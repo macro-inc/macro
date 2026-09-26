@@ -37,7 +37,7 @@ function tabFilters(tab: EmailTab): EmailFilters {
       shared: 'exclude' as const,
     }))
     .with('shared', () => ({ shared: 'only' as const }))
-    .with('drafts', 'scheduled', 'sent', 'all', () => ({}))
+    .with('favorites', 'drafts', 'scheduled', 'sent', 'all', () => ({}))
     .exhaustive();
 }
 
@@ -75,13 +75,20 @@ export function buildEmailSearchRequest(
   search: SoupSearchRequest,
   admittedIds?: readonly string[]
 ): SearchSoupQueryArgs {
+  // Both discovery and retained unread results must stay within favorites.
+  const threadIds =
+    context.tab === 'favorites'
+      ? (context.favoriteThreadIds ?? []).filter(
+          (id) => admittedIds === undefined || admittedIds.includes(id)
+        )
+      : admittedIds;
   const emailFilters: EmailFilters = {
     ...tabFilters(context.tab),
     ...facetFilters(
       admittedIds ? { ...context.facets, read: [] } : context.facets
     ),
-    ...(admittedIds
-      ? { email_thread_ids: admittedIds.length ? [...admittedIds] : [NIL_UUID] }
+    ...(threadIds
+      ? { email_thread_ids: threadIds.length ? [...threadIds] : [NIL_UUID] }
       : {}),
   };
 

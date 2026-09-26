@@ -1,13 +1,13 @@
 import type { FacetSelection } from '@app/features/soup';
 
 /**
- * Tab ids match the legacy mail view's `VIEW_TAB_LISTS.mail` values (`important`
- * is the Signal tab) so entity actions keyed on `${view}-${tab}` — mark done,
- * the sender-policy bucket — keep working unchanged.
+ * Existing tab ids match the legacy mail view (`important` is Signal).
+ * Favorites extends that list; entity action capabilities use `${view}-${tab}`.
  */
 export type EmailTab =
   | 'important'
   | 'noise'
+  | 'favorites'
   | 'sent'
   | 'scheduled'
   | 'calendar'

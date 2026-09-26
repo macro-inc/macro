@@ -25,6 +25,7 @@ const emailTabSchema = z
   .enum([
     'important',
     'noise',
+    'favorites',
     'sent',
     'scheduled',
     'calendar',

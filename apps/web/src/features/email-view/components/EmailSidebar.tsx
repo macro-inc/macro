@@ -8,6 +8,7 @@ import ClockIcon from '@phosphor/clock.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FileIcon from '@phosphor/file.svg';
 import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
+import StarIcon from '@phosphor/star.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import SignalIcon from '@phosphor/wave-sine.svg';
 import NoiseIcon from '@phosphor/waveform.svg';
@@ -24,6 +25,7 @@ import { EmailInboxList } from './EmailInboxSelector';
 const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   important: SignalIcon,
   noise: NoiseIcon,
+  favorites: StarIcon,
   sent: PaperPlaneTiltIcon,
   scheduled: ClockIcon,
   calendar: CalendarBlankIcon,

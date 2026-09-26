@@ -16,6 +16,7 @@ import {
 } from './channel';
 import { EmailInboxChip } from './email';
 import { GithubAuthorBadge } from './foreign';
+import { RowEnd } from './row-end';
 import { SOUP_ROW_CLASS } from './row-geometry';
 import { type LayoutProps, RowIndicator } from './shared';
 
@@ -104,18 +105,20 @@ export function NarrowLayout(props: LayoutProps) {
           placement="timestamp"
           class="text-xs text-right text-ink-extra-muted font-light"
         >
-          <Show
-            when={!isTaskEntity(props.entity)}
-            fallback={
-              <Entity.Properties
-                entity={props.entity}
-                maxUserStackUsers={0}
-                showCaret={false}
-              />
-            }
-          >
-            <Entity.Timestamp entity={props.entity} />
-          </Show>
+          <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
+            <Show
+              when={!isTaskEntity(props.entity)}
+              fallback={
+                <Entity.Properties
+                  entity={props.entity}
+                  maxUserStackUsers={0}
+                  showCaret={false}
+                />
+              }
+            >
+              <Entity.Timestamp entity={props.entity} />
+            </Show>
+          </RowEnd>
         </Entity.Slot>
       </Show>
     </Entity.Layout>

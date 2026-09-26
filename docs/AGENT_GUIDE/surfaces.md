@@ -304,10 +304,30 @@ Email's Tags sidebar uses the same [nested tag tree as Tasks](tasks.md#nested-si
 Carets and folder-only parents expand branches; actual tags select their exact ID
 and switch the mailbox to All. Parent selection does not include descendant tags.
 
-Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `Shared` /
+Full email client. Tabs: `Signal` / `Noise` / `Favorites` / `Sent` / `Scheduled` / `Calendar` / `Drafts` / `Shared` /
 `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
+
+`Favorites`, directly below Noise, lists starred Macro emails across Signal,
+Noise, and archived mail. It respects the selected inboxes and filters; search
+within the tab is also restricted to favorites. Removing a star removes the row
+from this view. The tab persists across reloads. With `enable-graphql-soup` on,
+favorite membership comes from the filtered GraphQL favorites query, then thread
+IDs scope the paginated GraphQL Soup query. With the flag off, the same scope
+uses the REST queries. An empty favorites list shows `No favorite emails`.
+
+On desktop, a favorited email keeps a filled, muted star just before its
+timestamp. Other rows reserve only that small star slot. Hovering reveals
+**Star email** (Macro favorites), **Archive email** (Mark Done, with Undo), and
+**Open command menu** for that email. The star stays in place; archive and commands
+replace the timestamp within its existing space. Archived rows offer
+**Unarchive email**; the archive control is disabled in tabs that do not support
+Mark Done. The icons also appear when a button receives keyboard focus. Clicking
+an icon neither opens the thread nor applies the action to other selected rows.
+Touch devices retain the swipe actions.
+Search results use the same reserved column, with actions aligned to the first
+line; snippets, highlighted matches, and expanded hits remain unobstructed.
 
 When switching email tabs or inboxes, the list shows current-query cached results
 or a scoped `Loading email` spinner until they arrive—not the previous tab's rows

@@ -16,6 +16,10 @@ import {
 } from './use-email-query';
 
 const searchQueryMock = vi.hoisted(() => vi.fn());
+const favoritesQueryMock = vi.hoisted(() => vi.fn());
+vi.mock('@queries/favorites/favorites', () => ({
+  useFavoritesQuery: favoritesQueryMock,
+}));
 const scheduledRows = vi.hoisted(() => ({
   current: [] as EmailDataSourceItem[],
 }));
@@ -113,6 +117,27 @@ function mount(search = '') {
     const [placeholder, setPlaceholder] = createSignal(false);
     const [fetching, setFetching] = createSignal(false);
     const [tagSetsReady, setTagSetsReady] = createSignal(true);
+    const [favoriteIds, setFavoriteIds] = createSignal<string[] | undefined>(
+      []
+    );
+    const [favoritesError, setFavoritesError] = createSignal<Error>();
+    favoritesQueryMock.mockReturnValue({
+      get isSuccess() {
+        return favoriteIds() !== undefined && !favoritesError();
+      },
+      get isError() {
+        return !!favoritesError();
+      },
+      get error() {
+        return favoritesError();
+      },
+      get data() {
+        if (favoriteIds() === undefined)
+          throw new Error('Read pending favorites');
+        return { favorites: favoriteIds()!.map((entityId) => ({ entityId })) };
+      },
+      refetch: vi.fn(async () => {}),
+    });
     const [searchEntities, setSearchDiscoveryEntities] = createSignal([
       email('search'),
     ]);
@@ -218,6 +243,8 @@ function mount(search = '') {
       setPlaceholder,
       setFetching,
       setTagSetsReady,
+      setFavoriteIds,
+      setFavoritesError,
       searchEntities,
       setSearchEntities,
       setSearchDiscoveryEntities,
@@ -231,9 +258,56 @@ function mount(search = '') {
 describe('Email list query transitions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    favoritesQueryMock.mockReturnValue({
+      isSuccess: true,
+      isError: false,
+      data: { favorites: [] },
+      error: null,
+      refetch: vi.fn(async () => {}),
+    });
     scheduledRows.current = [];
   });
   afterEach(() => dispose?.());
+
+  it('waits for favorites and uses only their IDs in the Soup query', () => {
+    const { source, setState, setEntities, setFavoriteIds } = mount();
+    setFavoriteIds(undefined);
+    setState('tab', 'favorites');
+    setEntities([email('starred'), email('ordinary')]);
+    expect(source.isLoading()).toBe(true);
+    expect(ids(source)).toEqual([]);
+    expect(vi.mocked(useSoupAstItemsQuery).mock.calls[0][1]?.().enabled).toBe(
+      false
+    );
+    setFavoriteIds(['starred']);
+    expect(source.isLoading()).toBe(false);
+    expect(ids(source)).toEqual(['starred']);
+    expect(vi.mocked(useSoupAstItemsQuery).mock.calls[0][1]?.().enabled).toBe(
+      true
+    );
+    expect(
+      vi.mocked(useSoupAstItemsQuery).mock.calls[0][0]().transport
+    ).toBeUndefined();
+    expect(
+      JSON.stringify(vi.mocked(useSoupAstItemsQuery).mock.calls[0][0]().body.ef)
+    ).toContain('starred');
+    expect(favoritesQueryMock).toHaveBeenCalledWith({
+      entityType: ['email_thread'],
+    });
+    setFavoriteIds([]);
+    expect(ids(source)).toEqual([]);
+  });
+
+  it('surfaces a favorites failure without an endless loading state', () => {
+    const { source, setState, setFavoriteIds, setFavoritesError } = mount();
+    setFavoriteIds(undefined);
+    setState('tab', 'favorites');
+    const error = new Error('Favorites unavailable');
+    setFavoritesError(error);
+    expect(source.error()).toBe(error);
+    expect(source.isLoading()).toBe(false);
+    expect(ids(source)).toEqual([]);
+  });
 
   it('lists the scheduled source on the Scheduled tab instead of soup rows', () => {
     scheduledRows.current = [

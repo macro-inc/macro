@@ -43,6 +43,7 @@ const NIL = '00000000-0000-0000-0000-000000000000';
 const TABS: EmailTab[] = [
   'important',
   'noise',
+  'favorites',
   'sent',
   'scheduled',
   'calendar',
@@ -79,6 +80,42 @@ const TAG_SETS = [
 ] as TagSetResponse[];
 
 describe('buildEmailQuery', () => {
+  it('filters favorites on the server in both Soup transports, including inbox and read scope', () => {
+    const args = buildEmailQuery(
+      contextFor({
+        tab: 'favorites',
+        favoriteThreadIds: ['starred-a', 'starred-b'],
+        inboxIds: ['inbox-a'],
+        facets: { read: ['unread'] },
+      })
+    );
+    expect(args.transport).toBeUndefined();
+    expect(args.body.emailView).toBe('all');
+    expect(serialize(args.body.ef)).toContain(
+      serialize({ l: { ThreadId: 'starred-a' } })
+    );
+    const input = makeGraphqlSoupInput(args);
+    expect(input.initial?.emailView).toBe('ALL');
+    const filter = serialize(input.initial?.filters?.emailFilter);
+    expect(filter).toContain(serialize({ literal: { threadId: 'starred-a' } }));
+    expect(filter).toContain(serialize({ literal: { threadId: 'starred-b' } }));
+    expect(filter).toContain(serialize({ literal: { owner: 'inbox-a' } }));
+    expect(filter).toContain(serialize({ literal: { read: false } }));
+    expect(filter).not.toContain('inboxVisible');
+  });
+
+  it('matches no email when favorites are empty or unresolved', () => {
+    for (const favoriteThreadIds of [undefined, []]) {
+      const args = buildEmailQuery(
+        contextFor({ tab: 'favorites', favoriteThreadIds })
+      );
+      expect(args.body.ef).toEqual({ l: { ThreadId: NIL } });
+      expect(makeGraphqlSoupInput(args).initial?.filters?.emailFilter).toEqual({
+        tree: { literal: { threadId: NIL } },
+      });
+    }
+  });
+
   it('keeps a full admission batch below REST and GraphQL ingress recursion limits', () => {
     const ids = Array.from(
       { length: 100 },
@@ -104,6 +141,7 @@ describe('buildEmailQuery', () => {
     expect(TABS.map((tab) => [tab, emailViewForTab(tab)])).toEqual([
       ['important', 'inbox'],
       ['noise', 'inbox'],
+      ['favorites', 'all'],
       ['sent', 'sent'],
       ['scheduled', 'drafts'],
       ['calendar', 'all'],
@@ -262,6 +300,28 @@ describe('buildEmailSearchRequest', () => {
     expect(body.filters.document_filters).toEqual({ document_ids: [NIL] });
     expect(body.filters.channel_filters).toEqual({ channel_ids: [NIL] });
     expect(body.filters.email_filters).toEqual({});
+  });
+
+  it('restricts search and retained results to current favorites before pagination', () => {
+    const context = contextFor({
+      tab: 'favorites',
+      favoriteThreadIds: ['starred-a', 'starred-b'],
+      inboxIds: ['inbox-a'],
+    });
+    expect(
+      buildEmailSearchRequest(context, search).body.filters?.email_filters
+    ).toEqual({
+      email_thread_ids: ['starred-a', 'starred-b'],
+      link_ids: ['inbox-a'],
+    });
+    expect(
+      buildEmailSearchRequest(context, search, ['starred-b', 'removed']).body
+        .filters?.email_filters?.email_thread_ids
+    ).toEqual(['starred-b']);
+    expect(
+      requestFor({ tab: 'favorites', favoriteThreadIds: [] }).filters
+        .email_filters?.email_thread_ids
+    ).toEqual([NIL]);
   });
 
   it('mirrors the tab scoping the list applies', () => {

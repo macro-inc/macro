@@ -118,7 +118,14 @@ function createAction() {
 
 describe('canExecuteMarkDoneOnView', () => {
   it('allows mark done on every thread-listing mail tab', () => {
-    for (const tab of ['important', 'noise', 'calendar', 'shared', 'all']) {
+    for (const tab of [
+      'important',
+      'noise',
+      'favorites',
+      'calendar',
+      'shared',
+      'all',
+    ]) {
       expect(canExecuteMarkDoneOnView('mail', tab)).toBe(true);
     }
   });
