@@ -76,7 +76,7 @@ afterEach(() => {
   testQueryClient.clear();
   clearTypingIndicators();
 });
-describe.each(['channel', 'document'] as const)(
+describe.each(['channel', 'document', 'initiative'] as const)(
   '%s uses the shared live cache',
   (type) => {
     const parent: MessageParent = { type, id: 'source' };
@@ -336,7 +336,7 @@ describe.each(['channel', 'document'] as const)(
       ).toEqual(['root']);
     });
     it(
-      type === 'document'
+      type !== 'channel'
         ? "loads a live root's thread state instead of refetching the timeline"
         : 'applies a live root without a metadata refetch',
       async () => {
@@ -345,7 +345,10 @@ describe.each(['channel', 'document'] as const)(
         const rootState = {
           ...state,
           root_id: 'newer-root',
-          anchor: { type: 'markdown', mark_id: 'mark' } as const,
+          anchor:
+            type === 'document'
+              ? ({ type: 'markdown', mark_id: 'mark' } as const)
+              : null,
         };
         mocks.thread.mockResolvedValue({
           root: message(parent, 'newer-root'),
@@ -367,7 +370,7 @@ describe.each(['channel', 'document'] as const)(
         const newestRoot = () =>
           testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
             .pages[0].items[0];
-        if (type === 'document') {
+        if (type !== 'channel') {
           expect(mocks.thread).toHaveBeenCalledWith(parent, 'newer-root');
           await vi.waitFor(() =>
             expect(newestRoot().state.anchor).toEqual(rootState.anchor)

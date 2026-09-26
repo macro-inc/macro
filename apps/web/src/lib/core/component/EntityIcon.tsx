@@ -47,6 +47,7 @@ import ListChecks from '@phosphor/list-checks.svg';
 import PhoneCall from '@phosphor/phone-call.svg';
 import Shapes from '@phosphor/shapes.svg';
 import Sparkle from '@phosphor/sparkle.svg';
+import Stack from '@phosphor/stack.svg';
 import Users from '@phosphor/users.svg';
 import UsersThree from '@phosphor/users-three.svg';
 import AddressBookBold from '@phosphor-icons/core/bold/address-book-bold.svg';
@@ -80,6 +81,7 @@ import ListChecksBold from '@phosphor-icons/core/bold/list-checks-bold.svg';
 import PhoneCallBold from '@phosphor-icons/core/bold/phone-call-bold.svg';
 import ShapesBold from '@phosphor-icons/core/bold/shapes-bold.svg';
 import SparkleBold from '@phosphor-icons/core/bold/sparkle-bold.svg';
+import StackBold from '@phosphor-icons/core/bold/stack-bold.svg';
 import UsersBold from '@phosphor-icons/core/bold/users-bold.svg';
 import UsersThreeBold from '@phosphor-icons/core/bold/users-three-bold.svg';
 import type { PreviewItem } from '@queries/preview';
@@ -117,6 +119,7 @@ export type EntityWithValidIcon =
   | 'files'
   | 'crm_company'
   | 'html'
+  | 'initiative'
   | 'reminder';
 
 const ARCHIVE_EXTENSIONS = new Set(
@@ -384,6 +387,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-task',
     background: 'bg-task/20',
     prettyName: 'Task',
+  },
+  initiative: {
+    icon: Stack,
+    boldIcon: StackBold,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Project',
   },
   snippet: {
     icon: BracketsCurly,

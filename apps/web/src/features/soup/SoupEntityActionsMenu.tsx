@@ -17,6 +17,7 @@ interface SoupEntityActionsMenuProps {
   viewContext: EntityActionViewContext;
   onActionComplete?: () => void;
   onEditTags?: () => void;
+  onSetProject?: () => void;
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
@@ -29,6 +30,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
       viewContext: props.viewContext,
       viewedProjectId: viewedProjectIdFromContent(content),
       openTagPicker: props.onEditTags,
+      openProjectPicker: props.onSetProject,
       splitHandle: panel.handle,
     });
   };

@@ -465,7 +465,10 @@ describe('GraphQL Soup document sub types', () => {
       { type: 'task', is_completed: true },
     ],
     [{ __typename: 'GraphqlSkillSubType' }, { type: 'skill' }],
-    [{ __typename: 'GraphqlInitiativeDescriptionSubType' }, undefined],
+    [
+      { __typename: 'GraphqlInitiativeDescriptionSubType' },
+      { type: 'initiative_description' },
+    ],
   ] as const)(
     'maps %j to the shared soup sub type %j',
     async (subType, expected) => {

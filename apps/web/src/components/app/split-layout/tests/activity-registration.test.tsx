@@ -11,6 +11,9 @@ const state = vi.hoisted(() => ({
   pageView: vi.fn(),
   track: vi.fn(),
   mountActivity: vi.fn(),
+  mountProjects: vi.fn(),
+  isPopover: false,
+  close: vi.fn(),
 }));
 
 vi.mock('@service-storage/websocket', () => ({
@@ -28,13 +31,22 @@ vi.mock('@core/auth', () => ({
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   usePosthog: () => ({ flagsLoaded: () => state.flagsLoaded() }),
-  useFeatureFlag: () => () => ({ enabled: state.enabled() }),
+  useFeatureFlag: () => () => ({
+    enabled: state.enabled(),
+    loading: !state.flagsLoaded(),
+  }),
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ pageView: state.pageView, track: state.track }),
 }));
 vi.mock('../layoutUtils', () => ({
-  useSplitPanelOrThrow: () => ({ handle: { replace: state.replace } }),
+  useSplitPanelOrThrow: () => ({
+    handle: {
+      replace: state.replace,
+      isPopover: () => state.isPopover,
+      close: state.close,
+    },
+  }),
 }));
 vi.mock('@core/component/LoadingBlock', () => ({
   LoadingBlock: () => <div>Authenticating</div>,
@@ -52,6 +64,20 @@ vi.mock('@app/features/activity/views/my-activity-view', () => ({
 }));
 vi.mock('@app/features/activity/open-entity-in-split', () => ({
   openEntityInSplit: vi.fn(),
+}));
+vi.mock('@app/features/projects/project-view', () => ({
+  ProjectsListView: () => {
+    state.mountProjects();
+    return <div>Project collection</div>;
+  },
+  ProjectView: () => {
+    state.mountProjects();
+    return <div>Project detail</div>;
+  },
+  CreateProjectView: () => {
+    state.mountProjects();
+    return <div>Project composer</div>;
+  },
 }));
 
 vi.mock('@app/features/home/components/HomeEntityDetailRouteView', () => ({
@@ -113,6 +139,65 @@ beforeEach(() => {
   state.authenticated = () => true;
   state.enabled = () => false;
   state.flagsLoaded = () => true;
+  state.isPopover = false;
+});
+
+describe('project registration', () => {
+  const routes = [
+    ['tasks-projects', 'Project collection'],
+    ['new-project', 'Project composer'],
+    ['project-compose', 'Project composer'],
+    [
+      'initiative-view~01a0cf92-3101-7e21-9a20-6e21058d20e0~overview',
+      'Project detail',
+    ],
+  ] as const;
+
+  it.each(routes)(
+    'gates a restored %s route until PostHog enables Projects',
+    async (route, title) => {
+      const [enabled, setEnabled] = createSignal(false);
+      const [loaded, setLoaded] = createSignal(false);
+      state.enabled = enabled;
+      state.flagsLoaded = loaded;
+      const component = resolveComponent(route);
+      render(() => <Suspense>{component.element()}</Suspense>);
+      expect(state.mountProjects).not.toHaveBeenCalled();
+      expect(state.replace).not.toHaveBeenCalled();
+
+      setEnabled(true);
+      setLoaded(true);
+      expect(await screen.findByText(title)).toBeTruthy();
+      expect(state.replace).not.toHaveBeenCalled();
+
+      setEnabled(false);
+      expect(screen.queryByText(title)).toBeNull();
+      expect(state.replace).toHaveBeenCalledExactlyOnceWith({
+        next: { type: 'component', id: 'tasks' },
+      });
+    }
+  );
+
+  it.each(routes)(
+    'redirects disabled %s without mounting project data',
+    (route) => {
+      const component = resolveComponent(route);
+      render(() => <Suspense>{component.element()}</Suspense>);
+      expect(state.mountProjects).not.toHaveBeenCalled();
+      expect(state.replace).toHaveBeenCalledExactlyOnceWith({
+        next: { type: 'component', id: 'tasks' },
+      });
+    }
+  );
+
+  it('closes a disabled composer popover instead of replacing its background split', () => {
+    state.isPopover = true;
+    const component = resolveComponent('project-compose');
+    render(() => <Suspense>{component.element()}</Suspense>);
+    expect(state.mountProjects).not.toHaveBeenCalled();
+    expect(state.replace).not.toHaveBeenCalled();
+    expect(state.close).toHaveBeenCalledOnce();
+  });
 });
 afterEach(cleanup);
 

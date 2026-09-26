@@ -11,6 +11,7 @@ import { MessageThread, threadListItem } from './MessageThread';
 
 const mocks = vi.hoisted(() => ({
   edit: vi.fn(),
+  resolve: vi.fn(),
   editor: vi.fn(),
   remove: vi.fn(),
   clipboard: vi.fn().mockResolvedValue(undefined),
@@ -49,6 +50,7 @@ vi.mock('@queries/messages/mutations', () => ({
   useDeleteMessageMutation: () => ({}),
   useDeleteThreadMutation: () => ({}),
   usePatchMessageMutation: () => ({}),
+  usePatchThreadMutation: () => ({ mutate: mocks.resolve, isPending: false }),
 }));
 vi.mock('@queries/messages/reactions', () => ({
   useAddReactionMutation: () => ({}),
@@ -63,6 +65,12 @@ vi.mock('@channel/Thread/ChannelThread', () => ({
         <p>
           thread of {props.parent().type} {props.parent().id}
         </p>
+        <Show when={props.isReplying()}>
+          <textarea aria-label="Reply composer" />
+        </Show>
+        <Show when={props.messageEditor}>
+          <p>Editor enabled</p>
+        </Show>
         <button
           onClick={() =>
             drawer?.open(props.data(), props.getMessageActions?.(props.data()))
@@ -236,4 +244,58 @@ describe('threadListItem', () => {
     expect(item.thread.preview.map((r) => r.id)).toEqual(['r3', 'r4', 'r5']);
     expect(item.thread.latest_reply_at).toBe('2026-01-05T00:00:00Z');
   });
+});
+
+it('allows writers to resolve and reopen project discussions, and only shows resolved status to viewers', () => {
+  const project = {
+    ...message,
+    parent: { type: 'initiative' as const, id: 'project' },
+  };
+  const view = render(() => (
+    <MessageThread data={project} canWrite allowResolve />
+  ));
+  fireEvent.click(view.getByRole('button', { name: 'Resolve discussion' }));
+  expect(mocks.resolve).toHaveBeenCalledWith({
+    parent: project.parent,
+    rootId: project.id,
+    patch: { resolved: true },
+  });
+  view.unmount();
+  const resolved = { ...project, state: { ...project.state, resolved: true } };
+  const viewer = render(() => (
+    <MessageThread data={resolved} canWrite={false} allowResolve />
+  ));
+  expect(viewer.getByText('Resolved')).toBeTruthy();
+  expect(
+    viewer.queryByRole('button', { name: 'Reopen discussion' })
+  ).toBeNull();
+  viewer.unmount();
+  const writer = render(() => (
+    <MessageThread data={resolved} canWrite allowResolve />
+  ));
+  fireEvent.click(writer.getByRole('button', { name: 'Reopen discussion' }));
+  expect(mocks.resolve).toHaveBeenLastCalledWith({
+    parent: project.parent,
+    rootId: project.id,
+    patch: { resolved: false },
+  });
+});
+
+it('closes an active project reply composer and editor when comment access is lost', () => {
+  const [canWrite, setCanWrite] = createSignal(true);
+  const view = render(() => (
+    <MessageThread
+      data={{ ...message, parent: { type: 'initiative', id: 'project' } }}
+      canWrite={canWrite()}
+    />
+  ));
+  openActions(view);
+  fireEvent.click(view.getByRole('button', { name: 'Reply' }));
+  expect(view.getByRole('textbox', { name: 'Reply composer' })).toBeTruthy();
+  expect(view.getByText('Editor enabled')).toBeTruthy();
+
+  setCanWrite(false);
+
+  expect(view.queryByRole('textbox', { name: 'Reply composer' })).toBeNull();
+  expect(view.queryByText('Editor enabled')).toBeNull();
 });

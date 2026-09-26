@@ -778,6 +778,45 @@ describe('Quick Access source integration', () => {
     }
   );
 
+  it('omits descriptions injected into local history without hiding notes, tasks or folders', async () => {
+    mocks.history = [
+      {
+        id: 'description',
+        type: 'document',
+        name: 'Same title',
+        ownerId: 'owner',
+        fileType: 'md',
+        subType: { type: 'initiative_description' },
+      },
+      {
+        id: 'note',
+        type: 'document',
+        name: 'Same title',
+        ownerId: 'owner',
+        fileType: 'md',
+      },
+      {
+        id: 'task',
+        type: 'document',
+        name: 'Same title',
+        ownerId: 'owner',
+        fileType: 'md',
+        subType: { type: 'task', is_completed: false },
+      },
+      { id: 'folder', type: 'project', name: 'Same title', ownerId: 'owner' },
+    ];
+    const list = setup((source) =>
+      source.useList({ buckets: ['note', 'task', 'project'] })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(
+      list
+        .items()
+        .map((item) => item.id)
+        .sort()
+    ).toEqual(['folder', 'note', 'task']);
+  });
+
   it('updates an open list on opted-in hydration notifications without changing its query', async () => {
     const list = setup((source) => source.useList({ buckets: ['note'] }));
     await vi.waitFor(() => expect(list.isLoading()).toBe(false));

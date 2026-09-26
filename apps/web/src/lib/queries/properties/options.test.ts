@@ -24,3 +24,28 @@ describe('usablePropertyOptions', () => {
     );
   });
 });
+
+it('uses already-loaded definition options while the option query is a placeholder', () => {
+  const loaded = [cachedOption];
+  expect(
+    usablePropertyOptions(
+      { data: [], isError: false, isPlaceholderData: true },
+      loaded
+    )
+  ).toBe(loaded);
+  expect(
+    usablePropertyOptions(
+      { data: [], isError: false, isPlaceholderData: false },
+      loaded
+    )
+  ).toEqual([]);
+});
+
+it('does not mask an unsuccessful first option request with definition options', () => {
+  expect(
+    usablePropertyOptions(
+      { data: undefined, isError: true, isPlaceholderData: false },
+      [cachedOption]
+    )
+  ).toEqual([]);
+});

@@ -34,6 +34,7 @@ import {
   createGraphqlEntityPropertiesQuery,
   entityPropertyOptimisticMutationUuid,
   mapGraphqlEntityProperties,
+  refetchGraphqlInitiativeProperties,
 } from './entity';
 
 const NIL_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
@@ -469,6 +470,82 @@ describe('createGraphqlEntityPropertiesQuery', () => {
     expect(requests[1]?.operation.context.requestPolicy).toBe('network-only');
     requests[1]?.next({ data: EMPTY_DATA });
     await refetch;
+  });
+
+  it('loads initiative properties from the native entity and clears prior values on navigation', async () => {
+    const { requests } = makeControlledClient();
+    const [entityId, setEntityId] = createSignal('initiative-1');
+    let query!: ReturnType<typeof createGraphqlEntityPropertiesQuery>;
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      query = createGraphqlEntityPropertiesQuery({
+        entityType: () => 'INITIATIVE',
+        entityId,
+        enabled: () => true,
+      });
+    });
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    expect(query.isEnabled()).toBe(true);
+    expect(requests[0].operation.variables).toEqual({
+      initiativeId: 'initiative-1',
+    });
+    requests[0].next({
+      data: { user: { initiative: { id: 'initiative-1', properties: [] } } },
+    });
+    await vi.waitFor(() => expect(query.result.data).toEqual([]));
+    setEntityId('initiative-2');
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    expect(requests[1].operation.variables).toEqual({
+      initiativeId: 'initiative-2',
+    });
+    expect(query.result.data).toBeUndefined();
+    requests[1].next({
+      data: { user: { initiative: { id: 'initiative-2', properties: [] } } },
+    });
+    await vi.waitFor(() => expect(query.result.data).toEqual([]));
+  });
+
+  it('refreshes the mounted project sidebar when a first property value is attached without a normalized cache', async () => {
+    const { requests } = makeControlledClient();
+    let query!: ReturnType<typeof createGraphqlEntityPropertiesQuery>;
+    createRoot((rootDispose) => {
+      dispose = rootDispose;
+      query = createGraphqlEntityPropertiesQuery({
+        entityType: () => 'INITIATIVE',
+        entityId: () => 'initiative-1',
+        enabled: () => true,
+      });
+    });
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    const data = {
+      user: { initiative: { id: 'initiative-1', properties: [] } },
+    };
+    requests[0].next({ data });
+    await vi.waitFor(() => expect(query.result.data).toEqual([]));
+    const property: SoupProperty = {
+      id: 'assignment-1',
+      definition: {
+        id: 'definition-1',
+        display_name: 'Status',
+        data_type: 'STRING',
+        is_multi_select: false,
+        is_system: false,
+        is_metadata: false,
+        owner: { scope: 'system' },
+        created_at: '',
+        updated_at: '',
+      },
+      value: { type: 'String', value: 'In progress' },
+    };
+    mapGraphqlPropertiesMock.mockReturnValue([property]);
+    const refresh = refetchGraphqlInitiativeProperties('initiative-1');
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    expect(requests[1].operation.context.requestPolicy).toBe('network-only');
+    requests[1].next({ data });
+    await refresh;
+    await vi.waitFor(() =>
+      expect(query.result.data?.[0].value).toBe('In progress')
+    );
   });
 
   it('does not start an operation for unsupported entity types', () => {

@@ -85,6 +85,7 @@ export function buildTaskSearchRequest(options: {
   userId: string | undefined;
   facets: FacetSelection;
   facetContext?: TaskFacetContext;
+  taskIds?: readonly string[];
 }): SearchSoupQueryArgs {
   const facetContext = options.facetContext ?? EMPTY_TASK_FACET_CONTEXT;
   const propertyFilters = selectedPropertyFilters(options.facets, facetContext);
@@ -114,6 +115,13 @@ export function buildTaskSearchRequest(options: {
         document_filters: {
           sub_types: ['task'],
           ...(owners ? { owners } : {}),
+          ...(options.taskIds !== undefined
+            ? {
+                document_ids: options.taskIds.length
+                  ? [...options.taskIds]
+                  : [NIL_UUID],
+              }
+            : {}),
         },
         ...(propertyFilters.length > 0
           ? { property_filters: propertyFilters }

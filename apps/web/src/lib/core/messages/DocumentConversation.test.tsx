@@ -1,5 +1,6 @@
+import { ThrownResultError } from '@core/util/result';
 import type { MessageListItem } from '@service-storage/messages';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { type Accessor, createSignal, For, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DocumentConversation } from './DocumentConversation';
@@ -8,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   timeline: vi.fn(),
   linkResolved: true,
   capturedParent: undefined as { type: string; id: string } | undefined,
+  linkError: null as unknown,
+  refetchLink: vi.fn(),
 }));
 
 vi.mock('@channel/Input', () => ({
@@ -39,6 +42,8 @@ vi.mock('@queries/messages/document-messages', () => ({
       return id ? `root-of-${id}` : null;
     },
     resolved: () => mocks.linkResolved,
+    error: () => mocks.linkError,
+    refetch: mocks.refetchLink,
   }),
 }));
 vi.mock('@queries/messages/mutations', () => ({
@@ -68,6 +73,7 @@ vi.mock('./MessageThread', () => ({
 afterEach(() => {
   mocks.linkResolved = true;
   mocks.capturedParent = undefined;
+  mocks.linkError = null;
   cleanup();
 });
 
@@ -265,4 +271,76 @@ describe('DocumentConversation linked message highlight', () => {
     const [, around] = mocks.timeline.mock.calls.at(-1)!;
     expect(around()).toBe('root-of-reply');
   });
+});
+
+it('retains loaded comments on a pagination failure and removes them immediately on access loss', () => {
+  const [error, setError] = createSignal<unknown>();
+  const [fetching, setFetching] = createSignal(true);
+  const loadMore = vi.fn();
+  mocks.timeline.mockReturnValue({
+    isPending: false,
+    get isError() {
+      return !!error();
+    },
+    get error() {
+      return error();
+    },
+    get isFetching() {
+      return fetching();
+    },
+    data: { pages: [{ items: [thread('Known discussion', null)] }] },
+    hasNextPage: true,
+    fetchNextPage: loadMore,
+  });
+  const view = render(() => (
+    <DocumentConversation
+      parent={{ type: 'initiative', id: 'project' }}
+      canWrite
+    />
+  ));
+  const load = view.getByRole('button', { name: 'Load earlier comments' });
+  expect(load.hasAttribute('disabled')).toBe(true);
+  fireEvent.click(load);
+  expect(loadMore).not.toHaveBeenCalled();
+
+  setFetching(false);
+  setError(new Error('Network disconnected'));
+  expect(view.getByText('Known discussion')).toBeTruthy();
+  expect(view.getByRole('textbox')).toBeTruthy();
+  expect(load.hasAttribute('disabled')).toBe(false);
+
+  setError(
+    new ThrownResultError([{ code: 'FORBIDDEN', message: 'No access' }])
+  );
+  expect(view.queryAllByRole('article')).toHaveLength(0);
+  expect(view.queryByRole('textbox')).toBeNull();
+  expect(
+    view.queryByRole('button', { name: 'Load earlier comments' })
+  ).toBeNull();
+});
+
+it('hides cached comments when a linked message denies access and retries the link', () => {
+  mocks.linkError = new ThrownResultError([
+    { code: 'FORBIDDEN', message: 'No access' },
+  ]);
+  const refetch = vi.fn();
+  mocks.timeline.mockReturnValue({
+    isPending: false,
+    data: { pages: [{ items: [thread('Cached discussion', null)] }] },
+    refetch,
+  });
+  const view = render(() => (
+    <DocumentConversation
+      parent={{ type: 'initiative', id: 'project' }}
+      targetId="linked-message"
+      canWrite
+    />
+  ));
+  expect(view.queryAllByRole('article')).toHaveLength(0);
+  expect(view.queryByRole('textbox')).toBeNull();
+  fireEvent.click(
+    view.getByRole('button', { name: 'Could not load comments. Retry' })
+  );
+  expect(refetch).toHaveBeenCalled();
+  expect(mocks.refetchLink).toHaveBeenCalled();
 });

@@ -2,7 +2,7 @@
 
 ## Surface
 
-`Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, and `Team tasks`.
+`Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, `Team tasks`, and `Projects`.
 The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, and `Filter`;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 and Tags submenus. Multi-select choices keep the menu open; Escape dismisses it.
@@ -86,6 +86,92 @@ filter sheets. Desktop uses the centered composer dialog.
 
 Tasks are documents under the hood (creation hits `POST /dss/documents/create_task`), so they
 also show up in Files/`All` and in AI-chat document listings.
+
+## Projects
+
+Projects are gated by PostHog `enable-projects` and are off by default. Local
+development can opt in with `VITE_ENABLE_PROJECTS=true`. When off, Tasks hides
+the Projects tab, project column, and assignment actions. A saved Projects tab
+temporarily shows My Tasks without overwriting the saved selection.
+
+Choose the `Projects` tab in Tasks, or open `/app/component/tasks-projects`.
+Projects use the same list rows, property cells, selection, group headers, and
+keyboard navigation as Tasks. Search (`Cmd/Ctrl+F`), `Sort projects`,
+`Group projects`, and `Filter projects` sit above the list. Groups default to
+Status; choose None, Priority, or Assignee to change them. Click a group header
+or use the list's disclosure keys to collapse or expand it. Sort by Updated,
+Name, or Due date. Filters include Status, Priority, and Assigned to me;
+`Filter due date` provides From and Through bounds and `Clear dates`.
+Search and filters apply before pagination. Scrolling or navigating near the
+end loads more projects; `Load more projects` also continues the list.
+Keyboard movement changes focus; Enter opens the focused project and
+Shift-selection opens it in a new split. Folders remain separate in Files.
+
+`New project` and the global Create menu's `Project` action (C, then P) open
+the same native composer host and layout as task creation,
+with a project name and the shared property pills for Status, Priority,
+Assignees, and Due date. Team sharing is enabled by default.
+Project Status offers `Not Started`, `In Progress`, and `Completed` in the
+composer, list, and detail/side-panel pickers. The Status filter uses the same
+three choices. Task statuses are unchanged. Existing project values from the
+previous status catalog remain visible until an editor changes them.
+
+Submit with
+`Create Project` or Cmd/Ctrl+Enter. `Continue editing in split` preserves the
+name, properties, and sharing choice; `Clear Draft` resets an uncreated draft.
+Leaving a property unset keeps its normal server default. If creation succeeds
+but a property write fails, `Retry saving properties` finishes the existing
+project, including after continuing in a split, without creating a duplicate.
+
+Opening a project keeps the Tasks workspace and its navigation. The top bar
+shows the Projects return breadcrumb and the project name, with the same Share
+and side-panel controls as task detail. Choose Overview or Tasks in
+that top bar. Opening an associated task extends the breadcrumb trail; choose
+the project breadcrumb to return, or Projects to restore the collection and its
+filters, groups, and scroll position. Project URLs retain identity and section:
+`/app/component/initiative-view~<project-id>~overview` (or `tasks`).
+Project properties live in the shared Details/Properties side panel and honor
+project access. Editors can rename the project; its owner can delete it.
+Deleting a project leaves its tasks in the workspace.
+
+Share uses the existing `To: Email or group` field, optional message, access
+choice, and `Share` action. Owners can open `Manage collaborators` from People.
+The usual team and link-access controls and Copy link action use the same menu
+as other entities. Access changes also apply to the description. Sharing to a
+channel posts a native project chip, which opens the project in Tasks; channel
+attachments list it in their Projects section.
+
+Assigning a person to a project also adds them as a collaborator with edit access.
+Clearing the assignee leaves that access in place; the owner can remove it through
+Manage collaborators in Share. Removing a collaborator does not clear assignees.
+
+Overview's Description uses the shared collaborative Markdown editor and saves
+automatically to the existing backing document. Edit/owner access allows typing;
+view/comment access is read-only. The description is part of the native project
+view and does not open a separate document block. Discussion appears below the
+description, using the same discussion component as tasks.
+Backing descriptions remain available through direct reads, but are omitted from
+ordinary document search, history, and Soup lists.
+An unavailable connection shows `Retry description` without clearing saved content.
+
+The project's Tasks tab starts with the task search, controls, and unified list;
+the project title and property pills appear only on Overview. Use
+`New task` to create a task associated with the project, or `Add existing tasks`
+to choose existing tasks. `Remove` clears a task's project association.
+The regular Tasks list includes a Project column; clicking a project chip opens
+that project. Right-click a task and choose `Set project…` to choose or clear its
+project. On mobile the same action is in the long-press menu. Selecting several
+tasks exposes `Set project` in the selection toolbar, and a context action on a
+selected row applies to the selection. Partial assignment failures leave only
+failed tasks in the picker for retry.
+
+Discussion at the bottom of Overview uses the new discussions system. Comments
+appear from oldest to newest, with the comment input below them. The Discussion
+heading collapses the section, and `Load earlier comments` loads older comments
+at the top. Comments, replies, and reactions stay attached to the project identity.
+Notification links open Overview at the relevant discussion. Existing `activity`
+URLs also open Overview and preserve the target discussion. Project history is
+not included in this discussion section.
 
 ## Bulk delete
 

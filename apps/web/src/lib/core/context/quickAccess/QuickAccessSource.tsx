@@ -390,6 +390,11 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const hidden = hiddenIds();
     for (const item of historyData) {
       if (item.deletedAt) continue;
+      if (
+        item.type === 'document' &&
+        item.subType?.type === 'initiative_description'
+      )
+        continue;
       if (hidden.has(item.id)) continue;
       seenIds.add(item.id);
 

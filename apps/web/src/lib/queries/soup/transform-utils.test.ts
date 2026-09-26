@@ -1,6 +1,9 @@
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { describe, expect, it, vi } from 'vitest';
-import { mapApiSoupItemToEntity } from './transform-utils';
+import {
+  isDisplayableSoupItem,
+  mapApiSoupItemToEntity,
+} from './transform-utils';
 
 vi.mock('@core/constant/allBlocks', () => ({
   blockNameToDefaultFile: {},
@@ -39,6 +42,57 @@ describe('chat soup entities', () => {
 });
 
 describe('document soup entities', () => {
+  it('excludes backing descriptions from lists while keeping direct document materialization', () => {
+    const document = (
+      id: string,
+      subType: Extract<SoupApiItem, { tag: 'document' }>['data']['subType']
+    ): Extract<SoupApiItem, { tag: 'document' }> => ({
+      tag: 'document',
+      frecency_score: 0,
+      is_favorited: false,
+      data: {
+        id,
+        name: 'Same title',
+        ownerId: 'macro|owner@example.com',
+        fileType: 'md',
+        subType,
+        documentVersionId: 1,
+        properties: [],
+        createdAt: '2026-09-11T00:00:00Z',
+        updatedAt: '2026-09-11T00:00:00Z',
+      },
+    });
+    const description = document('description', {
+      type: 'initiative_description',
+    });
+    const folder: SoupApiItem = {
+      tag: 'project',
+      frecency_score: 0,
+      is_favorited: false,
+      data: {
+        id: 'folder',
+        name: 'Same title',
+        ownerId: 'macro|owner@example.com',
+        properties: [],
+        createdAt: '2026-09-11T00:00:00Z',
+        updatedAt: '2026-09-11T00:00:00Z',
+      },
+    };
+    const items = [
+      description,
+      document('note', null),
+      document('task', { type: 'task', is_completed: false }),
+      folder,
+    ];
+    expect(
+      items.filter(isDisplayableSoupItem).map((item) => item.data.id)
+    ).toEqual(['note', 'task', 'folder']);
+    expect(mapApiSoupItemToEntity(description)).toMatchObject({
+      id: 'description',
+      type: 'document',
+    });
+  });
+
   it.each([
     [
       { type: 'task', is_completed: true },

@@ -19,6 +19,7 @@ import type {
   SplitMount,
 } from '../layoutManager';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
+import { focusPopoverInput } from '../utils/focusPopoverInput';
 
 false;
 
@@ -177,6 +178,7 @@ function PopoverSplitModal(props: {
           open={props.popover.isOpen}
           onOpenChange={onOpenChange}
           contentRef={attachPanel}
+          onOpenAutoFocus={(event) => focusPopoverInput(event, panelRef())}
         >
           <Panel
             hideBorder
@@ -191,6 +193,7 @@ function PopoverSplitModal(props: {
         side="bottom"
         open={props.popover.isOpen}
         onOpenChange={onOpenChange}
+        onInitialFocus={(event) => focusPopoverInput(event, panelRef())}
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />

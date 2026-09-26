@@ -355,7 +355,12 @@ export const useSearchResponseItemMapper = () => {
         ];
       }
       case 'document': {
-        if (!result.metadata || result.metadata.deleted_at) return [];
+        if (
+          !result.metadata ||
+          result.metadata.deleted_at ||
+          result.sub_type === 'initiative_description'
+        )
+          return [];
         const searchFileType =
           result.file_type === 'docx' ? 'pdf' : result.file_type;
         let search: SearchData;
@@ -644,7 +649,10 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem => Boolean(item);
+): item is DisplayableSoupItem =>
+  Boolean(item) &&
+  (item.tag !== 'document' ||
+    item.data.subType?.type !== 'initiative_description');
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread

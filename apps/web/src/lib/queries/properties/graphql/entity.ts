@@ -12,6 +12,7 @@ import type {
   PropertyApiValues,
   PropertyDefinitionDomain,
 } from '@property/types';
+import { withProjectStatusOptions } from '@property/utils/select-options';
 import { isInstantiatedProperty } from '@property/utils/typeGuards';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -25,6 +26,7 @@ import {
   type GraphqlEntityReferenceInput,
   type GraphqlPropertyTargetEntityType,
   type GraphqlSetPropertyValue,
+  InitiativePropertiesDocument,
   SetEntityPropertyDocument,
   type SetEntityPropertyMutation,
   type SetEntityPropertyMutationVariables,
@@ -97,11 +99,48 @@ export function createGraphqlEntityPropertiesQuery(
     };
   });
 
+  // Initiatives are native entities, not Soup folders or description documents.
+  const initiativeEnabled = () =>
+    options.enabled() &&
+    options.entityType() === 'INITIATIVE' &&
+    options.entityId().length > 0;
+  const initiative = createUrqlQuery(() => ({
+    query: InitiativePropertiesDocument,
+    client: getGraphqlSoupClient(),
+    variables: { initiativeId: options.entityId() },
+    enabled: initiativeEnabled(),
+    requestPolicy: 'cache-and-network',
+    keepPreviousData: false,
+    select: (data) =>
+      mapGraphqlProperties(data.user.initiative.properties)
+        .map(soupPropertyToProperty)
+        .map(withProjectStatusOptions)
+        .filter((property) => !property.isMetadata),
+  }));
+
   return {
-    result,
-    isEnabled: () => input() !== undefined,
-    refetch: () => result.refetch({ requestPolicy: 'network-only' }),
+    get result() {
+      return initiativeEnabled() ? initiative : result;
+    },
+    isEnabled: () => initiativeEnabled() || input() !== undefined,
+    refetch: () =>
+      (initiativeEnabled() ? initiative : result).refetch({
+        requestPolicy: 'network-only',
+      }),
   };
+}
+
+/** Re-read the native property relation, including newly attached values. */
+export async function refetchGraphqlInitiativeProperties(
+  initiativeId: string
+): Promise<void> {
+  await getGraphqlSoupClient()
+    .query(
+      InitiativePropertiesDocument,
+      { initiativeId },
+      { requestPolicy: 'network-only' }
+    )
+    .toPromise();
 }
 
 export type GraphqlEntityPropertyMutationInput =

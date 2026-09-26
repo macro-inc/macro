@@ -3,7 +3,9 @@ import { UserIcon } from '@core/component/UserIcon';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { Entity, type EntityData } from '@entity';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import WideStar from '@phosphor/sparkle.svg';
+import ProjectIcon from '@phosphor/stack.svg';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
@@ -200,6 +202,21 @@ function AskAiDisplay(props: { item: AskAiItem }) {
 function ItemDisplay(props: { item: CommandMenuItem }) {
   return (
     <Switch>
+      <Match when={props.item.kind === 'initiative' && props.item}>
+        {(item) => (
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <ProjectIcon class="size-4 text-ink-muted shrink-0" />
+            <span class="truncate">{item().name}</span>
+            <span class="ml-auto text-xs text-ink-muted">Project</span>
+          </div>
+        )}
+      </Match>
+      <Match when={props.item.kind === 'new-project'}>
+        <div class="flex items-center gap-2 flex-1 min-w-0">
+          <PlusIcon class="size-4 text-ink-muted" />
+          <span>New project</span>
+        </div>
+      </Match>
       <Match when={isSearchItem(props.item) && props.item}>
         {(item) => <SearchDisplay item={item()} />}
       </Match>

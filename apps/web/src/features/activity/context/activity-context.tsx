@@ -22,6 +22,8 @@ import {
 
 /** Resolved display for one referenced entity: name, icon, and link target. */
 export type EntityDisplay = {
+  /** Authorized native project target; projects have no document block. */
+  nativeProjectId?: Accessor<string | undefined>;
   name: Accessor<string>;
   icon: Accessor<JSX.Element>;
   isLoading: Accessor<boolean>;
