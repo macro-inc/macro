@@ -43,6 +43,7 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
 #[test]
 fn identity_precedes_the_standing_prompt_and_does_not_need_instructions() {
     let identity = AgentIdentity {
+        bot: bot_id::BotId::TEST_A,
         name: "Grunk".to_owned(),
         handle: "grunk".to_owned(),
     };

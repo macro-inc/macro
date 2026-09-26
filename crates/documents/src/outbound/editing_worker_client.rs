@@ -1,6 +1,8 @@
 //! Outbound adapter for the AI editing worker.
 
-use crate::domain::ports::editing::{EditMode, EditResult, EditUsage, EditingWorkerService};
+use crate::domain::ports::editing::{
+    EditMode, EditResult, EditUsage, EditingWorkerService, EditorName,
+};
 use macro_sync_service_jwt::DocumentPermissionToken;
 use reqwest::Client;
 use std::sync::Arc;
@@ -167,8 +169,9 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
         document_token: &DocumentPermissionToken,
         instructions: &str,
         mode: EditMode,
+        editor: Option<EditorName>,
     ) -> anyhow::Result<EditResult> {
-        let request_body = serde_json::json!({
+        let mut request_body = serde_json::json!({
             "documentToken": document_token.as_str(),
             "documentId": document_id,
             "prompt": instructions,
@@ -212,6 +215,9 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             },
             "interpret": false,
         });
+        if let Some(editor) = editor {
+            request_body["editor"] = serde_json::json!({ "name": editor.as_str() });
+        }
 
         // Propagate the current trace so the worker's spans join this
         // service's trace instead of rooting their own.

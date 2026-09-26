@@ -445,8 +445,10 @@ access to the title and property controls.
 1. Click `Edit with AI` (button directly under the editor body).
 2. A focused prompt box appears (placeholder `Describe the edit…`). Type the instruction,
    press Enter (or click `Send`).
-3. While running, the button row shows an author chip (e.g. `Wolf (AI)`) and a `Stop` button
-   (a11y text `Stop AI edit`). Edits stream directly into the document — there is no
+3. While running, the button row shows a `Stop` button (a11y text `Stop AI edit`), and the
+   live cursor walking the text is labelled with the editor's name: `Macro (AI)` for an
+   inline edit, or the name of the agent or persona whose session asked for the edit
+   (e.g. `Grunk (AI)`). Edits stream directly into the document — there is no
    accept/reject step. The editor can insert the same `@` mention chips a person can:
    dates/times, people, documents, channels, agent sessions (including the expanded
    Magic Chip card), and the other chip types.

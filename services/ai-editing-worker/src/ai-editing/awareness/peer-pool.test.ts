@@ -113,3 +113,37 @@ describe('PeerPool', () => {
     expect(pool.outstanding).toBe(3);
   });
 });
+
+describe('PeerPool.forEditor', () => {
+  it('labels every concurrent writer with the editor, never a pooled name', async () => {
+    const pool = PeerPool.forEditor('Macro', { colors });
+    const peers = await Promise.all([
+      pool.borrow(),
+      pool.borrow(),
+      pool.borrow(),
+    ]);
+    expect(peers.map((p) => p.name)).toEqual([
+      'Macro (AI)',
+      'Macro (AI)',
+      'Macro (AI)',
+    ]);
+    expect(pool.outstanding).toBe(3);
+  });
+
+  it('still hands out distinct peer ids and cycles colors', async () => {
+    const pool = PeerPool.forEditor('Grunk', { colors });
+    const a = await pool.borrow();
+    const b = await pool.borrow();
+    expect(a.peerId).not.toBe(b.peerId);
+    expect(a.color).not.toBe(b.color);
+  });
+
+  it('a released writer is reused under the same name', async () => {
+    const pool = PeerPool.forEditor('Cursor', { colors, max: 1 });
+    const a = await pool.borrow();
+    pool.release(a);
+    const b = await pool.borrow();
+    expect(b).toBe(a);
+    expect(b.name).toBe('Cursor (AI)');
+  });
+});
