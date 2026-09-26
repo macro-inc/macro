@@ -54,6 +54,10 @@ export function getAiToolsInfra(): AiToolsInfra {
     .getOutput('docxUploadBucketArn')
     .apply((v) => v as string);
 
+  const documentDeleteQueueArn: pulumi.Output<string> = cloudStorageServiceStack
+    .getOutput('deleteDocumentQueueArn')
+    .apply((v) => v as string);
+
   // Queue names come from the `macro_queues` crate at runtime; we only need the
   // ARNs here for the IAM send/receive grants below.
   const emailScheduledQueueArn: pulumi.Output<string> = emailServiceStack
@@ -100,6 +104,7 @@ export function getAiToolsInfra(): AiToolsInfra {
       mcpCredentialsKeyArn,
     ],
     queueArns: [
+      documentDeleteQueueArn,
       emailScheduledQueueArn,
       gmailOpsQueueArn,
       notificationIngressQueueArn,

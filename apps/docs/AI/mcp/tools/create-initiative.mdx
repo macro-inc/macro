@@ -1,0 +1,17 @@
+---
+title: CreateInitiative
+description: "Create a project for coordinating tasks (called an initiative in the API). Projects have status, priority, assignees, due dates, discussions and activity. Shares with the owner's team by default. This is different from CreateProject, which creates a folder. Use property tools with entityType initiative to set project properties."
+---
+
+# CreateInitiative
+
+Create a project for coordinating tasks (called an initiative in the API). Projects have status, priority, assignees, due dates, discussions and activity. Shares with the owner's team by default. This is different from CreateProject, which creates a folder. Use property tools with entityType initiative to set project properties.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string | Yes | Project name, up to 100 graphemes. |
+| `description` | string | No | Initial Markdown description, up to 2000 graphemes; optional. |
+| `memberIds` | string[] | No | Users to grant collaboration access; distinct from property assignees. |
+| `shareWithTeam` | boolean | No | Defaults to true. False creates without an explicit team grant. |

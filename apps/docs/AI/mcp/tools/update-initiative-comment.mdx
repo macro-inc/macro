@@ -1,0 +1,19 @@
+---
+title: UpdateInitiativeComment
+description: "Edit a project comment's Markdown or attachments. The shared discussion service enforces authorship: having project edit access alone does not authorize rewriting another author's comment. Omitted fields are unchanged."
+---
+
+# UpdateInitiativeComment
+
+Edit a project comment's Markdown or attachments. The shared discussion service enforces authorship: having project edit access alone does not authorize rewriting another author's comment. Omitted fields are unchanged.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `initiativeId` | string | Yes | Project identifier. |
+| `messageId` | string | Yes | Comment identifier. |
+| `content` | string | No | Replacement Markdown body. |
+| `mentions` | SimpleMention[] | No | Replacement explicit mentions; omitted preserves the existing authored mentions. |
+| `removeAttachmentIds` | string[] | No | Existing attachment ids to remove. |
+| `addAttachments` | NewAttachment[] | No | New attachments to append. |

@@ -1,0 +1,16 @@
+---
+title: ReadInitiative
+description: "Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The descriptionDocumentId can be read or edited with document tools. Use entityType initiative with property tools. Discussion and activity tools read the project's collaboration history."
+---
+
+# ReadInitiative
+
+Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The descriptionDocumentId can be read or edited with document tools. Use entityType initiative with property tools. Discussion and activity tools read the project's collaboration history.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `initiativeId` | string | Yes | Project identifier. |
+| `taskCursor` | string | No | Opaque nextTaskCursor from the preceding page for this project. |
+| `taskLimit` | integer | No | Maximum task ids to return, from 1 through 100; defaults to 100. |

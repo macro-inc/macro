@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [features]
+toolset = ["inbound", "dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:bot_id", "dep:schemars"]
 default = ["ports", "postgres"]
 inbound = [
   "dep:axum",
@@ -27,6 +28,11 @@ postgres = [
 ]
 
 [dependencies]
+ai_toolset = { path = "../ai_toolset", optional = true }
+anyhow = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+bot_id = { path = "../bot_id", optional = true }
+schemars = { workspace = true, optional = true }
 properties = { path = "../properties", optional = true, default-features = false }
 system_properties = { path = "../system_properties", optional = true }
 models_properties = { path = "../models_properties", optional = true }

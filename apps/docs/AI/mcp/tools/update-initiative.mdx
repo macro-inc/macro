@@ -1,0 +1,16 @@
+---
+title: UpdateInitiative
+description: "Rename a project with edit access, or replace its collaboration member list as the owner. Members control sharing independently of the assignee property. Assigning a user grants collaboration access; removing an assignment retains that access. For status, priority, assignees and due date use SetEntityProperty with entityType initiative. ReadInitiative returns the description document id for document editing tools."
+---
+
+# UpdateInitiative
+
+Rename a project with edit access, or replace its collaboration member list as the owner. Members control sharing independently of the assignee property. Assigning a user grants collaboration access; removing an assignment retains that access. For status, priority, assignees and due date use SetEntityProperty with entityType initiative. ReadInitiative returns the description document id for document editing tools.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `initiativeId` | string | Yes | Project identifier. |
+| `name` | string | No | Replacement name; omitted leaves it unchanged. |
+| `memberIds` | string[] | No | Owner-only complete replacement member list; omitted preserves existing members, [] clears it. |

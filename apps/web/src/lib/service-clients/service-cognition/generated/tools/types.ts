@@ -36,6 +36,7 @@ export type CodeExecutionErrorCode =
  */
 export type ToolPropertyTargetEntityType =
   | 'document'
+  | 'initiative'
   | 'project'
   | 'chat'
   | 'thread'
@@ -784,6 +785,26 @@ export type ParticipantAction = 'add' | 'remove';
  */
 export type MoveableEntityType = 'document' | 'chat' | 'email' | 'project';
 /**
+ * The entity whose permissions and lifecycle govern a message.
+ */
+export type MessageParent =
+  | {
+      type: 'channel';
+      id: string;
+    }
+  | {
+      type: 'document';
+      id: DocumentId;
+    }
+  | {
+      type: 'initiative';
+      id: string;
+    };
+/**
+ * A validated document identifier. Historical document ids need not be UUIDs.
+ */
+export type DocumentId = string;
+/**
  * One activity action returned to the AI.
  */
 export type ToolActivityAction =
@@ -1011,6 +1032,68 @@ export type CommentAnchor =
       type: 'pdfPin';
     };
 /**
+ * One full thread or a bounded timeline.
+ */
+export type InitiativeDiscussionsResult =
+  | {
+      thread: MessageThread;
+      type: 'thread';
+    }
+  | {
+      /**
+       * Matching discussion roots.
+       */
+      discussions: MessageListItem[];
+      /**
+       * More discussions may match; follow nextCursor.
+       */
+      truncated: boolean;
+      /**
+       * Stable continuation, absent after the final matching page.
+       */
+      nextCursor?: MessageCursor | null;
+      type: 'timeline';
+    };
+/**
+ * A thread's location within its document. Geometry remains annotation-owned.
+ */
+export type ThreadAnchor =
+  | {
+      /**
+       * Mark UUID serialized in the document.
+       */
+      mark_id: string;
+      /**
+       * The marked text as it read when the discussion was created, already
+       * trimmed and bounded. Absent on threads created or imported before
+       * snapshots were captured: the text a mark covers cannot be recovered
+       * from the mark id alone.
+       */
+      marked_text?: string | null;
+      type: 'markdown';
+    }
+  | {
+      /**
+       * Highlight annotation UUID.
+       */
+      anchor_id: string;
+      /**
+       * The text the highlight covers, trimmed and bounded like a markdown
+       * snapshot. The highlight owns it and it can be edited there, so it is
+       * read from the highlight whenever the thread is, never stored on the
+       * thread. Absent when the highlight carries no text.
+       */
+      marked_text?: string | null;
+      type: 'pdf_highlight';
+    }
+  | {
+      /**
+       * Placeable annotation UUID.
+       */
+      anchor_id: string;
+      type: 'pdf_placeable';
+    };
+/**
  * API-visible content lifecycle state derived from current document metadata.
  */
 export type DocumentContentState = 'unknown' | 'pending' | 'ready';
@@ -1031,6 +1114,39 @@ export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
  * The kind of an item inside a project.
  */
 export type ProjectItemType = 'document' | 'chat' | 'project';
+/**
+ * Privacy-preserving task project reference.
+ */
+export type TaskProjectReference =
+  | {
+      /**
+       * Requested task id.
+       */
+      taskId: string;
+      state: 'none';
+    }
+  | {
+      /**
+       * Requested task id.
+       */
+      taskId: string;
+      state: 'unavailable';
+    }
+  | {
+      /**
+       * Requested task id.
+       */
+      taskId: string;
+      /**
+       * Associated project id.
+       */
+      initiativeId: string;
+      /**
+       * Associated project name.
+       */
+      name: string;
+      state: 'visible';
+    };
 /**
  * How search terms are matched against skill names.
  */
@@ -1069,6 +1185,7 @@ export type UserToolResponseForSendEmailResponse =
 export type ToolEntityType =
   | 'document'
   | 'task'
+  | 'initiative'
   | 'project'
   | 'chat'
   | 'thread'
@@ -1108,6 +1225,14 @@ export type ConferenceChangeInput = 'google_meet' | 'remove';
  * The requester's own RSVP on an event they were invited to.
  */
 export type RsvpResponseInput = 'accepted' | 'declined' | 'tentative';
+/**
+ * A share can be disabled or grant a non-owner permission.
+ */
+export type ProjectShareAccess = 'off' | 'view' | 'comment' | 'edit';
+/**
+ * Scope admitted by a project's share link.
+ */
+export type ProjectLinkScope = 'off' | 'public' | 'team';
 /**
  * Content of a web fetch response - either a successful result or an error
  */
@@ -2876,6 +3001,97 @@ export interface ImportEntityView {
   importedByTeammate: boolean;
 }
 /**
+ * Create a project for coordinating tasks (called an initiative in the API). Projects have status, priority, assignees, due dates, discussions and activity. Shares with the owner's team by default. This is different from CreateProject, which creates a folder. Use property tools with entityType initiative to set project properties.
+ */
+export interface CreateInitiative {
+  /**
+   * Project name, up to 100 graphemes.
+   */
+  name: string;
+  /**
+   * Initial Markdown description, up to 2000 graphemes; optional.
+   */
+  description?: string | null;
+  /**
+   * Users to grant collaboration access; distinct from property assignees.
+   */
+  memberIds?: string[] | null;
+  /**
+   * Defaults to true. False creates without an explicit team grant.
+   */
+  shareWithTeam?: boolean | null;
+}
+/**
+ * Current project state, including visibility-filtered task membership.
+ */
+export interface ProjectDetails {
+  /**
+   * Project id; use entity type `initiative` in property tools.
+   */
+  initiativeId: string;
+  /**
+   * Project name.
+   */
+  name: string;
+  /**
+   * Description document; read or edit its Markdown using document tools.
+   */
+  descriptionDocumentId: string;
+  /**
+   * Project owner.
+   */
+  ownerId: string;
+  /**
+   * Collaboration members, distinct from property assignees.
+   */
+  memberIds: string[];
+  /**
+   * Up to 200 associated tasks the caller can view.
+   */
+  taskIds: string[];
+  /**
+   * Total associated tasks the caller can view.
+   */
+  taskCount: number;
+  /**
+   * Whether the project contains additional visible tasks beyond taskIds.
+   */
+  tasksTruncated: boolean;
+  /**
+   * Caller's effective permission.
+   */
+  access: string;
+  /**
+   * Explicit owner-team access, or absent when off.
+   */
+  teamAccess?: string | null;
+  /**
+   * Link scope: PUBLIC or TEAM, or absent when off.
+   */
+  linkScope?: string | null;
+  /**
+   * Access granted by the link.
+   */
+  linkAccess?: string | null;
+  /**
+   * Explicit channel shares.
+   */
+  channelShares: ProjectChannelShare[];
+}
+/**
+ * One channel's explicit project grant.
+ */
+export interface ProjectChannelShare {
+  /**
+   * Shared channel identifier.
+   */
+  channelId: string;
+  /**
+   * Granted access level.
+   */
+  access: string;
+}
+/**
  * Create a project — shown as a folder in the app UI. Documents, AI chats, email threads, and other projects can be placed inside it.
  */
 export interface CreateProject {
@@ -3118,6 +3334,50 @@ export interface DeleteImportEntityResponse {
    * What happened.
    */
   message: string;
+}
+/**
+ * Permanently delete a project, its description and project-owned discussions/properties. Associated tasks remain and lose their project association. Requires ownership. This operation cannot be undone.
+ */
+export interface DeleteInitiative {
+  /**
+   * Project to permanently delete.
+   */
+  initiativeId: string;
+}
+/**
+ * Successful project mutation with no further result body.
+ */
+export interface ProjectOperationComplete {
+  /**
+   * True when the operation completed.
+   */
+  success: boolean;
+}
+/**
+ * Delete a project comment, or delete an entire discussion when wholeDiscussion is true and messageId is its root id. Comment deletion leaves a tombstone so replies remain readable; whole-discussion deletion hides the thread. The service enforces author and project moderation permissions.
+ */
+export interface DeleteInitiativeComment {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Comment id, or root id for whole-discussion deletion.
+   */
+  messageId: string;
+  /**
+   * Delete the entire discussion rather than one comment. Defaults to false.
+   */
+  wholeDiscussion?: boolean;
+}
+/**
+ * The requested discussion operation completed.
+ */
+export interface DiscussionOperationComplete {
+  /**
+   * True after successful completion.
+   */
+  success: boolean;
 }
 /**
  * Permanently delete one of the current user's reminders, along with any notification it already produced. Get the `reminderId` from ListReminders or CreateReminder.
@@ -4165,6 +4425,115 @@ export interface ToolInbox {
   isDelegated: boolean;
 }
 /**
+ * Find projects (initiatives), with canonical properties and progress over tasks you can view. Returns at most 100 recently updated matches per page. Pass nextCursor back as cursor with the same filters to read more. Filter by name, status, priority, assignee, or due date. Project folders use ReadProject instead.
+ */
+export interface ListInitiatives {
+  /**
+   * Case-insensitive project name substring.
+   */
+  query?: string | null;
+  /**
+   * Status option id, obtained from property definitions.
+   */
+  status?: string | null;
+  /**
+   * Priority option id, obtained from property definitions.
+   */
+  priority?: string | null;
+  /**
+   * Assigned user id.
+   */
+  assignee?: string | null;
+  /**
+   * Earliest inclusive due timestamp.
+   */
+  dueAfter?: string | null;
+  /**
+   * Latest inclusive due timestamp.
+   */
+  dueBefore?: string | null;
+  /**
+   * Opaque nextCursor from the preceding page, with the same filters.
+   */
+  cursor?: string | null;
+  /**
+   * Maximum projects to return, from 1 through 100; defaults to 100.
+   */
+  limit?: number | null;
+}
+/**
+ * Bounded project search results.
+ */
+export interface ProjectListResult {
+  /**
+   * Matching visible projects.
+   */
+  projects: ProjectListRow[];
+  /**
+   * True when additional matches exist.
+   */
+  truncated: boolean;
+  /**
+   * Opaque cursor for the next page, absent after the final page.
+   */
+  nextCursor?: string | null;
+}
+/**
+ * One visible project with canonical fields and permission-aware progress.
+ */
+export interface ProjectListRow {
+  /**
+   * Project id.
+   */
+  initiativeId: string;
+  /**
+   * Project name.
+   */
+  name: string;
+  /**
+   * Description document id.
+   */
+  descriptionDocumentId: string;
+  /**
+   * Effective caller access.
+   */
+  access: string;
+  properties: ProjectPropertyValues;
+  /**
+   * Count of associated tasks visible to the caller.
+   */
+  taskCount: number;
+  /**
+   * Visible completed tasks.
+   */
+  completedTaskCount: number;
+}
+/**
+ * Canonical system-property values, editable through SetEntityProperty.
+ */
+export interface ProjectPropertyValues {
+  /**
+   * Status option id, or unset.
+   */
+  status?: string | null;
+  /**
+   * Priority option id, or unset.
+   */
+  priority?: string | null;
+  /**
+   * Assigned users, independent from sharing membership.
+   */
+  assignees: string[];
+  /**
+   * Due timestamp, or unset.
+   */
+  dueDate?: string | null;
+  /**
+   * Whether the status is completed.
+   */
+  completed: boolean;
+}
+/**
  * List the user's Gmail labels. Returns both system labels (INBOX, SENT, DRAFTS, UNREAD, STARRED, TRASH, SPAM, IMPORTANT, CATEGORY_PERSONAL, CATEGORY_SOCIAL, CATEGORY_PROMOTIONS, CATEGORY_UPDATES, CATEGORY_FORUMS, etc.) and any custom user-created labels. Each label has a UUID `id` and a `name`.
  *
  * Gmail represents nearly every inbox operation as a label add/remove, so this tool is the first step for almost any thread-management action: call ListLabels once to find the label `id` by `name`, then pass that `id` to UpdateThreadLabels. Common pairings (look up the named system label here, then call UpdateThreadLabels with that id):
@@ -4668,6 +5037,212 @@ export interface NameSearch {
    */
   tags?: TagFilter[] | null;
   tagsMatch?: TagMatch;
+}
+/**
+ * Post a Markdown comment on a project, or reply to a project discussion. Requires comment access. The bot is the author and the requesting user is recorded as its invoker. Uses the shared discussions system, including mention authorization, realtime updates and notifications.
+ */
+export interface PostInitiativeComment {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Markdown comment body.
+   */
+  content: string;
+  /**
+   * Root message id to reply to. Omit to start a discussion.
+   */
+  threadId?: string | null;
+  /**
+   * Explicit user/entity mentions; Markdown mentions are also extracted by the service.
+   */
+  mentions?: SimpleMention[];
+  /**
+   * Entity attachments, checked under the same caller's access.
+   */
+  attachments?: NewAttachment[];
+}
+/**
+ * A mention tracked in a message body.
+ */
+export interface SimpleMention {
+  /**
+   * Mentioned entity type.
+   */
+  entity_type: string;
+  /**
+   * Mentioned entity identifier.
+   */
+  entity_id: string;
+}
+/**
+ * An attachment to add to a message.
+ */
+export interface NewAttachment {
+  /**
+   * Attached entity type.
+   */
+  entity_type: string;
+  /**
+   * Attached entity identifier.
+   */
+  entity_id: string;
+  /**
+   * Optional media width.
+   */
+  width?: number | null;
+  /**
+   * Optional media height.
+   */
+  height?: number | null;
+}
+/**
+ * Shared message representation for channel timelines and entity discussions.
+ */
+export interface Message {
+  /**
+   * Message UUID.
+   */
+  id: string;
+  parent: MessageParent;
+  /**
+   * Root message UUID for replies; absent on roots.
+   */
+  thread_id?: string | null;
+  /**
+   * Authenticated actor or owner of imported content.
+   */
+  sender_id: string;
+  /**
+   * Original external author, when imported.
+   */
+  imported_author?: ImportedAuthor | null;
+  /**
+   * Public bot name and avatar for rendering shared message authors.
+   */
+  bot_profile?: BotSenderProfile | null;
+  /**
+   * Tracked mentions, retained when a caller changes attachments only.
+   */
+  mentions: SimpleMention[];
+  /**
+   * User who triggered a bot-authored message.
+   */
+  triggered_by?: string | null;
+  /**
+   * Macro Markdown body.
+   */
+  content: string;
+  /**
+   * Creation time.
+   */
+  created_at: string;
+  /**
+   * Last persisted update.
+   */
+  updated_at: string;
+  /**
+   * Last content edit, if any.
+   */
+  edited_at?: string | null;
+  /**
+   * Message tombstone, independent of thread deletion.
+   */
+  deleted_at?: string | null;
+  /**
+   * Attached entities.
+   */
+  attachments: MessageAttachment[];
+  /**
+   * Aggregated reactions.
+   */
+  reactions: CountedReaction[];
+}
+/**
+ * Display attribution for a comment imported from an external document.
+ */
+export interface ImportedAuthor {
+  /**
+   * Original author text; never interpreted as an authenticated principal.
+   */
+  name: string;
+}
+/**
+ * Public bot profile attached to bot-authored messages.
+ */
+export interface BotSenderProfile {
+  /**
+   * Bot display name.
+   */
+  name: string;
+  /**
+   * Bot avatar URL.
+   */
+  avatar_url?: string | null;
+}
+/**
+ * An entity attached to a message.
+ */
+export interface MessageAttachment {
+  /**
+   * Attachment UUID.
+   */
+  id: string;
+  /**
+   * Attached entity type.
+   */
+  entity_type: string;
+  /**
+   * Attached entity identifier.
+   */
+  entity_id: string;
+  /**
+   * Optional media width.
+   */
+  width?: number | null;
+  /**
+   * Optional media height.
+   */
+  height?: number | null;
+  /**
+   * When the attachment was added.
+   */
+  created_at: string;
+}
+/**
+ * Reaction emoji and the users who added it.
+ */
+export interface CountedReaction {
+  /**
+   * Emoji being reacted with.
+   */
+  emoji: string;
+  /**
+   * User identifiers.
+   */
+  users: string[];
+}
+/**
+ * Add or remove the acting bot's emoji reaction on a project comment. Requires comment access and a live comment in that project.
+ */
+export interface ReactToInitiativeComment {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Comment identifier.
+   */
+  messageId: string;
+  /**
+   * Emoji to react with.
+   */
+  emoji: string;
+  /**
+   * True adds the reaction; false removes it.
+   */
+  add: boolean;
 }
 /**
  * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
@@ -5378,6 +5953,288 @@ export interface DocumentComment {
   editedAt?: string | null;
 }
 /**
+ * Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The descriptionDocumentId can be read or edited with document tools. Use entityType initiative with property tools. Discussion and activity tools read the project's collaboration history.
+ */
+export interface ReadInitiative {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Opaque nextTaskCursor from the preceding page for this project.
+   */
+  taskCursor?: string | null;
+  /**
+   * Maximum task ids to return, from 1 through 100; defaults to 100.
+   */
+  taskLimit?: number | null;
+}
+/**
+ * Project detail and canonical property values.
+ */
+export interface ProjectReadResult {
+  project: ProjectDetails;
+  properties: ProjectPropertyValues;
+  /**
+   * Opaque cursor for the next task page, absent after the final page.
+   */
+  nextTaskCursor?: string | null;
+}
+/**
+ * Read project creation, edits, property changes, and task membership changes, newest first. Task references require current task view access. Each page scans at most 100 events and may contain fewer visible records. Pass nextCursor back as cursor with the same time filters to continue, including after an empty page. Discussions are read separately with ReadInitiativeDiscussions.
+ */
+export interface ReadInitiativeActivity {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Only changes at or after this timestamp.
+   */
+  after?: string | null;
+  /**
+   * Only changes before this timestamp.
+   */
+  before?: string | null;
+  /**
+   * Opaque nextCursor from the preceding activity page.
+   */
+  cursor?: InitiativeActivityCursor | null;
+  /**
+   * Maximum events to scan, from 1 through 100; defaults to 100.
+   */
+  limit?: number | null;
+}
+/**
+ * Stable cursor for project history.
+ */
+export interface InitiativeActivityCursor {
+  /**
+   * Time of the last scanned activity.
+   */
+  occurredAt: string;
+  /**
+   * Tie-breaker within the same timestamp.
+   */
+  id: string;
+}
+/**
+ * Bounded visible project activity.
+ */
+export interface ProjectActivityResult {
+  /**
+   * Visible events ordered newest first.
+   */
+  records: InitiativeActivityRecord[];
+  /**
+   * More events may match; follow nextCursor.
+   */
+  truncated: boolean;
+  /**
+   * Stable continuation, absent after the final matching page.
+   */
+  nextCursor?: InitiativeActivityCursor | null;
+}
+/**
+ * One authorized activity row; task names are hydrated through existing authorized task reads.
+ */
+export interface InitiativeActivityRecord {
+  /**
+   * Stable record identifier, also used for realtime deduplication.
+   */
+  id: string;
+  /**
+   * Principal who acted.
+   */
+  actorId: string;
+  /**
+   * Acting user's feed identity when a bot acted on their behalf.
+   */
+  subjectId: string;
+  /**
+   * Durable activity action tag.
+   */
+  action: string;
+  /**
+   * Typed payload for known actions. Absent for unknown actions.
+   */
+  actionPayload?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Time of the change.
+   */
+  occurredAt: string;
+}
+/**
+ * Read discussions and comments on a project using Macro's shared discussions system. Without threadId returns up to 100 roots with reply previews. Pass nextCursor back as cursor with the same date filters to read older roots. Use a root id as threadId to read the complete discussion. Date filters select discussions with activity in that interval.
+ */
+export interface ReadInitiativeDiscussions {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Root message id for a complete thread. Omit to list discussions.
+   */
+  threadId?: string | null;
+  /**
+   * Include discussions with roots or live replies at or after this timestamp.
+   */
+  after?: string | null;
+  /**
+   * Include discussions with roots or live replies before this timestamp.
+   */
+  before?: string | null;
+  /**
+   * Opaque nextCursor from the preceding timeline page; omit when reading a thread.
+   */
+  cursor?: MessageCursor | null;
+  /**
+   * Maximum roots to return, from 1 through 100; defaults to 100.
+   */
+  limit?: number | null;
+}
+/**
+ * Cursor for a chronological parent timeline.
+ */
+export interface MessageCursor {
+  /**
+   * Last root creation time.
+   */
+  created_at: string;
+  /**
+   * Last root UUID, used to break timestamp ties.
+   */
+  id: string;
+}
+/**
+ * A discussion with its root and ordered replies, including root tombstones.
+ */
+export interface MessageThread {
+  state: ThreadState;
+  root: Message;
+  /**
+   * Replies in display order.
+   */
+  replies: Message[];
+}
+/**
+ * State belonging to a whole thread, keyed by its root message.
+ */
+export interface ThreadState {
+  /**
+   * Root message UUID; there is no separate thread identity.
+   */
+  root_id: string;
+  /**
+   * User who owns this discussion, including imported discussions.
+   */
+  user_id: string;
+  /**
+   * Whether this discussion has been resolved.
+   */
+  resolved: boolean;
+  /**
+   * No anchor means a discussion on the entire parent. Deleted Markdown
+   * threads retain their mark identity so closed documents can reconcile it.
+   */
+  anchor?: ThreadAnchor | null;
+  /**
+   * Creation time of the discussion.
+   */
+  created_at: string;
+  /**
+   * Last state change.
+   */
+  updated_at: string;
+  /**
+   * Explicit deletion of the entire thread, distinct from root deletion.
+   */
+  deleted_at?: string | null;
+}
+/**
+ * Root message with its small thread preview, independent of its parent type.
+ */
+export interface MessageListItem {
+  /**
+   * Message UUID.
+   */
+  id: string;
+  parent: MessageParent;
+  /**
+   * Root message UUID for replies; absent on roots.
+   */
+  thread_id?: string | null;
+  /**
+   * Authenticated actor or owner of imported content.
+   */
+  sender_id: string;
+  /**
+   * Original external author, when imported.
+   */
+  imported_author?: ImportedAuthor | null;
+  /**
+   * Public bot name and avatar for rendering shared message authors.
+   */
+  bot_profile?: BotSenderProfile | null;
+  /**
+   * Tracked mentions, retained when a caller changes attachments only.
+   */
+  mentions: SimpleMention[];
+  /**
+   * User who triggered a bot-authored message.
+   */
+  triggered_by?: string | null;
+  /**
+   * Macro Markdown body.
+   */
+  content: string;
+  /**
+   * Creation time.
+   */
+  created_at: string;
+  /**
+   * Last persisted update.
+   */
+  updated_at: string;
+  /**
+   * Last content edit, if any.
+   */
+  edited_at?: string | null;
+  /**
+   * Message tombstone, independent of thread deletion.
+   */
+  deleted_at?: string | null;
+  /**
+   * Attached entities.
+   */
+  attachments: MessageAttachment[];
+  /**
+   * Aggregated reactions.
+   */
+  reactions: CountedReaction[];
+  state: ThreadState;
+  thread: MessageThreadPreview;
+}
+/**
+ * Thread counts and its oldest three live replies.
+ */
+export interface MessageThreadPreview {
+  /**
+   * Total live reply count.
+   */
+  reply_count: number;
+  /**
+   * Creation time of the latest live reply.
+   */
+  latest_reply_at?: string | null;
+  /**
+   * Bounded preview using the canonical message shape.
+   */
+  preview: Message[];
+}
+/**
  * Retrieve a documents metadata
  */
 export interface ReadMetadata {
@@ -5568,6 +6425,24 @@ export interface ReadSpreadsheet {
    * Include cell formatting.
    */
   includeStyles?: boolean | null;
+}
+/**
+ * Find the project associated with each requested task. Returns project id/name only when both task and project are visible. Distinguishes no project from unavailable. Accepts up to 100 unique task ids.
+ */
+export interface ReadTaskInitiatives {
+  /**
+   * Task ids to look up, deduplicated in input order.
+   */
+  taskIds: string[];
+}
+/**
+ * Visibility-aware project references for the requested tasks.
+ */
+export interface TaskProjectReferences {
+  /**
+   * References in deduplicated request order.
+   */
+  references: TaskProjectReference[];
 }
 /**
  * Rename an existing channel. Requires the current user to be an active channel participant. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
@@ -5878,7 +6753,7 @@ export interface SendEmail {
   includeSignature?: boolean | null;
 }
 /**
- * Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.
+ * Set or update a property value on an entity. Tasks are targeted as entity_type='document'. Projects in the Tasks UI are entity_type='initiative'; entity_type='project' still means a folder. Initiatives share the Assignees, Status, Priority and Due Date definitions below and their clearing behavior. Project Status accepts only Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), and Completed (...0004); In Review and Canceled are task-only options. Provide the property_definition_id and exactly one value field matching the property's data type.
  *
  * For multi-select properties — including tags — prefer add_option_ids / remove_option_ids over option_ids: they add or remove just those options atomically, composing with concurrent edits. option_ids replaces the entire value, so a stale read can silently drop options someone else just added; only use it when the user asks to set the value to exactly a given list. To apply a tag, pass the tag set's property_definition_id and the tag's option id (both from ListTags) in add_option_ids; to remove a tag, use remove_option_ids.
  *
@@ -5970,6 +6845,23 @@ export interface SetEntityPropertyResponse {
   message: string;
 }
 /**
+ * Resolve or reopen a project discussion using the shared discussion policy. Requires comment access and any additional author/moderator permissions enforced by the discussion service.
+ */
+export interface SetInitiativeDiscussionResolved {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Root message id of the discussion.
+   */
+  threadId: string;
+  /**
+   * True resolves; false reopens.
+   */
+  resolved: boolean;
+}
+/**
  * Set where future mail from a sender lands in one of the user's inboxes. This is the same control a human has in the inbox menus: Sender → Signal, Sender → Noise, and Block Sender.
  *
  * Policies:
@@ -6014,6 +6906,41 @@ export interface SetSenderPolicyResponse {
    * A human-readable summary of the change.
    */
   summary: string;
+}
+/**
+ * Set the project associated with tasks, moving them from their previous project if needed. Requires edit access to each task and the destination project; access to the previous project is unnecessary. Omit initiativeId to clear the association using task edit access alone. Reports each task's outcome independently; at most 100 unique tasks.
+ */
+export interface SetTaskInitiative {
+  /**
+   * Task ids to assign or clear, deduplicated in request order.
+   */
+  taskIds: string[];
+  /**
+   * Destination project; omit to clear each task's current project.
+   */
+  initiativeId?: string | null;
+}
+/**
+ * Results in deduplicated input order.
+ */
+export interface TaskProjectOutcomes {
+  /**
+   * Outcome for every submitted task.
+   */
+  results: TaskProjectOutcome[];
+}
+/**
+ * One task mutation outcome.
+ */
+export interface TaskProjectOutcome {
+  /**
+   * Requested task identifier.
+   */
+  taskId: string;
+  /**
+   * assigned, moved, cleared, notATask, notFound, or skippedNoPermission.
+   */
+  status: string;
 }
 /**
  * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.
@@ -6162,6 +7089,87 @@ export interface UpdateCalendarEvent {
    * Adjust out-of-office decline behavior; only valid on an event that is already out of office (its event type cannot be changed). Replaces the whole block: set `autoDeclineMode` ("decline_none", "decline_all", or "decline_new_only") and optionally `declineMessage`. Omit to leave it untouched.
    */
   outOfOffice?: OutOfOfficeInput | null;
+}
+/**
+ * Rename a project with edit access, or replace its collaboration member list as the owner. Members control sharing independently of the assignee property. Assigning a user grants collaboration access; removing an assignment retains that access. For status, priority, assignees and due date use SetEntityProperty with entityType initiative. ReadInitiative returns the description document id for document editing tools.
+ */
+export interface UpdateInitiative {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Replacement name; omitted leaves it unchanged.
+   */
+  name?: string | null;
+  /**
+   * Owner-only complete replacement member list; omitted preserves existing members, [] clears it.
+   */
+  memberIds?: string[] | null;
+}
+/**
+ * Edit a project comment's Markdown or attachments. The shared discussion service enforces authorship: having project edit access alone does not authorize rewriting another author's comment. Omitted fields are unchanged.
+ */
+export interface UpdateInitiativeComment {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Comment identifier.
+   */
+  messageId: string;
+  /**
+   * Replacement Markdown body.
+   */
+  content?: string | null;
+  /**
+   * Replacement explicit mentions; omitted preserves the existing authored mentions.
+   */
+  mentions?: SimpleMention[] | null;
+  /**
+   * Existing attachment ids to remove.
+   */
+  removeAttachmentIds?: string[];
+  /**
+   * New attachments to append.
+   */
+  addAttachments?: NewAttachment[];
+}
+/**
+ * Change a project's team, link or channel sharing. Only the actual project owner may change sharing. Each omitted field remains unchanged; off disables that share. Project and description document permissions change together. Collaboration member changes use UpdateInitiative.
+ */
+export interface UpdateInitiativeSharing {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Explicit owner-team grant; off removes it.
+   */
+  teamAccess?: ProjectShareAccess | null;
+  /**
+   * Who the project link admits; off disables it.
+   */
+  linkScope?: ProjectLinkScope | null;
+  /**
+   * Permission granted by an enabled link. Off resets it to the default view level.
+   */
+  linkAccess?: ProjectShareAccess | null;
+  /**
+   * Individual channel shares to set or remove; other shares remain unchanged.
+   */
+  channels?: ProjectChannelSharing[] | null;
+}
+/**
+ * Update one channel's grant without replacing other channel grants.
+ */
+export interface ProjectChannelSharing {
+  /**
+   * Channel id to share with or revoke.
+   */
+  channelId: string;
+  access: ProjectShareAccess;
 }
 /**
  * Change one of the current user's reminders: reword it, move when it fires, or mark it done. Get the `reminderId` from ListReminders or CreateReminder.

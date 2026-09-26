@@ -1,0 +1,18 @@
+---
+title: PostInitiativeComment
+description: "Post a Markdown comment on a project, or reply to a project discussion. Requires comment access. The bot is the author and the requesting user is recorded as its invoker. Uses the shared discussions system, including mention authorization, realtime updates and notifications."
+---
+
+# PostInitiativeComment
+
+Post a Markdown comment on a project, or reply to a project discussion. Requires comment access. The bot is the author and the requesting user is recorded as its invoker. Uses the shared discussions system, including mention authorization, realtime updates and notifications.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `initiativeId` | string | Yes | Project identifier. |
+| `content` | string | Yes | Markdown comment body. |
+| `threadId` | string | No | Root message id to reply to. Omit to start a discussion. |
+| `mentions` | SimpleMention[] | No | Explicit user/entity mentions; Markdown mentions are also extracted by the service. |
+| `attachments` | NewAttachment[] | No | Entity attachments, checked under the same caller's access. |

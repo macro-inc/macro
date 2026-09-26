@@ -1,0 +1,19 @@
+---
+title: ReadInitiativeDiscussions
+description: "Read discussions and comments on a project using Macro's shared discussions system. Without threadId returns up to 100 roots with reply previews. Pass nextCursor back as cursor with the same date filters to read older roots. Use a root id as threadId to read the complete discussion. Date filters select discussions with activity in that interval."
+---
+
+# ReadInitiativeDiscussions
+
+Read discussions and comments on a project using Macro's shared discussions system. Without threadId returns up to 100 roots with reply previews. Pass nextCursor back as cursor with the same date filters to read older roots. Use a root id as threadId to read the complete discussion. Date filters select discussions with activity in that interval.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `initiativeId` | string | Yes | Project identifier. |
+| `threadId` | string | No | Root message id for a complete thread. Omit to list discussions. |
+| `after` | string | No | Include discussions with roots or live replies at or after this timestamp. |
+| `before` | string | No | Include discussions with roots or live replies before this timestamp. |
+| `cursor` | MessageCursor | No | Opaque nextCursor from the preceding timeline page; omit when reading a thread. |
+| `limit` | integer | No | Maximum roots to return, from 1 through 100; defaults to 100. |

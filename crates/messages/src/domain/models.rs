@@ -470,6 +470,7 @@ pub struct PostMessage {
 
 /// Root message with its small thread preview, independent of its parent type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageListItem {
     /// The same canonical message returned by item reads and writes.
@@ -483,6 +484,7 @@ pub struct MessageListItem {
 
 /// Thread counts and its oldest three live replies.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageThreadPreview {
     /// Total live reply count.

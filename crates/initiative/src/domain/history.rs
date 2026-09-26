@@ -19,6 +19,7 @@ use super::models::InitiativeError;
 
 /// Stable cursor for project history.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "toolset", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct InitiativeActivityCursor {
@@ -30,6 +31,7 @@ pub struct InitiativeActivityCursor {
 
 /// One authorized activity row; task names are hydrated through existing authorized task reads.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[cfg_attr(feature = "toolset", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct InitiativeActivityRecord {

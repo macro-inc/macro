@@ -1,0 +1,18 @@
+---
+title: ReadInitiativeActivity
+description: "Read project creation, edits, property changes, and task membership changes, newest first. Task references require current task view access. Each page scans at most 100 events and may contain fewer visible records. Pass nextCursor back as cursor with the same time filters to continue, including after an empty page. Discussions are read separately with ReadInitiativeDiscussions."
+---
+
+# ReadInitiativeActivity
+
+Read project creation, edits, property changes, and task membership changes, newest first. Task references require current task view access. Each page scans at most 100 events and may contain fewer visible records. Pass nextCursor back as cursor with the same time filters to continue, including after an empty page. Discussions are read separately with ReadInitiativeDiscussions.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `initiativeId` | string | Yes | Project identifier. |
+| `after` | string | No | Only changes at or after this timestamp. |
+| `before` | string | No | Only changes before this timestamp. |
+| `cursor` | InitiativeActivityCursor | No | Opaque nextCursor from the preceding activity page. |
+| `limit` | integer | No | Maximum events to scan, from 1 through 100; defaults to 100. |
