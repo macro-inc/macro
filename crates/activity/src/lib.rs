@@ -30,8 +30,8 @@ pub mod outbound;
 pub use domain::events::{ActivityMacroEvent, ActivityTopicEvent, ActivityWireRow};
 pub use domain::models::{
     Action, ActionDecodeError, Activity, ActivityRecord, ActivitySource, Actor, Attribution,
-    CallStart, CommonAction, DomainActivity, EntityType, Ingest, ParticipantChange, PropertyChange,
-    RecordedAction, VIEW_ACTION_TAGS, activity_id, event_time,
+    CallStart, CommonAction, DomainActivity, EntityType, Ingest, InitiativeTaskChange,
+    ParticipantChange, PropertyChange, RecordedAction, VIEW_ACTION_TAGS, activity_id, event_time,
 };
 pub use domain::overview::{
     ActivityOverview, ActivityOverviewError, ActivityWindow, ActivityWindowError, DayCount,

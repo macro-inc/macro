@@ -331,6 +331,14 @@ impl InitiativeService for FakeInitiativeService {
         Err(InitiativeError::NotFound)
     }
 
+    async fn create_attributed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: CreateInitiativeRequest,
+        _attribution: activity::Attribution,
+    ) -> Result<InitiativeDetail, InitiativeError> {
+        self.create(user_id, request).await
+    }
     async fn page(
         &self,
         _user_id: &MacroUserIdStr<'_>,

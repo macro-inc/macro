@@ -8,7 +8,7 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
-initiative = { path = "../initiative", default-features = false, features = ["postgres"] }
+initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources"] }
 activity = { path = "../activity", default-features = false, features = ["ai_tools", "outbound"] }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }

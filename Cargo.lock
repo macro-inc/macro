@@ -3160,7 +3160,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.25"
+version = "0.6.26"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -7747,6 +7747,7 @@ dependencies = [
 name = "graphql_initiative"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "async-graphql",
  "chrono",
  "entity_access",
@@ -9152,6 +9153,7 @@ dependencies = [
 name = "initiative"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "anyhow",
  "axum",
  "chrono",
@@ -9160,6 +9162,8 @@ dependencies = [
  "http-body-util",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
  "mockall",

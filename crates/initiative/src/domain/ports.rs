@@ -12,11 +12,12 @@ use models_permissions::share_permission::team_share::TeamShareCreation;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use std::collections::HashMap;
 
+use crate::domain::events::{AssignedTasks, TaskMembershipChange};
 use crate::domain::models::{
-    AssignTasksResponse, AssignTasksResult, CreateInitiativeRepoArgs, CreateInitiativeRequest,
-    DescriptionDocumentId, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
-    InitiativeList, LockstepTeamShareFacts, NewDescriptionDocument, TaskAssignment,
-    UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
+    AssignTasksResponse, CreateInitiativeRepoArgs, CreateInitiativeRequest, DescriptionDocumentId,
+    InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId, InitiativeList,
+    LockstepTeamShareFacts, NewDescriptionDocument, TaskAssignment, UpdateInitiativeRepoArgs,
+    UpdateInitiativeRequest,
 };
 
 /// Outbound port for the description document's lifecycle.
@@ -102,17 +103,20 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         &self,
         id: InitiativeId,
         task_ids: Vec<String>,
-    ) -> impl Future<Output = Result<Vec<AssignTasksResult>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<AssignedTasks, Self::Err>> + Send;
 
     /// Remove one task from the initiative.
     fn unassign_task(
         &self,
         id: InitiativeId,
         task_id: &str,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<TaskMembershipChange>, Self::Err>> + Send;
 
     /// Clear any initiative association for a task. Already unassigned tasks succeed.
-    fn clear_task(&self, task_id: &str) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn clear_task(
+        &self,
+        task_id: &str,
+    ) -> impl Future<Output = Result<Option<TaskMembershipChange>, Self::Err>> + Send;
 
     /// Grant assignees edit access to the initiative and description in one transaction,
     /// recording non-owner recipients as collaborators without removing anyone or
@@ -164,6 +168,15 @@ pub trait InitiativeService: Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'_>,
         request: CreateInitiativeRequest,
+    ) -> impl Future<Output = Result<InitiativeDetail, InitiativeError>> + Send;
+
+    /// Create for a trusted principal. Direct users must be the owner; delegated
+    /// bots must act for that owner. HTTP bodies and tool inputs never provide attribution.
+    fn create_attributed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: CreateInitiativeRequest,
+        attribution: activity::Attribution,
     ) -> impl Future<Output = Result<InitiativeDetail, InitiativeError>> + Send;
 
     /// Load identity without an access receipt. For internal callers only.
