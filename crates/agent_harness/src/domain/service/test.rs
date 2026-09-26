@@ -1275,6 +1275,88 @@ async fn a_draining_replica_starts_no_new_work() {
     assert_eq!(containers.spawned(), 1, "no container for the refused open");
 }
 
+/// A runtime that loaded this session with its last turn still running - a
+/// replica taking over mid-turn - streams that turn to its end. A prompt sent
+/// meanwhile waits in the queue rather than being folded into it, and goes
+/// out once the continued turn completes.
+#[tokio::test]
+async fn a_prompt_waits_behind_a_turn_the_runtime_is_continuing() {
+    use agent_client_protocol::schema::v1::{ContentChunk, SessionNotification, SessionUpdate};
+    use agent_runtime_protocol::domain::turn::{TurnCompleteNotification, TurnOutcome};
+    let ((service, repo, containers, _announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    turns.settled(id).await;
+    let agent = container.agent();
+    let delivered = prompts(&agent).len();
+    let requests = agent.received_requests().len();
+
+    let logged = repo.list_by_session(id).await.expect("log").len();
+    container.sends_event(SystemEvent::TurnContinuing);
+    for update in [
+        SessionUpdate::UserMessageChunk(ContentChunk::new(ContentBlock::from("long job"))),
+        SessionUpdate::AgentMessageChunk(ContentChunk::new(ContentBlock::from("second half"))),
+    ] {
+        agent.sends_notification(SessionNotification::new(SessionId::new("acp-test"), update));
+    }
+    // Both chunks logged means the event ahead of them on the transport was
+    // seen first.
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while repo.list_by_session(id).await.expect("log").len() < logged + 2 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the continued turn's chunks are logged");
+
+    let queued = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("after the continued turn"),
+                action_id: None,
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("a prompt behind a continuing turn is accepted");
+    assert_eq!(
+        queued.disposition,
+        agent_session::domain::ports::ControlDisposition::Queued
+    );
+    assert_eq!(
+        prompts(&agent).len(),
+        delivered,
+        "nothing joined the continuing turn"
+    );
+    assert_eq!(
+        service
+            .queued_controls(id)
+            .await
+            .expect("queue lists")
+            .len(),
+        1
+    );
+
+    agent.sends_notification(TurnCompleteNotification {
+        session_id: SessionId::new("acp-test"),
+        outcome: TurnOutcome::Finished,
+    });
+    agent.wait_for_requests(requests + 1).await;
+    assert_eq!(
+        prompts(&agent).last(),
+        Some(&vec![ContentBlock::from("after the continued turn")])
+    );
+    assert!(
+        service
+            .queued_controls(id)
+            .await
+            .expect("queue lists")
+            .is_empty()
+    );
+}
+
 #[tokio::test]
 async fn composer_failure_stops_follow_up_announcement_and_delivery() {
     let composer = PromptComposerMock::default();

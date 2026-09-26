@@ -19,6 +19,9 @@ pub(super) enum Dispatch {
     Dispatched,
     /// Nothing was queued: the session is idle.
     QueueEmpty,
+    /// The runtime is still finishing a turn from before it loaded; the
+    /// oldest action stays queued until that turn ends.
+    Held,
 }
 
 pub(super) type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
@@ -912,6 +915,16 @@ where
                 })
                 .await;
                 Ok(Dispatch::Dispatched)
+            }
+            // The runtime loaded this session mid-turn and is still streaming
+            // that turn. The entry waits at the head of the queue, and the
+            // session stays pending so later prompts queue behind it; the
+            // fold's `TurnEnded` for the continued turn dispatches it.
+            Err(HarnessError::Session(AgentSessionError::TurnContinuing(_))) => {
+                tracing::info!(%session_id, "holding a prompt behind a continuing turn");
+                self.requeue_claimed(session_id, entry).await;
+                self.busy.admit(session_id);
+                Ok(Dispatch::Held)
             }
             Err(error) => {
                 self.requeue_claimed(session_id, entry).await;

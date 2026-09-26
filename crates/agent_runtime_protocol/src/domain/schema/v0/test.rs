@@ -46,6 +46,18 @@ fn disconnected_round_trips_as_a_typed_variant() {
 }
 
 #[test]
+fn turn_continuing_round_trips_as_a_typed_variant() {
+    assert_eq!(
+        serde_json::to_value(SystemEvent::TurnContinuing).unwrap(),
+        json!("turn_continuing")
+    );
+    assert_eq!(
+        serde_json::from_value::<SystemEvent>(json!("turn_continuing")).unwrap(),
+        SystemEvent::TurnContinuing
+    );
+}
+
+#[test]
 fn unknown_event_names_round_trip_losslessly() {
     let event = serde_json::from_value::<SystemEvent>(json!("vendor/custom-event")).unwrap();
     assert_eq!(
