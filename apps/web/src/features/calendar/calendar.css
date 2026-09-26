@@ -26,15 +26,6 @@
 	padding: 0.5rem;
 }
 
-/* On touch, the navigation overlay must cover the floating split header too.
-   The shell is a stacking context, so lifting its child overlay alone cannot
-   put the drawer or backdrop above the host's header. Keep the shell raised
-   through the drawer's exit transition. */
-html[data-touch-device="true"]
-	.calendar-workspace-shell[data-view-shell-layout="narrow"]:has([data-view-shell-aside]) {
-	z-index: var(--z-index-modal-overlay);
-}
-
 .calendar-view .fc {
 	color: var(--color-ink);
 	font-family: inherit;
