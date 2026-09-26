@@ -751,6 +751,10 @@ must stay hidden; subsequent live messages must still appear.
   than queued. Waiting prompts are written through to the session store as they are
   accepted, edited, or removed, and are restored when the session resumes after a
   harness restart — they must not disappear if the managing replica drains.
+- A Cursor turn cut off by a harness handoff keeps streaming into the same reply once
+  another replica picks the session up. It must not stay frozen until **Stop**, or
+  jump to the full transcript when stopped. A prompt sent meanwhile shows as `Queued`
+  and dispatches when that turn ends.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.
   Each row shows a `Queued` label (with `by {user}` when someone else queued it —

@@ -51,6 +51,7 @@ use agent_client_protocol::{
     Agent, ByteStreams, Client, ConnectTo, ConnectionTo, on_receive_notification,
     on_receive_request,
 };
+use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use std::sync::{Arc, OnceLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
@@ -75,7 +76,7 @@ pub struct AcpNotifier {
     pull_request: Option<Arc<dyn PullRequestReporter>>,
     working_branch: Option<Arc<dyn WorkingBranchReporter>>,
     bound: Arc<tokio::sync::Notify>,
-    reload: Option<tokio::sync::mpsc::UnboundedSender<SessionId>>,
+    host_events: Option<tokio::sync::mpsc::UnboundedSender<SystemEvent>>,
 }
 
 /// Host operation receiving PRs independently of ACP presentation.
@@ -94,9 +95,13 @@ impl AcpNotifier {
         Self::default()
     }
 
-    /// Deliver recovery requirements to the embedding ACP client, not the wire.
-    pub fn with_reload(mut self, reload: tokio::sync::mpsc::UnboundedSender<SessionId>) -> Self {
-        self.reload = Some(reload);
+    /// Deliver host-local events (reload requirements, a turn still
+    /// continuing after load) to the embedding ACP client, not the wire.
+    pub fn with_host_events(
+        mut self,
+        host_events: tokio::sync::mpsc::UnboundedSender<SystemEvent>,
+    ) -> Self {
+        self.host_events = Some(host_events);
         self
     }
 
@@ -165,14 +170,26 @@ impl SessionNotifier for AcpNotifier {
     }
 
     async fn require_reload(&self, session: &SessionId) -> Result<(), rootcause::Report> {
-        let Some(reload) = &self.reload else {
+        let Some(host_events) = &self.host_events else {
             // Standalone ACP clients own their load lifecycle. Keep serving
             // prompts without inventing a client request or pushing history.
             tracing::warn!(%session, "recovered Cursor history is available on session/load");
             return Ok(());
         };
-        reload
-            .send(session.clone())
+        host_events
+            .send(SystemEvent::ReloadRequired)
+            .map_err(|error| rootcause::report!("{error}"))
+    }
+
+    async fn continue_turn(&self, _session: &SessionId) -> Result<(), rootcause::Report> {
+        // A standalone client sees the continued turn's updates and its
+        // `_session/turn_complete` like any other; only an embedding host
+        // queues prompts behind it.
+        let Some(host_events) = &self.host_events else {
+            return Ok(());
+        };
+        host_events
+            .send(SystemEvent::TurnContinuing)
             .map_err(|error| rootcause::report!("{error}"))
     }
 

@@ -302,6 +302,13 @@ pub trait SessionNotifier {
         &self,
         session: &SessionId,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+    /// Tell the host, before a load's reply, that the session's last turn is
+    /// still running and will stream in and end with `turn_complete`, so it
+    /// holds new prompts until then. Enqueue only, like [`Self::require_reload`].
+    fn continue_turn(
+        &self,
+        session: &SessionId,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
     /// Emit a terminal lifecycle fact after the reconstructed turn's updates.
     fn turn_complete(
         &self,

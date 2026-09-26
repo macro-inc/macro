@@ -73,20 +73,27 @@ impl PipeTransport {
         Pipe: AsyncRead + AsyncWrite + Unpin + Send + 'static,
         Observer: Fn() + Send + 'static,
     {
-        Self::connect_recoverable(pipe, on_frame, shutdown, None)
+        Self::connect_recoverable(
+            pipe,
+            on_frame,
+            shutdown,
+            None::<mpsc::UnboundedReceiver<SystemEvent>>,
+        )
     }
 
-    /// Receive recovery requirements for this solo attachment's hosted session.
+    /// Receive host-local events (a reload requirement, a turn still
+    /// continuing) for this solo attachment's hosted session.
     #[must_use]
-    pub(crate) fn connect_recoverable<Pipe, Observer>(
+    pub(crate) fn connect_recoverable<Pipe, Observer, Event>(
         pipe: Pipe,
         on_frame: Observer,
         shutdown: CancellationToken,
-        reload: Option<mpsc::UnboundedReceiver<agent_client_protocol::schema::v1::SessionId>>,
+        host_events: Option<mpsc::UnboundedReceiver<Event>>,
     ) -> Self
     where
         Pipe: AsyncRead + AsyncWrite + Unpin + Send + 'static,
         Observer: Fn() + Send + 'static,
+        Event: HostEvent,
     {
         let (outbound_tx, outbound_rx) = mpsc::unbounded_channel();
         let (inbound_tx, inbound_rx) = mpsc::unbounded_channel();
@@ -104,7 +111,7 @@ impl PipeTransport {
             inbound_tx,
             on_frame,
             shutdown,
-            reload,
+            host_events,
         ));
 
         Self {
@@ -148,39 +155,62 @@ impl TransportSender<ToRuntimeMessage> for PipeSender {
     }
 }
 
+/// A signal a hosted provider enqueues for the session machine beside, not
+/// on, the ACP wire.
+pub(crate) trait HostEvent: Send + 'static {
+    fn into_event(self) -> SystemEvent;
+}
+
+impl HostEvent for SystemEvent {
+    fn into_event(self) -> SystemEvent {
+        self
+    }
+}
+
+/// Codex's only host signal: the session it recovered history for.
+impl HostEvent for agent_client_protocol::schema::v1::SessionId {
+    fn into_event(self) -> SystemEvent {
+        SystemEvent::ReloadRequired
+    }
+}
+
 /// Relay frames until either side closes or `shutdown` is cancelled.
-async fn pump<Pipe, Observer>(
+async fn pump<Pipe, Observer, Event>(
     pipe: Pipe,
     mut outbound: mpsc::UnboundedReceiver<Outbound>,
     inbound: mpsc::UnboundedSender<ToServerMessage>,
     on_frame: Observer,
     shutdown: CancellationToken,
-    mut reload: Option<mpsc::UnboundedReceiver<agent_client_protocol::schema::v1::SessionId>>,
+    mut host_events: Option<mpsc::UnboundedReceiver<Event>>,
 ) where
     Pipe: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     Observer: Fn() + Send + 'static,
+    Event: HostEvent,
 {
     let (reader, mut writer) = tokio::io::split(pipe);
     let mut lines = BufReader::new(reader).lines();
 
     loop {
         tokio::select! {
-            // Recovery is enqueued before the prompt response. Observe it
-            // first even when that response is already readable on the pipe.
+            // Host events are enqueued before the response they qualify (a
+            // prompt's, a load's). Observe them first even when that response
+            // is already readable on the pipe.
             biased;
             () = shutdown.cancelled() => break,
-            signal = async {
-                match reload.as_mut() {
+            event = async {
+                match host_events.as_mut() {
                     Some(receiver) => receiver.recv().await,
                     None => std::future::pending().await,
                 }
             } => {
-                if signal.is_none() {
-                    reload = None;
-                } else if inbound.send(ToServerMessage::Event {
-                    event: SystemEvent::ReloadRequired,
-                }).is_err() {
-                    break;
+                match event {
+                    None => host_events = None,
+                    Some(event) => {
+                        let event = event.into_event();
+                        if inbound.send(ToServerMessage::Event { event }).is_err() {
+                            break;
+                        }
+                    }
                 }
             }
             outgoing = outbound.recv() => {
