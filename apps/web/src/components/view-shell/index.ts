@@ -6,6 +6,7 @@ export {
   createCollapsedSidebarSectionsStorage,
   setSidebarSectionCollapsed,
 } from './collapsed-sections';
+export { createSlidingListTransition } from './createSlidingListTransition';
 export {
   type ListControlOption,
   ListFilterDropdown,
@@ -40,6 +41,7 @@ export {
 } from './ViewBreadcrumbs';
 export {
   useViewShell,
+  ViewNavigationControls,
   ViewShell,
   type ViewShellLayout,
   type ViewShellRootProps,

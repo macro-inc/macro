@@ -400,6 +400,7 @@ export const ENABLE_CALLS = true;
 export const enableQuickCalls = defineFlag({
   key: 'enable-quick-calls',
   env: 'ENABLE_QUICK_CALLS',
+  default: true,
 });
 
 // Email signatures: the settings editor, the compose / reply / AI-chat signature

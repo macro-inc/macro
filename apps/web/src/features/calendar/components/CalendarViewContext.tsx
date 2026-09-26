@@ -104,7 +104,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
       // Sources default to visible, so calendars discovered after a
       // preference was saved (or events whose calendar is still loading)
       // never silently disappear.
-      const hiddenSourceIds = createMemo(
+      const hiddenSourceIds = createMemo<ReadonlySet<string>>(
         () => new Set(preferences.hiddenSourceIds)
       );
       const isSourceVisible = (sourceId: string) =>
@@ -169,14 +169,21 @@ export const [CalendarViewContextProvider, useCalendarView] =
         }
       };
 
-      const setSourceVisibility = (sourceId: string, visible: boolean) => {
-        setPreferences('hiddenSourceIds', (current) =>
-          visible
-            ? current.filter((id) => id !== sourceId)
-            : current.includes(sourceId)
-              ? current
-              : [...current, sourceId]
-        );
+      const setSourcesVisibility = (
+        sourceIds: readonly string[],
+        visible: boolean
+      ) => {
+        const hidden = new Set(preferences.hiddenSourceIds);
+        let changed = false;
+        for (const sourceId of sourceIds) {
+          if (visible) changed = hidden.delete(sourceId) || changed;
+          else if (!hidden.has(sourceId)) {
+            hidden.add(sourceId);
+            changed = true;
+          }
+        }
+        if (!changed) return;
+        setPreferences('hiddenSourceIds', [...hidden]);
 
         const selected = selection.event();
         if (
@@ -187,13 +194,17 @@ export const [CalendarViewContextProvider, useCalendarView] =
           closeEventDetails();
         }
       };
+      const setSourceVisibility = (sourceId: string, visible: boolean) =>
+        setSourcesVisibility([sourceId], visible);
 
       return {
         displaySettings,
         sources,
         sourceById,
+        hiddenSourceIds,
         isSourceVisible,
         setSourceVisibility,
+        setSourcesVisibility,
         selectedEvent: selection.event,
         selectedEventAnchor: selection.anchor,
         setPeriodView: (periodView: CalendarPeriodView) => {

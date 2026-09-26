@@ -2,9 +2,9 @@
 
 ## Top bars
 
-Right-aligned split-header actions (including Calendar's New event and Channel's
-Call and Ask Macro) are borderless with a rounded-xl background on hover. Channel
-header tabs use fully rounded tracks and selected pills.
+Right-aligned split-header actions (including Calendar's touch/preview New event
+and Channel's Call and Ask Macro) are borderless with a rounded-xl background on
+hover. Channel header tabs use fully rounded tracks and selected pills.
 
 ## User cards
 
@@ -796,19 +796,88 @@ footer. Answering a recurring invitation opens a rounded glass sheet: choose
 `This event` or `All events`, then `Save response`. Cancel or Close returns to
 the event details without sending a response.
 
-The calendar header has matching `New event` and `New Call` buttons. Both stay
-available in narrow splits and on phones, where compact icons have accessible
-labels. `New Call` opens call setup; it is no longer in the right side panel.
-Week view also has a `Choose calendar view` menu, prev/next week,
-`Search events`, `Calendar settings`, and a mini month picker in the right side panel.
-The mini calendar's month label opens a month picker; arrows also change months.
-The right side panel has a collapsible `Upcoming events` box.
+The standalone Calendar view has a left navigation sidebar. The `New` menu
+above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
+`Reminder`. An icon-only shortcut in the `Upcoming events` header opens the
+availability dialog. Start/end time selectors and a weekend switch sit above
+copy ranges that wrap on narrow screens. The dialog checks all ranges using one
+calendar-occurrence query; ranges without free time are disabled with a reason
+tooltip that can receive keyboard focus. On touch devices the disabled option
+itself shows its range name, `No free time`, and an X icon.
+Copying rechecks the occurrences and current time, so changes since opening do
+not enter the copied text. The option keeps its width while a left spinner and
+`Copying…` crossfade to `Copied` with a green check icon; the button keeps its
+neutral styling. Reduced-motion preferences skip the crossfade and spin.
+Collapsible `Upcoming events` and `Calendars` sections follow; calendar
+account rows use Drive-style trailing disclosure buttons and animated nested
+branches. Their 14px visibility checkboxes precede the swatch and label, with
+separate account and individual-calendar visibility controls. `Team out of office`
+is feature-gated and lists teammates with 24px avatars; its section switch
+toggles the entire grid overlay. Clicking a teammate's row navigates to that
+date, opens read-only event details, and marks the row active. The icon-only
+`Calendar settings` control fills the sidebar footer.
+An account checkbox toggles its calendars together in one update. The checkbox
+responds immediately; the upcoming list and each grid page refresh on deferred
+tasks rather than re-rendering all pages during the click.
+The sidebar can be resized or collapsed on desktop; in narrow desktop panes
+it opens over the grid. Phones do not show the sidebar or its navigation drawer.
+The mobile split header places a month selector and Today in its left island;
+selecting the month opens the date-selection drawer. The right island keeps
+full-sized Availability, Search, and Settings actions. The New menu
+beside the bottom AI input offers Event, feature-gated Call, and feature-gated
+Reminder. Inline Calendar previews retain their host's chrome without adding
+another sidebar; their left header island has a compact New menu because the
+bottom New action follows the foreground host view.
+
+The in-view desktop Calendar header follows Drive's two-level layout: the slim
+top bar shows the viewed month and year and, when the sidebar is closed, a
+compact `New` menu. At wide widths, the row beneath puts `Search events` on
+the left and a labeled `Today` button followed by the rounded period selector
+and previous/next arrows on the right. The idle search field places its hotkey
+beside the placeholder. A query reveals the icon-only Exact-match toggle at
+wide widths; in narrow splits, Exact and Filters appear after focusing search.
+The filter button stays before Clear. The filter menu opens below the button,
+aligned to its right edge: Search in is single-select, while Status, Organizer,
+and Attendee allow multiple values. Organizer and Attendee virtualize their
+contact lists; selected contacts stay in place, while custom email addresses
+appear first. Adding a valid email clears the contact search. Filter selections
+apply immediately, and only these filters mark the filter button, not Exact
+mode. Clicking search opens a calendar-search hint until at least three
+characters are entered; searches show skeleton rows while loading. Empty
+results show an illustrated empty state. Result titles show a calendar-color
+swatch when the event is loaded in the visible range, falling back to the
+default calendar color otherwise. A result shows its location after the
+date/time when available. Each result offers at most one rounded Join action:
+matching occurrence content takes precedence over series metadata. Macro links
+use a neutral button, Google Meet uses a solid blue button in light mode and a
+subtle blue button in dark mode, and other conference links use a neutral button.
+All Join buttons use a camera icon. Generated Macro invitation paragraphs are
+hidden from event descriptions. Google Meet URLs in an event's location or
+description also supply Join actions. Recurring results wait for matching
+occurrence details before showing Join. Selecting a result preserves the search
+text. Availability lives in the desktop sidebar's Upcoming events section and
+in the mobile header.
+
+Resizing the split keeps the same search field mounted in the fixed-height
+header row. At narrow widths the row hides `Today` and the period selector,
+then the navigation arrows when space becomes scarce; focusing search also
+hides the remaining controls to give the field room. Its clear button remains
+available when a query is present. The `New` menu stays in the desktop top
+bar. Touch devices keep the month selector and header controls without separate
+create or call buttons in the right island. The desktop sidebar's mini
+calendar remains navigable by date and month.
+
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.
-The active area is hidden when no calls are active. Event rows show the name and
-time; click one to open its details. An event with a call link shows `Join` while
-it is in progress. Upcoming events follow today's date even when you browse another week;
-hidden calendars, cancelled events, and invitations you declined are omitted.
+The active area is hidden when no calls are active. Upcoming event rows show a
+calendar color swatch, the name, and the time; click one to open its details and
+highlight the active row. Small changes stagger: departing rows slide left
+while their height closes, and new rows enter from the left. When several rows
+change together, their heights cross over in one short wave; incoming text
+appears after outgoing text fades. Replaced rows exit right.
+An event with a call link shows `Join` while it is in progress. Upcoming events
+follow today's date even when you browse another week; hidden calendars,
+cancelled events, and invitations you declined are omitted.
 `New Call` opens `/app/meet/new` without creating a meeting. The `Invite Teammates`
 button above `Start call` opens the task assignee picker with name search, profile
 pictures and multiple selections, without bots or external contacts. The closed
@@ -853,7 +922,7 @@ Selecting `Macro call` on an owned editable event without one adds a call on sav
 choosing another option removes its generated Macro link from the invitation.
 Removing the link or deleting the calendar event does not revoke the reusable call.
 
-The side panel's `Calendars` section folds each connected account into a collapsible
+The sidebar's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
 name, per-calendar checkbox). Accounts start collapsed. Subscribed system calendars
@@ -892,7 +961,7 @@ guest but you — in a split beside the calendar on desktop, as the full-screen 
 touch devices — and is hidden when you are the only guest.
 
 With the `enable-calendar-team-ooo` flag on, teammates' Google Calendar out-of-office events
-overlay the grid as read-only chips titled `<name>: <event title>`. The side panel's
+overlay the grid as read-only chips titled `<name>: <event title>`. The sidebar's
 `Team out of office` section (shown only when the user belongs to a team with other members)
 has a checkbox in its header row toggling the whole overlay on or off — all teammates or
 none — and lists the next 90 days of teammate absences; clicking a row navigates the grid to

@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   authenticated: (): boolean => true,
   enabled: (): boolean => false,
   flagsLoaded: (): boolean => true,
+  touch: (): boolean => false,
   replace: vi.fn(),
   pageView: vi.fn(),
   track: vi.fn(),
@@ -101,7 +102,7 @@ vi.mock('@block-md/component/ComposeTask', () => ({}));
 vi.mock('@companies/crm/saved-views', () => ({}));
 vi.mock('@core/context/user', () => ({}));
 vi.mock('@core/mobile/isTouchDevice', () => ({
-  isTouchDevice: () => false,
+  isTouchDevice: () => state.touch(),
 }));
 vi.mock('@queries/agent-schedule/entities', () => ({}));
 vi.mock('@ui', () => ({
@@ -113,6 +114,7 @@ beforeEach(() => {
   state.authenticated = () => true;
   state.enabled = () => false;
   state.flagsLoaded = () => true;
+  state.touch = () => false;
 });
 afterEach(cleanup);
 
@@ -120,6 +122,15 @@ function renderActivity() {
   const activity = resolveComponent('activity');
   return render(() => <Suspense>{activity.element()}</Suspense>);
 }
+describe('calendar layout registration', () => {
+  it('owns desktop chrome but keeps the floating split header on touch', () => {
+    expect(resolveComponent('calendar').initialMeta).toMatchObject({
+      splitPanelLayout: 'composable',
+    });
+    state.touch = () => true;
+    expect(resolveComponent('calendar').initialMeta).toBeUndefined();
+  });
+});
 
 describe('activity registration', () => {
   it('redirects a disabled feed to inbox without mounting or tracking it', () => {
