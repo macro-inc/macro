@@ -757,9 +757,16 @@ above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
 `Reminder`. An icon-only shortcut in the `Upcoming events` header opens the
 availability dialog with working-hour settings above rounded copy options.
 Collapsible `Upcoming events` and `Calendars` sections follow; calendar
-account headers show their primary color swatch. `Team out of office` is
-feature-gated and lists teammates with 24px avatars. The icon-only
+account rows use Drive-style trailing disclosure buttons and animated nested
+branches. Their 14px visibility checkboxes precede the swatch and label, with
+separate account and individual-calendar visibility controls. `Team out of office`
+is feature-gated and lists teammates with 24px avatars; its section switch
+toggles the entire grid overlay. Clicking a teammate's row navigates to that
+date, opens read-only event details, and marks the row active. The icon-only
 `Calendar settings` control fills the sidebar footer.
+An account checkbox toggles its calendars together in one update. The checkbox
+responds immediately; the upcoming list and each grid page refresh on deferred
+tasks rather than re-rendering all pages during the click.
 The sidebar can be resized or collapsed on desktop; in narrow panes it opens
 over the grid. On phones, `Show calendar navigation` in the split header opens
 the same sidebar as a left drawer. Choose a date in the mini calendar to
@@ -785,10 +792,14 @@ month picker; arrows also change months.
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.
 The active area is hidden when no calls are active. Upcoming event rows show a
-calendar color swatch, the name, and the time; click one to open its details.
+calendar color swatch, the name, and the time; click one to open its details and
+highlight the active row. Small changes stagger: departing rows slide left
+while their height closes, and new rows enter from the left. When several rows
+change together, their heights cross over in one short wave; incoming text
+appears after outgoing text fades. Replaced rows exit right.
 An event with a call link shows `Join` while it is in progress. Upcoming events
-follow today's date even when you browse another week;
-hidden calendars, cancelled events, and invitations you declined are omitted.
+follow today's date even when you browse another week; hidden calendars,
+cancelled events, and invitations you declined are omitted.
 `New Call` opens `/app/meet/new` without creating a meeting. The `Invite Teammates`
 button above `Start call` opens the task assignee picker with name search, profile
 pictures and multiple selections, without bots or external contacts. The closed
