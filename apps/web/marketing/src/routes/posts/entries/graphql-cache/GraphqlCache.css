@@ -1,0 +1,70 @@
+.gqc-post {
+  color: var(--c4);
+  font-family: 'cyberreader', system-ui, sans-serif;
+}
+
+.gqc-post,
+.gqc-post * {
+  box-sizing: border-box;
+}
+
+.gqc-post a {
+  color: var(--a0);
+  text-decoration: none;
+}
+
+.gqc-post a:hover {
+  color: var(--c1);
+}
+
+.gqc-lede {
+  color: var(--c2);
+  font-size: 20px;
+  line-height: 1.6;
+}
+
+/* Brighter (near-white) emphasis without bold weight */
+.gqc-hl {
+  color: var(--c0);
+  font-weight: inherit;
+}
+
+.gqc-post ul.gqc-list {
+  line-height: 1.85;
+  margin: 0 0 20px;
+  padding-left: 1.4em;
+}
+
+.gqc-post ul.gqc-list li + li {
+  margin-top: 6px;
+}
+
+/* Small "shape of the data" blocks */
+.gqc-post pre.gqc-code {
+  background: color-mix(in srgb, var(--b1) 72%, var(--b0));
+  border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
+  border-radius: 10px;
+  color: var(--c3);
+  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-size: 14.5px;
+  line-height: 1.8;
+  margin: 26px 0;
+  overflow-x: auto;
+  padding: 16px 20px;
+  white-space: pre;
+}
+
+/* Pull-quote / callout block */
+.gqc-callout {
+  background: oklch(from var(--a0) l c h / 0.06);
+  border: 1px solid color-mix(in srgb, var(--a0) 32%, transparent);
+  border-radius: 12px;
+  margin: 40px 0;
+  padding: 22px 26px;
+}
+
+.gqc-callout p {
+  color: var(--c2);
+  font-size: 17.5px;
+  margin: 0;
+}

@@ -182,6 +182,42 @@
         "webdriverio": "9.29.1",
       },
     },
+    "apps/web/marketing": {
+      "name": "@macro-inc/website",
+      "dependencies": {
+        "@floating-ui/dom": "^1.7.4",
+        "@kobalte/core": "^0.13.11",
+        "@phosphor-icons/core": "^2.1.1",
+        "@solid-primitives/media": "2.3.6",
+        "@solid-primitives/platform": "^0.2.1",
+        "@solid-primitives/resize-observer": "^2.1.3",
+        "@solid-primitives/storage": "^4.3.3",
+        "@solidjs/router": "^0.15.3",
+        "posthog-js": "^1.424.0",
+        "simplex-noise": "^4.0.3",
+        "solid-js": "^1.9.7",
+        "tailwind-merge": "^3.4.0",
+        "virtua": "0.48.8",
+      },
+      "devDependencies": {
+        "@biomejs/biome": "2.5.6",
+        "@pierre/diffs": "1.3.5",
+        "@playwright/test": "^1.55.1",
+        "@solidjs/testing-library": "^0.8.10",
+        "@tailwindcss/vite": "^4.2.4",
+        "@types/bun": "^1.2.19",
+        "@types/node": "^24.8.0",
+        "happy-dom": "20.10.6",
+        "jsdom": "^26.1.0",
+        "tailwindcss": "^4.2.4",
+        "typescript": "^5.9.3",
+        "vite": "^6.4.1",
+        "vite-plugin-solid": "^2.11.8",
+        "vite-plugin-solid-svg": "^0.8.1",
+        "vite-tsconfig-paths": "^5.1.4",
+        "vitest": "5.0.1",
+      },
+    },
     "packages/collaboration": {
       "name": "@macro-inc/collaboration",
       "version": "0.1.0",
@@ -1192,6 +1228,8 @@
     "@macro-inc/observability": ["@macro-inc/observability@workspace:packages/observability"],
 
     "@macro-inc/spreadsheet": ["@macro-inc/spreadsheet@workspace:packages/spreadsheet"],
+
+    "@macro-inc/website": ["@macro-inc/website@workspace:apps/web/marketing"],
 
     "@marijn/find-cluster-break": ["@marijn/find-cluster-break@1.0.3", "", {}, "sha512-FY+MKLBoTsLNJF/eLWaOsXGdz6uh3Iu1axjPf6TUq92IYumcTcXWHoS747JARLkcdlJ/Waiaxc5wQfFO8jC6NA=="],
 
@@ -3268,6 +3306,8 @@
     "signature_pad": ["signature_pad@5.1.3", "", {}, "sha512-zyxW5vuJVnQdGcU+kAj9FYl7WaAunY3kA5S7mPg0xJiujL9+sPAWfSQHS5tXaJXDUa4FuZeKhfdCDQ6K3wfkpQ=="],
 
     "simple-git": ["simple-git@3.16.0", "", { "dependencies": { "@kwsites/file-exists": "^1.1.1", "@kwsites/promise-deferred": "^1.1.1", "debug": "^4.3.4" } }, "sha512-zuWYsOLEhbJRWVxpjdiXl6eyAyGo/KzVW+KFhhw9MqEEJttcq+32jTWSGyxTdf9e/YCohxRE+9xpWFj9FdiJNw=="],
+
+    "simplex-noise": ["simplex-noise@4.0.3", "", {}, "sha512-qSE2I4AngLQG7BXqoZj51jokT4WUXe8mOBrvfOXpci8+6Yu44+/dD5zqDpOx3Ux792eamTd2lLcI8jqFntk/lg=="],
 
     "sirv": ["sirv@3.0.2", "", { "dependencies": { "@polka/url": "^1.0.0-next.24", "mrmime": "^2.0.0", "totalist": "^3.0.0" } }, "sha512-2wcC/oGxHis/BoHkkPwldgiPSYcpZK3JU28WoMVv55yHJgcZ8rlXvuG9iZggz+sU1d4bRgIGASwyWqjxu3FM0g=="],
 

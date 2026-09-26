@@ -1,0 +1,372 @@
+.mvn-post {
+  color: var(--c4);
+  font-family: 'cyberreader', system-ui, sans-serif;
+}
+
+.mvn-post,
+.mvn-post * {
+  box-sizing: border-box;
+}
+
+.mvn-post a {
+  color: var(--a0);
+  text-decoration: none;
+}
+
+/* Small isometric block glyph above a section heading */
+.mvn-section-glyph {
+  color: color-mix(in srgb, var(--a0) 55%, transparent);
+  margin: 76px 0 16px;
+}
+
+.mvn-section-glyph svg {
+  display: block;
+}
+
+.post-body .mvn-section-glyph + h2 {
+  margin-top: 0;
+}
+
+.mvn-post a:hover {
+  color: var(--c1);
+}
+
+.mvn-authors-note {
+  color: color-mix(in srgb, var(--c4) 88%, transparent);
+  margin: 0 0 8px;
+}
+
+.mvn-authors-note-label {
+  color: var(--c2);
+  font-family: rajdhani, body, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+.mvn-authors-note p {
+  margin: 0;
+}
+
+.mvn-post > hr {
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--b4) 28%, transparent);
+  margin: 28px 0 36px;
+}
+
+.mvn-post ol.mvn-list,
+.mvn-post ul.mvn-list {
+  line-height: 1.85;
+  margin: 0 0 20px;
+  padding-left: 1.4em;
+}
+
+.mvn-post ol.mvn-list li + li,
+.mvn-post ul.mvn-list li + li {
+  margin-top: 10px;
+}
+
+/* Switch-to-macro style figure (competitor → Macro), reused from the index cover */
+.mvn-figure {
+  border: 1px solid var(--b3);
+  border-radius: 16px;
+  container-type: inline-size;
+  margin: 8px 0 36px;
+  overflow: hidden;
+}
+
+.mvn-figure .post-cover {
+  aspect-ratio: 21 / 9;
+  border-bottom: 0;
+}
+
+.mvn-figcaption {
+  color: var(--c4);
+  font-size: 14px;
+  margin: 14px 0 56px;
+  text-align: center;
+}
+
+/* YouTube embed — a gentle breakout just past the prose column */
+.mvn-video {
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--b3);
+  border-radius: 14px;
+  left: 50%;
+  margin: 72px 0 18px;
+  overflow: hidden;
+  position: relative;
+  transform: translateX(-50%);
+  width: min(820px, calc(100vw - 48px));
+}
+
+.mvn-video iframe {
+  border: 0;
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.mvn-video video {
+  border: 0;
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+/* Brighter (near-white) emphasis without bold weight */
+.mvn-hl {
+  color: var(--c0);
+  font-weight: inherit;
+}
+
+/* Embedded product screenshot — grid-paper frame with an inner border
+   matching the outer frame (no edge fade). */
+.mvn-graphic {
+  line-height: 0;
+  margin: 28px 0 12px;
+  width: 100%;
+}
+
+.mvn-graphic-frame {
+  background-color: color-mix(in srgb, var(--b1) 72%, var(--b0));
+  border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
+  border-radius: 14px;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: clamp(20px, 4vw, 36px) clamp(16px, 3vw, 28px);
+  position: relative;
+}
+
+.mvn-graphic-frame::before {
+  background-image: repeating-linear-gradient(
+    315deg,
+    var(--b2) 0,
+    var(--b2) 1px,
+    transparent 0,
+    transparent 50%
+  );
+  background-size: 12px 12px;
+  content: '';
+  inset: 0;
+  opacity: 0.45;
+  pointer-events: none;
+  position: absolute;
+}
+
+.mvn-graphic-inner {
+  border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.mvn-graphic-inner img,
+.mvn-graphic-inner video {
+  border: 0;
+  border-radius: 0;
+  display: block;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.mvn-phone {
+  display: flex;
+  justify-content: center;
+  margin: 36px 0 16px;
+  width: 100%;
+}
+
+.mvn-phone img {
+  display: block;
+  height: auto;
+  max-width: 100%;
+  width: 100%;
+}
+
+/* Pull-quote / callout block */
+.mvn-quote {
+  background: var(--b0);
+  border-left: 2px solid var(--b4);
+  font-size: 15px;
+  margin: 24px 0;
+  padding: 14px 0;
+}
+
+.mvn-testimonials {
+  display: grid;
+  gap: 28px;
+  margin: 28px 0 36px;
+}
+
+.mvn-testimonial {
+  border-left: 2px solid var(--b4);
+  margin: 0;
+  padding: 0 0 0 18px;
+}
+
+.mvn-testimonial blockquote {
+  font-size: 16px;
+  line-height: 1.65;
+  margin: 0;
+  quotes: none;
+}
+
+.mvn-testimonial figcaption {
+  color: var(--c4);
+  font-family: rajdhani, body, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-top: 12px;
+  text-transform: uppercase;
+}
+
+/* Comparison tables — minimal rows with very light separators, broken out
+ * wider than the prose column so they read left-to-right. */
+.mvn-table-wrap {
+  border: 1px solid color-mix(in srgb, var(--c1) 9%, transparent);
+  border-radius: 6px;
+  margin: 28px 0 36px;
+  overflow-x: auto;
+}
+
+.mvn-table {
+  border-collapse: collapse;
+  font-size: 15px;
+  width: 100%;
+}
+
+.mvn-table th,
+.mvn-table td {
+  border-bottom: 1px solid color-mix(in srgb, var(--c1) 7%, transparent);
+  color: var(--c2);
+  padding: 12px 18px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.mvn-table tbody tr:last-child th,
+.mvn-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.mvn-table thead th {
+  background: color-mix(in srgb, var(--c1) 5%, transparent);
+  color: var(--c1);
+  font-weight: 400;
+}
+
+.mvn-th-brand {
+  align-items: center;
+  display: inline-flex;
+  font-family: 'rajdhani', body;
+  gap: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mvn-th-brand svg {
+  display: block;
+  height: 14px;
+  width: auto;
+}
+
+.mvn-th-brand .mvn-logo-macro {
+  height: 11px;
+}
+
+.mvn-table tbody th {
+  color: var(--c0);
+  font-weight: 400;
+  width: 30%;
+}
+
+.mvn-table .mvn-macro-col {
+  color: var(--c2);
+}
+
+/* Collapsible table — fades out with a "Show more" affordance */
+.mvn-collapse {
+  position: relative;
+}
+
+.mvn-collapse-inner.is-collapsed {
+  max-height: 420px;
+  overflow: hidden;
+}
+
+.mvn-post button.mvn-showmore {
+  align-items: flex-end;
+  background: linear-gradient(to bottom, transparent 0, var(--b0) 82%);
+  border: 0;
+  bottom: 0;
+  cursor: pointer;
+  display: flex;
+  height: 120px;
+  justify-content: center;
+  left: 0;
+  padding: 0 0 12px;
+  position: absolute;
+  right: 0;
+}
+
+.mvn-showmore span {
+  align-items: center;
+  color: var(--c4);
+  display: flex;
+  font-family: 'rajdhani', body;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.mvn-showmore span::before,
+.mvn-showmore span::after {
+  background: var(--b3);
+  content: '';
+  height: 1px;
+  width: 20px;
+}
+
+.mvn-yes {
+  color: oklch(0.72 0.15 162);
+  font-weight: 600;
+}
+
+.mvn-no {
+  color: var(--c4);
+}
+
+/* FAQ */
+.mvn-faq h3 {
+  font-size: 21px;
+  margin-bottom: 8px;
+}
+
+.mvn-faq p {
+  margin-top: 0;
+}
+
+@media (max-width: 720px) {
+  .mvn-table {
+    font-size: 15px;
+  }
+
+  .mvn-table th,
+  .mvn-table td {
+    padding: 11px 12px;
+  }
+
+  .mvn-collapse-inner.is-collapsed {
+    max-height: 320px;
+  }
+}

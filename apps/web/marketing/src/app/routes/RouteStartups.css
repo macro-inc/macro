@@ -1,0 +1,22 @@
+.startups-page { width:100%; }
+.startups-main { box-sizing:border-box; max-width:1000px; margin:auto; padding:128px 32px 64px; }
+.startups-eyebrow { color:var(--a0); text-transform:uppercase; letter-spacing:.1em; font-size:14px; font-weight:600; margin:0 0 20px; }
+.startups-main h1 { font-family:display; font-size:clamp(40px,5vw,60px); font-weight:420; line-height:1.1; letter-spacing:-.025em; margin:0 0 24px; }
+.startups-intro { color:var(--c4); font-size:22px; line-height:1.5; max-width:42ch; }
+.startups-apply { display:inline-flex; align-items:center; gap:24px; min-height:48px; padding:0 26px; margin-top:12px; color:var(--b0); background:var(--a0); border-radius:999px; font-size:18px; font-weight:700; text-decoration:none; }
+.startups-offer { display:grid; grid-template-columns:1fr 1fr; align-items:center; gap:48px; border-block:1px solid var(--b3); margin:56px 0 40px; padding:40px 0; }
+.startups-credit { font:420 clamp(48px,6vw,76px)/1.2 display; color:var(--a0); margin:0; }
+.startups-credit span { display:block; color:var(--c4); font:500 17px body; margin-bottom:12px; }
+.startups-main h2 { font:420 28px/1.2 display; margin:0 0 16px; }
+.startups-offer div p,.startups-details p { font-size:19px; line-height:1.55; color:var(--c4); margin:0; }
+.startups-details { display:grid; grid-template-columns:1fr 1fr; gap:48px; }
+.startups-footer { padding:48px 24px 64px; }
+@media(max-width:700px) {
+ .startups-main { padding:104px 20px 48px; }
+ .startups-main h1 { font-size:clamp(34px,10vw,42px); }
+ .startups-intro { font-size:20px; }
+ .startups-apply { display:flex; justify-content:center; }
+ .startups-offer,.startups-details { grid-template-columns:1fr; gap:28px; }
+ .startups-offer { margin-top:40px; padding:32px 0; }
+ .startups-main h2 { font-size:26px; }
+}

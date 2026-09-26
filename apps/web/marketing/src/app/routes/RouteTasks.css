@@ -1,0 +1,130 @@
+/* Keep the original feature-page type sizes with the homepage's Slab weight. */
+.tasks-h1,
+.tasks-h2,
+.tasks-h3 {
+  color: var(--c1);
+  font-family: 'display';
+  font-weight: 315;
+  margin: 0;
+}
+.tasks-h1 {
+  font-size: 60px;
+  letter-spacing: -0.014em;
+  line-height: 1.08;
+}
+.tasks-h2 {
+  font-size: 48px;
+  letter-spacing: -0.015em;
+  line-height: 1.12;
+}
+.tasks-h3 {
+  font-size: 30px;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+
+@media (max-width: 699px) {
+  .tasks-h1 {
+    font-size: 40px;
+  }
+  .tasks-h2 {
+    font-size: 34px;
+  }
+  .tasks-h3 {
+    font-size: 23px;
+  }
+}
+
+/* Prose scale for /tasks.
+   ---------------------------------------------------------------------------
+   Three tiers, chosen by what the paragraph sits under rather than by eye. The
+   page had run 13/15/17/19px all at body/400/--c4, and the split was not by
+   role: the lifecycle subtitle was 17px while the flexibility subtitle
+   directly below it was 15px, and both are section subtitles.
+
+     .tasks-lead     follows a .tasks-h1 or .tasks-h2
+     .tasks-sub      follows a .tasks-h3
+     .tasks-caption  sits under a graphic or card, with its own small heading
+
+   The two paragraph tiers are set in 'cyberreader' at its Light 300, following
+   the home page: a blend of Rajdhani's edge and Inter's readability that
+   carries a sentence or two better than Rajdhani does, while still sounding
+   like the site. It ships as discrete faces at 300/400/700 only (not a
+   variable axis), so the 300 is the real Light file rather than a synthesised
+   weight -- and why these two rules carry their own font-weight instead of
+   sharing the 400 below.
+
+   .tasks-caption stays on Rajdhani. Cyberreader's advantage is at length, and
+   a caption has none; at 14-15px the two read about the same and Rajdhani is
+   the site's voice for a label. Everything else on this page at 16px or under
+   -- the bento's card descriptions, the grid captions, the lifecycle's phase
+   blurb -- stays with it for the same reason.
+
+   Measures are deliberately NOT set here. Every instance caps its own line
+   length against the column it sits in (360px, 520px, 620px, 46ch...), so a
+   shared max-width would be wrong in most of them.
+
+   The why-we-built-it statement was already in cyberreader, and the FAQ is a
+   shared component used by other pages; neither is touched here. */
+
+.tasks-lead,
+.tasks-sub,
+.tasks-caption {
+  color: var(--c4);
+  font-family: 'body';
+  font-weight: 400;
+  margin: 0;
+}
+
+.tasks-lead,
+.tasks-sub {
+  font-family: 'cyberreader', 'body';
+  font-weight: 300;
+}
+
+.tasks-lead {
+  font-size: 19px;
+  line-height: 1.6;
+}
+
+.tasks-sub {
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.tasks-caption {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Section eyebrow — the small uppercase label above a section's heading.
+   Only this one is centralised. The other three uppercase labels on the page
+   stay as they are, because they are not the same thing:
+     - the hero's brand tag is HeroEyebrow, shared by 8 files across email,
+       agents, crm and github; restyling it here would change those pages
+     - the "Explore Macro Chat" anchors are navigational and deliberately
+       mirror FeatureEyebrowLink in SectionFeatureGrid.tsx
+     - the lifecycle stepper's "01/02/03" are tabular numerals, not labels */
+.tasks-eyebrow {
+  color: color-mix(in srgb, var(--c4) 62%, transparent);
+  font-family: 'rajdhani', 'body';
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 699px) {
+  .tasks-lead {
+    font-size: 17px;
+  }
+  .tasks-sub {
+    font-size: 15px;
+  }
+  .tasks-caption {
+    font-size: 14px;
+  }
+  .tasks-eyebrow {
+    font-size: 11.5px;
+  }
+}

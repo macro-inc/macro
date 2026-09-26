@@ -1,0 +1,26 @@
+<svg viewBox="0 0 760 270" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="760" height="270" fill="none"/>
+  <defs>
+    <linearGradient id="switch-sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="oklch(from var(--a0) calc(l + 0.06) calc(c * 0.9) h)"/>
+      <stop offset="52%" stop-color="oklch(from var(--a0) calc(l + 0.01) calc(c * 0.9) h)"/>
+      <stop offset="100%" stop-color="oklch(from var(--a0) calc(l - 0.04) calc(c * 0.9) h)"/>
+    </linearGradient>
+  </defs>
+
+
+  <rect x="166" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g transform="translate(200 84) scale(3)">
+    <path fill="url(#switch-sheen)" d="M2 18.439l3.69-2.828c1.961 2.56 4.044 3.739 6.363 3.739 2.307 0 4.33-1.166 6.203-3.704L22 18.405C19.298 22.065 15.941 24 12.053 24 8.178 24 4.788 22.078 2 18.439zM12.036 5.612l-6.58 5.666-3.098-3.598L12.05 0l9.634 7.688-3.11 3.588z"/>
+  </g>
+  <text x="236" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">ClickUp</text>
+
+
+  <rect x="454" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g transform="translate(485 94.4) scale(0.43)" fill="url(#switch-sheen)">
+    <path d="M0.121368 44.5707V94.6784L0.123097 94.8165C0.140592 95.5053 0.289921 96.1847 0.563153 96.8184C0.854625 97.4943 1.28114 98.1038 1.8166 98.6094L22.5065 118.144L37.6081 112.239V59.7876L15.2084 38.6654L0.121368 44.5707Z"/>
+    <path d="M30.89 6.04832V48.797L41.1458 58.4696V68.173L94.2982 118.349L109.4 112.444L109.392 59.9907L45.9767 0.140625L30.89 6.04832Z"/>
+    <path d="M102.685 6.04936V48.7977L112.948 58.4841L112.848 68.0867L166.111 118.35L181.197 112.445V62.3371C181.198 61.6013 181.047 60.8733 180.756 60.1975C180.465 59.5216 180.038 58.9121 179.503 58.4065L117.789 0.140625L102.685 6.04936Z"/>
+  </g>
+  <text x="524" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">Macro</text>
+</svg>

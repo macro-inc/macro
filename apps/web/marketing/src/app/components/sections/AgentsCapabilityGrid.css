@@ -1,0 +1,89 @@
+.agents-capabilities { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-block: 1px solid var(--agents-line); }
+.agents-capability { min-width: 0; display: grid; grid-template-rows: 270px 1fr; gap: 44px; padding: 30px 30px 36px; scroll-margin-top: 96px; }
+.agents-capability:nth-child(even) { border-left: 1px solid var(--agents-line); }
+.agents-capability:nth-child(n+3) { border-top: 1px solid var(--agents-line); }
+.agents-cap-visual { position: relative; min-width: 0; overflow: hidden; display: grid; place-items: center; background: radial-gradient(ellipse at center, color-mix(in srgb, var(--c4) 8%, transparent), transparent 70%); }
+.agents-cap-art { position: relative; width: 100%; }
+.agents-cap-caption { padding-left: 29px; display: grid; align-content: start; gap: 20px; }
+.agents-page .agents-cap-caption h2 { display: flex; align-items: center; gap: 10px; margin-left: -29px; font: 700 14px/1.3 'body'; letter-spacing: .07em; text-transform: uppercase; color: var(--c2); }
+.agents-cap-number { display: inline-grid; place-items: center; width: 19px; height: 19px; flex: none; border: 1px solid color-mix(in srgb, var(--c4) 42%, transparent); border-radius: 50%; font: 500 11px/1 'rajdhani', 'body'; letter-spacing: 0; }
+.agents-page .agents-cap-caption p { color: color-mix(in srgb, var(--c4) 85%, transparent); font: 500 15px/1.5 'body'; max-width: 40ch; }
+.agents-cap-assignment { width: 116%; margin-left: 5%; mask-image: linear-gradient(to right, transparent, #000 7%, #000 75%, transparent); }
+.agents-cap-assignment > svg { display: block; width: 100%; height: auto; }
+.agents-cap-schedule { max-width: 420px; padding-inline: 8px; }
+.agents-cap-schedule-control { padding: 24px; background: linear-gradient(125deg, #151619, #0c0d0f); border: 1px solid #ffffff16; border-radius: 18px; box-shadow: 0 12px 36px #0008; transform: rotate(-2deg); }
+.agents-cap-schedule-time { display: flex; align-items: center; gap: 12px; font-size: 19px; color: #d4d4d4; }
+.agents-cap-schedule-time > svg { width: 24px; height: 24px; color: var(--a0); }
+.agents-cap-schedule-time strong { font-size: 18px; font-weight: 400; margin-left: auto; }
+.agents-cap-days { display: flex; gap: 8px; margin-top: 21px; justify-content: space-between; }
+.agents-cap-days > span { flex: 1; max-width: 36px; height: 34px; display: grid; place-items: center; border-radius: 6px; color: #555; font-size: 13px; border: 1px solid #ffffff0c; }
+.agents-cap-days > .is-active { color: var(--a0); border-color: color-mix(in srgb, var(--a0) 26%, transparent); background: color-mix(in srgb, var(--a0) 8%, transparent); }
+.agents-cap-inbox-line { width: 1px; height: 29px; margin-left: 48px; background: linear-gradient(var(--a0), #ffffff20); }
+.agents-cap-inbox-row { display: flex; align-items: center; gap: 14px; margin-left: 28px; padding: 17px 18px; background: linear-gradient(125deg, #181a20, #101114); border: 1px solid #ffffff0e; border-radius: 13px; box-shadow: 0 8px 24px #0009; mask-image: linear-gradient(to right, #000 80%, transparent); }
+.agents-cap-inbox-row > svg { width: 23px; height: 17px; flex: none; color: var(--a0); }
+.agents-cap-inbox-row strong { display: block; font-size: 16px; font-weight: 450; color: #ddd; }
+.agents-cap-inbox-row span { display: block; color: #898b91; font-size: 11px; margin-top: 3px; }
+.agents-cap-inbox-row i { width: 5px; height: 5px; border-radius: 50%; background: var(--a0); margin-left: auto; }
+.agents-cap-permissions { padding-inline: 6px; max-width: 440px; }
+.agents-cap-access-header, .agents-cap-access-row { display: grid; grid-template-columns: minmax(0, 1fr) 38px 38px; align-items: center; gap: 18px; }
+.agents-cap-access-header { padding: 0 22px 16px; color: #9b9da3; font-size: 13px; text-align: center; }
+.agents-cap-access-header > svg { color: var(--a0); width: 25px; height: 18px; justify-self: center; }
+.agents-cap-access-row { background: linear-gradient(125deg, #181a20, #101114); border: 1px solid #ffffff14; padding: 20px 22px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 8px 24px #0005; }
+.agents-cap-access-row > span { display: flex; align-items: center; gap: 12px; color: #d5d5d9; font-size: 19px; white-space: nowrap; }
+.agents-cap-access-row > span > svg { width: 22px; height: 22px; color: #8f97cb; }
+.agents-cap-access-row > svg { color: #55ae75; justify-self: center; width: 23px; height: 23px; }
+.agents-cap-access-row.is-private { opacity: .6; }
+.agents-cap-access-row.is-private svg { color: #8d8f97; }
+.agents-cap-access-note { display: flex; align-items: center; justify-content: center; gap: 8px; color: #888b92; font-size: 11px; margin-top: 18px; }
+.agents-cap-access-note svg { width: 12px; height: 12px; }
+.agents-cap-connections { height: 260px; max-width: 460px; font-family: 'Inter', sans-serif; }
+.agents-cap-connections > svg { position: absolute; inset: 0; width: 100%; height: 100%; stroke: color-mix(in srgb, var(--a0) 40%, transparent); stroke-width: 1; }
+.agents-cap-hub { position: absolute; width: 80px; height: 80px; left: 50%; top: 50%; transform: translate(-50%, -50%); border: 1px solid color-mix(in srgb, var(--a0) 30%, #202124); background: linear-gradient(145deg, #27282b, #111213); border-radius: 19px; box-shadow: 0 12px 30px #0008, inset 0 1px 0 #ffffff16; display: grid; align-content: center; justify-items: center; gap: 8px; }
+.agents-cap-hub > svg { width: 30px; height: 21px; color: var(--a0); }
+.agents-cap-hub > span { color: #96989e; font-size: 10px; letter-spacing: .1em; }
+.agents-cap-tool { position: absolute; width: 68px; display: grid; justify-items: center; gap: 9px; transform: translate(-50%, -50%); font-size: 11px; color: #9d9fa5; }
+.agents-cap-tool > svg { width: 48px; height: 48px; padding: 12px; background: linear-gradient(145deg, #25262b, #131417); color: #bbb; border: 1px solid #ffffff16; border-radius: 14px; box-shadow: 0 8px 24px #0008; }
+.agents-cap-tool--github { left: 17.4%; top: 25%; }
+.agents-cap-tool--linear { left: 82.6%; top: 25%; }
+.agents-cap-tool--notion { left: 17.4%; top: 75%; }
+.agents-cap-tool--slack { left: 82.6%; top: 75%; }
+@media (max-width: 1030px) and (min-width: 701px) {
+  .agents-capability { padding-inline: 20px; grid-template-rows: 230px 1fr; gap: 32px; }
+  .agents-cap-schedule-control { padding: 18px 14px; }
+  .agents-cap-schedule-time { font-size: 15px; gap: 8px; }
+  .agents-cap-schedule-time strong { font-size: 15px; }
+  .agents-cap-days { gap: 5px; }
+  .agents-cap-inbox-row { margin-left: 12px; padding-inline: 14px; }
+  .agents-cap-inbox-row strong { font-size: 13px; }
+  .agents-cap-access-header, .agents-cap-access-row { grid-template-columns: minmax(0, 1fr) 26px 26px; gap: 8px; padding-inline: 14px; }
+  .agents-cap-access-row > span { font-size: 15px; gap: 8px; }
+  .agents-cap-connections { height: 230px; }
+}
+@media (max-width: 700px) {
+  .agents-capabilities { grid-template-columns: minmax(0, 1fr); }
+  .agents-capability { padding: 26px 4px 32px; gap: 30px; grid-template-rows: 230px 1fr; }
+  .agents-capability:nth-child(even) { border-left: 0; }
+  .agents-capability + .agents-capability { border-top: 1px solid var(--agents-line); }
+  .agents-page .agents-cap-caption h2 { font-size: 14px; }
+  .agents-page .agents-cap-caption p { font-size: 15px; }
+  .agents-cap-caption { padding-left: 29px; gap: 14px; }
+  .agents-cap-visual { max-width: 430px; width: 100%; justify-self: center; }
+  .agents-cap-assignment { width: 116%; }
+  .agents-cap-schedule { max-width: 350px; padding: 0 4px; }
+  .agents-cap-schedule-control { padding: 20px 14px; }
+  .agents-cap-schedule-time { font-size: 17px; gap: 8px; }
+  .agents-cap-schedule-time strong { font-size: 16px; }
+  .agents-cap-days { gap: 5px; margin-top: 16px; }
+  .agents-cap-days > span { height: 30px; }
+  .agents-cap-inbox-row { margin-left: 12px; padding: 14px; gap: 10px; }
+  .agents-cap-inbox-row strong { font-size: 14px; }
+  .agents-cap-inbox-row span { font-size: 10px; }
+  .agents-cap-access-header, .agents-cap-access-row { grid-template-columns: minmax(0, 1fr) 27px 27px; gap: 8px; padding-inline: 14px; }
+  .agents-cap-access-row > span { font-size: 17px; gap: 8px; }
+  .agents-cap-connections { height: 230px; max-width: 350px; }
+}
+@media (max-width: 360px) {
+  .agents-cap-schedule-time, .agents-cap-schedule-time strong { font-size: 14px; }
+  .agents-cap-access-row > span { font-size: 14px; }
+  .agents-cap-access-row > span > svg { width: 17px; height: 17px; }
+}

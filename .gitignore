@@ -52,3 +52,7 @@ infra/local/generated/
 
 # Owner-bound subscription OAuth credentials for the internal Claude demo.
 /.claude-cloud/
+
+# Unified marketing build artifacts.
+/apps/web/dist-site/
+/apps/web/dist-site-prerender/

@@ -39,7 +39,12 @@
     "format": "bunx --bun biome format --write",
     "fix": "bunx --bun biome lint --write",
     "clean": "bun scripts/clean-env.js",
-    "knip": "bunx --bun knip"
+    "knip": "bunx --bun knip",
+    "build:site": "bun run --cwd marketing build",
+    "check:seo:live": "bun marketing/scripts/verify-seo-live.ts",
+    "check:seo": "bun marketing/scripts/verify-seo.ts",
+    "build:all": "bun run build && bun run build:site",
+    "dev:site": "bun run --cwd marketing dev"
   },
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",

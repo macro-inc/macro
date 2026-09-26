@@ -1,0 +1,19 @@
+@font-face { font-family: 'Demo KaTeX Main'; src: url('../../../assets/demo-fonts/katex-main.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Demo KaTeX Math'; src: url('../../../assets/demo-fonts/katex-math-italic.woff2') format('woff2'); font-weight: 400; font-style: italic; font-display: swap; }
+.site-live-doc-host { width: 100%; height: 100%; position: relative; overflow: hidden; }
+.site-live-doc-column { box-sizing: border-box; width: 100%; max-width: 720px; margin: 0 auto; padding: 24px 28px; }
+.site-live-doc-editor { outline: none; color: var(--c1); font: 400 16px/24px 'Inter Variable', system-ui, sans-serif; overflow-wrap: anywhere; }
+.site-live-doc-editor h1 { margin: 0 0 12px; font-size: 20px; line-height: 28px; font-weight: 600; font-family: inherit; }
+.site-live-doc-editor h2 { margin: 0 0 8px; font-size: 18px; line-height: 28px; font-weight: 600; font-family: inherit; }
+.site-live-doc-editor p { margin: 16px 0; font: inherit; color: inherit; }
+.site-live-doc-editor ul { margin: 16px 0 6px 24px; padding-left: 0; list-style: disc; }
+.site-live-doc-editor li { padding: 0; margin: 4px 0; line-height: 24px; }
+.site-live-doc-editor strong { font-weight: 700; }
+.site-live-doc-editor code { padding: 1px 3px; border-radius: 3px; background: color-mix(in srgb, var(--c1) 8%, transparent); font-size: .9em; }
+.site-live-doc-math { font: 400 19.36px/24px 'Demo KaTeX Main', serif; }
+.site-live-doc-math i, .site-live-doc-math sup { font-family: 'Demo KaTeX Math', serif; font-style: italic; }
+.site-live-doc-math i { margin-right: .04em; }
+.site-live-doc-math sup { font-size: .7em; }
+.site-live-doc-menu { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; margin-top: 12px; border: 1px solid color-mix(in srgb, var(--c1) 15%, transparent); border-radius: 8px; background: var(--b0); color: var(--c1); font: 400 13px/20px 'Inter', sans-serif; }
+.site-live-doc-menu button { padding: 4px 8px; border-radius: 4px; }
+.site-live-doc-menu button:hover, .site-live-doc-menu button:focus-visible { background: color-mix(in srgb, var(--c1) 10%, transparent); }

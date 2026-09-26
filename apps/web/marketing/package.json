@@ -1,0 +1,46 @@
+{
+  "name": "@macro-inc/website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config vite.config.ts",
+    "build": "bun run check:standalone && vite build -c vite.config.ts && vite build -c vite.prerender.config.ts && bun scripts/prerender.ts && bun scripts/verify-seo.ts",
+    "check:standalone": "bun scripts/verify-standalone.ts",
+    "type-check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run -c vitest.config.ts",
+    "check:seo": "bun scripts/verify-seo.ts"
+  },
+  "dependencies": {
+    "@floating-ui/dom": "^1.7.4",
+    "@kobalte/core": "^0.13.11",
+    "@phosphor-icons/core": "^2.1.1",
+    "@solid-primitives/media": "2.3.6",
+    "@solid-primitives/platform": "^0.2.1",
+    "@solid-primitives/resize-observer": "^2.1.3",
+    "@solid-primitives/storage": "^4.3.3",
+    "@solidjs/router": "^0.15.3",
+    "posthog-js": "^1.424.0",
+    "simplex-noise": "^4.0.3",
+    "solid-js": "^1.9.7",
+    "tailwind-merge": "^3.4.0",
+    "virtua": "0.48.8"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.6",
+    "@pierre/diffs": "1.3.5",
+    "@playwright/test": "^1.55.1",
+    "@solidjs/testing-library": "^0.8.10",
+    "@tailwindcss/vite": "^4.2.4",
+    "@types/bun": "^1.2.19",
+    "@types/node": "^24.8.0",
+    "happy-dom": "20.10.6",
+    "jsdom": "^26.1.0",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.1",
+    "vite-plugin-solid": "^2.11.8",
+    "vite-plugin-solid-svg": "^0.8.1",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "5.0.1"
+  }
+}
