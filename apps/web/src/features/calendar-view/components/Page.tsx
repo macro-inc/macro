@@ -44,6 +44,7 @@ import {
 import { Button } from '@ui';
 import {
   type Accessor,
+  createDeferred,
   createEffect,
   createMemo,
   createSignal,
@@ -232,10 +233,16 @@ export function Page(props: {
   const isActive = () => pager.isActive(props.id);
   const useNarrowWeekdayHeaders = () =>
     props.useNarrowDayHeaders && !isMobile();
+  // Let the checkbox update before remapping occurrences and redrawing the grid.
+  // Each page has its own deferred update, so the scheduler can yield between
+  // the three FullCalendar instances.
+  const renderedHiddenSourceIds = createDeferred(calendarView.hiddenSourceIds);
+  const isRenderedSourceVisible = (sourceId: string) =>
+    !renderedHiddenSourceIds().has(sourceId);
   const data = useCalendarOccurrenceData({
     range,
     sourceById: calendarView.sourceById,
-    isSourceVisible: calendarView.isSourceVisible,
+    isSourceVisible: isRenderedSourceVisible,
     queryOptions: () => ({
       pollWhileSyncing: isActive(),
       refetchOnWindowFocus: isActive(),
@@ -243,7 +250,7 @@ export function Page(props: {
   });
   const teamOoo = useTeamOooEvents({
     range,
-    isSourceVisible: calendarView.isSourceVisible,
+    isSourceVisible: isRenderedSourceVisible,
     refetchOnWindowFocus: isActive,
   });
   const visibleEvents = createMemo(() => [

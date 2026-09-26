@@ -74,9 +74,10 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     visible: boolean
   ) => {
     calendarView.closeEventDetails();
-    for (const source of group.calendars) {
-      calendarView.setSourceVisibility(source.id, visible);
-    }
+    calendarView.setSourcesVisibility(
+      group.calendars.map((source) => source.id),
+      visible
+    );
   };
   const isAccountVisible = (group: CalendarAccountGroup) =>
     group.calendars.every((source) => calendarView.isSourceVisible(source.id));

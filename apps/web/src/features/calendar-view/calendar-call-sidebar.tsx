@@ -3,6 +3,7 @@ import { openExternalUrl } from '@core/util/url';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { useNavigate } from '@solidjs/router';
 import { isSameDay, isTomorrow } from 'date-fns';
+import { createDeferred } from 'solid-js';
 import { useCalendarView } from '../calendar/components/CalendarViewContext';
 import { formatCompactCalendarTime } from '../calendar/utils/time-format';
 import { calendarCallNavigation } from '../meetings/core/calendar-calls';
@@ -21,10 +22,13 @@ export function CalendarCallSidebar(
   const userId = useUserId();
   const quickCalls = useQuickCallsFlag();
   const now = createCallSidebarClock();
+  const renderedHiddenSourceIds = createDeferred(calendar.hiddenSourceIds);
+  const isRenderedSourceVisible = (sourceId: string) =>
+    !renderedHiddenSourceIds().has(sourceId);
   const upcoming = useUpcomingCalendarEventsSource({
     userId,
     sourceById: calendar.sourceById,
-    isSourceVisible: calendar.isSourceVisible,
+    isSourceVisible: isRenderedSourceVisible,
     now,
   });
   const active = useActiveQuickCallsSource(() =>
@@ -58,6 +62,7 @@ export function CalendarCallSidebar(
       sources={{ upcoming, active }}
       now={now}
       when={when}
+      selectedEventId={calendar.selectedEvent()?.id}
       actions={{
         openEvent: (event, anchor) => {
           const calendarEvent = upcoming.findEvent(event.id);

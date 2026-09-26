@@ -1,16 +1,20 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CalendarSidebar } from './CalendarSidebar';
 
 const state = vi.hoisted(() => ({
   mobile: false,
+  selectEvent: vi.fn(),
   overlay: false,
   touch: false,
   quickCalls: true,
   teammates: true,
   teamWindows: [] as Array<{
     ownerId: string;
+    eventId: string;
+    occurrenceKey: string;
+    event: { id: string };
     name: string;
     title?: string;
     start: Date;
@@ -23,6 +27,7 @@ const state = vi.hoisted(() => ({
   navigate: vi.fn(),
 }));
 
+const [selectedEvent, setSelectedEvent] = createSignal<{ id: string }>();
 vi.mock('@app/components/view-shell', () => {
   const Slot = (props: { children?: JSX.Element }) => <>{props.children}</>;
   const Control = (
@@ -95,7 +100,17 @@ vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
     displaySettings: { weekStartsOn: 0 },
     sources: () => [{ id: 'one' }, { id: 'two' }],
     isSourceVisible: () => true,
+    selectedEvent,
+    selectEvent: (
+      event: { id: string },
+      anchor: HTMLElement,
+      origin: string
+    ) => {
+      state.selectEvent(event, anchor, origin);
+      setSelectedEvent(event);
+    },
     setSourceVisibility: vi.fn(),
+    setSourcesVisibility: vi.fn(),
   }),
 }));
 vi.mock('@app/features/calendar/components/SourceControls', () => ({
@@ -157,6 +172,8 @@ beforeEach(() => {
   state.overlay = false;
   state.touch = false;
   state.teammates = true;
+  setSelectedEvent(undefined);
+  state.selectEvent.mockClear();
   state.teamWindows = [];
   state.quickCalls = true;
   state.gotoDate.mockClear();
@@ -227,8 +244,10 @@ it('shows a teammate avatar beside an upcoming out-of-office window', () => {
   state.teamWindows = [
     {
       ownerId: 'macro|teammate@example.com',
+      eventId: 'ooo-1',
+      occurrenceKey: '2026-01-15',
       name: 'Teammate',
-      title: 'Out of office',
+      event: { id: '["ooo-1","2026-01-15"]' },
       start: new Date(2026, 0, 15),
       end: new Date(2026, 0, 16),
     },
@@ -238,4 +257,13 @@ it('shows a teammate avatar beside an upcoming out-of-office window', () => {
     'macro|teammate@example.com'
   );
   expect(screen.getByText('Teammate')).toBeTruthy();
+  const row = screen.getByRole('button', { name: /Teammate/ });
+  fireEvent.click(row);
+  expect(row.classList.contains('bg-active')).toBe(true);
+  expect(row.getAttribute('aria-current')).toBe('true');
+  expect(state.selectEvent).toHaveBeenCalledWith(
+    state.teamWindows[0]?.event,
+    row,
+    'agenda'
+  );
 });

@@ -2,9 +2,9 @@
  * @vitest-environment jsdom
  */
 
-import { fireEvent, render, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarSource } from '../types';
 import { SourceControls } from './SourceControls';
 
@@ -36,21 +36,46 @@ const SOURCES: CalendarSource[] = [
   },
 ];
 
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 function renderControls() {
   const onVisibilityChange = vi.fn<(id: string, visible: boolean) => void>();
+  const onGroupVisibilityChange = vi.fn<
+    (ids: string[], visible: boolean) => void
+  >();
   const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
+  const changeVisibility = (ids: readonly string[], visible: boolean) =>
+    setHidden((current) => {
+      const next = new Set(current);
+      for (const id of ids) {
+        if (visible) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
   const result = render(() => (
     <SourceControls
       sources={SOURCES}
       isVisible={(id) => !hidden().has(id)}
       onVisibilityChange={(id, visible) => {
         onVisibilityChange(id, visible);
-        setHidden((current) => {
-          const next = new Set(current);
-          if (visible) next.delete(id);
-          else next.add(id);
-          return next;
-        });
+        changeVisibility([id], visible);
+      }}
+      onGroupVisibilityChange={(ids, visible) => {
+        onGroupVisibilityChange(ids, visible);
+        changeVisibility(ids, visible);
       }}
     />
   ));
@@ -61,11 +86,17 @@ function renderControls() {
     const caret =
       result.queryByRole('button', { name: `Collapse ${email}` }) ??
       result.getByRole('button', { name: `Expand ${email}` });
-    const header = caret.parentElement;
+    const header = caret.parentElement?.parentElement;
     if (!header) throw new Error(`missing header for ${email}`);
     return header;
   };
-  return { ...result, onVisibilityChange, headerFor, expandAccount };
+  return {
+    ...result,
+    onVisibilityChange,
+    onGroupVisibilityChange,
+    headerFor,
+    expandAccount,
+  };
 }
 
 describe('SourceControls', () => {
@@ -86,6 +117,34 @@ describe('SourceControls', () => {
     );
     expect(swatch?.style.backgroundColor).toBe('rgb(255, 0, 0)');
   });
+
+  it('places checkboxes before labels and keeps expansion separate from visibility', () => {
+    const { expandAccount, getByRole, getByText, headerFor, onVisibilityChange } =
+      renderControls();
+    const header = headerFor('gab@macro.com');
+    const headerCheckbox = header.querySelector('input[type="checkbox"]');
+    const headerText = header.querySelector('.truncate');
+    expect(
+      headerCheckbox &&
+        headerText &&
+        headerCheckbox.compareDocumentPosition(headerText) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    const disclosure = getByRole('button', { name: 'Expand gab@macro.com' });
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+    expandAccount('gab@macro.com');
+    expect(
+      getByRole('button', { name: 'Collapse gab@macro.com' }).getAttribute(
+        'aria-expanded'
+      )
+    ).toBe('true');
+    expect(onVisibilityChange).not.toHaveBeenCalled();
+    const child = getByRole('checkbox', { name: 'Holidays in United States' });
+    const childText = getByText('Holidays in United States');
+    expect(
+      child.compareDocumentPosition(childText) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
   it('reveals an account calendars once expanded', () => {
     const { expandAccount, getByText } = renderControls();
     expandAccount('gab@macro.com');
@@ -99,14 +158,17 @@ describe('SourceControls', () => {
     expect(onVisibilityChange).toHaveBeenCalledWith('gab-holidays', false);
   });
 
-  it('toggles every calendar in an account from its header checkbox', () => {
-    const { headerFor, onVisibilityChange } = renderControls();
-    // The header checkbox works while the group is still folded.
+  it('toggles an account in one visibility update from its header checkbox', () => {
+    const { headerFor, onVisibilityChange, onGroupVisibilityChange } =
+      renderControls();
     fireEvent.click(
       within(headerFor('gab@macro.com')).getByText('gab@macro.com')
     );
-    expect(onVisibilityChange).toHaveBeenCalledWith('gab-primary', false);
-    expect(onVisibilityChange).toHaveBeenCalledWith('gab-holidays', false);
+    expect(onGroupVisibilityChange).toHaveBeenCalledExactlyOnceWith(
+      ['gab-primary', 'gab-holidays'],
+      false
+    );
+    expect(onVisibilityChange).not.toHaveBeenCalled();
   });
 
   it('marks a subscription calendar with an indicator', () => {

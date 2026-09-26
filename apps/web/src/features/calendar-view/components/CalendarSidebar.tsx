@@ -127,6 +127,7 @@ function CalendarSourcesSection() {
             sources={calendarView.sources()}
             isVisible={calendarView.isSourceVisible}
             onVisibilityChange={calendarView.setSourceVisibility}
+            onGroupVisibilityChange={calendarView.setSourcesVisibility}
           />
         </CollapsibleSection.Content>
       </CollapsibleSection.Root>
@@ -160,6 +161,9 @@ function TeamOooUpcomingList() {
   const shell = useViewShell();
   const upcoming = useUpcomingTeamOoo();
   const windows = upcoming.windows;
+  const calendarView = useCalendarView();
+  const isActive = (window: TeamOooWindow) =>
+    calendarView.selectedEvent()?.id === window.event.id;
 
   return (
     <div class="flex flex-col gap-0.5">
@@ -182,9 +186,19 @@ function TeamOooUpcomingList() {
             {(window) => (
               <button
                 type="button"
-                class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-hover"
-                onClick={() => {
+                class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
+                classList={{
+                  'bg-active': isActive(window),
+                  'hover:bg-hover': !isActive(window),
+                }}
+                aria-current={isActive(window) ? 'true' : undefined}
+                onClick={(event) => {
                   calendarPager.gotoDate(window.start);
+                  calendarView.selectEvent(
+                    window.event,
+                    event.currentTarget,
+                    'agenda'
+                  );
                   if (shell.aside.isOverlay()) shell.aside.collapse();
                 }}
               >
