@@ -69,6 +69,27 @@ fn set_model_becomes_a_model_config_option_request() {
 }
 
 #[test]
+fn a_generic_session_config_action_round_trips_through_acp() {
+    let session_id = SessionId::new("acp-abc");
+    let action = AgentAction::set_config_option("reasoning_effort", "high");
+    let translated = action
+        .to_runtime(&session_id, RequestId::Str("harness:effort:0".to_owned()))
+        .unwrap();
+
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = &translated else {
+        panic!("a config change translates to an ACP request");
+    };
+    let parsed = ClientRequest::parse_message(&request.method, &request.params).unwrap();
+    let ClientRequest::SetSessionConfigOptionRequest(parsed) = parsed else {
+        panic!("a config change translates to SetSessionConfigOptionRequest");
+    };
+    assert_eq!(parsed.session_id, session_id);
+    assert_eq!(parsed.config_id.to_string(), "reasoning_effort");
+    assert_eq!(parsed.value.as_value_id().unwrap().to_string(), "high");
+    assert_eq!(AgentAction::control_from_runtime(&translated), Some(action));
+}
+
+#[test]
 fn stop_becomes_a_cancel_notification_with_no_request_id() {
     let session_id = SessionId::new("acp-abc");
     let translated = AgentAction::Stop

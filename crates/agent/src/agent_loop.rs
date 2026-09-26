@@ -1,8 +1,8 @@
 /// The main entry point: [`AgentLoop`] and [`Session`].
 use crate::error::AgentError;
 use crate::hook::{BridgeInputs, RegisterFn, ToolRouter, UserToolFinisher};
-use crate::model::PredefinedModel;
 use crate::model::router::{ModelRouter, ProviderAgent};
+use crate::model::{PredefinedModel, ReasoningEffort};
 use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
 use crate::tool_adapter::DynToolSetAdapter;
@@ -30,6 +30,7 @@ const DEFAULT_MAX_TOKENS: u64 = 16_000;
 /// (MCP tools are per-user, system prompt depends on toolset selection).
 pub struct AgentLoop {
     model: String,
+    reasoning_effort: Option<ReasoningEffort>,
     max_turns: usize,
     max_tokens: u64,
     recorder: Arc<dyn UsageRecorder>,
@@ -54,6 +55,7 @@ impl AgentLoop {
     pub fn new(recorder: Arc<dyn UsageRecorder>) -> Self {
         Self {
             model: PredefinedModel::default().to_string(),
+            reasoning_effort: None,
             max_turns: DEFAULT_MAX_TURNS,
             max_tokens: DEFAULT_MAX_TOKENS,
             recorder,
@@ -84,6 +86,12 @@ impl AgentLoop {
     /// api-id string (frontend).
     pub fn with_model<M: ToString>(mut self, model: M) -> Self {
         self.model = model.to_string();
+        self
+    }
+
+    /// Override the model provider's default reasoning effort.
+    pub fn with_reasoning_effort(mut self, effort: ReasoningEffort) -> Self {
+        self.reasoning_effort = Some(effort);
         self
     }
 
@@ -158,16 +166,18 @@ impl AgentLoop {
             system_prompt,
             usage_ctx,
             |handle, prompt, max_turns, max_tokens, telemetry| {
-                ModelRouter::shared()
+                let routed = ModelRouter::shared()
                     .expect("failed to initialize model router")
-                    .agent(
-                        &self.model,
-                        handle,
-                        prompt,
-                        max_turns,
-                        max_tokens,
-                        telemetry,
-                    )
+                    .route_or_default(&self.model);
+                telemetry.set_model(routed.provider(), routed.model_name());
+                routed.into_agent(
+                    self.reasoning_effort,
+                    handle,
+                    prompt,
+                    max_turns,
+                    max_tokens,
+                    &telemetry,
+                )
             },
         )
         .await

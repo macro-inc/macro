@@ -1,6 +1,6 @@
 use agent_client_protocol::schema::v1::{
-    ContentChunk, ResourceLink, SessionId, TextContent, ToolCall as AcpToolCall, ToolCallStatus,
-    ToolCallUpdate, ToolCallUpdateFields,
+    ContentChunk, ResourceLink, SessionConfigValueId, SessionId, SetSessionConfigOptionRequest,
+    TextContent, ToolCall as AcpToolCall, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields,
 };
 use agent_runtime_protocol::domain::schema::v0::AcpMessage;
 
@@ -53,6 +53,22 @@ fn prompt_frame_with_file(text: &str, name: &str, uri: &str) -> Message {
         "id": 1,
         "method": "session/prompt",
         "params": serde_json::to_value(request).expect("a prompt should serialize"),
+    }))
+    .expect("a request frame should deserialize");
+    Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(raw)))
+}
+
+fn config_frame(config_id: &str, value: &str) -> Message {
+    let request = SetSessionConfigOptionRequest::new(
+        acp_session(),
+        config_id.to_owned(),
+        SessionConfigValueId::new(value.to_owned()),
+    );
+    let raw: RawJsonRpcMessage = serde_json::from_value(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "session/set_config_option",
+        "params": serde_json::to_value(request).expect("a config change should serialize"),
     }))
     .expect("a request frame should deserialize");
     Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(raw)))
@@ -207,4 +223,38 @@ fn a_call_the_log_never_answered_is_closed_rather_than_left_dangling() {
 #[test]
 fn an_empty_log_replays_to_an_empty_conversation() {
     assert!(replay_history(Vec::new()).is_empty());
+}
+
+fn config_response(result: serde_json::Value) -> Message {
+    Message::ToServer(ToServerMessage::Acp(AcpMessage(
+        serde_json::from_value(serde_json::json!({
+            "jsonrpc": "2.0", "id": 2, "result": result
+        }))
+        .unwrap(),
+    )))
+}
+
+#[test]
+fn only_confirmed_effort_replays_and_removal_resets_it() {
+    let mut frames = vec![config_frame(REASONING_EFFORT_CONFIG_ID, "low")];
+    assert_eq!(replay_reasoning_effort(&frames), ReasoningEffort::Default);
+    let options = crate::domain::model_options::session_config_options(
+        "anthropic/claude-sonnet-5",
+        &["anthropic/claude-sonnet-5"],
+        ReasoningEffort::Low,
+    );
+    frames.push(config_response(
+        serde_json::json!({ "configOptions": options }),
+    ));
+    frames.push(config_frame(REASONING_EFFORT_CONFIG_ID, "medium"));
+    frames.push(Message::ToServer(ToServerMessage::Acp(AcpMessage(
+        serde_json::from_value(serde_json::json!({
+            "jsonrpc": "2.0", "id": 2, "error": { "code": -32602, "message": "unsupported" }
+        }))
+        .unwrap(),
+    ))));
+    assert_eq!(replay_reasoning_effort(&frames), ReasoningEffort::Low);
+    frames.push(config_frame("model", "other-model"));
+    frames.push(config_response(serde_json::json!({ "configOptions": [] })));
+    assert_eq!(replay_reasoning_effort(&frames), ReasoningEffort::Default);
 }

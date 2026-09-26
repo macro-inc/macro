@@ -82,8 +82,13 @@ impl SearchText {
                 }
             }
             MessagePart::Control { control, outcome } => {
-                if let Control::SetModel { model } = control {
-                    self.push(model);
+                match control {
+                    Control::SetModel { model } => self.push(model),
+                    Control::SetConfigOption { config_id, value } => {
+                        self.push(config_id);
+                        self.push(value);
+                    }
+                    Control::Compact | Control::Stop => {}
                 }
                 if let ControlOutcome::Rejected { message } = outcome {
                     self.push(message);

@@ -207,6 +207,37 @@ pub struct AgentSetModelAction {
     pub model: String,
 }
 
+/// Ask the agent to change one advertised select-style session setting.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSetConfigOptionAction {
+    /// Opaque ACP config id advertised by the agent.
+    pub config_id: String,
+    /// Opaque select value advertised for that config option.
+    pub value: String,
+}
+
+impl AgentSetConfigOptionAction {
+    /// Read a non-model select change back from its ACP request.
+    pub fn from_runtime(message: &ToRuntimeMessage) -> Option<(SessionId, Self)> {
+        let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = message else {
+            return None;
+        };
+        let ClientRequest::SetSessionConfigOptionRequest(request) =
+            ClientRequest::parse_message(&request.method, &request.params).ok()?
+        else {
+            return None;
+        };
+        let config_id = request.config_id.to_string();
+        if config_id == MODEL_CONFIG_ID {
+            return None;
+        }
+        let value = request.value.as_value_id()?.to_string();
+        Some((request.session_id, Self { config_id, value }))
+    }
+}
+
 impl AgentSetModelAction {
     /// Read a model change back from the ACP request produced for it.
     ///
@@ -400,6 +431,8 @@ pub enum AgentAction {
     Prompt(AgentPromptAction),
     /// Switch the model the agent runs on.
     SetModel(AgentSetModelAction),
+    /// Change an agent-advertised select-style session setting.
+    SetConfigOption(AgentSetConfigOptionAction),
     /// Compact the agent's current context.
     Compact,
     /// Interrupt whatever the agent is doing.
@@ -440,6 +473,14 @@ impl AgentAction {
         })
     }
 
+    /// Ask the agent to change one of its advertised select settings.
+    pub fn set_config_option(config_id: impl Into<String>, value: impl Into<String>) -> Self {
+        Self::SetConfigOption(AgentSetConfigOptionAction {
+            config_id: config_id.into(),
+            value: value.into(),
+        })
+    }
+
     /// Answer the elicitation the agent asked with `request_id`.
     pub fn respond_elicitation(
         request_id: ElicitationRequestId,
@@ -456,6 +497,9 @@ impl AgentAction {
     pub fn control_from_runtime(message: &ToRuntimeMessage) -> Option<Self> {
         if let Some((_, action)) = AgentSetModelAction::from_runtime(message) {
             return Some(Self::SetModel(action));
+        }
+        if let Some((_, action)) = AgentSetConfigOptionAction::from_runtime(message) {
+            return Some(Self::SetConfigOption(action));
         }
 
         let ToRuntimeMessage::Acp(AcpMessage(frame)) = message else {
@@ -497,6 +541,7 @@ impl AgentAction {
             // An elicitation answer is the running turn's own business: the
             // agent is blocked on it mid-turn, so it must ride alongside.
             Self::SetModel(_)
+            | Self::SetConfigOption(_)
             | Self::Stop
             | Self::RespondElicitation(_)
             | Self::RespondToPermission(_) => false,
@@ -541,6 +586,21 @@ impl AgentAction {
                     session_id.clone(),
                     MODEL_CONFIG_ID,
                     action.model.as_str(),
+                );
+                let params = serde_json::to_value(&payload)
+                    .map_err(|error| ActionError::Acp(error.to_string()))?;
+                let frame =
+                    RawJsonRpcMessage::request(payload.method().to_owned(), params, request_id)
+                        .map_err(|error| ActionError::Acp(error.to_string()))?;
+                Ok(ToRuntimeMessage::Acp(AcpMessage(frame)))
+            }
+            Self::SetConfigOption(action) => {
+                let payload = SetSessionConfigOptionRequest::new(
+                    session_id.clone(),
+                    action.config_id.clone(),
+                    agent_client_protocol::schema::v1::SessionConfigValueId::new(
+                        action.value.clone(),
+                    ),
                 );
                 let params = serde_json::to_value(&payload)
                     .map_err(|error| ActionError::Acp(error.to_string()))?;

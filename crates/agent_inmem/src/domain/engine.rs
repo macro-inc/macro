@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use agent::ReasoningEffort;
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
 use ai_tools::user_tool_review::UserToolReviewer;
@@ -30,6 +31,8 @@ pub struct TurnRequest {
     /// Model id the turn runs on. Unknown ids fall back to the loop's
     /// default model rather than failing the turn.
     pub model: String,
+    /// Provider-independent effort selected for this session.
+    pub reasoning_effort: ReasoningEffort,
     /// Who this agent is. Folded into every turn's system prompt so the
     /// model can answer "who are you" even when the session has no
     /// instructions. `None` leaves the standing prompt unnamed.

@@ -372,7 +372,7 @@ impl SpeculativeFold {
                                 && !matches!(outcome, super::model::PermissionOutcome::Pending)
                     )
                 }),
-            AgentAction::Prompt(_) | AgentAction::Compact | AgentAction::SetModel(_) => self
+            AgentAction::Prompt(_) | AgentAction::Compact | AgentAction::SetModel(_) | AgentAction::SetConfigOption(_) => self
                 .committed
                 .machine
                 .messages()

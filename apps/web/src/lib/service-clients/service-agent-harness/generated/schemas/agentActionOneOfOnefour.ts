@@ -6,10 +6,15 @@
  */
 
 import type { AgentActionOneOfOnefourAllOf } from './agentActionOneOfOnefourAllOf';
-import type { AgentPermissionAction } from './agentPermissionAction';
+import type { AgentRespondElicitationAction } from './agentRespondElicitationAction';
 
 /**
- * Answer a permission request the agent is waiting on.
+ * Answer an `elicitation/create` the agent sent.
+
+The one action whose wire form is a JSON-RPC *response* rather than a
+request or notification: the agent asked, we answer on its id. The
+minted [`AgentActionId`] therefore never reaches the wire for this
+action; the fold correlates on the agent's id instead.
  */
-export type AgentActionOneOfOnefour = AgentPermissionAction &
+export type AgentActionOneOfOnefour = AgentRespondElicitationAction &
   AgentActionOneOfOnefourAllOf;

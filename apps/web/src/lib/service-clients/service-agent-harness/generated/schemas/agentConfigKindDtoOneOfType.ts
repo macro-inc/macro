@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type AgentActionOneOfNineType =
-  (typeof AgentActionOneOfNineType)[keyof typeof AgentActionOneOfNineType];
+export type AgentConfigKindDtoOneOfType =
+  (typeof AgentConfigKindDtoOneOfType)[keyof typeof AgentConfigKindDtoOneOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const AgentActionOneOfNineType = {
-  stop: 'stop',
+export const AgentConfigKindDtoOneOfType = {
+  select: 'select',
 } as const;

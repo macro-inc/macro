@@ -22,7 +22,10 @@
  */
 
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
+import {
+  ModelCatalogPicker,
+  type ModelRowProps,
+} from '@core/component/AI/component/input/ModelCatalogPicker';
 import {
   type CatalogModelOption,
   isLargeModelCatalog,
@@ -37,7 +40,7 @@ import SearchIcon from '@phosphor/magnifying-glass.svg';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
 import type { ModelOption } from '@service-agent-fold/generated/types';
 import { Button, cn, Dropdown } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
 import { groupOptions, withoutRedundantGroups } from './model-groups';
 
 /** Compact ghost pill — same size as the short-list trigger and chat's selector. */
@@ -74,6 +77,8 @@ export interface AgentModelSelectorProps {
   /** The models the harness offers, in the order it listed them. */
   options: ModelOption[];
   disabled?: boolean;
+  effortLabel?: string;
+  modelRow?: Component<ModelRowProps>;
   /** Receives the id of the model to switch to. */
   onSelect: (model: string) => void;
 }
@@ -83,11 +88,13 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
   const [sheetOpen, setSheetOpen] = createSignal(false);
   const [query, setQuery] = createSignal('');
   const shown = () => props.changingTo ?? props.model;
-  const label = () =>
+  const baseLabel = () =>
     modelLabel(
       shown() ?? undefined,
       props.options.find((option) => option.id === shown())?.name
     );
+  const label = () =>
+    [baseLabel(), props.effortLabel].filter(Boolean).join(' · ');
   const options = createMemo(() => withoutRedundantGroups(props.options));
   const toCatalogOption = (option: ModelOption): CatalogModelOption => ({
     id: option.id,
@@ -252,12 +259,14 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
 
   return (
     <Show when={props.options.length > 0}>
-      <Show when={!isTouchDevice()} fallback={sheet}>
-        <Show when={useCatalog()} fallback={shortList}>
+      <Show when={!isTouchDevice() || props.modelRow} fallback={sheet}>
+        <Show when={useCatalog() || props.modelRow} fallback={shortList}>
           <ModelCatalogPicker
             value={shown()}
             options={catalogOptions()}
             onSelect={pick}
+            modelRow={props.modelRow}
+            triggerLabel={label()}
             disabled={props.disabled}
             ariaLabel="Agent model"
             searchPlaceholder="Search models"

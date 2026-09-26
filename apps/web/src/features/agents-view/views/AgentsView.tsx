@@ -195,13 +195,8 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   };
   const startConversation = (start: StartConversation) => {
     const id = startPendingSession({
-      botId: start.botId,
+      ...start,
       userId: userId(),
-      prompt: start.prompt,
-      attachments: start.attachments,
-      modelOverride: start.modelOverride,
-      repoUrl: start.repoUrl,
-      repoBranch: start.repoBranch,
     });
     openConversation(
       { id, type: 'agent_session' },

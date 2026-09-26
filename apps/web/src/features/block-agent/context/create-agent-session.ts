@@ -40,6 +40,8 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import type { EffortSelection } from '../state/session-config';
+import { configureSessionModel } from './configure-session-model';
 
 export type AgentSessionHandle = {
   /** Session row, absent until the load resolves. */
@@ -60,6 +62,8 @@ export type AgentSessionHandle = {
    * log. `undefined` while the block has no session to act on.
    */
   issue: (action: AgentAction) => Promise<IssueResult> | undefined;
+  /** Confirm a model change, then validate and confirm its optional effort. */
+  selectModel: (model: string, effort?: EffortSelection) => Promise<void>;
   /**
    * Show a queued action as dispatched under the id the server holds it
    * by. See {@link AgentSession.expect}.
@@ -305,6 +309,20 @@ export function createAgentSession(
     accessDenied: () => resource.error instanceof AgentSessionAccessDenied,
     retry: () => void refetch(),
     issue: (action) => live()?.issue(action, { userId: options.userId() }),
+    selectModel: async (model, effort) => {
+      const current = live();
+      if (!current) throw new Error('The agent session is not ready.');
+      await configureSessionModel(
+        {
+          issue: (action) =>
+            current.issue(action, { userId: options.userId() }),
+          snapshot: () => current.snapshot(),
+          subscribe: (listener) => current.subscribe(listener),
+        },
+        model,
+        effort
+      );
+    },
     expect: (actionId, action) =>
       live()?.expect(actionId, action, { userId: options.userId() }),
     retract: (actionId) => live()?.retract(actionId),

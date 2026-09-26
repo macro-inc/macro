@@ -63,6 +63,37 @@ fn the_session_open_response_seeds_the_model_and_the_menu() {
     );
 }
 
+#[test]
+fn the_session_open_response_preserves_all_config_capabilities() {
+    let mut machine = FoldMachineImpl::new();
+    drive(
+        &mut machine,
+        concat!(
+            r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"n","method":"session/new","params":{"cwd":"/w","mcpServers":[]}}}"#,
+            "\n",
+            r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"n","result":{"sessionId":"s1","configOptions":[{"id":"reasoning_effort","name":"Reasoning effort","category":"thought_level","type":"select","currentValue":"medium","options":[{"value":"low","name":"Low"},{"value":"medium","name":"Medium"},{"value":"high","name":"High"}]},{"id":"auto_approve","name":"Auto approve","type":"boolean","currentValue":false}]}}}"#,
+        ),
+    );
+
+    let options = &machine.metadata().config_options;
+    assert_eq!(options.len(), 2);
+    assert_eq!(options[0].id, "reasoning_effort");
+    assert_eq!(options[0].category.as_deref(), Some("thought_level"));
+    assert!(matches!(
+        &options[0].kind,
+        crate::domain::session_config::SessionConfigKind::Select {
+            current_value,
+            options
+        } if current_value == "medium" && options.len() == 3
+    ));
+    assert!(matches!(
+        options[1].kind,
+        crate::domain::session_config::SessionConfigKind::Boolean {
+            current_value: false
+        }
+    ));
+}
+
 /// The same handshake with the runtime grouping its models under family
 /// headers, as the Cursor agent does.
 const OPEN_GROUPED: &str = concat!(
@@ -272,4 +303,30 @@ fn a_reconnect_clears_pending_correlation() {
         "the prompt's response closed the turn instead of being eaten as a config response"
     );
     assert_eq!(machine.metadata().model, None, "no config ever resolved");
+}
+
+#[test]
+fn omitted_config_preserves_settings_but_an_explicit_empty_snapshot_removes_them() {
+    let mut machine = FoldMachineImpl::default();
+    drive(&mut machine, OPEN);
+    let before = machine.metadata().clone();
+    let request = r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"effort","method":"session/set_config_option","params":{"sessionId":"s1","configId":"effort","value":"low"}}}"#;
+    drive(&mut machine, request);
+    let changed = drive(
+        &mut machine,
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"effort","result":{}}}"#,
+    );
+    assert_eq!(changed, 0);
+    assert_eq!(machine.metadata().model, before.model);
+    assert_eq!(machine.metadata().supported_models, before.supported_models);
+    assert_eq!(machine.metadata().config_options, before.config_options);
+
+    drive(&mut machine, request);
+    let changed = drive(
+        &mut machine,
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"effort","result":{"configOptions":[]}}}"#,
+    );
+    assert_eq!(changed, 1);
+    assert!(machine.metadata().config_options.is_empty());
+    assert!(machine.metadata().supported_models.is_empty());
 }
