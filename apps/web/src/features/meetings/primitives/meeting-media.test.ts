@@ -142,3 +142,149 @@ describe('prejoin media', () => {
     }
   );
 });
+
+describe('prejoin device and background settings', () => {
+  beforeEach(stubMediaStream);
+
+  it('selects devices without opening disabled inputs and captures the selected device when enabled', async () => {
+    const { request, tracks } = fakeMediaAccess();
+    const { media, dispose } = setup(request);
+    try {
+      await media.prepare();
+      media.selectDevice('camera', 'camera-2');
+      media.selectDevice('speaker', 'speaker-2');
+      expect(request).toHaveBeenCalledTimes(1);
+      media.setCameraEnabled(true);
+      await vi.waitFor(() => expect(media.video()).toBeDefined());
+      expect(request).toHaveBeenLastCalledWith({
+        audio: false,
+        video: expect.objectContaining({ deviceId: { exact: 'camera-2' } }),
+      });
+      media.selectDevice('microphone', 'mic-2');
+      await vi.waitFor(() => expect(media.pending()).toBe(false));
+      expect(tracks[0].stop).toHaveBeenCalledOnce();
+      expect(request).toHaveBeenLastCalledWith({
+        audio: { deviceId: { exact: 'mic-2' } },
+        video: false,
+      });
+      expect(media.selectedDevices().speaker).toBe('speaker-2');
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps the selected camera when retrying unsupported resolution constraints', async () => {
+    const camera = fakeTrack('video');
+    const request = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new DOMException('Resolution', 'OverconstrainedError')
+      )
+      .mockResolvedValueOnce(withTracks(camera));
+    const { media, dispose } = setup(request);
+    try {
+      media.selectDevice('camera', 'camera-2');
+      media.setCameraEnabled(true);
+      await vi.waitFor(() => expect(media.video()).toBeDefined());
+      expect(request).toHaveBeenLastCalledWith({
+        audio: false,
+        video: { deviceId: { exact: 'camera-2' } },
+      });
+    } finally {
+      dispose();
+    }
+  });
+
+  it('disposes the processed preview while handing off the live raw camera and retaining the effect', async () => {
+    const { request, tracks } = fakeMediaAccess();
+    const previewTrack = fakeTrack('video');
+    const stream = withTracks(previewTrack);
+    const stopPreview = vi.fn();
+    const processBackground = vi.fn(async () => ({
+      stream,
+      dispose: stopPreview,
+    }));
+    const { media, dispose } = createRoot((dispose) => ({
+      media: createMeetingMedia({ request, processBackground }),
+      dispose,
+    }));
+    try {
+      media.setBackgroundEffect({ type: 'blur', intensity: 'medium' });
+      media.setCameraEnabled(true);
+      await vi.waitFor(() => expect(media.video()).toBe(stream));
+      const camera = tracks[0];
+      expect(processBackground).toHaveBeenCalledWith(camera, {
+        type: 'blur',
+        intensity: 'medium',
+      });
+      expect(media.handoff()).toEqual({ camera });
+      expect(stopPreview).toHaveBeenCalledOnce();
+      expect(camera.stop).not.toHaveBeenCalled();
+      expect(media.backgroundEffect()).toEqual({
+        type: 'blur',
+        intensity: 'medium',
+      });
+    } finally {
+      dispose();
+    }
+  });
+
+  it('never exposes raw video when a requested background fails', async () => {
+    const { request, tracks } = fakeMediaAccess();
+    const { media, dispose } = createRoot((dispose) => ({
+      media: createMeetingMedia({
+        request,
+        processBackground: async () => {
+          throw new Error('unsupported');
+        },
+      }),
+      dispose,
+    }));
+    try {
+      media.setBackgroundEffect({ type: 'blur', intensity: 'light' });
+      media.setCameraEnabled(true);
+      await vi.waitFor(() => expect(media.backgroundError()).toBeDefined());
+      expect(media.video()).toBeUndefined();
+      expect(media.cameraEnabled()).toBe(false);
+      expect(media.pending()).toBe(false);
+      expect(tracks[0].stop).toHaveBeenCalledOnce();
+      expect(media.handoff()).toBeUndefined();
+      media.setBackgroundEffect({ type: 'none' });
+      media.setCameraEnabled(true);
+      await vi.waitFor(() => expect(media.video()).toBeDefined());
+      expect(media.backgroundError()).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('discards an effect that finishes after the camera was turned off', async () => {
+    const { request } = fakeMediaAccess();
+    const stopPreview = vi.fn();
+    let resolve!: (value: { stream: MediaStream; dispose: () => void }) => void;
+    const processBackground = vi.fn(
+      () =>
+        new Promise<{ stream: MediaStream; dispose: () => void }>((done) => {
+          resolve = done;
+        })
+    );
+    const { media, dispose } = createRoot((dispose) => ({
+      media: createMeetingMedia({ request, processBackground }),
+      dispose,
+    }));
+    try {
+      media.setBackgroundEffect({ type: 'blur', intensity: 'heavy' });
+      media.setCameraEnabled(true);
+      await vi.waitFor(() => expect(processBackground).toHaveBeenCalledOnce());
+      expect(media.video()).toBeUndefined();
+      expect(media.pending()).toBe(true);
+      media.setCameraEnabled(false);
+      resolve({ stream: withTracks(fakeTrack('video')), dispose: stopPreview });
+      await vi.waitFor(() => expect(stopPreview).toHaveBeenCalledOnce());
+      expect(media.video()).toBeUndefined();
+      expect(media.pending()).toBe(false);
+    } finally {
+      dispose();
+    }
+  });
+});
