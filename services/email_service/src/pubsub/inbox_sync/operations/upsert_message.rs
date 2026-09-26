@@ -19,7 +19,7 @@ use email_db_client::attachments::provider::upload_filters::{
     attachment_is_document, attachment_is_media,
 };
 use email_db_client::threads;
-use email_utils::dedupe_emails;
+use email_utils::{dedupe_emails, is_macro_notification_sender};
 use filter_ast::Expr;
 use item_filters::{SharedEmailFilter, ast::email::EmailLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -678,9 +678,7 @@ async fn send_notifications(
         return Ok(());
     }
 
-    let Some((message, tier)) =
-        filter_notifiable_message(ctx, link, new_message_provider_id).await?
-    else {
+    let Some(message) = filter_notifiable_message(ctx, link, new_message_provider_id).await? else {
         return Ok(());
     };
 
@@ -699,6 +697,21 @@ async fn send_notifications(
     let sender_contact = message
         .from_contact_id
         .and_then(|from_id| sender_contacts.get(&from_id));
+
+    // Macro's own digest / system emails describe activity the user already
+    // has in-app notifications for; never raise a new-email notification
+    // (in-app row or push) on top of them.
+    if sender_contact.is_some_and(|contact| is_macro_notification_sender(&contact.email)) {
+        tracing::debug!(
+            thread_id = %message.thread_db_id,
+            "skipping new-email notification for Macro's own notification sender"
+        );
+        return Ok(());
+    }
+
+    let Some(tier) = new_email_tier(ctx, link, message.thread_db_id).await? else {
+        return Ok(());
+    };
 
     let sender = sender_contact.map(|contact| {
         contact
@@ -865,12 +878,15 @@ async fn new_email_tier(
     Ok(staff_inbox.then_some(NewEmailTier::StaffInbox))
 }
 
+/// Loads the newly upserted message, returning `None` for messages that never
+/// notify (sent or draft). Sender- and tier-based gating happens in
+/// `send_notifications`.
 #[tracing::instrument(skip(ctx, link))]
 async fn filter_notifiable_message(
     ctx: &PubSubContext,
     link: &link::Link,
     new_message_provider_id: &str,
-) -> result::Result<Option<(SimpleMessage, NewEmailTier)>, ProcessingError> {
+) -> result::Result<Option<SimpleMessage>, ProcessingError> {
     let new_message =
         email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
             &ctx.db,
@@ -893,6 +909,5 @@ async fn filter_notifiable_message(
         return Ok(None);
     }
 
-    let tier = new_email_tier(ctx, link, new_message.thread_db_id).await?;
-    Ok(tier.map(|tier| (new_message, tier)))
+    Ok(Some(new_message))
 }
