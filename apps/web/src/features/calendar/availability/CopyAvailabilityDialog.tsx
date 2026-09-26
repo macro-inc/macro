@@ -1,7 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
 import { writeClipboardData } from '@core/util/dataTransfer';
+import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CopyIcon from '@phosphor/copy.svg';
+import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import XIcon from '@phosphor/x.svg';
 import {
   ActionDialogShell,
@@ -10,14 +12,19 @@ import {
   Dialog,
   type ManagedDialogProps,
   ToggleSwitch,
+  Tooltip,
 } from '@ui';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import {
   AVAILABILITY_RANGE_OPTIONS,
   type AvailabilityRangeKey,
+  formatAvailabilityText,
 } from './availability';
-import { useAvailabilitySettings } from './settings';
-import { useAvailabilityText } from './use-availability-text';
+import {
+  getPersistedCalendarTimeFormat,
+  useAvailabilitySettings,
+} from './settings';
+import { useAvailabilityRanges } from './use-availability-ranges';
 
 interface TimeOption {
   value: string;
@@ -50,9 +57,9 @@ const END_TIME_OPTIONS = timeOptions(12, 22);
 export function CopyAvailabilityDialog(props: ManagedDialogProps) {
   const [copying, setCopying] = createSignal<AvailabilityRangeKey>();
   const [copiedRange, setCopiedRange] = createSignal<AvailabilityRangeKey>();
-  const getAvailabilityText = useAvailabilityText();
   const { settings, setStartTime, setEndTime, setExcludeWeekends } =
     useAvailabilitySettings();
+  const availability = useAvailabilityRanges(settings);
   let disposed = false;
   let resetCopied: ReturnType<typeof setTimeout> | undefined;
   onCleanup(() => {
@@ -62,32 +69,47 @@ export function CopyAvailabilityDialog(props: ManagedDialogProps) {
 
   const copyRange = async (rangeKey: AvailabilityRangeKey) => {
     if (disposed || copying()) return;
+    if (!availability.days()?.[rangeKey]?.length) return;
     clearTimeout(resetCopied);
     setCopiedRange(undefined);
     setCopying(rangeKey);
     try {
-      const text = await getAvailabilityText(rangeKey);
+      let latest;
+      try {
+        latest = await availability.refreshRange(rangeKey);
+      } catch {
+        if (!disposed) toast.failure('Failed to load availability');
+        return;
+      }
       if (disposed) return;
-      if (!text) {
+      if (!latest) {
+        toast.alert('Calendar is still syncing. Try again shortly.');
+        return;
+      }
+      if (!latest.days.length) {
         toast.alert('No free time in that range');
         return;
       }
-      const copied = await writeClipboardData({ 'text/plain': text });
-      if (disposed) return;
-      if (copied) {
-        setCopiedRange(rangeKey);
-        resetCopied = setTimeout(() => setCopiedRange(undefined), 2500);
-      } else {
-        toast.failure('Failed to copy availability');
-      }
-    } catch {
-      if (!disposed) {
-        toast.failure('Failed to load availability');
+
+      try {
+        const text = formatAvailabilityText(
+          latest.days,
+          getPersistedCalendarTimeFormat(),
+          latest.now
+        );
+        const copied = await writeClipboardData({ 'text/plain': text });
+        if (disposed) return;
+        if (copied) {
+          setCopiedRange(rangeKey);
+          resetCopied = setTimeout(() => setCopiedRange(undefined), 2500);
+        } else {
+          toast.failure('Failed to copy availability');
+        }
+      } catch {
+        if (!disposed) toast.failure('Failed to copy availability');
       }
     } finally {
-      if (!disposed) {
-        setCopying(undefined);
-      }
+      if (!disposed) setCopying(undefined);
     }
   };
 
@@ -116,31 +138,45 @@ export function CopyAvailabilityDialog(props: ManagedDialogProps) {
             <div class="flex flex-wrap items-end gap-3">
               <label class="flex min-w-32 flex-1 flex-col gap-2 text-sm font-medium text-ink-muted">
                 Start time
-                <select
-                  class="settings-input w-full text-sm text-ink"
-                  value={settings().startTime}
-                  onChange={(event) => setStartTime(event.currentTarget.value)}
-                >
-                  <For each={START_TIME_OPTIONS}>
-                    {(option) => (
-                      <option value={option.value}>{option.label}</option>
-                    )}
-                  </For>
-                </select>
+                <span class="relative block">
+                  <select
+                    class="settings-input w-full appearance-none pr-9 text-sm text-ink hover:border-edge-button hover:bg-hover"
+                    value={settings().startTime}
+                    onChange={(event) =>
+                      setStartTime(event.currentTarget.value)
+                    }
+                  >
+                    <For each={START_TIME_OPTIONS}>
+                      {(option) => (
+                        <option value={option.value}>{option.label}</option>
+                      )}
+                    </For>
+                  </select>
+                  <CaretDownIcon
+                    aria-hidden="true"
+                    class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted"
+                  />
+                </span>
               </label>
               <label class="flex min-w-32 flex-1 flex-col gap-2 text-sm font-medium text-ink-muted">
                 End time
-                <select
-                  class="settings-input w-full text-sm text-ink"
-                  value={settings().endTime}
-                  onChange={(event) => setEndTime(event.currentTarget.value)}
-                >
-                  <For each={END_TIME_OPTIONS}>
-                    {(option) => (
-                      <option value={option.value}>{option.label}</option>
-                    )}
-                  </For>
-                </select>
+                <span class="relative block">
+                  <select
+                    class="settings-input w-full appearance-none pr-9 text-sm text-ink hover:border-edge-button hover:bg-hover"
+                    value={settings().endTime}
+                    onChange={(event) => setEndTime(event.currentTarget.value)}
+                  >
+                    <For each={END_TIME_OPTIONS}>
+                      {(option) => (
+                        <option value={option.value}>{option.label}</option>
+                      )}
+                    </For>
+                  </select>
+                  <CaretDownIcon
+                    aria-hidden="true"
+                    class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted"
+                  />
+                </span>
               </label>
             </div>
             <ToggleSwitch
@@ -152,40 +188,112 @@ export function CopyAvailabilityDialog(props: ManagedDialogProps) {
           </section>
         </ActionDialogShell.Body>
         <ActionDialogShell.Footer class="justify-start gap-2 py-5">
+          <Show when={availability.isError()}>
+            <div
+              role="alert"
+              class="flex w-full items-center justify-between gap-2 text-sm text-ink-muted"
+            >
+              Could not load availability.
+              <Button variant="outline" size="sm" onClick={availability.retry}>
+                Retry
+              </Button>
+            </div>
+          </Show>
           <For each={AVAILABILITY_RANGE_OPTIONS}>
             {(option) => {
               const copied = () => copiedRange() === option.key;
-              const label = () => {
-                if (copying() === option.key) return 'Copying…';
-                if (copied()) return 'Copied';
-                return option.label;
+              const unavailable = () =>
+                availability.days()?.[option.key]?.length === 0;
+              const disabled = () =>
+                copying() !== undefined ||
+                !availability.days()?.[option.key]?.length;
+              const reason = () => {
+                if (availability.isError())
+                  return 'Could not check availability';
+                if (!availability.days()) return 'Checking availability…';
+                if (unavailable()) return 'No free time in this range';
+                return '';
               };
+              const isCopying = () => copying() === option.key;
               return (
-                <Button
-                  variant={copied() ? 'success' : 'outline'}
-                  size="md"
-                  class={cn(
-                    'min-w-32 flex-1 gap-1.5 rounded-full px-2',
-                    copied() && 'border-success bg-success-bg'
-                  )}
-                  aria-label={
-                    copied()
-                      ? `${option.label} availability copied`
-                      : `Copy availability for ${option.label}`
-                  }
-                  disabled={copying() !== undefined}
-                  onClick={() => void copyRange(option.key)}
+                <Tooltip
+                  as="span"
+                  class="min-w-32 flex-1 flex-col rounded-lg focus-visible:ring-2 focus-visible:ring-edge-focus"
+                  label={reason()}
+                  disabled={!reason()}
+                  tabIndex={unavailable() ? 0 : undefined}
                 >
-                  {label()}
-                  <Show when={copied()} fallback={<CopyIcon class="size-4" />}>
-                    <CheckIcon class="size-4" />
-                  </Show>
-                </Button>
+                  <Button
+                    variant="outline"
+                    size="md"
+                    class={cn(
+                      'w-full rounded-full px-2 disabled:cursor-not-allowed disabled:opacity-50',
+                      isCopying() &&
+                        'data-disabled:opacity-100 disabled:opacity-100'
+                    )}
+                    aria-label={
+                      isCopying()
+                        ? `Copying availability for ${option.label}`
+                        : copied()
+                          ? `${option.label} availability copied`
+                          : `Copy availability for ${option.label}${reason() ? `: ${reason()}` : ''}`
+                    }
+                    aria-busy={isCopying()}
+                    disabled={disabled()}
+                    onClick={() => void copyRange(option.key)}
+                  >
+                    <span aria-hidden="true" class="grid place-items-center">
+                      <span
+                        class={cn(
+                          'col-start-1 row-start-1 flex items-center justify-center gap-1.5 transition-opacity duration-200 motion-reduce:transition-none',
+                          isCopying() || copied() ? 'opacity-0' : 'opacity-100',
+                          unavailable() && 'touch:hidden'
+                        )}
+                      >
+                        {option.label}
+                        <CopyIcon class="size-4" />
+                      </span>
+                      <span
+                        class={cn(
+                          'col-start-1 row-start-1 flex items-center justify-center gap-1.5 transition-opacity duration-200 motion-reduce:transition-none',
+                          isCopying() ? 'opacity-100' : 'opacity-0'
+                        )}
+                      >
+                        <SpinnerIcon
+                          class={cn(
+                            'size-4 motion-reduce:animate-none',
+                            isCopying() && 'animate-spin'
+                          )}
+                        />
+                        Copying…
+                      </span>
+                      <span
+                        class={cn(
+                          'col-start-1 row-start-1 flex items-center justify-center gap-1.5 transition-opacity duration-200 motion-reduce:transition-none',
+                          copied() && !isCopying() ? 'opacity-100' : 'opacity-0'
+                        )}
+                      >
+                        Copied
+                        <CheckIcon class="size-4 text-success" />
+                      </span>
+                      <Show when={unavailable()}>
+                        <span class="col-start-1 row-start-1 hidden items-center justify-center gap-1.5 touch:flex">
+                          {option.label}: No free time
+                          <XIcon class="size-4" />
+                        </span>
+                      </Show>
+                    </span>
+                  </Button>
+                </Tooltip>
               );
             }}
           </For>
           <span role="status" class="sr-only">
-            {copiedRange() ? 'Availability copied' : ''}
+            {copying()
+              ? 'Copying availability'
+              : copiedRange()
+                ? 'Availability copied'
+                : ''}
           </span>
         </ActionDialogShell.Footer>
       </ActionDialogShell>

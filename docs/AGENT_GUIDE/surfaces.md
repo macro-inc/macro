@@ -756,8 +756,14 @@ The standalone Calendar view has a left navigation sidebar. The `New` menu
 above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
 `Reminder`. An icon-only shortcut in the `Upcoming events` header opens the
 availability dialog. Start/end time selectors and a weekend switch sit above
-copy ranges that wrap on narrow screens; a successful copy briefly shows a
-green `Copied` button with a check icon.
+copy ranges that wrap on narrow screens. The dialog checks all ranges using one
+calendar-occurrence query; ranges without free time are disabled with a reason
+tooltip that can receive keyboard focus. On touch devices the disabled option
+itself shows its range name, `No free time`, and an X icon.
+Copying rechecks the occurrences and current time, so changes since opening do
+not enter the copied text. The option keeps its width while a left spinner and
+`Copying…` crossfade to `Copied` with a green check icon; the button keeps its
+neutral styling. Reduced-motion preferences skip the crossfade and spin.
 Collapsible `Upcoming events` and `Calendars` sections follow; calendar
 account rows use Drive-style trailing disclosure buttons and animated nested
 branches. Their 14px visibility checkboxes precede the swatch and label, with
