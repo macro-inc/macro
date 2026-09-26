@@ -6,6 +6,7 @@ use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
     ports::ForeignEntityListQuery,
 };
+use item_filters::ast::{LiteralTree, github_pull_request::GithubPullRequestLiteral};
 
 use super::models::{
     EnrichedGithubPullRequest, GithubPullRequestError, GithubPullRequestRow,
@@ -90,12 +91,15 @@ pub trait GithubPullRequestListing: Send + Sync + 'static {
     /// Up to `limit` pull request records stored for one of `source_ids` and matching `query`,
     /// one per pull request, in the query's sort order. `requesting_user` scopes the
     /// participant and notification-state filters; without one they match nothing.
+    /// `github_pull_request_filter` keeps only pull requests whose typed columns match it.
+    /// "Updated" sorts by, and reports, GitHub's updated time when the pull request has one.
     fn list_pull_requests(
         &self,
         requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         query: ForeignEntityListQuery,
+        github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     ) -> impl Future<Output = Result<Vec<ForeignEntity>, GithubPullRequestError>> + Send;
 }
 
@@ -104,13 +108,14 @@ pub trait GithubPullRequestListingRepository: Send + Sync + 'static {
     /// Error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
 
-    /// Up to `limit` pull request records stored for one of `source_ids` and matching `query`,
-    /// one per pull request, in the query's sort order.
+    /// Up to `limit` pull request records stored for one of `source_ids` and matching `query`
+    /// and `github_pull_request_filter`, one per pull request, in the query's sort order.
     fn list_pull_requests(
         &self,
         requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         query: ForeignEntityListQuery,
+        github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     ) -> impl Future<Output = Result<Vec<ForeignEntity>, Self::Err>> + Send;
 }

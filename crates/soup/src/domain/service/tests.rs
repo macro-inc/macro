@@ -23,7 +23,10 @@ use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencySt
 use github_pull_requests::domain::models::GithubPullRequestError;
 use item_filters::{
     ChannelThreadFilters, EntityFilters, ForeignEntityFilters,
-    ast::{EntityFilterAst, foreign_entity::ForeignEntityLiteral},
+    ast::{
+        EntityFilterAst, LiteralTree, foreign_entity::ForeignEntityLiteral,
+        github_pull_request::GithubPullRequestLiteral,
+    },
 };
 use model_entity::EntityType;
 use model_owner::Owner;
@@ -256,6 +259,7 @@ impl GithubPullRequestListing for NoopPullRequestListing {
         _source_ids: Vec<SourceId>,
         _limit: u32,
         _query: ForeignEntityListQuery,
+        _github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     ) -> Result<Vec<ForeignEntity>, GithubPullRequestError> {
         Ok(Vec::new())
     }
@@ -277,6 +281,7 @@ struct RecordedPullRequestListingCall {
     source_ids: Vec<SourceId>,
     limit: u32,
     query: ForeignEntityListQuery,
+    github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
 }
 
 fn foreign_entity_matches_filter(
@@ -340,6 +345,7 @@ impl GithubPullRequestListing for RecordingPullRequestListing {
         source_ids: Vec<SourceId>,
         limit: u32,
         query: ForeignEntityListQuery,
+        github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     ) -> Result<Vec<ForeignEntity>, GithubPullRequestError> {
         let filter = query.filter().clone();
 
@@ -352,6 +358,7 @@ impl GithubPullRequestListing for RecordingPullRequestListing {
                 source_ids: source_ids.clone(),
                 limit,
                 query,
+                github_pull_request_filter,
             });
 
         Ok(self
@@ -737,6 +744,58 @@ async fn simple_soup_includes_foreign_entities() {
     assert_eq!(calls[0].limit, 20);
     assert_eq!(calls[0].source_ids, vec![SourceId::user(user.as_ref())]);
     assert!(calls[0].query.filter().is_none());
+}
+
+#[tokio::test]
+async fn simple_soup_passes_the_github_pull_request_filter_to_the_listing() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let pull_request_listing = RecordingPullRequestListing::new(Vec::new());
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+    let draft = Arc::new(Expr::val(GithubPullRequestLiteral::Draft(true)));
+
+    SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        pull_request_listing.clone(),
+        NoOpRemindersService,
+    )
+    .get_user_soup(
+        SoupRequest {
+            sort_direction: SoupSortDirection::default(),
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![],
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::UpdatedAt,
+                EntityFilterAst {
+                    github_pull_request_filter: Some(draft.clone()),
+                    ..EntityFilterAst::mock_empty()
+                },
+            ),
+            user: user.clone(),
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    let calls = pull_request_listing.calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(
+        format!("{:?}", calls[0].github_pull_request_filter),
+        format!("{:?}", Some(draft))
+    );
 }
 
 #[tokio::test]

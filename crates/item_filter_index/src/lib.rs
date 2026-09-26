@@ -368,6 +368,10 @@ fn check_soup_flat(
         }
     }
 
+    if ast.github_pull_request_filter.is_some() {
+        return Eligibility::Unsupported(UnsupportedReason::Partition("githubPullRequest"));
+    }
+
     // These opt-in partitions are empty when omitted. The UI's confine()
     // also excludes them with a positive nil ID. Accept only proven emptiness,
     // not arbitrary trees over partitions that have no local index.

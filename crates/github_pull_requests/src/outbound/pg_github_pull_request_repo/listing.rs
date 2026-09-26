@@ -9,7 +9,10 @@ use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
     ports::ForeignEntityListQuery,
 };
-use item_filters::ast::foreign_entity::ForeignEntityLiteral;
+use item_filters::ast::{
+    LiteralTree, foreign_entity::ForeignEntityLiteral,
+    github_pull_request::GithubPullRequestLiteral,
+};
 use models_pagination::SimpleSortMethod;
 use uuid::Uuid;
 
@@ -33,6 +36,8 @@ struct ListingQuery<'a> {
     cursor_id: Option<Uuid>,
     cursor_value: Option<DateTime<Utc>>,
     limit: i64,
+    /// Keeps only pull requests whose typed columns match this jsonpath.
+    github_pull_request_jsonpath: Option<&'a str>,
 }
 
 fn source_id_parts(source_ids: &[SourceId]) -> (Vec<String>, Vec<String>) {
@@ -195,6 +200,42 @@ fn foreign_entity_literal_jsonpath(literal: &ForeignEntityLiteral) -> String {
     }
 }
 
+fn github_pull_request_expr_jsonpath(expr: &Expr<GithubPullRequestLiteral>) -> String {
+    match expr {
+        Expr::And(left, right) => format!(
+            "({} && {})",
+            github_pull_request_expr_jsonpath(left),
+            github_pull_request_expr_jsonpath(right)
+        ),
+        Expr::Or(left, right) => format!(
+            "({} || {})",
+            github_pull_request_expr_jsonpath(left),
+            github_pull_request_expr_jsonpath(right)
+        ),
+        Expr::Not(inner) => format!("(!{})", github_pull_request_expr_jsonpath(inner)),
+        Expr::Literal(literal) => github_pull_request_literal_jsonpath(literal),
+    }
+}
+
+fn github_pull_request_literal_jsonpath(literal: &GithubPullRequestLiteral) -> String {
+    match literal {
+        GithubPullRequestLiteral::RepositoryId(id) => format!("($.repositoryId == {id})"),
+        GithubPullRequestLiteral::Author(id) => jsonpath_text_eq("authorId", id),
+        GithubPullRequestLiteral::Status(state) => jsonpath_text_eq("status", state.as_str()),
+        GithubPullRequestLiteral::Involves(id) => jsonpath_array_contains("participants", id),
+        GithubPullRequestLiteral::ReviewRequested(id) => {
+            jsonpath_array_contains("requestedReviewers", id)
+        }
+        GithubPullRequestLiteral::Draft(draft) => format!("($.draft == {draft})"),
+    }
+}
+
+fn jsonpath_array_contains(field_name: &str, expected_value: &str) -> String {
+    let expected_value = serde_json::to_string(expected_value)
+        .expect("serializing a string literal to JSON should not fail");
+    format!("($.{field_name}[*] == {expected_value})")
+}
+
 fn jsonpath_text_eq(field_name: &str, expected_value: &str) -> String {
     let expected_value = serde_json::to_string(expected_value)
         .expect("serializing a string literal to JSON should not fail");
@@ -217,6 +258,7 @@ impl PgGithubPullRequestRepo {
             cursor_id,
             cursor_value,
             limit,
+            github_pull_request_jsonpath,
         } = query;
         let sort_method = sort_method.to_string();
 
@@ -237,12 +279,13 @@ impl PgGithubPullRequestRepo {
                     fe.stored_for_id,
                     fe.stored_for_auth_entity,
                     fe.created_at,
-                    fe.updated_at,
+                    COALESCE(gpr.github_updated_at, fe.updated_at) AS updated_at,
                     CASE $3::text
                         WHEN 'created_at' THEN fe.created_at
-                        ELSE fe.updated_at
+                        ELSE COALESCE(gpr.github_updated_at, fe.updated_at)
                     END AS sort_at
                 FROM foreign_entity fe
+                LEFT JOIN github_pull_request gpr ON gpr.github_key = fe.foreign_entity_id
                 WHERE fe.foreign_entity_source = $11::text
                   AND EXISTS (
                     SELECT 1
@@ -266,6 +309,20 @@ impl PgGithubPullRequestRepo {
                     OR (fe.metadata -> 'participantGithubUserIds') ? $8::text
                   )
                   AND (
+                    $12::text IS NULL
+                    OR (gpr.github_key IS NOT NULL AND jsonb_path_match(
+                        jsonb_build_object(
+                            'repositoryId', gpr.repository_id,
+                            'authorId', gpr.author_github_user_id,
+                            'status', gpr.status,
+                            'draft', gpr.draft,
+                            'requestedReviewers', to_jsonb(gpr.requested_reviewer_github_user_ids),
+                            'participants', to_jsonb(gpr.participant_github_user_ids)
+                        ),
+                        ($12::text)::jsonpath
+                    ))
+                  )
+                  AND (
                     $9::int[] IS NULL
                     OR ($10::text IS NOT NULL AND (
                         SELECT COALESCE(bit_or(CASE un.state
@@ -278,7 +335,12 @@ impl PgGithubPullRequestRepo {
                           AND n.event_item_id = fe.id::text
                     ) = ANY($9::int[]))
                   )
-                ORDER BY fe.foreign_entity_source, fe.foreign_entity_id, sort_at DESC, fe.id DESC
+                ORDER BY
+                    fe.foreign_entity_source,
+                    fe.foreign_entity_id,
+                    sort_at DESC,
+                    fe.updated_at DESC,
+                    fe.id DESC
             )
             SELECT
                 id as "id!: Uuid",
@@ -306,6 +368,7 @@ impl PgGithubPullRequestRepo {
             notification_sets,
             notification_user_id,
             GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+            github_pull_request_jsonpath,
         )
         .fetch_all(&self.pool)
         .await
@@ -331,13 +394,14 @@ impl PgGithubPullRequestRepo {
 impl GithubPullRequestListingRepository for PgGithubPullRequestRepo {
     type Err = sqlx::Error;
 
-    #[tracing::instrument(err, skip(self, source_ids, query))]
+    #[tracing::instrument(err, skip(self, source_ids, query, github_pull_request_filter))]
     async fn list_pull_requests(
         &self,
         requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         query: ForeignEntityListQuery,
+        github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     ) -> Result<Vec<ForeignEntity>, Self::Err> {
         if source_ids.is_empty() || limit == 0 {
             return Ok(Vec::new());
@@ -393,6 +457,9 @@ impl GithubPullRequestListingRepository for PgGithubPullRequestRepo {
 
         let (source_ids, source_auth_entities) = source_id_parts(&source_ids);
         let (cursor_id, cursor_value) = query.vals();
+        let github_pull_request_jsonpath = github_pull_request_filter
+            .as_deref()
+            .map(github_pull_request_expr_jsonpath);
 
         self.fetch_listing(ListingQuery {
             source_ids: &source_ids,
@@ -405,6 +472,7 @@ impl GithubPullRequestListingRepository for PgGithubPullRequestRepo {
             cursor_id: cursor_id.copied(),
             cursor_value: cursor_value.copied(),
             limit: limit as i64,
+            github_pull_request_jsonpath: github_pull_request_jsonpath.as_deref(),
         })
         .await
     }

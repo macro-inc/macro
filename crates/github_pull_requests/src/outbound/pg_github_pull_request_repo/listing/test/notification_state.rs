@@ -57,6 +57,7 @@ async fn notification_boolean_filters_match_every_present_state_set(pool: PgPool
                 vec![SourceId::user(user)],
                 100,
                 filter_query(Some(Arc::new(expr))),
+                None,
             )
             .await
             .unwrap()
@@ -78,6 +79,7 @@ async fn notification_boolean_filters_match_every_present_state_set(pool: PgPool
             vec![SourceId::user(user)],
             100,
             filter_query(Some(Arc::new(Expr::is_not(leaf(Done))))),
+            None,
         )
         .await
         .unwrap();

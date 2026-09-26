@@ -7,6 +7,7 @@ use foreign_entity::domain::{
     models::{CreateForeignEntity, ForeignEntity, PatchForeignEntity, SourceId},
     ports::{ForeignEntityListQuery, ForeignEntityService},
 };
+use item_filters::ast::{LiteralTree, github_pull_request::GithubPullRequestLiteral};
 
 use super::{
     models::{
@@ -252,13 +253,14 @@ where
     F: ForeignEntityService,
     R: GithubPullRequestListingRepository,
 {
-    #[tracing::instrument(err, skip(self, source_ids, query))]
+    #[tracing::instrument(err, skip(self, source_ids, query, github_pull_request_filter))]
     async fn list_pull_requests(
         &self,
         requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         query: ForeignEntityListQuery,
+        github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     ) -> Result<Vec<ForeignEntity>, GithubPullRequestError> {
         if source_ids.is_empty() {
             return Ok(Vec::new());
@@ -274,6 +276,7 @@ where
             source_ids,
             limit,
             query,
+            github_pull_request_filter,
         )
         .await
         .map_err(repository_error)

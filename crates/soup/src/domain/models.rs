@@ -18,11 +18,12 @@ use github_pull_requests::domain::models::GithubPullRequestError;
 use item_filters::{
     EntityFilters,
     ast::{
-        EntityFilterAst, ExpandErr,
+        EntityFilterAst, ExpandErr, LiteralTree,
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         crm_company::CrmCompanyLiteral,
         email::EmailLiteral,
+        github_pull_request::GithubPullRequestLiteral,
         properties::{
             PropertiesLiteral, PropertyEntityType, properties_filter_can_apply_to,
             properties_filter_matches_propertyless,
@@ -831,6 +832,12 @@ impl SoupRequest<Option<EntityFilterAst>> {
                     .and_then(|filter| filter.foreign_entity_filter.clone()),
             )),
         }
+    }
+
+    /// The request's GitHub pull request filter, which narrows its foreign entity leg.
+    pub(crate) fn build_github_pull_request_filter(&self) -> LiteralTree<GithubPullRequestLiteral> {
+        self.entity_ast()
+            .and_then(|ast| ast.github_pull_request_filter.clone())
     }
 
     pub(crate) fn build_foreign_entity_source_ids(

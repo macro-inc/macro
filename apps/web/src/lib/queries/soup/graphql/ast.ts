@@ -14,6 +14,8 @@ import type {
   GraphqlEmailValue as GraphqlEmailValueInput,
   GraphqlEntityFilterAst as GraphqlEntityFilterAstInput,
   GraphqlForeignEntityLiteral as GraphqlForeignEntityLiteralInput,
+  GraphqlGithubPullRequestLiteral as GraphqlGithubPullRequestLiteralInput,
+  GraphqlGithubPullRequestState,
   GraphqlGroupByInput,
   GroupedSoupContinuationInput as GraphqlGroupedSoupContinuationInput,
   GroupedSoupInput as GraphqlGroupedSoupInput,
@@ -61,6 +63,7 @@ type TargetAstKey =
   | 'callf'
   | 'ccf'
   | 'fef'
+  | 'ghprf'
   | 'asf'
   | 'remf'
   | 'propf';
@@ -510,6 +513,43 @@ function mapForeignEntityLiteral(
   }
 }
 
+function mapGithubPullRequestState(
+  value: unknown
+): GraphqlGithubPullRequestState {
+  const state = mapString(value, 'status');
+  if (state === 'open') return 'OPEN';
+  if (state === 'closed') return 'CLOSED';
+  if (state === 'merged') return 'MERGED';
+  unsupported(`unsupported pull request status ${state}`);
+}
+
+function mapGithubPullRequestLiteral(
+  literal: unknown
+): GraphqlGithubPullRequestLiteralInput {
+  const [field, value] = singleLiteralField(literal);
+  switch (field) {
+    case 'repo':
+      return {
+        repositoryId:
+          typeof value === 'number'
+            ? String(value)
+            : mapString(value, 'repositoryId'),
+      };
+    case 'au':
+      return { author: mapString(value, 'author') };
+    case 'st':
+      return { status: mapGithubPullRequestState(value) };
+    case 'inv':
+      return { involves: mapString(value, 'involves') };
+    case 'rr':
+      return { reviewRequested: mapString(value, 'reviewRequested') };
+    case 'draft':
+      return { draft: mapBoolean(value, 'draft') };
+    default:
+      unsupported(`github pull request literal ${field}`);
+  }
+}
+
 function mapReminderLiteral(literal: unknown): GraphqlReminderLiteralInput {
   const [field, value] = singleLiteralField(literal);
   switch (field) {
@@ -646,6 +686,12 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
     filters.foreignEntityFilter = compileExpr(
       body.fef,
       mapForeignEntityLiteral
+    );
+  }
+  if (body.ghprf) {
+    filters.githubPullRequestFilter = compileExpr(
+      body.ghprf,
+      mapGithubPullRequestLiteral
     );
   }
   if (body.asf) {

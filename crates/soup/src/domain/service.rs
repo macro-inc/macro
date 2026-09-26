@@ -36,10 +36,11 @@ use frecency::domain::{
 };
 use github_pull_requests::domain::ports::GithubPullRequestListing;
 use item_filters::ast::{
-    EntityFilterAst,
+    EntityFilterAst, LiteralTree,
     channel::{ChannelLiteral, ChannelThreadLiteral},
     email::EmailLiteral,
     foreign_entity::ForeignEntityLiteral,
+    github_pull_request::GithubPullRequestLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
@@ -116,6 +117,8 @@ struct NotifiedHydrationLegs {
     comms: Option<GetChannelsRequest>,
     comms_threads: Option<GetThreadReplyRowsRequest>,
     foreign_entities: Option<(Vec<SourceId>, ForeignEntityListQuery)>,
+    /// Narrows the foreign entity leg to matching GitHub pull requests.
+    github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     reminders: Option<GetRemindersRequest<'static>>,
 }
 
@@ -1028,6 +1031,7 @@ where
                 foreign_entity_sources,
                 foreign_entity_ids.len() as u32,
                 foreign_entity_query,
+                legs.github_pull_request_filter.clone(),
             ),
             self.handle_reminder_request(reminder_request),
         );
@@ -1250,13 +1254,14 @@ where
         Ok(Either::Right(items.into_iter().map(SoupCandidate::plain)))
     }
 
-    #[tracing::instrument(err, skip(self, source_ids, query))]
+    #[tracing::instrument(err, skip(self, source_ids, query, github_pull_request_filter))]
     async fn handle_foreign_entity_request(
         &self,
         requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         query: Option<ForeignEntityListQuery>,
+        github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let Some(query) = query else {
             return Ok(Either::Left(None.into_iter()));
@@ -1264,7 +1269,13 @@ where
 
         Ok(Either::Right(
             self.github_pull_request_service
-                .list_pull_requests(requesting_user, source_ids, limit, query)
+                .list_pull_requests(
+                    requesting_user,
+                    source_ids,
+                    limit,
+                    query,
+                    github_pull_request_filter,
+                )
                 .await?
                 .into_iter()
                 .map(|entity| SoupCandidate::plain(foreign_entity_to_soup_item(entity))),
@@ -1530,6 +1541,7 @@ where
         let metadata_source_ids = foreign_entity_source_ids.clone();
         let metadata_user = req.user.to_string();
         let foreign_entity_query = req.build_foreign_entity_query();
+        let github_pull_request_filter = req.build_github_pull_request_filter();
         let email_request = req.build_email_request(team_receipt);
         let comms_request = req.build_comms_request();
         let comms_thread_request = req.build_comms_thread_request();
@@ -1561,6 +1573,7 @@ where
                     foreign_entity_source_ids,
                     limit as u32,
                     foreign_entity_query,
+                    github_pull_request_filter,
                 );
 
                 let (
@@ -1650,6 +1663,7 @@ where
                     comms_threads: comms_thread_request,
                     foreign_entities: foreign_entity_query
                         .map(|query| (foreign_entity_source_ids, query)),
+                    github_pull_request_filter,
                     reminders: reminder_request,
                 };
                 let (candidates, next) = self
