@@ -81,12 +81,14 @@ function renderControls() {
   const expandAccount = (email: string) =>
     fireEvent.click(result.getByRole('button', { name: `Expand ${email}` }));
   const headerFor = (email: string) => {
-    // Works whether the group is currently collapsed or expanded.
+    // Resolve the row from the account, not the disclosure button's wrappers.
     const caret =
       result.queryByRole('button', { name: `Collapse ${email}` }) ??
       result.getByRole('button', { name: `Expand ${email}` });
-    const header = caret.parentElement?.parentElement;
-    if (!header) throw new Error(`missing header for ${email}`);
+    const header = caret.closest('li')?.firstElementChild;
+    if (!(header instanceof HTMLElement)) {
+      throw new Error(`missing header for ${email}`);
+    }
     return header;
   };
   return {
@@ -143,7 +145,7 @@ describe('SourceControls', () => {
       )
     ).toBe('true');
     expect(onVisibilityChange).not.toHaveBeenCalled();
-    const child = getByRole('checkbox', { name: 'Holidays in United States' });
+    const child = getByRole('checkbox', { name: /Holidays in United States/ });
     const childText = getByText('Holidays in United States');
     expect(
       child.compareDocumentPosition(childText) &

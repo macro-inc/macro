@@ -1,6 +1,6 @@
 import CalendarCheckIcon from '@phosphor/calendar-check.svg';
-import { Button, type ButtonSize, type DialogHandle, openDialog } from '@ui';
-import { getOwner, Show } from 'solid-js';
+import { Button, type ButtonSize, useImperativeDialog } from '@ui';
+import { Show } from 'solid-js';
 import { useCalendarConnectedInboxes } from '../hooks/use-calendar-connected-inboxes';
 import { CopyAvailabilityDialog } from './CopyAvailabilityDialog';
 
@@ -9,15 +9,10 @@ export function CopyAvailabilityButton(props: {
   class?: string;
   size?: ButtonSize;
 }) {
-  const owner = getOwner();
-  if (!owner) {
-    throw new Error('CopyAvailabilityButton requires a Solid owner');
-  }
+  const dialog = useImperativeDialog(CopyAvailabilityDialog);
   const connectedInboxes = useCalendarConnectedInboxes();
-  let dialog: DialogHandle | undefined;
   const showDialog = () => {
-    if (dialog?.isOpen()) return;
-    dialog = openDialog(CopyAvailabilityDialog, {}, { owner });
+    if (!dialog.isOpen()) dialog.open({});
   };
 
   return (
