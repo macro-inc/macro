@@ -5977,6 +5977,13 @@ type GraphqlUser {
 	"""
 	favorites(filter: FavoritesFilterInput): [GraphqlFavorite!]!
 	"""
+	Non-deleted projects the authenticated user can access, as a flat list.
+	
+	Clients build the Drive sidebar tree from `parentId`. Membership is
+	gated by `entity_access` (not view history).
+	"""
+	folders: [GraphqlSoupProject!]!
+	"""
 	A page of the authenticated user's own activity, newest first.
 	Delegated actions performed on the user's behalf are included.
 	"""
