@@ -40,9 +40,11 @@ function CalendarPages() {
   const breakpoints = createSizeBreakpoints(
     () => viewportSize.width ?? undefined,
     {
-      narrowDayHeaders: 519,
+      fullDayHeaders: { min: 520 },
     }
   );
+  const useNarrowDayHeaders = () =>
+    viewportSize.width !== null && !breakpoints.fullDayHeaders();
   let resizeFrame: number | undefined;
 
   createEffect(
@@ -84,7 +86,7 @@ function CalendarPages() {
                     <Page
                       id={pageId}
                       initialDate={calendarPager.initialDateFor(pageId)}
-                      useNarrowDayHeaders={breakpoints.narrowDayHeaders()}
+                      useNarrowDayHeaders={useNarrowDayHeaders()}
                     />
                   </Suspense>
                 </Pager.Page>

@@ -90,12 +90,13 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
   const headerSize = createElementSize(headerElement);
   // The shell width includes the sidebar; use the header's own main-pane width.
   const breakpoints = createSizeBreakpoints(() => headerSize.width ?? 0, {
-    compact: 519,
-    hidePeriod: 459,
-    hideNavigation: 259,
+    fullHeader: { min: 520 },
+    periodControls: { min: 460 },
+    navigationArrows: { min: 260 },
   });
-  const showPeriodControls = () => !breakpoints.hidePeriod();
-  const showNavigationArrows = () => !breakpoints.hideNavigation();
+  const isCompactHeader = () => !breakpoints.fullHeader();
+  const showPeriodControls = breakpoints.periodControls;
+  const showNavigationArrows = breakpoints.navigationArrows;
   const today = createLocalToday();
   const [narrowSearchOpen, setNarrowSearchOpen] = createSignal(false);
   useCalendarHotkeys({
@@ -115,11 +116,11 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
   );
   const isNarrow = () => shell?.aside.isCollapsed() ?? true;
   const showHeaderCreate = () =>
-    breakpoints.compact() ||
+    isCompactHeader() ||
     (shell?.aside.isCollapsed() && !shell?.aside.isOverlay());
   const showDesktopNavigation = () => {
     if (!showNavigationArrows()) return false;
-    return !breakpoints.compact() || !narrowSearchOpen();
+    return !isCompactHeader() || !narrowSearchOpen();
   };
   const usesSplitHeader = () =>
     props.presentation === 'preview' || isTouchDevice();
@@ -264,7 +265,7 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
             <div class="min-w-0 max-w-md flex-1">
               <CalendarSearch
                 inline
-                compact={breakpoints.compact()}
+                compact={isCompactHeader()}
                 onOpenChange={setNarrowSearchOpen}
               />
             </div>
