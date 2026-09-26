@@ -35,7 +35,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { v7 as uuidv7 } from 'uuid';
 import { SessionLoadTrace, traceAcquire } from './load-telemetry';
-import { publishSessionTurn } from './session-turn';
+import { isWorkingTurn, publishSessionTurn } from './session-turn';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
 
@@ -89,6 +89,16 @@ const accessDenied = (errors: { code: string }[]) =>
 function occupiesTurn(action: AgentAction): boolean {
   return action.type === 'prompt' || action.type === 'compact';
 }
+
+/**
+ * How long a working turn may go without a single log frame before the log
+ * is refetched. Realtime delivery is at-most-once: a relay that drops the
+ * frame ending a turn leaves the fold reading "working" with nothing left to
+ * arrive, and only the durable log can say otherwise. A turn that is
+ * genuinely quiet this long costs one `GET /log`; a turn that lost its tail
+ * settles instead of spinning until a reload.
+ */
+export const QUIET_TURN_RESYNC_MS = 15_000;
 
 export class AgentSession {
   private static readonly open = new Map<string, AgentSession>();
@@ -149,11 +159,30 @@ export class AgentSession {
    * wait in the server's queue.
    */
   private turn: TurnState = 'idle';
+  /** Armed while the turn is working; fires a resync if no input lands first. */
+  private quietTimer: ReturnType<typeof setTimeout> | undefined;
+  private resyncing = false;
 
   private setTurn(turn: TurnState | undefined): void {
     const next = turn ?? 'idle';
     this.turn = next;
     publishSessionTurn(this.id, next);
+    this.watchQuiet();
+  }
+
+  /**
+   * Restart the quiet clock: any input means the turn is alive. Idle turns
+   * have nothing to wait for, and `blocked` ones are waiting on the user, so
+   * neither is watched.
+   */
+  private watchQuiet(): void {
+    clearTimeout(this.quietTimer);
+    this.quietTimer = undefined;
+    if (this.closed || !isWorkingTurn(this.turn)) return;
+    this.quietTimer = setTimeout(() => {
+      this.quietTimer = undefined;
+      void this.resync().then(() => this.watchQuiet());
+    }, QUIET_TURN_RESYNC_MS);
   }
 
   private constructor(id: string) {
@@ -343,6 +372,8 @@ export class AgentSession {
     this.trace.end('released');
     this.listeners.clear();
     this.unsubscribeSocket();
+    clearTimeout(this.quietTimer);
+    this.quietTimer = undefined;
     closeSession(this.id);
   }
 
@@ -397,15 +428,22 @@ export class AgentSession {
   }
 
   /**
-   * A reopened socket is a new socket session: rows may have been missed
-   * while it was down. Refetch, and let the machine reconcile the overlap
-   * and settle any speculation the log confirmed meanwhile.
+   * Rows may have been missed: a reopened socket is a new socket session, and
+   * a working turn that has gone quiet may have lost the frame that ended it.
+   * Refetch, and let the machine reconcile the overlap and settle any
+   * speculation the log confirmed meanwhile. One fetch at a time; a second
+   * trigger during the fetch is answered by the same snapshot.
    */
   private async resync(): Promise<void> {
-    if (!this.ready || this.closed) return;
-    const log = await agentHarnessServiceClient.getLog(this.id);
-    if (log.isErr() || this.closed) return;
-    await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
+    if (!this.ready || this.closed || this.resyncing) return;
+    this.resyncing = true;
+    try {
+      const log = await agentHarnessServiceClient.getLog(this.id);
+      if (log.isErr() || this.closed) return;
+      await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
+    } finally {
+      this.resyncing = false;
+    }
   }
 
   private enqueue(input: FoldInput): Promise<void> {
@@ -425,7 +463,10 @@ export class AgentSession {
     const run = this.chain.then(async () => {
       if (this.closed) return;
       const events = await pushSession(this.id, inputs);
-      if (this.closed || events.length === 0) return;
+      if (this.closed) return;
+      // Input landed, whatever it changed: the turn is not quiet.
+      this.watchQuiet();
+      if (events.length === 0) return;
       const metadata = events.findLast((event) => event.kind === 'metadata');
       if (metadata) this.setTurn(metadata.metadata.turn);
       for (const listener of this.listeners) listener(events);
