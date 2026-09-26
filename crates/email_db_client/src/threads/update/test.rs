@@ -74,6 +74,7 @@ const SIG_THREAD_TRASH_ONLY: &str = "00000000-0000-0000-0000-00000000d204";
 const SIG_THREAD_VIP_ADDRESS: &str = "00000000-0000-0000-0000-00000000d205";
 const SIG_THREAD_DOMAIN_MUTED: &str = "00000000-0000-0000-0000-00000000d206";
 const SIG_THREAD_DRAFT: &str = "00000000-0000-0000-0000-00000000d207";
+const SIG_THREAD_MACRO_DIGEST: &str = "00000000-0000-0000-0000-00000000d209";
 
 async fn fetch_signal(pool: &Pool<Postgres>, thread_id: &str) -> anyhow::Result<bool> {
     Ok(sqlx::query_scalar!(
@@ -168,6 +169,20 @@ async fn signal_domain_override_mutes_unlabeled_message(
     // other@corp.com has no address exception, so the domain mute applies.
     sync_signal(&pool, SIG_THREAD_DOMAIN_MUTED).await?;
     assert!(!fetch_signal(&pool, SIG_THREAD_DOMAIN_MUTED).await?);
+    Ok(())
+}
+
+// Macro's own notification emails are never signal: the exclusion is
+// case-insensitive on the sender domain and beats both the unlabeled
+// default and an explicit address-important override.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sync_thread_signal_flag"))
+)]
+async fn signal_cleared_for_macro_notification_sender(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    assert!(fetch_signal(&pool, SIG_THREAD_MACRO_DIGEST).await?);
+    sync_signal(&pool, SIG_THREAD_MACRO_DIGEST).await?;
+    assert!(!fetch_signal(&pool, SIG_THREAD_MACRO_DIGEST).await?);
     Ok(())
 }
 

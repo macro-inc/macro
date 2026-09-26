@@ -542,6 +542,7 @@ pub(super) async fn update_thread_metadata(
 /// thread has a non-TRASH message matching the importance heuristic. Exact
 /// copy of `email_db_client::threads::update::sync_thread_signal_flag`,
 /// mirroring the Importance(true) predicate in the dynamic query builder.
+/// Macro's own notification emails (`$2` domain) never count as signal.
 pub(super) async fn sync_thread_signal_flag(
     tx: &mut sqlx::PgConnection,
     thread_db_id: Uuid,
@@ -559,6 +560,11 @@ pub(super) async fn sync_thread_signal_flag(
                       SELECT 1 FROM email_message_labels ml
                       JOIN email_labels l ON ml.label_id = l.id
                       WHERE ml.message_id = m.id AND l.name = 'TRASH'
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM email_contacts sender_c
+                      WHERE sender_c.id = m.from_contact_id
+                        AND LOWER(SPLIT_PART(sender_c.email_address, '@', 2)) = $2
                   )
                   AND (
                       (
@@ -642,7 +648,8 @@ pub(super) async fn sync_thread_signal_flag(
         WHERE t.id = $1
           AND t.is_signal IS DISTINCT FROM calc.sig
         "#,
-        thread_db_id
+        thread_db_id,
+        email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN,
     )
     .execute(tx)
     .await?;
