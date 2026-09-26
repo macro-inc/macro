@@ -38,21 +38,31 @@ export function CalendarCallSidebar() {
     const start = new Date(
       call.allDay ? `${call.start.slice(0, 10)}T00:00:00` : call.start
     );
-    const day = isSameDay(start, now())
-      ? 'Today'
-      : isTomorrow(start)
-        ? 'Tomorrow'
-        : start.toLocaleDateString([], {
-            month: 'short',
-            day: 'numeric',
-          });
-    if (call.allDay) return `${day} · All day`;
-    if (start <= now()) return 'Now';
+    let day: string;
+    if (isSameDay(start, now())) {
+      day = 'Today';
+    } else if (isTomorrow(start)) {
+      day = 'Tomorrow';
+    } else {
+      day = start.toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric',
+      });
+    }
+    if (call.allDay) {
+      return `${day} · All day`;
+    }
+    if (start <= now()) {
+      return 'Now';
+    }
     const time = formatCompactCalendarTime(
       start,
       calendar.displaySettings.timeFormat
     );
-    return isSameDay(start, now()) ? time : `${day} · ${time}`;
+    if (isSameDay(start, now())) {
+      return time;
+    }
+    return `${day} · ${time}`;
   }
 
   return (

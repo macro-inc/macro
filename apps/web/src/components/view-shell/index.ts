@@ -6,6 +6,7 @@ export {
   createCollapsedSidebarSectionsStorage,
   setSidebarSectionCollapsed,
 } from './collapsed-sections';
+export { createSlidingListTransition } from './createSlidingListTransition';
 export {
   type ListControlOption,
   ListFilterDropdown,
