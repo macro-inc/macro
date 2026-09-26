@@ -4,6 +4,7 @@ import {
   SidePanel,
 } from '@components/app/side-panel';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
+import { PrAgentSessionsSection } from './PrAgentSessionsSection';
 
 export function PrSidePanelSections(props: {
   enrichment?: GithubPullRequestWithDetails;
@@ -17,6 +18,8 @@ export function PrSidePanelSections(props: {
       <SidePanel.Section id="pr-checks" title="Checks" order={20}>
         <GithubPullRequestChecksContent enrichment={props.enrichment} />
       </SidePanel.Section>
+
+      <PrAgentSessionsSection url={props.enrichment?.url} />
     </>
   );
 }

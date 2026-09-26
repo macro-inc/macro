@@ -120,6 +120,7 @@ import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendin
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
 import type { GetSystemSkillsHandler200 } from './generated/schemas/getSystemSkillsHandler200';
+import type { GithubPullRequestFacets } from './generated/schemas/githubPullRequestFacets';
 import type { GithubPullRequestsResponse } from './generated/schemas/githubPullRequestsResponse';
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
@@ -1645,6 +1646,19 @@ export const storageServiceClient = {
 
     return await dssFetch<ForeignEntity>(
       `/foreign_entity/by_source/${encodeURIComponent(source)}/${encodedForeignEntityId}`,
+      { method: 'GET' }
+    );
+  },
+
+  /**
+   * Repositories and authors among the GitHub pull requests visible to the
+   * caller and their team, most pull requests first.
+   */
+  async getGithubPullRequestFacets(): Promise<
+    Result<GithubPullRequestFacets, ResultError<FetchWithTokenErrorCode>[]>
+  > {
+    return await dssFetch<GithubPullRequestFacets>(
+      '/github_pull_requests/facets',
       { method: 'GET' }
     );
   },

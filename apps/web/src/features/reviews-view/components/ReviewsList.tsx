@@ -148,8 +148,8 @@ export function ReviewsList(props: ReviewsListProps) {
   const list = props.list;
   const reviews = list.items.all;
   const selectedReviews = list.selection.items;
-  const missingIdentity = () =>
-    props.scope === 'authored' && !props.authorLogin && !props.authorId;
+  // "Authored by me" matches the viewer's GitHub id on the backend.
+  const missingIdentity = () => props.scope === 'authored' && !props.authorId;
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
   const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
   const listSize = createElementSize(listElement);
@@ -223,7 +223,7 @@ export function ReviewsList(props: ReviewsListProps) {
     rootMargin: '320px',
   });
 
-  // The visible rows can be sparser than the fetched pages after local filters.
+  // The visible rows can be sparser than the fetched pages after a local search.
   // Measure the scroll area after rendering each page and keep fetching until
   // the viewport fills, a result is reachable, or pagination ends.
   createEffect(() => {
@@ -311,9 +311,7 @@ export function ReviewsList(props: ReviewsListProps) {
                               props.selectedRepositories.length > 0 ||
                               props.selectedAuthors.length > 0
                             }
-                            hasAuthorIdentity={Boolean(
-                              props.authorLogin || props.authorId
-                            )}
+                            hasAuthorIdentity={Boolean(props.authorId)}
                             githubAccountStatus={props.githubAccountStatus}
                             onClearSearch={props.onClearSearch}
                             onClearFilters={props.onClearFilters}

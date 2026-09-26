@@ -33,8 +33,9 @@ import {
 import { ReviewsList } from './components/ReviewsList';
 import { ReviewsSidebar } from './components/ReviewsSidebar';
 import { createReviewsListController } from './primitives/create-reviews-list-controller';
+import { useReviewsFacetsQuery } from './queries/use-reviews-facets-query';
 import { useReviewsQuery } from './queries/use-reviews-query';
-import { filterReviews } from './reviews-filter';
+import { searchReviews } from './reviews-filter';
 import { reviewsHostedContent } from './reviews-hosted-content';
 import { reviewsTabSearch, reviewsTabSearchCodec } from './reviews-tab-search';
 import type { ReviewsScope, ReviewsSortId } from './reviews-types';
@@ -63,42 +64,32 @@ function ReviewsRoot() {
   const scopeTitle = () => REVIEW_SCOPE_TITLES[scope()];
   const [search, setSearch] = createSignal('');
   const [sort, setSort] = createSignal<ReviewsSortId>('updated_at');
+  // Selections are numeric GitHub repository and author ids.
   const [selectedRepositories, setSelectedRepositories] = createSignal<
     string[]
   >([]);
   const [selectedAuthors, setSelectedAuthors] = createSignal<string[]>([]);
-  const listEnabled = () => !params.foreignEntityId;
-  const source = useReviewsQuery(sort, scope, listEnabled);
-  const githubLink = useGithubLinkStatusQuery({ enabled: listEnabled });
+  const listVisible = () => !params.foreignEntityId;
+  const githubLink = useGithubLinkStatusQuery({ enabled: listVisible });
   const viewer = useUserContext();
   const authorLogin = () =>
     githubLink.isPending ? undefined : githubLink.data?.username;
   const authorId = () =>
     githubLink.isPending ? undefined : githubLink.data?.userId;
-  const repositories = createMemo(() =>
-    [
-      ...new Set(
-        source
-          .reviews()
-          .map((review) => `${review.metadata.owner}/${review.metadata.repo}`)
-      ),
-    ]
-      .sort()
-      .map((id) => ({ id, label: id }))
+  // "Authored by me" matches the viewer's GitHub id on the backend, so it waits for one.
+  const listEnabled = () =>
+    listVisible() && (scope() !== 'authored' || Boolean(authorId()));
+  const source = useReviewsQuery(
+    sort,
+    () => ({
+      scope: scope(),
+      repositoryIds: selectedRepositories(),
+      authorIds: selectedAuthors(),
+      viewerGithubUserId: authorId(),
+    }),
+    listEnabled
   );
-  const authors = createMemo(() =>
-    [
-      ...new Set(
-        source
-          .reviews()
-          .flatMap((review) =>
-            review.metadata.authorLogin ? [review.metadata.authorLogin] : []
-          )
-      ),
-    ]
-      .sort()
-      .map((id) => ({ id, label: id }))
-  );
+  const facets = useReviewsFacetsQuery(listVisible);
   const changeFilter = (
     group: ReviewsFilterId,
     id: string,
@@ -151,22 +142,13 @@ function ReviewsRoot() {
       { search: searchForTab(scope()) }
     );
   };
-  const reviews = createMemo(() =>
-    filterReviews(source.reviews(), {
-      scope: scope(),
-      authorLogin: authorLogin(),
-      authorId: authorId(),
-      search: search(),
-      repositories: selectedRepositories(),
-      authors: selectedAuthors(),
-    })
-  );
+  const reviews = createMemo(() => searchReviews(source.reviews(), search()));
   const listController = createReviewsListController(reviews, openReview);
   const controls = () => ({
     sort: sort(),
     onSortChange: setSort,
-    repositories: repositories(),
-    authors: authors(),
+    repositories: facets.repositories(),
+    authors: facets.authors(),
     selectedRepositories: selectedRepositories(),
     selectedAuthors: selectedAuthors(),
     onFilterChange: changeFilter,
