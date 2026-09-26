@@ -394,6 +394,43 @@ fn property_values_are_a_typed_union_without_soup_names() {
     assert!(!sdl.contains("GraphqlSoupDataType"));
 }
 
+#[test]
+fn initiative_reads_are_viewer_scoped_and_share_one_normalized_entity() {
+    let sdl = crate::build_schema().sdl();
+    let object = |name: &str| {
+        sdl.split_once(&format!("type {name} {{"))
+            .expect("GraphQL object exists")
+            .1
+            .split_once('\n')
+            .unwrap()
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0
+    };
+    let viewer = object("GraphqlUser");
+    assert_sdl_line(viewer, "initiative(initiativeId: ID!): GraphqlInitiative!");
+    assert_sdl_line(
+        viewer,
+        "initiatives(input: InitiativePageInput): InitiativePage!",
+    );
+    assert!(!object("SoupQueryRoot").contains("initiative"));
+    assert_sdl_line(object("GraphqlInitiative"), "id: ID!");
+    assert_sdl_line(
+        object("GraphqlInitiative"),
+        "properties: [GraphqlProperty!]!",
+    );
+    assert_sdl_line(
+        object("InitiativePage"),
+        "initiatives: [GraphqlInitiative!]!",
+    );
+    assert_sdl_line(
+        object("TaskInitiativeReference"),
+        "initiative: GraphqlInitiative",
+    );
+    assert!(!sdl.contains("GraphqlInitiativePageRow"));
+}
+
 /// The exported SDL is a frontend contract: `schema.graphql` feeds the client
 /// codegen and the normalized-cache metadata. Splitting the schema across
 /// crates must never change it silently — regenerate with

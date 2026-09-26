@@ -2,11 +2,55 @@ use entity_access_db_utils::{
     AccessLevel, delete_user_entity_access_rows, upsert_user_entity_access_bulk,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use sqlx::{Postgres, Transaction};
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{AdapterError, GrantTargets, map_sqlx};
-use crate::domain::models::InitiativeError;
+use super::{AdapterError, GrantTargets, map_sqlx, parse_description_document_id};
+use crate::domain::models::{InitiativeError, InitiativeId};
+
+pub(super) async fn grant_assignees(
+    pool: &PgPool,
+    id: InitiativeId,
+    user_ids: &[MacroUserIdStr<'static>],
+) -> Result<(), InitiativeError> {
+    if user_ids.is_empty() {
+        return Ok(());
+    }
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(AdapterError::Sqlx)
+        .map_err(map_sqlx)?;
+    let row = sqlx::query!(
+        "SELECT description_document_id, owner_user_id FROM initiative WHERE id = $1 FOR UPDATE",
+        id.as_uuid(),
+    )
+    .fetch_optional(tx.as_mut())
+    .await
+    .map_err(AdapterError::Sqlx)
+    .map_err(map_sqlx)?
+    .ok_or(InitiativeError::NotFound)?;
+    let description_id = parse_description_document_id(id.as_uuid(), &row.description_document_id)?;
+    let collaborators = user_ids
+        .iter()
+        .filter(|user_id| user_id.as_ref() != row.owner_user_id)
+        .cloned()
+        .collect::<Vec<_>>();
+    // Assignment grants remain after the property is cleared, just like task sharing.
+    // Record those grants as collaborators so the owner can explicitly revoke them.
+    apply_member_diff(
+        &mut tx,
+        &GrantTargets::new(id, description_id),
+        &collaborators,
+        &[],
+    )
+    .await?;
+    tx.commit()
+        .await
+        .map_err(AdapterError::Sqlx)
+        .map_err(map_sqlx)?;
+    Ok(())
+}
 
 pub(super) async fn insert_members(
     tx: &mut Transaction<'_, Postgres>,

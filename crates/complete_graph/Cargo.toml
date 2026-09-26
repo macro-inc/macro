@@ -25,6 +25,7 @@ graphql_common = { path = "../graphql_common" }
 graphql_email = { path = "../graphql_email" }
 graphql_entity_mutation = { path = "../graphql_entity_mutation" }
 graphql_favorite = { path = "../graphql_favorite" }
+graphql_initiative = { path = "../graphql_initiative" }
 graphql_notification = { path = "../graphql_notification" }
 graphql_permission = { path = "../graphql_permission" }
 graphql_properties = { path = "../graphql_properties" }

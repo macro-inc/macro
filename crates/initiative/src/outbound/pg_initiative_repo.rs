@@ -89,6 +89,23 @@ impl InitiativeRepo for PgInitiativeRepo {
         list::list_accessible(&self.pool, user_id).await
     }
 
+    async fn task_memberships(
+        &self,
+        task_ids: Vec<String>,
+    ) -> Result<std::collections::HashMap<String, InitiativeId>, Self::Err> {
+        let rows = sqlx::query!(
+            "SELECT task_id, initiative_id FROM task_initiative WHERE task_id = ANY($1)",
+            &task_ids
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(classify_sqlx)?;
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.task_id, InitiativeId::from_uuid(row.initiative_id)))
+            .collect())
+    }
+
     #[tracing::instrument(err, skip(self, args))]
     async fn update(&self, args: UpdateInitiativeRepoArgs) -> Result<InitiativeDetail, Self::Err> {
         create::update(&self.pool, args).await
@@ -127,6 +144,15 @@ impl InitiativeRepo for PgInitiativeRepo {
     #[tracing::instrument(err, skip(self))]
     async fn clear_task(&self, task_id: &str) -> Result<(), Self::Err> {
         tasks::clear_task(&self.pool, task_id).await
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    async fn grant_assignees(
+        &self,
+        id: InitiativeId,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), Self::Err> {
+        members::grant_assignees(&self.pool, id, &user_ids).await
     }
 
     #[tracing::instrument(err, skip(self))]

@@ -88,6 +88,18 @@ fn unattributed_property_update_is_dropped() {
 }
 
 #[test]
+fn initiative_property_changes_keep_the_initiative_identity() {
+    let mut metadata = update(Some(user("macro|seamus@example.com")));
+    metadata.entity_type = PropertyEntityType::Initiative;
+    let event = envelope(PropertyTopicEvent::EntityPropertyUpdated(metadata));
+    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+        panic!("expected initiative activity");
+    };
+    assert_eq!(activities[0].entity_type, ActivityEntityType::Initiative);
+    assert!(matches!(activities[0].action, Action::PropertyChanged(_)));
+}
+
+#[test]
 fn delegated_property_update_keeps_the_user_as_subject() {
     let mut metadata = update(None);
     metadata.actor = Some(

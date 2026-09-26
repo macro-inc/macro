@@ -1,0 +1,25 @@
+[package]
+name = "graphql_initiative"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-graphql = { workspace = true, features = ["chrono"] }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+graphql_common = { path = "../graphql_common" }
+graphql_permission = { path = "../graphql_permission" }
+graphql_soup = { path = "../graphql_soup" }
+initiative = { path = "../initiative", default-features = false, features = ["ports"] }
+macro_user_id = { path = "../macro_user_id" }
+models_permissions = { path = "../models_permissions" }
+model-entity = { path = "../model-entity" }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+rootcause = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

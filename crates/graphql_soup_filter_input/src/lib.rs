@@ -300,6 +300,8 @@ enum GraphqlPropertyEntityType {
     Company,
     /// Document entity.
     Document,
+    /// Initiative entity.
+    Initiative,
     /// Project entity.
     Project,
     /// Task entity.
@@ -325,7 +327,8 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Task => Self::Task,
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
-            other @ GraphqlPropertyEntityType::CallRecord => return Err(other),
+            other @ (GraphqlPropertyEntityType::CallRecord
+            | GraphqlPropertyEntityType::Initiative) => return Err(other),
         })
     }
 }
