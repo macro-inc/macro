@@ -87,11 +87,9 @@ it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove r
 
 ## Home (desktop) / Notifications (mobile) — `/app/home`
 
-Every form factor waits for new-app-views flag readiness before choosing the
-new view or its legacy fallback. With the flag enabled, touch devices render
-the new Inbox as **Notifications**: a floating Signal/Noise pill strip with a
-leading filter drawer (Status and Type), pull-to-refresh, and swipe-left to
-mark done. On touch, Signal is a pure notification feed — the viewer's own
+Touch devices render the Inbox as **Notifications**: a floating Signal/Noise
+pill strip with a leading filter drawer (Status and Type), pull-to-refresh,
+and swipe-left to mark done. On touch, Signal is a pure notification feed — the viewer's own
 touched-by-me recents are not merged in; that merge is desktop Home's Signal
 only, so sent mail and AI chats without notifications appear only on desktop.
 
@@ -248,13 +246,10 @@ an older reminder stays in its older section after the event's metadata syncs;
 opening its details should show the expected occurrence. A newer reminder or your
 own later activity can move the row forward, but a calendar sync alone should not.
 
-On mobile, this route always renders the original Notifications soup view,
-regardless of the new-app-views flag. The dock and search scope use the bell icon
-and **Notifications** label; Home is desktop-only. Notifications uses the existing
-Inbox presets, Signal/Noise tabs, notification cards, read/type filters, swipe
-actions, and pull-to-refresh, without Home's merged own-activity feed or chat
-starting pane. Opening a row navigates to its entity. On iOS, rows fade underneath
-the filters and status bar using the shared top edge gradient.
+On mobile, the dock and search scope use the bell icon and **Notifications**
+label; Home is desktop-only. Notifications has no merged own-activity feed or
+chat starting pane. Opening a row navigates to its entity. On iOS, rows fade
+underneath the filters and status bar using the shared top edge gradient.
 
 Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
 unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`
@@ -678,8 +673,8 @@ just client-side row filtering. Cached inserts enforce the same rule before a
 refetch, including expanded groups and inactive cached Shared queries. Until
 viewer identity is available, document inserts into Shared are rejected.
 
-With `enable-new-app-views` enabled, Files opens **Drive** using the
-same shell as Tasks, on desktop and touch devices alike.
+Files opens **Drive** using the same shell as Tasks, on desktop and touch
+devices alike.
 
 On touch devices (phones and tablets), the Drive header is a scrollable pill
 strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a

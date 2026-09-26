@@ -197,8 +197,7 @@ export const ListNav = (props: ListNavProps) => {
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
         // An attribute rather than a class-only state, so the styling can be
-        // retargeted from CSS and the `data-active` selectors the old sidebar's
-        // tests use keep working.
+        // retargeted from CSS and tests can select the active item.
         data-active={isActive() ? '' : undefined}
         data-sidebar-next-item={props.item.id}
         data-unread={props.unread ? '' : undefined}

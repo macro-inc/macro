@@ -1,40 +1,18 @@
 import { defineRoute, useParams } from '@app/lib/split-router';
 import {
-  NewAppView,
+  AppView,
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
-import { useUserContext } from '@core/context/user';
-import { lazy, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { z } from 'zod';
-import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { TasksDetailRouteView } from './components/TasksDetailView';
 import { TasksView } from './tasks-view';
-
-const SoupView = lazy(async () => ({
-  default: (await import('../next-soup/soup-view/soup-view')).SoupView,
-}));
-
-function LegacyTasksView() {
-  const user = useUserContext();
-  const preset = getViewPreset('tasks', undefined, {
-    userId: user.userId(),
-    isTeamAdmin: false,
-  });
-  return (
-    <SoupView
-      viewName="Tasks"
-      initialFilters={preset?.filters}
-      initialClientFilters={preset?.clientFilters}
-      initialGroupBy={preset?.groupBy}
-    />
-  );
-}
 
 function TasksLegacyRouteView() {
   const params = useParams<{ taskId?: string }>();
   return (
-    <Show when={params.taskId} fallback={<LegacyTasksView />}>
+    <Show when={params.taskId}>
       {(taskId) => <RedirectSplit to={{ type: 'task', id: taskId() }} />}
     </Show>
   );
@@ -43,16 +21,14 @@ function TasksLegacyRouteView() {
 export const TasksRouteView = withAuth(() => {
   const params = useParams<{ taskId?: string }>();
   return (
-    <NewAppView
+    <AppView
       id="tasks"
-      composableOnTouch
       detailDesktopOnly
       detailRequested={() => typeof params.taskId === 'string'}
       detailFallback={<TasksLegacyRouteView />}
-      fallback={<LegacyTasksView />}
     >
       <TasksView />
-    </NewAppView>
+    </AppView>
   );
 });
 

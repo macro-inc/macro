@@ -103,9 +103,9 @@ return controls navigate to the workspace's list root. Multiple panes navigate
 their child routes and history independently; returning to a list does not
 activate another pane. Opening a resource already displayed in another pane
 still activates its owner through router claim arbitration; the compatibility
-preview guard can instead reject a conflicting embedded preview. On touch, or
-when the new-app-view flag cannot render the detail, Home, Email, Tasks, and
-Channels detail URLs fall back to the existing full-block surface. Legacy email
+preview guard can instead reject a conflicting embedded preview. On touch, Home,
+Email, Tasks, and Channels detail URLs fall back to the existing full-block
+surface. Legacy email
 and channel message targets are normalized into per-pane search by ingress
 middleware, including external/history navigation; explicit namespaced values win.
 Unavailable documents retain their error/retry UI rather than navigating away.
@@ -183,23 +183,21 @@ stay centered and the preview body fills the remaining height below the divider.
 
 ## Sidebar (a11y names are load-bearing)
 
-- Top: buttons `Search` and `Create`. Clicking sidebar `Search` opens a menu
+The outer sidebar is an icon rail; labels appear in tooltips.
+
+- Top: buttons `Create` and `Search`. Clicking `Search` opens a menu
   with `Command Menu` (⌘K on Mac / Ctrl+K elsewhere) and `Search everything`
   (`/`). Choose the first to open commands, or the second to open and focus
   global search. Hold Shift while selecting `Search everything` to open it in a
   new split, including when Search is already active. This left-click menu shares
-  its surface and item styling with the sidebar right-click menus, in both the
-  compact rail and expanded sidebar.
-- Nav: `Go to Home`, `Go to Getting Started`, `Go to Recent`, `Go to Activity`.
-- Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
-  `Go to Calendar`, `Go to Agents`, `Go to Customers`.
-- Then `Favorites` (pinned items) and `Latest` (recent channels/DMs with an `Unread` switch).
-- Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
-  `Settings (Ctrl ;)`, `Log out`.
+  its surface and item styling with the sidebar right-click menus.
+- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`, `Agents`,
+  `Customers`. Calendar and Customers appear only when their features are enabled.
+- Bottom: button named after the user (their name, or email when unset) — menu
+  with `Command menu (Ctrl K)`, `Settings (Ctrl ;)`, `Log out`.
 
-With the new app views enabled, the outer sidebar is an icon rail. Start a new AI
-chat from the Agents workspace; the rail has no separate new-chat-in-a-new-split
-button. Its tooltips
+Start a new AI chat from the Agents workspace; the rail has no separate
+new-chat-in-a-new-split button. Its tooltips
 use the standard 400 ms hover delay and 300 ms grace period between items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
 item. Home uses Signal; Email uses Important across all linked inboxes.
@@ -282,8 +280,7 @@ uploading or moving anything.
 
 ## Favorites
 
-Use an entity's command/context menu to add or remove it from Favorites; drag rows
-within the expanded sidebar's Favorites section to reorder them. Documents, chats,
+Use an entity's command/context menu to add or remove it from Favorites. Documents, chats,
 projects, email threads, channels, calls, CRM companies, and CRM contacts support
 toggling. Individual channel messages are not favoritable.
 

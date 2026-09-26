@@ -139,9 +139,9 @@ function Cell(props: { children: JSX.Element }) {
 
 /**
  * Mic / camera / screen-share / settings / hang-up arranged as a single
- * rounded card with hairline dividers — matches the in-call sidebar panel
- * styling. Each cell holds a plain ghost `Button`, so the hover stays
- * contained inside the button rather than filling the cell to the dividers.
+ * rounded card with hairline dividers. Each cell holds a plain ghost `Button`,
+ * so the hover stays contained inside the button rather than filling the cell
+ * to the dividers.
  */
 export function CallControlsDefaultAndPanelRow(
   props: CallControlsDefaultAndPanelRowProps

@@ -8,7 +8,6 @@ import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useSplitRouter } from '@app/lib/split-router';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useSidebarCollapse } from '@components/app/sidebarVisibility';
 import { type BlockName, NonDocumentBlockTypes } from '@core/block';
 import {
   ContextMenuContent,
@@ -33,7 +32,6 @@ import CaretLeft from '@phosphor/caret-left.svg';
 import CaretUp from '@phosphor/caret-up.svg';
 import SplitIcon from '@phosphor/columns.svg';
 import CopyIcon from '@phosphor/copy.svg';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -137,41 +135,6 @@ function SplitBackButton() {
     >
       <CaretLeft />
     </Button>
-  );
-}
-
-function SidebarExpandButton() {
-  const panel = useContext(SplitPanelContext);
-  const layout = useContext(SplitLayoutContext);
-  const sidebar = useSidebarCollapse();
-
-  const isLeftmostSplit = () =>
-    layout?.manager.splits()[0]?.id === panel?.handle.id;
-  const visible = () => sidebar.isCollapsed() && isLeftmostSplit();
-
-  return (
-    <div
-      class={cn(
-        'overflow-hidden transition-[width,opacity,margin] duration-[120ms] ease-in-out',
-        visible()
-          ? 'w-8 @max-[380px]/split-header:w-0 @max-[380px]/split-header:opacity-0 opacity-100 mr-1 @max-[380px]/split-header:mr-0'
-          : 'w-0 opacity-0 mr-0'
-      )}
-      aria-hidden={!visible()}
-    >
-      <Button
-        class="rounded-lg"
-        square
-        size="sm"
-        label="Expand Sidebar"
-        hotkey={TOKENS.global.toggleSidebar}
-        disabled={!visible()}
-        tabindex={visible() ? undefined : -1}
-        onClick={() => sidebar.expand()}
-      >
-        <SidebarIcon class="size-4" />
-      </Button>
-    </div>
   );
 }
 
@@ -624,7 +587,6 @@ export function SplitHeader(props: {
             when={isTouchDevice()}
             fallback={
               <div class="relative flex items-center pl-2 h-full">
-                <SidebarExpandButton />
                 <SplitCloseButton />
                 <SplitDriveReturnButton />
               </div>
