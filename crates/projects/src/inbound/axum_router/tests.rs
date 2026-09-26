@@ -96,6 +96,13 @@ impl ProjectService for FakeProjectService {
         Ok(vec![project()])
     }
 
+    async fn list_accessible_projects(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Project>, ProjectError> {
+        Ok(vec![project()])
+    }
+
     async fn list_pending_projects(
         &self,
         _user_id: MacroUserIdStr<'static>,
