@@ -67,4 +67,24 @@ describe('thread state with an injected source', () => {
         dispose();
       }
     }));
+
+  it('keeps a suggested body with the reply request until the composer consumes it', () =>
+    createRoot((dispose) => {
+      try {
+        const state = createEmailThreadState(
+          createThreadContext({ thread: () => thread([message('one')]) })
+        );
+
+        state.replyRequest.set('one', 'reply-all', 'Sounds good to me.');
+
+        expect(state.replyRequest.messageId()).toBe('one');
+        expect(state.replyRequest.replyType()).toBe('reply-all');
+        expect(state.replyRequest.suggestedBody()).toBe('Sounds good to me.');
+
+        state.replyRequest.clear();
+        expect(state.replyRequest.suggestedBody()).toBeUndefined();
+      } finally {
+        dispose();
+      }
+    }));
 });

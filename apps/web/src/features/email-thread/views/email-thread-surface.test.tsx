@@ -33,6 +33,7 @@ describe('thread composition ownership', () => {
         threadId={() => 'thread'}
         context={{
           thread: threadContext,
+          hasProfessionalFeatures: () => true,
           compose: createComposeContext(),
           rendering: {},
         }}

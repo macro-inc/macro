@@ -6,9 +6,10 @@ import type { EmailThreadState } from './email-thread-state';
 
 export function openEmailReplyComposerForMessage(args: {
   ctx: EmailThreadState;
-  isMobile: boolean;
+  useReplyDrawer: boolean;
   message: EmailMessage;
   replyType: ReplyType;
+  suggestedBody?: string;
   isLastMessage?: boolean;
   setShowReply?: Setter<boolean>;
 }) {
@@ -19,9 +20,9 @@ export function openEmailReplyComposerForMessage(args: {
   // composer's effect applies them to its own (seed-keyed) form instance.
   // Writing to the form registry from here would target the wrong entry —
   // the registry key includes a seed only the composer knows.
-  args.ctx.replyRequest.set(messageId, args.replyType);
+  args.ctx.replyRequest.set(messageId, args.replyType, args.suggestedBody);
 
-  if (args.isMobile) {
+  if (args.useReplyDrawer) {
     args.ctx.mobileReplyComposer.openForMessage(messageId);
     return true;
   }
