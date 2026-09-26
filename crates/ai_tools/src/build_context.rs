@@ -399,8 +399,11 @@ pub async fn build_tool_service_context_from_env(
 
     let anthropic_tool_context = build_anthropic_tool_context();
 
-    let skill_tool_context =
-        crate::tool_context::build_skill_tool_context(search_client.clone(), soup_service.clone());
+    let skill_tool_context = crate::tool_context::build_skill_tool_context(
+        search_client.clone(),
+        soup_service.clone(),
+        &document_tool_context,
+    );
 
     Ok(ToolServiceContext {
         search_service_client: search_client.clone(),

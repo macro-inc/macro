@@ -372,8 +372,11 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
     );
 
     let search_service_client = Arc::new(search_service_client);
-    let skill_tool_context =
-        ai_tools::build_skill_tool_context(search_service_client.clone(), soup_service.clone());
+    let skill_tool_context = ai_tools::build_skill_tool_context(
+        search_service_client.clone(),
+        soup_service.clone(),
+        &document_tool_context,
+    );
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),

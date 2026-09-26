@@ -851,3 +851,18 @@ webhook sync completes; its chip should then appear without a page refresh.
 Verify status changes (open/merged/closed) while the chip stays mounted, and
 verify that reconnecting the gateway catches up changes missed while disconnected.
 There is no periodic PR lookup polling.
+
+
+## Reading skills
+
+Agents in Macro and connected MCP harnesses can discover saved skill documents
+and built-in skills with `ListSkills`, then load the full instructions with
+`ReadSkill` using the returned `documentId`. `ListSkills` returns the 100 most
+recently updated visible skill documents plus built-ins; `SearchSkills` finds a
+skill by name, including older skills outside that list. A skill mention's id can
+also be passed directly to `ReadSkill`.
+
+The chat's **Read skill** tool row expands to show the full instructions. When
+verifying this flow, invoke a saved skill by name, confirm the agent reads it,
+and expand the row to inspect the returned content. Document access permissions
+apply; ordinary documents and deleted skills cannot be read as skills.
