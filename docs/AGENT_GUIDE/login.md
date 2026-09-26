@@ -13,7 +13,7 @@
    the user's inbox (locally: Mailpit).
 5. First login auto-creates the user, seeds onboarding content (a "Macro Support x <name>"
    channel, a "Macro how to guide" doc favorite, three sample tasks), and lands on
-   `/app/component/inbox`. The starter documents share a personal `docs` tag; the
+   `/app/home`. The starter documents share a personal `docs` tag; the
    guide's `#` example is an inline mention of that same tag. A tag attachment
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
@@ -46,7 +46,7 @@ and [repeatable iOS smoke test](../../apps/web/tests/native/ios/README.md).
 
 ## Known crash on first landing (local)
 
-Immediately after login the app navigates to `/app/component/inbox` and can throw a
+Immediately after login the app navigates to `/app/home` and can throw a
 full-screen error dialog: **"Something went terribly wrong — Cannot read properties of
 undefined (reading 'id')"**. Console shows `Failed to init email link on login` with a 404 on
 `GET /auth/link/github/status` and a 400 on `POST /email/email/init`. This is cosmetic-ish and
