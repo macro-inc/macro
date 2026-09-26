@@ -6,6 +6,17 @@
 The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, and `Filter`;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 and Tags submenus. Multi-select choices keep the menu open; Escape dismisses it.
+The top of the `Filter` menu is a `Filter with AI…` textbox: type a plain-English
+description such as `urgent and high priority tasks that are not completed` and press
+Enter. It replaces the current selection with the matching Status, Priority, Assignee,
+Created by, and Tags options (exclusions on Status/Priority become the complementary
+options; subject matter such as `about billing` lands in the search box), then closes
+the menu. Requests that only partly map keep the menu open and show a muted note
+under the box; requests that map to nothing (excluding a tag, an unknown person,
+off-topic text) keep the typed text and show a red error there instead. The box keeps
+focus while you type even if the pointer drifts over the rows; ArrowDown moves into
+the rows and hovering a submenu hands focus to it as usual. The mobile drawer has no
+AI box.
 Task creation is available from the `New` button in the Tasks sidebar. Below the tabs the
 sidebar has a collapsible `Tags` section listing every personal and team tag, with a
 `New tag` button beside the heading. Clicking a tag narrows the current tab to tasks
