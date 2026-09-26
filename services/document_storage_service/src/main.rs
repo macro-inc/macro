@@ -96,6 +96,7 @@ use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use github_pull_requests::{
     domain::service::GithubPullRequestServiceImpl,
+    inbound::axum_router::GithubPullRequestRouterState,
     outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
 };
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
@@ -589,6 +590,15 @@ async fn run() -> anyhow::Result<()> {
         )),
         authorization_state: authorization_state.clone(),
     };
+
+    let github_pull_request_state = GithubPullRequestRouterState::new(
+        Arc::new(GithubPullRequestServiceImpl::new(
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+            PgGithubPullRequestRepo::new(db.clone()),
+        )),
+        entity_access_service.clone(),
+        authorization_state.clone(),
+    );
 
     let foreign_entity_state = ForeignEntityRouterState::new(
         foreign_entity_service.clone(),
@@ -1611,6 +1621,7 @@ async fn run() -> anyhow::Result<()> {
         graphql_entity_mutation_service,
         github_sync_service: Arc::new(github_sync_service_impl),
         github_pull_request_index_state,
+        github_pull_request_state,
         foreign_entity_state,
         db: db.clone(),
         readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),

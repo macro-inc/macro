@@ -111,9 +111,50 @@ impl GithubPullRequestRow {
     }
 }
 
+/// Repositories and authors among the GitHub pull requests a caller can see, each with the
+/// number of pull requests it covers.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestFacets {
+    /// Repositories, most pull requests first.
+    pub repositories: Vec<GithubRepositoryFacet>,
+    /// Authors, most pull requests first.
+    pub authors: Vec<GithubAuthorFacet>,
+}
+
+/// A repository among the visible GitHub pull requests.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubRepositoryFacet {
+    /// The numeric GitHub repository id, which survives renames and transfers.
+    pub repository_id: String,
+    /// The repository's most recently synced name, as `owner/repo`.
+    pub repository: String,
+    /// Number of visible pull requests in the repository.
+    pub count: i64,
+}
+
+/// An author among the visible GitHub pull requests.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubAuthorFacet {
+    /// The author's numeric GitHub user id.
+    pub github_user_id: String,
+    /// The author's most recently synced GitHub login, when known.
+    pub login: Option<String>,
+    /// Number of visible pull requests the author opened.
+    pub count: i64,
+}
+
 /// Errors from storing GitHub pull requests.
 #[derive(Debug, thiserror::Error)]
 pub enum GithubPullRequestError {
+    /// The request was malformed.
+    #[error("{0}")]
+    BadRequest(String),
     /// The pull request could not be serialized into record metadata.
     #[error("failed to serialize pull request metadata: {0}")]
     Metadata(#[from] serde_json::Error),

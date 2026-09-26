@@ -88,6 +88,7 @@ use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use github_pull_requests::{
     domain::service::GithubPullRequestServiceImpl,
+    inbound::axum_router::GithubPullRequestRouterState,
     outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
 };
 use initiative::{
@@ -538,6 +539,13 @@ pub(crate) type DssForeignEntityState =
 pub(crate) type GithubPullRequestServiceType =
     GithubPullRequestServiceImpl<ForeignEntityServiceType, PgGithubPullRequestRepo>;
 
+/// Type alias for the GitHub pull request router state.
+pub(crate) type DssGithubPullRequestState = GithubPullRequestRouterState<
+    GithubPullRequestServiceType,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl<
     DocumentService,
@@ -601,6 +609,7 @@ pub(crate) struct ApiContext {
     pub s3_client: Arc<S3>,
     pub github_sync_service: Arc<GithubSyncServiceType>,
     pub github_pull_request_index_state: DssGithubPullRequestIndexState,
+    pub github_pull_request_state: DssGithubPullRequestState,
     pub dynamodb_client: Arc<DynamodbClient>,
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,

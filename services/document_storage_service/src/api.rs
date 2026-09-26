@@ -272,6 +272,12 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/github_pull_requests",
+            github_pull_requests::inbound::axum_router::github_pull_requests_router(
+                state.github_pull_request_state.clone(),
+            ),
+        )
+        .nest(
             "/call",
             call::inbound::axum_router::call_router(state.call_state.clone()),
         )

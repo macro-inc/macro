@@ -7561,12 +7561,16 @@ name = "github_pull_requests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "chrono",
  "entity_access",
  "filter_ast",
  "foreign_entity",
  "item_filters",
+ "macro_authorization",
  "macro_db_migrator",
+ "macro_user_id",
+ "model-error-response",
  "models_pagination",
  "serde",
  "serde_json",

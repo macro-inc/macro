@@ -2,15 +2,18 @@
 
 use std::future::Future;
 
+use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
     ports::ForeignEntityListQuery,
 };
 use item_filters::ast::{LiteralTree, github_pull_request::GithubPullRequestLiteral};
+use macro_user_id::user_id::MacroUserIdStr;
 
 use super::models::{
-    EnrichedGithubPullRequest, GithubPullRequestError, GithubPullRequestRow,
-    GithubRepositoryIdentity, UpsertGithubPullRequest, UpsertedGithubPullRequest,
+    EnrichedGithubPullRequest, GithubPullRequestError, GithubPullRequestFacets,
+    GithubPullRequestRow, GithubRepositoryIdentity, UpsertGithubPullRequest,
+    UpsertedGithubPullRequest,
 };
 
 /// Stores GitHub pull requests as foreign entity records, one record per user or team the pull
@@ -118,4 +121,29 @@ pub trait GithubPullRequestListingRepository: Send + Sync + 'static {
         query: ForeignEntityListQuery,
         github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     ) -> impl Future<Output = Result<Vec<ForeignEntity>, Self::Err>> + Send;
+}
+
+/// Aggregate views over the GitHub pull requests a caller can see.
+pub trait GithubPullRequestFacetService: Send + Sync + 'static {
+    /// Repositories and authors among the pull requests visible to `user`, plus those visible
+    /// to `team` when the caller is acting within one. A pull request visible to both counts
+    /// once.
+    fn github_pull_request_facets(
+        &self,
+        user: MacroUserIdStr<'static>,
+        team: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> impl Future<Output = Result<GithubPullRequestFacets, GithubPullRequestError>> + Send;
+}
+
+/// Aggregates over the pull request rows visible to a set of sources.
+pub trait GithubPullRequestFacetRepository: Send + Sync + 'static {
+    /// Error type returned by repository operations.
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+
+    /// Count distinct pull requests per repository and per author among the pull requests
+    /// with a record stored for any of `source_ids`.
+    fn github_pull_request_facets(
+        &self,
+        source_ids: Vec<SourceId>,
+    ) -> impl Future<Output = Result<GithubPullRequestFacets, Self::Err>> + Send;
 }

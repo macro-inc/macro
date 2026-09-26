@@ -3,19 +3,23 @@
 #[cfg(test)]
 mod test;
 
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberTeamRole};
 use foreign_entity::domain::{
     models::{CreateForeignEntity, ForeignEntity, PatchForeignEntity, SourceId},
     ports::{ForeignEntityListQuery, ForeignEntityService},
 };
 use item_filters::ast::{LiteralTree, github_pull_request::GithubPullRequestLiteral};
+use macro_user_id::user_id::MacroUserIdStr;
 
 use super::{
     models::{
         EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
-        GithubPullRequestError, GithubPullRequestRow, GithubPullRequestStatus,
-        GithubRepositoryIdentity, UpsertGithubPullRequest, UpsertedGithubPullRequest,
+        GithubPullRequestError, GithubPullRequestFacets, GithubPullRequestRow,
+        GithubPullRequestStatus, GithubRepositoryIdentity, UpsertGithubPullRequest,
+        UpsertedGithubPullRequest,
     },
     ports::{
+        GithubPullRequestFacetRepository, GithubPullRequestFacetService,
         GithubPullRequestIndexRepository, GithubPullRequestIndexer, GithubPullRequestListing,
         GithubPullRequestListingRepository, GithubPullRequestRepository, GithubPullRequestService,
     },
@@ -280,6 +284,35 @@ where
         )
         .await
         .map_err(repository_error)
+    }
+}
+
+impl<F, R> GithubPullRequestFacetService for GithubPullRequestServiceImpl<F, R>
+where
+    F: ForeignEntityService,
+    R: GithubPullRequestFacetRepository,
+{
+    #[tracing::instrument(err, skip(self, team))]
+    async fn github_pull_request_facets(
+        &self,
+        user: MacroUserIdStr<'static>,
+        team: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<GithubPullRequestFacets, GithubPullRequestError> {
+        let mut source_ids = vec![SourceId::user(user.as_ref())];
+        if let Some(team) = team {
+            let entity = team.entity();
+            if entity.entity_type != EntityType::Team {
+                return Err(GithubPullRequestError::BadRequest(format!(
+                    "expected Team receipt, got {:?}",
+                    entity.entity_type
+                )));
+            }
+            source_ids.push(SourceId::new(entity.entity_id.clone(), "team"));
+        }
+
+        GithubPullRequestFacetRepository::github_pull_request_facets(&self.repo, source_ids)
+            .await
+            .map_err(repository_error)
     }
 }
 

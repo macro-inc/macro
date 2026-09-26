@@ -2,7 +2,9 @@ use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{
+    EntityAccessReceipt, EntityType, MemberTeamRole, ViewAccessLevel,
+};
 use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{
@@ -11,6 +13,7 @@ use foreign_entity::domain::{
     ports::{ForeignEntityListQuery, ForeignEntityService},
 };
 use item_filters::ast::{LiteralTree, github_pull_request::GithubPullRequestLiteral};
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Cursor, CursorVal, Query, SimpleSortMethod};
 use uuid::Uuid;
 
@@ -18,10 +21,11 @@ use super::GithubPullRequestServiceImpl;
 use crate::domain::{
     models::{
         EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
-        GithubPullRequestError, GithubPullRequestRow, GithubPullRequestStatus,
-        GithubRepositoryIdentity, UpsertGithubPullRequest,
+        GithubPullRequestError, GithubPullRequestFacets, GithubPullRequestRow,
+        GithubPullRequestStatus, GithubRepositoryIdentity, UpsertGithubPullRequest,
     },
     ports::{
+        GithubPullRequestFacetRepository, GithubPullRequestFacetService,
         GithubPullRequestIndexRepository, GithubPullRequestIndexer, GithubPullRequestListing,
         GithubPullRequestListingRepository, GithubPullRequestRepository, GithubPullRequestService,
     },
@@ -162,6 +166,7 @@ struct StubPullRequestRows {
     stored: Arc<Mutex<Vec<(String, String, serde_json::Value)>>>,
     listing_calls: Arc<Mutex<Vec<ListingCall>>>,
     fail_listings: Arc<Mutex<bool>>,
+    facet_requests: Arc<Mutex<Vec<Vec<SourceId>>>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -274,6 +279,18 @@ impl GithubPullRequestListingRepository for StubPullRequestRows {
                 .map(|filter| format!("{filter:?}")),
         });
         Ok(Vec::new())
+    }
+}
+
+impl GithubPullRequestFacetRepository for StubPullRequestRows {
+    type Err = Infallible;
+
+    async fn github_pull_request_facets(
+        &self,
+        source_ids: Vec<SourceId>,
+    ) -> Result<GithubPullRequestFacets, Self::Err> {
+        self.facet_requests.lock().unwrap().push(source_ids);
+        Ok(GithubPullRequestFacets::default())
     }
 }
 
@@ -722,4 +739,60 @@ async fn listing_reports_repository_failures() {
         panic!("expected a repository error, got {error:?}");
     };
     assert!(error.to_string().contains("listing failed"));
+}
+
+fn facet_user() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str(USER_ID).unwrap()
+}
+
+#[tokio::test]
+async fn facets_cover_the_users_pull_requests() {
+    let rows = StubPullRequestRows::default();
+    let service = service(&StubForeignEntityService::default(), &rows);
+
+    service
+        .github_pull_request_facets(facet_user(), None)
+        .await
+        .unwrap();
+
+    assert_eq!(*rows.facet_requests.lock().unwrap(), vec![vec![user()]]);
+}
+
+#[tokio::test]
+async fn facets_add_the_team_in_context() {
+    let rows = StubPullRequestRows::default();
+    let service = service(&StubForeignEntityService::default(), &rows);
+    let team_receipt = EntityAccessReceipt::<MemberTeamRole>::dangerously_assert_authenticated_user(
+        facet_user(),
+        TEAM_ID,
+        EntityType::Team,
+    );
+
+    service
+        .github_pull_request_facets(facet_user(), Some(team_receipt))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *rows.facet_requests.lock().unwrap(),
+        vec![vec![user(), team()]]
+    );
+}
+
+#[tokio::test]
+async fn facets_reject_a_receipt_for_anything_but_a_team() {
+    let rows = StubPullRequestRows::default();
+    let service = service(&StubForeignEntityService::default(), &rows);
+    let not_a_team = EntityAccessReceipt::<MemberTeamRole>::dangerously_assert_authenticated_user(
+        facet_user(),
+        &Uuid::new_v4().to_string(),
+        EntityType::Document,
+    );
+
+    let result = service
+        .github_pull_request_facets(facet_user(), Some(not_a_team))
+        .await;
+
+    assert!(matches!(result, Err(GithubPullRequestError::BadRequest(_))));
+    assert!(rows.facet_requests.lock().unwrap().is_empty());
 }

@@ -6,22 +6,35 @@ version = "0.1.0"
 
 [features]
 default = ["outbound", "ports", "service"]
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "entity_access/inbound",
+  "schema",
+  "service",
+]
 outbound = [
   "dep:filter_ast",
   "dep:models_pagination",
   "dep:sqlx",
   "ports",
 ]
-ports = ["dep:item_filters", "foreign_entity/ports"]
+ports = ["dep:entity_access", "dep:item_filters", "foreign_entity/ports"]
 schema = ["dep:utoipa"]
 service = ["ports"]
 
 [dependencies]
 anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
 chrono = { workspace = true }
+entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
 filter_ast = { path = "../filter_ast", optional = true }
 foreign_entity = { path = "../foreign_entity", default-features = false }
 item_filters = { path = "../item_filters", optional = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+model-error-response = { path = "../model-error-response", optional = true }
 models_pagination = { path = "../models_pagination", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -33,7 +46,6 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 foreign_entity = { path = "../foreign_entity", default-features = false, features = ["outbound"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

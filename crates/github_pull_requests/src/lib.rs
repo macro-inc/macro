@@ -7,11 +7,15 @@
 //! # Architecture
 //!
 //! - **domain**: Contains domain models, ports, and service implementation.
+//! - **inbound**: Contains the HTTP API adapters.
 //! - **outbound**: Contains adapters for external persistence systems.
 
 #![deny(missing_docs)]
 
 pub mod domain;
+
+#[cfg(feature = "inbound")]
+pub mod inbound;
 
 #[cfg(feature = "outbound")]
 pub mod outbound;
