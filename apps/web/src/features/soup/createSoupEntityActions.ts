@@ -343,6 +343,11 @@ export function createSoupEntityActions(): {
     }
 
     if (canExecuteAll(muteAction.canExecute)) {
+      middleItems.push({
+        id: 'snooze',
+        label: 'Snooze notifications…',
+        onClick: () => muteAction.snooze(entities),
+      });
       const allMuted = entities.every((entity) => muteAction.isMuted(entity));
       middleItems.push({
         id: 'mute',

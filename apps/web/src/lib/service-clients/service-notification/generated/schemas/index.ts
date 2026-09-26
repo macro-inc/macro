@@ -214,5 +214,7 @@ export * from './taskAssignedMetadata';
 export * from './taskAssignedMetadataSenderProfilePictureUrl';
 export * from './taskAssignedMetadataSubType';
 export * from './taskAssignedMetadataTaskName';
+export * from './unsubscribeItemParams';
 export * from './unsubscribeItemPathParams';
 export * from './userUnsubscribe';
+export * from './userUnsubscribeSnoozedUntil';

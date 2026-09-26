@@ -166,7 +166,8 @@ export function isMutedItem(
   return muted.some(
     (entry) =>
       entry.item_id === item.item_id &&
-      normalizeMuteItemType(entry.item_type) === type
+      normalizeMuteItemType(entry.item_type) === type &&
+      (!entry.snoozed_until || Date.parse(entry.snoozed_until) > Date.now())
   );
 }
 

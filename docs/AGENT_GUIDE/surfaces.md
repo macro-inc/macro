@@ -1267,6 +1267,33 @@ or remove the signature.
 The inbox row's trash icon removes the inbox through the existing confirmation;
 it is separate from the signature editor's close control.
 
+### Notification snoozes
+
+Open **Settings → Notifications** to see **Snoozed items** and their local resume
+times. **Choose item…** searches for an entity and opens its snooze picker.
+Email threads appear alongside other entities; enter at least three characters
+to search email subjects beyond the loaded threads, or use **Load more** to browse.
+**Change time** opens the same searchable time picker used by entity
+actions; **Resume** cancels a snooze immediately. Permanent mutes appear separately
+under **Muted items**, with **Snooze instead** to replace one with a timed pause.
+
+To snooze an entity, right-click its row (long-press on mobile) and choose
+**Snooze notifications…**, or select/open the entity and search for that command
+in Cmd/Ctrl+K. Multi-selection applies the chosen deadline to all selected items.
+Use arrow keys and Enter, click a preset, or type a future date/time such as
+`2h` or `tomorrow 10am`. The next morning means the next local 9 AM; the weekend
+preset resumes on Monday at 9 AM. The picker displays the exact local date and
+time before saving. Escape cancels without changing anything.
+
+Snoozing pauses notifications only: it does not hide, archive, mark read, or mark
+done. Channel message/thread rows target their parent channel, matching mute.
+The server enforces expiration even when no client is open. A failed save keeps
+the picker open for retry; a successful save appears in notification settings.
+
+Design references: [Slack notification pause/resume](https://slack.com/help/articles/214908388-Pause-your-Slack-notifications)
+and [Superhuman's keyboard-driven Remind Me picker](https://new.superhuman.com/remind-me-29124).
+Macro applies the temporary pause per entity and keeps the entity visible.
+
 ### Team membership
 
 Team membership has no size cap, including free teams. Invitations and domain

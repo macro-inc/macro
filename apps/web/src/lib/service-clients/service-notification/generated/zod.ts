@@ -21,6 +21,12 @@ export const healthHandlerResponse = zod
 export const getUnsubscribesResponseItem = zod.object({
   item_id: zod.string().describe('The item id'),
   item_type: zod.string().describe('The item type'),
+  snoozed_until: zod.iso
+    .datetime({})
+    .nullish()
+    .describe(
+      'None for permanent mutes; notifications resume automatically at this deadline.'
+    ),
 });
 export const getUnsubscribesResponse = zod.array(getUnsubscribesResponseItem);
 
@@ -37,8 +43,35 @@ export const unsubscribeEmailResponse = zod
  * @summary Unsubscribes a user from a given item for notifications.
  */
 export const unsubscribeItemParams = zod.object({
-  item_type: zod.string(),
+  item_type: zod.enum([
+    'user',
+    'chat',
+    'channel',
+    'channel_message',
+    'document',
+    'project',
+    'email_thread',
+    'calendar_event',
+    'team',
+    'call',
+    'foreign_entity',
+    'static_file',
+    'crm_company',
+    'crm_contact',
+    'reminder',
+    'skill',
+    'agent_session',
+    'scheduled_action',
+    'initiative',
+  ]),
   item_id: zod.string(),
+});
+
+export const unsubscribeItemQueryParams = zod.object({
+  snoozed_until: zod.iso
+    .datetime({})
+    .nullish()
+    .describe('A future resume time. Omit to mute indefinitely.'),
 });
 
 export const unsubscribeItemResponse = zod
@@ -51,7 +84,27 @@ export const unsubscribeItemResponse = zod
  * @summary Removes a unsubscribe item for a user.
  */
 export const removeUnsubscribeItemParams = zod.object({
-  item_type: zod.string(),
+  item_type: zod.enum([
+    'user',
+    'chat',
+    'channel',
+    'channel_message',
+    'document',
+    'project',
+    'email_thread',
+    'calendar_event',
+    'team',
+    'call',
+    'foreign_entity',
+    'static_file',
+    'crm_company',
+    'crm_contact',
+    'reminder',
+    'skill',
+    'agent_session',
+    'scheduled_action',
+    'initiative',
+  ]),
   item_id: zod.string(),
 });
 
