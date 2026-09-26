@@ -1,7 +1,7 @@
 # Pull request diff viewer
 
 `agent-changes.tsx` wires the viewer into agent sessions. The controller and views
-can also be mounted by a PR external entity without an `AgentSessionProvider`.
+are also mounted by `block-pr/pr-changes.tsx` without an `AgentSessionProvider`.
 
 A host supplies `ChangesSource` and `ChangesHost` from
 `context/agent-changes-context.ts`, creates a controller with `createAgentChanges`,
@@ -15,9 +15,16 @@ a chat-only (in-memory) session shows no GitHub chrome. Clipboard, external
 navigation, and notifications are host callbacks.
 
 The source owns fetching, cache identity, and conversion into the feature's core
-changeset types. A PR entity adapter should resolve its GitHub owner/repository/PR
-number and implement this same contract using shared queries. It does not need to
-construct an agent session. That adapter and its backend endpoint are not yet wired.
+changeset types. `queries/pull-request-changes.ts` reads a standalone PR snapshot
+through the authenticated agent-harness `/pull-requests/changes` endpoint, which
+uses the viewer's repository access and the shared GitHub diff reader and budgets.
+It does not construct an agent session.
+
+Session hosts supply `openPullRequest` to navigate to the PR entity's Overview or
+Diff tab. While a PR is linked, the embedded pane stays hidden and does not fetch
+its patch, even if the URL still contains an old pane layout. `open-pull-request.ts`
+resolves the synced foreign entity and uses normal responsive split navigation,
+including selecting the requested tab when an existing PR split is reused.
 
 Layout and diff style are controlled accessor/setter pairs. Hosts using the app
 router can use `url-diff-state.ts`; embedded viewers can provide local signals.

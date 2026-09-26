@@ -131,6 +131,17 @@ describe('ChangesPane', () => {
     controller().sendQueuedNotes();
     expect(context.sent).toEqual([]);
     expect(screen.queryByRole('button', { name: 'Send to agent' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Close the changes pane' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Expand changes to the full width' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Bring the session back' })
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'Split' }));
+    expect(controller().diffStyle()).toBe('split');
   });
 
   it('shows refresh failures without discarding the current diff and allows retry', async () => {
@@ -198,7 +209,7 @@ describe('ChangesPane', () => {
     expect(
       screen.queryByRole('button', { name: 'Create pull request' })
     ).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'View pull request' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open on GitHub' }));
     expect(context.opened).toEqual([url]);
     expect(context.sent).toEqual([]);
   });
@@ -223,6 +234,34 @@ describe('ChangesPane', () => {
 });
 
 describe('session controls', () => {
+  it('opens the PR diff from both entry points, ignoring a stale pane layout', () => {
+    const context = readyContext();
+    const openPullRequest = vi.fn();
+    context.host.openPullRequest = openPullRequest;
+    context.setPullRequestUrl('https://github.com/macro-inc/macro/pull/123');
+    const { controller } = mount(context, () => (
+      <>
+        <ChangesToggle />
+        <ChangesHandoff />
+      </>
+    ));
+    controller().layout.spotlight();
+    const button = screen.getByRole('button', { name: /View diff/ });
+    expect(button.hasAttribute('aria-pressed')).toBe(false);
+    expect(controller().model.patchStatus()).toBe('idle');
+    fireEvent.click(button);
+    expect(openPullRequest).toHaveBeenLastCalledWith('diff');
+    fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+    expect(openPullRequest).toHaveBeenLastCalledWith('diff');
+    fireEvent.click(screen.getByRole('button', { name: 'Pull request #123' }));
+    expect(openPullRequest).toHaveBeenLastCalledWith('overview');
+    expect(context.opened).toEqual([]);
+
+    context.setPullRequestUrl(undefined);
+    expect(controller().reviewInPullRequest()).toBe(false);
+    expect(screen.getByRole('button', { name: /Changes/ })).toBeTruthy();
+  });
+
   it('toggles the pane and shows addition/deletion totals', () => {
     const context = readyContext();
     const { controller } = mount(context, () => <ChangesToggle />);

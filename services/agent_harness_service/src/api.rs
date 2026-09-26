@@ -71,6 +71,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     claude_auth: Router,
     sharing: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
+    pull_request_changes: Router,
 }
 
 impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
@@ -96,6 +97,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             claude_auth: Router::new(),
             sharing: Router::new(),
             changes,
+            pull_request_changes: Router::new(),
         }
     }
 
@@ -108,6 +110,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach session-sharing routes with their independent domain service.
     pub fn with_sharing(mut self, router: Router) -> Self {
         self.sharing = router;
+        self
+    }
+
+    /// Attach standalone pull request reads using the viewer's GitHub access.
+    pub fn with_pull_request_changes(mut self, router: Router) -> Self {
+        self.pull_request_changes = router;
         self
     }
 }
@@ -208,6 +216,7 @@ where
         .merge(agent_models_router(states.models))
         .merge(agent_repositories_router(states.repositories))
         .merge(states.claude_auth)
+        .merge(states.pull_request_changes)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }
 

@@ -122,7 +122,7 @@ export function ChangesPane() {
 
   return (
     <section
-      class="relative flex h-full min-w-0 flex-col bg-panel"
+      class="@container relative flex h-full min-w-0 flex-col bg-panel"
       aria-label="Changes"
     >
       <ChangesHeader
@@ -137,9 +137,9 @@ export function ChangesPane() {
         }}
         refreshing={model.refreshing() || state().kind === 'capturing'}
         onRefresh={() => void model.refresh()}
-        onBack={layout.backToSplit}
-        onSpotlight={layout.spotlight}
-        onClose={layout.close}
+        onBack={context.host.agent ? layout.backToSplit : undefined}
+        onSpotlight={context.host.agent ? layout.spotlight : undefined}
+        onClose={context.host.agent ? layout.close : undefined}
       />
       <Show when={model.refreshError()}>
         {(message) => (

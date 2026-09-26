@@ -5,7 +5,6 @@ import {
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import { useBlockId } from '@core/block';
 import { openExternalUrl } from '@core/util/url';
 import GithubIcon from '@icon/mcp-github.svg';
 import GitMerge from '@phosphor/git-merge.svg';
@@ -79,10 +78,10 @@ export function PrStatusChip(props: { status: string; class?: string }) {
  * tabs — matching the other block types.
  */
 export function PrSplitHeader(props: {
+  foreignEntityId: string;
   prRef: PrRef;
   enrichment: GithubPullRequest | undefined;
 }) {
-  const blockId = useBlockId();
   const title = () => props.enrichment?.name ?? prDisplayName(props.prRef);
   const githubUrl = () => props.enrichment?.url ?? prHtmlUrl(props.prRef);
 
@@ -113,7 +112,7 @@ export function PrSplitHeader(props: {
       <ResponsiveBlockToolbar
         tools={tools}
         ops={ops}
-        id={blockId}
+        id={props.foreignEntityId}
         itemType="foreign"
         name={title()}
       />

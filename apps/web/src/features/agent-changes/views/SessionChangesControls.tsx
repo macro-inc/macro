@@ -20,14 +20,18 @@ export function ChangesToggle() {
   return (
     <Show when={available()}>
       <ChangesToggleButton
-        open={layout.changesVisible()}
+        open={!controller.reviewInPullRequest() && layout.changesVisible()}
+        navigates={controller.reviewInPullRequest()}
         additions={counts()?.additions ?? 0}
         deletions={counts()?.deletions ?? 0}
         capturing={
           !context.host.pullRequestChangeCounts &&
           model.state().kind === 'capturing'
         }
-        onToggle={layout.toggle}
+        onToggle={() => {
+          if (controller.reviewInPullRequest()) controller.openReview();
+          else layout.toggle();
+        }}
       />
     </Show>
   );
@@ -40,7 +44,7 @@ export function ChangesHandoff() {
   const { available, layout, model, review, context } = controller;
   const visible = () =>
     available() &&
-    !layout.changesVisible() &&
+    (controller.reviewInPullRequest() || !layout.changesVisible()) &&
     model.files().length > 0 &&
     !controller.handoffDismissed();
   return (
@@ -52,10 +56,14 @@ export function ChangesHandoff() {
         linkedUrl={context.host.pullRequestUrl()}
         onReview={() => {
           const first = model.files()[0];
-          layout.open();
+          controller.openReview();
           if (first) review.activate(first.path);
         }}
         onViewPullRequest={() => {
+          if (controller.reviewInPullRequest()) {
+            context.host.openPullRequest?.('overview');
+            return;
+          }
           const url = context.host.pullRequestUrl();
           if (url) context.host.openExternal(url);
         }}
@@ -69,7 +77,7 @@ export function ReviewNotesDock() {
   const controller = useOptionalAgentChanges();
   const [expanded, setExpanded] = createSignal(false);
   if (!controller) return null;
-  const { available, review, context, layout } = controller;
+  const { available, review, context } = controller;
   return (
     <Show
       when={available() && context.host.agent && review.queued().length > 0}
@@ -83,7 +91,7 @@ export function ReviewNotesDock() {
         onRemove={review.removeNote}
         onSend={controller.sendQueuedNotes}
         onOpenNote={(note) => {
-          layout.open();
+          controller.openReview();
           review.activate(note.path);
         }}
       />

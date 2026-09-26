@@ -626,58 +626,47 @@ Existing announcement chips remain locked to the turn they announced.
 
 ### Reviewing a linked GitHub pull request
 
-Sessions with a linked GitHub pull request capture that PR's diff when each
-turn ends, regardless of the coding runtime. Unpushed workspace changes and
-branches without a PR are not included. The session header gains a **Changes**
-toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it opens a resizable
-**Changes** pane beside the transcript (drag the 1px divider between them).
-Chat sessions on Macro's in-memory harness have no repository, so they show
-none of this: no **Changes** toggle, pane, hand-off card, or review-notes chip,
-and the title menu offers **Open repository** only when the session has one.
-The URL's `diff` query parameter stores each session's pane state and diff
-layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
-`split` for side-by-side diffs). Copying the URL preserves that view; reload
-and Back/Forward restore it. A plain session URL starts with Changes closed.
-Divider width, collapsed files, and review notes stay local.
-The pane header shows a `head → base` branch pill, a **Unified / Split**
-segmented control (`aria-label="Diff layout"`), a refresh button, the
-**View pull request** button (opens GitHub), and **Expand changes to the full width**
-(spotlight; **Bring the session back** returns to the split) and **Close the
-changes pane**. Below it is a **Collapse all / Expand all** button.
-The body is a file tree (`nav[aria-label="Changed files"]`, directories
-compressed along single-child chains, status letters A/M/D/R and +/− counts)
-next to a scrollable stack of file cards. Expanded cards keep their full height;
-**Collapse all / Expand all** hides or restores their bodies. Each card's header has a disclosure
-caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; hover a
-line and click the accent **+** in the gutter (drag for a range) to leave a
-review note for the agent (`aria-label="Review note"`; `Cmd/Ctrl+Enter` adds,
-`Escape` cancels). Notes hang under their line as "queued for the agent" and a
-**N review notes queued · Send to agent** chip appears above the composer.
-The chip's count row expands (`aria-expanded`) to show each queued note's
-file, line, and text so the reviewer can read or edit them before sending;
-**Send to agent** then posts one prompt listing every non-empty note by file
-and line and marks them "sent to agent". Sending a typed composer message
-while notes are queued includes those notes in the same prompt and marks them
-sent — a second Enter does not post them again. Clicking a note's path opens
-that file in the Changes pane. Notes never go to GitHub. Collapsed files and
-unsent notes persist per session in localStorage; a new capture expands all
-files.
+A coding session with a linked GitHub pull request shows **View diff** in its
+header with the PR's green additions and red deletions (`+N −M`). Clicking it
+opens the PR foreign entity on its **Diff** tab. The app inserts a split when
+there is room and replaces the current split on a small screen. If the PR is
+already open, it focuses that entity and selects Diff instead of duplicating it.
+**Review changes** on the handoff card opens the same Diff tab; **Pull request
+#N** opens its Overview. A newly created PR may still be syncing into Macro;
+an attempted open explains that and can be retried once sync finishes.
 
-The session header's **Changes** pill and sidebar totals display the linked
-PR's `additions` and `deletions` returned by the GitHub API, without summing
-transcript edits. The sidebar lists files from the captured PR diff. Counts
-refresh when a capture changes and every 30 seconds while the session is open.
-Zero-valued counts and unavailable GitHub statistics are hidden; a missing PR
-or failed GitHub request never falls back to estimated transcript totals.
+The PR entity has **Overview** and **Diff** tabs. Overview retains its description,
+metadata, and discussion. Diff loads the PR directly using the viewer's GitHub
+repository access, including PRs that have no coding session. Unpushed workspace
+changes and branches without a PR are not included. The URL's namespaced `diff`
+parameter preserves each PR's tab and Unified/Split preference across reload and
+Back/Forward. Collapsed files stay local to that PR.
 
-While the pane is closed and a capture has files, a **Changes ready to
-review** card sits above the composer with **Review changes**, **Pull request
-#N** (opens GitHub), and **Dismiss**. With no linked PR, the pane explains
-that a GitHub PR is required. Ask the agent to open one and register its URL
-with `set_pull_request`, then use **Refresh changes**. An unavailable or
-oversized PR is explained in the pane; there is no branch or container fallback.
-Refresh request failures show a retry banner while keeping the last diff visible.
-The pane does not create PRs or generate their descriptions.
+The diff header shows a `head → base` branch pill, a **Unified / Split** segmented
+control (`aria-label="Diff layout"`), **Refresh pull request changes**, and
+**Open on GitHub**. The PR viewer has no session spotlight or close-pane buttons.
+Below it, **Collapse all / Expand all** controls the file cards. The body has a
+file tree (`nav[aria-label="Changed files"]`, directories compressed along
+single-child chains, status letters A/M/D/R and +/− counts) beside a scrollable
+stack of file cards. Each card has a disclosure caret, path, counts, and
+**Copy path**. Diffs render with Pierre. The tree is hidden in narrow splits to
+leave room for the diffs. The standalone PR viewer is read-only and does not send
+review notes to an agent or GitHub.
+
+The session header and sidebar totals use the linked PR's GitHub API statistics,
+without estimating from transcript edits. The sidebar lists files from its last
+captured PR diff. Counts refresh when a capture changes and every 30 seconds
+while the session is open. Zero or unavailable statistics are hidden.
+
+Coding sessions without a linked PR retain the embedded Changes pane, which
+explains that a GitHub PR is required. Ask the agent to open one and register its
+URL with `set_pull_request`. Once linked, review actions use the PR entity and
+old saved pane layouts cannot reopen the embedded diff. Macro in-memory chat
+sessions have no repository and show no changes controls.
+
+Loading, empty, unavailable, and oversized PRs have explicit states in the diff
+viewer. Refresh failures preserve the last loaded diff and show a retry banner.
+The viewer does not create PRs or generate their descriptions.
 
 ### Transcript navigation
 

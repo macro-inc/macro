@@ -23,9 +23,9 @@ export function ChangesHeader(props: {
   onViewPullRequest: () => void;
   refreshing: boolean;
   onRefresh: () => void;
-  onBack: () => void;
-  onSpotlight: () => void;
-  onClose: () => void;
+  onBack?: () => void;
+  onSpotlight?: () => void;
+  onClose?: () => void;
 }) {
   const pill = () => {
     const url = props.pullRequestUrl;
@@ -35,12 +35,12 @@ export function ChangesHeader(props: {
   };
   return (
     <header class="flex h-12 shrink-0 items-center gap-1.5 border-b border-edge pr-2 pl-2.5">
-      <Show when={props.spotlit}>
+      <Show when={props.spotlit && props.onBack}>
         <Button
           variant="ghost"
           size="icon-sm"
           tooltip="Bring the session back"
-          onClick={() => props.onBack()}
+          onClick={props.onBack}
         >
           <ArrowLeftIcon />
         </Button>
@@ -52,7 +52,7 @@ export function ChangesHeader(props: {
       <Show when={pill()}>
         {(text) => (
           <span
-            class="inline-flex h-5.5 max-w-64 items-center truncate rounded-full border border-edge-muted px-2 font-mono text-[11px] text-ink-subtle max-lg:hidden"
+            class="inline-flex h-5.5 max-w-64 items-center truncate rounded-full border border-edge-muted px-2 font-mono text-[11px] text-ink-subtle @max-[720px]:hidden"
             title={text()}
           >
             {text()}
@@ -69,7 +69,7 @@ export function ChangesHeader(props: {
           { value: 'split', label: 'Split' },
         ]}
         onChange={props.onDiffStyle}
-        class="max-md:hidden"
+        class="@max-[560px]:hidden"
       />
       <Button
         variant="ghost"
@@ -85,33 +85,39 @@ export function ChangesHeader(props: {
           variant="outline"
           size="sm"
           class="gap-1.5"
+          aria-label="Open on GitHub"
+          tooltip="Open on GitHub"
           onClick={props.onViewPullRequest}
         >
           <GitPullRequestIcon class="size-3.5" />
-          <span>View pull request</span>
+          <span class="@max-[560px]:hidden">Open on GitHub</span>
         </Button>
       </Show>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-pressed={props.spotlit}
-        tooltip={
-          props.spotlit
-            ? 'Back to the split'
-            : 'Expand changes to the full width'
-        }
-        onClick={() => props.onSpotlight()}
-      >
-        {props.spotlit ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        tooltip="Close the changes pane"
-        onClick={() => props.onClose()}
-      >
-        <XIcon />
-      </Button>
+      <Show when={props.onSpotlight}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-pressed={props.spotlit}
+          tooltip={
+            props.spotlit
+              ? 'Back to the split'
+              : 'Expand changes to the full width'
+          }
+          onClick={props.onSpotlight}
+        >
+          {props.spotlit ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
+        </Button>
+      </Show>
+      <Show when={props.onClose}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          tooltip="Close the changes pane"
+          onClick={props.onClose}
+        >
+          <XIcon />
+        </Button>
+      </Show>
     </header>
   );
 }

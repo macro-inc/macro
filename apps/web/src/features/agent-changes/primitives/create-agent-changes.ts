@@ -23,6 +23,8 @@ export type AgentChangesController = {
   context: AgentChangesContext;
   /** False when the host can never have changes; every control renders nothing. */
   available: Accessor<boolean>;
+  reviewInPullRequest: Accessor<boolean>;
+  openReview: () => void;
   layout: PaneLayoutController;
   model: ChangesModel;
   /** Authoritative PR totals shared by the session header and sidebar. */
@@ -58,6 +60,8 @@ export function createAgentChanges(options: {
   ];
 }): AgentChangesController {
   const { source, host } = options.context;
+  const reviewInPullRequest = () =>
+    !!host.openPullRequest && !!host.pullRequestUrl();
   const layout = createPaneLayout({
     sessionId: host.scopeKey,
     storage: options.storage,
@@ -65,7 +69,7 @@ export function createAgentChanges(options: {
   });
   const model = createChangesModel({
     source,
-    changesVisible: layout.changesVisible,
+    changesVisible: () => !reviewInPullRequest() && layout.changesVisible(),
   });
   const review = createReviewState({
     sessionId: host.scopeKey,
@@ -99,6 +103,11 @@ export function createAgentChanges(options: {
   return {
     context: options.context,
     available: () => host.canHaveChanges?.() ?? true,
+    reviewInPullRequest,
+    openReview: () => {
+      if (reviewInPullRequest()) host.openPullRequest?.('diff');
+      else layout.open();
+    },
     layout,
     model,
     changeCounts: () =>

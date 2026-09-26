@@ -65,4 +65,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 agent_session = { path = "../agent_session", default-features = false, features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
+model_user = { path = "../model_user" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tower = { workspace = true }

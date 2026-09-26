@@ -14,12 +14,14 @@ const SESSION_MIN_PX = 320;
 const CHANGES_MIN_PX = 400;
 
 export function AgentChangesSplit(props: ParentProps) {
-  const { available, layout } = useAgentChanges();
+  const { available, layout, reviewInPullRequest } = useAgentChanges();
   let zone: ResizeZoneCtx | undefined;
   // A host that can never have changes keeps the session alone on screen,
   // whatever a stale URL or persisted layout asks for.
-  const sessionVisible = () => !available() || layout.sessionVisible();
-  const changesVisible = () => available() && layout.changesVisible();
+  const sessionVisible = () =>
+    !available() || reviewInPullRequest() || layout.sessionVisible();
+  const changesVisible = () =>
+    available() && !reviewInPullRequest() && layout.changesVisible();
 
   return (
     <Resize.Zone

@@ -5,20 +5,26 @@ import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { createMethodRegistration } from '@core/orchestrator';
+import { blockHandleSignal } from '@core/signal/load';
 import { DebouncedNotificationReadMarker } from '@notifications';
+import { queryReadyGate } from '@queries/gate';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
-import { cn, Layer, Scroll } from '@ui';
-import { type Accessor, createMemo, Show } from 'solid-js';
+import { Button, cn, Layer, Scroll } from '@ui';
+import { type Accessor, createMemo, onMount, Show, Suspense } from 'solid-js';
 
+import { createUrlDiffState } from '../../agent-changes/url-diff-state';
+import { type PrView, PrViews } from '../components/pr-views';
 import { createPrDiscussionSource } from '../data/prDiscussionSource';
 import { usePrForeignEntityQuery } from '../data/queries';
+import { PrChanges } from '../pr-changes';
 import {
   cleanGithubMarkdown,
   githubAvatarUrl,
   githubDisplayLogin,
 } from '../util/githubMarkdown';
 import type { PrRef } from '../util/prKey';
-import { prDisplayName } from '../util/prKey';
+import { prDisplayName, prHtmlUrl } from '../util/prKey';
 import {
   PrDescriptionSkeleton,
   PrMetadataSkeleton,
@@ -29,28 +35,63 @@ import { PR_PILL_CLASS, PrSplitHeader, PrStatusChip } from './PrSplitHeader';
 import { PrTimeline } from './PrTimeline';
 import { PrSidePanelSections } from './sidepanel/PrSidePanelSections';
 
-export default function PrBlock() {
+export default function PrBlock(props: { view?: unknown }) {
   const blockId = useBlockId();
+  const blockHandle = blockHandleSignal.get;
+  const diffState = createUrlDiffState(() => `pr:${blockId}`);
+  const setView = (view: PrView) => {
+    const layout = view === 'diff' ? 'changes-only' : 'agent-only';
+    if (diffState.layout() !== layout) diffState.setLayout(layout);
+  };
+
+  // Navigation params aim a newly opened or already mounted PR at its diff.
+  // The URL owns subsequent tab changes and restores them after reload.
+  onMount(() => {
+    if (props.view === 'diff' || props.view === 'overview') setView(props.view);
+  });
+  createMethodRegistration(blockHandle, {
+    goToLocationFromParams: async (params: Record<string, unknown>) => {
+      if (params.view === 'diff' || params.view === 'overview') {
+        setView(params.view);
+      }
+    },
+  });
 
   return (
     <Show when={blockId}>
-      {(id) => <PrBlockContent foreignEntityId={id()} />}
+      {(id) => (
+        <Suspense fallback={<PrTitleSkeleton />}>
+          <PrBlockContent
+            foreignEntityId={id()}
+            view={diffState.layout() === 'agent-only' ? 'overview' : 'diff'}
+            onViewChange={setView}
+            diffStyle={diffState.diffStyle()}
+            onDiffStyleChange={diffState.setDiffStyle}
+          />
+        </Suspense>
+      )}
     </Show>
   );
 }
 
-function PrBlockContent(props: { foreignEntityId: string }) {
+function PrBlockContent(props: {
+  foreignEntityId: string;
+  view: PrView;
+  onViewChange: (view: PrView) => void;
+  diffStyle: 'unified' | 'split';
+  onDiffStyleChange: (style: 'unified' | 'split') => void;
+}) {
   const notificationSource = useGlobalNotificationSource();
   const foreignEntityQuery = usePrForeignEntityQuery(
     () => props.foreignEntityId
   );
 
-  const prRef = createMemo(() => foreignEntityQuery.data?.prRef);
-  const pullRequest = createMemo(() => foreignEntityQuery.data?.pullRequest);
+  const data = () =>
+    queryReadyGate(foreignEntityQuery) ? foreignEntityQuery.data : undefined;
+  const prRef = () => data()?.prRef;
+  const pullRequest = () => data()?.pullRequest;
 
-  const loadFailed = createMemo(
-    () => !pullRequest() && !!foreignEntityQuery.error
-  );
+  const loadFailed = () => foreignEntityQuery.isError;
 
   // Block-lifetime local Macro discussion (prototype-only, lost on reload).
   const discussionSource = createPrDiscussionSource();
@@ -63,43 +104,89 @@ function PrBlockContent(props: { foreignEntityId: string }) {
       />
       <SidePanel.Layout>
         <PrSidePanelSections enrichment={pullRequest} />
-        <div class="flex flex-col size-full min-w-0">
+        <div class="flex flex-col size-full min-w-0 min-h-0">
           <Show when={prRef()}>
             {(ref) => (
-              <PrSplitHeader prRef={ref()} enrichment={pullRequest()} />
+              <PrSplitHeader
+                foreignEntityId={props.foreignEntityId}
+                prRef={ref()}
+                enrichment={pullRequest()}
+              />
             )}
           </Show>
 
-          <Scroll class="flex-1 min-h-0">
-            <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
-              <Show
-                when={prRef()}
-                fallback={
-                  <>
-                    <PrTitleSkeleton />
-                    <div class="spacer h-3" />
-                    <PrMetadataSkeleton />
-                    <PrDescriptionSkeleton />
-                    <PrTimelineSkeleton />
-                  </>
-                }
-              >
-                {(ref) => (
-                  <>
-                    <PrTitle prRef={ref()} pullRequest={pullRequest} />
-                    <div class="spacer h-3" />
-                    <PrMetadata prRef={ref()} pullRequest={pullRequest} />
-                    <PrDescription pullRequest={pullRequest} />
-                    <PrLoadErrorBanner loadFailed={loadFailed} />
-                    <PrTimeline
-                      githubItems={pullRequest()?.comments ?? []}
-                      source={discussionSource}
+          <Show
+            when={!loadFailed() || data()}
+            fallback={
+              <div class="p-6 text-sm text-ink-muted">
+                <p>Couldn't load this pull request.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="mt-3"
+                  onClick={() => void foreignEntityQuery.refetch()}
+                >
+                  Try again
+                </Button>
+              </div>
+            }
+          >
+            <PrViews
+              view={props.view}
+              onViewChange={props.onViewChange}
+              diff={
+                <Show
+                  when={prRef()}
+                  fallback={
+                    <div class="p-6 text-sm text-ink-muted">
+                      Loading pull request…
+                    </div>
+                  }
+                >
+                  {(ref) => (
+                    <PrChanges
+                      foreignEntityId={props.foreignEntityId}
+                      pullRequestUrl={prHtmlUrl(ref())}
+                      diffStyle={props.diffStyle}
+                      onDiffStyleChange={props.onDiffStyleChange}
                     />
-                  </>
-                )}
-              </Show>
-            </div>
-          </Scroll>
+                  )}
+                </Show>
+              }
+              overview={
+                <Scroll class="flex-1 min-h-0">
+                  <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
+                    <Show
+                      when={prRef()}
+                      fallback={
+                        <>
+                          <PrTitleSkeleton />
+                          <div class="spacer h-3" />
+                          <PrMetadataSkeleton />
+                          <PrDescriptionSkeleton />
+                          <PrTimelineSkeleton />
+                        </>
+                      }
+                    >
+                      {(ref) => (
+                        <>
+                          <PrTitle prRef={ref()} pullRequest={pullRequest} />
+                          <div class="spacer h-3" />
+                          <PrMetadata prRef={ref()} pullRequest={pullRequest} />
+                          <PrDescription pullRequest={pullRequest} />
+                          <PrLoadErrorBanner loadFailed={loadFailed} />
+                          <PrTimeline
+                            githubItems={pullRequest()?.comments ?? []}
+                            source={discussionSource}
+                          />
+                        </>
+                      )}
+                    </Show>
+                  </div>
+                </Scroll>
+              }
+            />
+          </Show>
         </div>
       </SidePanel.Layout>
     </div>

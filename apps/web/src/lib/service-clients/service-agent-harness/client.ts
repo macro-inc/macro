@@ -16,6 +16,7 @@ import type {
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
+  PullRequestChangesResponse,
   SandboxSize,
   SandboxSizeBody,
   SharePermissionV2,
@@ -235,6 +236,15 @@ export const agentHarnessServiceClient = {
     return fetchWithToken<AgentSessionChangesResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/changes`,
       { method: 'GET' }
+    );
+  },
+
+  /** A standalone PR's summary and matching patch, using the viewer's GitHub access. */
+  getPullRequestChanges(url: string) {
+    const params = new URLSearchParams({ url });
+    return fetchWithToken<PullRequestChangesResponse>(
+      `${agentHarnessHost}/pull-requests/changes?${params}`,
+      { method: 'GET', errorResponseHandler: sessionError }
     );
   },
 

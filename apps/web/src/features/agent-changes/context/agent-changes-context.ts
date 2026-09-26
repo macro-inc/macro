@@ -62,6 +62,8 @@ export type ChangesHost = {
   >;
   /** The pull request represented by the source. */
   pullRequestUrl: Accessor<string | undefined>;
+  /** Session hosts open the linked PR entity instead of an embedded pane. */
+  openPullRequest?: (view: 'overview' | 'diff') => void;
   openExternal: (url: string) => void;
   copyText: (text: string) => Promise<boolean>;
   notify: (message: string, tone: 'success' | 'failure') => void;

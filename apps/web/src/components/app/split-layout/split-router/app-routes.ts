@@ -51,7 +51,8 @@ export const appSplitRoutes = defineRoutes({
     ...debugRoutes,
     legacySplitRoute,
   ],
-  globalSearch: ['referral_code'],
+  // The shared diff codec namespaces each viewer by entity inside this value.
+  globalSearch: ['referral_code', 'diff'],
   unmatchedPathHandlers: [handleLegacySplitPath],
   defaultEntry: () => ({
     location: { route: { matches: [{ id: 'view-inbox', params: {} }] } },

@@ -19,11 +19,13 @@ import type {
   CreateAgentSessionResponse,
   EditQueuedActionRequest,
   EmptyRequest,
+  GetPullRequestChangesParams,
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsRequest,
   PreviewAgentSessionsResponse,
+  PullRequestChangesResponse,
   RenameAgentSessionRequest,
   SandboxSizeBody,
   SharePermissionV2,
@@ -1670,4 +1672,100 @@ export const start = async (
 
   const data: startResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as startResponse;
+};
+
+/**
+ * @summary Read a GitHub PR through the authenticated viewer's repository access.
+ */
+export type getPullRequestChangesResponse200 = {
+  data: PullRequestChangesResponse;
+  status: 200;
+};
+
+export type getPullRequestChangesResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type getPullRequestChangesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getPullRequestChangesResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getPullRequestChangesResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type getPullRequestChangesResponse422 = {
+  data: string;
+  status: 422;
+};
+
+export type getPullRequestChangesResponse502 = {
+  data: string;
+  status: 502;
+};
+
+export type getPullRequestChangesResponseSuccess =
+  getPullRequestChangesResponse200 & {
+    headers: Headers;
+  };
+export type getPullRequestChangesResponseError = (
+  | getPullRequestChangesResponse400
+  | getPullRequestChangesResponse401
+  | getPullRequestChangesResponse403
+  | getPullRequestChangesResponse404
+  | getPullRequestChangesResponse422
+  | getPullRequestChangesResponse502
+) & {
+  headers: Headers;
+};
+
+export type getPullRequestChangesResponse =
+  | getPullRequestChangesResponseSuccess
+  | getPullRequestChangesResponseError;
+
+export const getGetPullRequestChangesUrl = (
+  params: GetPullRequestChangesParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/pull-requests/changes?${stringifiedParams}`
+    : `/pull-requests/changes`;
+};
+
+export const getPullRequestChanges = async (
+  params: GetPullRequestChangesParams,
+  options?: RequestInit
+): Promise<getPullRequestChangesResponse> => {
+  const res = await fetch(getGetPullRequestChangesUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getPullRequestChangesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getPullRequestChangesResponse;
 };

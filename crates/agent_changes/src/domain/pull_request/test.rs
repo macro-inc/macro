@@ -10,6 +10,7 @@ use std::sync::Mutex;
 struct Reader {
     calls: Mutex<Vec<(String, PullRequestRef)>>,
     error: Option<fn() -> CompareError>,
+    patch: Option<String>,
 }
 
 impl PullRequestDiffReader for Reader {
@@ -26,7 +27,7 @@ impl PullRequestDiffReader for Reader {
             return Err(error());
         }
         Ok(PullRequestDiff {
-            patch: "PR diff".to_owned(),
+            patch: self.patch.clone().unwrap_or_else(|| "PR diff".to_owned()),
             range: ChangesetRange {
                 repository: Some(pr.repository.https_url()),
                 base: GitRef::named("release"),
@@ -34,6 +35,68 @@ impl PullRequestDiffReader for Reader {
             },
         })
     }
+}
+
+#[tokio::test]
+async fn standalone_pr_uses_the_viewers_access_and_returns_matching_summary_and_patch() {
+    let patch =
+        "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1,2 @@\n-old\n+new\n+line\n";
+    let service = PullRequestChanges::new(Reader {
+        patch: Some(patch.to_owned()),
+        ..Reader::default()
+    });
+    let session = test_agent_session(AgentSessionId::TEST_A);
+    let viewer = session.owner_user().unwrap();
+    let reference = PullRequestRef::parse("https://github.com/upstream/repo/pull/42").unwrap();
+    let snapshot = service.changes(viewer, &reference).await.unwrap();
+    assert_eq!(snapshot.patch.trim(), patch.trim());
+    assert_eq!(snapshot.files.len(), 1);
+    assert_eq!(snapshot.files[0].path, "a.txt");
+    assert_eq!((snapshot.additions, snapshot.deletions), (2, 1));
+    assert_eq!(snapshot.range.base.name.as_deref(), Some("release"));
+    assert_eq!(snapshot.range.head.name.as_deref(), Some("fork-fix"));
+    assert!(!snapshot.truncated);
+    assert_eq!(
+        *service.reader.calls.lock().unwrap(),
+        vec![(viewer.to_string(), reference)]
+    );
+}
+
+#[tokio::test]
+async fn standalone_pr_preserves_repository_access_denials() {
+    let service = PullRequestChanges::new(Reader {
+        error: Some(|| CompareError::Unavailable),
+        ..Reader::default()
+    });
+    let session = test_agent_session(AgentSessionId::TEST_A);
+    let reference = PullRequestRef::parse("https://github.com/upstream/repo/pull/42").unwrap();
+    assert!(matches!(
+        service
+            .changes(session.owner_user().unwrap(), &reference)
+            .await,
+        Err(CompareError::Unavailable)
+    ));
+}
+
+#[tokio::test]
+async fn standalone_pr_applies_the_same_per_file_budget_as_session_captures() {
+    let service = PullRequestChanges::new(Reader {
+        patch: Some(format!(
+            "diff --git a/large.txt b/large.txt\n--- a/large.txt\n+++ b/large.txt\n@@ -0,0 +1 @@\n+{}\n",
+            "a".repeat(MAX_FILE_PATCH_BYTES)
+        )),
+        ..Reader::default()
+    });
+    let session = test_agent_session(AgentSessionId::TEST_A);
+    let reference = PullRequestRef::parse("https://github.com/upstream/repo/pull/42").unwrap();
+    let snapshot = service
+        .changes(session.owner_user().unwrap(), &reference)
+        .await
+        .unwrap();
+    assert!(snapshot.truncated);
+    assert!(snapshot.patch.is_empty());
+    assert!(snapshot.files[0].patch_omitted);
+    assert_eq!(snapshot.additions, 1);
 }
 
 #[tokio::test]

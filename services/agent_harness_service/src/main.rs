@@ -29,6 +29,9 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use agent_changes::domain::pull_request::PullRequestChanges;
 use agent_changes::domain::service::{AgentChangesService, CaptureOnTurnEnd};
 use agent_changes::inbound::axum_router::AgentChangesRouterState;
+use agent_changes::inbound::pull_request::{
+    PullRequestChangesRouterState, pull_request_changes_router,
+};
 use agent_changes::outbound::github_pull_request::GithubPullRequestDiff;
 use agent_changes::outbound::postgres::PgChangesetRepo;
 use agent_changes::outbound::s3::S3ChangesetBlobStore;
@@ -889,7 +892,7 @@ async fn run() -> anyhow::Result<()> {
         )));
     let changes = AgentChangesService::new(
         session_repo.clone(),
-        changes_extractor,
+        changes_extractor.clone(),
         PgChangesetRepo::new(pool.clone()),
         S3ChangesetBlobStore::new(
             macro_aws_config::s3_client().await,
@@ -1038,6 +1041,10 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
     let http_port = config.port;
+    let pull_request_changes = pull_request_changes_router(PullRequestChangesRouterState::new(
+        changes_extractor,
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    ));
     let sharing = agent_session::inbound::axum_router::sharing::agent_session_sharing_router(
         AgentSessionRouterState::new(
             agent_session::domain::sharing::SessionSharingService::new(session_repo.clone()),
@@ -1057,7 +1064,8 @@ async fn run() -> anyhow::Result<()> {
                 changes_state,
             )
             .with_claude_auth(claude_auth)
-            .with_sharing(sharing),
+            .with_sharing(sharing)
+            .with_pull_request_changes(pull_request_changes),
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),

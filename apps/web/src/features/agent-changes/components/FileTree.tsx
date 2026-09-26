@@ -90,7 +90,7 @@ function Rows(props: {
 export function FileTree(props: FileTreeProps) {
   return (
     <nav
-      class="flex w-58 shrink-0 flex-col gap-px overflow-y-auto border-r border-edge-muted px-1.5 pt-2 pb-4 max-md:w-44"
+      class="flex w-58 shrink-0 flex-col gap-px overflow-y-auto border-r border-edge-muted px-1.5 pt-2 pb-4 @max-[720px]:w-44 @max-[560px]:hidden"
       aria-label="Changed files"
     >
       <div class="flex items-center gap-1.5 px-1.5 pt-0.5 pb-1.5 text-[10px] tracking-[0.07em] text-ink-placeholder uppercase">

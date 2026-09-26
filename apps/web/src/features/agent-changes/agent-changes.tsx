@@ -15,6 +15,7 @@ import { createSignal, type ParentProps } from 'solid-js';
 import { useAgentSession } from '../block-agent/context/AgentSessionContext';
 import type { ChangesHost } from './context/agent-changes-context';
 import { AgentChangesControllerProvider } from './context/agent-changes-controller';
+import { createPullRequestOpener } from './open-pull-request';
 import { createAgentChanges } from './primitives/create-agent-changes';
 import { createPullRequestStatsSource } from './queries/pull-request-stats';
 import { createSessionChangesSource } from './queries/session-changes';
@@ -43,6 +44,9 @@ export function AgentChangesProvider(props: ParentProps) {
   const coding = () => isCoderHarness(session.session()?.harness);
   const source = createSessionChangesSource(() =>
     coding() ? session.sessionId() : undefined
+  );
+  const openPullRequest = createPullRequestOpener(() =>
+    coding() ? (session.session()?.pullRequestUrl ?? undefined) : undefined
   );
   const sendPrompt = async (markdown: string) => {
     try {
@@ -73,6 +77,7 @@ export function AgentChangesProvider(props: ParentProps) {
     },
     canHaveChanges: coding,
     pullRequestUrl: () => session.session()?.pullRequestUrl ?? undefined,
+    openPullRequest,
     openExternal: openExternalUrl,
     copyText,
     notify: (message, tone) => {

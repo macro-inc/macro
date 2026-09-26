@@ -1447,6 +1447,96 @@
           }
         ]
       }
+    },
+    "/pull-requests/changes": {
+      "get": {
+        "tags": ["pull-requests"],
+        "summary": "Read a GitHub PR through the authenticated viewer's repository access.",
+        "operationId": "get_pull_request_changes",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "description": "GitHub pull request URL",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PullRequestChangesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2726,6 +2816,21 @@
           "uri": {
             "type": "string",
             "description": "Where the agent can fetch the file."
+          }
+        }
+      },
+      "PullRequestChangesResponse": {
+        "type": "object",
+        "description": "A summary and its matching unified patch, returned as one snapshot.",
+        "required": ["changeset", "patch"],
+        "properties": {
+          "changeset": {
+            "$ref": "#/components/schemas/ChangesetDto",
+            "description": "The files and refs in this read."
+          },
+          "patch": {
+            "type": "string",
+            "description": "The budgeted patch described by the summary."
           }
         }
       },
