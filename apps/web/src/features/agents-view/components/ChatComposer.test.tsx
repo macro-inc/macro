@@ -94,10 +94,26 @@ vi.mock('@core/util/upload', () => ({
   ) => callback(files.map((file) => ({ file }))),
 }));
 
+const resizeCallbacks: ResizeObserverCallback[] = [];
+
+/** Report a content resize the way the browser would for `target`. */
+function resize(target: HTMLElement, height: number) {
+  vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(0, 0, 400, height)
+  );
+  const entry = { target, contentRect: new DOMRect(0, 0, 400, height) };
+  for (const callback of resizeCallbacks)
+    callback([entry as unknown as ResizeObserverEntry], {} as ResizeObserver);
+}
+
 beforeEach(() => {
+  resizeCallbacks.length = 0;
   vi.stubGlobal(
     'ResizeObserver',
     class {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback);
+      }
       observe() {}
       unobserve() {}
       disconnect() {}
@@ -230,6 +246,32 @@ describe('Chat session input', () => {
     const settings = screen.getByRole('group', { name: 'Composer settings' });
     expect(settings.textContent).toBe('Agent');
   });
+  it('does not grow the surface from zero after mounting offscreen', () => {
+    render(() => (
+      <ChatComposer
+        draft=""
+        onDraftChange={vi.fn()}
+        onSend={vi.fn()}
+        selector={<button>Agent</button>}
+      />
+    ));
+    const surface = document.querySelector<HTMLElement>(
+      '[data-agent-composer="chat"]'
+    );
+    const content = document.querySelector<HTMLElement>(
+      '[data-composer-content]'
+    );
+    if (!surface || !content) throw new Error('composer did not render');
+    const parent = content.parentElement;
+    content.remove();
+    resize(content, 0);
+    expect(surface.style.height).toBe('');
+
+    parent?.append(content);
+    resize(content, 49);
+    expect(surface.style.height).toBe('49px');
+  });
+
   it('lets controls inside the composer receive pointer focus', () => {
     render(() => (
       <ChatComposer

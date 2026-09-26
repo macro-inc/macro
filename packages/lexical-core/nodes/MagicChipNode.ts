@@ -95,18 +95,24 @@ export class MagicChipNode extends DecoratorNode<
   __promptedMessage: MagicChipMessage | null;
   __status: MagicChipStatus;
 
+  __cachedDecoratorSignature?: string;
+  __cachedDecoratorComponent?: DecoratorComponent<MagicChipDecoratorProps>;
+
   static getType() {
     return MAGIC_CHIP_NODE_TYPE;
   }
 
   static clone(node: MagicChipNode) {
-    return new MagicChipNode(
+    const clone = new MagicChipNode(
       node.__agentSessionId,
       node.__channelId,
       node.__promptedMessage,
       node.__status,
       node.__key
     );
+    clone.__cachedDecoratorSignature = node.__cachedDecoratorSignature;
+    clone.__cachedDecoratorComponent = node.__cachedDecoratorComponent;
+    return clone;
   }
 
   constructor(
@@ -183,14 +189,22 @@ export class MagicChipNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
+    const signature = JSON.stringify(this.exportComponentProps());
+    if (
+      this.__cachedDecoratorComponent &&
+      this.__cachedDecoratorSignature === signature
+    )
+      return this.__cachedDecoratorComponent;
+    this.__cachedDecoratorSignature = signature;
     const decorator = getDecorator<MagicChipDecoratorProps>(MagicChipNode);
     if (decorator) {
-      return () =>
+      this.__cachedDecoratorComponent = () =>
         decorator({
           ...this.exportComponentProps(),
           key: this.getKey(),
           theme: config.theme,
         });
+      return this.__cachedDecoratorComponent;
     }
   }
 }

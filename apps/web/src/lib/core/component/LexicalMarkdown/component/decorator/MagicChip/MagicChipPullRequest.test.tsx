@@ -26,14 +26,10 @@ vi.mock('@queries/client', async () => {
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getForeignEntityBySource: vi.fn() },
 }));
-vi.mock(
-  '@core/component/LexicalMarkdown/component/decorator/PullRequestMention',
-  () => ({
-    PullRequestEntityLink: (props: { entity: ForeignEntity }) => (
-      <span>{(props.entity.metadata as { status: string }).status}</span>
-    ),
-  })
-);
+const openWithSplit = vi.fn();
+vi.mock('@components/app/split-layout/layout', () => ({
+  useSplitLayout: () => ({ openWithSplit }),
+}));
 
 afterEach(() => {
   cleanup();
@@ -84,7 +80,12 @@ it('keeps an already mounted chip current through late sync and merge', async ()
     id: '019f0000-0000-7000-8000-000000000001',
     foreignEntityId: 'macro-inc/macro/pull/6369',
     foreignEntitySource: 'github_pull_request',
-    metadata: { status: 'open' },
+    metadata: {
+      status: 'open',
+      name: 'Fix reply state',
+      additions: 42,
+      deletions: 0,
+    },
     storedForId: 'macro|wolf@macro.com',
     storedForAuthEntity: 'user',
     createdAt: '2026-09-11T00:00:00Z',
@@ -106,14 +107,29 @@ it('keeps an already mounted chip current through late sync and merge', async ()
   expect(lookup).toHaveBeenCalledTimes(1);
   await handlePullRequestUpdated(entity);
   await vi.advanceTimersByTimeAsync(1);
-  expect(screen.getByText('open')).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: '#6369 · Fix reply state' })
+  ).toBeTruthy();
+  expect(screen.getByLabelText('42 lines added')).toBeTruthy();
+  expect(screen.getByLabelText('0 lines deleted')).toBeTruthy();
   await handlePullRequestUpdated({
     ...entity,
-    metadata: { status: 'merged' },
+    metadata: {
+      status: 'merged',
+      name: 'Fix reply state',
+      additions: 48,
+      deletions: 2,
+    },
     updatedAt: '2026-09-11T00:01:00Z',
   });
   await vi.advanceTimersByTimeAsync(1);
-  expect(screen.getByText('merged')).toBeTruthy();
+  expect(screen.getByLabelText('48 lines added')).toBeTruthy();
+  expect(screen.getByLabelText('2 lines deleted')).toBeTruthy();
+  screen.getByRole('button', { name: '#6369 · Fix reply state' }).click();
+  expect(openWithSplit).toHaveBeenCalledWith(
+    { type: 'pr', id: entity.id },
+    expect.any(Object)
+  );
   rendered.unmount();
   const calls = lookup.mock.calls.length;
   await vi.advanceTimersByTimeAsync(30_000);

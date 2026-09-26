@@ -1,4 +1,5 @@
 import { activityRoute } from '@app/features/activity/route';
+import { DIFF_SEARCH_PARAM } from '@app/features/agent-changes/core/url-state';
 import {
   agentChatsRoute,
   agentsRoute,
@@ -57,7 +58,9 @@ export const appSplitRoutes = defineRoutes({
     ...debugRoutes,
     legacySplitRoute,
   ],
-  globalSearch: ['referral_code'],
+  // The changes viewer keys its entries by host, not by pane, so its key is
+  // owned globally; a route-local one would be dropped on the next commit.
+  globalSearch: ['referral_code', DIFF_SEARCH_PARAM],
   unmatchedPathHandlers: [handleLegacySplitPath],
   defaultEntry: () => ({
     location: { route: { matches: [{ id: 'view-inbox', params: {} }] } },

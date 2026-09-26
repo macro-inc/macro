@@ -32,6 +32,7 @@ export function EmailViewBreadcrumbItem() {
     >
       {(item) => (
         <ViewBreadcrumbs.Button
+          class="shrink-0 rounded-md hover:bg-hover"
           isActive={item.isActive()}
           onClick={item.onSelect}
         >

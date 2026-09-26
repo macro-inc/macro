@@ -1,4 +1,5 @@
-import { createMemo, type FlowComponent, Suspense } from 'solid-js';
+import { DebugSuspense } from '@channel/DebugSuspense';
+import { createMemo, type FlowComponent } from 'solid-js';
 import { QuickAccessContextProvider } from './context';
 import { createQuickAccessValue } from './QuickAccessSource';
 import type {
@@ -49,7 +50,7 @@ const QuickAccessProviderValue: FlowComponent = (props) => {
 };
 
 export const QuickAccessProvider: FlowComponent = (props) => (
-  <Suspense>
+  <DebugSuspense name="QuickAccess.root">
     <QuickAccessProviderValue>{props.children}</QuickAccessProviderValue>
-  </Suspense>
+  </DebugSuspense>
 );

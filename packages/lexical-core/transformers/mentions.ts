@@ -407,6 +407,19 @@ export const I_AGENT_SESSION_MENTION: TextMatchTransformer = {
   },
 };
 
+/** Expanded session references serialize as blocks while preserving their identity. */
+export const I_AGENT_SESSION_CARD: ElementTransformer = {
+  dependencies: [AgentSessionMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof AgentSessionMentionNode) || !node.isExpanded())
+      return null;
+    return buildAgentSessionMentionMarkdown(node.exportComponentProps());
+  },
+  replace: () => false,
+};
+
 // External Agent Session Mentions
 
 export const E_AGENT_SESSION_MENTION: ElementTransformer = {

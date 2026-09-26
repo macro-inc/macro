@@ -33,7 +33,7 @@ function VariantsDemo() {
 function SizesDemo() {
   return (
     <div class="flex flex-wrap items-end gap-3">
-      <For each={['sm', 'md', 'lg'] as const}>
+      <For each={['xs', 'sm', 'md', 'lg'] as const}>
         {(size) => (
           <div class="flex flex-col items-start gap-1.5">
             <span class="font-mono text-xs text-ink-subtle">{size}</span>
@@ -92,7 +92,8 @@ export default defineDoc({
     {
       id: 'sizes',
       title: 'Sizes',
-      description: 'Matches the Button `sm` / `md` / `lg` control sizes.',
+      description:
+        'Matches the Button `xs` / `sm` / `md` / `lg` control sizes.',
       render: SizesDemo,
     },
     {

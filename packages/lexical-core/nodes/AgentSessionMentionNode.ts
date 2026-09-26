@@ -1,5 +1,10 @@
+import { $insertNodeToNearestRootAtCaret } from '@lexical/utils';
 import {
   $applyNodeReplacement,
+  $createParagraphNode,
+  $getSiblingCaret,
+  $isParagraphNode,
+  $isRootOrShadowRoot,
   DecoratorNode,
   type DOMConversion,
   type DOMConversionMap,
@@ -14,7 +19,7 @@ import {
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
-const VERSION = 2;
+const VERSION = 3;
 
 export type AgentSessionMentionInfo = {
   id: string;
@@ -41,12 +46,43 @@ export class AgentSessionMentionNode extends DecoratorNode<
   __mentionUuid: string | undefined;
   __expanded: boolean;
 
+  __cachedDecoratorSignature?: string;
+  __cachedDecoratorComponent?: DecoratorComponent<AgentSessionMentionDecoratorProps>;
+
   static getType() {
     return 'agent-session-mention';
   }
 
   isInline(): boolean {
-    return true;
+    return !this.__expanded;
+  }
+
+  static transform() {
+    return (node: LexicalNode) => {
+      if (!$isAgentSessionMentionNode(node)) return;
+      const parent = node.getParent();
+      if (!parent) return;
+      if (node.isExpanded() && !$isRootOrShadowRoot(parent)) {
+        $insertNodeToNearestRootAtCaret(
+          node,
+          $getSiblingCaret(node, 'previous')
+        );
+        // Splitting an otherwise empty paragraph must not add blank lines.
+        if ($isParagraphNode(parent)) {
+          for (const sibling of [
+            node.getPreviousSibling(),
+            node.getNextSibling(),
+          ]) {
+            if ($isParagraphNode(sibling) && sibling.isEmpty())
+              sibling.remove();
+          }
+        }
+      } else if (!node.isExpanded() && $isRootOrShadowRoot(parent)) {
+        const paragraph = $createParagraphNode();
+        node.replace(paragraph);
+        paragraph.append(node);
+      }
+    };
   }
 
   isKeyboardSelectable(): boolean {
@@ -54,13 +90,16 @@ export class AgentSessionMentionNode extends DecoratorNode<
   }
 
   static clone(node: AgentSessionMentionNode) {
-    return new AgentSessionMentionNode(
+    const clone = new AgentSessionMentionNode(
       node.__id,
       node.__label,
       node.__mentionUuid,
       node.__key,
       node.__expanded
     );
+    clone.__cachedDecoratorSignature = node.__cachedDecoratorSignature;
+    clone.__cachedDecoratorComponent = node.__cachedDecoratorComponent;
+    return clone;
   }
 
   constructor(
@@ -110,13 +149,13 @@ export class AgentSessionMentionNode extends DecoratorNode<
   }
 
   createDOM(_config: EditorConfig): HTMLElement {
-    const span = document.createElement('span');
+    const span = document.createElement(this.__expanded ? 'div' : 'span');
     span.setAttribute('data-agent-session-mention', 'true');
     return span;
   }
 
-  updateDOM(_prevNode: AgentSessionMentionNode, _dom: HTMLElement): boolean {
-    return false;
+  updateDOM(prevNode: AgentSessionMentionNode, _dom: HTMLElement): boolean {
+    return prevNode.__expanded !== this.__expanded;
   }
 
   static importDOM(): DOMConversionMap<HTMLElement> | null {
@@ -148,6 +187,7 @@ export class AgentSessionMentionNode extends DecoratorNode<
     };
 
     return {
+      div: wrapInCheck({ conversion: convert, priority: 1 }),
       span: wrapInCheck({ conversion: convert, priority: 1 }),
       a: wrapInCheck({ conversion: convert, priority: 1 }),
     };
@@ -164,7 +204,7 @@ export class AgentSessionMentionNode extends DecoratorNode<
   }
 
   exportDOM() {
-    const element = document.createElement('span');
+    const element = document.createElement(this.__expanded ? 'div' : 'span');
     const attrs = this.getDataAttrs();
     for (const [k, v] of Object.entries(attrs)) {
       if (v) {
@@ -194,6 +234,7 @@ export class AgentSessionMentionNode extends DecoratorNode<
   setLabel(label: string | undefined) {
     const self = this.getWritable();
     self.__label = label;
+    self.__cachedDecoratorComponent = undefined;
   }
 
   isExpanded(): boolean {
@@ -201,7 +242,9 @@ export class AgentSessionMentionNode extends DecoratorNode<
   }
 
   setExpanded(expanded: boolean) {
-    this.getWritable().__expanded = expanded;
+    const self = this.getWritable();
+    self.__expanded = expanded;
+    self.__cachedDecoratorComponent = undefined;
   }
 
   getMentionUuid(): string | undefined {
@@ -211,21 +254,30 @@ export class AgentSessionMentionNode extends DecoratorNode<
   setMentionUuid(mentionUuid: string | undefined) {
     const self = this.getWritable();
     self.__mentionUuid = mentionUuid;
+    self.__cachedDecoratorComponent = undefined;
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
+    const signature = JSON.stringify(this.exportComponentProps());
+    if (
+      this.__cachedDecoratorComponent &&
+      this.__cachedDecoratorSignature === signature
+    )
+      return this.__cachedDecoratorComponent;
+    this.__cachedDecoratorSignature = signature;
     const Component = getDecorator<AgentSessionMentionDecoratorProps>(
       AgentSessionMentionNode
     );
 
     if (!Component) return undefined;
 
-    return () =>
+    this.__cachedDecoratorComponent = () =>
       Component({
         ...this.exportComponentProps(),
         key: this.getKey(),
         theme: config.theme,
       });
+    return this.__cachedDecoratorComponent;
   }
 }
 

@@ -217,6 +217,20 @@ mod tests {
     }
 
     #[test]
+    fn session_tool_use_prompt_keeps_the_thread_mechanics_away_from_the_user() {
+        // The thread rule explains review cards and the session view so the
+        // model knows why it writes the draft out. None of that is for the
+        // user, who asked for an email or an event and should just get the
+        // draft and a question - not a note about where their prompt came from.
+        let session = SESSION_TOOL_USE_PROMPT.to_string();
+        assert!(session.contains("The rule above is for you, not the user"));
+        assert!(session.contains("Never explain why you are writing the draft out"));
+        assert!(session.contains("not mention the agent session view, review cards"));
+        assert!(session.contains("does not know or care"));
+        assert!(session.contains("with no preamble about"));
+    }
+
+    #[test]
     fn chat_prompt_names_the_confirmed_send_only_to_rule_it_out() {
         // The chat host has the same toolset and a composer, so the direct
         // tool is visible there and must be steered away from; the direct

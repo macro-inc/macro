@@ -106,7 +106,9 @@ export function createMagicChipModel(props: MagicChipData): {
   presentation: Accessor<MagicChipPresentation>;
   header: Accessor<MagicChipHeader | undefined>;
   interactions: InteractionController;
+  loading: Accessor<boolean>;
 } {
+  const [loading, setLoading] = createSignal(true);
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
   const sessionQuery = useAgentSessionQuery(() => props.agentSessionId);
   // Guard pending data so a cold query cannot suspend the surrounding editor.
@@ -134,17 +136,25 @@ export function createMagicChipModel(props: MagicChipData): {
   // A chip scrolled out of a virtualized list mid-load releases the session,
   // which rejects the load or the snapshot. That is not a fault.
   let released = false;
-  void live
-    .load()
-    .then(() => live.snapshot())
-    .then((snapshot) => {
+  async function loadSession() {
+    try {
+      await live.load();
+      if (released) return;
+
+      const snapshot = await live.snapshot();
+      if (released) return;
+
       setMessages(snapshot.messages);
       setMetadata(snapshot.metadata);
-    })
-    .catch((error: unknown) => {
-      if (released) return;
-      console.error('[magic-chip] session log could not be folded', error);
-    });
+    } catch (error: unknown) {
+      if (!released) {
+        console.error('[magic-chip] session log could not be folded', error);
+      }
+    } finally {
+      if (!released) setLoading(false);
+    }
+  }
+  void loadSession();
 
   onCleanup(() => {
     released = true;
@@ -226,5 +236,5 @@ export function createMagicChipModel(props: MagicChipData): {
       : undefined;
   });
 
-  return { presentation, header, interactions };
+  return { presentation, header, interactions, loading };
 }

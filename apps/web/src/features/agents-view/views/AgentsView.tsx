@@ -311,6 +311,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                 <NewChatPage
                                   roster={rosterSource.roster()}
                                   rosterLoading={rosterSource.loading()}
+                                  availabilityLoading={rosterSource.availabilityLoading()}
                                   onStart={startConversation}
                                   onOpenRoster={openRoster}
                                 />

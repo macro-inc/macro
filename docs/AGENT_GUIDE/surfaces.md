@@ -440,7 +440,24 @@ HTTP and WebSockets. iOS shares the native cache code but is not yet covered by
 that driver.
 
 In the new Email view, ordinary row activation opens the thread inside
-`/app/component/mail`; the Email breadcrumb returns to the filtered list.
+`/app/component/mail`; the view breadcrumb (for example Signal) has a hover
+background and returns to the filtered list. The inline header uses the existing
+email title menu: open the menu button beside the subject for **Ask AI**, **Create a
+Task**, and the other thread actions. On desktop, **Mark as unread**, **Mark done**,
+and **Previous item** / **Next item** sit at the right of that header. The arrows
+follow the current filtered list and disable at its ends. Mark done advances in
+that list. Mark as unread (in the header or title menu) returns to the originating
+list with its tab, inbox, and filters preserved. Mark as not done and Mark as read
+stay on the current thread.
+Opening a saved draft from **Drafts** keeps the subject breadcrumb, title menu,
+and applicable header controls visible above the composer. Verify these remain
+available when returning to Drafts and reopening the draft.
+**Delete** in the title menu moves the thread to Trash and returns to the same
+filtered list. Its toast offers **Undo** to restore the email.
+Verify that opening the title menu, returning to the list, and reopening a thread
+preserve working menu actions and header controls. Repeatedly navigate forward
+and backward, including after returning to the list: the subject and email body
+should remain visible without reloading.
 Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
 the destination for direct links and legacy surfaces. Click a message header to
 expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
@@ -1322,7 +1339,8 @@ without comment permission have no comment composer, so Ask AI remains visible.
 On touch devices, an email thread's floating action bar has Previous email and
 Next email arrows beside the larger Mark done checkmark. The arrows follow the
 source list's filtered order, skip non-email items, and disable at its ends.
-`J` and `K` use that same order in the Email view. They do not wrap; a thread
+`J` / `ArrowRight` and `K` / `ArrowLeft` use that same order in the Email view.
+Arrow keys in a reply editor or other text input keep their normal editing behavior. They do not wrap; a thread
 opened without a source list has disabled arrows.
 Mark done archives the current thread and opens the next email in that same
 filtered list, loading pages until another email is found or the list ends.
