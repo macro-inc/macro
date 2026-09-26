@@ -514,6 +514,9 @@ to open the PR entity in a split; until GitHub has synced the entity the
 chip is a GitHub link instead. The icon and status word follow open /
 merged / closed.
 
+Tool rows show the tool's own name without an MCP server or workspace prefix.
+Chat MCP rows retain their service icon.
+
 Individual tools appear as bare rows with an icon, tool name, optional detail,
 and a right-aligned result summary. The caret on the right opens the results;
 it points right when collapsed and down when expanded. Individual results start

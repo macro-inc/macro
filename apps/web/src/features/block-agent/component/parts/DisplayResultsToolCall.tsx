@@ -33,7 +33,6 @@ export function DisplayResultsToolCall(props: {
       fallback={
         <ToolCard
           title={props.common.label}
-          subtitle={props.common.server}
           status="failed"
           muted
           trailing="Failed"
