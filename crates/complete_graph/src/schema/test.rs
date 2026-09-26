@@ -1187,6 +1187,7 @@ impl TestHarness {
                 self.email_content_reader.clone(),
             ))
             .data(NoOpEntityFavoriteEdgeReader)
+            .data(graphql_soup::FoldersQuery::noop())
             .data(self.activity_reader.clone())
             .data(graphql_activity::entity_activity_loader(
                 self.activity_reader.clone(),
@@ -1440,6 +1441,19 @@ async fn favorites_are_nested_under_the_authenticated_user() {
 
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(response.data.to_string(), "{user: {favorites: []}}");
+    assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn folders_are_nested_under_the_authenticated_user() {
+    let harness = harness();
+
+    let response = harness
+        .execute("{ user { folders { id name parentId ownerId } } }")
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.to_string(), "{user: {folders: []}}");
     assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
 }
 

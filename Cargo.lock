@@ -7789,8 +7789,10 @@ dependencies = [
 name = "graphql_soup"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-graphql",
  "async-stream",
+ "async-trait",
  "axum",
  "axum-extra",
  "chrono",
@@ -7821,6 +7823,7 @@ dependencies = [
  "soup",
  "soup-filter-projection",
  "soup_realtime",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
  "uuid",

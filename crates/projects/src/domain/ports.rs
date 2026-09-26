@@ -60,6 +60,15 @@ pub trait ProjectRepo: Send + Sync + 'static {
         user_id: &str,
     ) -> impl Future<Output = Result<Vec<Project>, Self::Err>> + Send;
 
+    /// List non-deleted projects the user can access via `entity_access`.
+    ///
+    /// Includes pending uploads. Soft-deleted projects are excluded. Order is
+    /// newest `updatedAt` first.
+    fn get_accessible_projects_for_user(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<Project>, Self::Err>> + Send;
+
     /// List non-deleted, pending root projects owned by the user.
     fn get_pending_root_projects(
         &self,
@@ -335,6 +344,14 @@ impl ProjectSearchIndexer for UnavailableProjectSearchIndexer {
 pub trait ProjectService: Send + Sync + 'static {
     /// List projects visible through the user's project history.
     fn list_projects(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<Project>, ProjectError>> + Send;
+
+    /// List non-deleted projects the user can access via `entity_access`.
+    ///
+    /// Includes pending uploads so in-progress folder trees appear in Drive.
+    fn list_accessible_projects(
         &self,
         user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<Project>, ProjectError>> + Send;

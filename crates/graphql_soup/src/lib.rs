@@ -6,6 +6,8 @@
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
+/// User-scoped accessible folders query for the Drive sidebar.
+mod folders;
 /// GraphQL inputs and conversion into Soup domain requests.
 mod inputs;
 /// DataLoader-backed hydration for realtime Soup patches.
@@ -17,6 +19,9 @@ mod objects;
 /// Top-level Soup query resolver.
 mod resolvers;
 
+pub use folders::{
+    FoldersQuery, FoldersQueryError, FoldersQueryReader, NoOpFoldersQueryReader, resolve_folders,
+};
 pub use graphql_common::{GraphqlRequestParts, GraphqlSoupEntityType};
 pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupInput};
 pub use loaders::{
