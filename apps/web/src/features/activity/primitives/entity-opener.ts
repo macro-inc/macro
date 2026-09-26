@@ -33,11 +33,12 @@ export function createEntityOpener(
     const display = context.entityDisplay(entityId, () => type);
     if (!onOpen) return { display };
     const handlers = useSplitNavigationHandler<HTMLDivElement>((event) => {
-      const block = display.blockOrFileType();
+      const projectId = display.nativeProjectId?.();
+      const block = projectId ? 'initiative' : display.blockOrFileType();
       if (!block) return;
       onOpen({
         block,
-        id: entityId(),
+        id: projectId ?? entityId(),
         params: display.linkParams(),
         newSplit: event.shiftKey,
       });

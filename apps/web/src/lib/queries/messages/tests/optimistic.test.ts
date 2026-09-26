@@ -797,3 +797,26 @@ describe('seedThreadRepliesFromMessageTimeline', () => {
     expect(getThreadRepliesFromCache(parent.id, 'msg-3')).toEqual([cached]);
   });
 });
+
+it('removes an empty project discussion root and restores it on failed deletion', () => {
+  const parent = { type: 'initiative' as const, id: 'project-1' };
+  const root = {
+    ...createPaginatedMessage('root', '2026-09-22T12:00:00Z'),
+    parent,
+  };
+  const key = messageKeys.messages(parent, null).queryKey;
+  testQueryClient.setQueryData<MessageTimelineData>(key, {
+    pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+    pageParams: [null],
+  });
+  const context = optimisticDeleteMessage({ parent, message_id: 'root' });
+  expect(
+    testQueryClient.getQueryData<MessageTimelineData>(key)?.pages[0].items
+  ).toEqual([]);
+  expect(context).toBeDefined();
+  rollbackDeleteMessage(parent, context!);
+  expect(
+    testQueryClient.getQueryData<MessageTimelineData>(key)?.pages[0].items[0]
+      .deleted_at
+  ).toBeFalsy();
+});

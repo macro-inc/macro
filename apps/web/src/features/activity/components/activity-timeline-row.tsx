@@ -46,6 +46,7 @@ export function ActivityTimelineRow(props: {
   rail?: RailEnds;
   display?: EntityDisplay;
   propertyDefinition?: PropertyDefinitionDomain;
+  propertyValueLabel?: (raw: unknown) => string | undefined;
   rowProps?: JSX.HTMLAttributes<HTMLDivElement>;
 }) {
   const showActor = () => props.showActor !== false;
@@ -138,6 +139,7 @@ export function ActivityTimelineRow(props: {
                   action={action()}
                   count={entrySize(props.entry)}
                   propertyDefinition={props.propertyDefinition}
+                  propertyValueLabel={props.propertyValueLabel}
                   capitalize={!showActor()}
                 />
               </span>
@@ -156,6 +158,7 @@ export function ActivityTimelineRow(props: {
                       <PropertyChangeText
                         action={change()}
                         definition={props.propertyDefinition}
+                        valueLabel={props.propertyValueLabel}
                         capitalize={!showActor()}
                       />
                     )}

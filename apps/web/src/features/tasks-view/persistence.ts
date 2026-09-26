@@ -17,7 +17,7 @@ export const TASKS_ENTRY_STATE_KEY = 'tasks.view';
 export const TASKS_LIST_ENTRY_STATE_KEY = 'tasks.listState';
 
 const taskTabSchema = z
-  .enum(['my-tasks', 'created-by-me', 'team-tasks'])
+  .enum(['my-tasks', 'created-by-me', 'team-tasks', 'projects'])
   .catch('my-tasks');
 
 const taskGroupBySchema = z.enum([
@@ -101,10 +101,13 @@ function selectEntryState(state: TasksViewState): TasksEntryState {
 function createTasksEntryStorage(options: {
   handle: EntryPersistenceHandle;
   restore: boolean;
+  scopeKey?: string;
 }): PersistenceStorage<TasksViewState> {
   return createEntryPersistenceStorage({
     handle: options.handle,
-    key: TASKS_ENTRY_STATE_KEY,
+    key: options.scopeKey
+      ? `${TASKS_ENTRY_STATE_KEY}:${options.scopeKey}`
+      : TASKS_ENTRY_STATE_KEY,
     restore: (current, stored) => {
       if (!options.restore) return undefined;
 
@@ -125,11 +128,14 @@ function createTasksEntryStorage(options: {
 }
 
 export function createTasksListEntryStorage(
-  handle: EntryPersistenceHandle
+  handle: EntryPersistenceHandle,
+  scopeKey?: string
 ): PersistenceStorage<TasksListStateSnapshot> {
   return createEntryPersistenceStorage({
     handle,
-    key: TASKS_LIST_ENTRY_STATE_KEY,
+    key: scopeKey
+      ? `${TASKS_LIST_ENTRY_STATE_KEY}:${scopeKey}`
+      : TASKS_LIST_ENTRY_STATE_KEY,
     restore: (current, stored) => {
       const result = tasksListStateSchemaWithDefaults.safeParse(stored);
       const restored = result.success
@@ -155,6 +161,7 @@ export type CreateTasksViewPersistenceOptions = {
   userId: Accessor<string | undefined>;
   restoreEntryState?: boolean;
   restorePreferences?: boolean;
+  scopeKey?: string;
 };
 
 /** Persists Tasks navigation and user-level sidebar preferences. */
@@ -171,6 +178,7 @@ export function createTasksViewPersistence(
       createTasksEntryStorage({
         handle: options.handle,
         restore: options.restoreEntryState ?? true,
+        scopeKey: options.scopeKey,
       }),
     ],
   };

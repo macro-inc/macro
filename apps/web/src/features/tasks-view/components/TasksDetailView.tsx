@@ -41,7 +41,11 @@ function TaskDetailTopBar(props: { documentId: string }) {
   );
 }
 
-export function TasksDetailView(props: { task: TaskDetailTarget }) {
+export function TasksDetailView(props: {
+  task: TaskDetailTarget;
+  onClose?: () => void;
+  breadcrumbOrder?: number;
+}) {
   const { source, openTask, closeTask, selectedTask } = useTasksView();
   const panel = useSplitPanelOrThrow();
   const listNavigation = useListDetailNavigation({
@@ -83,13 +87,13 @@ export function TasksDetailView(props: { task: TaskDetailTarget }) {
               <MarkdownDetailBreadcrumbItem
                 value={breadcrumbValue()}
                 metadata={metadata()}
-                order={1}
+                order={props.breadcrumbOrder ?? 1}
                 documentId={props.task.id}
                 kind="task"
                 fallbackName={props.task.fallbackName}
                 ownerId={context.data.metadata.owner}
                 projectId={context.data.metadata.projectId ?? undefined}
-                onClose={closeTask}
+                onClose={props.onClose ?? closeTask}
                 onDuplicate={(id, name) => openTask({ id, fallbackName: name })}
               />
             )}

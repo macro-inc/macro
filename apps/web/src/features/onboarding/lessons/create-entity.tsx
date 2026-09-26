@@ -152,8 +152,10 @@ function CreateEntityDemo(props: LessonContentProps) {
     );
   });
 
-  // Build sandbox versions of all creatable blocks
-  const sandboxBlocks: CreatableBlock[] = CREATABLE_BLOCKS.map((block) => ({
+  // Native projects aren't represented in the onboarding sandbox yet.
+  const sandboxBlocks: CreatableBlock[] = CREATABLE_BLOCKS.filter(
+    (block) => block.blockName !== 'initiative'
+  ).map((block) => ({
     ...block,
     keyDownHandler: () => {
       const sandboxType = BLOCK_TO_SANDBOX[block.blockName];

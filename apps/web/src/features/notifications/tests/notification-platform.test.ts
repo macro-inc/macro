@@ -31,7 +31,10 @@ vi.mock('../notification-resolvers', () => ({
   DefaultUserNameResolver: vi.fn(async () => undefined),
 }));
 
-import { maybeHandlePlatformNotification } from '../notification-platform';
+import {
+  maybeHandlePlatformNotification,
+  toPlatformNotificationData,
+} from '../notification-platform';
 
 function baseNotification(
   overrides: Partial<UnifiedNotification>
@@ -233,4 +236,29 @@ describe('maybeHandlePlatformNotification', () => {
       })
     );
   });
+});
+
+it('uses the project discussion bot display name for platform notifications', async () => {
+  const notification = baseNotification({
+    entity_type: 'initiative',
+    notification_metadata: {
+      tag: 'initiative_discussion',
+      content: {
+        projectName: 'Launch',
+        owner: 'macro|owner@example.com',
+        reason: 'mention',
+        messageId: '01992d2f-8444-7000-8000-000000000001',
+        threadId: '01992d2f-8444-7000-8000-000000000001',
+        text: 'Ready to ship',
+        senderDisplayName: 'Launch agent',
+      },
+    },
+  });
+  const result = await toPlatformNotificationData(
+    notification,
+    async () => undefined,
+    async () => undefined
+  );
+  expect(result?.title).toContain('Launch agent');
+  expect(JSON.stringify(result)).toContain('Launch');
 });

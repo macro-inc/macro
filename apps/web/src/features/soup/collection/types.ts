@@ -1,6 +1,7 @@
 import type { EntityData } from '@entity';
 
-export type SoupEntityIdentity = Pick<EntityData, 'id' | 'type'>;
+/** Row identity also supports native views that do not belong to EntityData. */
+export type SoupEntityIdentity = { id: string; type: string };
 
 export type SoupEntityRow<TEntity extends SoupEntityIdentity = EntityData> = {
   kind: 'entity';

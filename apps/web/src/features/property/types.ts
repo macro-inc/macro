@@ -55,6 +55,8 @@ export type Property = {
    * affordance in single-select editors. */
   isRequired?: boolean;
   options?: PropertyOption[];
+  /** Restricts selectable values without hiding labels for historical values. */
+  allowedOptionIds?: readonly string[];
   owner: PropertyOwner;
   specificEntityType?: EntityType | null;
   createdAt: DateValue;

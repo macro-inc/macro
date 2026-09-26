@@ -19,6 +19,11 @@ files:
   - apps/web/src/features/channel/primitives/create-channel-invites*
   - apps/web/src/features/channel/components/channel-invite*
   - apps/web/src/features/channel/views/channel-invite*
+  - apps/web/src/features/projects/queries/**
+  - apps/web/src/features/projects/primitives/**
+  - apps/web/src/features/projects/components/**
+  - apps/web/src/features/projects/views/**
+  - apps/web/src/features/projects/context/**
   - apps/web/src/features/block-agent/queries/**
   - apps/web/src/features/block-agent/primitives/**
   - apps/web/src/features/block-agent/ui/**

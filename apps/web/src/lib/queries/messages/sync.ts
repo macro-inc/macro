@@ -164,8 +164,8 @@ export function handleMessageEvent(
   if (isRootPost && refetchTimelineAwaitingFirstPage(parent)) return;
   if (isOwnEcho) return;
   applyMessage(change.message, change.type);
-  if (isRootPost && parent.type === 'document') {
-    void loadDocumentRootState(parent, change.message.id);
+  if (isRootPost && parent.type !== 'channel') {
+    void loadDiscussionRootState(parent, change.message.id);
   }
 }
 
@@ -189,8 +189,8 @@ function refetchTimelineAwaitingFirstPage(parent: MessageParent): boolean {
   return true;
 }
 
-/** A live document root arrives without its anchor; its thread state carries it. */
-async function loadDocumentRootState(parent: MessageParent, rootId: string) {
+/** Live discussion roots need authoritative state before the conversation can display them. */
+async function loadDiscussionRootState(parent: MessageParent, rootId: string) {
   try {
     const thread = await entityMessagesClient.thread(parent, rootId);
     queryClient.setQueryData<MessageThread>(

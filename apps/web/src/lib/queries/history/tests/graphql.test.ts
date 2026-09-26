@@ -24,6 +24,67 @@ function cacheHost(
 }
 
 describe('cached GraphQL history', () => {
+  it('filters cached backing descriptions while retaining notes, tasks and folders', async () => {
+    const entries = [
+      {
+        id: 'description',
+        typename: 'GraphqlSoupDocument',
+        bucket: 'note',
+        subType: { __typename: 'GraphqlInitiativeDescriptionSubType' },
+      },
+      {
+        id: 'note',
+        typename: 'GraphqlSoupDocument',
+        bucket: 'note',
+        subType: null,
+      },
+      {
+        id: 'task',
+        typename: 'GraphqlSoupDocument',
+        bucket: 'task',
+        subType: { __typename: 'GraphqlTaskSubType', isCompleted: false },
+      },
+      {
+        id: 'folder',
+        typename: 'GraphqlSoupProject',
+        bucket: 'project',
+        subType: null,
+      },
+    ];
+    const host = cacheHost(
+      async () => ({
+        documents: entries.map((entry) => ({
+          profile: 'quick-access-v1',
+          recordKey: `${entry.typename}:${entry.id}`,
+          bucket: entry.bucket,
+          searchText: 'Same title',
+          timestampMs: 1,
+          sourceHash: 'hash',
+        })),
+        nextCursor: null,
+      }),
+      async ({ keys }) =>
+        keys.map((recordKey) => {
+          const entry = entries.find(
+            (entry) => `${entry.typename}:${entry.id}` === recordKey
+          )!;
+          return {
+            recordKey,
+            record: {
+              __typename: entry.typename,
+              name: 'Same title',
+              ownerId: 'owner',
+              createdAt: '2026-09-11T00:00:00Z',
+              subType: entry.subType,
+            },
+          };
+        })
+    );
+    expect(
+      (await readCachedGraphqlHistoryItems(host)).map((item) => item.id)
+    ).toEqual(['note', 'task', 'folder']);
+  });
+
   it('browses the indexed recent projection and materializes only final keys', async () => {
     const search = vi.fn(
       async (): Promise<SearchCachePage> => ({

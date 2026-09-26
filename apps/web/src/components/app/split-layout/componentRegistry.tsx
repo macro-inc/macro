@@ -19,11 +19,18 @@ import {
   RecentRouteView,
   SearchRouteView,
 } from '@app/features/next-soup/route';
+import { parseProjectRoute } from '@app/features/projects/core/route';
+import {
+  CreateProjectView,
+  ProjectsListView,
+  ProjectView,
+} from '@app/features/projects/project-view';
 import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
 import { RemindersRouteView } from '@app/features/reminders/route';
 import { ReviewsRouteView } from '@app/features/reviews-view/route';
 import { SettingsRouteView } from '@app/features/settings/route';
 import { TasksRouteView } from '@app/features/tasks-view/route';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeSkill } from '@block-md/component/ComposeSkill';
@@ -33,12 +40,20 @@ import {
   DEV_MODE_ENV,
   enableChatV3Agents,
   enableNewAppViews,
+  enableProjects,
   isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
-import { type JSXElement, lazy, Show } from 'solid-js';
+import {
+  type JSXElement,
+  lazy,
+  onMount,
+  type ParentProps,
+  Show,
+} from 'solid-js';
+import { useSplitPanelOrThrow } from './layoutUtils';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -112,6 +127,15 @@ export function resolveComponent(
 ): ResolvedComponent {
   const registration = REGISTRY.get(name);
   if (!registration) {
+    if (parseProjectRoute(name)) {
+      const base = REGISTRY.get('initiative-view');
+      if (base)
+        return {
+          element: () =>
+            base.factory({ ...(params ?? {}), projectRoute: name }),
+          initialMeta: resolveInitialMeta('initiative-view', base.initialMeta),
+        };
+    }
     if (parseAgentsRoute(name)) {
       const base = REGISTRY.get('agents');
       if (base) {
@@ -142,6 +166,70 @@ export function resolveComponent(
 registerComponent('unified-list', () => (
   <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
 ));
+
+function DisabledProjectsRoute() {
+  const panel = useSplitPanelOrThrow();
+  onMount(() => {
+    if (panel.handle.isPopover()) panel.handle.close();
+    else panel.handle.replace({ next: { type: 'component', id: 'tasks' } });
+  });
+  return null;
+}
+
+function ProjectsRouteGate(props: ParentProps) {
+  const flag = useFeatureFlag(enableProjects);
+  return (
+    <Show
+      when={flag().enabled}
+      fallback={
+        <Show when={!flag().loading} fallback={<LoadingBlock />}>
+          <DisabledProjectsRoute />
+        </Show>
+      }
+    >
+      {props.children}
+    </Show>
+  );
+}
+
+const GatedCreateProjectView: typeof CreateProjectView = (props) => (
+  <ProjectsRouteGate>
+    <CreateProjectView {...props} />
+  </ProjectsRouteGate>
+);
+
+registerComponent('new-project', withAuth(GatedCreateProjectView), {
+  splitPanelLayout: 'composable',
+});
+registerComponent('project-compose', withAuth(GatedCreateProjectView), {
+  splitPanelLayout: 'composable',
+});
+registerComponent(
+  'initiative-view',
+  withAuth((params) => {
+    const route =
+      typeof params.projectRoute === 'string'
+        ? parseProjectRoute(params.projectRoute)
+        : undefined;
+    return route ? (
+      <ProjectsRouteGate>
+        <ProjectView route={route} />
+      </ProjectsRouteGate>
+    ) : (
+      <RedirectSplit to={{ type: 'component', id: 'tasks' }} />
+    );
+  }),
+  { splitPanelLayout: 'composable' }
+);
+registerComponent(
+  'tasks-projects',
+  withAuth(() => (
+    <ProjectsRouteGate>
+      <ProjectsListView />
+    </ProjectsRouteGate>
+  )),
+  { splitPanelLayout: 'composable' }
+);
 
 // Compatibility factories for restored content and hosts outside a route outlet.
 // App views themselves are composed by the application route layer.

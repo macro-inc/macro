@@ -4,6 +4,7 @@
   --task-col-assignees: 9rem;
   --task-col-created-by: 7rem;
   --task-col-timestamp: 5rem;
+  --task-col-initiative: 8rem;
 }
 
 /* Medium containers: hide Created By column */
@@ -21,5 +22,6 @@
     --task-col-assignees: 3rem;
     --task-col-created-by: 0rem;
     --task-col-timestamp: 5rem;
+    --task-col-initiative: 6rem;
   }
 }

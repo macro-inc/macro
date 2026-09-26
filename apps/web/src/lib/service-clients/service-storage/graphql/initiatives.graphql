@@ -1,0 +1,120 @@
+fragment InitiativeSummaryFields on GraphqlInitiative {
+  __typename
+  id
+  name
+  descriptionDocumentId
+  updatedAt
+  userAccessLevel
+  taskCount
+  completedTaskCount
+  properties {
+    ...SoupPropertyFields
+  }
+}
+
+fragment InitiativeDetailFields on GraphqlInitiative {
+  ...InitiativeSummaryFields
+  ownerId
+  memberIds
+  taskIds
+  createdAt
+  sharePermission {
+    __typename
+    id
+    owner
+    linkShare
+    linkShareAccessLevel
+    teamShareAccessLevel
+    channelSharePermissions {
+      channelId
+      accessLevel
+    }
+  }
+}
+
+query Initiative($initiativeId: ID!) {
+  user {
+    id
+    initiative(initiativeId: $initiativeId) {
+      ...InitiativeDetailFields
+    }
+  }
+}
+
+query Initiatives($input: InitiativePageInput) {
+  user {
+    id
+    initiatives(input: $input) {
+      initiatives {
+        ...InitiativeSummaryFields
+      }
+      nextCursor
+    }
+  }
+}
+
+query InitiativeTasks($initiativeId: ID!, $input: InitiativeTasksInput) {
+  user {
+    id
+    initiativeTasks(initiativeId: $initiativeId, input: $input) {
+      taskIds
+      nextCursor
+      total
+    }
+  }
+}
+
+query TaskInitiativeReferences($taskIds: [ID!]!) {
+  user {
+    id
+    taskInitiativeReferences(taskIds: $taskIds) {
+      taskId
+      state
+      initiative {
+        __typename
+        id
+        name
+      }
+    }
+  }
+}
+
+query InitiativeProperties($initiativeId: ID!) {
+  user {
+    id
+    initiative(initiativeId: $initiativeId) {
+      __typename
+      id
+      properties {
+        ...SoupPropertyFields
+      }
+    }
+  }
+}
+
+mutation CreateInitiative($input: CreateInitiativeInput!) {
+  createInitiative(input: $input) {
+    ...InitiativeDetailFields
+  }
+}
+
+mutation UpdateInitiative($initiativeId: ID!, $input: UpdateInitiativeInput!) {
+  updateInitiative(initiativeId: $initiativeId, input: $input) {
+    ...InitiativeDetailFields
+  }
+}
+
+mutation DeleteInitiative($initiativeId: ID!) {
+  deleteInitiative(initiativeId: $initiativeId)
+}
+
+mutation AssignInitiativeTasks($initiativeId: ID!, $taskIds: [ID!]!) {
+  assignInitiativeTasks(initiativeId: $initiativeId, taskIds: $taskIds) {
+    taskId
+    status
+  }
+}
+
+mutation ClearTaskInitiative($taskId: ID!) {
+  clearTaskInitiative(taskId: $taskId)
+}

@@ -13,6 +13,16 @@ const mocks = vi.hoisted(() => ({
   entityMode: (): boolean => false,
   scope: (): CommandWithInfo[] => [],
 }));
+// These tests exercise entity loading independently of Projects and its providers.
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+}));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'owner',
+}));
+vi.mock('../projects/queries/project-search', () => ({
+  useProjectSearchQuery: () => ({ isPending: true }),
+}));
 vi.mock('@app/constants/hotkeys', () => ({
   GO_TO_COMMAND_SCOPE: 'go-to',
   GO_TO_LEADER_KEY: 'g',

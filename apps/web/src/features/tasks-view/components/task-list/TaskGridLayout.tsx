@@ -14,6 +14,7 @@ import {
 } from '@entity/components/Badges';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
+import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import {
   PropertiesProvider,
@@ -26,8 +27,7 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui/utils/classname';
-import { createMemo, For, Show, Suspense } from 'solid-js';
-import { ListPropertyValue } from './ListPropertyValue';
+import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 import {
   TASK_GRID_COLUMNS,
   TASK_GRID_TEMPLATE_AREAS_WIDE,
@@ -64,6 +64,7 @@ function buildStubProperty(col: TaskGridColumn): Property {
 
 type TaskGridLayoutProps = Omit<LayoutProps, 'entity'> & {
   entity: TaskEntityWithProperties;
+  projectSlot?: JSX.Element;
 };
 
 export function TaskGridLayout(props: TaskGridLayoutProps) {
@@ -130,6 +131,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           'gap-2 grid grid-rows-[1fr]'
         )}
         style={{
+          '--task-col-initiative': props.projectSlot ? undefined : '0rem',
           'grid-template-columns': props.hideCheckbox
             ? TASK_GRID_TEMPLATE_COLUMNS_WIDE_NO_INDICATOR
             : TASK_GRID_TEMPLATE_COLUMNS_WIDE,
@@ -208,6 +210,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
               class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
             >
               <ListPropertyValue
+                entityId={props.entity.id}
                 property={
                   propertyMap().get(col.defId) ?? buildStubProperty(col)
                 }
@@ -215,6 +218,10 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
             </Entity.Slot>
           )}
         </For>
+
+        <Entity.Slot placement="initiative" class="min-w-0 truncate text-xs">
+          {props.projectSlot}
+        </Entity.Slot>
 
         {/* Created By column - only shown on wide containers (>1220px) */}
         <Entity.Slot

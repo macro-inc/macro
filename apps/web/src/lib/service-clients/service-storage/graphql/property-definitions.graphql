@@ -1,0 +1,56 @@
+fragment PropertyOptionFields on GraphqlPropertyOption {
+  __typename
+  id
+  propertyDefinitionId
+  displayOrder
+  color
+  createdAt
+  updatedAt
+  value {
+    __typename
+    ... on GraphqlStringPropertyOptionValue {
+      stringValue: value
+    }
+    ... on GraphqlNumberPropertyOptionValue {
+      numberValue: value
+    }
+  }
+}
+
+query PropertyDefinitions(
+  $scope: GraphqlPropertyDefinitionScope!
+  $forEntityType: GraphqlPropertyEntityType
+  $includeOptions: Boolean!
+) {
+  user {
+    id
+    propertyDefinitions(scope: $scope, forEntityType: $forEntityType) {
+      __typename
+      id
+      displayName
+      dataType
+      isMultiSelect
+      specificEntityType
+      isSystem
+      isMetadata
+      createdAt
+      updatedAt
+      owner {
+        scope
+        principalId
+      }
+      options @include(if: $includeOptions) {
+        ...PropertyOptionFields
+      }
+    }
+  }
+}
+
+query PropertyOptions($propertyDefinitionId: ID!) {
+  user {
+    id
+    propertyOptions(propertyDefinitionId: $propertyDefinitionId) {
+      ...PropertyOptionFields
+    }
+  }
+}
