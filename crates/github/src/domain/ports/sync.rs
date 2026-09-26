@@ -8,7 +8,8 @@ use crate::domain::models::{
     AppJwt, EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser,
     GithubError, GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails,
     GithubRepository, GithubSetupAccessToken, GithubUserInstallation, MacroTaskId,
-    ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent,
+    RepositoryIdBackfillPage, RepositoryIdBackfillRequest, ResolvedTeamTaskReference,
+    TeamTaskReference, ValidatedGithubWebhookEvent,
 };
 
 /// Repository for accessing github sync data from the database.
@@ -308,6 +309,28 @@ pub trait GithubSyncRealtime: Send + Sync + 'static {
         recipients: &[MacroUserIdStr<'static>],
         entity: &foreign_entity::domain::models::ForeignEntity,
     ) -> impl Future<Output = Result<(), GithubError>> + Send;
+}
+
+/// Pages through every GitHub App installation Macro has recorded.
+pub trait GithubInstallationLister: Send + Sync + 'static {
+    /// The error type returned by repository operations.
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+
+    /// Up to `limit` distinct installation ids that sort after `after`, in ascending order.
+    fn list_installation_ids(
+        &self,
+        after: Option<&str>,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+}
+
+/// Stamps GitHub repository ids onto pull request records synced before the id was stored.
+pub trait GithubRepositoryIdBackfill: Send + Sync + 'static {
+    /// Process the next page of installations and report what changed.
+    fn backfill_repository_ids(
+        &self,
+        request: RepositoryIdBackfillRequest,
+    ) -> impl Future<Output = Result<RepositoryIdBackfillPage, GithubError>> + Send;
 }
 
 /// Lists repository metadata for an installation the caller is authorized to access.

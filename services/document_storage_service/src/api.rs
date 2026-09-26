@@ -302,6 +302,12 @@ fn api_router(state: ApiContext) -> Router {
             internal::router(state.clone())
                 .nest("/notifications", notification::router())
                 .nest(
+                    "/github",
+                    github::inbound::repository_id_backfill_router::repository_id_backfill_router(
+                        state.github_repository_id_backfill_state.clone(),
+                    ),
+                )
+                .nest(
                     "/search",
                     search_service::search_router()
                         .with_state(SearchHandlerState::from_ref(&state)),

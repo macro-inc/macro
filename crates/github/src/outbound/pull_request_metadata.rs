@@ -152,6 +152,7 @@ struct GithubInstallationRepositoriesResponse {
 
 #[derive(Debug, serde::Deserialize)]
 struct GithubInstallationRepositoryResponse {
+    id: u64,
     name: String,
     owner: GithubRepositoryOwnerResponse,
     html_url: String,
@@ -169,6 +170,7 @@ impl GithubInstallationRepositoryResponse {
             html_url: self.html_url,
             default_branch: self.default_branch,
             private: self.private,
+            id: self.id,
         }
     }
 }

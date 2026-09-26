@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use super::models::{
     CreateForeignEntity, ForeignEntity, ForeignEntityError, GithubPullRequestFacets,
-    PatchForeignEntity, SourceId,
+    GithubRepositoryIdentity, PatchForeignEntity, SourceId,
 };
 
 /// Query type used when listing foreign entities for source ids.
@@ -149,6 +149,32 @@ pub trait GithubPullRequestFacetRepository: Send + Sync + 'static {
         &self,
         source_ids: Vec<SourceId>,
     ) -> impl Future<Output = Result<GithubPullRequestFacets, Self::Err>> + Send;
+}
+
+/// Repository for stamping GitHub repository ids onto pull request records synced before the
+/// id was stored.
+pub trait GithubRepositoryIdBackfillRepository: Send + Sync + 'static {
+    /// Error type returned by repository operations.
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+
+    /// Set `repositoryId` on GitHub pull request records that have none and whose metadata
+    /// `owner` and `repo` match one of `repositories` case-insensitively. `updated_at` is left
+    /// untouched so list ordering does not change. Returns how many records changed.
+    fn set_missing_github_repository_ids(
+        &self,
+        repositories: &[GithubRepositoryIdentity],
+    ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
+}
+
+/// Service for stamping GitHub repository ids onto pull request records synced before the id
+/// was stored.
+pub trait GithubRepositoryIdBackfillService: Send + Sync + 'static {
+    /// Set `repositoryId` on GitHub pull request records that have none and match one of
+    /// `repositories` by name. Returns how many records changed.
+    fn set_missing_github_repository_ids(
+        &self,
+        repositories: &[GithubRepositoryIdentity],
+    ) -> impl Future<Output = Result<u64, ForeignEntityError>> + Send;
 }
 
 /// Service for aggregate views over GitHub pull request foreign entities.

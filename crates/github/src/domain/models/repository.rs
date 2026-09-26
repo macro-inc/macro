@@ -18,6 +18,8 @@ pub struct GithubRepository {
     pub default_branch: Option<String>,
     /// Whether the repository is private.
     pub private: bool,
+    /// GitHub's numeric repository id, which survives renames and transfers.
+    pub id: u64,
 }
 
 impl GithubRepository {
@@ -28,4 +30,32 @@ impl GithubRepository {
     pub fn https_url(&self) -> String {
         format!("https://github.com/{}/{}", self.owner, self.name)
     }
+}
+
+/// A request for the next page of installations to backfill repository ids for.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepositoryIdBackfillRequest {
+    /// Resume after this installation id; absent to start from the first installation.
+    #[serde(default)]
+    pub after: Option<String>,
+    /// How many installations to process in this call; absent for the default page size.
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// What one page of the repository id backfill did.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RepositoryIdBackfillPage {
+    /// Installations processed in this page, including those that failed.
+    pub installations: u32,
+    /// Repositories listed across the page's installations.
+    pub repositories: u32,
+    /// Pull request records that gained a repository id.
+    pub updated_pull_requests: u64,
+    /// Installations whose repositories GitHub would not list, such as suspended ones.
+    pub failed_installation_ids: Vec<String>,
+    /// Pass as `after` to continue; absent once every installation has been processed.
+    pub next_after: Option<String>,
 }

@@ -87,7 +87,10 @@ use foreign_entity::{
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
-use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
+use github::domain::service::{
+    GithubSyncConfig, GithubSyncServiceImpl, InstallationTokenConfig, RepositoryIdBackfillService,
+};
+use github::inbound::repository_id_backfill_router::RepositoryIdBackfillRouterState;
 use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
@@ -563,6 +566,19 @@ async fn run() -> anyhow::Result<()> {
         GithubSyncClientImpl::default(),
         ConnectionGatewayGithubRealtime::new(conn_gateway_client.clone()),
     );
+
+    let github_repository_id_backfill_state = RepositoryIdBackfillRouterState {
+        service: Arc::new(RepositoryIdBackfillService::new(
+            InstallationTokenConfig {
+                client_id: config.github_sync_app_client_id.to_string(),
+                private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_string(),
+            },
+            PgGithubSyncRepo::new(db.clone()),
+            GithubSyncClientImpl::default(),
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+        )),
+        authorization_state: authorization_state.clone(),
+    };
 
     let foreign_entity_state = ForeignEntityRouterState::new(
         foreign_entity_service.clone(),
@@ -1581,6 +1597,7 @@ async fn run() -> anyhow::Result<()> {
         )),
         graphql_entity_mutation_service,
         github_sync_service: Arc::new(github_sync_service_impl),
+        github_repository_id_backfill_state,
         foreign_entity_state,
         db: db.clone(),
         readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),

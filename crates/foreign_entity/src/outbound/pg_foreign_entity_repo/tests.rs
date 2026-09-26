@@ -1,4 +1,5 @@
 mod github_pull_request_facets;
+mod github_repository_id_backfill;
 mod notification_state;
 mod pull_request_filters;
 

@@ -12,10 +12,12 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     CreateForeignEntity, ForeignEntity, GITHUB_PULL_REQUEST_SOURCE, GithubAuthorFacet,
-    GithubPullRequestFacets, GithubRepositoryFacet, PatchForeignEntity, SourceId,
+    GithubPullRequestFacets, GithubRepositoryFacet, GithubRepositoryIdentity, PatchForeignEntity,
+    SourceId,
 };
 use crate::domain::ports::{
     ForeignEntityListQuery, ForeignEntityRepository, GithubPullRequestFacetRepository,
+    GithubRepositoryIdBackfillRepository,
 };
 
 struct ForeignEntityBatchQuery<'a> {
@@ -699,5 +701,51 @@ impl GithubPullRequestFacetRepository for PgForeignEntityRepo {
                 })
                 .collect(),
         })
+    }
+}
+
+impl GithubRepositoryIdBackfillRepository for PgForeignEntityRepo {
+    type Err = sqlx::Error;
+
+    #[tracing::instrument(err, skip(self, repositories), fields(repositories = repositories.len()))]
+    async fn set_missing_github_repository_ids(
+        &self,
+        repositories: &[GithubRepositoryIdentity],
+    ) -> Result<u64, Self::Err> {
+        let mut ids = Vec::with_capacity(repositories.len());
+        let mut owners = Vec::with_capacity(repositories.len());
+        let mut names = Vec::with_capacity(repositories.len());
+        // GitHub repository ids fit in a bigint; one that did not could not be stored anyway.
+        for repository in repositories {
+            let Ok(id) = i64::try_from(repository.id) else {
+                continue;
+            };
+            ids.push(id);
+            owners.push(repository.owner.clone());
+            names.push(repository.name.clone());
+        }
+        if ids.is_empty() {
+            return Ok(0);
+        }
+
+        let result = sqlx::query!(
+            r#"
+            UPDATE foreign_entity fe
+            SET metadata = fe.metadata || jsonb_build_object('repositoryId', r.repository_id)
+            FROM UNNEST($1::bigint[], $2::text[], $3::text[]) AS r(repository_id, owner, name)
+            WHERE fe.foreign_entity_source = $4
+              AND NOT (fe.metadata ? 'repositoryId')
+              AND lower(fe.metadata ->> 'owner') = lower(r.owner)
+              AND lower(fe.metadata ->> 'repo') = lower(r.name)
+            "#,
+            &ids,
+            &owners,
+            &names,
+            GITHUB_PULL_REQUEST_SOURCE,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected())
     }
 }

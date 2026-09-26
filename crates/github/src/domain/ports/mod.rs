@@ -11,5 +11,6 @@ mod sync;
 pub use link::{Auth, GithubLinkService, GithubOauth, GithubRepo};
 #[cfg(feature = "sync")]
 pub use sync::{
-    GithubRepositoryClient, GithubSyncClient, GithubSyncRealtime, GithubSyncRepo, GithubSyncService,
+    GithubInstallationLister, GithubRepositoryClient, GithubRepositoryIdBackfill, GithubSyncClient,
+    GithubSyncRealtime, GithubSyncRepo, GithubSyncService,
 };

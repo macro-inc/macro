@@ -6,8 +6,42 @@ use crate::domain::models::{
     GithubAppInstallationSource, GithubKey, MacroTaskId, ResolvedTeamTaskReference,
     TeamTaskReference,
 };
-use crate::domain::ports::GithubSyncRepo;
+use crate::domain::ports::{GithubInstallationLister, GithubSyncRepo};
 use crate::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+
+// ---------------------------------------------------------------------------
+// list_installation_ids
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_list_installation_ids_pages_distinct_ids_in_order(pool: Pool<Postgres>) {
+    sqlx::query(
+        r#"
+        INSERT INTO github_app_installation (id, source_id, source_type)
+        VALUES
+            ('300', 'macro|a@example.com', 'user'),
+            ('100', 'macro|a@example.com', 'user'),
+            ('100', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'team'),
+            ('200', 'macro|b@example.com', 'user')
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("installations should be inserted");
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let first = repo
+        .list_installation_ids(None, 2)
+        .await
+        .expect("first page should load");
+    let rest = repo
+        .list_installation_ids(Some("200"), 2)
+        .await
+        .expect("second page should load");
+
+    assert_eq!(first, vec!["100".to_string(), "200".to_string()]);
+    assert_eq!(rest, vec!["300".to_string()]);
+}
 
 // ---------------------------------------------------------------------------
 // get_task_ids

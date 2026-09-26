@@ -81,7 +81,8 @@ use foreign_entity::{
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
-use github::domain::service::GithubSyncServiceImpl;
+use github::domain::service::{GithubSyncServiceImpl, RepositoryIdBackfillService};
+use github::inbound::repository_id_backfill_router::RepositoryIdBackfillRouterState;
 use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
@@ -539,6 +540,14 @@ pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl<
     ConnectionGatewayGithubRealtime,
 >;
 
+/// Type alias for the GitHub repository id backfill service.
+pub(crate) type GithubRepositoryIdBackfillServiceType =
+    RepositoryIdBackfillService<PgGithubSyncRepo, GithubSyncClientImpl, ForeignEntityServiceType>;
+
+/// Type alias for the GitHub repository id backfill router state.
+pub(crate) type DssGithubRepositoryIdBackfillState =
+    RepositoryIdBackfillRouterState<GithubRepositoryIdBackfillServiceType, AuthorizationService>;
+
 /// Type alias for the cal.com webhook service.
 pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSink>;
 
@@ -583,6 +592,7 @@ pub(crate) struct ApiContext {
     pub redis_client: Arc<Redis>,
     pub s3_client: Arc<S3>,
     pub github_sync_service: Arc<GithubSyncServiceType>,
+    pub github_repository_id_backfill_state: DssGithubRepositoryIdBackfillState,
     pub dynamodb_client: Arc<DynamodbClient>,
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,

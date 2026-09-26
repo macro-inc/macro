@@ -12,11 +12,13 @@ use uuid::Uuid;
 
 use super::models::{
     CreateForeignEntity, ForeignEntity, ForeignEntityError, ForeignEntityLookupCaller,
-    GithubPullRequestFacets, PatchForeignEntity, SourceId, validate_foreign_entity_lookup,
+    GithubPullRequestFacets, GithubRepositoryIdentity, PatchForeignEntity, SourceId,
+    validate_foreign_entity_lookup,
 };
 use super::ports::{
     ForeignEntityListQuery, ForeignEntityRepository, ForeignEntityService,
     GithubPullRequestFacetRepository, GithubPullRequestFacetService,
+    GithubRepositoryIdBackfillRepository, GithubRepositoryIdBackfillService,
 };
 
 /// Concrete foreign entity service implementation.
@@ -173,6 +175,26 @@ where
 
         self.repo
             .get_github_pull_request_facets(source_ids)
+            .await
+            .map_err(|error| ForeignEntityError::Internal(error.into()))
+    }
+}
+
+impl<R> GithubRepositoryIdBackfillService for ForeignEntityServiceImpl<R>
+where
+    R: GithubRepositoryIdBackfillRepository,
+{
+    #[tracing::instrument(err, skip(self, repositories), fields(repositories = repositories.len()))]
+    async fn set_missing_github_repository_ids(
+        &self,
+        repositories: &[GithubRepositoryIdentity],
+    ) -> Result<u64, ForeignEntityError> {
+        if repositories.is_empty() {
+            return Ok(0);
+        }
+
+        self.repo
+            .set_missing_github_repository_ids(repositories)
             .await
             .map_err(|error| ForeignEntityError::Internal(error.into()))
     }

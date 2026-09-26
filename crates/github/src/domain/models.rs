@@ -25,7 +25,7 @@ pub use pull_request::{
     GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
     GithubPullRequestRef, GithubPullRequestStatus,
 };
-pub use repository::GithubRepository;
+pub use repository::{GithubRepository, RepositoryIdBackfillPage, RepositoryIdBackfillRequest};
 pub use sync::{
     GithubAppInstallationSource, GithubAuthenticatedUser, GithubInstallationAccessToken,
     GithubInstallationSetupAction, GithubKey, GithubSetupAccessToken, GithubUserInstallation,

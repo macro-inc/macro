@@ -30,6 +30,7 @@ fn repository(owner: &str, name: &str) -> GithubRepository {
         html_url: format!("https://github.com/{owner}/{name}"),
         default_branch: Some("main".to_owned()),
         private: true,
+        id: 1,
     }
 }
 

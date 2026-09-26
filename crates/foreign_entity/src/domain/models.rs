@@ -141,6 +141,17 @@ pub struct GithubAuthorFacet {
     pub count: i64,
 }
 
+/// A GitHub repository's stable id together with its current name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GithubRepositoryIdentity {
+    /// The numeric GitHub repository id.
+    pub id: u64,
+    /// The account the repository lives under.
+    pub owner: String,
+    /// The repository name, without its owner.
+    pub name: String,
+}
+
 /// The identity a by-source foreign entity lookup runs as.
 ///
 /// Inbound adapters resolve the transport credential into one of these
