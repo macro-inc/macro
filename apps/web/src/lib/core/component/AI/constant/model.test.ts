@@ -9,16 +9,17 @@ import {
   Model,
   modelsForPlan,
   modelUsageHint,
+  PAID_MODELS,
   type TModel,
 } from './model';
 
 const PROVIDER_OF = (m: TModel) => MODEL_PROVIDER[m];
 
 describe('modelsForPlan / defaultModelForPlan', () => {
-  it('gives paid users every model and an Anthropic-smart default', () => {
+  it('gives paid users every picker model and an Anthropic-smart default', () => {
     const paid = modelsForPlan(true);
-    // Every known model is selectable for a paid user.
-    expect([...paid].sort()).toEqual([...Object.values(Model)].sort());
+    expect(paid).toEqual(PAID_MODELS);
+    expect(paid).not.toContain(Model.fable51);
     expect(DEFAULT_MODEL).toBe(Model.sonnet5);
     expect(defaultModelForPlan(true)).toBe(DEFAULT_MODEL);
   });
@@ -42,10 +43,10 @@ describe('modelUsageHint', () => {
     expect(modelUsageHint(Model.haiku45)).toBeUndefined();
   });
 
-  it('keeps Fable and Astra paid-only: free users see them locked, paid users select them', () => {
+  it('removes Fable from plan options while keeping Astra paid-only', () => {
     expect(modelsForPlan(false)).not.toContain(Model.fable51);
     expect(modelsForPlan(false)).not.toContain(Model.gpt6Astra);
-    expect(modelsForPlan(true)).toContain(Model.fable51);
+    expect(modelsForPlan(true)).not.toContain(Model.fable51);
     expect(modelsForPlan(true)).toContain(Model.gpt6Astra);
   });
 });

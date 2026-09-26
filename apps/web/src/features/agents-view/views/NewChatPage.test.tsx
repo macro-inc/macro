@@ -92,6 +92,10 @@ vi.mock('@queries/agents/models', () => ({
                   { id: 'chat-default', name: 'Chat default' },
                   { id: 'claude-sonnet-4', name: 'Sonnet 4' },
                   {
+                    id: 'anthropic/claude-fable-5-1',
+                    name: 'Fable 5.1',
+                  },
+                  {
                     id: 'anthropic/claude-sonnet-5',
                     name: 'anthropic/claude-sonnet-5',
                   },
@@ -483,6 +487,7 @@ describe('agent-led new conversation', () => {
     expect(
       models.queryByRole('menuitem', { name: /Cursor default|GPT-5/ })
     ).toBeNull();
+    expect(models.queryByRole('menuitem', { name: /Fable 5.1/ })).toBeNull();
     const sonnet = models.getByRole('menuitem', { name: 'Sonnet 5' });
     expect(
       sonnet.querySelector('[data-ai-provider="anthropic"] svg')
