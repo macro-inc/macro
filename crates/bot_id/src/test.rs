@@ -84,6 +84,20 @@ fn claude_is_a_global_system_agent_with_a_distinct_identity() {
 }
 
 #[test]
+fn non_system_bot_id_rejects_every_system_bot() {
+    for bot in SYSTEM_BOTS {
+        assert_eq!(NonSystemBotId::new(bot.id), None, "{}", bot.handle);
+    }
+}
+
+#[test]
+fn non_system_bot_id_accepts_a_row_bot() {
+    let bot = NonSystemBotId::new(BotId::TEST_A).unwrap();
+
+    assert_eq!(bot.get(), BotId::TEST_A);
+}
+
+#[test]
 fn rejects_trailing_storage_content() {
     let uuid = Uuid::new_v4();
 

@@ -1180,7 +1180,7 @@ async fn entity_property_event_set_failures_do_not_publish_before_commit() {
 }
 
 #[tokio::test]
-async fn entity_property_event_actor_is_only_an_authenticated_user() {
+async fn entity_property_event_attributes_team_bot_but_not_system_access() {
     let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
     let bot_access = EditReceipt::dangerously_assert_bot(
         bot_id.into_storage_id(),
@@ -1204,7 +1204,11 @@ async fn entity_property_event_actor_is_only_an_authenticated_user() {
     let internal_access =
         EditReceipt::dangerously_assert_internal_user("doc1", AccessEntityType::Document);
 
-    for access in [bot_access, unauthenticated_access, internal_access] {
+    for (access, expected_actor) in [
+        (bot_access, Some(bot_id.into_storage_id().to_string())),
+        (unauthenticated_access, None),
+        (internal_access, None),
+    ] {
         let property_definition_id = Uuid::from_u128(0xE704);
         let assignment = entity_property_for_event(
             Uuid::from_u128(0xE705),
@@ -1242,7 +1246,12 @@ async fn entity_property_event_actor_is_only_an_authenticated_user() {
             published.envelope["metadata"]["actor_user_id"],
             serde_json::Value::Null
         );
-        assert!(published.envelope["metadata"]["actor"].is_null());
+        assert_eq!(
+            published.envelope["metadata"]["actor"],
+            expected_actor
+                .map(serde_json::Value::String)
+                .unwrap_or(serde_json::Value::Null)
+        );
         assert!(published.envelope["metadata"]["on_behalf_of"].is_null());
     }
 }

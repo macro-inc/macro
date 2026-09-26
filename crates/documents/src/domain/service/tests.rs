@@ -9,12 +9,11 @@ use model::document::{DocumentMetadata, FileType};
 use std::sync::{Arc, Mutex};
 
 use crate::domain::models::{
-    EmailImportRepoOutcome, GithubPullRequest, ImportEmailAttachmentRepoArgs,
+    EmailImportRepoOutcome, GithubPullRequest, ImportEmailAttachmentRepoArgs, OwnerTeam,
 };
 use crate::domain::ports::{DocumentContentEventService, MockDocumentRepo};
 
 use super::*;
-use activity::{Actor, Attribution};
 
 mod sync_content;
 
@@ -161,11 +160,10 @@ impl TaskPropertiesPort for TestTaskPropertiesPort {
 
     async fn set_entity_property(
         &self,
-        _user_id: &str,
+        _principal: &CreationPrincipal,
         _entity_id: &str,
         _property_definition_id: uuid::Uuid,
         _value: Option<models_properties::api::requests::SetPropertyValue>,
-        _attribution: &activity::Attribution,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -2130,7 +2128,7 @@ async fn copy_document_best_effort_bumps_inherited_project_and_publishes_event()
     let mut copied_metadata = make_test_metadata();
     copied_metadata.document_id = "doc-2".to_string();
     copied_metadata.document_name = "copied doc".to_string();
-    repo.expect_get_team_default_link_share()
+    repo.expect_get_owner_team()
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
     repo.expect_copy_document()
         .returning(move |_, _| Box::pin(std::future::ready(Ok(copied_metadata.clone()))));
@@ -2157,9 +2155,7 @@ async fn copy_document_best_effort_bumps_inherited_project_and_publishes_event()
         .copy_document(
             authenticated_receipt("doc-1"),
             document_context,
-            macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
-                .unwrap()
-                .into_owned(),
+            &CreationPrincipal::User(test_user()),
             "copied doc".to_string(),
             None,
             None,
@@ -2178,6 +2174,130 @@ async fn copy_document_best_effort_bumps_inherited_project_and_publishes_event()
     assert_eq!(event.payload["metadata"]["source_document_id"], "doc-1");
     assert_eq!(event.payload["metadata"]["document_name"], "copied doc");
     assert_eq!(event.payload["metadata"]["owner"], "macro|user@user.com");
+}
+
+#[derive(Clone, Default)]
+struct RecordingUploadUrlPort {
+    copies: Arc<Mutex<Vec<(String, String)>>>,
+}
+
+impl PresignedUploadUrlPort for RecordingUploadUrlPort {
+    async fn put_document_storage_presigned_url(
+        &self,
+        _key: &str,
+        _sha: &str,
+        _content_type: ContentType,
+    ) -> anyhow::Result<String> {
+        Ok(String::new())
+    }
+
+    async fn put_docx_upload_presigned_url(
+        &self,
+        _key: &str,
+        _sha: &str,
+        _content_type: ContentType,
+    ) -> anyhow::Result<String> {
+        Ok(String::new())
+    }
+
+    async fn copy_object(&self, source_key: &str, destination_key: &str) -> anyhow::Result<()> {
+        self.copies
+            .lock()
+            .unwrap()
+            .push((source_key.to_string(), destination_key.to_string()));
+        Ok(())
+    }
+
+    async fn get_snapshot(&self, _document_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        Ok(None)
+    }
+
+    async fn upload_snapshot(&self, _document_id: &str, _bytes: Vec<u8>) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn bot_owned_copy_reads_the_source_owner_key_and_writes_the_bot_key() {
+    let principal = CreationPrincipal::TeamBot {
+        bot: bot_id::NonSystemBotId::new(bot_id()).unwrap(),
+        team: uuid::uuid!("00000000-0000-0000-0000-000000000456"),
+    };
+
+    for (file_type, source_key, destination_key) in [
+        (
+            "txt",
+            "macro|user@user.com/doc-1/1",
+            "bot|00000000-0000-0000-0000-000000000123/doc-2/3",
+        ),
+        (
+            "docx",
+            "macro|user@user.com/doc-1/converted.pdf",
+            "bot|00000000-0000-0000-0000-000000000123/doc-2/converted.pdf",
+        ),
+    ] {
+        let mut original = make_test_metadata();
+        original.project_id = None;
+        original.project_name = None;
+        original.file_type = Some(file_type.to_string());
+        original.document_bom = Some(serde_json::json!([]));
+        let mut repo = make_mock_repo();
+        repo.expect_get_document_metadata()
+            .returning(move |_| Box::pin(std::future::ready(Ok(original.clone()))));
+        repo.expect_get_owner_team()
+            .returning(|_| Box::pin(std::future::ready(Ok(None))));
+        repo.expect_copy_document().returning(|args, _| {
+            let mut copied = make_test_metadata();
+            copied.document_id = "doc-2".to_string();
+            copied.document_version_id = 3;
+            copied.owner = args.owner;
+            copied.project_id = None;
+            Box::pin(std::future::ready(Ok(copied)))
+        });
+        repo.expect_get_document_version_id()
+            .returning(|_| Box::pin(std::future::ready(Ok((1, true)))));
+        repo.expect_get_latest_document_version_id()
+            .returning(|_| Box::pin(std::future::ready(Ok((1, true)))));
+        repo.expect_set_document_content()
+            .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+        repo.expect_get_team_task_metadata()
+            .returning(|_| Box::pin(std::future::ready(Ok(None))));
+        let uploads = RecordingUploadUrlPort::default();
+        let service = DocumentServiceImpl::new(
+            repo,
+            test_cloudfront_config(),
+            sync_service_client::SyncServiceClient::new(
+                "test-sync-key".to_string(),
+                "http://sync-service.test".to_string(),
+            ),
+            uploads.clone(),
+            TestTaskPropertiesPort,
+            TestConnectionService::default(),
+            TestEntityAccessManagementService::default(),
+            TestForeignEntityService::default(),
+            TestEventBroker::default(),
+        );
+        let mut context = task_document_context("doc-1");
+        context.file_type = Some(file_type.to_string());
+        context.sub_type = None;
+
+        service
+            .copy_document(
+                bot_receipt("doc-1"),
+                context,
+                &principal,
+                "copied doc".to_string(),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            *uploads.copies.lock().unwrap(),
+            [(source_key.to_string(), destination_key.to_string())]
+        );
+    }
 }
 
 struct RejectUnexpectedFinalization;
@@ -2205,7 +2325,7 @@ impl crate::domain::ports::mentions::DocumentMentionTrackingPort for RejectUnexp
     async fn track_document_mentions(
         &self,
         _: &str,
-        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        _: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
         _: &str,
     ) -> anyhow::Result<()> {
         panic!("failed repository creation must not track mentions");
@@ -2235,11 +2355,11 @@ async fn creator_forwards_explicit_consent_and_stops_after_repository_failure() 
         ),
     ] {
         let mut repo = make_mock_repo();
-        repo.expect_get_team_default_link_share()
+        repo.expect_get_owner_team()
             .returning(|_| Box::pin(std::future::ready(Ok(None))));
         repo.expect_create_document()
             .withf(move |args, permission| {
-                args.share_with_team == expected_share
+                args.document.share_with_team == expected_share
                     && permission.team_share_access_level.is_none()
             })
             .times(1)
@@ -2257,7 +2377,7 @@ async fn creator_forwards_explicit_consent_and_stops_after_repository_failure() 
         );
         let result = creator
             .create_markdown_text(
-                create_document_repo_args(FileType::Md).user_id,
+                &CreationPrincipal::User(test_user()),
                 NewMarkdownTextDocument {
                     metadata: NewDocumentMetadata::new("test"),
                     markdown: String::new(),
@@ -2270,14 +2390,17 @@ async fn creator_forwards_explicit_consent_and_stops_after_repository_failure() 
     }
 }
 
-fn create_document_repo_args(file_type: FileType) -> CreateDocumentRepoArgs {
-    CreateDocumentRepoArgs {
+fn test_user() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str("macro|user@user.com")
+        .unwrap()
+        .into_owned()
+}
+
+fn new_document(file_type: FileType) -> NewDocument {
+    NewDocument {
         id: None,
         sha: "sha".to_string(),
         document_name: "doc".to_string(),
-        user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
-            .unwrap()
-            .into_owned(),
         file_type: Some(file_type),
         project_id: None,
         team_id: None,
@@ -2285,9 +2408,36 @@ fn create_document_repo_args(file_type: FileType) -> CreateDocumentRepoArgs {
         created_at: None,
         sub_type: None,
         skip_history: false,
-        attribution: None,
         initial_link_share: InitialLinkShare::EntityDefault,
     }
+}
+
+#[tokio::test]
+async fn team_bot_task_rejects_a_different_numbering_team() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team().times(0);
+    repo.expect_create_document().times(0);
+    let (service, broker) = make_test_service_with_event_broker(repo);
+    let team = uuid::Uuid::from_u128(7);
+    let principal = CreationPrincipal::TeamBot {
+        bot: bot_id::NonSystemBotId::new(bot_id::BotId::TEST_A).unwrap(),
+        team,
+    };
+    let mut document = new_document(FileType::Md);
+    document.sub_type = Some(DocumentSubType::Task);
+    document.team_id = Some(uuid::Uuid::from_u128(8));
+
+    let error = crate::domain::ports::DocumentService::create_document(
+        &service, &principal, document, None,
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "bad request: task team does not match the creating bot's team"
+    );
+    assert!(broker.published().lock().unwrap().is_empty());
 }
 
 async fn create_document_with_team_default(
@@ -2297,9 +2447,16 @@ async fn create_document_with_team_default(
     expected_access_level: Option<models_permissions::share_permission::access_level::AccessLevel>,
 ) {
     let mut repo = make_mock_repo();
-    repo.expect_get_team_default_link_share()
-        .withf(|user_id| user_id == "macro|user@user.com")
-        .returning(move |_| Box::pin(std::future::ready(Ok(team_default))));
+    repo.expect_get_owner_team()
+        .withf(|owner| *owner == Owner::User(test_user()))
+        .returning(move |_| {
+            Box::pin(std::future::ready(Ok(team_default.map(
+                |default_link_share| OwnerTeam {
+                    team_id: uuid::Uuid::from_u128(1),
+                    default_link_share,
+                },
+            ))))
+        });
     let created_metadata = make_test_metadata();
     repo.expect_create_document()
         .withf(move |_, share_permission| {
@@ -2317,10 +2474,8 @@ async fn create_document_with_team_default(
 
     crate::domain::ports::DocumentService::create_document(
         &service,
-        macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
-            .unwrap()
-            .into_owned(),
-        create_document_repo_args(file_type),
+        &CreationPrincipal::User(test_user()),
+        new_document(file_type),
         None,
     )
     .await
@@ -2388,10 +2543,10 @@ async fn exact_initial_link_share_bypasses_md_public_edit_default() {
     ] {
         let mut repo = make_mock_repo();
         let created_metadata = make_test_metadata();
-        repo.expect_get_team_default_link_share().times(0);
+        repo.expect_get_owner_team().times(0);
         repo.expect_create_document()
             .withf(move |args, share_permission| {
-                args.initial_link_share == InitialLinkShare::Exact(state)
+                args.document.initial_link_share == InitialLinkShare::Exact(state)
                     && share_permission.link_share_state() == state
                     && share_permission.team_share_access_level.is_none()
             })
@@ -2403,12 +2558,12 @@ async fn exact_initial_link_share_bypasses_md_public_edit_default() {
             .returning(|_| Box::pin(std::future::ready(Ok(None))));
         let (service, _event_broker) = make_test_service_with_event_broker(repo);
 
-        let mut args = create_document_repo_args(FileType::Md);
-        args.initial_link_share = InitialLinkShare::Exact(state);
+        let mut document = new_document(FileType::Md);
+        document.initial_link_share = InitialLinkShare::Exact(state);
         crate::domain::ports::DocumentService::create_document(
             &service,
-            args.user_id.clone(),
-            args,
+            &CreationPrincipal::User(test_user()),
+            document,
             None,
         )
         .await
@@ -2420,13 +2575,13 @@ async fn exact_initial_link_share_bypasses_md_public_edit_default() {
 async fn initiative_description_rejects_entity_default_link_share() {
     let repo = make_mock_repo();
     let (service, event_broker) = make_test_service_with_event_broker(repo);
-    let mut args = create_document_repo_args(FileType::Md);
-    args.sub_type = Some(document_sub_type::DocumentSubType::InitiativeDescription);
+    let mut document = new_document(FileType::Md);
+    document.sub_type = Some(document_sub_type::DocumentSubType::InitiativeDescription);
 
     let err = crate::domain::ports::DocumentService::create_document(
         &service,
-        args.user_id.clone(),
-        args,
+        &CreationPrincipal::User(test_user()),
+        document,
         None,
     )
     .await
@@ -2445,11 +2600,12 @@ async fn initiative_description_accepts_exact_link_share() {
 
     let mut repo = make_mock_repo();
     let created_metadata = make_test_metadata();
-    repo.expect_get_team_default_link_share().times(0);
+    repo.expect_get_owner_team().times(0);
     repo.expect_create_document()
         .withf(|args, share_permission| {
-            args.sub_type == Some(document_sub_type::DocumentSubType::InitiativeDescription)
-                && args.initial_link_share == InitialLinkShare::Exact(LinkShareState::Off)
+            args.document.sub_type
+                == Some(document_sub_type::DocumentSubType::InitiativeDescription)
+                && args.document.initial_link_share == InitialLinkShare::Exact(LinkShareState::Off)
                 && share_permission.link_share_state() == LinkShareState::Off
         })
         .times(1)
@@ -2460,13 +2616,13 @@ async fn initiative_description_accepts_exact_link_share() {
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
     let (service, _event_broker) = make_test_service_with_event_broker(repo);
 
-    let mut args = create_document_repo_args(FileType::Md);
-    args.sub_type = Some(document_sub_type::DocumentSubType::InitiativeDescription);
-    args.initial_link_share = InitialLinkShare::Exact(LinkShareState::Off);
+    let mut document = new_document(FileType::Md);
+    document.sub_type = Some(document_sub_type::DocumentSubType::InitiativeDescription);
+    document.initial_link_share = InitialLinkShare::Exact(LinkShareState::Off);
     crate::domain::ports::DocumentService::create_document(
         &service,
-        args.user_id.clone(),
-        args,
+        &CreationPrincipal::User(test_user()),
+        document,
         None,
     )
     .await
@@ -2474,9 +2630,73 @@ async fn initiative_description_accepts_exact_link_share() {
 }
 
 #[tokio::test]
-async fn create_document_publishes_resolved_attribution() {
+async fn create_document_publishes_the_principal_as_owner_and_actor() {
+    let team_bot = CreationPrincipal::TeamBot {
+        bot: bot_id::NonSystemBotId::new(bot_id::BotId::TEST_A).unwrap(),
+        team: uuid::Uuid::from_u128(7),
+    };
+    for (principal, owner, actor, on_behalf_of) in [
+        (
+            CreationPrincipal::User(test_user()),
+            "macro|user@user.com",
+            "macro|user@user.com",
+            None,
+        ),
+        (
+            CreationPrincipal::BotForUser {
+                bot: bot_id::MACRO_AI_BOT_ID,
+                user: test_user(),
+            },
+            "macro|user@user.com",
+            "bot|00000000-0000-0000-0000-00000000a1a1",
+            Some("macro|user@user.com"),
+        ),
+        (
+            team_bot,
+            "bot|00000000-0000-0000-0000-00000000b07a",
+            "bot|00000000-0000-0000-0000-00000000b07a",
+            None,
+        ),
+    ] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_owner_team()
+            .returning(|_| Box::pin(std::future::ready(Ok(None))));
+        repo.expect_create_document().returning(|args, _| {
+            let mut metadata = make_test_metadata();
+            metadata.owner = args.owner;
+            Box::pin(std::future::ready(Ok(metadata)))
+        });
+        repo.expect_set_document_content()
+            .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+        repo.expect_get_team_task_metadata()
+            .returning(|_| Box::pin(std::future::ready(Ok(None))));
+        let (service, event_broker) = make_test_service_with_event_broker(repo);
+
+        crate::domain::ports::DocumentService::create_document(
+            &service,
+            &principal,
+            new_document(FileType::Txt),
+            None,
+        )
+        .await
+        .unwrap();
+
+        let published = event_broker.published();
+        let published = published.lock().unwrap();
+        let metadata = &published[0].payload["metadata"];
+        assert_eq!(metadata["owner"], owner);
+        assert_eq!(metadata["actor"], actor);
+        assert_eq!(
+            metadata.get("on_behalf_of").and_then(|user| user.as_str()),
+            on_behalf_of
+        );
+    }
+}
+
+#[tokio::test]
+async fn email_import_is_attributed_to_the_system_bot() {
     let mut repo = make_mock_repo();
-    repo.expect_get_team_default_link_share()
+    repo.expect_get_owner_team()
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
     let created_metadata = make_test_metadata();
     repo.expect_import_email_attachment_document()
@@ -2493,18 +2713,13 @@ async fn create_document_publishes_resolved_attribution() {
     let (service, event_broker) = make_test_service_with_event_broker(repo);
     let args = ImportEmailAttachmentRepoArgs {
         email_attachment_id: uuid::Uuid::from_u128(7),
-        create: create_document_repo_args(FileType::Txt),
+        owner: test_user(),
+        document: new_document(FileType::Txt),
     };
 
-    crate::domain::ports::DocumentService::import_email_attachment(
-        &service,
-        macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
-            .unwrap()
-            .into_owned(),
-        args,
-    )
-    .await
-    .unwrap();
+    crate::domain::ports::DocumentService::import_email_attachment(&service, args)
+        .await
+        .unwrap();
 
     let published = event_broker.published();
     let published = published.lock().unwrap();
@@ -2524,9 +2739,11 @@ async fn create_document_publishes_resolved_attribution() {
     );
 }
 
+type PropertyWrite = (CreationPrincipal, uuid::Uuid, Option<SetPropertyValue>);
+
 #[derive(Default, Clone)]
 struct RecordingTaskPropertiesPort {
-    writes: Arc<Mutex<Vec<(String, uuid::Uuid, Attribution)>>>,
+    writes: Arc<Mutex<Vec<PropertyWrite>>>,
 }
 
 impl TaskPropertiesPort for RecordingTaskPropertiesPort {
@@ -2540,17 +2757,15 @@ impl TaskPropertiesPort for RecordingTaskPropertiesPort {
 
     async fn set_entity_property(
         &self,
-        user_id: &str,
+        principal: &CreationPrincipal,
         _entity_id: &str,
         property_definition_id: uuid::Uuid,
-        _value: Option<models_properties::api::requests::SetPropertyValue>,
-        attribution: &Attribution,
+        value: Option<SetPropertyValue>,
     ) -> anyhow::Result<()> {
-        self.writes.lock().unwrap().push((
-            user_id.to_string(),
-            property_definition_id,
-            attribution.clone(),
-        ));
+        self.writes
+            .lock()
+            .unwrap()
+            .push((principal.clone(), property_definition_id, value));
         Ok(())
     }
 
@@ -2564,70 +2779,90 @@ impl TaskPropertiesPort for RecordingTaskPropertiesPort {
 }
 
 #[tokio::test]
-async fn handle_task_properties_forwards_create_attribution() {
-    use crate::domain::models::{ASSIGNEES_PROPERTY_ID, CreateTaskRequest, STATUS_PROPERTY_ID};
+async fn default_task_properties_assign_the_acting_user_and_never_a_team_bot() {
+    let assignees = uuid::Uuid::parse_str(ASSIGNEES_PROPERTY_ID).unwrap();
+    let status = uuid::Uuid::parse_str(STATUS_PROPERTY_ID).unwrap();
+    let not_started = SetPropertyValue::SelectOption {
+        option_id: NOT_STARTED_STATUS_OPTION_ID,
+    };
+    let assigned_to_user = SetPropertyValue::MultiEntityReference {
+        references: vec![EntityReference {
+            entity_id: "macro|user@user.com".to_string(),
+            entity_type: models_properties::EntityType::User,
+            specific_message_id: None,
+        }],
+    };
+    let bot_for_user = CreationPrincipal::BotForUser {
+        bot: bot_id::MACRO_SYSTEM_BOT_ID,
+        user: test_user(),
+    };
+    let team_bot = CreationPrincipal::TeamBot {
+        bot: bot_id::NonSystemBotId::new(bot_id::BotId::TEST_A).unwrap(),
+        team: uuid::Uuid::from_u128(7),
+    };
 
-    let task_properties = RecordingTaskPropertiesPort::default();
-    let service = DocumentServiceImpl::new(
-        make_mock_repo(),
-        test_cloudfront_config(),
-        sync_service_client::SyncServiceClient::new(
-            "test-sync-key".to_string(),
-            "http://sync-service.test".to_string(),
+    for (principal, expected) in [
+        (
+            bot_for_user,
+            vec![
+                (assignees, Some(assigned_to_user)),
+                (status, Some(not_started.clone())),
+            ],
         ),
-        TestUploadUrlPort,
-        task_properties.clone(),
-        TestConnectionService::default(),
-        TestEntityAccessManagementService::default(),
-        TestForeignEntityService::default(),
-        TestEventBroker::default(),
-    );
-    let user = macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
-        .unwrap()
-        .into_owned();
-    let attribution = Attribution::delegated(
-        Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID),
-        user.clone(),
-    );
+        (team_bot, vec![(status, Some(not_started))]),
+    ] {
+        let task_properties = RecordingTaskPropertiesPort::default();
+        let service = DocumentServiceImpl::new(
+            make_mock_repo(),
+            test_cloudfront_config(),
+            sync_service_client::SyncServiceClient::new(
+                "test-sync-key".to_string(),
+                "http://sync-service.test".to_string(),
+            ),
+            TestUploadUrlPort,
+            task_properties.clone(),
+            TestConnectionService::default(),
+            TestEntityAccessManagementService::default(),
+            TestForeignEntityService::default(),
+            TestEventBroker::default(),
+        );
 
-    crate::domain::ports::DocumentService::handle_task_properties(
-        &service,
-        user.clone(),
-        "task-1",
-        &CreateTaskRequest {
-            task_name: "Intro to tasks".to_string(),
-            markdown: None,
-            project_id: None,
-            team_id: None,
-            property_values: None,
-            share_with_team: false,
-        },
-        &attribution,
-    )
-    .await
-    .unwrap();
+        crate::domain::ports::DocumentService::handle_task_properties(
+            &service,
+            &principal,
+            "task-1",
+            &CreateTaskRequest {
+                task_name: "Intro to tasks".to_string(),
+                markdown: None,
+                project_id: None,
+                team_id: None,
+                property_values: None,
+                share_with_team: false,
+            },
+        )
+        .await
+        .unwrap();
 
-    let writes = task_properties.writes.lock().unwrap().clone();
-    assert_eq!(writes.len(), 2);
-    assert_eq!(
-        writes[0].1,
-        uuid::Uuid::parse_str(ASSIGNEES_PROPERTY_ID).unwrap()
-    );
-    assert_eq!(
-        writes[1].1,
-        uuid::Uuid::parse_str(STATUS_PROPERTY_ID).unwrap()
-    );
-    assert!(
-        writes
-            .iter()
-            .all(|(user_id, _, recorded)| user_id == user.as_ref() && recorded == &attribution)
-    );
+        let writes = task_properties.writes.lock().unwrap().clone();
+        assert!(
+            writes
+                .iter()
+                .all(|(written_as, _, _)| *written_as == principal)
+        );
+        assert_eq!(
+            writes
+                .into_iter()
+                .map(|(_, property, value)| (property, value))
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
 }
 
 #[tokio::test]
 async fn create_document_reuse_skips_content_url_and_created_event() {
     let mut repo = make_mock_repo();
-    repo.expect_get_team_default_link_share()
+    repo.expect_get_owner_team()
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
     let created_metadata = make_test_metadata();
     repo.expect_import_email_attachment_document()
@@ -2649,18 +2884,13 @@ async fn create_document_reuse_skips_content_url_and_created_event() {
     let (service, event_broker) = make_test_service_with_event_broker(repo);
     let args = ImportEmailAttachmentRepoArgs {
         email_attachment_id: uuid::Uuid::from_u128(9),
-        create: create_document_repo_args(FileType::Txt),
+        owner: test_user(),
+        document: new_document(FileType::Txt),
     };
 
-    let response = crate::domain::ports::DocumentService::import_email_attachment(
-        &service,
-        macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
-            .unwrap()
-            .into_owned(),
-        args,
-    )
-    .await
-    .unwrap();
+    let response = crate::domain::ports::DocumentService::import_email_attachment(&service, args)
+        .await
+        .unwrap();
 
     assert!(response.document_response.presigned_url.is_none());
     assert_eq!(
@@ -2768,11 +2998,10 @@ fn spreadsheet_test_service(
     )
 }
 
-fn spreadsheet_create_args() -> CreateDocumentRepoArgs {
-    let mut args = create_document_repo_args(FileType::Spreadsheet);
-    args.user_id = MacroUserIdStr::try_from_email("sheets@macro.com").unwrap();
-    args.sha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string();
-    args
+fn spreadsheet_document() -> NewDocument {
+    let mut document = new_document(FileType::Spreadsheet);
+    document.sha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string();
+    document
 }
 
 #[tokio::test]
@@ -2780,7 +3009,7 @@ async fn spreadsheet_creation_is_ready_only_after_sync_initialization() {
     let mut repo = make_mock_repo();
     let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
     let mut sequence = mockall::Sequence::new();
-    repo.expect_get_team_default_link_share()
+    repo.expect_get_owner_team()
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
     repo.expect_create_document().returning(|_, _| {
         let mut metadata = make_test_metadata();
@@ -2809,10 +3038,14 @@ async fn spreadsheet_creation_is_ready_only_after_sync_initialization() {
     repo.expect_get_team_task_metadata()
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
     let service = spreadsheet_test_service(repo, sync);
-    let args = spreadsheet_create_args();
-    let result = DocumentService::create_document(&service, args.user_id.clone(), args, None)
-        .await
-        .unwrap();
+    let result = DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        spreadsheet_document(),
+        None,
+    )
+    .await
+    .unwrap();
     assert!(result.document_response.presigned_url.is_none());
     assert_eq!(
         result.document_response.document_metadata.content,
@@ -2824,7 +3057,7 @@ async fn spreadsheet_creation_is_ready_only_after_sync_initialization() {
 async fn failed_spreadsheet_initialization_cleans_up_document_metadata() {
     let mut repo = make_mock_repo();
     let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
-    repo.expect_get_team_default_link_share()
+    repo.expect_get_owner_team()
         .returning(|_| Box::pin(std::future::ready(Ok(None))));
     repo.expect_create_document()
         .returning(|_, _| Box::pin(std::future::ready(Ok(make_test_metadata()))));
@@ -2840,11 +3073,15 @@ async fn failed_spreadsheet_initialization_cleans_up_document_metadata() {
         .times(1)
         .returning(|_| Box::pin(std::future::ready(Ok(()))));
     let service = spreadsheet_test_service(repo, sync);
-    let args = spreadsheet_create_args();
     assert!(
-        DocumentService::create_document(&service, args.user_id.clone(), args, None)
-            .await
-            .is_err()
+        DocumentService::create_document(
+            &service,
+            &CreationPrincipal::User(test_user()),
+            spreadsheet_document(),
+            None,
+        )
+        .await
+        .is_err()
     );
 }
 
@@ -2885,7 +3122,7 @@ fn spreadsheet_uploads_are_rejected_instead_of_discarding_their_bytes() {
             .is_err()
     );
     assert!(
-        validate_spreadsheet_creation(Some(FileType::Spreadsheet), &spreadsheet_create_args().sha)
+        validate_spreadsheet_creation(Some(FileType::Spreadsheet), &spreadsheet_document().sha)
             .is_ok()
     );
     assert!(validate_spreadsheet_creation(Some(FileType::Csv), "uploaded-csv-sha").is_ok());

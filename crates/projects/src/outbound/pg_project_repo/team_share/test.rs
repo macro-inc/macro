@@ -13,12 +13,12 @@ use uuid::Uuid;
 
 use crate::domain::models::{CreateProjectArgs, EditProjectArgs, ProjectError};
 use crate::domain::ports::ProjectRepo;
-use crate::outbound::pg_project_repo::PgProjectRepo;
+use crate::outbound::pg_project_repo::tests::{TestRepo, test_repo};
 
 const OWNER: &str = "macro|test@example.com";
 const TEAM_ID: Uuid = Uuid::from_u128(0xb2222222_2222_2222_2222_222222222222);
 
-async fn create_project(repo: &PgProjectRepo, name: &str) -> String {
+async fn create_project(repo: &TestRepo, name: &str) -> String {
     repo.create_project(CreateProjectArgs {
         user_id: OWNER.to_owned(),
         name: name.to_string(),
@@ -54,7 +54,7 @@ fn command(facts: &TeamShareFacts, level: Option<AccessLevel>) -> AuthorizedTeam
 }
 
 async fn edit_team_share(
-    repo: &PgProjectRepo,
+    repo: &TestRepo,
     project_id: &str,
     level: Option<AccessLevel>,
 ) -> Result<(), ProjectError> {
@@ -164,7 +164,7 @@ fn unshared() -> StoredTeamShare {
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn get_team_share_facts_reads_owner_team_and_null_state(pool: PgPool) {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let project_id = create_project(&repo, "Facts").await;
 
     let facts = repo.get_team_share_facts(&project_id).await.unwrap();
@@ -182,7 +182,7 @@ async fn get_team_share_facts_reads_owner_team_and_null_state(pool: PgPool) {
     fixtures(path = "../fixtures", scripts("users"))
 )]
 async fn get_team_share_facts_without_team_has_no_owner_team(pool: PgPool) {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let project_id = create_project(&repo, "No team").await;
 
     let facts = repo.get_team_share_facts(&project_id).await.unwrap();
@@ -196,7 +196,7 @@ async fn get_team_share_facts_without_team_has_no_owner_team(pool: PgPool) {
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn edit_applies_team_share_command_and_inserts_direct_team_entity_access(pool: PgPool) {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let project_id = create_project(&repo, "Shared").await;
 
     edit_team_share(&repo, &project_id, Some(AccessLevel::Edit))
@@ -243,7 +243,7 @@ async fn edit_applies_team_share_command_and_inserts_direct_team_entity_access(p
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn edit_team_share_copies_and_clears_nested_document_grants(pool: PgPool) {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let project_id = create_project(&repo, "Folder").await;
     let document_id = Uuid::from_u128(0xc3333333_3333_3333_3333_333333333333);
     insert_folder_document(&pool, &project_id, document_id).await;
@@ -301,7 +301,7 @@ async fn edit_team_share_copies_and_clears_nested_document_grants(pool: PgPool) 
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn edit_clear_command_removes_managed_team_entity_access_and_bumps_revision(pool: PgPool) {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let project_id = create_project(&repo, "Cleared").await;
     edit_team_share(&repo, &project_id, Some(AccessLevel::Comment))
         .await
@@ -325,7 +325,7 @@ async fn edit_clear_command_removes_managed_team_entity_access_and_bumps_revisio
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn edit_with_team_level_but_no_command_returns_unauthorized(pool: PgPool) {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let project_id = create_project(&repo, "Original").await;
 
     let result = repo
@@ -357,7 +357,7 @@ async fn edit_with_team_level_but_no_command_returns_unauthorized(pool: PgPool) 
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn edit_rejects_command_for_other_project_or_mismatched_level(pool: PgPool) {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let project_id = create_project(&repo, "Target").await;
     let other_project_id = create_project(&repo, "Other").await;
     let facts = repo.get_team_share_facts(&project_id).await.unwrap();
@@ -399,7 +399,7 @@ async fn edit_rejects_command_for_other_project_or_mismatched_level(pool: PgPool
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn edit_stale_command_returns_conflict(pool: PgPool) {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let project_id = create_project(&repo, "Stale").await;
     let facts = repo.get_team_share_facts(&project_id).await.unwrap();
     let stale = command(&facts, Some(AccessLevel::Edit));
@@ -428,7 +428,7 @@ async fn edit_stale_command_returns_conflict(pool: PgPool) {
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn edit_team_share_and_link_share_in_one_call_persists_both(pool: PgPool) {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let project_id = create_project(&repo, "Both").await;
     let facts = repo.get_team_share_facts(&project_id).await.unwrap();
 
@@ -473,7 +473,7 @@ async fn edit_team_share_and_link_share_in_one_call_persists_both(pool: PgPool) 
     fixtures(path = "../fixtures", scripts("users", "team"))
 )]
 async fn get_project_share_permission_reads_team_share_access_level(pool: PgPool) {
-    let repo = PgProjectRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let project_id = create_project(&repo, "Read").await;
     assert_eq!(
         repo.get_project_share_permission(&project_id)

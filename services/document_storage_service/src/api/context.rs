@@ -281,22 +281,16 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
 
     async fn set_entity_property(
         &self,
-        user_id: &str,
+        principal: &model_owner::CreationPrincipal,
         entity_id: &str,
         property_definition_id: uuid::Uuid,
         value: Option<models_properties::api::requests::SetPropertyValue>,
-        attribution: &activity::Attribution,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
-        let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
-        let entity_access_receipt = task_property_edit_receipt(
-            self.entity_access_service.as_ref(),
-            &user_id,
-            attribution,
-            entity_id,
-        )
-        .await?;
+        let entity_access_receipt =
+            task_property_edit_receipt(self.entity_access_service.as_ref(), principal, entity_id)
+                .await?;
         self.properties
             .set_entity_property(&entity_access_receipt, property_definition_id, value)
             .await
@@ -324,7 +318,7 @@ pub(crate) type EntityAccessManagementService =
     >;
 
 pub(crate) type DocumentService = DocumentServiceImpl<
-    PgDocumentRepo,
+    PgDocumentRepo<PgBotsRepo>,
     S3UploadUrlAdapter,
     TaskPropertiesAdapter,
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
@@ -343,7 +337,7 @@ pub(crate) type DocumentsState =
 
 /// Concrete project service wired into DSS.
 pub(crate) type ProjectService = ProjectServiceImpl<
-    PgProjectRepo,
+    PgProjectRepo<PgBotsRepo>,
     S3ProjectUploadAdapter,
     DynamoBulkUploadAdapter,
     ShaCountAdapter,

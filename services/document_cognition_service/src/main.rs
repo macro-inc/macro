@@ -2,6 +2,7 @@
 use crate::api::context::ApiContext;
 use ai_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
 use anyhow::Context;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
@@ -21,6 +22,8 @@ use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -270,7 +273,10 @@ async fn main() -> anyhow::Result<()> {
         config.document_storage_bucket.to_string(),
         config.docx_document_upload_bucket.to_string(),
     );
-    let document_repo = PgDocumentRepo::new(db.clone());
+    let document_repo = PgDocumentRepo::new(
+        db.clone(),
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone()))),
+    );
 
     let cloudfront_config = CloudFrontConfig {
         distribution_url: config

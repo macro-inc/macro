@@ -11,7 +11,7 @@ use documents::domain::markdown_backfill::{
 use documents::domain::models::DocumentError;
 use documents::domain::ports::markdown::MarkdownInitializationPort;
 use documents::outbound::markdown_init::LexicalSyncMarkdownInitializer;
-use documents::outbound::pg_document_repo::PgDocumentRepo;
+use documents::outbound::pg_document_repo::PgMarkdownBackfillRepo;
 use documents::outbound::s3_markdown_source::S3MarkdownObjectReader;
 use lexical_client::LexicalClient;
 use macro_env_var::env_vars;
@@ -120,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to connect to postgres")?;
 
-    let repo = PgDocumentRepo::new(db);
+    let repo = PgMarkdownBackfillRepo::new(db);
     let sync_probe =
         SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url.clone());
     let object_reader = build_object_reader(options.initialize_missing).await?;

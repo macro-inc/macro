@@ -2,6 +2,7 @@ use ai_tools::{
     NoOpConnectionService, NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue,
     ToolServiceContext,
 };
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::{
     domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
 };
@@ -15,6 +16,8 @@ use email::outbound::EmailPgRepo;
 use email_service_client::EmailServiceClientExternal;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -119,7 +122,10 @@ pub async fn build_tool_service_context(
         &config.document_storage_bucket,
         &config.docx_document_upload_bucket,
     );
-    let document_repo = PgDocumentRepo::new(pool.clone());
+    let document_repo = PgDocumentRepo::new(
+        pool.clone(),
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
+    );
     let cloudfront_config = CloudFrontConfig {
         distribution_url: config
             .document_storage_service_cloudfront_distribution_url

@@ -13,6 +13,7 @@ use documents_hex::domain::ports::mentions::DocumentMentionTrackingPort;
 use initiative::domain::models::{DescriptionDocumentId, InitiativeError, NewDescriptionDocument};
 use initiative::domain::ports::InitiativeDescriptionDocuments;
 use macro_event_broker::MacroEventBroker;
+use model_owner::CreationPrincipal;
 use sqlx::PgPool;
 
 use crate::service::document_event_publisher::publish_document_purged_event;
@@ -77,7 +78,7 @@ where
         let created = self
             .creator
             .create_markdown_text(
-                owner,
+                &CreationPrincipal::User(owner),
                 NewMarkdownTextDocument {
                     metadata,
                     markdown: prefill_markdown,

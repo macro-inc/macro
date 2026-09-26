@@ -72,13 +72,16 @@ fn published_event_actors(access: &EditReceipt) -> PublishedEventActors {
                 on_behalf_of: Some(acting_user.clone()),
                 actor_user_id: None,
             },
-            BotReceiptScope::Team { .. } | BotReceiptScope::Channel { .. } => {
-                PublishedEventActors {
-                    actor: None,
-                    on_behalf_of: None,
-                    actor_user_id: None,
-                }
-            }
+            BotReceiptScope::Team { .. } => PublishedEventActors {
+                actor: Some(Actor::new_from_bot(bot.bot_id())),
+                on_behalf_of: None,
+                actor_user_id: None,
+            },
+            BotReceiptScope::Channel { .. } => PublishedEventActors {
+                actor: None,
+                on_behalf_of: None,
+                actor_user_id: None,
+            },
         },
         EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => PublishedEventActors {
             actor: None,

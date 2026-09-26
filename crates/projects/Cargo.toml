@@ -29,6 +29,7 @@ outbound = [
   "dep:documents",
   "dep:dynamodb_client",
   "dep:entity_access_db_utils",
+  "dep:entity_registry",
   "dep:entity_registry_db_utils",
   "dep:hex",
   "dep:macro_sha_count_client",
@@ -101,6 +102,7 @@ document_sub_type = { path = "../document_sub_type", optional = true }
 documents = { path = "../documents", default-features = false, optional = true }
 dynamodb_client = { path = "../dynamodb_client", optional = true }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_registry = { path = "../entity_registry/entity_registry", optional = true }
 entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
 hex = { workspace = true, optional = true }
 macro_sha_count_client = { path = "../macro_sha_count_client", optional = true }

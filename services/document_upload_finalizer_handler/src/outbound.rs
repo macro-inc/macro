@@ -3,6 +3,7 @@ use documents::domain::models::DocumentError;
 use documents::domain::upload_finalize::{RepoUploadFinalizePort, UploadFinalizeDocumentPort};
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use documents::outbound::s3_utf8_object_reader::S3Utf8ObjectReader;
+use entity_registry::BotFacts;
 use model::document::DocumentBasic;
 
 use crate::ports::{DocumentObjectReader, DocumentUploadMetadataPort};
@@ -35,18 +36,18 @@ impl DocumentObjectReader for S3DocumentObjectReader {
 
 /// Postgres-backed document port for upload finalization.
 #[derive(Clone)]
-pub struct PgDocumentUploadPort {
-    repo: PgDocumentRepo,
+pub struct PgDocumentUploadPort<B> {
+    repo: PgDocumentRepo<B>,
 }
 
-impl PgDocumentUploadPort {
+impl<B> PgDocumentUploadPort<B> {
     /// Construct a Postgres document upload port.
-    pub fn new(repo: PgDocumentRepo) -> Self {
+    pub fn new(repo: PgDocumentRepo<B>) -> Self {
         Self { repo }
     }
 }
 
-impl DocumentUploadMetadataPort for PgDocumentUploadPort {
+impl<B: BotFacts + Clone + 'static> DocumentUploadMetadataPort for PgDocumentUploadPort<B> {
     async fn get_basic_document(
         &self,
         document_id: &str,
@@ -61,7 +62,7 @@ impl DocumentUploadMetadataPort for PgDocumentUploadPort {
     }
 }
 
-impl UploadFinalizeDocumentPort for PgDocumentUploadPort {
+impl<B: BotFacts + Clone + 'static> UploadFinalizeDocumentPort for PgDocumentUploadPort<B> {
     async fn get_document_content(
         &self,
         document_context: &DocumentBasic,

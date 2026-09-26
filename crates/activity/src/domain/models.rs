@@ -23,6 +23,7 @@ use std::sync::LazyLock;
 
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::CreationPrincipal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -83,6 +84,18 @@ impl Attribution {
         match self {
             Self::Direct { .. } => None,
             Self::Delegated { subject, .. } => Some(subject.clone()),
+        }
+    }
+}
+
+impl From<&CreationPrincipal> for Attribution {
+    fn from(principal: &CreationPrincipal) -> Self {
+        match principal {
+            CreationPrincipal::User(user) => Self::direct(Actor::new_from_user(user.clone())),
+            CreationPrincipal::BotForUser { bot, user } => {
+                Self::delegated(Actor::new_from_bot(*bot), user.clone())
+            }
+            CreationPrincipal::TeamBot { bot, .. } => Self::direct(Actor::new_from_bot(bot.get())),
         }
     }
 }

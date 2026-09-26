@@ -9,11 +9,14 @@ anyhow = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["eventbridge"] }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
+bots = { path = "../../crates/bots", default-features = false, features = ["outbound"] }
 documents = { path = "../../crates/documents", default-features = false, features = [
   "markdown_init",
   "outbound",
   "ports",
 ] }
+entity_registry = { path = "../../crates/entity_registry/entity_registry" }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 lambda_runtime = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }

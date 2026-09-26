@@ -103,7 +103,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/documents",
             post(
-                documents_hex::inbound::axum_router::create_document::create_document_handler::<
+                documents_hex::inbound::axum_router::create_document::create_document_internal_handler::<
                     DocumentService,
                     EntityAccessService,
                     AuthorizationService,

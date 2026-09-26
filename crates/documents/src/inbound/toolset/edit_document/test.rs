@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 use crate::domain::content::DocumentContent;
 use crate::domain::events::InteractionReason;
 use crate::domain::models::{
-    CreateDocumentRepoArgs, CreateTaskRequest, DocumentError, DocumentTeamShareResponse,
-    EditDocumentServiceArgs, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
-    LocationQueryParams, TaskBranchName,
+    CreateTaskRequest, DocumentError, DocumentTeamShareResponse, EditDocumentServiceArgs,
+    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument,
+    TaskBranchName,
 };
 use crate::domain::permission_token::decode_permission_token;
 use crate::domain::ports::editing::{
@@ -25,7 +25,7 @@ use macro_sync_service_jwt::DocumentPermissionToken;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model::{document::DocumentBasic, sync_service::SyncServiceVersionID};
 use model_entity::Entity;
-use model_owner::Owner;
+use model_owner::{CreationPrincipal, Owner};
 use sync_service_client::SyncServiceClient;
 use uuid::Uuid;
 
@@ -118,8 +118,8 @@ impl DocumentService for FakeDocumentService {
 
     async fn create_document(
         &self,
-        _user_id: MacroUserIdStr<'static>,
-        _args: CreateDocumentRepoArgs,
+        _principal: &CreationPrincipal,
+        _document: NewDocument,
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         panic!("unexpected create_document call")
@@ -127,7 +127,6 @@ impl DocumentService for FakeDocumentService {
 
     async fn import_email_attachment(
         &self,
-        _user_id: MacroUserIdStr<'static>,
         _args: ImportEmailAttachmentRepoArgs,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         panic!("unexpected import_email_attachment call")
@@ -177,7 +176,7 @@ impl DocumentService for FakeDocumentService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         _document_context: DocumentBasic,
-        _user_id: MacroUserIdStr<'static>,
+        _principal: &CreationPrincipal,
         _document_name: String,
         _query_version_id: Option<i64>,
         _sync_version_id: Option<SyncServiceVersionID>,
@@ -198,10 +197,9 @@ impl DocumentService for FakeDocumentService {
 
     async fn handle_task_properties(
         &self,
-        _user_id: MacroUserIdStr<'static>,
+        _principal: &CreationPrincipal,
         _document_id: &str,
         _request: &CreateTaskRequest,
-        _attribution: &activity::Attribution,
     ) -> Result<(), DocumentError> {
         panic!("unexpected handle_task_properties call")
     }
@@ -241,8 +239,8 @@ impl DocumentService for FakeDocumentService {
 impl DocumentCreationService for FakeDocumentService {
     async fn create_document(
         &self,
-        _user_id: MacroUserIdStr<'static>,
-        _args: CreateDocumentRepoArgs,
+        _principal: &CreationPrincipal,
+        _document: NewDocument,
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         panic!("unexpected create_document call")
@@ -250,10 +248,9 @@ impl DocumentCreationService for FakeDocumentService {
 
     async fn handle_task_properties(
         &self,
-        _user_id: MacroUserIdStr<'static>,
+        _principal: &CreationPrincipal,
         _document_id: &str,
         _request: &CreateTaskRequest,
-        _attribution: &activity::Attribution,
     ) -> Result<(), DocumentError> {
         panic!("unexpected handle_task_properties call")
     }
@@ -704,23 +701,22 @@ async fn edit_token_carries_the_context_actor() {
 }
 
 #[test]
-fn tool_writes_are_delegated_from_the_context_actor_to_the_requesting_user() {
+fn tool_creations_are_made_by_the_context_actor_for_the_requesting_user() {
     let user = MacroUserIdStr::try_from(TEST_USER_ID.to_string()).expect("valid user");
     let default_context =
         tool_context(FakeDocumentService::new("md"), FakeEditingWorker::default());
     assert_eq!(default_context.actor, bot_id::MACRO_AI_BOT_ID);
 
-    let attribution = default_context
+    let principal = default_context
         .0
         .with_actor(BotId::TEST_A)
-        .attribution(user);
+        .creation_principal(user.clone());
     assert_eq!(
-        attribution.actor().as_ref(),
-        BotId::TEST_A.into_storage_id().as_ref()
-    );
-    assert_eq!(
-        attribution.on_behalf_of().as_ref().map(|id| id.as_ref()),
-        Some(TEST_USER_ID)
+        principal,
+        CreationPrincipal::BotForUser {
+            bot: BotId::TEST_A,
+            user,
+        }
     );
 }
 

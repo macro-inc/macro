@@ -3,10 +3,11 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use activity::Attribution;
-use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, EntityType};
-use macro_user_id::user_id::MacroUserIdStr;
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityType,
+};
 use model::document::{FileType, FileTypeExt};
+use model_owner::CreationPrincipal;
 use rootcause::compat::anyhow1::IntoAnyhow;
 use tracing::Instrument;
 
@@ -33,10 +34,9 @@ pub struct NewFileUpload {
     pub file_name: String,
     /// Original file bytes.
     pub bytes: Vec<u8>,
-    /// Edit capability for the destination project; absent for top-level files.
+    /// Edit capability for the destination project, minted for the uploading
+    /// principal; absent for top-level files.
     pub project: Option<EntityAccessReceipt<EditAccessLevel>>,
-    /// Actor responsible for the upload on behalf of the owner.
-    pub attribution: Attribution,
 }
 
 impl<Svc, MarkdownInit, BytesUpload, MentionTracker>
@@ -53,14 +53,13 @@ where
     #[tracing::instrument(skip_all, err)]
     pub async fn upload_file(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         upload: NewFileUpload,
     ) -> Result<CreatedDocument, DocumentError> {
         let NewFileUpload {
             file_name,
             bytes,
             project,
-            attribution,
         } = upload;
         if bytes.len() > MAX_INLINE_UPLOAD_BYTES {
             return Err(DocumentError::BadRequest(
@@ -100,10 +99,10 @@ where
             ));
         }
 
-        let mut metadata = NewDocumentMetadata::builder(document_name).attribution(attribution);
+        let mut metadata = NewDocumentMetadata::builder(document_name);
         if let Some(project) = project {
             if project.entity().entity_type != EntityType::Project
-                || project.acting_user_id() != Some(&user_id)
+                || !receipt_is_for(&project, principal)
             {
                 return Err(DocumentError::Unauthorized);
             }
@@ -115,16 +114,14 @@ where
         }
 
         let hashes = file_shas(&bytes);
-        let args = metadata.build().into_repo_args(
-            user_id.clone(),
-            RepoDocumentKind {
-                file_type,
-                sha: hashes.hex,
-                subtype: RepoDocumentSubtype::Regular,
-                team_id: None,
-                share_with_team: false,
-            },
-        );
+        let document = metadata.build().into_new_document(RepoDocumentKind {
+            file_type,
+            sha: hashes.hex,
+            subtype: RepoDocumentSubtype::Regular,
+            team_id: None,
+            share_with_team: false,
+        });
+        let principal = principal.clone();
         let document_service = self.document_service.clone();
         let bytes_uploader = self.bytes_uploader.clone();
         // Own the entire write so dropping the caller cannot interrupt metadata
@@ -132,7 +129,7 @@ where
         tokio::spawn(
             async move {
                 let response = document_service
-                    .create_document(user_id, args, None)
+                    .create_document(&principal, document, None)
                     .await
                     .inspect_err(|error| {
                         tracing::error!(error=?error, "file upload metadata creation failed");
@@ -182,5 +179,23 @@ where
         )
         .await
         .map_err(|error| DocumentError::Internal(rootcause::report!(error).into_anyhow()))?
+    }
+}
+
+fn receipt_is_for(
+    receipt: &EntityAccessReceipt<EditAccessLevel>,
+    principal: &CreationPrincipal,
+) -> bool {
+    match (receipt.auth(), principal) {
+        (EntityAccessAuth::Authenticated(receipt_user), CreationPrincipal::User(user)) => {
+            receipt_user == user
+        }
+        (EntityAccessAuth::Bot(auth), CreationPrincipal::BotForUser { bot, user }) => {
+            auth.bot_id() == *bot && auth.scope().acting_user_id() == Some(user)
+        }
+        (EntityAccessAuth::Bot(auth), CreationPrincipal::TeamBot { bot, team }) => {
+            auth.bot_id() == bot.get() && auth.scope().team_id() == Some(*team)
+        }
+        _ => false,
     }
 }
