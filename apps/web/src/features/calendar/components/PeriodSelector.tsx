@@ -146,8 +146,9 @@ export function PeriodSelector(props: { isNarrow?: boolean }) {
     >
       <Dropdown.Trigger
         aria-label="Choose calendar view"
-        size="md"
-        class="shrink-0 h-(--sidebar-row-height) gap-(--sidebar-label-gap) rounded-full px-(--sidebar-item-inset) touch:h-11"
+        variant="ghost"
+        size="lg"
+        class="shrink-0 rounded-full border-transparent bg-transparent text-sm"
       >
         {CALENDAR_VIEWS.find((view) => view.value === controls.activeView())
           ?.label ?? 'Week'}

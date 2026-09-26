@@ -776,18 +776,38 @@ chrome and topbar actions rather than adding another sidebar.
 The in-view desktop Calendar header follows Drive's two-level layout: the slim
 top bar shows the viewed month and year and, when the sidebar is closed, a
 compact `New` menu. At wide widths, the row beneath puts `Search events` on
-the left and a labeled `Today` button followed by previous/next arrows and
-the rounded period selector on the right. Clicking search opens a
-calendar-search hint until at least three characters are entered; empty results
-show an illustrated empty state. Availability is only in the sidebar's Upcoming
-events section.
-When the header narrows, the search field stays in the same fixed-height flex
-row instead of turning into an icon. Focusing it hides `Today` and the period
-controls to give search the full row; moving focus away restores them. A search
-with text retains its clear button when shrunk. The `New` menu stays in the top
-bar while search is expanded. Touch devices retain the split header's compact
-creation controls and month picker. The mini calendar's month label opens a
-month picker; arrows also change months.
+the left and a labeled `Today` button followed by the rounded period selector
+and previous/next arrows on the right. The idle search field places its hotkey
+beside the placeholder. A query reveals the icon-only Exact-match toggle at
+wide widths; in narrow splits, Exact and Filters appear after focusing search.
+The filter button stays before Clear. The filter menu opens below the button,
+aligned to its right edge: Search in is single-select, while Status, Organizer,
+and Attendee allow multiple values. Organizer and Attendee virtualize their
+contact lists; selected contacts stay in place, while custom email addresses
+appear first. Adding a valid email clears the contact search. Filter selections
+apply immediately, and only these filters mark the filter button, not Exact
+mode. Clicking search opens a calendar-search hint until at least three
+characters are entered; searches show skeleton rows while loading. Empty
+results show an illustrated empty state. Result titles show a calendar-color
+swatch when the event is loaded in the visible range, falling back to the
+default calendar color otherwise. A result shows its location after the
+date/time when available. Each result offers at most one rounded Join action:
+matching occurrence content takes precedence over series metadata. Macro links
+use a neutral button, Google Meet uses a solid blue button in light mode and a
+subtle blue button in dark mode, and other conference links use a neutral button.
+All Join buttons use a camera icon. Generated Macro invitation paragraphs are
+hidden from event descriptions. Google Meet URLs in an event's location or
+description also supply Join actions. Recurring results wait for matching
+occurrence details before showing Join. Selecting a result preserves the search
+text. Availability is only in the sidebar's Upcoming events section.
+
+Resizing the split keeps the same search field mounted in the fixed-height
+header row. At narrow widths the row hides `Today` and the period selector,
+then the navigation arrows when space becomes scarce; focusing search also
+hides the remaining controls to give the field room. Its clear button remains
+available when a query is present. The `New` menu stays in the top bar. Touch
+devices retain the split header's compact creation controls and month picker.
+The mini calendar's month label opens a month picker; arrows change months.
 
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.

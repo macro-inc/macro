@@ -82,6 +82,8 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
   const headerSize = createElementSize(headerElement);
   // The shell width includes the sidebar; only the header's main-pane width matters.
   const isCompactHeader = () => (headerSize.width ?? 0) < 520;
+  const showPeriodControls = () => (headerSize.width ?? 0) >= 460;
+  const showNavigationArrows = () => (headerSize.width ?? 0) >= 260;
   const today = createLocalToday();
   const [narrowSearchOpen, setNarrowSearchOpen] = createSignal(false);
   useCalendarHotkeys({
@@ -157,11 +159,11 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
   const todayButton = (mobile: boolean) => (
     <Button
       variant={mobile ? 'ghost' : 'outline'}
-      size={mobile ? 'icon-lg' : 'md'}
+      size={mobile ? 'icon-lg' : 'lg'}
       class={
         mobile
           ? 'relative rounded-full'
-          : 'rounded-full border-edge-button bg-transparent px-3'
+          : 'rounded-full border-edge-button bg-transparent px-3 text-sm'
       }
       label="Go to today"
       hotkey={TOKENS.calendar.period.today}
@@ -220,11 +222,11 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
                 {newEvent()}
                 {newCall()}
                 <Show when={!isMobile()}>
+                  <PeriodSelector isNarrow={isNarrow()} />
                   <div class="flex shrink-0 items-center gap-1">
                     {previous()}
                     {next()}
                   </div>
-                  <PeriodSelector isNarrow={isNarrow()} />
                 </Show>
                 <CalendarSearch />
                 <Show when={props.presentation === 'preview'}>
@@ -265,48 +267,30 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
           </Show>
         </ViewShell.TopBar>
         <ViewShell.Header ref={setHeaderElement}>
-          <Show
-            when={isCompactHeader()}
-            fallback={
-              <div class="flex min-w-0 items-center justify-between gap-3">
-                <div class="w-full min-w-0 max-w-md">
-                  <CalendarSearch inline />
-                </div>
-                <div class="ml-auto flex shrink-0 items-center gap-1">
-                  {todayButton(false)}
-                  {previous()}
-                  {next()}
-                  <PeriodSelector isNarrow={isNarrow()} />
-                </div>
-              </div>
-            }
-          >
-            <div class="flex h-10 min-w-0 items-center gap-2">
-              <div
-                class="w-full min-w-0 max-w-md"
-                onFocusIn={() => setNarrowSearchOpen(true)}
-                onFocusOut={(event) => {
-                  if (
-                    event.relatedTarget instanceof Node &&
-                    event.currentTarget.contains(event.relatedTarget)
-                  ) {
-                    return;
-                  }
-                  setNarrowSearchOpen(false);
-                }}
-              >
-                <CalendarSearch inline />
-              </div>
-              <Show when={!narrowSearchOpen()}>
-                <div class="ml-auto flex shrink-0 items-center gap-1">
-                  {todayButton(false)}
-                  {previous()}
-                  {next()}
-                  <PeriodSelector isNarrow={isNarrow()} />
-                </div>
-              </Show>
+          <div class="flex h-10 min-w-0 items-center gap-2">
+            <div class="min-w-0 max-w-md flex-1">
+              <CalendarSearch
+                inline
+                compact={isCompactHeader()}
+                onOpenChange={setNarrowSearchOpen}
+              />
             </div>
-          </Show>
+            <Show
+              when={
+                (!isCompactHeader() || !narrowSearchOpen()) &&
+                showNavigationArrows()
+              }
+            >
+              <div class="ml-auto flex shrink-0 items-center gap-1">
+                <Show when={showPeriodControls()}>
+                  {todayButton(false)}
+                  <PeriodSelector isNarrow={isNarrow()} />
+                </Show>
+                {previous()}
+                {next()}
+              </div>
+            </Show>
+          </div>
         </ViewShell.Header>
       </>
     </Show>
