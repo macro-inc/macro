@@ -1,6 +1,7 @@
 use chrono::{TimeZone, Utc};
 
 mod access;
+mod reads;
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType,
     OwnerAccessLevel, ViewAccessLevel,
@@ -131,7 +132,11 @@ fn service_with_documents(
     repo: MockInitiativeRepo,
     documents: MockInitiativeDescriptionDocuments,
 ) -> InitiativeServiceImpl<MockInitiativeRepo, MockInitiativeDescriptionDocuments> {
-    InitiativeServiceImpl::new(repo, documents)
+    InitiativeServiceImpl::new(
+        repo,
+        documents,
+        std::sync::Arc::new(reads::FakeResources::default()),
+    )
 }
 
 fn share_update() -> UpdateSharePermissionRequestV2 {

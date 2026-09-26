@@ -5,6 +5,7 @@ mod options;
 mod task_properties;
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use activity::Actor;
 use document_sub_type::DocumentSubType;
@@ -29,7 +30,7 @@ use models_properties::service::property_definition_with_options::PropertyDefini
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType};
-use system_properties::SystemPropertyKey;
+use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 use super::error::PropertiesErr;
@@ -46,7 +47,9 @@ use super::model::{
     ResolvedPropertySubject, TagPromotionOutcome, TagRemapOutcome, TagScope, TagSet,
     UpdatePropertyOptionOutcome, ViewReceipt,
 };
-use super::ports::{NotificationService, PermissionService, PropertiesRepo};
+use super::ports::{
+    InitiativeAssigneeService, NotificationService, PermissionService, PropertiesRepo,
+};
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
 
 use helpers::{
@@ -102,6 +105,7 @@ where
     permission_service: Option<P>,
     notification_service: Option<N>,
     event_broker: B,
+    initiative_assignees: Option<Arc<dyn InitiativeAssigneeService>>,
 }
 
 impl<R, P, N> PropertiesServiceImpl<R, P, N>
@@ -121,6 +125,7 @@ where
             permission_service,
             notification_service,
             event_broker: NoopMacroEventBroker,
+            initiative_assignees: None,
         }
     }
 }
@@ -142,7 +147,17 @@ where
             permission_service: self.permission_service,
             notification_service: self.notification_service,
             event_broker,
+            initiative_assignees: self.initiative_assignees,
         }
+    }
+
+    /// Supply the initiative domain's assignee-sharing capability.
+    pub fn with_initiative_assignees(
+        mut self,
+        initiative_assignees: Arc<dyn InitiativeAssigneeService>,
+    ) -> Self {
+        self.initiative_assignees = Some(initiative_assignees);
+        self
     }
 
     /// Publish a property lifecycle event without coupling broker availability
@@ -639,6 +654,23 @@ where
 
         // Validate property options at service layer (before upserting)
         let option_ids = extract_option_ids_from_property_value(&property_value);
+        if entity_type == EntityType::Initiative
+            && property_definition_id == SystemPropertyKey::STATUS_UUID
+            && option_ids.iter().any(|option_id| {
+                !matches!(
+                    StatusOption::from_uuid(*option_id),
+                    Some(
+                        StatusOption::NotStarted
+                            | StatusOption::InProgress
+                            | StatusOption::Completed
+                    )
+                )
+            })
+        {
+            return Err(PropertiesErr::Validation(
+                "Project status must be Not Started, In Progress, or Completed".to_string(),
+            ));
+        }
         if !option_ids.is_empty() {
             self.validate_property_options(property_definition_id, &option_ids)
                 .await?;
@@ -681,6 +713,13 @@ where
             && entity_type == EntityType::Task
         {
             self.handle_task_assignees_property(entity_id, value, access.acting_user_id())
+                .await?;
+        }
+
+        if property_definition_id == SystemPropertyKey::ASSIGNEES_UUID
+            && entity_type == EntityType::Initiative
+        {
+            self.handle_initiative_assignees_property(access, &property_value)
                 .await?;
         }
 

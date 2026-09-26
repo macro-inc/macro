@@ -21,7 +21,9 @@ pub enum PropertyTargetEntityType {
     Company,
     /// Document, including tasks and snippets.
     Document,
-    /// Project.
+    /// Initiative, displayed as a Project in the application.
+    Initiative,
+    /// Folder project.
     Project,
     /// Email thread.
     Thread,

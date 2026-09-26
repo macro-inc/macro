@@ -165,6 +165,7 @@ fn insert_graphql_context_data(
     data.insert(state.favorites_mutation_service.clone());
     data.insert(state.favorites_service.clone());
     data.insert(state.channel_service.clone());
+    data.insert(state.graphql_initiative_context.clone());
     data.insert(state.graphql_notification_reader.clone());
     data.insert(state.soup_router_state.email_service());
     data.insert(state.entity_access_service.clone());

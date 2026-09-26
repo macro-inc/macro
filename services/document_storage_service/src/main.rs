@@ -440,7 +440,12 @@ async fn run() -> anyhow::Result<()> {
             Some(permission_checker),
             Some(notification_service),
         )
-        .with_event_broker(macro_event_broker.clone()),
+        .with_event_broker(macro_event_broker.clone())
+        .with_initiative_assignees(Arc::new(
+            initiative::domain::assignees::InitiativeAssignees::new(PgInitiativeRepo::new(
+                db.clone(),
+            )),
+        )),
     );
 
     // Create the channel list service used by soup.
@@ -1223,6 +1228,11 @@ async fn run() -> anyhow::Result<()> {
                 macro_event_broker.clone(),
             ),
         ),
+        Arc::new(initiative::outbound::resources::ProjectResources::new(
+            properties_service.clone(),
+            system_properties_service.clone(),
+            entity_access_service.clone(),
+        )),
     ));
 
     let collab_surface_service = CollabSurfaceServiceImpl::new(
@@ -1562,6 +1572,10 @@ async fn run() -> anyhow::Result<()> {
             Arc::new(reminders_service),
             entity_access_service.clone(),
             authorization_state.clone(),
+        ),
+        graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
+            initiative_service.clone(),
+            entity_access_service.clone(),
         ),
         initiative_state: InitiativeRouterState::new(
             initiative_service,

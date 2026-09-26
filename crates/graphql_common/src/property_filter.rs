@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{IntoFilterExpr, filter_expr_input, parse_id};
 
+#[cfg(test)]
+mod test;
+
 filter_expr_input!(
     GraphqlPropertiesExpr,
     GraphqlPropertiesBinaryExpr,
@@ -38,7 +41,14 @@ impl IntoFilterExpr<PropertiesLiteral> for GraphqlPropertiesLiteral {
             property_definition_id: parse_id(self.property_definition_id, "propertyDefinitionId")?,
             entity_type: self
                 .entity_type
-                .and_then(|et| PropertyEntityType::try_from(et).ok()),
+                .map(|entity_type| {
+                    PropertyEntityType::try_from(entity_type).map_err(|unsupported| {
+                        async_graphql::Error::new(format!(
+                            "Property filtering is not supported for {unsupported:?}"
+                        ))
+                    })
+                })
+                .transpose()?,
             value: self.value.into_ast()?,
         }))
     }
@@ -85,6 +95,8 @@ pub enum GraphqlPropertyEntityType {
     Company,
     /// Document entity.
     Document,
+    /// Initiative entity.
+    Initiative,
     /// Project entity.
     Project,
     /// Task entity.
@@ -105,6 +117,7 @@ impl GraphqlPropertyEntityType {
             models_properties::EntityType::Chat => Self::Chat,
             models_properties::EntityType::Company => Self::Company,
             models_properties::EntityType::Document => Self::Document,
+            models_properties::EntityType::Initiative => Self::Initiative,
             models_properties::EntityType::Project => Self::Project,
             models_properties::EntityType::Task => Self::Task,
             models_properties::EntityType::Thread => Self::Thread,
@@ -121,6 +134,7 @@ impl GraphqlPropertyEntityType {
             Self::Chat => models_properties::EntityType::Chat,
             Self::Company => models_properties::EntityType::Company,
             Self::Document => models_properties::EntityType::Document,
+            Self::Initiative => models_properties::EntityType::Initiative,
             Self::Project => models_properties::EntityType::Project,
             Self::Task => models_properties::EntityType::Task,
             Self::Thread => models_properties::EntityType::Thread,
@@ -143,9 +157,9 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Task => Self::Task,
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
-            // Call records are not part of the generic property-filter AST.
-            // They are filtered through a dedicated call query instead.
-            other @ GraphqlPropertyEntityType::CallRecord => return Err(other),
+            // Calls and initiatives use their owning domain's query surface.
+            other @ (GraphqlPropertyEntityType::CallRecord
+            | GraphqlPropertyEntityType::Initiative) => return Err(other),
         })
     }
 }

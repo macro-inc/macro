@@ -5,6 +5,9 @@ mod test;
 
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
+use std::sync::Arc;
+
+mod reads;
 
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
@@ -26,6 +29,7 @@ use crate::domain::models::{
     UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
 };
 use crate::domain::ports::{InitiativeDescriptionDocuments, InitiativeRepo, InitiativeService};
+use crate::domain::resources::InitiativeResources;
 
 /// Concrete initiative service backed by an [`InitiativeRepo`] and the description document
 /// port.
@@ -33,6 +37,7 @@ use crate::domain::ports::{InitiativeDescriptionDocuments, InitiativeRepo, Initi
 pub struct InitiativeServiceImpl<R, D> {
     repo: R,
     description_documents: D,
+    resources: Arc<dyn InitiativeResources>,
 }
 
 impl<R, D> std::fmt::Debug for InitiativeServiceImpl<R, D> {
@@ -47,10 +52,11 @@ where
     D: InitiativeDescriptionDocuments,
 {
     /// Create an initiative service backed by the provided repository and document port.
-    pub fn new(repo: R, description_documents: D) -> Self {
+    pub fn new(repo: R, description_documents: D, resources: Arc<dyn InitiativeResources>) -> Self {
         Self {
             repo,
             description_documents,
+            resources,
         }
     }
 
@@ -100,6 +106,36 @@ where
     R::Err: Into<InitiativeError>,
     D: InitiativeDescriptionDocuments,
 {
+    async fn summary(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<crate::domain::reads::InitiativePageRow, InitiativeError> {
+        self.read_summary(receipt).await
+    }
+
+    async fn page(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: crate::domain::reads::InitiativePageRequest,
+    ) -> Result<crate::domain::reads::InitiativePage, InitiativeError> {
+        self.read_page(user_id, request).await
+    }
+
+    async fn tasks_page(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        request: crate::domain::reads::InitiativeTasksRequest,
+    ) -> Result<crate::domain::reads::InitiativeTasksPage, InitiativeError> {
+        self.read_tasks_page(receipt, request).await
+    }
+
+    async fn task_references(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: crate::domain::reads::TaskInitiativeReferencesRequest,
+    ) -> Result<crate::domain::reads::TaskInitiativeReferences, InitiativeError> {
+        self.read_task_references(user_id, request).await
+    }
     /// Two commits with compensation. The documents side commits first. A failed
     /// initiative write purges the document so nothing orphaned survives an `Err`.
     #[tracing::instrument(err, skip_all)]
@@ -151,6 +187,14 @@ where
             .await;
         match created {
             Ok(mut detail) => {
+                if let Err(error) = self.resources.initialize(id).await {
+                    if self.repo.delete(id).await.inspect_err(|cleanup| {
+                        tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization");
+                    }).is_ok() {
+                        let _ = self.description_documents.purge(description_document_id).await.inspect_err(|cleanup| tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization"));
+                    }
+                    return Err(error);
+                }
                 detail.user_access_level = AccessLevel::Owner;
 
                 Ok(detail)
@@ -198,6 +242,7 @@ where
             .map_err(Into::into)?
             .ok_or(InitiativeError::NotFound)?;
         detail.user_access_level = receipt_access_level(&receipt)?;
+        detail.task_ids = self.visible_tasks(receipt.auth(), detail.task_ids).await?;
         Ok(detail)
     }
 
@@ -265,6 +310,7 @@ where
             .map_err(Into::into)?;
 
         detail.user_access_level = receipt_access_level(&receipt)?;
+        detail.task_ids = self.visible_tasks(receipt.auth(), detail.task_ids).await?;
         Ok(detail)
     }
 
@@ -336,6 +382,15 @@ where
             .map_err(Into::into)
     }
 
+    #[tracing::instrument(err, skip_all)]
+    async fn grant_assignees(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), InitiativeError> {
+        super::assignees::grant(&self.repo, &receipt, user_ids).await
+    }
+
     /// Initiative rows first, then the document. The FK's `ON DELETE RESTRICT`
     /// would reject a document-first purge while the initiative still names it.
     #[tracing::instrument(err, skip_all)]
@@ -345,16 +400,21 @@ where
     ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
         let description_document_id = self.repo.delete(id).await.map_err(Into::into)?;
-        self.description_documents
-            .purge(description_document_id)
-            .await
-            .inspect_err(|_| {
-                tracing::error!(
-                    %description_document_id,
-                    %id,
-                    "description document orphaned after initiative delete"
-                );
-            })
+
+        // Cleanup follows an authorized deletion and is not a fresh user edit.
+        let cleanup_receipt = EntityAccessReceipt::try_new(
+            EntityAccessAuth::Internal,
+            receipt.entity().clone(),
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+        )
+        .map_err(|_| InitiativeError::Unauthorized)?;
+        let properties_cleanup = self.resources.purge(cleanup_receipt).await;
+        let document_cleanup = self.description_documents.purge(description_document_id).await.inspect_err(|error| {
+            tracing::error!(?error, %description_document_id, %id, "description document orphaned after initiative delete");
+        });
+        properties_cleanup.and(document_cleanup)
     }
 }
 

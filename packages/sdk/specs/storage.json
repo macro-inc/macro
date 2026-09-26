@@ -23608,6 +23608,7 @@
           "CHAT",
           "COMPANY",
           "DOCUMENT",
+          "INITIATIVE",
           "PROJECT",
           "TASK",
           "THREAD",

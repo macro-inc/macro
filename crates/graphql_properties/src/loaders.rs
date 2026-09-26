@@ -1,11 +1,17 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::dataloader::{DataLoader, Loader};
-use entity_access::domain::models::ViewAccessLevel;
+use entity_access::domain::models::{EntityAccessReceipt, EntityPermission, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use models_properties::service::{
+    property_definition::PropertyDefinition, property_option::PropertyOption,
+};
 use rootcause::markers::{Cloneable, Dynamic};
+use uuid::Uuid;
+
+use crate::definitions::GraphqlPropertyDefinitionScope;
 
 /// Whether the canonical entity type supports property targets.
 fn is_property_target(entity_type: model_entity::EntityType) -> bool {
@@ -19,12 +25,28 @@ fn is_property_target(entity_type: model_entity::EntityType) -> bool {
             | EntityType::Chat
             | EntityType::Channel
             | EntityType::Project
+            | EntityType::Initiative
             | EntityType::User
     )
 }
 
 /// Reader used by GraphQL property edges.
 pub trait EntityPropertyReader: Send + Sync + 'static {
+    /// List definitions visible to the authenticated caller in the requested scope.
+    fn get_definitions(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        scope: GraphqlPropertyDefinitionScope,
+        for_entity_type: Option<models_properties::EntityType>,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinition>, rootcause::Report>> + Send;
+
+    /// Read options after the properties service verifies definition visibility.
+    fn get_options(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<PropertyOption>, rootcause::Report>> + Send;
+
     /// Load properties for the requested entity keys on behalf of the given
     /// user. Entities the user cannot view yield an empty property list.
     fn get_properties(
@@ -44,6 +66,23 @@ pub trait EntityPropertyReader: Send + Sync + 'static {
 pub struct NoOpEntityPropertyReader;
 
 impl EntityPropertyReader for NoOpEntityPropertyReader {
+    async fn get_definitions(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _scope: GraphqlPropertyDefinitionScope,
+        _for_entity_type: Option<models_properties::EntityType>,
+    ) -> Result<Vec<PropertyDefinition>, rootcause::Report> {
+        Err(rootcause::report!("property reader is not configured"))
+    }
+
+    async fn get_options(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _property_definition_id: Uuid,
+    ) -> Result<Vec<PropertyOption>, rootcause::Report> {
+        Err(rootcause::report!("property reader is not configured"))
+    }
+
     async fn get_properties(
         &self,
         _user_id: &MacroUserIdStr<'static>,
@@ -76,11 +115,76 @@ impl<P, A> PropertiesEntityPropertyReader<P, A> {
     }
 }
 
+impl<P, A: EntityAccessService> PropertiesEntityPropertyReader<P, A> {
+    /// Mint membership proof from the canonical access service for owner-scoped reads.
+    async fn caller_team_receipt(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> Result<Option<properties::domain::service::TeamReceipt>, rootcause::Report> {
+        let Some(team) = self
+            .entity_access_service
+            .get_user_team(user_id)
+            .await
+            .map_err(|err| rootcause::report!(err))?
+        else {
+            return Ok(None);
+        };
+        Ok(EntityAccessReceipt::try_new_authenticated_user(
+            user_id.clone(),
+            entity_access::domain::models::Entity {
+                entity_id: team.team_id.to_string(),
+                entity_type: model_entity::EntityType::Team,
+            },
+            EntityPermission::TeamRole { role: team.role },
+        )
+        .map(Some)
+        .map_err(|err| rootcause::report!(err))?)
+    }
+}
+
 impl<P, A> EntityPropertyReader for PropertiesEntityPropertyReader<P, A>
 where
     P: properties::PropertiesService,
     A: EntityAccessService,
 {
+    async fn get_definitions(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        scope: GraphqlPropertyDefinitionScope,
+        for_entity_type: Option<models_properties::EntityType>,
+    ) -> Result<Vec<PropertyDefinition>, rootcause::Report> {
+        let team = match scope {
+            GraphqlPropertyDefinitionScope::Team | GraphqlPropertyDefinitionScope::All => {
+                self.caller_team_receipt(user_id).await?
+            }
+            GraphqlPropertyDefinitionScope::User | GraphqlPropertyDefinitionScope::System => None,
+        };
+        let (user, include_system) = match scope {
+            GraphqlPropertyDefinitionScope::User => (Some(user_id), false),
+            GraphqlPropertyDefinitionScope::Team => (None, false),
+            GraphqlPropertyDefinitionScope::System => (None, true),
+            GraphqlPropertyDefinitionScope::All => (Some(user_id), true),
+        };
+        Ok(self
+            .properties_service
+            .list_property_definitions(team.as_ref(), user, include_system, for_entity_type)
+            .await
+            .map_err(|err| rootcause::report!(err))?)
+    }
+
+    async fn get_options(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        property_definition_id: Uuid,
+    ) -> Result<Vec<PropertyOption>, rootcause::Report> {
+        let team = self.caller_team_receipt(user_id).await?;
+        Ok(self
+            .properties_service
+            .get_property_options(property_definition_id, user_id, team.as_ref())
+            .await
+            .map_err(|err| rootcause::report!(err))?)
+    }
+
     async fn get_properties(
         &self,
         user_id: &MacroUserIdStr<'static>,
@@ -164,6 +268,27 @@ impl<R> EntityPropertiesLoader<R> {
     /// Create a new entity properties DataLoader scoped to the requesting user.
     pub fn new(user_id: MacroUserIdStr<'static>, reader: R) -> Self {
         Self { user_id, reader }
+    }
+}
+
+impl<R: EntityPropertyReader> EntityPropertiesLoader<R> {
+    /// Load definitions using the same authenticated identity as property edges.
+    pub(crate) async fn definitions(
+        &self,
+        scope: GraphqlPropertyDefinitionScope,
+        for_entity_type: Option<models_properties::EntityType>,
+    ) -> Result<Vec<PropertyDefinition>, rootcause::Report> {
+        self.reader
+            .get_definitions(&self.user_id, scope, for_entity_type)
+            .await
+    }
+
+    /// Load options using the same authenticated identity as property edges.
+    pub(crate) async fn options(
+        &self,
+        definition_id: Uuid,
+    ) -> Result<Vec<PropertyOption>, rootcause::Report> {
+        self.reader.get_options(&self.user_id, definition_id).await
     }
 }
 

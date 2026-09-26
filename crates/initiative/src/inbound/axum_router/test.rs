@@ -324,6 +324,46 @@ fn reject_name(name: &str) -> Result<(), InitiativeError> {
 }
 
 impl InitiativeService for FakeInitiativeService {
+    async fn summary(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<crate::domain::reads::InitiativePageRow, InitiativeError> {
+        Err(InitiativeError::NotFound)
+    }
+
+    async fn page(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _request: crate::domain::reads::InitiativePageRequest,
+    ) -> Result<crate::domain::reads::InitiativePage, InitiativeError> {
+        Ok(crate::domain::reads::InitiativePage {
+            initiatives: Vec::new(),
+            next_cursor: None,
+        })
+    }
+
+    async fn tasks_page(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _request: crate::domain::reads::InitiativeTasksRequest,
+    ) -> Result<crate::domain::reads::InitiativeTasksPage, InitiativeError> {
+        Ok(crate::domain::reads::InitiativeTasksPage {
+            task_ids: Vec::new(),
+            next_cursor: None,
+            total: 0,
+        })
+    }
+
+    async fn task_references(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _request: crate::domain::reads::TaskInitiativeReferencesRequest,
+    ) -> Result<crate::domain::reads::TaskInitiativeReferences, InitiativeError> {
+        Ok(crate::domain::reads::TaskInitiativeReferences {
+            references: Vec::new(),
+        })
+    }
+
     async fn create(
         &self,
         _user_id: &MacroUserIdStr<'_>,
@@ -413,6 +453,14 @@ impl InitiativeService for FakeInitiativeService {
         self.record(ServiceCall::Clear {
             task_id: task_receipt.entity().entity_id.clone(),
         });
+        Ok(())
+    }
+
+    async fn grant_assignees(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        _user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), InitiativeError> {
         Ok(())
     }
 

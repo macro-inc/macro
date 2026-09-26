@@ -7,6 +7,77 @@ use crate::domain::model::{PropertyRow, SystemPropertyKey};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn initiative_initialization_preserves_values_and_folder_namespace(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::service::{SystemPropertiesService, SystemPropertiesServiceImpl};
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let service = SystemPropertiesServiceImpl::new(repo.clone());
+    let entity_id = "initiative-initialization";
+    // An identical legacy folder id is a separate property owner.
+    repo.bulk_upsert_properties(vec![PropertyRow::entity_reference(
+        entity_id,
+        EntityType::Project,
+        SystemPropertyKey::ASSIGNEES_UUID,
+        EntityType::User,
+        vec!["macro|folder@test.com".into()],
+        None,
+    )])
+    .await?;
+    service
+        .attach_initiative_properties(vec![entity_id.into()])
+        .await?;
+    repo.bulk_upsert_properties(vec![PropertyRow::entity_reference(
+        entity_id,
+        EntityType::Initiative,
+        SystemPropertyKey::ASSIGNEES_UUID,
+        EntityType::User,
+        vec!["macro|owner@test.com".into()],
+        None,
+    )])
+    .await?;
+    service
+        .attach_initiative_properties(vec![entity_id.into()])
+        .await?;
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT entity_type AS "entity_type: EntityType", property_definition_id, values
+        FROM entity_properties
+        WHERE entity_id = $1
+        "#,
+        entity_id,
+    )
+    .fetch_all(&pool)
+    .await?;
+    assert_eq!(rows.len(), 5);
+    let initiatives: Vec<_> = rows
+        .iter()
+        .filter(|row| row.entity_type == EntityType::Initiative)
+        .collect();
+    assert_eq!(initiatives.len(), 4);
+    for row in initiatives {
+        if row.property_definition_id == SystemPropertyKey::ASSIGNEES_UUID {
+            assert_eq!(
+                row.values.as_ref().unwrap()["value"][0]["entity_id"],
+                "macro|owner@test.com"
+            );
+        } else {
+            assert!(row.values.as_ref().unwrap().is_null());
+        }
+    }
+    let folder = rows
+        .iter()
+        .find(|row| row.entity_type == EntityType::Project)
+        .unwrap();
+    assert_eq!(
+        folder.values.as_ref().unwrap()["value"][0]["entity_id"],
+        "macro|folder@test.com"
+    );
+    Ok(())
+}
+
 /// Helper to count task properties
 async fn count_task_properties(pool: &Pool<Postgres>, entity_id: &str) -> i64 {
     sqlx::query_scalar::<_, i64>(
