@@ -827,10 +827,7 @@ Active Quick Calls you created, participated in, or were invited to appear above
 next five events (including ones in progress), whether or not they have call links.
 The active area is hidden when no calls are active. Upcoming event rows show a
 calendar color swatch, the name, and the time; click one to open its details and
-highlight the active row. Small changes stagger: departing rows slide left
-while their height closes, and new rows enter from the left. When several rows
-change together, their heights cross over in one short wave; incoming text
-appears after outgoing text fades. Replaced rows exit right.
+highlight the active row.
 An event with a call link shows `Join` while it is in progress. Upcoming events
 follow today's date even when you browse another week; hidden calendars,
 cancelled events, and invitations you declined are omitted.

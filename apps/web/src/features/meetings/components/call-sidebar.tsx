@@ -1,9 +1,7 @@
-import { createSlidingListTransition } from '@app/components/view-shell/createSlidingListTransition';
 import PhoneIcon from '@phosphor/phone.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
-import { TransitionGroup } from 'solid-transition-group';
 import type { ActiveQuickCall } from '../context/call-sidebar';
 import type { UpcomingCalendarEvent } from '../core/upcoming-calendar-events';
 
@@ -35,7 +33,6 @@ export function CallSidebar(props: {
   onRetryActive: () => void;
   onRetryUpcoming: () => void;
 }) {
-  const { exitingRows, transitionProps } = createSlidingListTransition();
   return (
     <div class="flex min-w-0 flex-col gap-1 overflow-x-clip">
       <For each={props.active}>
@@ -66,68 +63,66 @@ export function CallSidebar(props: {
           <CallListError message={error()} onRetry={props.onRetryActive} />
         )}
       </Show>
-      <TransitionGroup {...transitionProps}>
-        <Key each={props.upcoming} by="id">
-          {(calendarEvent) => (
-            <div
-              class={cn(
-                'min-w-0 overflow-hidden rounded-lg',
-                props.selectedEventId === calendarEvent().id
-                  ? 'bg-active'
-                  : 'hover:bg-hover'
-              )}
-            >
-              <div class="flex w-full items-center gap-2 px-2 py-2">
-                <button
-                  type="button"
-                  class="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:bg-hover"
-                  onClick={(event) =>
-                    props.onOpenEvent(calendarEvent(), event.currentTarget)
-                  }
-                  aria-label={`Open ${calendarEvent().title}`}
-                  aria-current={
-                    props.selectedEventId === calendarEvent().id
-                      ? 'true'
-                      : undefined
-                  }
+      <Key each={props.upcoming} by="id">
+        {(calendarEvent) => (
+          <div
+            class={cn(
+              'min-w-0 overflow-hidden rounded-lg',
+              props.selectedEventId === calendarEvent().id
+                ? 'bg-active'
+                : 'hover:bg-hover'
+            )}
+          >
+            <div class="flex w-full items-center gap-2 px-2 py-2">
+              <button
+                type="button"
+                class="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:bg-hover"
+                onClick={(event) =>
+                  props.onOpenEvent(calendarEvent(), event.currentTarget)
+                }
+                aria-label={`Open ${calendarEvent().title}`}
+                aria-current={
+                  props.selectedEventId === calendarEvent().id
+                    ? 'true'
+                    : undefined
+                }
+              >
+                <span
+                  aria-hidden="true"
+                  class="size-2.5 shrink-0 rounded-sm"
+                  style={{ 'background-color': calendarEvent().color }}
+                />
+                <Tooltip
+                  as="span"
+                  class="min-w-0 flex-1"
+                  label={calendarEvent().title}
                 >
-                  <span
-                    aria-hidden="true"
-                    class="size-2.5 shrink-0 rounded-sm"
-                    style={{ 'background-color': calendarEvent().color }}
-                  />
-                  <Tooltip
-                    as="span"
-                    class="min-w-0 flex-1"
-                    label={calendarEvent().title}
-                  >
-                    <span class="truncate text-xs text-ink">
-                      {calendarEvent().title}
-                    </span>
-                  </Tooltip>
-                  <span class="ml-auto shrink-0 text-xs tabular-nums text-ink-muted">
-                    {props.when(calendarEvent())}
+                  <span class="truncate text-xs text-ink">
+                    {calendarEvent().title}
                   </span>
-                </button>
-                <Show
-                  when={props.canJoin(calendarEvent()) && calendarEvent().url}
-                >
-                  {(url) => (
-                    <button
-                      type="button"
-                      class="shrink-0 rounded-md bg-ink-muted/10 px-2 py-1 text-xs text-ink hover:bg-active"
-                      aria-label={`Join ${calendarEvent().title}`}
-                      onClick={() => props.onJoin(url())}
-                    >
-                      Join
-                    </button>
-                  )}
-                </Show>
-              </div>
+                </Tooltip>
+                <span class="ml-auto shrink-0 text-xs tabular-nums text-ink-muted">
+                  {props.when(calendarEvent())}
+                </span>
+              </button>
+              <Show
+                when={props.canJoin(calendarEvent()) && calendarEvent().url}
+              >
+                {(url) => (
+                  <button
+                    type="button"
+                    class="shrink-0 rounded-md bg-ink-muted/10 px-2 py-1 text-xs text-ink hover:bg-active"
+                    aria-label={`Join ${calendarEvent().title}`}
+                    onClick={() => props.onJoin(url())}
+                  >
+                    Join
+                  </button>
+                )}
+              </Show>
             </div>
-          )}
-        </Key>
-      </TransitionGroup>
+          </div>
+        )}
+      </Key>
       <Show when={props.upcomingLoading && props.upcoming.length === 0}>
         <div
           role="status"
@@ -147,8 +142,7 @@ export function CallSidebar(props: {
         when={
           !props.upcomingLoading &&
           !props.upcomingError &&
-          props.upcoming.length === 0 &&
-          exitingRows() === 0
+          props.upcoming.length === 0
         }
       >
         <p class="px-2 py-1 text-xs text-ink-muted">No upcoming events</p>
