@@ -15,9 +15,7 @@ import { useQuickCallsFlag } from '../meetings/use-quick-calls-flag';
 import { CallSidebar } from '../meetings/views/call-sidebar';
 
 /** Production wiring, mounted within the section's Suspense boundary. */
-export function CalendarCallSidebar(
-  props: { onSelectEvent?: () => void } = {}
-) {
+export function CalendarCallSidebar() {
   const calendar = useCalendarView();
   const userId = useUserId();
   const quickCalls = useQuickCallsFlag();
@@ -68,7 +66,6 @@ export function CalendarCallSidebar(
           const calendarEvent = upcoming.findEvent(event.id);
           if (calendarEvent) {
             calendar.selectEvent(calendarEvent, anchor, 'agenda');
-            props.onSelectEvent?.();
           }
         },
         join: (url) => {

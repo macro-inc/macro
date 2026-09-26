@@ -17,7 +17,6 @@ import {
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -89,7 +88,6 @@ function CalendarMiniCalendar() {
 
 function UpcomingEventsSection() {
   const [open, setOpen] = createSignal(true);
-  const shell = useViewShell();
 
   return (
     <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
@@ -101,13 +99,7 @@ function UpcomingEventsSection() {
         <CopyAvailabilityButton class="size-(--sidebar-control-size) rounded-lg" />
       </CollapsibleSection.Header>
       <CollapsibleSection.Content>
-        <CalendarCallSidebar
-          onSelectEvent={() => {
-            // Desktop details anchor to the row; only the mobile drawer can
-            // close its navigation overlay without losing the event anchor.
-            if (isMobile() && shell.aside.isOverlay()) shell.aside.collapse();
-          }}
-        />
+        <CalendarCallSidebar />
       </CollapsibleSection.Content>
     </CollapsibleSection.Root>
   );
