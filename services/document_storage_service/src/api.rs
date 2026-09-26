@@ -297,6 +297,12 @@ fn api_router(state: ApiContext) -> Router {
             internal::router(state.clone())
                 .nest("/notifications", notification::router())
                 .nest(
+                    "/github",
+                    github::inbound::pull_request_index_router::pull_request_index_router(
+                        state.github_pull_request_index_state.clone(),
+                    ),
+                )
+                .nest(
                     "/search",
                     search_service::search_router()
                         .with_state(SearchHandlerState::from_ref(&state)),

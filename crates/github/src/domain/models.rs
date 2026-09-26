@@ -24,7 +24,7 @@ pub use installation_state::{
     InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,
 };
 pub use link::{GithubAccessToken, GithubExchangeTokenResponse, GithubLink, GithubUserInfo};
-pub use repository::GithubRepository;
+pub use repository::{GithubRepository, PullRequestIndexPage, PullRequestIndexRequest};
 pub use sync::{
     GithubAppInstallationSource, GithubAuthenticatedUser, GithubInstallationAccessToken,
     GithubInstallationSetupAction, GithubSetupAccessToken, GithubUserInstallation,

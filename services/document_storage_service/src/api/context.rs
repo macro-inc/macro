@@ -81,11 +81,15 @@ use foreign_entity::{
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
-use github::domain::service::GithubSyncServiceImpl;
+use github::domain::service::{GithubSyncServiceImpl, PullRequestIndexService};
+use github::inbound::pull_request_index_router::PullRequestIndexRouterState;
 use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
-use github_pull_requests::domain::service::GithubPullRequestServiceImpl;
+use github_pull_requests::{
+    domain::service::GithubPullRequestServiceImpl,
+    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+};
 use initiative::{
     domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
     outbound::PgInitiativeRepo,
@@ -530,15 +534,27 @@ pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEnt
 pub(crate) type DssForeignEntityState =
     ForeignEntityRouterState<ForeignEntityServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the GitHub pull request service.
+pub(crate) type GithubPullRequestServiceType =
+    GithubPullRequestServiceImpl<ForeignEntityServiceType, PgGithubPullRequestRepo>;
+
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl<
     DocumentService,
     PgGithubSyncRepo,
     GithubSyncClientImpl,
-    GithubPullRequestServiceImpl<ForeignEntityServiceType>,
+    GithubPullRequestServiceType,
     NotificationIngressType,
     ConnectionGatewayGithubRealtime,
 >;
+
+/// Type alias for the GitHub pull request index service.
+pub(crate) type GithubPullRequestIndexServiceType =
+    PullRequestIndexService<PgGithubSyncRepo, GithubSyncClientImpl, GithubPullRequestServiceType>;
+
+/// Type alias for the GitHub pull request index router state.
+pub(crate) type DssGithubPullRequestIndexState =
+    PullRequestIndexRouterState<GithubPullRequestIndexServiceType, AuthorizationService>;
 
 /// Type alias for the cal.com webhook service.
 pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSink>;
@@ -584,6 +600,7 @@ pub(crate) struct ApiContext {
     pub redis_client: Arc<Redis>,
     pub s3_client: Arc<S3>,
     pub github_sync_service: Arc<GithubSyncServiceType>,
+    pub github_pull_request_index_state: DssGithubPullRequestIndexState,
     pub dynamodb_client: Arc<DynamodbClient>,
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,

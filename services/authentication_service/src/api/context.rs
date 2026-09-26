@@ -24,7 +24,10 @@ use github::domain::service::GithubLinkServiceImpl;
 use github::outbound::github_auth_client::GithubAuthImpl;
 use github::outbound::github_oauth_client::GithubOauthImpl;
 use github::outbound::pg_github_repo::PgGithubRepo;
-use github_pull_requests::domain::service::GithubPullRequestServiceImpl;
+use github_pull_requests::{
+    domain::service::GithubPullRequestServiceImpl,
+    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+};
 use gtm_invite::{
     domain::service::GtmInviteServiceImpl, outbound::pg_gtm_invite_repo::PgGtmInviteRepo,
 };
@@ -118,7 +121,10 @@ pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
     PgGithubRepo,
     GithubOauthImpl,
     GithubAuthImpl,
-    GithubPullRequestServiceImpl<ForeignEntityServiceImpl<PgForeignEntityRepo>>,
+    GithubPullRequestServiceImpl<
+        ForeignEntityServiceImpl<PgForeignEntityRepo>,
+        PgGithubPullRequestRepo,
+    >,
 >;
 
 pub(crate) type EntityAccessServiceType = EntityAccessServiceImpl<PgAccessRepository>;

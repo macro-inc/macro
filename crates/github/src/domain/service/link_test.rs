@@ -8,7 +8,10 @@ use foreign_entity::domain::{
     },
     ports::{ForeignEntityListQuery, ForeignEntityService},
 };
-use github_pull_requests::domain::service::GithubPullRequestServiceImpl;
+use github_pull_requests::domain::{
+    models::GithubPullRequestRow, ports::GithubPullRequestRepository,
+    service::GithubPullRequestServiceImpl,
+};
 use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
@@ -210,6 +213,7 @@ fn default_pull_request_details() -> GithubPullRequestDetails {
     GithubPullRequestDetails {
         title: "Add token validation".to_string(),
         state: "open".to_string(),
+        repository_id: None,
         merged_at: None,
         additions: 12,
         deletions: 3,
@@ -219,6 +223,9 @@ fn default_pull_request_details() -> GithubPullRequestDetails {
         comments: None,
         checks: None,
         participant_github_user_ids: None,
+        draft: None,
+        requested_reviewer_github_user_ids: None,
+        github_updated_at: None,
     }
 }
 
@@ -597,8 +604,30 @@ type TestGithubLinkService = GithubLinkServiceImpl<
     StubGithubRepo,
     StubGithubOauth,
     StubAuth,
-    GithubPullRequestServiceImpl<StubForeignEntityService>,
+    GithubPullRequestServiceImpl<StubForeignEntityService, NoPullRequestRows>,
 >;
+
+struct NoPullRequestRows;
+
+impl GithubPullRequestRepository for NoPullRequestRows {
+    type Err = std::convert::Infallible;
+
+    async fn github_key_for(
+        &self,
+        _repository_id: i64,
+        _number: i64,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn upsert_row(&self, _row: &GithubPullRequestRow) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn rename_row(&self, _from: &str, _to: &str) -> Result<(), Self::Err> {
+        Ok(())
+    }
+}
 
 fn service(repo: StubGithubRepo, oauth: StubGithubOauth, auth: StubAuth) -> TestGithubLinkService {
     service_with_foreign_entities(repo, oauth, auth, StubForeignEntityService::default())
@@ -614,7 +643,7 @@ fn service_with_foreign_entities(
         repo,
         oauth,
         auth,
-        GithubPullRequestServiceImpl::new(foreign_entity_service),
+        GithubPullRequestServiceImpl::new(foreign_entity_service, NoPullRequestRows),
         GithubLinkConfig {
             client_id: "client-id".to_string(),
             client_secret: "client-secret".to_string(),

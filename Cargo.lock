@@ -7558,11 +7558,14 @@ dependencies = [
 name = "github_pull_requests"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "entity_access",
  "foreign_entity",
+ "macro_db_migrator",
  "serde",
  "serde_json",
+ "sqlx",
  "thiserror 2.0.18",
  "tokio",
  "tracing",

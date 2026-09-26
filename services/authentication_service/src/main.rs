@@ -32,7 +32,10 @@ use github::{
         pg_github_repo::PgGithubRepo,
     },
 };
-use github_pull_requests::domain::service::GithubPullRequestServiceImpl;
+use github_pull_requests::{
+    domain::service::GithubPullRequestServiceImpl,
+    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+};
 use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
@@ -450,7 +453,10 @@ async fn main() -> anyhow::Result<()> {
         PgGithubRepo::new(db.clone()),
         GithubOauthImpl::default(),
         GithubAuthImpl::new(auth_client.clone(), redis_multiplexed_conn),
-        GithubPullRequestServiceImpl::new(foreign_entity_service),
+        GithubPullRequestServiceImpl::new(
+            foreign_entity_service,
+            PgGithubPullRequestRepo::new(db.clone()),
+        ),
         GithubLinkConfig {
             client_id: config.github_client_id.to_string(),
             client_secret: config.github_client_secret.to_string(),

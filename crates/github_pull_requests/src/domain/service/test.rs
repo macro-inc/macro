@@ -1,3 +1,4 @@
+use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
@@ -13,10 +14,13 @@ use uuid::Uuid;
 use super::GithubPullRequestServiceImpl;
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
-        GithubPullRequestStatus, UpsertGithubPullRequest,
+        EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubPullRequestRow,
+        GithubPullRequestStatus, GithubRepositoryIdentity, UpsertGithubPullRequest,
     },
-    ports::GithubPullRequestService,
+    ports::{
+        GithubPullRequestIndexRepository, GithubPullRequestIndexer, GithubPullRequestRepository,
+        GithubPullRequestService,
+    },
 };
 
 const GITHUB_KEY: &str = "macro/app/pull/7";
@@ -136,6 +140,9 @@ impl ForeignEntityService for StubForeignEntityService {
             .iter_mut()
             .find(|record| record.id == id)
             .ok_or(ForeignEntityError::NotFound(id))?;
+        if let Some(foreign_entity_id) = patch.foreign_entity_id {
+            record.foreign_entity_id = foreign_entity_id;
+        }
         if let Some(metadata) = patch.metadata {
             record.metadata = metadata;
         }
@@ -144,11 +151,94 @@ impl ForeignEntityService for StubForeignEntityService {
     }
 }
 
+#[derive(Clone, Default)]
+struct StubPullRequestRows {
+    rows: Arc<Mutex<Vec<GithubPullRequestRow>>>,
+    /// Stored pull request metadata by repository owner and name.
+    stored: Arc<Mutex<Vec<(String, String, serde_json::Value)>>>,
+}
+
+impl StubPullRequestRows {
+    fn rows(&self) -> Vec<GithubPullRequestRow> {
+        self.rows.lock().unwrap().clone()
+    }
+}
+
+impl GithubPullRequestRepository for StubPullRequestRows {
+    type Err = Infallible;
+
+    async fn github_key_for(
+        &self,
+        repository_id: i64,
+        number: i64,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(self
+            .rows()
+            .into_iter()
+            .find(|row| row.repository_id == Some(repository_id) && row.number == number)
+            .map(|row| row.github_key))
+    }
+
+    async fn upsert_row(&self, row: &GithubPullRequestRow) -> Result<(), Self::Err> {
+        let mut rows = self.rows.lock().unwrap();
+        match rows
+            .iter_mut()
+            .find(|existing| existing.github_key == row.github_key)
+        {
+            Some(existing) => {
+                let repository_id = row.repository_id.or(existing.repository_id);
+                *existing = GithubPullRequestRow {
+                    repository_id,
+                    ..row.clone()
+                };
+            }
+            None => rows.push(row.clone()),
+        }
+        Ok(())
+    }
+
+    async fn rename_row(&self, from: &str, to: &str) -> Result<(), Self::Err> {
+        let mut rows = self.rows.lock().unwrap();
+        if rows.iter().any(|row| row.github_key == to) {
+            rows.retain(|row| row.github_key != from);
+        } else if let Some(row) = rows.iter_mut().find(|row| row.github_key == from) {
+            row.github_key = to.to_owned();
+        }
+        Ok(())
+    }
+}
+
+impl GithubPullRequestIndexRepository for StubPullRequestRows {
+    type Err = Infallible;
+
+    async fn latest_pull_request_metadata(
+        &self,
+        owner: &str,
+        name: &str,
+    ) -> Result<Vec<serde_json::Value>, Self::Err> {
+        Ok(self
+            .stored
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(stored_owner, stored_name, _)| stored_owner == owner && stored_name == name)
+            .map(|(_, _, metadata)| metadata.clone())
+            .collect())
+    }
+}
+
+type TestService = GithubPullRequestServiceImpl<StubForeignEntityService, StubPullRequestRows>;
+
+fn service(foreign_entities: &StubForeignEntityService, rows: &StubPullRequestRows) -> TestService {
+    GithubPullRequestServiceImpl::new(foreign_entities.clone(), rows.clone())
+}
+
 fn pull_request(status: GithubPullRequestStatus) -> EnrichedGithubPullRequest {
     EnrichedGithubPullRequest {
         github_key: GITHUB_KEY.to_string(),
         owner: "macro".to_string(),
         repo: "app".to_string(),
+        repository_id: None,
         number: 7,
         url: "https://github.com/macro/app/pull/7".to_string(),
         display_name: "macro/app#7".to_string(),
@@ -162,6 +252,9 @@ fn pull_request(status: GithubPullRequestStatus) -> EnrichedGithubPullRequest {
         comments: None,
         checks: None,
         participant_github_user_ids: Some(vec!["42".to_string()]),
+        draft: None,
+        requested_reviewer_github_user_ids: None,
+        github_updated_at: None,
     }
 }
 
@@ -190,7 +283,8 @@ fn user() -> SourceId {
 #[tokio::test]
 async fn upsert_creates_the_record_for_a_source_without_one() {
     let foreign_entities = StubForeignEntityService::default();
-    let service = GithubPullRequestServiceImpl::new(foreign_entities.clone());
+    let rows = StubPullRequestRows::default();
+    let service = service(&foreign_entities, &rows);
 
     let upserted = service
         .upsert_pull_request(UpsertGithubPullRequest {
@@ -227,7 +321,8 @@ async fn upsert_merges_into_the_sources_own_record() {
     let user_record = stored_record(&user(), serde_json::json!({ "status": "closed" }));
     let foreign_entities =
         StubForeignEntityService::with_records(vec![user_record.clone(), team_record.clone()]);
-    let service = GithubPullRequestServiceImpl::new(foreign_entities.clone());
+    let rows = StubPullRequestRows::default();
+    let service = service(&foreign_entities, &rows);
 
     let upserted = service
         .upsert_pull_request(UpsertGithubPullRequest {
@@ -267,7 +362,8 @@ async fn a_sources_first_record_starts_from_another_sources_metadata() {
         }),
     );
     let foreign_entities = StubForeignEntityService::with_records(vec![team_record]);
-    let service = GithubPullRequestServiceImpl::new(foreign_entities.clone());
+    let rows = StubPullRequestRows::default();
+    let service = service(&foreign_entities, &rows);
 
     let upserted = service
         .upsert_pull_request(UpsertGithubPullRequest {
@@ -292,7 +388,8 @@ async fn refresh_updates_every_stored_record() {
     let user_record = stored_record(&user(), serde_json::json!({ "status": "open" }));
     let foreign_entities =
         StubForeignEntityService::with_records(vec![team_record.clone(), user_record.clone()]);
-    let service = GithubPullRequestServiceImpl::new(foreign_entities.clone());
+    let rows = StubPullRequestRows::default();
+    let service = service(&foreign_entities, &rows);
 
     let refreshed = service
         .refresh_pull_request(&pull_request(GithubPullRequestStatus::Closed))
@@ -314,7 +411,8 @@ async fn refresh_updates_every_stored_record() {
 #[tokio::test]
 async fn refresh_without_stored_records_does_nothing() {
     let foreign_entities = StubForeignEntityService::default();
-    let service = GithubPullRequestServiceImpl::new(foreign_entities.clone());
+    let rows = StubPullRequestRows::default();
+    let service = service(&foreign_entities, &rows);
 
     let refreshed = service
         .refresh_pull_request(&pull_request(GithubPullRequestStatus::Open))
@@ -323,4 +421,147 @@ async fn refresh_without_stored_records_does_nothing() {
 
     assert!(refreshed.is_empty());
     assert!(foreign_entities.patches().is_empty());
+}
+
+#[tokio::test]
+async fn upsert_writes_the_row_from_the_merged_metadata() {
+    let foreign_entities = StubForeignEntityService::default();
+    let rows = StubPullRequestRows::default();
+    let service = service(&foreign_entities, &rows);
+
+    service
+        .upsert_pull_request(UpsertGithubPullRequest {
+            pull_request: EnrichedGithubPullRequest {
+                repository_id: Some(99),
+                draft: Some(true),
+                requested_reviewer_github_user_ids: Some(vec!["8".to_string()]),
+                ..pull_request(GithubPullRequestStatus::Open)
+            },
+            stored_for: user(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        rows.rows(),
+        vec![GithubPullRequestRow {
+            github_key: GITHUB_KEY.to_string(),
+            repository_id: Some(99),
+            number: 7,
+            owner: "macro".to_string(),
+            repo: "app".to_string(),
+            title: Some("Add pull request storage".to_string()),
+            status: Some(GithubPullRequestStatus::Open),
+            draft: true,
+            author_github_user_id: None,
+            author_login: None,
+            requested_reviewer_github_user_ids: vec!["8".to_string()],
+            participant_github_user_ids: vec!["42".to_string()],
+            github_updated_at: None,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn upsert_after_a_repository_rename_moves_every_record_and_the_row() {
+    let old_metadata = serde_json::to_value(EnrichedGithubPullRequest {
+        repository_id: Some(99),
+        ..pull_request(GithubPullRequestStatus::Open)
+    })
+    .unwrap();
+    let team_record = stored_record(&team(), old_metadata.clone());
+    let user_record = stored_record(&user(), old_metadata.clone());
+    let foreign_entities =
+        StubForeignEntityService::with_records(vec![team_record.clone(), user_record.clone()]);
+    let rows = StubPullRequestRows::default();
+    rows.rows
+        .lock()
+        .unwrap()
+        .push(GithubPullRequestRow::from_metadata(&old_metadata).unwrap());
+    let service = service(&foreign_entities, &rows);
+
+    let upserted = service
+        .upsert_pull_request(UpsertGithubPullRequest {
+            pull_request: EnrichedGithubPullRequest {
+                github_key: "macro/renamed/pull/7".to_string(),
+                repo: "renamed".to_string(),
+                url: "https://github.com/macro/renamed/pull/7".to_string(),
+                display_name: "macro/renamed#7".to_string(),
+                repository_id: Some(99),
+                ..pull_request(GithubPullRequestStatus::Merged)
+            },
+            stored_for: team(),
+        })
+        .await
+        .unwrap();
+
+    assert!(foreign_entities.creates().is_empty());
+    assert_eq!(upserted.foreign_entity.id, team_record.id);
+    assert_eq!(
+        upserted.previous_status,
+        Some(GithubPullRequestStatus::Open)
+    );
+    assert!(
+        foreign_entities
+            .records()
+            .iter()
+            .all(|record| record.foreign_entity_id == "macro/renamed/pull/7")
+    );
+    let stored_rows = rows.rows();
+    assert_eq!(stored_rows.len(), 1);
+    assert_eq!(stored_rows[0].github_key, "macro/renamed/pull/7");
+    assert_eq!(stored_rows[0].repo, "renamed");
+    assert_eq!(stored_rows[0].status, Some(GithubPullRequestStatus::Merged));
+}
+
+#[tokio::test]
+async fn index_writes_a_row_for_each_stored_pull_request_of_each_known_repository() {
+    let metadata = |key: &str, number: u64, status: &str| {
+        serde_json::json!({
+            "githubKey": key,
+            "owner": "Macro",
+            "repo": "App",
+            "number": number,
+            "url": format!("https://github.com/{key}"),
+            "displayName": key,
+            "status": status,
+        })
+    };
+    let rows = StubPullRequestRows::default();
+    rows.stored.lock().unwrap().extend([
+        (
+            "macro".to_string(),
+            "app".to_string(),
+            metadata("Macro/App/pull/7", 7, "closed"),
+        ),
+        (
+            "macro".to_string(),
+            "app-web".to_string(),
+            metadata("macro/app-web/pull/1", 1, "open"),
+        ),
+    ]);
+    let service = service(&StubForeignEntityService::default(), &rows);
+
+    let indexed = service
+        .index_repositories(&[
+            GithubRepositoryIdentity {
+                id: 99,
+                owner: "macro".to_string(),
+                name: "app".to_string(),
+            },
+            GithubRepositoryIdentity {
+                id: 0,
+                owner: "macro".to_string(),
+                name: "app-web".to_string(),
+            },
+        ])
+        .await
+        .unwrap();
+
+    assert_eq!(indexed, 1);
+    let stored_rows = rows.rows();
+    assert_eq!(stored_rows.len(), 1);
+    assert_eq!(stored_rows[0].github_key, "Macro/App/pull/7");
+    assert_eq!(stored_rows[0].repository_id, Some(99));
+    assert_eq!(stored_rows[0].status, Some(GithubPullRequestStatus::Closed));
 }

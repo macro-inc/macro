@@ -230,6 +230,11 @@ impl<
             github_key: github_key.as_ref().to_string(),
             owner: owner.to_string(),
             repo: repo.to_string(),
+            repository_id: event
+                .payload
+                .get("repository")
+                .and_then(|repository| repository.get("id"))
+                .and_then(|value| value.as_u64()),
             number,
             url,
             display_name: format!("{owner}/{repo}#{number}"),
@@ -260,6 +265,24 @@ impl<
             comments: None,
             checks: None,
             participant_github_user_ids: Self::participant_ids_from_payload(pull_request),
+            draft: pull_request
+                .and_then(|pr| pr.get("draft"))
+                .and_then(|value| value.as_bool()),
+            requested_reviewer_github_user_ids: pull_request
+                .and_then(|pr| pr.get("requested_reviewers"))
+                .and_then(|value| value.as_array())
+                .map(|users| {
+                    users
+                        .iter()
+                        .filter_map(|user| user.get("id").and_then(|value| value.as_u64()))
+                        .map(|id| id.to_string())
+                        .collect()
+                }),
+            github_updated_at: pull_request
+                .and_then(|pr| pr.get("updated_at"))
+                .and_then(|value| value.as_str())
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|updated_at| updated_at.with_timezone(&chrono::Utc)),
         })
     }
 
@@ -348,6 +371,7 @@ impl<
             github_key: fallback.github_key,
             owner: fallback.owner,
             repo: fallback.repo,
+            repository_id: details.repository_id.or(fallback.repository_id),
             number: fallback.number,
             url: fallback.url,
             display_name: fallback.display_name,
@@ -363,6 +387,11 @@ impl<
             participant_github_user_ids: details
                 .participant_github_user_ids
                 .or(fallback.participant_github_user_ids),
+            draft: details.draft.or(fallback.draft),
+            requested_reviewer_github_user_ids: details
+                .requested_reviewer_github_user_ids
+                .or(fallback.requested_reviewer_github_user_ids),
+            github_updated_at: details.github_updated_at.or(fallback.github_updated_at),
         }
     }
 

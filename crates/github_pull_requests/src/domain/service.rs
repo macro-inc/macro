@@ -11,22 +11,28 @@ use foreign_entity::domain::{
 use super::{
     models::{
         EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
-        GithubPullRequestError, GithubPullRequestStatus, UpsertGithubPullRequest,
-        UpsertedGithubPullRequest,
+        GithubPullRequestError, GithubPullRequestRow, GithubPullRequestStatus,
+        GithubRepositoryIdentity, UpsertGithubPullRequest, UpsertedGithubPullRequest,
     },
-    ports::GithubPullRequestService,
+    ports::{
+        GithubPullRequestIndexRepository, GithubPullRequestIndexer, GithubPullRequestRepository,
+        GithubPullRequestService,
+    },
 };
 
-/// Stores pull requests through the foreign entity service.
-pub struct GithubPullRequestServiceImpl<F> {
+/// Stores pull requests through the foreign entity service, with their typed columns in `repo`.
+pub struct GithubPullRequestServiceImpl<F, R> {
     foreign_entity_service: F,
+    repo: R,
 }
 
-impl<F: ForeignEntityService> GithubPullRequestServiceImpl<F> {
-    /// Create a service that stores pull requests through `foreign_entity_service`.
-    pub fn new(foreign_entity_service: F) -> Self {
+impl<F: ForeignEntityService, R: GithubPullRequestRepository> GithubPullRequestServiceImpl<F, R> {
+    /// Create a service that stores pull requests through `foreign_entity_service` and their
+    /// typed columns in `repo`.
+    pub fn new(foreign_entity_service: F, repo: R) -> Self {
         Self {
             foreign_entity_service,
+            repo,
         }
     }
 
@@ -42,9 +48,78 @@ impl<F: ForeignEntityService> GithubPullRequestServiceImpl<F> {
             )
             .await?)
     }
+
+    /// Move a pull request stored under the name its repository had before a rename or
+    /// transfer to its current key: every record stored for it, and its row.
+    async fn follow_rename(
+        &self,
+        pull_request: &EnrichedGithubPullRequest,
+    ) -> Result<(), GithubPullRequestError> {
+        let (Some(repository_id), Ok(number)) = (
+            pull_request
+                .repository_id
+                .and_then(|id| i64::try_from(id).ok()),
+            i64::try_from(pull_request.number),
+        ) else {
+            return Ok(());
+        };
+        let Some(previous_key) = self
+            .repo
+            .github_key_for(repository_id, number)
+            .await
+            .map_err(repository_error)?
+        else {
+            return Ok(());
+        };
+        if previous_key == pull_request.github_key {
+            return Ok(());
+        }
+
+        for record in self.stored_records(&previous_key).await? {
+            self.foreign_entity_service
+                .patch_foreign_entity(
+                    record.id,
+                    PatchForeignEntity {
+                        foreign_entity_id: Some(pull_request.github_key.clone()),
+                        ..PatchForeignEntity::default()
+                    },
+                )
+                .await?;
+        }
+        self.repo
+            .rename_row(&previous_key, &pull_request.github_key)
+            .await
+            .map_err(repository_error)
+    }
+
+    /// Write a pull request's typed columns from a record's metadata. Rows are derived data, so
+    /// a failure is logged rather than failing the write of the record itself.
+    async fn store_row(&self, metadata: &serde_json::Value, repository_id: Option<i64>) -> bool {
+        let Some(mut row) = GithubPullRequestRow::from_metadata(metadata) else {
+            tracing::warn!("pull request metadata has no typed columns");
+            return false;
+        };
+        if repository_id.is_some() {
+            row.repository_id = repository_id;
+        }
+
+        match self.repo.upsert_row(&row).await {
+            Ok(()) => true,
+            Err(error) => {
+                tracing::error!(
+                    error=?error,
+                    github_key=%row.github_key,
+                    "failed to store pull request row"
+                );
+                false
+            }
+        }
+    }
 }
 
-impl<F: ForeignEntityService> GithubPullRequestService for GithubPullRequestServiceImpl<F> {
+impl<F: ForeignEntityService, R: GithubPullRequestRepository> GithubPullRequestService
+    for GithubPullRequestServiceImpl<F, R>
+{
     #[tracing::instrument(
         err,
         skip(self, upsert),
@@ -58,6 +133,7 @@ impl<F: ForeignEntityService> GithubPullRequestService for GithubPullRequestServ
             pull_request,
             stored_for,
         } = upsert;
+        self.follow_rename(&pull_request).await?;
 
         let records = self.stored_records(&pull_request.github_key).await?;
         let existing = records.iter().find(|record| {
@@ -97,6 +173,7 @@ impl<F: ForeignEntityService> GithubPullRequestService for GithubPullRequestServ
                     .await?
             }
         };
+        self.store_row(&foreign_entity.metadata, None).await;
 
         Ok(UpsertedGithubPullRequest {
             foreign_entity,
@@ -129,8 +206,49 @@ impl<F: ForeignEntityService> GithubPullRequestService for GithubPullRequestServ
                     .await?,
             );
         }
+        if let Some(latest) = refreshed.iter().max_by_key(|record| record.updated_at) {
+            self.store_row(&latest.metadata, None).await;
+        }
         Ok(refreshed)
     }
+}
+
+impl<F, R> GithubPullRequestIndexer for GithubPullRequestServiceImpl<F, R>
+where
+    F: ForeignEntityService,
+    R: GithubPullRequestRepository + GithubPullRequestIndexRepository,
+{
+    #[tracing::instrument(err, skip(self, repositories), fields(repositories = repositories.len()))]
+    async fn index_repositories(
+        &self,
+        repositories: &[GithubRepositoryIdentity],
+    ) -> Result<u64, GithubPullRequestError> {
+        let mut indexed = 0;
+        for repository in repositories {
+            let Some(repository_id) = i64::try_from(repository.id).ok().filter(|id| *id != 0)
+            else {
+                continue;
+            };
+            let pull_requests = GithubPullRequestIndexRepository::latest_pull_request_metadata(
+                &self.repo,
+                &repository.owner,
+                &repository.name,
+            )
+            .await
+            .map_err(repository_error)?;
+            for metadata in &pull_requests {
+                if self.store_row(metadata, Some(repository_id)).await {
+                    indexed += 1;
+                }
+            }
+        }
+
+        Ok(indexed)
+    }
+}
+
+fn repository_error(error: impl Into<anyhow::Error>) -> GithubPullRequestError {
+    GithubPullRequestError::Repository(error.into())
 }
 
 fn status_from_metadata(metadata: &serde_json::Value) -> Option<GithubPullRequestStatus> {

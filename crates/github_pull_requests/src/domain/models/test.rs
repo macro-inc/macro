@@ -25,6 +25,7 @@ fn pull_request_details(
     GithubPullRequestDetails {
         title: "Add pull request enrichment".to_string(),
         state: state.to_string(),
+        repository_id: None,
         merged_at,
         additions: 42,
         deletions: 12,
@@ -34,6 +35,9 @@ fn pull_request_details(
         comments: None,
         checks: None,
         participant_github_user_ids: None,
+        draft: None,
+        requested_reviewer_github_user_ids: None,
+        github_updated_at: None,
     }
 }
 
@@ -152,6 +156,7 @@ fn pull_request_response_serializes_with_camel_case_fields() {
             github_key: reference.github_key,
             owner: reference.owner,
             repo: reference.repo,
+            repository_id: None,
             number: reference.number,
             url: reference.url,
             display_name: reference.display_name,
@@ -165,6 +170,9 @@ fn pull_request_response_serializes_with_camel_case_fields() {
             comments: Some(vec![pull_request_comment()]),
             checks: Some(vec![pull_request_check_run()]),
             participant_github_user_ids: None,
+            draft: None,
+            requested_reviewer_github_user_ids: None,
+            github_updated_at: None,
         }],
     };
 
@@ -285,6 +293,7 @@ fn pull_request_enrichment_copies_details_fields() {
     let details = GithubPullRequestDetails {
         title: "Add pull request enrichment".to_string(),
         state: "closed".to_string(),
+        repository_id: None,
         merged_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
         additions: 42,
         deletions: 12,
@@ -294,6 +303,9 @@ fn pull_request_enrichment_copies_details_fields() {
         comments: Some(comments.clone()),
         checks: Some(checks.clone()),
         participant_github_user_ids: Some(vec!["42".to_string(), "583231".to_string()]),
+        draft: None,
+        requested_reviewer_github_user_ids: None,
+        github_updated_at: None,
     };
 
     let enriched = EnrichedGithubPullRequest::from_details(reference.clone(), details);
@@ -336,6 +348,7 @@ fn pull_request_foreign_entity_metadata_serializes_enriched_pull_request() {
     let details = GithubPullRequestDetails {
         title: "Add pull request enrichment".to_string(),
         state: "closed".to_string(),
+        repository_id: None,
         merged_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
         additions: 42,
         deletions: 12,
@@ -345,6 +358,9 @@ fn pull_request_foreign_entity_metadata_serializes_enriched_pull_request() {
         comments: Some(vec![pull_request_comment()]),
         checks: Some(vec![pull_request_check_run()]),
         participant_github_user_ids: None,
+        draft: None,
+        requested_reviewer_github_user_ids: None,
+        github_updated_at: None,
     };
     let enriched = EnrichedGithubPullRequest::from_details(reference, details);
 
@@ -457,6 +473,7 @@ fn pull_request_foreign_entity_metadata_keeps_fresh_arrays() {
     let details = GithubPullRequestDetails {
         title: "Add pull request enrichment".to_string(),
         state: "open".to_string(),
+        repository_id: None,
         merged_at: None,
         additions: 42,
         deletions: 12,
@@ -466,6 +483,9 @@ fn pull_request_foreign_entity_metadata_keeps_fresh_arrays() {
         comments: Some(comments.clone()),
         checks: Some(checks.clone()),
         participant_github_user_ids: None,
+        draft: None,
+        requested_reviewer_github_user_ids: None,
+        github_updated_at: None,
     };
     let enriched = EnrichedGithubPullRequest::from_details(pull_request_reference(), details);
     let existing_metadata = serde_json::json!({

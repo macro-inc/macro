@@ -82,6 +82,7 @@ github = { path = "../../crates/github", default-features = false, features = [
   "outbound",
 ] }
 github_pull_requests = { path = "../../crates/github_pull_requests", default-features = false, features = [
+  "outbound",
   "service",
 ] }
 http-body-util = { workspace = true }

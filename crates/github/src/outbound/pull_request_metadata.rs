@@ -50,8 +50,10 @@ pub(crate) async fn fetch_pull_request_metadata(
         .as_ref()
         .and_then(|user| user.login.clone());
     let author_id = pull_request.user.as_ref().and_then(|user| user.id);
+    let requested_reviewer_github_user_ids = user_ids(&pull_request.requested_reviewers);
 
     Ok(GithubPullRequestDetails {
+        repository_id: pull_request.base.repository_id(),
         title: pull_request.title,
         state: pull_request.state,
         merged_at: pull_request.merged_at,
@@ -63,6 +65,9 @@ pub(crate) async fn fetch_pull_request_metadata(
         comments,
         checks,
         participant_github_user_ids,
+        draft: pull_request.draft,
+        requested_reviewer_github_user_ids: Some(requested_reviewer_github_user_ids),
+        github_updated_at: pull_request.updated_at,
     })
 }
 
@@ -151,6 +156,7 @@ struct GithubInstallationRepositoriesResponse {
 
 #[derive(Debug, serde::Deserialize)]
 struct GithubInstallationRepositoryResponse {
+    id: u64,
     name: String,
     owner: GithubRepositoryOwnerResponse,
     html_url: String,
@@ -168,6 +174,7 @@ impl GithubInstallationRepositoryResponse {
             html_url: self.html_url,
             default_branch: self.default_branch,
             private: self.private,
+            id: self.id,
         }
     }
 }
@@ -183,6 +190,12 @@ struct GithubOpenPullRequestResponse {
     title: String,
     html_url: String,
     body: Option<String>,
+    #[serde(default)]
+    base: GithubPullRequestBaseResponse,
+    #[serde(default)]
+    draft: Option<bool>,
+    #[serde(default)]
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
     user: Option<GithubUserResponse>,
     #[serde(default)]
     requested_reviewers: Vec<GithubUserResponse>,
@@ -199,6 +212,12 @@ struct GithubPullRequestResponse {
     deletions: u64,
     body: Option<String>,
     head: GithubPullRequestHeadResponse,
+    #[serde(default)]
+    base: GithubPullRequestBaseResponse,
+    #[serde(default)]
+    draft: Option<bool>,
+    #[serde(default)]
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
     user: Option<GithubUserResponse>,
     #[serde(default)]
     requested_reviewers: Vec<GithubUserResponse>,
@@ -233,6 +252,31 @@ fn structural_participant_ids(
 #[derive(Debug, serde::Deserialize)]
 struct GithubPullRequestHeadResponse {
     sha: String,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct GithubPullRequestBaseResponse {
+    repo: Option<GithubRepositoryIdResponse>,
+}
+
+impl GithubPullRequestBaseResponse {
+    fn repository_id(&self) -> Option<u64> {
+        self.repo.as_ref().map(|repo| repo.id)
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubRepositoryIdResponse {
+    id: u64,
+}
+
+/// The stable numeric ids, as strings, of the users that have one.
+fn user_ids(users: &[GithubUserResponse]) -> Vec<String> {
+    users
+        .iter()
+        .filter_map(|user| user.id)
+        .map(|id| id.to_string())
+        .collect()
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -597,6 +641,7 @@ impl GithubOpenPullRequestResponse {
             github_key: GithubKey::new(owner, repo, self.number).to_string(),
             owner: owner.to_string(),
             repo: repo.to_string(),
+            repository_id: self.base.repository_id(),
             number: self.number,
             url: self.html_url,
             display_name: format!("{owner}/{repo}#{}", self.number),
@@ -611,6 +656,9 @@ impl GithubOpenPullRequestResponse {
             checks: None,
             participant_github_user_ids: (!participant_ids.is_empty())
                 .then(|| participant_ids.iter().map(u64::to_string).collect()),
+            draft: self.draft,
+            requested_reviewer_github_user_ids: Some(user_ids(&self.requested_reviewers)),
+            github_updated_at: self.updated_at,
         }
     }
 }
