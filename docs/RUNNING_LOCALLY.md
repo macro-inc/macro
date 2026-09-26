@@ -340,6 +340,12 @@ When you start the stack with `--build-aux-services`, press `r` to rebuild those
 
 If you started without the flag and suspect a stale image, press `q`. Then start again with the flag.
 
+To leave services you don't need out of the stack, pass `--skip <service>` once per service, using its name in `docker/docker-compose.yml`. A skipped Rust service is not built, a skipped service does not start, and rebuilds with `r` skip it too. Skipping `agent_harness_service` also skips its sandbox image, which is slow to build the first time. The command fails before building anything if a service that still starts depends on a skipped one.
+
+```bash
+just run_local --skip agent_harness_service --skip mcp_service
+```
+
 ## Headless Mode
 
 `just stack` runs the same stack without an attached terminal. There is no hotkey loop and no dev server. The frontend is built once and served statically by the proxy. The whole product lives behind one origin. A finished `up` leaves only Docker containers running.

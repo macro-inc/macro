@@ -24,6 +24,7 @@ use serde_yaml::value::{Tag, TaggedValue};
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::{Instance, Port};
 use super::inventory::services_for_mode;
+use super::skip::{SKIPPED_PROFILE, is_skipped};
 use super::{Mode, repo_root};
 
 /// The one Rust service with a second listener: the agent egress proxy inside
@@ -63,18 +64,23 @@ pub fn caddyfile_path(instance: &Instance) -> PathBuf {
 /// Build the override (typed model), apply the merge tags, and write it.
 /// `static_frontend` mounts the staged app bundle into the proxy (headless
 /// stacks serve the frontend from Caddy instead of a dev server).
+/// Services in `skip` move to a profile nothing enables, so they do not start.
 pub fn generate(
     mode: Mode,
     instance: &Instance,
     binaries: &BinariesDir,
     static_frontend: bool,
     gmail_forwarder: bool,
+    skip: &[String],
 ) -> Result<PathBuf> {
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
 
     // 1. Rust services → runtime image + mounted binaries.
     for svc in services_for_mode(mode) {
+        if is_skipped(skip, svc.compose_name) {
+            continue;
+        }
         let mut s = dct::Service {
             image: Some(RUNTIME_IMAGE_TAG.to_string()),
             volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
@@ -153,6 +159,14 @@ pub fn generate(
                 ..Default::default()
             }),
         );
+    }
+
+    for name in skip {
+        services
+            .entry(name.clone())
+            .or_default()
+            .get_or_insert_with(Default::default)
+            .profiles = vec![SKIPPED_PROFILE.to_string()];
     }
 
     let compose = dct::Compose {

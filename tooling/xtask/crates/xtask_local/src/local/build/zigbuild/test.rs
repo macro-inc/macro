@@ -13,7 +13,7 @@ fn only_services_that_drop_default_features_build_separately() {
 
 #[test]
 fn unified_args_pass_local_features_package_qualified() {
-    let args = unified_args();
+    let args = unified_args(&[]);
     let features = args
         .iter()
         .position(|a| a == "--features")
@@ -31,7 +31,7 @@ fn unified_args_pass_local_features_package_qualified() {
 
 #[test]
 fn unified_args_build_every_unified_service_bin() {
-    let args = unified_args();
+    let args = unified_args(&[]);
     for svc in unified_services() {
         assert!(
             args.windows(2)
@@ -67,4 +67,11 @@ fn isolated_target_dirs_do_not_collide() {
         .map(|svc| isolated_target_dir(Path::new("/ws"), svc))
         .collect();
     assert_eq!(dirs.len(), isolated_services().count());
+}
+
+#[test]
+fn left_out_services_are_not_built() {
+    let harness = super::super::super::inventory::AGENT_HARNESS;
+    assert!(unified_args(&[]).iter().any(|arg| arg == harness));
+    assert!(!unified_args(&[harness]).iter().any(|arg| arg == harness));
 }

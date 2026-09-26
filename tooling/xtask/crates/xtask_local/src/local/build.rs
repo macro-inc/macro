@@ -23,21 +23,24 @@ pub struct BuildOptions {
     pub no_build: bool,
     /// Use this directory as the `/app/out` source instead of building.
     pub binaries_dir: Option<std::path::PathBuf>,
+    /// Compose names of skipped services, whose binaries are not built.
+    pub skip: Vec<String>,
 }
 
 /// Resolve a [`BinariesDir`] for the run: from `--binaries-dir`, from the
 /// existing target dir (`--no-build`), or by building with zigbuild.
 pub fn resolve(stage: &Stage, target: Target, opts: &BuildOptions) -> Result<BinariesDir> {
+    let left_out = super::skip::left_out_bins(&opts.skip);
     let dir = match &opts.binaries_dir {
         Some(dir) => BinariesDir::classify(dir)?,
         None if opts.no_build => {
             BinariesDir::classify(&super::workspace_root().join(target.debug_dir()))?
         }
         None => {
-            zigbuild::run(stage, target)?;
+            zigbuild::run(stage, target, &left_out)?;
             BinariesDir::classify(&super::workspace_root().join(target.debug_dir()))?
         }
     };
-    dir.validate(&super::inventory::local_binaries())?;
+    dir.validate(&super::inventory::local_binaries(&left_out))?;
     Ok(dir)
 }

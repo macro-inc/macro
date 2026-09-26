@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn local_binaries_are_unique_and_complete() {
-    let bins = local_binaries();
+    let bins = local_binaries(&[]);
     // 18 distinct binaries (the bundled set, including scheduled_action,
     // calendar_service, the local-only search_processing_service, agent harness,
     // mcp_service, and the seed_cli shipped for the gmail_forwarder sidecar).
@@ -17,6 +17,14 @@ fn local_binaries_are_unique_and_complete() {
     let mut sorted = bins.clone();
     sorted.dedup();
     assert_eq!(sorted.len(), bins.len(), "binaries must be deduplicated");
+}
+
+#[test]
+fn left_out_binaries_are_not_expected() {
+    let all = local_binaries(&[]);
+    let without = local_binaries(&[AGENT_HARNESS]);
+    assert!(!without.contains(&AGENT_HARNESS));
+    assert_eq!(without.len(), all.len() - 1);
 }
 
 #[test]

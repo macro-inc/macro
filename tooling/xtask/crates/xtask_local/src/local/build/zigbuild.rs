@@ -32,7 +32,7 @@ mod test;
 /// [`RustService::no_default_features`] as close to empty as the features allow.
 // xtask is host tooling; reading CARGO_BUILD_JOBS from the process env is correct.
 #[allow(clippy::disallowed_methods)]
-pub fn run(stage: &Stage, target: Target) -> Result<()> {
+pub fn run(stage: &Stage, target: Target, left_out: &[&str]) -> Result<()> {
     ensure_target_installed(target)?;
 
     let ws = workspace_root();
@@ -48,7 +48,7 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
         });
 
     let mut cmd = base_command(&ws, &zig_cache, &jobs, target);
-    cmd.args(unified_args());
+    cmd.args(unified_args(left_out));
     stage.run(
         &format!("Building service binaries ({})", target.triple),
         &mut cmd,
@@ -59,7 +59,7 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
     // resolution from invalidating the unified build's shared artifacts (and
     // vice versa). Each dir then only ever sees one resolution, so both stay
     // incrementally fresh. Costs one cold build per dir, once.
-    for svc in isolated_services() {
+    for svc in isolated_services().filter(|svc| !left_out.contains(&svc.cargo_bin)) {
         let target_dir = isolated_target_dir(&ws, svc);
         let mut cmd = base_command(&ws, &zig_cache, &jobs, target);
         cmd.args(isolated_args(svc, &target_dir));
@@ -101,14 +101,15 @@ fn isolated_services() -> impl Iterator<Item = &'static RustService> {
         .filter(|s| !s.is_opt_in() && s.no_default_features)
 }
 
-/// `--bin` per service plus one `--features` carrying every service's local
-/// features, package-qualified so a feature only reaches the package that
-/// declares it.
-fn unified_args() -> Vec<String> {
-    let mut args: Vec<String> = unified_services()
+/// `--bin` per service not in `left_out`, plus one `--features` carrying every
+/// such service's local features, package-qualified so a feature only reaches
+/// the package that declares it.
+fn unified_args(left_out: &[&str]) -> Vec<String> {
+    let built = || unified_services().filter(|svc| !left_out.contains(&svc.cargo_bin));
+    let mut args: Vec<String> = built()
         .flat_map(|svc| ["--bin".to_owned(), svc.cargo_bin.to_owned()])
         .collect();
-    let features: Vec<String> = unified_services()
+    let features: Vec<String> = built()
         .flat_map(|svc| {
             svc.local_features()
                 .iter()

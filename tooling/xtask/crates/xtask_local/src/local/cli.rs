@@ -97,6 +97,11 @@ pub struct BuildArgs {
     /// Rebuild every repository-built local Docker service.
     #[arg(long)]
     pub build_aux_services: bool,
+    /// Leave a `docker/docker-compose.yml` service out of the stack: a skipped
+    /// Rust service is not built, and no skipped service starts. Repeatable.
+    /// Fails when a service that still starts depends on a skipped one.
+    #[arg(long, value_name = "SERVICE")]
+    pub skip: Vec<String>,
     /// Use this dir as the `/app/out` source instead of building.
     #[arg(long)]
     pub binaries_dir: Option<PathBuf>,

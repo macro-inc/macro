@@ -326,12 +326,15 @@ pub fn services_for_mode(mode: Mode) -> impl Iterator<Item = &'static RustServic
     RUST_SERVICES.iter().filter(move |s| s.in_mode(mode))
 }
 
+/// The agent harness, whose sandbox image is skipped along with it.
+pub const AGENT_HARNESS: &str = "agent_harness_service";
+
 /// The cargo binaries to build for a fully local stack (every non-opt-in
-/// service's bin, deduplicated). Used by `zigbuild`.
-pub fn local_binaries() -> Vec<&'static str> {
+/// service's bin not in `left_out`, deduplicated). Used by `zigbuild`.
+pub fn local_binaries(left_out: &[&str]) -> Vec<&'static str> {
     let mut bins: Vec<&'static str> = RUST_SERVICES
         .iter()
-        .filter(|s| !s.is_opt_in())
+        .filter(|s| !s.is_opt_in() && !left_out.contains(&s.cargo_bin))
         .map(|s| s.cargo_bin)
         .collect();
     bins.sort_unstable();
