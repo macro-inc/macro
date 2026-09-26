@@ -7,7 +7,8 @@ import FilterIcon from '@phosphor/funnel-simple.svg';
 import SortIcon from '@phosphor/sort-ascending.svg';
 import GroupIcon from '@phosphor/stack.svg';
 import { cn, Dropdown } from '@ui';
-import { batch, For, type JSX, Show } from 'solid-js';
+import { batch, createSignal, For, type JSX, Show } from 'solid-js';
+import { AiFilterInput, type AiFilterInputProps } from './AiFilterInput';
 
 export type ListControlOption<TId extends string> = {
   id: TId;
@@ -150,6 +151,11 @@ export type ListFilterDropdownProps<
     selected: boolean
   ) => void;
   onClear?: () => void;
+  /**
+   * Adds a plain-English box above the groups that resolves a description
+   * into a selection. The menu closes once a fully mapped request applies.
+   */
+  aiFilter?: Pick<AiFilterInputProps, 'placeholder' | 'onSubmit'>;
   customTrigger?: JSX.Element;
   triggerRef?: (element: HTMLButtonElement) => void;
   label?: string;
@@ -162,6 +168,14 @@ export function ListFilterDropdown<
   TGroupId extends string,
   TOptionId extends string,
 >(props: ListFilterDropdownProps<TGroupId, TOptionId>) {
+  // Uncontrolled menus track their own state so the AI box can close them.
+  const [internalOpen, setInternalOpen] = createSignal(false);
+  const isOpen = () => props.open ?? internalOpen();
+  const setOpen = (open: boolean) => {
+    props.onOpenChange?.(open);
+    if (props.open === undefined) setInternalOpen(open);
+  };
+
   const isGroupActive = (group: ListFilterGroup<TGroupId, TOptionId>) =>
     props.isGroupActive?.(group.id) ??
     group.options.some(
@@ -171,11 +185,7 @@ export function ListFilterDropdown<
     );
 
   return (
-    <Dropdown
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-      placement="bottom-end"
-    >
+    <Dropdown open={isOpen()} onOpenChange={setOpen} placement="bottom-end">
       <Show
         when={props.customTrigger}
         fallback={
@@ -194,6 +204,17 @@ export function ListFilterDropdown<
         {(trigger) => trigger()}
       </Show>
       <Dropdown.Content class={cn('min-w-32', props.contentClass)}>
+        <Show when={props.aiFilter}>
+          {(aiFilter) => (
+            <Dropdown.Group>
+              <AiFilterInput
+                placeholder={aiFilter().placeholder}
+                onSubmit={aiFilter().onSubmit}
+                onApplied={() => setOpen(false)}
+              />
+            </Dropdown.Group>
+          )}
+        </Show>
         <Dropdown.Group>
           <For each={props.groups}>
             {(group) => (

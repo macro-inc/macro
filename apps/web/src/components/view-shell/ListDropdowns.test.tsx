@@ -7,6 +7,7 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { AiFilterOutcome } from './AiFilterInput';
 import { ListFilterDropdown } from './ListDropdowns';
 
 // Exercise the actual menus/comboboxes without initializing the app UI barrel.
@@ -147,4 +148,97 @@ it('focuses searchable submenus on opening and reopening and supports keyboard s
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(open()).toBe(false));
   }
+});
+
+function setupAiFilter(onSubmit: (query: string) => Promise<AiFilterOutcome>) {
+  const [open, setOpen] = createSignal(true);
+  render(() => (
+    <ListFilterDropdown
+      label="Filter tasks"
+      open={open()}
+      onOpenChange={setOpen}
+      groups={[
+        {
+          id: 'people',
+          label: 'Assignee',
+          options: [{ id: 'alice', label: 'Alice' }],
+        },
+      ]}
+      isSelected={() => false}
+      onSelectionChange={() => {}}
+      aiFilter={{ placeholder: 'Filter with AI…', onSubmit }}
+    />
+  ));
+  return { open };
+}
+
+it('submits the AI filter description on Enter and closes once it applies', async () => {
+  const onSubmit = vi.fn(async () => ({ status: 'applied' }) as const);
+  const { open } = setupAiFilter(onSubmit);
+  const input = await screen.findByPlaceholderText('Filter with AI…');
+  fireEvent.input(input, { target: { value: 'high priority only' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(onSubmit).toHaveBeenCalledWith('high priority only');
+  await waitFor(() => expect(open()).toBe(false));
+});
+
+it('keeps the menu open with feedback when the request only partly maps', async () => {
+  const { open } = setupAiFilter(async () => ({
+    status: 'applied',
+    note: 'Tags cannot be excluded.',
+  }));
+  const input = await screen.findByPlaceholderText('Filter with AI…');
+  fireEvent.input(input, { target: { value: 'no dev tasks' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect((await screen.findByRole('status')).textContent).toBe(
+    'Tags cannot be excluded.'
+  );
+  expect(open()).toBe(true);
+  expect((input as HTMLInputElement).value).toBe('');
+});
+
+it('shows an error and keeps the description when the request fails', async () => {
+  const { open } = setupAiFilter(async () => ({
+    status: 'error',
+    message: 'AI filtering is unavailable right now.',
+  }));
+  const input = await screen.findByPlaceholderText('Filter with AI…');
+  fireEvent.input(input, { target: { value: 'urgent tasks' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    'AI filtering is unavailable right now.'
+  );
+  expect(open()).toBe(true);
+  expect((input as HTMLInputElement).value).toBe('urgent tasks');
+});
+
+it('hands focus back to the AI input when a hovered row steals it mid-description', async () => {
+  setupAiFilter(async () => ({ status: 'applied' }) as const);
+  const input = await screen.findByPlaceholderText('Filter with AI…');
+  const row = screen.getByRole('menuitem', { name: 'Assignee' });
+  // Opening highlights the first row; the user then clicks into the box.
+  await waitFor(() => expect(document.activeElement).toBe(row));
+  fireEvent.pointerDown(input);
+  input.focus();
+  fireEvent.input(input, { target: { value: 'urgent' } });
+  expect(document.activeElement).toBe(input);
+
+  // Kobalte focuses whichever row the mouse moves over.
+  row.focus();
+  await waitFor(() => expect(document.activeElement).toBe(input));
+
+  // Keyboard navigation is a deliberate hand-off and must stick.
+  fireEvent.keyDown(input, { key: 'ArrowDown' });
+  row.focus();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(document.activeElement).toBe(row);
+});
+
+it('ignores Enter on an empty description and leaves the option rows reachable', async () => {
+  const onSubmit = vi.fn(async () => ({ status: 'applied' }) as const);
+  setupAiFilter(onSubmit);
+  const input = await screen.findByPlaceholderText('Filter with AI…');
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(onSubmit).not.toHaveBeenCalled();
+  expect(screen.getByRole('menuitem', { name: 'Assignee' })).toBeTruthy();
 });
