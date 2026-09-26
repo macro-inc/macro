@@ -3,6 +3,7 @@ import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentChangesContext } from '../context/agent-changes-context';
 import { AgentChangesControllerProvider } from '../context/agent-changes-controller';
+import { DEFAULT_FILE_TREE_WIDTH } from '../core/layout';
 import {
   type AgentChangesController,
   createAgentChanges,
@@ -106,6 +107,42 @@ describe('ChangesPane', () => {
     expect(screen.queryAllByTestId('diff')).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
     expect(screen.getAllByTestId('diff')).toHaveLength(2);
+  });
+
+  it('hides the file tree until toggled, and resizes it', async () => {
+    const context = readyContext();
+    const { controller } = mount(context, () => <ChangesPane />);
+    controller().layout.open();
+    await waitFor(() => expect(screen.getAllByTestId('diff')).toHaveLength(2));
+    expect(screen.queryByRole('navigation', { name: 'Changed files' })).toBe(
+      null
+    );
+
+    const toggle = screen.getByRole('button', { name: /2 files/ });
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(
+      screen.getByRole('navigation', { name: 'Changed files' })
+    ).toBeTruthy();
+
+    const handle = screen.getByRole('separator', {
+      name: 'Resize the file tree',
+    });
+    const panel = handle.parentElement!;
+    expect(panel.style.width).toBe(`${DEFAULT_FILE_TREE_WIDTH}px`);
+    fireEvent.keyDown(handle, { key: 'ArrowRight' });
+    expect(controller().layout.fileTreeWidth()).toBe(
+      DEFAULT_FILE_TREE_WIDTH + 16
+    );
+    expect(panel.style.width).toBe(`${DEFAULT_FILE_TREE_WIDTH + 16}px`);
+    fireEvent.dblClick(handle);
+    expect(controller().layout.fileTreeWidth()).toBe(DEFAULT_FILE_TREE_WIDTH);
+
+    fireEvent.click(toggle);
+    expect(screen.queryByRole('navigation', { name: 'Changed files' })).toBe(
+      null
+    );
   });
 
   it('supports a PR host with no agent capabilities', async () => {
