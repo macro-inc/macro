@@ -933,6 +933,9 @@ async fn composer_failure_stops_open_delivery_and_keeps_the_prompt_queued() {
     ));
 }
 
+/// The agent's instructions are its system prompt, and the runtime reads
+/// them off the session row - so a mention snapshots them there, the same as
+/// the create menu does, and never folds them into the prompt body.
 #[tokio::test]
 async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
     let context = ConversationContext {
@@ -950,7 +953,7 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
         ..ConversationContext::default()
     };
     let composer = PromptComposerMock::default();
-    let (service, _repo, containers, announcer, _runtimes) = harness_with_edges(
+    let (service, repo, containers, announcer, _runtimes) = harness_with_edges(
         PromptContextMock::with_context(context.clone()),
         composer.clone(),
     );
@@ -980,6 +983,35 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
         prompts(&container.agent()),
         [vec![ContentBlock::from(context_prompt(&raw))]]
     );
+    let session = repo.get(id).await.expect("the session row exists");
+    assert_eq!(session.instructions.as_deref(), Some("Diagnose first."));
+}
+
+/// A bot configured with no instructions opens with none: whitespace is not
+/// a system prompt, and the row says so the same way the create menu's does.
+#[tokio::test]
+async fn open_stores_no_instructions_when_the_agent_has_only_blank_ones() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let mut command = open_command();
+    command.runtime.instructions = "  \n".to_owned();
+    let id = AgentSessionId::new();
+
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(id).unwrap();
+        complete_handshake(&container).await;
+    };
+    let (result, ()) = tokio::join!(open, drive);
+    result.unwrap();
+
+    let session = repo.get(id).await.expect("the session row exists");
+    assert_eq!(session.instructions, None);
 }
 
 /// A mention in a document comment: the agent is told which mark the comment
