@@ -10,65 +10,95 @@ import {
   type EmailMessageBodyProps,
 } from '../primitives/email-message-body';
 export function EmailMessageBody(props: EmailMessageBodyProps) {
-  const { showFullHTML, setShowFullHTML, host, hasHiddenReplyStructure } =
-    createEmailMessageBody(props, useEmailRenderingContext());
+  const context = useEmailRenderingContext();
+  const {
+    showFullHTML,
+    setShowFullHTML,
+    host,
+    hasHiddenReplyStructure,
+    isPending,
+    isError,
+    retry,
+  } = createEmailMessageBody(props, context);
   return (
-    <div
-      class="ph-no-capture flex flex-col [&_.md-p:first-child]:mt-0 [&_.md-p:last-child]:mb-0"
-      onPointerDown={() => {
-        if (!props.isBodyExpanded() && props.message.db_id) {
-          props.setExpandedMessageBody(props.message.db_id);
-          props.setFocusedMessageId(props.message.db_id);
-        } else if (props.message.db_id) {
-          props.setFocusedMessageId(props.message.db_id);
-        }
-      }}
-    >
+    <Show when={context.canRender?.() !== false}>
       <div
-        class="relative min-w-0 w-full"
-        classList={{
-          isPersonal: props.isPersonal,
-          'line-clamp-3': !props.isBodyExpanded(),
+        class="ph-no-capture flex flex-col [&_.md-p:first-child]:mt-0 [&_.md-p:last-child]:mb-0"
+        onPointerDown={() => {
+          if (!props.isBodyExpanded() && props.message.db_id) {
+            props.setExpandedMessageBody(props.message.db_id);
+            props.setFocusedMessageId(props.message.db_id);
+          } else if (props.message.db_id) {
+            props.setFocusedMessageId(props.message.db_id);
+          }
         }}
       >
-        <Switch>
-          {/* If available, we use body_macro to render "Macro-fied" email content in static markdown with, e.g. correctly styled document mentions. */}
-          <Match when={!showFullHTML() && props.message.body_macro}>
-            {(bodyMacro) => {
-              return (
-                <StaticMarkdown
-                  markdown={bodyMacro()}
-                  theme={channelTheme}
-                  target="internal"
-                />
-              );
-            }}
-          </Match>
-          <Match when={!props.message.body_html_sanitized}>
-            <StaticMarkdown
-              markdown={props.message.body_text ?? ''}
-              theme={channelTheme}
-              target="internal"
-            />
-          </Match>
-          <Match when={true}>{host()}</Match>
-        </Switch>
-        <Show when={!showFullHTML() && hasHiddenReplyStructure()}>
-          <div class="flex items-center mt-1.5 mb-2">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setShowFullHTML(true)}
-              class={cn(
-                'rounded-md text-ink-extra-muted hover:text-ink-muted',
-                props.isFocused ? 'hover:bg-surface' : 'hover:bg-active'
-              )}
-            >
-              <DotsThree />
-            </Button>
-          </div>
-        </Show>
+        <div
+          class="relative min-w-0 w-full"
+          classList={{
+            isPersonal: props.isPersonal,
+            'line-clamp-3': !props.isBodyExpanded(),
+          }}
+        >
+          <Switch>
+            {/* If available, we use body_macro to render "Macro-fied" email content in static markdown with, e.g. correctly styled document mentions. */}
+            <Match when={!showFullHTML() && props.message.body_macro}>
+              {(bodyMacro) => {
+                return (
+                  <StaticMarkdown
+                    markdown={bodyMacro()}
+                    theme={channelTheme}
+                    target="internal"
+                  />
+                );
+              }}
+            </Match>
+            <Match when={!props.message.body_html_sanitized}>
+              <StaticMarkdown
+                markdown={props.message.body_text ?? ''}
+                theme={channelTheme}
+                target="internal"
+              />
+            </Match>
+            <Match when={true}>
+              <Show
+                when={host()}
+                fallback={
+                  <div
+                    class="min-h-12 text-ink-muted"
+                    aria-live="polite"
+                    aria-busy={isPending()}
+                  >
+                    <Show when={isError()} fallback="Loading message…">
+                      <Button variant="ghost" onClick={retry}>
+                        Retry loading message
+                      </Button>
+                    </Show>
+                  </div>
+                }
+              >
+                {host()}
+              </Show>
+            </Match>
+          </Switch>
+          <Show when={!showFullHTML() && hasHiddenReplyStructure()}>
+            <div class="flex items-center mt-1.5 mb-2">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                disabled={isPending()}
+                onClick={() => setShowFullHTML(true)}
+                class={cn(
+                  'rounded-md text-ink-extra-muted hover:text-ink-muted',
+                  props.isFocused ? 'hover:bg-surface' : 'hover:bg-active'
+                )}
+              >
+                <DotsThree />
+              </Button>
+            </div>
+          </Show>
+        </div>
       </div>
-    </div>
+    </Show>
   );
 }

@@ -6,7 +6,11 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
-import { catchToResult, throwOnErr } from '@core/util/result';
+import {
+  catchToResult,
+  thrownResultErrorHasCode,
+  throwOnErr,
+} from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
@@ -20,7 +24,10 @@ import {
   markGraphqlEmailThreadSeen,
   markGraphqlEmailThreadUnread,
 } from '@service-storage/graphql-email-read-state';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  graphqlCacheEnabled,
+} from '@service-storage/graphql-soup';
 import {
   type InfiniteData,
   useInfiniteQuery,
@@ -41,6 +48,7 @@ import {
   createGraphqlEmailThreadQuery,
   fetchGraphqlEmailThread,
   mapGraphqlThreadError,
+  readCachedGraphqlEmailThread,
 } from './graphql/thread';
 import {
   archiveEmailThread,
@@ -89,6 +97,32 @@ function flattenThreadPages(
     ...firstPage,
     messages: data.pages.flatMap((p) => p.messages),
   };
+}
+
+/** Existing source cache remains the authority; an artifact is never a source. */
+export async function readCachedEmailThread(
+  threadId: string
+): Promise<ThreadQueryData | undefined> {
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    const thread = await readCachedGraphqlEmailThread(threadId);
+    return thread
+      ? {
+          thread,
+          hasMore: thread.messages.length === DEFAULT_THREAD_MESSAGES_LIMIT,
+        }
+      : undefined;
+  }
+  const queryKey = emailKeys.threadMessages(threadId).queryKey;
+  const error = queryClient.getQueryState(queryKey)?.error;
+  if (
+    ['FORBIDDEN', 'UNAUTHORIZED', 'NOT_FOUND'].some((code) =>
+      thrownResultErrorHasCode(error, code)
+    )
+  )
+    throw error;
+  const pages =
+    queryClient.getQueryData<InfiniteData<Thread, number>>(queryKey);
+  return pages?.pages.length ? selectThreadQueryData(pages) : undefined;
 }
 
 /**
@@ -343,7 +377,9 @@ export function useMarkThreadAsSeenMutation(
           params.threadId,
           getActiveGraphqlSoupRevalidations()
         );
-        if (disposition === 'committed')
+        // The normalized cache already replays the durable revalidations after
+        // commit. Only the uncached transport needs the caller's refresh.
+        if (disposition === 'committed' && !graphqlCacheEnabled())
           await refreshActiveGraphqlSoupQueries();
         return;
       }
@@ -426,7 +462,7 @@ export function useMarkThreadAsUnreadMutation(
           params.threadId,
           getActiveGraphqlSoupRevalidations()
         );
-        if (disposition === 'committed')
+        if (disposition === 'committed' && !graphqlCacheEnabled())
           await refreshActiveGraphqlSoupQueries();
         return;
       }

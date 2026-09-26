@@ -30,6 +30,14 @@ export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude],
     projects: [
+      {
+        extends: false,
+        test: {
+          environment: 'node',
+          include: ['src/lib/email-render-cache/**/*.test.ts'],
+          name: 'email-render-cache',
+        },
+      },
       '../../packages/email-renderer/vitest.config.ts',
       '../../packages/collaboration/vitest.collab.config.ts',
       '../../packages/collaboration/vitest.transport.config.ts',
@@ -212,6 +220,7 @@ export default defineConfig({
             'src/components/**/*.{test,spec}.{ts,tsx}',
             'src/features/**/*.{test,spec}.{ts,tsx}',
             'src/lib/analytics/**/*.{test,spec}.{ts,tsx}',
+            'src/lib/email-render-cache/**/*.test.tsx',
             'src/lib/constants/**/*.{test,spec}.{ts,tsx}',
             'src/lib/fullcalendar-solid/**/*.{test,spec}.{ts,tsx}',
             'src/lib/persistence/**/*.{test,spec}.{ts,tsx}',

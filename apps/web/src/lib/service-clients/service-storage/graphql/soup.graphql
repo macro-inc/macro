@@ -30,6 +30,7 @@ query SoupBackfill($input: SoupInput!) {
 					}
 				}
 			}
+			preparationIds: items { __typename id }
 			nextCursor
 		}
 	}

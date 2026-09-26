@@ -1,6 +1,8 @@
+import { thrownResultErrorHasCode } from '@core/util/result';
+import { revokeCachedEmailThread } from '@queries/email/cached-access';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
 import type { ApiThread } from '@service-email/generated/schemas';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo } from 'solid-js';
 import type { EmailThreadSource } from '../context/email-thread-context';
 import type { EmailThread } from '../core/email-thread';
 
@@ -90,9 +92,28 @@ export function createEmailThreadSource(
   threadId: Accessor<string>,
   query: ThreadQueryResult<ThreadQueryData>
 ): EmailThreadSource {
+  const accessDenied = createMemo(
+    () =>
+      query.isError &&
+      ['FORBIDDEN', 'UNAUTHORIZED', 'NOT_FOUND'].some((code) =>
+        thrownResultErrorHasCode(query.error, code)
+      )
+  );
+  let revokedId: string | undefined;
+  createEffect(() => {
+    if (accessDenied()) {
+      const id = threadId();
+      // Cache invalidation can re-execute the query. One continuing denial
+      // must not become a refetch/invalidation loop.
+      if (revokedId === id) return;
+      revokedId = id;
+      void revokeCachedEmailThread(id);
+    } else if (query.isSuccess && !query.isFetching) revokedId = undefined;
+  });
   // Status guards prevent a pending Solid resource from suspending its owner.
   const thread = createMemo(() => {
     if (!query.isSuccess && !query.isError) return undefined;
+    if (accessDenied()) return undefined;
     const data = query.data?.thread;
     return data?.db_id === threadId() ? toEmailThread(data) : undefined;
   });

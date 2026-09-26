@@ -5,6 +5,7 @@ import { mountEmailMutation } from './tests/mutation';
 
 const mocks = vi.hoisted(() => ({
   graphqlEnabled: true,
+  cacheEnabled: true,
   markSeen: vi.fn(),
   updateLabel: vi.fn(),
   getLabels: vi.fn(),
@@ -54,6 +55,7 @@ vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@macro-inc/observability', () => ({ Telemetry: { error: vi.fn() } }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({ mutation: mocks.graphqlMutation }),
+  graphqlCacheEnabled: () => mocks.cacheEnabled,
 }));
 
 import {
@@ -88,6 +90,7 @@ function hasReadPatch(value: unknown, isRead: boolean): boolean {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.graphqlEnabled = true;
+  mocks.cacheEnabled = true;
   mocks.legacyPatch.mockReturnValue({ rollback: vi.fn() });
   mocks.refresh.mockResolvedValue(undefined);
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
@@ -128,14 +131,17 @@ describe('external archive disposition', () => {
 
 describe('email read state with GraphQL Soup', () => {
   it.each([
-    { read: true, graphql: true },
-    { read: false, graphql: true },
-    { read: true, graphql: false },
-    { read: false, graphql: false },
+    { read: true, graphql: true, cache: true },
+    { read: false, graphql: true, cache: true },
+    { read: true, graphql: true, cache: false },
+    { read: false, graphql: true, cache: false },
+    { read: true, graphql: false, cache: false },
+    { read: false, graphql: false, cache: false },
   ])(
-    'propagates isRead=$read before the request settles (GraphQL=$graphql)',
-    async ({ read, graphql }) => {
+    'propagates isRead=$read before the request settles (GraphQL=$graphql, cache=$cache)',
+    async ({ read, graphql, cache }) => {
       mocks.graphqlEnabled = graphql;
+      mocks.cacheEnabled = cache;
       let finish!: () => void;
       const network = new Promise<void>((resolve) => {
         finish = resolve;
@@ -204,7 +210,7 @@ describe('email read state with GraphQL Soup', () => {
         finish();
         await result;
       }
-      expect(mocks.refresh).toHaveBeenCalledTimes(graphql ? 1 : 0);
+      expect(mocks.refresh).toHaveBeenCalledTimes(graphql && !cache ? 1 : 0);
     }
   );
 
@@ -266,7 +272,7 @@ describe('email read state with GraphQL Soup', () => {
         finish();
         await result;
       }
-      expect(mocks.refresh).toHaveBeenCalledOnce();
+      expect(mocks.refresh).not.toHaveBeenCalled();
     }
   );
 

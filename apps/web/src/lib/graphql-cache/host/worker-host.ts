@@ -5,6 +5,7 @@
  */
 
 import { deleteLegacyNormalizedCacheIdb } from '../legacy-idb-cleanup';
+import { notifyCacheIdentityReset } from '../lifecycle';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type AffectedOperationsResult,
@@ -278,6 +279,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         return;
       }
       if (msg.kind === 'cache-changed') {
+        if (msg.identityReset) void notifyCacheIdentityReset();
         for (const cb of cacheChangeSubscribers) cb(msg.revision);
         return;
       }

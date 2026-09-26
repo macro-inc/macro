@@ -937,7 +937,11 @@ export class CacheWorkerCore {
       });
     }
     if (cacheChanged && result.revisionAdvanced) {
-      this.push({ kind: 'cache-changed', revision: result.revision });
+      this.push({
+        kind: 'cache-changed',
+        revision: result.revision,
+        ...(result.reset ? { identityReset: true } : {}),
+      });
     }
   }
 

@@ -1461,6 +1461,7 @@ describe('CacheWorkerCore', () => {
     expect(port.postMessage).toHaveBeenCalledWith({
       kind: 'cache-changed',
       revision: INITIAL_CACHE_REVISION,
+      identityReset: true,
     });
     expect(port.postMessage).toHaveBeenLastCalledWith({
       id: 2,

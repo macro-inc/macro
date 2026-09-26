@@ -11,10 +11,12 @@ import {
   type EmailThreadPageQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import {
+  getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import type { CombinedError } from '@urql/core';
+import { print } from 'graphql';
 import type { Accessor } from 'solid-js';
 import { mapGraphqlEmailThreadPage } from './mapper';
 
@@ -48,6 +50,22 @@ function threadFromPage(page: EmailThreadPageQuery) {
   throw new ThrownResultError([
     { code: 'NOT_FOUND', message: 'Email thread not found' },
   ]);
+}
+
+/** Complete local projection only; never wait for cache-and-network completion. */
+export async function readCachedGraphqlEmailThread(
+  threadId: string
+): Promise<ApiThread | undefined> {
+  const host = getGraphqlSoupCacheHost();
+  if (!host) return;
+  const result = await host.readQuery({
+    query: print(EmailThreadPageDocument),
+    variables: { threadId, offset: 0, limit: DEFAULT_THREAD_MESSAGES_LIMIT },
+  });
+  if (result.kind !== 'hit') return;
+  const page = result.data as EmailThreadPageQuery;
+  if (!page.user.emailThread) return;
+  return mapGraphqlEmailThreadPage(page.user.emailThread);
 }
 
 /**

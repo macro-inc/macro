@@ -7,6 +7,7 @@ import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import type { Accessor } from 'solid-js';
 import { useEmailView } from './email-view-context';
+import { usePrepareEmailNeighbors } from './preparation-adapter';
 import type { EmailDataSourceItem } from './queries/use-email-query';
 
 /** Keeps thread triage inside the Email view's filtered navigation stack. */
@@ -14,6 +15,17 @@ export function useEmailDetailListNavigation(
   threadId: Accessor<string>
 ): EmailThreadListNavigation {
   const { source, openThread } = useEmailView();
+  usePrepareEmailNeighbors(
+    () =>
+      source
+        .items()
+        .flatMap((row) =>
+          row.kind === 'entity' && row.entity.type === 'email'
+            ? [row.entity.id]
+            : []
+        ),
+    threadId
+  );
   const navigation = useListDetailNavigation<EmailDataSourceItem, EntityData>({
     currentId: threadId,
     source,

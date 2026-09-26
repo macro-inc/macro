@@ -1,3 +1,4 @@
+import { invalidateEmailRenders } from '@app/lib/email-render-cache/lifecycle';
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { invalidateUserInfo } from '@queries/auth/user-info';
@@ -200,6 +201,7 @@ export function useRemoveInboxMutation(callbacks?: RemoveInboxCallbacks) {
   return useMutation(() => ({
     mutationFn: async (linkId: string) => {
       await throwOnErr(() => emailClient.deleteLink({ linkId }));
+      await invalidateEmailRenders();
     },
 
     ...withCallbacks<void, Error, string, RemoveInboxContext>(

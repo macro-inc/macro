@@ -27,6 +27,7 @@ import {
 } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
+import { EmailRenderCacheProvider } from '@app/lib/email-render-cache/session';
 import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
 import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
@@ -569,51 +570,55 @@ export function Root() {
           <PosthogProvider>
             <EntityProvider>
               <UserContextProvider>
-                <EmailLinksContextProvider>
-                  <BrowserNotificationModal />
-                  <IosPushNotificationModal />
-                  <IpadUnsupportedDialog />
-                  <GlobalShareInboxConflictDialog />
-                  <QuerySyncProviderWithUserId />
-                  <UserInfoSideEffects />
-                  <TeamContextProvider>
-                    <ConfiguredGlobalAppStateProvider>
-                      <MutationUndoProvider>
-                        <ChannelsContextProvider>
-                          <CallProvider>
-                            <CallKitSync />
-                            <CallStartedNotifier />
-                            <IncomingCallEvents />
-                            <QuickAccessProvider>
-                              <SearchProvider>
-                                <ChatAttachmentsInit />
-                                <ReactiveFavicon />
-                                <Title>{tabTitle()}</Title>
-                                <MeetingSessionProvider>
-                                  {/* Loading boundaries belong inside Layout so
-                                    a pending resource cannot detach the app shell. */}
-                                  <IsomorphicRouter
-                                    transformUrl={transformShortIdInUrlPathname}
-                                    root={AppRouteLayout}
-                                    rootPreload={rootPreload}
-                                    base={ROUTER_BASE}
-                                  >
-                                    {{
-                                      path: '/',
-                                      component: TauriRouteListener,
-                                      children: ROUTES,
-                                    }}
-                                  </IsomorphicRouter>
-                                </MeetingSessionProvider>
-                                <ToastRegion />
-                              </SearchProvider>
-                            </QuickAccessProvider>
-                          </CallProvider>
-                        </ChannelsContextProvider>
-                      </MutationUndoProvider>
-                    </ConfiguredGlobalAppStateProvider>
-                  </TeamContextProvider>
-                </EmailLinksContextProvider>
+                <EmailRenderCacheProvider>
+                  <EmailLinksContextProvider>
+                    <BrowserNotificationModal />
+                    <IosPushNotificationModal />
+                    <IpadUnsupportedDialog />
+                    <GlobalShareInboxConflictDialog />
+                    <QuerySyncProviderWithUserId />
+                    <UserInfoSideEffects />
+                    <TeamContextProvider>
+                      <ConfiguredGlobalAppStateProvider>
+                        <MutationUndoProvider>
+                          <ChannelsContextProvider>
+                            <CallProvider>
+                              <CallKitSync />
+                              <CallStartedNotifier />
+                              <IncomingCallEvents />
+                              <QuickAccessProvider>
+                                <SearchProvider>
+                                  <ChatAttachmentsInit />
+                                  <ReactiveFavicon />
+                                  <Title>{tabTitle()}</Title>
+                                  <MeetingSessionProvider>
+                                    {/* Loading boundaries belong inside Layout so
+                                      a pending resource cannot detach the app shell. */}
+                                    <IsomorphicRouter
+                                      transformUrl={
+                                        transformShortIdInUrlPathname
+                                      }
+                                      root={AppRouteLayout}
+                                      rootPreload={rootPreload}
+                                      base={ROUTER_BASE}
+                                    >
+                                      {{
+                                        path: '/',
+                                        component: TauriRouteListener,
+                                        children: ROUTES,
+                                      }}
+                                    </IsomorphicRouter>
+                                  </MeetingSessionProvider>
+                                  <ToastRegion />
+                                </SearchProvider>
+                              </QuickAccessProvider>
+                            </CallProvider>
+                          </ChannelsContextProvider>
+                        </MutationUndoProvider>
+                      </ConfiguredGlobalAppStateProvider>
+                    </TeamContextProvider>
+                  </EmailLinksContextProvider>
+                </EmailRenderCacheProvider>
               </UserContextProvider>
             </EntityProvider>
           </PosthogProvider>

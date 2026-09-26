@@ -1,7 +1,12 @@
+import { ThrownResultError } from '@core/util/result';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
 import type { ApiMessage, ApiThread } from '@service-email/generated/schemas';
 import { batch, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@queries/email/cached-access', () => ({
+  revokeCachedEmailThread: vi.fn(async () => {}),
+}));
 
 function message(id: string, overrides: Partial<ApiMessage> = {}): ApiMessage {
   return {
@@ -41,6 +46,30 @@ function thread(messages: ApiMessage[]): ApiThread {
 import { createEmailThreadSource, toEmailThread } from './thread-source';
 
 describe('thread query adaptation', () => {
+  it('does not render retained data after an authoritative access denial', () =>
+    createRoot((dispose) => {
+      try {
+        const source = createEmailThreadSource(() => 'thread', {
+          isError: true,
+          isSuccess: false,
+          isLoading: false,
+          error: new ThrownResultError([
+            { code: 'FORBIDDEN', message: 'Access removed' },
+          ]),
+          data: { thread: thread([message('cached')]), hasMore: false },
+          isFetching: false,
+          isFetchingNextPage: false,
+          isEnabled: true,
+          hasNextPage: false,
+          transport: 'rest',
+          fetchNextPage: async () => {},
+          refetch: async () => {},
+        });
+        expect(source.thread()).toBeUndefined();
+      } finally {
+        dispose();
+      }
+    }));
   it('guards resource reads, retains available data during refresh errors, and clears it when switching threads', () =>
     createRoot((dispose) => {
       try {
