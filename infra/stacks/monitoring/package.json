@@ -1,0 +1,14 @@
+{
+  "name": "monitoring-stack",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "main": "index.ts",
+  "scripts": {
+    "preview:prod": "pulumi stack select macro-inc/prod && pulumi preview --diff"
+  },
+  "dependencies": {
+    "@pulumi/datadog": "^4.51.0",
+    "@pulumi/pulumi": "^3.181.0"
+  }
+}
