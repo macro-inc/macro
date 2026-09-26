@@ -431,7 +431,10 @@ where
             // owner picked for it when they opened it, what they switched it
             // to since, or - for a session that never picked - the slug this
             // harness seeded the record with, which resolves to no opinion.
-            .with_host_model(Some(session.model.clone())),
+            .with_host_model(Some(session.model.clone()))
+            .with_image_fetcher(Arc::new(
+                cursor_cloud_agents::outbound::http_prompt_images::HttpPromptImageFetcher::new(),
+            )),
         );
         if let Some(restored) = restore {
             service.restore_session_with_watermark(
@@ -732,10 +735,11 @@ where
         open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
+        images: &[cursor_cloud_agents::domain::prompt_image::CursorPromptImage],
     ) -> std::result::Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         let (agent, run) = self
             .client
-            .create_agent(prompt, repo, open_pull_request, mcp_servers, model)
+            .create_agent(prompt, repo, open_pull_request, mcp_servers, model, images)
             .await?;
         let summary = self
             .client
@@ -775,8 +779,9 @@ where
         agent: &CursorAgentId,
         prompt: &str,
         model: Option<&ModelChoice>,
+        images: &[cursor_cloud_agents::domain::prompt_image::CursorPromptImage],
     ) -> std::result::Result<CursorRunId, rootcause::Report> {
-        self.client.create_run(agent, prompt, model).await
+        self.client.create_run(agent, prompt, model, images).await
     }
 
     async fn list_models(&self) -> std::result::Result<Vec<CursorModel>, rootcause::Report> {

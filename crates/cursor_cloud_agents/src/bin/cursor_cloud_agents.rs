@@ -144,7 +144,10 @@ async fn main() -> ExitCode {
             Arc::new(cursor_cloud_agents::outbound::memory_journal::MemoryJournal::default()),
             cursor_cloud_agents::domain::ports::NoArtifactStore,
         )
-        .with_default_model(configured_model),
+        .with_default_model(configured_model)
+        .with_image_fetcher(Arc::new(
+            cursor_cloud_agents::outbound::http_prompt_images::HttpPromptImageFetcher::new(),
+        )),
     );
     match serve(service, notifier, tokio::io::stdin(), tokio::io::stdout()).await {
         Ok(()) => ExitCode::SUCCESS,

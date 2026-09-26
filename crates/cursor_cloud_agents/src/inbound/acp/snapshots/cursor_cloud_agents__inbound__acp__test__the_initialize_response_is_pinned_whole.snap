@@ -1,6 +1,6 @@
 ---
 source: crates/cursor_cloud_agents/src/inbound/acp/test.rs
-assertion_line: 582
+assertion_line: 707
 expression: response
 ---
 {
@@ -8,7 +8,7 @@ expression: response
   "agentCapabilities": {
     "loadSession": true,
     "promptCapabilities": {
-      "image": false,
+      "image": true,
       "audio": false,
       "embeddedContext": true
     },

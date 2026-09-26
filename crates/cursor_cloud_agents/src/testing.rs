@@ -143,16 +143,22 @@ impl ScriptSender {
 /// What a [`FakeCursor`] was asked to do.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CursorCall {
-    /// `create_agent(prompt, repo, open_pull_request, mcp_servers, model)`.
+    /// `create_agent(prompt, repo, open_pull_request, mcp_servers, model, images)`.
     CreateAgent(
         String,
         Option<RepoUrl>,
         bool,
         Vec<McpServer>,
         Option<ModelChoice>,
+        Vec<crate::domain::prompt_image::CursorPromptImage>,
     ),
-    /// `create_run(agent, prompt, model)`.
-    CreateRun(CursorAgentId, String, Option<ModelChoice>),
+    /// `create_run(agent, prompt, model, images)`.
+    CreateRun(
+        CursorAgentId,
+        String,
+        Option<ModelChoice>,
+        Vec<crate::domain::prompt_image::CursorPromptImage>,
+    ),
     /// `cancel_run(agent, run)`.
     CancelRun(CursorAgentId, CursorRunId),
     /// `run_result(agent, run)`.
@@ -474,6 +480,7 @@ impl CursorAgents for FakeCursor {
         open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
+        images: &[crate::domain::prompt_image::CursorPromptImage],
     ) -> Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         self.record(CursorCall::CreateAgent(
             prompt.to_owned(),
@@ -481,6 +488,7 @@ impl CursorAgents for FakeCursor {
             open_pull_request,
             mcp_servers.to_vec(),
             model.cloned(),
+            images.to_vec(),
         ));
         self.await_create_gate().await;
         let mut state = self.inner.lock().expect("fake cursor poisoned");
@@ -518,11 +526,13 @@ impl CursorAgents for FakeCursor {
         agent: &CursorAgentId,
         prompt: &str,
         model: Option<&ModelChoice>,
+        images: &[crate::domain::prompt_image::CursorPromptImage],
     ) -> Result<CursorRunId, rootcause::Report> {
         self.record(CursorCall::CreateRun(
             agent.clone(),
             prompt.to_owned(),
             model.cloned(),
+            images.to_vec(),
         ));
         self.await_create_gate().await;
         let mut state = self.inner.lock().expect("fake cursor poisoned");

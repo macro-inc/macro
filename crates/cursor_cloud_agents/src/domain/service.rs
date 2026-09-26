@@ -47,9 +47,10 @@ use crate::domain::model::{
     ModelChoice, RepoUrl, RunStatus,
 };
 use crate::domain::ports::{
-    ArtifactStore, CursorAgents, CursorArtifacts, RepositoryChooser, RunStream, SessionIntent,
-    SessionNotifier, StreamConnectError,
+    ArtifactStore, CursorAgents, CursorArtifacts, NoPromptImageFetcher, PromptImageFetcher,
+    RepositoryChooser, RunStream, SessionIntent, SessionNotifier, StreamConnectError,
 };
+use crate::domain::prompt_image::{self, CursorPromptImage};
 use agent_client_protocol::schema::v1::{
     ContentBlock, SessionId, SessionUpdate, StopReason, TextContent,
 };
@@ -296,6 +297,18 @@ fn explain_rejection(error: SessionError) -> SessionError {
     error
 }
 
+/// A user chunk that restates the prompt the client already sent.
+///
+/// An image frame does not: it was fetched from a pasted link, and the live
+/// transcript learns the picture from this update.
+fn restates_the_prompt(update: &SessionUpdate) -> bool {
+    matches!(
+        update,
+        SessionUpdate::UserMessageChunk(chunk)
+            if !matches!(chunk.content, ContentBlock::Image(_))
+    )
+}
+
 /// Whether a failed create is a definite refusal — the prompt never ran, so
 /// it is journalled as aborted rather than left as an accepted turn.
 fn is_prompt_rejection(error: &SessionError) -> bool {
@@ -320,9 +333,9 @@ struct RejectedPrompt {
 /// The prompt that finally mints an agent, carrying the ones Cursor refused
 /// before it so the agent reads the whole conversation the person had.
 ///
-/// Plain text rather than structure because that is all `create_agent`
-/// takes; the framing tells the agent which message is current and that the
-/// earlier ones were never acted on, so it neither re-does nor ignores them.
+/// The framing tells the agent which message is current and that the earlier
+/// ones were never acted on, so it neither re-does nor ignores them. Images
+/// travel beside this text, on the prompt that is actually sent.
 fn prompt_with_rejected(rejected: &[RejectedPrompt], prompt: &str) -> String {
     if rejected.is_empty() {
         return prompt.to_owned();
@@ -464,6 +477,8 @@ pub struct CursorSessionService<Cursor, Notifier, Chooser, Store> {
     /// `GET /v1/models`, fetched once. The table is static for the life of a
     /// process and every `session/new` would otherwise re-fetch it.
     models: tokio::sync::Mutex<Option<Vec<CursorModel>>>,
+    /// Resolves pasted links into prompt images. Absent means links stay text.
+    images: Arc<dyn PromptImageFetcher>,
 }
 
 impl<Cursor, Notifier, Chooser, Store> CursorSessionService<Cursor, Notifier, Chooser, Store>
@@ -492,7 +507,15 @@ where
             default_model_id: None,
             host_model_id: None,
             models: tokio::sync::Mutex::new(None),
+            images: Arc::new(NoPromptImageFetcher),
         }
+    }
+
+    /// Fetch pasted links and attach the ones that are images.
+    #[must_use]
+    pub fn with_image_fetcher(mut self, images: Arc<dyn PromptImageFetcher>) -> Self {
+        self.images = images;
+        self
     }
     /// Pin the model every new session starts on, by id.
     ///
@@ -780,6 +803,33 @@ where
         outcome
     }
 
+    /// Fetch links in `blocks` and keep the ones that are images.
+    ///
+    /// The returned blocks are `blocks` plus one ACP image frame per picture
+    /// that was not already an image block. A fetch that fails leaves that
+    /// link as text.
+    async fn resolve_prompt_images(
+        &self,
+        blocks: Vec<ContentBlock>,
+    ) -> (Vec<ContentBlock>, Vec<CursorPromptImage>) {
+        let mut images = prompt_image::images_in_blocks(&blocks);
+        let mut fetched = Vec::new();
+        for url in prompt_image::linked_image_urls(&blocks) {
+            if images.len() + fetched.len() >= prompt_image::MAX_PROMPT_IMAGES {
+                break;
+            }
+            if let Some(image) = self.images.fetch_image(&url).await {
+                fetched.push(image);
+            }
+        }
+        if !fetched.is_empty() {
+            tracing::info!(count = fetched.len(), "attached fetched prompt images");
+        }
+        let blocks = prompt_image::with_fetched_images(blocks, &fetched);
+        images.extend(fetched);
+        (blocks, images)
+    }
+
     async fn run_turn(
         &self,
         session_id: &SessionId,
@@ -839,6 +889,9 @@ where
             self.backfill_foreign_runs(session_id, &session, agent, None)
                 .await?;
         }
+        // Links are fetched before the prompt is journaled, so the record
+        // holds the image frames and not only the URLs they came from.
+        let (blocks, images) = self.resolve_prompt_images(blocks).await;
         // Preserve original content before the provider creates remote work.
         self.capture(
             session_id,
@@ -875,9 +928,16 @@ where
             Some(agent) => {
                 // Queue behind any run still going (the same agent advances
                 // from cursor.com too) instead of failing the prompt.
-                self.create_run_when_free(&session, &agent, prompt, model.as_ref(), &cancel)
-                    .await
-                    .map(|run| (agent, run))
+                self.create_run_when_free(
+                    &session,
+                    &agent,
+                    prompt,
+                    model.as_ref(),
+                    &images,
+                    &cancel,
+                )
+                .await
+                .map(|run| (agent, run))
             }
             None => {
                 // Snapshotted out of the lock: `create_agent` is a network
@@ -926,6 +986,7 @@ where
                                 intent.open_pull_request,
                                 &mcp_servers,
                                 model.as_ref(),
+                                &images,
                             )
                             .await
                             .map_err(SessionError::from)
@@ -1822,6 +1883,7 @@ where
         agent: &CursorAgentId,
         prompt: &str,
         model: Option<&ModelChoice>,
+        images: &[CursorPromptImage],
         cancel: &tokio_util::sync::CancellationToken,
     ) -> Result<CursorRunId, SessionError> {
         let mut released = false;
@@ -1834,7 +1896,7 @@ where
                     .into_dynamic(),
                 ));
             }
-            match self.cursor.create_run(agent, prompt, model).await {
+            match self.cursor.create_run(agent, prompt, model, images).await {
                 Ok(run) => return Ok(run),
                 Err(error) if error.to_string().contains("agent_busy") => {
                     // A run this session already gave up on still holds the
@@ -2361,7 +2423,7 @@ where
                     })
             });
             for update in updates {
-                if local_prompt && matches!(update, SessionUpdate::UserMessageChunk(_)) {
+                if local_prompt && restates_the_prompt(&update) {
                     continue;
                 }
                 self.notifier.notify(id, update).await.map_err(|error| {

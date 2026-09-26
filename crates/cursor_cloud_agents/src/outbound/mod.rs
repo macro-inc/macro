@@ -1,5 +1,7 @@
 //! Driven adapters other than the Cursor API client.
 
+/// Fetches pasted links that turn out to be images.
+pub mod http_prompt_images;
 /// Process-local journal for standalone agents and tests.
 pub mod memory_journal;
 /// Fenced durable journal for hosted sessions.
