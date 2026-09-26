@@ -654,15 +654,20 @@ The URL's `diff` query parameter stores each session's pane state and diff
 layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
 `split` for side-by-side diffs). Copying the URL preserves that view; reload
 and Back/Forward restore it. A plain session URL starts with Changes closed.
-Divider width, collapsed files, and review notes stay local.
+Divider width, file tree visibility and width, collapsed files, and review
+notes stay local.
 The pane header shows a `head → base` branch pill, a **Unified / Split**
 segmented control (`aria-label="Diff layout"`), a refresh button, the
 **View pull request** button (opens GitHub), and **Expand changes to the full width**
 (spotlight; **Bring the session back** returns to the split) and **Close the
-changes pane**. Below it is a **Collapse all / Expand all** button.
-The body is a file tree (`nav[aria-label="Changed files"]`, directories
-compressed along single-child chains, status letters A/M/D/R and +/− counts)
-next to a scrollable stack of file cards. Expanded cards keep their full height;
+changes pane**. Below it is an **N files** file tree toggle (`aria-pressed`)
+and a **Collapse all / Expand all** button.
+The body is a scrollable stack of file cards. The file tree
+(`nav[aria-label="Changed files"]`, directories compressed along single-child
+chains, status letters A/M/D/R and +/− counts) is hidden until the toggle
+opens it on the left; drag its right edge (`role="separator"`,
+`aria-label="Resize the file tree"`, or arrow keys) to resize it, and
+double-click the edge to reset the width. Expanded cards keep their full height;
 **Collapse all / Expand all** hides or restores their bodies. Each card's header has a disclosure
 caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; hover a
 line and click the accent **+** in the gutter (drag for a range) to leave a
