@@ -1,15 +1,15 @@
-//! Domain models for GitHub pull request enrichment.
+//! GitHub pull request models and the rules for merging them into stored metadata.
 
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-/// Foreign entity source used for GitHub pull request metadata rows.
+/// Foreign entity source used for GitHub pull request records.
 pub const GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE: &str = "github_pull_request";
 
 /// A pull request reference that can be enriched with live GitHub data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct GithubPullRequestRef {
     /// The stored GitHub association key, in `owner/repo/pull/number` format.
@@ -28,7 +28,7 @@ pub struct GithubPullRequestRef {
 
 /// The normalized lifecycle status for a GitHub pull request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum GithubPullRequestStatus {
     /// The pull request is open.
@@ -91,7 +91,7 @@ where
 
 /// A comment associated with a GitHub pull request.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct GithubPullRequestComment {
     /// The unique GitHub identifier for the comment or review.
@@ -137,7 +137,7 @@ pub struct GithubPullRequestComment {
 
 /// A check run associated with a GitHub pull request.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct GithubPullRequestCheckRun {
     /// The unique GitHub identifier for the check run.
@@ -158,7 +158,7 @@ pub struct GithubPullRequestCheckRun {
 
 /// GitHub API pull request details used to enrich a pull request reference.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct GithubPullRequestDetails {
     /// The GitHub pull request title.
     pub title: String,
@@ -212,7 +212,7 @@ impl GithubPullRequestDetails {
 
 /// A pull request reference enriched with live GitHub details when available.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct EnrichedGithubPullRequest {
     /// The stored GitHub association key, in `owner/repo/pull/number` format.
@@ -382,7 +382,7 @@ impl EnrichedGithubPullRequest {
 
 /// Request body for the authenticated pull request enrichment proxy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct EnrichGithubPullRequestsProxyRequest {
     /// The pull requests to enrich for the authenticated user.
@@ -391,7 +391,7 @@ pub struct EnrichGithubPullRequestsProxyRequest {
 
 /// Response body for pull request enrichment.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct EnrichGithubPullRequestsResponse {
     /// Pull requests with enrichment fields populated when GitHub data was available.

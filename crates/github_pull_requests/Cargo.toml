@@ -1,0 +1,26 @@
+[package]
+edition = "2024"
+name = "github_pull_requests"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["ports", "service"]
+ports = []
+schema = ["dep:utoipa"]
+service = ["foreign_entity/ports", "ports"]
+
+[dependencies]
+chrono = { workspace = true }
+foreign_entity = { path = "../foreign_entity", default-features = false }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+uuid = { workspace = true }

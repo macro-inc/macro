@@ -81,6 +81,9 @@ github = { path = "../../crates/github", default-features = false, features = [
   "link",
   "outbound",
 ] }
+github_pull_requests = { path = "../../crates/github_pull_requests", default-features = false, features = [
+  "service",
+] }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }

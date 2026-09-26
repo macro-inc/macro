@@ -1722,6 +1722,7 @@ dependencies = [
  "fusionauth",
  "futures",
  "github",
+ "github_pull_requests",
  "gtm_invite",
  "http-body-util",
  "jsonwebtoken 10.3.0",
@@ -5644,6 +5645,7 @@ dependencies = [
  "frecency",
  "futures",
  "github",
+ "github_pull_requests",
  "graphql_soup",
  "harnesses",
  "hex",
@@ -5850,6 +5852,7 @@ dependencies = [
  "entity_registry_db_utils",
  "foreign_entity",
  "futures",
+ "github_pull_requests",
  "hex",
  "http-body-util",
  "jsonwebtoken 10.3.0",
@@ -7510,6 +7513,7 @@ dependencies = [
  "entity_access",
  "foreign_entity",
  "fusionauth",
+ "github_pull_requests",
  "hex",
  "hmac 0.12.1",
  "http-body-util",
@@ -7545,6 +7549,23 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "github_pull_requests"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "entity_access",
+ "foreign_entity",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -16087,6 +16108,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "futures",
+ "github_pull_requests",
  "http-body-util",
  "indexmap 2.14.0",
  "item_filters",

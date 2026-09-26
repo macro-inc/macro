@@ -6,11 +6,10 @@ use agent_changes::domain::{
     model::{AgentSessionId, PullRequestRef},
     ports::SessionBranchReader,
 };
+use github_pull_requests::domain::models::GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE;
 use models_soup::agent_session::AgentPullRequestState;
 
 use super::*;
-
-const PULL_REQUEST_SOURCE: &str = "github_pull_request";
 
 fn pull_request_key(url: &str) -> Option<String> {
     let reference = PullRequestRef::parse(url)?;
@@ -77,7 +76,7 @@ pub(super) async fn enrich<F: ForeignEntityService>(
         };
         let filter = Expr::and(
             Expr::Literal(ForeignEntityLiteral::ForeignEntitySource(
-                PULL_REQUEST_SOURCE.to_owned(),
+                GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE.to_owned(),
             )),
             Arc::unwrap_or_clone(ids),
         );

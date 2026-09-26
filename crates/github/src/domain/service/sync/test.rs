@@ -3,8 +3,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser,
-        GithubError, GithubInstallationAccessToken, GithubKey, GithubPullRequestCheckRun,
+        EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+        GithubAppInstallationSource, GithubAuthenticatedUser, GithubError,
+        GithubInstallationAccessToken, GithubKey, GithubPullRequestCheckRun,
         GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestStatus,
         GithubSetupAccessToken, GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference,
         TeamTaskReference, ValidatedGithubWebhookEvent,
@@ -34,6 +35,7 @@ use foreign_entity::domain::{
     },
     ports::{ForeignEntityListQuery, ForeignEntityService},
 };
+use github_pull_requests::domain::service::GithubPullRequestServiceImpl;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentBasic, DocumentMetadata};
 use model_entity::Entity;
@@ -965,18 +967,19 @@ fn foreign_entity_id_from_receipt(
     })
 }
 
+#[derive(Clone)]
 struct StubForeignEntityService {
-    foreign_entities: Mutex<Vec<ForeignEntity>>,
-    create_calls: Mutex<Vec<CreateForeignEntity>>,
-    patch_calls: Mutex<Vec<(uuid::Uuid, PatchForeignEntity)>>,
+    foreign_entities: Arc<Mutex<Vec<ForeignEntity>>>,
+    create_calls: Arc<Mutex<Vec<CreateForeignEntity>>>,
+    patch_calls: Arc<Mutex<Vec<(uuid::Uuid, PatchForeignEntity)>>>,
 }
 
 impl StubForeignEntityService {
     fn new() -> Self {
         Self {
-            foreign_entities: Mutex::new(Vec::new()),
-            create_calls: Mutex::new(Vec::new()),
-            patch_calls: Mutex::new(Vec::new()),
+            foreign_entities: Arc::new(Mutex::new(Vec::new())),
+            create_calls: Arc::new(Mutex::new(Vec::new())),
+            patch_calls: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -1173,15 +1176,44 @@ impl NotificationIngress for StubNotificationIngress {
     }
 }
 
-type TestGithubSyncService = GithubSyncServiceImpl<
+type TestSyncServiceImpl = GithubSyncServiceImpl<
     StubDocumentService,
     StubSyncRepo,
     StubSyncClient,
-    StubForeignEntityService,
+    GithubPullRequestServiceImpl<StubForeignEntityService>,
     StubNotificationIngress,
     StubRealtime,
 >;
-type TestServiceWithForeignEntityService = (TestGithubSyncService, Arc<StubForeignEntityService>);
+
+/// The sync service under test, with a handle on the foreign entities it stores.
+struct TestGithubSyncService {
+    service: TestSyncServiceImpl,
+    foreign_entity_service: StubForeignEntityService,
+}
+
+impl std::ops::Deref for TestGithubSyncService {
+    type Target = TestSyncServiceImpl;
+
+    fn deref(&self) -> &Self::Target {
+        &self.service
+    }
+}
+
+impl std::ops::DerefMut for TestGithubSyncService {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.service
+    }
+}
+
+type TestServiceWithForeignEntityService = (TestGithubSyncService, StubForeignEntityService);
+
+fn pull_request_service(
+    foreign_entity_service: &StubForeignEntityService,
+) -> Arc<GithubPullRequestServiceImpl<StubForeignEntityService>> {
+    Arc::new(GithubPullRequestServiceImpl::new(
+        foreign_entity_service.clone(),
+    ))
+}
 
 fn make_sync_service() -> TestGithubSyncService {
     make_sync_service_with_doc_service().0
@@ -1196,9 +1228,9 @@ fn make_sync_service_with_repo_and_notification_ingress(
     notification_ingress: StubNotificationIngress,
 ) -> TestGithubSyncService {
     let doc_service = Arc::new(StubDocumentService::new());
-    let foreign_entity_service = Arc::new(StubForeignEntityService::new());
+    let foreign_entity_service = StubForeignEntityService::new();
 
-    GithubSyncServiceImpl::new(
+    let service = GithubSyncServiceImpl::new(
         GithubSyncConfig {
             webhook_secret: "test-webhook-secret".to_string(),
             github_sync_app_url: "https://github.com/apps/test/installations/new?existing=1"
@@ -1209,17 +1241,21 @@ fn make_sync_service_with_repo_and_notification_ingress(
             installation_state_secret: "test-installation-state-secret".to_string(),
         },
         doc_service,
-        foreign_entity_service,
+        pull_request_service(&foreign_entity_service),
         notification_ingress,
         repo,
         StubSyncClient::new(),
         StubRealtime::default(),
-    )
+    );
+    TestGithubSyncService {
+        service,
+        foreign_entity_service,
+    }
 }
 
 fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocumentService>) {
     let doc_service = Arc::new(StubDocumentService::new());
-    let foreign_entity_service = Arc::new(StubForeignEntityService::new());
+    let foreign_entity_service = StubForeignEntityService::new();
 
     let service = GithubSyncServiceImpl::new(
         GithubSyncConfig {
@@ -1232,13 +1268,19 @@ fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocum
             installation_state_secret: "test-installation-state-secret".to_string(),
         },
         doc_service.clone(),
-        foreign_entity_service,
+        pull_request_service(&foreign_entity_service),
         StubNotificationIngress::new(),
         StubSyncRepo::new(),
         StubSyncClient::new(),
         StubRealtime::default(),
     );
-    (service, doc_service)
+    (
+        TestGithubSyncService {
+            service,
+            foreign_entity_service,
+        },
+        doc_service,
+    )
 }
 
 fn make_sync_service_with_foreign_entity_service() -> TestServiceWithForeignEntityService {

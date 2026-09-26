@@ -91,6 +91,7 @@ use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use github_pull_requests::domain::service::GithubPullRequestServiceImpl;
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use initiative::{
     domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
@@ -557,7 +558,9 @@ async fn run() -> anyhow::Result<()> {
             installation_state_secret: config.github_installation_state_secret.to_string(),
         },
         document_service.clone(),
-        foreign_entity_service.clone(),
+        Arc::new(GithubPullRequestServiceImpl::new(
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+        )),
         (*notification_ingress_service).clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),

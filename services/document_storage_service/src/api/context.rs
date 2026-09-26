@@ -85,6 +85,7 @@ use github::domain::service::GithubSyncServiceImpl;
 use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use github_pull_requests::domain::service::GithubPullRequestServiceImpl;
 use initiative::{
     domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
     outbound::PgInitiativeRepo,
@@ -534,7 +535,7 @@ pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl<
     DocumentService,
     PgGithubSyncRepo,
     GithubSyncClientImpl,
-    ForeignEntityServiceType,
+    GithubPullRequestServiceImpl<ForeignEntityServiceType>,
     NotificationIngressType,
     ConnectionGatewayGithubRealtime,
 >;

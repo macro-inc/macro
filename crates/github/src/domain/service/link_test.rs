@@ -8,6 +8,7 @@ use foreign_entity::domain::{
     },
     ports::{ForeignEntityListQuery, ForeignEntityService},
 };
+use github_pull_requests::domain::service::GithubPullRequestServiceImpl;
 use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
@@ -592,11 +593,14 @@ fn foreign_entity(
     }
 }
 
-fn service(
-    repo: StubGithubRepo,
-    oauth: StubGithubOauth,
-    auth: StubAuth,
-) -> GithubLinkServiceImpl<StubGithubRepo, StubGithubOauth, StubAuth, StubForeignEntityService> {
+type TestGithubLinkService = GithubLinkServiceImpl<
+    StubGithubRepo,
+    StubGithubOauth,
+    StubAuth,
+    GithubPullRequestServiceImpl<StubForeignEntityService>,
+>;
+
+fn service(repo: StubGithubRepo, oauth: StubGithubOauth, auth: StubAuth) -> TestGithubLinkService {
     service_with_foreign_entities(repo, oauth, auth, StubForeignEntityService::default())
 }
 
@@ -605,12 +609,12 @@ fn service_with_foreign_entities(
     oauth: StubGithubOauth,
     auth: StubAuth,
     foreign_entity_service: StubForeignEntityService,
-) -> GithubLinkServiceImpl<StubGithubRepo, StubGithubOauth, StubAuth, StubForeignEntityService> {
+) -> TestGithubLinkService {
     GithubLinkServiceImpl::new(
         repo,
         oauth,
         auth,
-        foreign_entity_service,
+        GithubPullRequestServiceImpl::new(foreign_entity_service),
         GithubLinkConfig {
             client_id: "client-id".to_string(),
             client_secret: "client-secret".to_string(),
