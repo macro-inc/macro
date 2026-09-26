@@ -14,6 +14,7 @@ import type { Project } from '@service-storage/generated/schemas/project';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { v4 as uuidv4 } from 'uuid';
 import { queryClient } from '../client';
+import { refreshActiveGraphqlFoldersQueries } from './graphql-folders';
 import { storageKeys } from './keys';
 
 const PROJECTS_STALE_TIME = 5 * 60 * 1000;
@@ -79,9 +80,12 @@ export function useProjectsQuery() {
 }
 
 export function invalidateProjects() {
-  return queryClient.invalidateQueries({
-    queryKey: storageKeys.projects.list.queryKey,
-  });
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: storageKeys.projects.list.queryKey,
+    }),
+    refreshActiveGraphqlFoldersQueries(),
+  ]);
 }
 
 /**
