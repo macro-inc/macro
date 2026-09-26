@@ -1865,3 +1865,5 @@ impl NotificationExtIos for AgentSessionMentionedMetadata {
         agent_session_apns(self, &self.session, sender_id, notification_id)
     }
 }
+mod crm_discussion;
+pub use crm_discussion::{CrmDiscussionMetadata, CrmDiscussionReason};

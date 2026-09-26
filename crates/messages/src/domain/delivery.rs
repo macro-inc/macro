@@ -9,8 +9,8 @@ mod test;
 pub struct DiscussionContext {
     /// Document name.
     pub name: String,
-    /// Authenticated parent owner.
-    pub owner: String,
+    /// Authenticated parent owner; a CRM record may have none.
+    pub owner: Option<String>,
     /// Optional document extension.
     pub file_type: Option<String>,
     /// Whether the document is a task.
@@ -208,7 +208,7 @@ impl<
                     .collect(),
                 participants: context.participants.clone(),
                 assignees: context.assignees.clone(),
-                owners: vec![context.owner.clone()],
+                owners: context.owner.iter().cloned().collect(),
                 ..Default::default()
             };
             // Only document link sharing confers explicit visibility on mention.

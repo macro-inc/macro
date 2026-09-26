@@ -727,7 +727,10 @@ async fn run() -> anyhow::Result<()> {
             message_realtime.clone(),
         ),
         messages::domain::delivery::DiscussionDelivery::new(
-            messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()),
+            messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()).with_crm(
+                crm::outbound::lookup::PgCrmParentReader::new(pool.clone()),
+                ai_tools::build_properties_service(pool.clone(), entity_access.clone()),
+            ),
             messages::outbound::entity_access_audience::EntityAccessMessageAudience(
                 (*entity_access).clone(),
             ),
@@ -740,7 +743,8 @@ async fn run() -> anyhow::Result<()> {
     );
     let message_service: Arc<dyn messages::domain::api::MessageServiceApi> = Arc::new(
         messages::domain::service::MessageService::new(
-            messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+            messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone())
+                .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(broker.clone()),
                 messages::domain::ports::NoMessageEventPublisher,

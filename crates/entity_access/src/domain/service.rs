@@ -625,7 +625,9 @@ where
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::AgentSession
-            | EntityType::Initiative => {
+            | EntityType::Initiative
+            | EntityType::CrmCompany
+            | EntityType::CrmContact => {
                 let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid entity_id for get_users_by_entity")
                 })?;

@@ -697,3 +697,45 @@ describe('stackNotifications — entity discussions', () => {
     ]);
   });
 });
+
+describe('CRM discussion notifications', () => {
+  function crmNotification(
+    id: string,
+    recordId: string,
+    threadId: string,
+    createdAt: number
+  ): UnifiedNotification {
+    return {
+      ...createBaseNotification(id, createdAt, {
+        tag: 'crm_discussion',
+        content: {
+          recordName: 'Acme',
+          reason: 'owner',
+          messageId: `${id}-message`,
+          threadId,
+          text: `Comment ${id}`,
+        },
+      }),
+      entity_id: recordId,
+      entity_type: 'crm_company',
+    };
+  }
+
+  it('stacks one group per record thread', () => {
+    const groups = stackNotifications([
+      crmNotification('a', 'company-1', 'thread-1', 1000),
+      crmNotification('b', 'company-1', 'thread-1', 2000),
+      crmNotification('c', 'company-1', 'thread-2', 3000),
+      crmNotification('d', 'company-2', 'thread-1', 4000),
+    ]);
+    expect(groups.map((group) => group.type)).toEqual([
+      'crm_discussion',
+      'crm_discussion',
+      'crm_discussion',
+    ]);
+    expect(
+      groups.map((group) => group.notifications.map((n) => n.id).sort())
+    ).toEqual([['d'], ['c'], ['a', 'b']]);
+    expect(getThreadId(groups[2])).toBe('thread-1');
+  });
+});

@@ -611,7 +611,12 @@ impl AgentSessionResponse {
     pub fn new(session: AgentSession, can_edit: bool) -> Self {
         let thread_channel_id = match &session.thread_parent {
             Some(messages::domain::models::MessageParent::Channel(channel_id)) => Some(*channel_id),
-            Some(messages::domain::models::MessageParent::Document(_)) | None => None,
+            Some(
+                messages::domain::models::MessageParent::Document(_)
+                | messages::domain::models::MessageParent::CrmCompany(_)
+                | messages::domain::models::MessageParent::CrmContact(_),
+            )
+            | None => None,
         };
         Self {
             id: session.id.as_uuid(),

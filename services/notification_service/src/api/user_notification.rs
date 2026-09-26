@@ -13,8 +13,8 @@ use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionSettledMetadata,
     AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
     ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata,
-    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrComment, GithubPrMention,
-    GithubPrReview, GithubPrStatusChanged, GithubReviewRequested,
+    CommentedOnDocumentMetadata, CrmDiscussionMetadata, DocumentMentionMetadata, GithubPrComment,
+    GithubPrMention, GithubPrReview, GithubPrStatusChanged, GithubReviewRequested,
     MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
     RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
@@ -47,6 +47,7 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
         MentionedInDocumentCommentMetadata::TYPE_NAME,
         RepliedToDocumentCommentThreadMetadata::TYPE_NAME,
         CommentedOnDocumentMetadata::TYPE_NAME,
+        CrmDiscussionMetadata::TYPE_NAME,
         CalendarEventReminderMetadata::TYPE_NAME,
         AgentSessionSettledMetadata::TYPE_NAME,
         AgentSessionWaitingForInputMetadata::TYPE_NAME,

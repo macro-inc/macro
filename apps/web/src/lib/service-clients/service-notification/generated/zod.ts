@@ -563,6 +563,46 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          messageId: zod
+                            .uuid()
+                            .describe('Canonical shared message UUID.'),
+                          reason: zod
+                            .enum(['mention', 'reply', 'owner'])
+                            .describe(
+                              'Why a CRM discussion notification was delivered.'
+                            ),
+                          recordName: zod
+                            .string()
+                            .describe('Company or contact display name.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe('Public display name for a bot author.'),
+                          senderProfilePictureUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Optional avatar for push notification attachments.'
+                            ),
+                          text: zod
+                            .string()
+                            .describe('Posted Markdown content.'),
+                          threadId: zod
+                            .uuid()
+                            .describe('Canonical discussion root UUID.'),
+                        })
+                        .describe(
+                          'CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.'
+                        ),
+                      tag: zod.enum(['crm_discussion']),
+                    })
+                    .describe(
+                      'Someone commented, replied, or mentioned the recipient on a CRM company or contact.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           channelName: zod
                             .string()
                             .optional()
@@ -2318,6 +2358,46 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          messageId: zod
+                            .uuid()
+                            .describe('Canonical shared message UUID.'),
+                          reason: zod
+                            .enum(['mention', 'reply', 'owner'])
+                            .describe(
+                              'Why a CRM discussion notification was delivered.'
+                            ),
+                          recordName: zod
+                            .string()
+                            .describe('Company or contact display name.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe('Public display name for a bot author.'),
+                          senderProfilePictureUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Optional avatar for push notification attachments.'
+                            ),
+                          text: zod
+                            .string()
+                            .describe('Posted Markdown content.'),
+                          threadId: zod
+                            .uuid()
+                            .describe('Canonical discussion root UUID.'),
+                        })
+                        .describe(
+                          'CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.'
+                        ),
+                      tag: zod.enum(['crm_discussion']),
+                    })
+                    .describe(
+                      'Someone commented, replied, or mentioned the recipient on a CRM company or contact.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           channelName: zod
                             .string()
                             .optional()
@@ -4067,6 +4147,46 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          messageId: zod
+                            .uuid()
+                            .describe('Canonical shared message UUID.'),
+                          reason: zod
+                            .enum(['mention', 'reply', 'owner'])
+                            .describe(
+                              'Why a CRM discussion notification was delivered.'
+                            ),
+                          recordName: zod
+                            .string()
+                            .describe('Company or contact display name.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe('Public display name for a bot author.'),
+                          senderProfilePictureUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Optional avatar for push notification attachments.'
+                            ),
+                          text: zod
+                            .string()
+                            .describe('Posted Markdown content.'),
+                          threadId: zod
+                            .uuid()
+                            .describe('Canonical discussion root UUID.'),
+                        })
+                        .describe(
+                          'CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.'
+                        ),
+                      tag: zod.enum(['crm_discussion']),
+                    })
+                    .describe(
+                      'Someone commented, replied, or mentioned the recipient on a CRM company or contact.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           channelName: zod
                             .string()
                             .optional()
@@ -5785,6 +5905,44 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['commented_on_document']),
             })
             .describe('Someone commented on a document the user owns.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  messageId: zod
+                    .uuid()
+                    .describe('Canonical shared message UUID.'),
+                  reason: zod
+                    .enum(['mention', 'reply', 'owner'])
+                    .describe(
+                      'Why a CRM discussion notification was delivered.'
+                    ),
+                  recordName: zod
+                    .string()
+                    .describe('Company or contact display name.'),
+                  senderDisplayName: zod
+                    .string()
+                    .nullish()
+                    .describe('Public display name for a bot author.'),
+                  senderProfilePictureUrl: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Optional avatar for push notification attachments.'
+                    ),
+                  text: zod.string().describe('Posted Markdown content.'),
+                  threadId: zod
+                    .uuid()
+                    .describe('Canonical discussion root UUID.'),
+                })
+                .describe(
+                  'CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.'
+                ),
+              tag: zod.enum(['crm_discussion']),
+            })
+            .describe(
+              'Someone commented, replied, or mentioned the recipient on a CRM company or contact.'
+            ),
           zod
             .object({
               content: zod

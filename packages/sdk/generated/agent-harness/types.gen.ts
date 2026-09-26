@@ -908,6 +908,18 @@ export type MessageParent = {
      */
     id: DocumentId;
     type: 'document';
+} | {
+    /**
+     * A CRM company.
+     */
+    id: string;
+    type: 'crm_company';
+} | {
+    /**
+     * A CRM contact.
+     */
+    id: string;
+    type: 'crm_contact';
 };
 
 /**

@@ -1576,6 +1576,58 @@ input GraphqlCrmCompanyLiteral @oneOf {
 }
 
 """
+Metadata for a discussion on a CRM company or contact.
+"""
+type GraphqlCrmDiscussionMetadata {
+	"""
+	Company or contact display name.
+	"""
+	recordName: String!
+	"""
+	Notification reason.
+	"""
+	reason: GraphqlCrmDiscussionReason!
+	"""
+	Shared message identifier.
+	"""
+	messageId: ID!
+	"""
+	Shared discussion root identifier.
+	"""
+	threadId: ID!
+	"""
+	Comment Markdown.
+	"""
+	text: String!
+	"""
+	Public bot display name, if applicable.
+	"""
+	senderDisplayName: String
+	"""
+	Sender avatar URL.
+	"""
+	senderProfilePictureUrl: String
+}
+
+"""
+Why a CRM discussion notification was sent.
+"""
+enum GraphqlCrmDiscussionReason {
+	"""
+	Explicit user mention.
+	"""
+	MENTION
+	"""
+	Reply to a discussion.
+	"""
+	REPLY
+	"""
+	Comment on an owned company or one of its contacts.
+	"""
+	OWNER
+}
+
+"""
 GraphQL input representing the crm scope.
 """
 input GraphqlCrmScope @oneOf {
@@ -3290,7 +3342,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata
+union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata
 
 """
 A notification associated with a Soup entity.

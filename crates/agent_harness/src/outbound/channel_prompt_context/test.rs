@@ -59,10 +59,7 @@ impl ContextAuthorizer for Authorizer {
         Ok(EntityAccessReceipt::try_new_authenticated_user(
             actor.clone(),
             Entity {
-                entity_type: match parent {
-                    MessageParent::Document(_) => EntityType::Document,
-                    MessageParent::Channel(_) => EntityType::Channel,
-                },
+                entity_type: parent.access_entity_type(),
                 entity_id: parent.entity_id(),
             },
             EntityPermission::AccessLevel {

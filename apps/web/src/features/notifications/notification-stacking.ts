@@ -1,6 +1,7 @@
 import type { NotificationType } from '@core/types';
 import { compareDateDesc } from '@core/util/date';
 import { match } from 'ts-pattern';
+import { isEntityDiscussionEvent } from './entity-discussion';
 import {
   isChannelNotification,
   isDocumentCommentNotification,
@@ -60,6 +61,7 @@ export function getThreadId(group: NotificationStack): string {
       .with({ tag: 'commented_on_document' }, (m) =>
         m.content.threadId.toString()
       )
+      .with({ tag: 'crm_discussion' }, (m) => m.content.threadId)
       .otherwise(() => '');
     if (threadId) return threadId;
   }
@@ -103,14 +105,28 @@ export function stackNotifications(
   const docMentions = notifications.filter(
     (n) => n.notification_metadata.tag === 'document_mention'
   );
+  // One stack per discussion thread on a CRM record.
+  const crmDiscussionThreads = groupBy(
+    notifications.filter((n) =>
+      isEntityDiscussionEvent(n.notification_metadata)
+    ),
+    (n) => {
+      const meta = n.notification_metadata;
+      return `${n.entity_id}:${isEntityDiscussionEvent(meta) ? meta.content.threadId : n.id}`;
+    }
+  );
   const others = notifications.filter(
     (n) =>
       !isChannelNotification(n) &&
       !isDocumentCommentNotification(n) &&
-      n.notification_metadata.tag !== 'document_mention'
+      n.notification_metadata.tag !== 'document_mention' &&
+      !isEntityDiscussionEvent(n.notification_metadata)
   );
 
   const groups: NotificationStack[] = [
+    ...[...crmDiscussionThreads.values()].flatMap((items) =>
+      makeStack('crm_discussion', items)
+    ),
     ...channelStacks,
     ...docCommentStacks,
     ...makeStack('document_mention', docMentions),

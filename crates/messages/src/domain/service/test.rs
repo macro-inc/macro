@@ -908,13 +908,17 @@ async fn human_can_post_canonical_agent_mentions_on_documents_and_channels() {
     for parent in [
         MessageParent::parse("document", "doc").unwrap(),
         MessageParent::Channel(Uuid::from_u128(20)),
+        MessageParent::CrmCompany(Uuid::from_u128(22)),
+        MessageParent::CrmContact(Uuid::from_u128(23)),
     ] {
         let repo = fixture();
         let events = Events::default();
         let service = MessageService::new(repo.clone(), events.clone());
         let (entity_type, permission) = match parent {
-            MessageParent::Document(_) => (
-                EntityType::Document,
+            MessageParent::Document(_)
+            | MessageParent::CrmCompany(_)
+            | MessageParent::CrmContact(_) => (
+                parent.access_entity_type(),
                 EntityPermission::AccessLevel {
                     access_level: AccessLevel::Comment,
                 },

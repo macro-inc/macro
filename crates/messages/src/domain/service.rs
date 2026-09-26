@@ -413,6 +413,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             return Err(MessageError::Invalid("thread update must change a field"));
         }
         if patch.detach_anchor {
+            if !matches!(parent, MessageParent::Document(_)) {
+                return Err(MessageError::Invalid(
+                    "only document discussions have anchors",
+                ));
+            }
             if !access.entity_permission().satisfies::<EditAccessLevel>() {
                 return Err(MessageError::Forbidden);
             }
@@ -703,6 +708,8 @@ fn parent_from_receipt<P: RequiredPermission>(
     let kind = match entity.entity_type {
         EntityType::Channel => "channel",
         EntityType::Document => "document",
+        EntityType::CrmCompany => "crm_company",
+        EntityType::CrmContact => "crm_contact",
         _ => return Err(MessageError::Forbidden),
     };
     MessageParent::parse(kind, &entity.entity_id)

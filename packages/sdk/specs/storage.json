@@ -26547,6 +26547,38 @@
                 "enum": ["document"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A CRM company.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A CRM company."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["crm_company"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A CRM contact.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A CRM contact."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["crm_contact"]
+              }
+            }
           }
         ],
         "description": "The entity whose permissions and lifecycle govern a message."

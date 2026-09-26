@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_contacts (id, company_id, email, hidden, first_interaction, last_interaction)\n        VALUES ($1, $2, $3, $4, now(), now())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "02e02203a76c8bf9103aaf932450592b27c8fc3f689634a1f490921c18be83a9"
+}

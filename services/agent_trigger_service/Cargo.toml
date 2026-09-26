@@ -9,6 +9,7 @@ name = "agent_trigger_service"
 path = "src/main.rs"
 
 [dependencies]
+crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
 agent_session = { path = "../../crates/agent_session" }
 agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
 ai_usage = { path = "../../crates/ai_usage" }

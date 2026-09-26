@@ -334,7 +334,9 @@ impl AgentSessionMacroEvent {
                         channel_id: *channel_id,
                     })?,
             ),
-            MessageParent::Document(_) => None,
+            MessageParent::Document(_)
+            | MessageParent::CrmCompany(_)
+            | MessageParent::CrmContact(_) => None,
         };
         Ok(match decision {
             TriggerDecision::Open { bot_id, message } => match channel {

@@ -73,7 +73,9 @@ impl WorkExecutor for Dispatcher {
                             messages::domain::models::MessageParent::Channel(channel_id) => {
                                 Some(*channel_id)
                             }
-                            messages::domain::models::MessageParent::Document(_) => None,
+                            messages::domain::models::MessageParent::Document(_)
+                            | messages::domain::models::MessageParent::CrmCompany(_)
+                            | messages::domain::models::MessageParent::CrmContact(_) => None,
                         },
                         parent: Some(parent),
                         thread_id: Some(thread_id),

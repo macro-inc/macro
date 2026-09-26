@@ -2,6 +2,10 @@ import type { NotificationType } from '@core/types';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import type { NotificationStack } from '@notifications';
 import {
+  entityDiscussionVerb,
+  isEntityDiscussionEvent,
+} from '@notifications/entity-discussion';
+import {
   getNotificationAgentSender,
   getUniqueAgentSenders,
 } from '@notifications/notification-sender';
@@ -106,10 +110,15 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
 
     // Single notification: "Peter mentioned you"
     if (isSingleNotification()) {
+      const metadata = (props.notification ?? props.stack?.notifications[0])
+        ?.notification_metadata;
+      const action = isEntityDiscussionEvent(metadata)
+        ? entityDiscussionVerb(metadata)
+        : getActionVerb(type);
       if (sender && type !== 'ai_response') {
-        return `${sender} ${getActionVerb(type)}`;
+        return `${sender} ${action}`;
       }
-      return getActionVerb(type);
+      return action;
     }
 
     // Stack with multiple senders

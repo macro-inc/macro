@@ -14,6 +14,7 @@ mod test;
 #[derive(Clone)]
 pub struct PgMessageRepository {
     pool: PgPool,
+    crm: Option<std::sync::Arc<dyn CrmParentReader>>,
 }
 
 #[derive(Deserialize)]
@@ -55,7 +56,9 @@ fn database_error(error: sqlx::Error) -> MessageError {
 fn channel_column(parent: &MessageParent) -> Option<Uuid> {
     match parent {
         MessageParent::Channel(id) => Some(*id),
-        MessageParent::Document(_) => None,
+        MessageParent::Document(_)
+        | MessageParent::CrmCompany(_)
+        | MessageParent::CrmContact(_) => None,
     }
 }
 
@@ -70,7 +73,24 @@ fn stored_attachment_type(entity_type: &str) -> &str {
 impl PgMessageRepository {
     /// Create a repository using the shared MacroDB pool.
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self { pool, crm: None }
+    }
+
+    /// Supply the owning CRM identity service for company and contact discussions.
+    /// Unconfigured compositions reject CRM operations.
+    pub fn with_crm(mut self, crm: impl CrmParentReader) -> Self {
+        self.crm = Some(std::sync::Arc::new(crm));
+        self
+    }
+
+    async fn crm_parent_exists(&self, parent: &MessageParent) -> Result<bool, MessageError> {
+        let Some(crm) = &self.crm else {
+            return Ok(false);
+        };
+        crm.read_crm_parent(parent)
+            .await
+            .map(|value| value.is_some())
+            .map_err(MessageError::Repository)
     }
 
     /// Fill in what each PDF highlight anchor covers. The highlight owns its
@@ -517,6 +537,9 @@ impl MessageRepository for PgMessageRepository {
 
     async fn parent_exists(&self, parent: &MessageParent) -> Result<bool, MessageError> {
         let exists = match parent {
+            MessageParent::CrmCompany(_) | MessageParent::CrmContact(_) => {
+                return self.crm_parent_exists(parent).await;
+            }
             MessageParent::Document(_) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL) AS "exists!""#, parent.entity_id())
                 .fetch_one(&self.pool).await,
             MessageParent::Channel(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS "exists!""#, id)

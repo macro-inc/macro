@@ -158,6 +158,8 @@ async fn receipt<P: RequiredPermission, A: EntityAccessService, Auth: MacroAutho
     let kind = match parent {
         MessageParent::Channel(_) => EntityType::Channel,
         MessageParent::Document(_) => EntityType::Document,
+        MessageParent::CrmCompany(_) => EntityType::CrmCompany,
+        MessageParent::CrmContact(_) => EntityType::CrmContact,
     };
     entity_access::inbound::axum_extractors::principal_entity_access_receipt::<P>(
         access,

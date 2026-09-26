@@ -45,6 +45,10 @@ pub enum MessageParent {
     Channel(Uuid),
     /// A document, including tasks and PDFs.
     Document(DocumentId),
+    /// A CRM company.
+    CrmCompany(Uuid),
+    /// A CRM contact.
+    CrmContact(Uuid),
 }
 
 impl MessageParent {
@@ -53,6 +57,12 @@ impl MessageParent {
         match entity_type {
             "channel" => Ok(Self::Channel(entity_id.parse().map_err(|_| InvalidParent)?)),
             "document" => Ok(Self::Document(entity_id.to_owned().try_into()?)),
+            "crm_company" => Ok(Self::CrmCompany(
+                entity_id.parse().map_err(|_| InvalidParent)?,
+            )),
+            "crm_contact" => Ok(Self::CrmContact(
+                entity_id.parse().map_err(|_| InvalidParent)?,
+            )),
             _ => Err(InvalidParent),
         }
     }
@@ -62,13 +72,15 @@ impl MessageParent {
         match self {
             Self::Channel(_) => "channel",
             Self::Document(_) => "document",
+            Self::CrmCompany(_) => "crm_company",
+            Self::CrmContact(_) => "crm_contact",
         }
     }
 
     /// Canonical parent identifier.
     pub fn entity_id(&self) -> String {
         match self {
-            Self::Channel(id) => id.to_string(),
+            Self::Channel(id) | Self::CrmCompany(id) | Self::CrmContact(id) => id.to_string(),
             Self::Document(id) => id.0.clone(),
         }
     }
@@ -84,6 +96,8 @@ impl MessageParent {
         match self {
             Self::Channel(_) => entity_access::domain::models::EntityType::Channel,
             Self::Document(_) => entity_access::domain::models::EntityType::Document,
+            Self::CrmCompany(_) => entity_access::domain::models::EntityType::CrmCompany,
+            Self::CrmContact(_) => entity_access::domain::models::EntityType::CrmContact,
         }
     }
 }

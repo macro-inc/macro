@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_domains (company_id, team_id, domain) VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "534c8ac63fa4fb0bd49d0eb006ca9ff8a342d4b281ebc78a2c98c9773c0a5619"
+}
