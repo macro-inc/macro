@@ -118,29 +118,43 @@ async fn set_timestamps(
         .expect("updated foreign entity should exist")
 }
 
+/// A pull request record, with a typed row listing `participant_github_user_ids` when given.
 async fn insert_pr_with_participants(
+    pool: &PgPool,
     repo: &PgForeignEntityRepo,
     foreign_entity_id: &str,
     stored_for_id: &str,
     participant_github_user_ids: Option<&[&str]>,
 ) -> ForeignEntity {
-    let mut metadata = json!({ "displayName": foreign_entity_id });
+    let entity = repo
+        .create_foreign_entity(
+            Uuid::now_v7(),
+            CreateForeignEntity {
+                foreign_entity_id: foreign_entity_id.into(),
+                foreign_entity_source: "github_pull_request".into(),
+                metadata: json!({ "displayName": foreign_entity_id }),
+                stored_for_id: stored_for_id.into(),
+                stored_for_auth_entity: "user".into(),
+            },
+        )
+        .await
+        .expect("pull request foreign entity should be inserted");
+
     if let Some(participants) = participant_github_user_ids {
-        metadata["participantGithubUserIds"] = json!(participants);
+        sqlx::query(
+            r#"
+            INSERT INTO github_pull_request (github_key, number, owner, repo, participant_github_user_ids)
+            VALUES ($1, 1, 'macro', 'app', $2)
+            "#,
+        )
+        .bind(foreign_entity_id)
+        .bind(participants.iter().map(|id| (*id).to_owned()).collect::<Vec<_>>())
+        .execute(pool)
+        .await
+        .expect("pull request row should be inserted");
     }
 
-    repo.create_foreign_entity(
-        Uuid::now_v7(),
-        CreateForeignEntity {
-            foreign_entity_id: foreign_entity_id.into(),
-            foreign_entity_source: "github_pull_request".into(),
-            metadata,
-            stored_for_id: stored_for_id.into(),
-            stored_for_auth_entity: "user".into(),
-        },
-    )
-    .await
-    .expect("pull request foreign entity should be inserted")
+    entity
 }
 
 async fn insert_github_link(pool: &PgPool, macro_id: &str, github_user_id: &str) {
@@ -592,16 +606,17 @@ async fn list_applies_foreign_entity_filters(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn list_includes_me_filters_to_participant_metadata(pool: PgPool) {
+async fn list_includes_me_matches_the_typed_participants(pool: PgPool) {
     let repo = PgForeignEntityRepo::new(pool.clone());
     let listing = PgGithubPullRequestRepo::new(pool.clone());
     let macro_id = "macro|user@example.com";
     insert_github_link(&pool, macro_id, "42").await;
 
     let involved =
-        insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["7", "42"])).await;
-    insert_pr_with_participants(&repo, "other-pr", macro_id, Some(&["7"])).await;
-    insert_pr_with_participants(&repo, "legacy-pr", macro_id, None).await;
+        insert_pr_with_participants(&pool, &repo, "involved-pr", macro_id, Some(&["7", "42"]))
+            .await;
+    insert_pr_with_participants(&pool, &repo, "other-pr", macro_id, Some(&["7"])).await;
+    insert_pr_with_participants(&pool, &repo, "legacy-pr", macro_id, None).await;
 
     let entities = listing
         .list_pull_requests(
@@ -622,7 +637,7 @@ async fn list_includes_me_without_github_link_returns_empty(pool: PgPool) {
     let repo = PgForeignEntityRepo::new(pool.clone());
     let listing = PgGithubPullRequestRepo::new(pool.clone());
     let macro_id = "macro|user@example.com";
-    insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
+    insert_pr_with_participants(&pool, &repo, "involved-pr", macro_id, Some(&["42"])).await;
 
     let entities = listing
         .list_pull_requests(
@@ -644,7 +659,7 @@ async fn list_includes_me_without_requesting_user_returns_empty(pool: PgPool) {
     let listing = PgGithubPullRequestRepo::new(pool.clone());
     let macro_id = "macro|user@example.com";
     insert_github_link(&pool, macro_id, "42").await;
-    insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
+    insert_pr_with_participants(&pool, &repo, "involved-pr", macro_id, Some(&["42"])).await;
 
     let entities = listing
         .list_pull_requests(
@@ -667,8 +682,9 @@ async fn list_includes_me_composes_with_other_filters(pool: PgPool) {
     let macro_id = "macro|user@example.com";
     insert_github_link(&pool, macro_id, "42").await;
 
-    let involved = insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
-    insert_pr_with_participants(&repo, "other-pr", macro_id, Some(&["7"])).await;
+    let involved =
+        insert_pr_with_participants(&pool, &repo, "involved-pr", macro_id, Some(&["42"])).await;
+    insert_pr_with_participants(&pool, &repo, "other-pr", macro_id, Some(&["7"])).await;
     insert_foreign_entity_for_source(&repo, "linear-issue", "linear_issue", macro_id, "user").await;
 
     let filter = Some(Arc::new(Expr::and(
@@ -692,13 +708,36 @@ async fn list_includes_me_composes_with_other_filters(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_includes_me_composes_with_the_pull_request_filter(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    insert_github_link(&pool, macro_id, "42").await;
+    let involved =
+        insert_pr_with_participants(&pool, &repo, "involved-pr", macro_id, Some(&["42"])).await;
+
+    let list = |draft: bool| {
+        listing.list_pull_requests(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(includes_me_filter()),
+            Some(Arc::new(Expr::val(GithubPullRequestLiteral::Draft(draft)))),
+        )
+    };
+
+    assert_eq!(list(false).await.unwrap(), vec![involved]);
+    assert!(list(true).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn list_includes_me_under_not_fails_closed(pool: PgPool) {
     let repo = PgForeignEntityRepo::new(pool.clone());
     let listing = PgGithubPullRequestRepo::new(pool.clone());
     let macro_id = "macro|user@example.com";
     insert_github_link(&pool, macro_id, "42").await;
-    insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
-    insert_pr_with_participants(&repo, "other-pr", macro_id, Some(&["7"])).await;
+    insert_pr_with_participants(&pool, &repo, "involved-pr", macro_id, Some(&["42"])).await;
+    insert_pr_with_participants(&pool, &repo, "other-pr", macro_id, Some(&["7"])).await;
 
     let filter = Some(Arc::new(Expr::is_not(Expr::val(
         ForeignEntityLiteral::IncludesMe,
