@@ -10401,7 +10401,9 @@ export const createInitiativeBody = zod
     shareWithTeam: zod
       .boolean()
       .nullish()
-      .describe("When true, share with the owner's team at create time."),
+      .describe(
+        "Share with the owner's team at create time. Defaults to true; users without\na team create an unshared initiative. Explicit false skips the team grant."
+      ),
   })
   .describe('Create-initiative HTTP body.');
 
@@ -10585,7 +10587,9 @@ export const updateInitiativeBody = zod
     memberIds: zod
       .array(zod.string())
       .nullish()
-      .describe('Full replacement member list when present.'),
+      .describe(
+        'Full replacement collaborator list when present. Only the owner may send this field.'
+      ),
     name: zod.string().nullish().describe('Replacement name.'),
     sharePermission: zod
       .union([

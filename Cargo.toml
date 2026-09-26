@@ -62,6 +62,7 @@ members = [
   "crates/harnesses",
   "crates/import",
   "crates/initiative",
+  "crates/initiative_documents",
   "crates/item_filter_index",
   "crates/integration_tests/local_e2e",
   "crates/loops_client",

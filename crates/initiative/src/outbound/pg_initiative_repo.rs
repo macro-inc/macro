@@ -125,6 +125,11 @@ impl InitiativeRepo for PgInitiativeRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn clear_task(&self, task_id: &str) -> Result<(), Self::Err> {
+        tasks::clear_task(&self.pool, task_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn delete(&self, id: InitiativeId) -> Result<DescriptionDocumentId, Self::Err> {
         create::delete(&self.pool, id).await
     }

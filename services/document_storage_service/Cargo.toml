@@ -29,6 +29,7 @@ location_check = []
 [dependencies]
 agent_changes = { path = "../../crates/agent_changes", default-features = false, features = ["outbound"] }
 dictation = { path = "../../crates/dictation", features = ["inbound", "outbound"] }
+initiative_documents = { path = "../../crates/initiative_documents" }
 agent_session = { path = "../../crates/agent_session", features = ["outbound"] }
 activity = { path = "../../crates/activity" }
 ai_tools = { path = "../../crates/ai_tools" }
@@ -92,7 +93,7 @@ channel_labels = { path = "../../crates/channel_labels", features = [
 ] }
 crm = { path = "../../crates/crm" }
 document_sub_type = { path = "../../crates/document_sub_type" }
-documents_hex = { path = "../../crates/documents", package = "documents" }
+documents_hex = { path = "../../crates/documents", package = "documents", features = ["purge"] }
 doppler-config = { workspace = true }
 dynamodb_client = { path = "../../crates/dynamodb_client" }
 email = { path = "../../crates/email", features = ["outbound", "ports"] }

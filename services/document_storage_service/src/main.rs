@@ -1211,11 +1211,17 @@ async fn run() -> anyhow::Result<()> {
     );
     let initiative_service = Arc::new(InitiativeServiceImpl::new(
         PgInitiativeRepo::new(db.clone()),
-        outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter::new(
+        initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
             document_creator.clone(),
-            db.clone(),
-            sqs_client.clone(),
-            macro_event_broker.clone(),
+            documents_hex::domain::purge::DocumentPurger::new(
+                documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(
+                    db.clone(),
+                ),
+                documents_hex::outbound::document_purge::SqsDocumentPurgeQueue::new(
+                    sqs_client.clone(),
+                ),
+                macro_event_broker.clone(),
+            ),
         ),
     ));
 

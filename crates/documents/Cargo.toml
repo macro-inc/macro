@@ -10,6 +10,7 @@ path = "src/bin/backfill_markdown_content_location.rs"
 required-features = ["backfill_binary"]
 
 [features]
+purge = ["ports", "outbound", "dep:macro_db_client", "dep:sqs_client", "dep:comms_db_client"]
 ai_tools = [
   "dep:ai_toolset",
   "dep:ai_usage",
@@ -80,6 +81,8 @@ schema = ["dep:utoipa", "macro_user_id/schema"]
 service = ["dep:entity_access_management", "dep:foreign_entity", "ports"]
 
 [dependencies]
+macro_db_client = { path = "../macro_db_client", optional = true }
+sqs_client = { path = "../sqs_client", optional = true }
 activity = { path = "../activity", default-features = false }
 bot_id = { path = "../bot_id" }
 # Core

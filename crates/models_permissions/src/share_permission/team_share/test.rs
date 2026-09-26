@@ -314,10 +314,7 @@ fn creation_contract_distinguishes_ordinary_task_call_and_initiative_defaults() 
             level: TeamShareLevel::Comment,
         }))
     );
-    assert_eq!(
-        TeamShareCreation::Initiative.resolve(None),
-        Err(TeamSharePolicyError::MissingTeam)
-    );
+    assert_eq!(TeamShareCreation::Initiative.resolve(None), Ok(None));
     assert_eq!(
         TeamShareCreation::Initiative.resolve(Some(team_id)),
         Ok(Some(TeamShareGrant {
@@ -337,7 +334,7 @@ fn initiative_description_resolves_like_initiative() {
     }
     assert_eq!(
         TeamShareCreation::InitiativeDescription.resolve(None),
-        Err(TeamSharePolicyError::MissingTeam)
+        Ok(None)
     );
 }
 

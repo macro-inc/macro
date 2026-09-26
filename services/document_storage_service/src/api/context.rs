@@ -498,12 +498,16 @@ pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
 
 pub(crate) type InitiativeDescriptionDocumentsType =
-    crate::outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter<
+    initiative_documents::InitiativeDescriptionDocumentsAdapter<
         Arc<DocumentService>,
         documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer,
         documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
         documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker,
-        DssEventBroker,
+        documents_hex::domain::purge::DocumentPurger<
+            documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository,
+            documents_hex::outbound::document_purge::SqsDocumentPurgeQueue,
+            DssEventBroker,
+        >,
     >;
 
 /// Type alias for the initiative service.

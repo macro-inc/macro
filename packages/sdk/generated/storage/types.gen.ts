@@ -3667,7 +3667,8 @@ export type CreateInitiativeRequest = {
      */
     name: string;
     /**
-     * When true, share with the owner's team at create time.
+     * Share with the owner's team at create time. Defaults to true; users without
+     * a team create an unshared initiative. Explicit false skips the team grant.
      */
     shareWithTeam?: boolean | null;
 };
@@ -10628,7 +10629,7 @@ export type UpdateCrmTeamSettingsRequest = {
  */
 export type UpdateInitiativeRequest = {
     /**
-     * Full replacement member list when present.
+     * Full replacement collaborator list when present. Only the owner may send this field.
      */
     memberIds?: Array<string> | null;
     /**
