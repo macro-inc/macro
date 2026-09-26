@@ -773,6 +773,7 @@ dependencies = [
  "futures",
  "import",
  "initiative",
+ "initiative_documents",
  "item_filters",
  "lazy_static",
  "lexical_client",
@@ -9143,8 +9144,11 @@ name = "initiative"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "ai_toolset",
  "anyhow",
+ "async-trait",
  "axum",
+ "bot_id",
  "chrono",
  "entity_access",
  "entity_access_db_utils",
@@ -9163,6 +9167,7 @@ dependencies = [
  "models_properties",
  "properties",
  "rootcause",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "share_permission_db_utils",
@@ -11055,6 +11060,8 @@ dependencies = [
 name = "messages"
 version = "0.1.0"
 dependencies = [
+ "ai_toolset",
+ "anyhow",
  "async-trait",
  "axum",
  "bot_id",

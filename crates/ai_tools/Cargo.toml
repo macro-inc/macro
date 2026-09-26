@@ -8,7 +8,8 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
-initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources"] }
+initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }
+initiative_documents = { path = "../initiative_documents" }
 activity = { path = "../activity", default-features = false, features = ["ai_tools", "outbound"] }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
@@ -36,7 +37,7 @@ contacts = { path = "../contacts", default-features = false, features = [
   "outbound",
 ] }
 crm = { path = "../crm" }
-documents = { path = "../documents", features = ["ai_tools"] }
+documents = { path = "../documents", features = ["ai_tools", "purge"] }
 email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }
 entity_access = { path = "../entity_access" }
@@ -53,7 +54,7 @@ macro_aws_config = { path = "../macro_aws_config" }
 macro_db_client = { path = "../macro_db_client" }
 macro_env_var = { path = "../macro_env_var" }
 macro_event_broker = { path = "../macro_event_broker" }
-messages = { path = "../messages", features = ["broker", "delivery"] }
+messages = { path = "../messages", features = ["broker", "delivery", "toolset"] }
 macro_queues = { path = "../macro_queues" }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }

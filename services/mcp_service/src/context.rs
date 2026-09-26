@@ -377,6 +377,15 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
     let search_service_client = Arc::new(search_service_client);
     let skill_tool_context =
         ai_tools::build_skill_tool_context(search_service_client.clone(), soup_service.clone());
+    let (initiative_tool_context, initiative_discussion_tool_context) =
+        ai_tools::build_initiative_tool_contexts(
+            db.clone(),
+            &document_tool_context,
+            properties_service.clone(),
+            entity_access_service.clone(),
+            side_effect_clients,
+        );
+
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
@@ -413,6 +422,8 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             dss_url,
         ),
         project_tool_context,
+        initiative_tool_context,
+        initiative_discussion_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
         skill_tool_context,

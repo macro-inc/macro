@@ -84,6 +84,7 @@ pub struct BulkSetEntityPropertyOptionsResponse {
 fn entity_type_label(entity_type: ToolPropertyTargetEntityType) -> &'static str {
     match entity_type {
         ToolPropertyTargetEntityType::Document => "document",
+        ToolPropertyTargetEntityType::Initiative => "initiative",
         ToolPropertyTargetEntityType::Project => "project",
         ToolPropertyTargetEntityType::Chat => "chat",
         ToolPropertyTargetEntityType::Thread => "thread",

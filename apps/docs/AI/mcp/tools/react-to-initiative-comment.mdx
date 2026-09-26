@@ -1,0 +1,17 @@
+---
+title: ReactToInitiativeComment
+description: "Add or remove the acting bot's emoji reaction on a project comment. Requires comment access and a live comment in that project."
+---
+
+# ReactToInitiativeComment
+
+Add or remove the acting bot's emoji reaction on a project comment. Requires comment access and a live comment in that project.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `initiativeId` | string | Yes | Project identifier. |
+| `messageId` | string | Yes | Comment identifier. |
+| `emoji` | string | Yes | Emoji to react with. |
+| `add` | boolean | Yes | True adds the reaction; false removes it. |
