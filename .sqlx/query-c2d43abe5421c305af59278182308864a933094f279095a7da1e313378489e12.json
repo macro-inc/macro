@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, actor_id, action, action_payload, subject_id, entity_type, entity_id, occurred_at\n                   FROM activity_events WHERE entity_type = $1 AND entity_id = $2 AND (occurred_at, id) < ($3, $4)\n                   ORDER BY occurred_at DESC, id DESC LIMIT $5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "actor_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "action",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "action_payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "subject_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "occurred_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c2d43abe5421c305af59278182308864a933094f279095a7da1e313378489e12"
+}

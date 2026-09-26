@@ -1,6 +1,7 @@
 use entity_access_db_utils::AccessLevel;
 
 mod access;
+mod history;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -947,6 +948,7 @@ async fn assign_tasks_moves_and_reports_non_tasks(pool: PgPool) -> anyhow::Resul
         .await?;
     assert_eq!(
         first_results
+            .results
             .iter()
             .map(|result| result.status)
             .collect::<Vec<_>>(),
@@ -959,9 +961,23 @@ async fn assign_tasks_moves_and_reports_non_tasks(pool: PgPool) -> anyhow::Resul
             vec![task_a.clone(), not_a_task.clone(), missing.clone()],
         )
         .await?;
-    assert_eq!(second_results[0].status, AssignTaskStatus::Moved);
-    assert_eq!(second_results[1].status, AssignTaskStatus::NotATask);
-    assert_eq!(second_results[2].status, AssignTaskStatus::NotATask);
+    assert_eq!(second_results.results[0].status, AssignTaskStatus::Moved);
+    assert_eq!(second_results.results[1].status, AssignTaskStatus::NotATask);
+    assert_eq!(second_results.results[2].status, AssignTaskStatus::NotATask);
+    assert_eq!(
+        second_results.changes,
+        vec![crate::domain::events::TaskMembershipChange {
+            task_id: task_a.clone(),
+            from: Some(first.id),
+            to: Some(second.id)
+        }]
+    );
+    assert!(
+        repo.assign_tasks(second.id, vec![task_a.clone()])
+            .await?
+            .changes
+            .is_empty()
+    );
 
     let first_detail = repo.get_detail(first.id).await?.expect("first");
     let second_detail = repo.get_detail(second.id).await?.expect("second");

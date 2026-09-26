@@ -45,6 +45,7 @@ export function decodeEntityType(
   entityType: GraphqlEntityType
 ): ActivityEntityType {
   return match(entityType)
+    .with('INITIATIVE', () => 'initiative' as const)
     .with('DOCUMENT', () => 'document' as const)
     .with('PROJECT', () => 'project' as const)
     .with('CHAT', () => 'chat' as const)
@@ -58,6 +59,12 @@ function decodeAction(
   action: ActivityEventFieldsFragment['action']
 ): ActivityAction {
   return match(action)
+    .with({ __typename: 'GraphqlActivityTaskAdded' }, () => ({
+      kind: 'task-added' as const,
+    }))
+    .with({ __typename: 'GraphqlActivityTaskRemoved' }, () => ({
+      kind: 'task-removed' as const,
+    }))
     .with({ __typename: 'GraphqlActivityCreated' }, () => ({
       kind: 'created' as const,
     }))

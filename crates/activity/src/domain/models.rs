@@ -138,6 +138,13 @@ pub struct CallStart {
     pub call_id: String,
 }
 
+/// Task referenced by a project membership event. No task name is stored.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InitiativeTaskChange {
+    /// The task document. Readers must verify task visibility before exposing this reference.
+    pub task_id: String,
+}
+
 /// The durable action vocabulary — what the `action`/`action_payload`
 /// columns hold. [`Action::to_columns`] is the storage codec, written out
 /// explicitly; the future read path adds the inverse next to it.
@@ -183,6 +190,10 @@ pub enum Action {
     ParticipantRemoved(ParticipantChange),
     /// A call was started in the entity (channel).
     CallStarted(CallStart),
+    /// A task was added to an initiative.
+    TaskAdded(InitiativeTaskChange),
+    /// A task was removed from an initiative.
+    TaskRemoved(InitiativeTaskChange),
 }
 
 impl From<CommonAction> for Action {
@@ -235,6 +246,7 @@ impl Action {
                 payload(change)
             }
             Action::CallStarted(start) => payload(start),
+            Action::TaskAdded(change) | Action::TaskRemoved(change) => payload(change),
         };
         (tag, payload)
     }
@@ -272,6 +284,8 @@ impl Action {
             ActionTag::ParticipantAdded => Ok(Action::ParticipantAdded(parsed(payload)?)),
             ActionTag::ParticipantRemoved => Ok(Action::ParticipantRemoved(parsed(payload)?)),
             ActionTag::CallStarted => Ok(Action::CallStarted(parsed(payload)?)),
+            ActionTag::TaskAdded => Ok(Action::TaskAdded(parsed(payload)?)),
+            ActionTag::TaskRemoved => Ok(Action::TaskRemoved(parsed(payload)?)),
         }
     }
 }

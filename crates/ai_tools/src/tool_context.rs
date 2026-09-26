@@ -895,6 +895,7 @@ pub type ToolPropertiesService = properties::PropertiesServiceImpl<
     properties::PropertiesPgRepo,
     properties::PermissionServiceImpl<ToolEntityAccessService>,
     NoOpNotificationService,
+    ToolBotEventBroker,
 >;
 
 /// Imported-document property enrichment backed by the AI tool host's Properties service.
@@ -910,14 +911,47 @@ pub fn build_properties_service(
     pool: sqlx::PgPool,
     entity_access_service: Arc<ToolEntityAccessService>,
 ) -> Arc<ToolPropertiesService> {
-    Arc::new(properties::PropertiesServiceImpl::new(
-        properties::PropertiesPgRepo::new(pool.clone()),
-        Some(properties::PermissionServiceImpl::new(
-            pool,
-            entity_access_service,
-        )),
-        Some(NoOpNotificationService),
-    ))
+    properties_service_with_events(
+        pool,
+        entity_access_service,
+        ToolBotEventBroker::NoOp(Default::default()),
+    )
+}
+
+/// Build canonical property tools with committed changes published to activity.
+pub fn build_properties_service_with_broker(
+    pool: sqlx::PgPool,
+    entity_access_service: Arc<ToolEntityAccessService>,
+    broker: ToolEventBroker,
+) -> Arc<ToolPropertiesService> {
+    properties_service_with_events(
+        pool,
+        entity_access_service,
+        ToolBotEventBroker::Real(broker),
+    )
+}
+
+fn properties_service_with_events(
+    pool: sqlx::PgPool,
+    entity_access_service: Arc<ToolEntityAccessService>,
+    broker: ToolBotEventBroker,
+) -> Arc<ToolPropertiesService> {
+    Arc::new(
+        properties::PropertiesServiceImpl::new(
+            properties::PropertiesPgRepo::new(pool.clone()),
+            Some(properties::PermissionServiceImpl::new(
+                pool.clone(),
+                entity_access_service,
+            )),
+            Some(NoOpNotificationService),
+        )
+        .with_initiative_assignees(Arc::new(
+            initiative::domain::assignees::InitiativeAssignees::new(
+                initiative::outbound::PgInitiativeRepo::new(pool),
+            ),
+        ))
+        .with_event_broker(broker),
+    )
 }
 
 /// Build the real task properties adapter used by document creation tools.
@@ -1397,7 +1431,10 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
 pub type ToolActivityToolContext = activity::inbound::toolset::ActivityToolContext<
-    activity::outbound::pg_activity_repo::PgActivityRepo,
+    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+        activity::outbound::pg_activity_repo::PgActivityRepo,
+        ToolEntityAccessService,
+    >,
 >;
 
 pub fn build_activity_tool_context(
@@ -1406,7 +1443,10 @@ pub fn build_activity_tool_context(
     entity_access_service: Arc<ToolEntityAccessService>,
 ) -> ToolActivityToolContext {
     activity::inbound::toolset::ActivityToolContext::new(
-        activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+        initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+            entity_access_service.clone(),
+        ),
     )
     .with_metadata_resolver(ToolActivityMetadataResolver::new(
         properties,

@@ -8,6 +8,7 @@ mod pg_initiative_repo;
 
 #[cfg(feature = "postgres")]
 pub use pg_initiative_repo::PgInitiativeRepo;
+pub mod event_publisher;
 
 #[cfg(feature = "resources")]
 mod assignees;

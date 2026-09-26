@@ -157,7 +157,7 @@ async fn task_side_clear_needs_no_source_initiative_receipt() {
     repo.expect_clear_task()
         .withf(|id| id == "task-1")
         .times(1)
-        .return_once(|_| Box::pin(async { Ok(()) }));
+        .return_once(|_| Box::pin(async { Ok(None) }));
     service(repo)
         .clear_task(task_receipt(OWNER, "task-1"))
         .await

@@ -3915,6 +3915,8 @@ export const ReadActivityResponse = z.object({
             type: z.literal('participantRemoved'),
           }),
           z.object({ callId: z.string(), type: z.literal('callStarted') }),
+          z.object({ type: z.literal('taskAdded') }),
+          z.object({ type: z.literal('taskRemoved') }),
           z.object({
             tag: z.string(),
             payload: z.any().optional(),

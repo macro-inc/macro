@@ -1363,6 +1363,8 @@ export type ActivityUpdatesSubscription = { activityUpdates:
         | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
         | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
         | { __typename: 'GraphqlActivitySent' }
+        | { __typename: 'GraphqlActivityTaskAdded' }
+        | { __typename: 'GraphqlActivityTaskRemoved' }
         | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
        }
     | { __typename: 'GraphqlActivityInvalidation', refresh: boolean }
@@ -1384,6 +1386,8 @@ export type MyActivityQuery = { user: { id: string, activity: { nextCursor: stri
           | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
           | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
           | { __typename: 'GraphqlActivitySent' }
+          | { __typename: 'GraphqlActivityTaskAdded' }
+          | { __typename: 'GraphqlActivityTaskRemoved' }
           | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
          }> } } };
 
@@ -1412,6 +1416,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
         | { __typename: 'GraphqlSoupCalendarEvent', id: string, activity: Array<{ __typename: 'GraphqlActivityEvent', id: string, actorId: string, subjectId: string, entityType: GraphqlEntityType, entityId: string, occurredAt: string, action:
@@ -1425,6 +1431,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
         | { __typename: 'GraphqlSoupCall', id: string, activity: Array<{ __typename: 'GraphqlActivityEvent', id: string, actorId: string, subjectId: string, entityType: GraphqlEntityType, entityId: string, occurredAt: string, action:
@@ -1438,6 +1446,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
         | { __typename: 'GraphqlSoupChannel', id: string, activity: Array<{ __typename: 'GraphqlActivityEvent', id: string, actorId: string, subjectId: string, entityType: GraphqlEntityType, entityId: string, occurredAt: string, action:
@@ -1451,6 +1461,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
         | { __typename: 'GraphqlSoupChannelMessage', id: string, activity: Array<{ __typename: 'GraphqlActivityEvent', id: string, actorId: string, subjectId: string, entityType: GraphqlEntityType, entityId: string, occurredAt: string, action:
@@ -1464,6 +1476,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
         | { __typename: 'GraphqlSoupChat', id: string, activity: Array<{ __typename: 'GraphqlActivityEvent', id: string, actorId: string, subjectId: string, entityType: GraphqlEntityType, entityId: string, occurredAt: string, action:
@@ -1477,6 +1491,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
         | { __typename: 'GraphqlSoupCrmCompany', id: string, activity: Array<{ __typename: 'GraphqlActivityEvent', id: string, actorId: string, subjectId: string, entityType: GraphqlEntityType, entityId: string, occurredAt: string, action:
@@ -1490,6 +1506,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
         | { __typename: 'GraphqlSoupDocument', id: string, activity: Array<{ __typename: 'GraphqlActivityEvent', id: string, actorId: string, subjectId: string, entityType: GraphqlEntityType, entityId: string, occurredAt: string, action:
@@ -1503,6 +1521,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
         | { __typename: 'GraphqlSoupEmailThread', id: string, activity: Array<{ __typename: 'GraphqlActivityEvent', id: string, actorId: string, subjectId: string, entityType: GraphqlEntityType, entityId: string, occurredAt: string, action:
@@ -1516,6 +1536,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
         | { __typename: 'GraphqlSoupForeignEntity', id: string, activity: Array<{ __typename: 'GraphqlActivityEvent', id: string, actorId: string, subjectId: string, entityType: GraphqlEntityType, entityId: string, occurredAt: string, action:
@@ -1529,6 +1551,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
         | { __typename: 'GraphqlSoupProject', id: string, activity: Array<{ __typename: 'GraphqlActivityEvent', id: string, actorId: string, subjectId: string, entityType: GraphqlEntityType, entityId: string, occurredAt: string, action:
@@ -1542,6 +1566,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
         | { __typename: 'GraphqlSoupReminder', id: string, activity: Array<{ __typename: 'GraphqlActivityEvent', id: string, actorId: string, subjectId: string, entityType: GraphqlEntityType, entityId: string, occurredAt: string, action:
@@ -1555,6 +1581,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
       > } } };
@@ -1570,6 +1598,8 @@ type EntityActivityFields_GraphqlSoupAgentSession_Fragment = { __typename: 'Grap
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 
@@ -1584,6 +1614,8 @@ type EntityActivityFields_GraphqlSoupCalendarEvent_Fragment = { __typename: 'Gra
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 
@@ -1598,6 +1630,8 @@ type EntityActivityFields_GraphqlSoupCall_Fragment = { __typename: 'GraphqlSoupC
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 
@@ -1612,6 +1646,8 @@ type EntityActivityFields_GraphqlSoupChannel_Fragment = { __typename: 'GraphqlSo
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 
@@ -1626,6 +1662,8 @@ type EntityActivityFields_GraphqlSoupChannelMessage_Fragment = { __typename: 'Gr
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 
@@ -1640,6 +1678,8 @@ type EntityActivityFields_GraphqlSoupChat_Fragment = { __typename: 'GraphqlSoupC
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 
@@ -1654,6 +1694,8 @@ type EntityActivityFields_GraphqlSoupCrmCompany_Fragment = { __typename: 'Graphq
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 
@@ -1668,6 +1710,8 @@ type EntityActivityFields_GraphqlSoupDocument_Fragment = { __typename: 'GraphqlS
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 
@@ -1682,6 +1726,8 @@ type EntityActivityFields_GraphqlSoupEmailThread_Fragment = { __typename: 'Graph
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 
@@ -1696,6 +1742,8 @@ type EntityActivityFields_GraphqlSoupForeignEntity_Fragment = { __typename: 'Gra
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 
@@ -1710,6 +1758,8 @@ type EntityActivityFields_GraphqlSoupProject_Fragment = { __typename: 'GraphqlSo
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 
@@ -1724,6 +1774,8 @@ type EntityActivityFields_GraphqlSoupReminder_Fragment = { __typename: 'GraphqlS
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 
@@ -1753,6 +1805,8 @@ export type ActivityEventFieldsFragment = { __typename: 'GraphqlActivityEvent', 
     | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
     | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
     | { __typename: 'GraphqlActivitySent' }
+    | { __typename: 'GraphqlActivityTaskAdded' }
+    | { __typename: 'GraphqlActivityTaskRemoved' }
     | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
    };
 
