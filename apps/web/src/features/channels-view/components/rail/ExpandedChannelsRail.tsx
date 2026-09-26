@@ -4,6 +4,7 @@ import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
+import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
@@ -43,7 +44,6 @@ import {
 import {
   ChannelAvatar,
   ChannelCallIndicator,
-  ChannelMutedIndicator,
   ChannelRailItemContextMenu,
   CONVERSATION_CARD_HEIGHT,
   ConversationCard,
