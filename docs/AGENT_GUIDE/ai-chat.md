@@ -688,7 +688,9 @@ or failed GitHub request never falls back to estimated transcript totals.
 
 While the pane is closed and a capture has files, a **Changes ready to
 review** card sits above the composer with **Review changes**, **Pull request
-#N** (opens GitHub), and **Dismiss**. With no linked PR, the pane explains
+#N** (opens GitHub), and **Dismiss**. It is hidden while the session still
+has queued messages — those prompts will keep changing the tree. With no
+linked PR, the pane explains
 that a GitHub PR is required. Ask the agent to open one and register its URL
 with `set_pull_request`, then use **Refresh changes**. An unavailable or
 oversized PR is explained in the pane; there is no branch or container fallback.
@@ -753,7 +755,9 @@ must stay hidden; subsequent live messages must still appear.
   harness restart — they must not disappear if the managing replica drains.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.
-  Each row shows a `Queued` label (with `by {user}` when someone else queued it —
+  The list is capped at the smaller of 40% of the viewport height and 24rem. Past that
+  it scrolls on its own and starts scrolled to the bottom, so the next-to-send row stays
+  visible. Scroll up inside the list to reach newer entries. Each row shows a `Queued` label (with `by {user}` when someone else queued it —
   several users can stack prompts in one session's queue) and an always-visible remove
   (`X`) button. A queued prompt's text is itself an editor: click in and type — changes
   autosave (debounced, and on blur) with no save button. Editing and removal are

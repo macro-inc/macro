@@ -72,6 +72,7 @@ export function AgentChangesProvider(props: ParentProps) {
         (session.session()?.canEdit ?? true),
     },
     canHaveChanges: coding,
+    hasQueuedMessages: () => session.queue.entries().length > 0,
     pullRequestUrl: () => session.session()?.pullRequestUrl ?? undefined,
     openExternal: openExternalUrl,
     copyText,
