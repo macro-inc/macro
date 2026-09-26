@@ -1,0 +1,16 @@
+---
+title: DeleteInitiativeComment
+description: "Delete a project comment, or delete an entire discussion when wholeDiscussion is true and messageId is its root id. Comment deletion leaves a tombstone so replies remain readable; whole-discussion deletion hides the thread. The service enforces author and project moderation permissions."
+---
+
+# DeleteInitiativeComment
+
+Delete a project comment, or delete an entire discussion when wholeDiscussion is true and messageId is its root id. Comment deletion leaves a tombstone so replies remain readable; whole-discussion deletion hides the thread. The service enforces author and project moderation permissions.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `initiativeId` | string | Yes | Project identifier. |
+| `messageId` | string | Yes | Comment id, or root id for whole-discussion deletion. |
+| `wholeDiscussion` | boolean | No | Delete the entire discussion rather than one comment. Defaults to false. |

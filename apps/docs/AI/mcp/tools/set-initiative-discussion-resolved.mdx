@@ -1,0 +1,16 @@
+---
+title: SetInitiativeDiscussionResolved
+description: "Resolve or reopen a project discussion using the shared discussion policy. Requires comment access and any additional author/moderator permissions enforced by the discussion service."
+---
+
+# SetInitiativeDiscussionResolved
+
+Resolve or reopen a project discussion using the shared discussion policy. Requires comment access and any additional author/moderator permissions enforced by the discussion service.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `initiativeId` | string | Yes | Project identifier. |
+| `threadId` | string | Yes | Root message id of the discussion. |
+| `resolved` | boolean | Yes | True resolves; false reopens. |

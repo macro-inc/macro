@@ -13,6 +13,67 @@ use std::{
 #[derive(Default)]
 struct Events(Mutex<Vec<InitiativeTopicEvent>>);
 
+#[cfg(feature = "toolset")]
+#[tokio::test]
+async fn attributed_creation_preserves_the_bot_and_delegating_owner() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_get_team_default_link_share()
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    repo.expect_create()
+        .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
+    let mut documents = MockInitiativeDescriptionDocuments::new();
+    documents
+        .expect_create()
+        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+    let events = Arc::new(Events::default());
+    let attribution = activity::Attribution::delegated(
+        activity::Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+        user(OWNER),
+    );
+    service_with_documents(repo, documents)
+        .with_event_publisher(events.clone())
+        .create_attributed(
+            &user(OWNER),
+            CreateInitiativeRequest {
+                name: "Launch".into(),
+                ..Default::default()
+            },
+            attribution.clone(),
+        )
+        .await
+        .unwrap();
+    let recorded = events.0.lock().unwrap();
+    let [InitiativeTopicEvent::Created(change)] = recorded.as_slice() else {
+        panic!("one attributed creation")
+    };
+    assert_eq!(change.attribution, Some(attribution.into()));
+}
+
+#[cfg(feature = "toolset")]
+#[tokio::test]
+async fn attributed_creation_rejects_mismatched_owner_before_creating_anything() {
+    for attribution in [
+        activity::Attribution::direct(activity::Actor::new_from_user(user(OTHER))),
+        activity::Attribution::delegated(
+            activity::Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+            user(OTHER),
+        ),
+        activity::Attribution::delegated(activity::Actor::new_from_user(user(OWNER)), user(OWNER)),
+    ] {
+        let result = service(MockInitiativeRepo::new())
+            .create_attributed(
+                &user(OWNER),
+                CreateInitiativeRequest {
+                    name: "Launch".into(),
+                    ..Default::default()
+                },
+                attribution,
+            )
+            .await;
+        assert!(matches!(result, Err(InitiativeError::Unauthorized)));
+    }
+}
+
 impl InitiativeEventPublisher for Events {
     fn publish(
         &self,

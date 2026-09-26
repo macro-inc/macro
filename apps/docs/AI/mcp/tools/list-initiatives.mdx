@@ -1,0 +1,21 @@
+---
+title: ListInitiatives
+description: "Find projects (initiatives), with canonical properties and progress over tasks you can view. Returns at most 100 recently updated matches per page. Pass nextCursor back as cursor with the same filters to read more. Filter by name, status, priority, assignee, or due date. Project folders use ReadProject instead."
+---
+
+# ListInitiatives
+
+Find projects (initiatives), with canonical properties and progress over tasks you can view. Returns at most 100 recently updated matches per page. Pass nextCursor back as cursor with the same filters to read more. Filter by name, status, priority, assignee, or due date. Project folders use ReadProject instead.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `query` | string | No | Case-insensitive project name substring. |
+| `status` | string | No | Status option id, obtained from property definitions. |
+| `priority` | string | No | Priority option id, obtained from property definitions. |
+| `assignee` | string | No | Assigned user id. |
+| `dueAfter` | string | No | Earliest inclusive due timestamp. |
+| `dueBefore` | string | No | Latest inclusive due timestamp. |
+| `cursor` | string | No | Opaque nextCursor from the preceding page, with the same filters. |
+| `limit` | integer | No | Maximum projects to return, from 1 through 100; defaults to 100. |
