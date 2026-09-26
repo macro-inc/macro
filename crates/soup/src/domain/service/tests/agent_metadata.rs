@@ -70,7 +70,7 @@ async fn metadata_is_batched_and_only_uses_visible_prs_and_captured_branches() {
         )]),
         ..Default::default()
     };
-    let foreign = RecordingForeignEntityService::new(vec![
+    let foreign = RecordingPullRequestListing::new(vec![
         pull_request("1", user, "merged"),
         pull_request("2", "macro|someone-else@example.com", "closed"),
         pull_request("3", user, "unknown"),
@@ -130,7 +130,7 @@ async fn metadata_is_batched_and_only_uses_visible_prs_and_captured_branches() {
 #[tokio::test]
 async fn no_pr_links_skip_foreign_entity_lookup() {
     let branches = Branches::default();
-    let foreign = RecordingForeignEntityService::new(Vec::new());
+    let foreign = RecordingPullRequestListing::new(Vec::new());
     let mut items = vec![agent(AgentSessionId::new(), None)];
     super::super::agent_metadata::enrich(
         &foreign,
@@ -158,7 +158,7 @@ async fn runtime_branch_without_pr_survives_enrichment_and_takes_precedence() {
         )]),
         ..Default::default()
     };
-    let foreign = RecordingForeignEntityService::new(Vec::new());
+    let foreign = RecordingPullRequestListing::new(Vec::new());
     let mut item = agent(session, None);
     let SoupItem::AgentSession(row) = &mut item.item else {
         unreachable!()
@@ -197,7 +197,7 @@ async fn changed_or_missing_repository_does_not_restore_an_old_captured_branch()
             )]),
             ..Default::default()
         };
-        let foreign = RecordingForeignEntityService::new(Vec::new());
+        let foreign = RecordingPullRequestListing::new(Vec::new());
         let mut item = agent(session, None);
         let SoupItem::AgentSession(row) = &mut item.item else {
             unreachable!()

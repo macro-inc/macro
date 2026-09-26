@@ -42,8 +42,8 @@ pub trait ForeignEntityRepository: Send + Sync + 'static {
 
     /// List foreign entities visible through the supplied source identifiers.
     ///
-    /// `requesting_user` is the macro user id used to resolve participant filters such as
-    /// [`ForeignEntityLiteral::IncludesMe`]; when `None`, participant filters match nothing.
+    /// `requesting_user` is the macro user id notification-state filters are scoped to; when
+    /// `None`, they match nothing. [`ForeignEntityLiteral::IncludesMe`] never matches here.
     fn get_foreign_entities_for_user(
         &self,
         requesting_user: Option<String>,
@@ -106,8 +106,8 @@ pub trait ForeignEntityService: Send + Sync + 'static {
 
     /// List foreign entities visible through the supplied source identifiers.
     ///
-    /// `requesting_user` is the macro user id used to resolve participant filters such as
-    /// [`ForeignEntityLiteral::IncludesMe`]; when `None`, participant filters match nothing.
+    /// `requesting_user` is the macro user id notification-state filters are scoped to; when
+    /// `None`, they match nothing. [`ForeignEntityLiteral::IncludesMe`] never matches here.
     fn get_foreign_entities_for_user(
         &self,
         requesting_user: Option<String>,

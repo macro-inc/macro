@@ -2,7 +2,7 @@
 //!
 //! Owns the pull request model, the rules for merging refreshed pull request data into what is
 //! already stored, the typed `github_pull_request` columns read from that data, and the service
-//! that writes pull request records.
+//! that writes pull request records and lists the ones a caller can see.
 //!
 //! # Architecture
 //!

@@ -185,7 +185,7 @@ pub(crate) type DssSoupService = SoupImpl<
     ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>,
     call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     DssCrmService,
-    ForeignEntityServiceType,
+    GithubPullRequestServiceType,
     RemindersServiceType,
 >;
 

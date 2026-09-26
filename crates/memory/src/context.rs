@@ -21,6 +21,10 @@ use foreign_entity::{
 };
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
+use github_pull_requests::{
+    domain::service::GithubPullRequestServiceImpl,
+    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+};
 use lexical_client::LexicalClient;
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::repository::DbNotificationRepository;
@@ -97,8 +101,10 @@ pub async fn build_tool_service_context(
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
-    let foreign_entity_service =
-        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone()));
+    let github_pull_request_service = GithubPullRequestServiceImpl::new(
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
+        PgGithubPullRequestRepo::new(pool.clone()),
+    );
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
         frecency_service,
@@ -108,7 +114,7 @@ pub async fn build_tool_service_context(
             call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
         ),
         crm::domain::service::NoOpCrmService,
-        foreign_entity_service,
+        github_pull_request_service,
         reminders::domain::service::NoOpRemindersService,
     ));
 
@@ -138,12 +144,11 @@ pub async fn build_tool_service_context(
     )));
     let properties_service =
         ai_tools::build_properties_service(pool.clone(), entity_access_service.clone());
-    let task_properties_service =
-        ai_tools::build_task_properties_adapter(
-            pool.clone(),
-            properties_service.clone(),
-            entity_access_service.clone(),
-        );
+    let task_properties_service = ai_tools::build_task_properties_adapter(
+        pool.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
     let document_service = documents::domain::service::DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -227,7 +232,6 @@ pub async fn build_tool_service_context(
         ),
         (*entity_access_service).clone(),
     );
-
 
     let skill_tool_context =
         ai_tools::build_skill_tool_context(search_client.clone(), soup_service.clone());

@@ -4,8 +4,8 @@
 mod test;
 
 use foreign_entity::domain::{
-    models::{CreateForeignEntity, ForeignEntity, PatchForeignEntity},
-    ports::ForeignEntityService,
+    models::{CreateForeignEntity, ForeignEntity, PatchForeignEntity, SourceId},
+    ports::{ForeignEntityListQuery, ForeignEntityService},
 };
 
 use super::{
@@ -15,8 +15,8 @@ use super::{
         GithubRepositoryIdentity, UpsertGithubPullRequest, UpsertedGithubPullRequest,
     },
     ports::{
-        GithubPullRequestIndexRepository, GithubPullRequestIndexer, GithubPullRequestRepository,
-        GithubPullRequestService,
+        GithubPullRequestIndexRepository, GithubPullRequestIndexer, GithubPullRequestListing,
+        GithubPullRequestListingRepository, GithubPullRequestRepository, GithubPullRequestService,
     },
 };
 
@@ -244,6 +244,39 @@ where
         }
 
         Ok(indexed)
+    }
+}
+
+impl<F, R> GithubPullRequestListing for GithubPullRequestServiceImpl<F, R>
+where
+    F: ForeignEntityService,
+    R: GithubPullRequestListingRepository,
+{
+    #[tracing::instrument(err, skip(self, source_ids, query))]
+    async fn list_pull_requests(
+        &self,
+        requesting_user: Option<String>,
+        source_ids: Vec<SourceId>,
+        limit: u32,
+        query: ForeignEntityListQuery,
+    ) -> Result<Vec<ForeignEntity>, GithubPullRequestError> {
+        if source_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        for source_id in &source_ids {
+            source_id.validate()?;
+        }
+
+        GithubPullRequestListingRepository::list_pull_requests(
+            &self.repo,
+            requesting_user,
+            source_ids,
+            limit,
+            query,
+        )
+        .await
+        .map_err(repository_error)
     }
 }
 

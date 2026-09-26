@@ -1272,7 +1272,10 @@ async fn run() -> anyhow::Result<()> {
                 readonly_db.clone(),
             )),
             crm_service.clone(),
-            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
+            GithubPullRequestServiceImpl::new(
+                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
+                PgGithubPullRequestRepo::new(readonly_db.clone()),
+            ),
             reminders_service.clone(),
         )
         .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(

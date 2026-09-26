@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use foreign_entity::domain::{
     models::{
@@ -9,17 +9,19 @@ use foreign_entity::domain::{
     },
     ports::{ForeignEntityListQuery, ForeignEntityService},
 };
+use models_pagination::{Cursor, CursorVal, Query, SimpleSortMethod};
 use uuid::Uuid;
 
 use super::GithubPullRequestServiceImpl;
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubPullRequestRow,
-        GithubPullRequestStatus, GithubRepositoryIdentity, UpsertGithubPullRequest,
+        EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+        GithubPullRequestError, GithubPullRequestRow, GithubPullRequestStatus,
+        GithubRepositoryIdentity, UpsertGithubPullRequest,
     },
     ports::{
-        GithubPullRequestIndexRepository, GithubPullRequestIndexer, GithubPullRequestRepository,
-        GithubPullRequestService,
+        GithubPullRequestIndexRepository, GithubPullRequestIndexer, GithubPullRequestListing,
+        GithubPullRequestListingRepository, GithubPullRequestRepository, GithubPullRequestService,
     },
 };
 
@@ -156,11 +158,27 @@ struct StubPullRequestRows {
     rows: Arc<Mutex<Vec<GithubPullRequestRow>>>,
     /// Stored pull request metadata by repository owner and name.
     stored: Arc<Mutex<Vec<(String, String, serde_json::Value)>>>,
+    listing_calls: Arc<Mutex<Vec<ListingCall>>>,
+    fail_listings: Arc<Mutex<bool>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ListingCall {
+    requesting_user: Option<String>,
+    source_ids: Vec<SourceId>,
+    limit: u32,
+    sort_method: String,
+    cursor_id: Option<Uuid>,
+    cursor_value: Option<DateTime<Utc>>,
 }
 
 impl StubPullRequestRows {
     fn rows(&self) -> Vec<GithubPullRequestRow> {
         self.rows.lock().unwrap().clone()
+    }
+
+    fn listing_calls(&self) -> Vec<ListingCall> {
+        self.listing_calls.lock().unwrap().clone()
     }
 }
 
@@ -224,6 +242,32 @@ impl GithubPullRequestIndexRepository for StubPullRequestRows {
             .filter(|(stored_owner, stored_name, _)| stored_owner == owner && stored_name == name)
             .map(|(_, _, metadata)| metadata.clone())
             .collect())
+    }
+}
+
+impl GithubPullRequestListingRepository for StubPullRequestRows {
+    type Err = anyhow::Error;
+
+    async fn list_pull_requests(
+        &self,
+        requesting_user: Option<String>,
+        source_ids: Vec<SourceId>,
+        limit: u32,
+        query: ForeignEntityListQuery,
+    ) -> Result<Vec<ForeignEntity>, Self::Err> {
+        if *self.fail_listings.lock().unwrap() {
+            anyhow::bail!("listing failed");
+        }
+        let (cursor_id, cursor_value) = query.vals();
+        self.listing_calls.lock().unwrap().push(ListingCall {
+            requesting_user,
+            source_ids,
+            limit,
+            sort_method: query.sort_method().to_string(),
+            cursor_id: cursor_id.copied(),
+            cursor_value: cursor_value.copied(),
+        });
+        Ok(Vec::new())
     }
 }
 
@@ -564,4 +608,97 @@ async fn index_writes_a_row_for_each_stored_pull_request_of_each_known_repositor
     assert_eq!(stored_rows[0].github_key, "Macro/App/pull/7");
     assert_eq!(stored_rows[0].repository_id, Some(99));
     assert_eq!(stored_rows[0].status, Some(GithubPullRequestStatus::Closed));
+}
+
+fn listing_query() -> ForeignEntityListQuery {
+    Query::Sort(SimpleSortMethod::UpdatedAt, None)
+}
+
+#[tokio::test]
+async fn listing_without_sources_skips_the_repository() {
+    let rows = StubPullRequestRows::default();
+    let service = service(&StubForeignEntityService::default(), &rows);
+
+    let listed = service
+        .list_pull_requests(Some(USER_ID.to_string()), Vec::new(), 10, listing_query())
+        .await
+        .unwrap();
+
+    assert!(listed.is_empty());
+    assert!(rows.listing_calls().is_empty());
+}
+
+#[tokio::test]
+async fn listing_forwards_the_caller_sources_limit_and_query() {
+    let rows = StubPullRequestRows::default();
+    let service = service(&StubForeignEntityService::default(), &rows);
+    let cursor_id = Uuid::new_v4();
+    let cursor_value = Utc::now();
+
+    service
+        .list_pull_requests(
+            Some(USER_ID.to_string()),
+            vec![user(), team()],
+            37,
+            Query::Cursor(Cursor {
+                id: cursor_id,
+                limit: 37,
+                val: CursorVal {
+                    sort_type: SimpleSortMethod::CreatedAt,
+                    last_val: cursor_value,
+                },
+                filter: None,
+            }),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        rows.listing_calls(),
+        vec![ListingCall {
+            requesting_user: Some(USER_ID.to_string()),
+            source_ids: vec![user(), team()],
+            limit: 37,
+            sort_method: "created_at".to_string(),
+            cursor_id: Some(cursor_id),
+            cursor_value: Some(cursor_value),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn listing_rejects_blank_sources() {
+    let rows = StubPullRequestRows::default();
+    let service = service(&StubForeignEntityService::default(), &rows);
+
+    let error = service
+        .list_pull_requests(None, vec![SourceId::new(" ", "user")], 10, listing_query())
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            error,
+            GithubPullRequestError::ForeignEntity(ForeignEntityError::BadRequest(_))
+        ),
+        "{error:?}"
+    );
+    assert!(rows.listing_calls().is_empty());
+}
+
+#[tokio::test]
+async fn listing_reports_repository_failures() {
+    let rows = StubPullRequestRows::default();
+    *rows.fail_listings.lock().unwrap() = true;
+    let service = service(&StubForeignEntityService::default(), &rows);
+
+    let error = service
+        .list_pull_requests(None, vec![user()], 10, listing_query())
+        .await
+        .unwrap_err();
+
+    let GithubPullRequestError::Repository(error) = error else {
+        panic!("expected a repository error, got {error:?}");
+    };
+    assert!(error.to_string().contains("listing failed"));
 }

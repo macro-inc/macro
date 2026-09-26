@@ -41,6 +41,10 @@ use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
+use github_pull_requests::{
+    domain::service::GithubPullRequestServiceImpl,
+    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+};
 use lexical_mention_extractor::LexicalMentionExtractor;
 use macro_event_broker::{
     EventBrokerError, KafkaEventPublisher, MacroEvent, MacroEventBroker, MacroEventBrokerService,
@@ -857,6 +861,10 @@ pub type ToolDocumentToolContext = DocumentToolContext<
 /// Type alias for the foreign entity service implementation used by AI tools.
 pub type ToolForeignEntityService = ForeignEntityServiceImpl<PgForeignEntityRepo>;
 
+/// Type alias for the GitHub pull request service used by AI tools.
+pub type ToolGithubPullRequestService =
+    GithubPullRequestServiceImpl<ToolForeignEntityService, PgGithubPullRequestRepo>;
+
 /// Type alias for the soup service implementation
 pub type ToolSoupService = SoupImpl<
     soup::outbound::pg_soup_repo::PgSoupRepo,
@@ -865,7 +873,7 @@ pub type ToolSoupService = SoupImpl<
     ToolCommsService,
     ToolCallRecordQueryService,
     crm::domain::service::NoOpCrmService,
-    ToolForeignEntityService,
+    ToolGithubPullRequestService,
     reminders::domain::service::NoOpRemindersService,
 >;
 

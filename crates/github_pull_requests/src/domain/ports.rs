@@ -2,7 +2,10 @@
 
 use std::future::Future;
 
-use foreign_entity::domain::models::ForeignEntity;
+use foreign_entity::domain::{
+    models::{ForeignEntity, SourceId},
+    ports::ForeignEntityListQuery,
+};
 
 use super::models::{
     EnrichedGithubPullRequest, GithubPullRequestError, GithubPullRequestRow,
@@ -80,4 +83,34 @@ pub trait GithubPullRequestIndexRepository: Send + Sync + 'static {
         owner: &str,
         name: &str,
     ) -> impl Future<Output = Result<Vec<serde_json::Value>, Self::Err>> + Send;
+}
+
+/// Lists the GitHub pull requests a caller can see.
+pub trait GithubPullRequestListing: Send + Sync + 'static {
+    /// Up to `limit` pull request records stored for one of `source_ids` and matching `query`,
+    /// one per pull request, in the query's sort order. `requesting_user` scopes the
+    /// participant and notification-state filters; without one they match nothing.
+    fn list_pull_requests(
+        &self,
+        requesting_user: Option<String>,
+        source_ids: Vec<SourceId>,
+        limit: u32,
+        query: ForeignEntityListQuery,
+    ) -> impl Future<Output = Result<Vec<ForeignEntity>, GithubPullRequestError>> + Send;
+}
+
+/// Reads pull request records for listings.
+pub trait GithubPullRequestListingRepository: Send + Sync + 'static {
+    /// Error type returned by repository operations.
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+
+    /// Up to `limit` pull request records stored for one of `source_ids` and matching `query`,
+    /// one per pull request, in the query's sort order.
+    fn list_pull_requests(
+        &self,
+        requesting_user: Option<String>,
+        source_ids: Vec<SourceId>,
+        limit: u32,
+        query: ForeignEntityListQuery,
+    ) -> impl Future<Output = Result<Vec<ForeignEntity>, Self::Err>> + Send;
 }

@@ -12,11 +12,9 @@ use crm::domain::companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor};
 use email::domain::models::{GetEmailsRequest, PreviewView};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use filter_ast::Expr;
-use foreign_entity::domain::{
-    models::{ForeignEntityError, SourceId},
-    ports::ForeignEntityListQuery,
-};
+use foreign_entity::domain::{models::SourceId, ports::ForeignEntityListQuery};
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
+use github_pull_requests::domain::models::GithubPullRequestError;
 use item_filters::{
     EntityFilters,
     ast::{
@@ -1335,9 +1333,9 @@ pub enum SoupErr {
     /// role is below admin/owner.
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     CrmAdminRequired,
-    /// Foreign entity lookup failed.
+    /// GitHub pull request listing failed.
     #[error(transparent)]
-    ForeignEntityErr(#[from] ForeignEntityError),
+    GithubPullRequestErr(#[from] GithubPullRequestError),
     /// Entity filter AST expansion failed.
     #[error(transparent)]
     AstErr(#[from] ExpandErr),

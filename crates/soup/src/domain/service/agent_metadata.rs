@@ -6,7 +6,6 @@ use agent_changes::domain::{
     model::{AgentSessionId, PullRequestRef},
     ports::SessionBranchReader,
 };
-use github_pull_requests::domain::models::GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE;
 use models_soup::agent_session::AgentPullRequestState;
 
 use super::*;
@@ -21,8 +20,8 @@ fn pull_request_key(url: &str) -> Option<String> {
 
 /// Enrich only returned rows, so metadata work is bounded by the page size and
 /// never reads branch facts for sessions outside the caller's visible page.
-pub(super) async fn enrich<F: ForeignEntityService>(
-    foreign_entities: &F,
+pub(super) async fn enrich<F: GithubPullRequestListing>(
+    pull_requests: &F,
     branches: Option<&dyn SessionBranchReader>,
     user: String,
     sources: Vec<SourceId>,
@@ -74,18 +73,12 @@ pub(super) async fn enrich<F: ForeignEntityService>(
         ) else {
             return Ok(Vec::new());
         };
-        let filter = Expr::and(
-            Expr::Literal(ForeignEntityLiteral::ForeignEntitySource(
-                GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE.to_owned(),
-            )),
-            Arc::unwrap_or_clone(ids),
-        );
-        foreign_entities
-            .get_foreign_entities_for_user(
+        pull_requests
+            .list_pull_requests(
                 Some(user),
                 sources,
                 keys.len() as u32,
-                Query::new(None, SimpleSortMethod::UpdatedAt, Some(Arc::new(filter))),
+                Query::new(None, SimpleSortMethod::UpdatedAt, Some(ids)),
             )
             .await
             .map_err(anyhow::Error::from)

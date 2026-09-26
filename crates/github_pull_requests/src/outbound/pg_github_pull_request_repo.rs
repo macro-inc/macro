@@ -1,6 +1,7 @@
 //! PostgreSQL storage for the typed columns of GitHub pull requests.
 
 mod index;
+mod listing;
 #[cfg(test)]
 mod test;
 

@@ -6,15 +6,24 @@ version = "0.1.0"
 
 [features]
 default = ["outbound", "ports", "service"]
-outbound = ["dep:sqlx", "ports"]
-ports = []
+outbound = [
+  "dep:filter_ast",
+  "dep:item_filters",
+  "dep:models_pagination",
+  "dep:sqlx",
+  "ports",
+]
+ports = ["foreign_entity/ports"]
 schema = ["dep:utoipa"]
-service = ["foreign_entity/ports", "ports"]
+service = ["ports"]
 
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
+filter_ast = { path = "../filter_ast", optional = true }
 foreign_entity = { path = "../foreign_entity", default-features = false }
+item_filters = { path = "../item_filters", optional = true }
+models_pagination = { path = "../models_pagination", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
@@ -26,5 +35,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+foreign_entity = { path = "../foreign_entity", default-features = false, features = ["outbound"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

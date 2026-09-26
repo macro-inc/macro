@@ -16,7 +16,8 @@ pub enum ForeignEntityLiteral {
     /// Filter by the external source name.
     #[serde(rename = "fes")]
     ForeignEntitySource(String),
-    /// Filter to entities whose metadata participant list contains the requesting user.
+    /// The requesting user takes part in the record. The GitHub pull request listing matches it
+    /// against a pull request's participants; the generic foreign entity listing matches nothing.
     #[serde(rename = "me")]
     IncludesMe,
     /// An entity has a non-deleted notification in this exact state.

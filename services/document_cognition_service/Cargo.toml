@@ -60,6 +60,7 @@ email_service_client = { path = "../../crates/email_service_client" }
 entity_access = { path = "../../crates/entity_access" }
 entity_access_management = { path = "../../crates/entity_access_management" }
 foreign_entity = { path = "../../crates/foreign_entity" }
+github_pull_requests = { path = "../../crates/github_pull_requests" }
 frecency = { path = "../../crates/frecency", features = ["outbound", "postgres"] }
 futures = { workspace = true }
 http = { workspace = true }

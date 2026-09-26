@@ -1,23 +1,29 @@
-//! PostgreSQL implementation of the [`ForeignEntityRepository`] port.
+//! Listing the pull request records a caller can see, for Soup's foreign entity leg.
 
 #[cfg(test)]
-mod tests;
+mod test;
 
 use chrono::{DateTime, Utc};
 use filter_ast::Expr;
+use foreign_entity::domain::{
+    models::{ForeignEntity, SourceId},
+    ports::ForeignEntityListQuery,
+};
 use item_filters::ast::foreign_entity::ForeignEntityLiteral;
 use models_pagination::SimpleSortMethod;
-use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::{CreateForeignEntity, ForeignEntity, PatchForeignEntity, SourceId};
-use crate::domain::ports::{ForeignEntityListQuery, ForeignEntityRepository};
+use super::PgGithubPullRequestRepo;
+use crate::domain::{
+    models::GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, ports::GithubPullRequestListingRepository,
+};
 
-struct ForeignEntityBatchQuery<'a> {
+struct ListingQuery<'a> {
     source_ids: &'a [String],
     source_auth_entities: &'a [String],
     sort_method: SimpleSortMethod,
     filter_jsonpath: Option<&'a str>,
+    participant_github_user_id: Option<&'a str>,
     /// Macro user id used to scope the per-user notification state predicates.
     /// When a notification filter is requested but this is `None`, nothing matches.
     notification_user_id: Option<&'a str>,
@@ -36,14 +42,15 @@ fn source_id_parts(source_ids: &[SourceId]) -> (Vec<String>, Vec<String>) {
         .unzip()
 }
 
-/// A mixed metadata/notification subtree cannot be lifted safely. Pure notification subtrees
-/// support AND, OR, and NOT.
+/// A participant or mixed metadata/notification subtree cannot be lifted safely.
+/// Pure notification subtrees support AND, OR, and NOT.
 struct UnsupportedHoistedFilter;
 
 /// Filters lifted off the top-level AND spine into dedicated SQL predicates because they cannot be
-/// expressed in the metadata jsonpath (they need notification-table joins).
+/// expressed in the metadata jsonpath (they need indexed-containment or notification-table joins).
 #[derive(Default)]
 struct HoistedForeignEntityFilters {
+    includes_me: bool,
     // A truth table over the eight possible sets of notification states present
     // on an entity. AND combines truth tables, not row-level state predicates:
     // an unseen literal and a seen literal can match different notifications.
@@ -54,6 +61,7 @@ struct HoistedForeignEntityFilters {
 impl HoistedForeignEntityFilters {
     fn and(self, other: Self) -> Self {
         Self {
+            includes_me: self.includes_me || other.includes_me,
             notification_matches: match (self.notification_matches, other.notification_matches) {
                 (Some(a), Some(b)) => Some(a & b),
                 (a, b) => a.or(b),
@@ -105,7 +113,10 @@ fn notification_truth_table(expr: &Expr<ForeignEntityLiteral>) -> Option<u8> {
 /// Literals that cannot be represented in the metadata jsonpath and must be lifted into dedicated
 /// SQL predicates instead.
 fn is_hoisted_literal(literal: &ForeignEntityLiteral) -> bool {
-    matches!(literal, ForeignEntityLiteral::NotificationState(_))
+    matches!(
+        literal,
+        ForeignEntityLiteral::IncludesMe | ForeignEntityLiteral::NotificationState(_)
+    )
 }
 
 fn contains_hoisted_literal(expr: &Expr<ForeignEntityLiteral>) -> bool {
@@ -118,9 +129,9 @@ fn contains_hoisted_literal(expr: &Expr<ForeignEntityLiteral>) -> bool {
     }
 }
 
-/// Lift pure notification subtrees off the AND spine. Notification subtrees preserve their full
-/// boolean expression through a truth table; other literals remain in the metadata jsonpath.
-/// Mixed OR/NOT subtrees fail closed.
+/// Lift participant predicates and pure notification subtrees off the AND spine.
+/// Notification subtrees preserve their full boolean expression through a truth table;
+/// other literals remain in the metadata jsonpath. Mixed OR/NOT subtrees fail closed.
 fn extract_hoisted_filters(
     expr: &Expr<ForeignEntityLiteral>,
 ) -> Result<HoistedForeignEntityFilters, UnsupportedHoistedFilter> {
@@ -134,6 +145,10 @@ fn extract_hoisted_filters(
         Expr::And(left, right) => {
             Ok(extract_hoisted_filters(left)?.and(extract_hoisted_filters(right)?))
         }
+        Expr::Literal(ForeignEntityLiteral::IncludesMe) => Ok(HoistedForeignEntityFilters {
+            includes_me: true,
+            ..Default::default()
+        }),
         other => {
             if contains_hoisted_literal(other) {
                 Err(UnsupportedHoistedFilter)
@@ -171,9 +186,9 @@ fn foreign_entity_literal_jsonpath(literal: &ForeignEntityLiteral) -> String {
         ForeignEntityLiteral::ForeignEntitySource(source) => {
             jsonpath_text_eq("foreignEntitySource", source)
         }
-        // IncludesMe names a source-specific participant the generic store cannot resolve, so it
-        // matches nothing here. Notification literals are hoisted by extract_hoisted_filters; if
-        // one slips through, match nothing rather than everything.
+        // IncludesMe and the notification literals are hoisted into dedicated SQL predicates by
+        // extract_hoisted_filters and never reach the jsonpath; if one slips through, match nothing
+        // rather than everything.
         ForeignEntityLiteral::IncludesMe | ForeignEntityLiteral::NotificationState(_) => {
             "(1 == 0)".to_string()
         }
@@ -186,27 +201,17 @@ fn jsonpath_text_eq(field_name: &str, expected_value: &str) -> String {
     format!("($.{field_name} == {expected_value})")
 }
 
-/// PostgreSQL-backed foreign entity repository.
-#[derive(Clone)]
-pub struct PgForeignEntityRepo {
-    pool: PgPool,
-}
-
-impl PgForeignEntityRepo {
-    /// Create a new repository backed by the given connection pool.
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
-    }
-
-    async fn get_foreign_entities_for_user_batch(
+impl PgGithubPullRequestRepo {
+    async fn fetch_listing(
         &self,
-        query: ForeignEntityBatchQuery<'_>,
+        query: ListingQuery<'_>,
     ) -> Result<Vec<ForeignEntity>, sqlx::Error> {
-        let ForeignEntityBatchQuery {
+        let ListingQuery {
             source_ids,
             source_auth_entities,
             sort_method,
             filter_jsonpath,
+            participant_github_user_id,
             notification_user_id,
             notification_sets,
             cursor_id,
@@ -238,7 +243,8 @@ impl PgForeignEntityRepo {
                         ELSE fe.updated_at
                     END AS sort_at
                 FROM foreign_entity fe
-                WHERE EXISTS (
+                WHERE fe.foreign_entity_source = $11::text
+                  AND EXISTS (
                     SELECT 1
                     FROM source_ids s
                     WHERE s.stored_for_id = fe.stored_for_id
@@ -256,17 +262,21 @@ impl PgForeignEntityRepo {
                     )
                   )
                   AND (
-                    $8::int[] IS NULL
-                    OR ($9::text IS NOT NULL AND (
+                    $8::text IS NULL
+                    OR (fe.metadata -> 'participantGithubUserIds') ? $8::text
+                  )
+                  AND (
+                    $9::int[] IS NULL
+                    OR ($10::text IS NOT NULL AND (
                         SELECT COALESCE(bit_or(CASE un.state
                             WHEN 'unseen' THEN 1 WHEN 'seen' THEN 2 WHEN 'done' THEN 4 END), 0)
                         FROM notification n
                         JOIN user_notification un ON un.notification_id = n.id
-                        WHERE un.user_id = $9::text
+                        WHERE un.user_id = $10::text
                           AND un.deleted_at IS NULL
                           AND n.event_item_type = 'foreign_entity'
                           AND n.event_item_id = fe.id::text
-                    ) = ANY($8::int[]))
+                    ) = ANY($9::int[]))
                   )
                 ORDER BY fe.foreign_entity_source, fe.foreign_entity_id, sort_at DESC, fe.id DESC
             )
@@ -292,73 +302,37 @@ impl PgForeignEntityRepo {
             cursor_value,
             cursor_id,
             limit,
+            participant_github_user_id,
             notification_sets,
             notification_user_id,
+            GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
         )
         .fetch_all(&self.pool)
         .await
     }
-}
 
-impl ForeignEntityRepository for PgForeignEntityRepo {
-    type Err = sqlx::Error;
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_foreign_entity_by_id(&self, id: Uuid) -> Result<Option<ForeignEntity>, Self::Err> {
-        sqlx::query_as!(
-            ForeignEntity,
+    async fn github_user_id_for_macro_user(
+        &self,
+        macro_user_id: &str,
+    ) -> Result<Option<String>, sqlx::Error> {
+        sqlx::query_scalar!(
             r#"
-            SELECT
-                id as "id!: Uuid",
-                foreign_entity_id as "foreign_entity_id!: String",
-                foreign_entity_source as "foreign_entity_source!: String",
-                metadata as "metadata!: serde_json::Value",
-                stored_for_id as "stored_for_id!: String",
-                stored_for_auth_entity as "stored_for_auth_entity!: String",
-                created_at as "created_at!: DateTime<Utc>",
-                updated_at as "updated_at!: DateTime<Utc>"
-            FROM foreign_entity
-            WHERE id = $1
-            LIMIT 1
+            SELECT github_user_id
+            FROM github_links
+            WHERE macro_id = $1
             "#,
-            id,
+            macro_user_id,
         )
         .fetch_optional(&self.pool)
         .await
     }
+}
 
-    #[tracing::instrument(err, skip(self))]
-    async fn get_foreign_entities_by_foreign_entity_id(
-        &self,
-        foreign_entity_id: &str,
-        foreign_entity_source: Option<&str>,
-    ) -> Result<Vec<ForeignEntity>, Self::Err> {
-        sqlx::query_as!(
-            ForeignEntity,
-            r#"
-            SELECT
-                id as "id!: Uuid",
-                foreign_entity_id as "foreign_entity_id!: String",
-                foreign_entity_source as "foreign_entity_source!: String",
-                metadata as "metadata!: serde_json::Value",
-                stored_for_id as "stored_for_id!: String",
-                stored_for_auth_entity as "stored_for_auth_entity!: String",
-                created_at as "created_at!: DateTime<Utc>",
-                updated_at as "updated_at!: DateTime<Utc>"
-            FROM foreign_entity
-            WHERE foreign_entity_id = $1
-              AND ($2::text IS NULL OR foreign_entity_source = $2)
-            ORDER BY created_at ASC, id ASC
-            "#,
-            foreign_entity_id,
-            foreign_entity_source,
-        )
-        .fetch_all(&self.pool)
-        .await
-    }
+impl GithubPullRequestListingRepository for PgGithubPullRequestRepo {
+    type Err = sqlx::Error;
 
     #[tracing::instrument(err, skip(self, source_ids, query))]
-    async fn get_foreign_entities_for_user(
+    async fn list_pull_requests(
         &self,
         requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
@@ -370,6 +344,7 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
         }
 
         let HoistedForeignEntityFilters {
+            includes_me,
             notification_matches,
             jsonpath: filter_jsonpath,
         } = match query
@@ -381,7 +356,7 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
             Ok(hoisted) => hoisted.unwrap_or_default(),
             Err(UnsupportedHoistedFilter) => {
                 tracing::warn!(
-                    "mixed metadata/notification literal under Or/Not in a foreign entity filter is unsupported; returning no results"
+                    "IncludesMe or mixed metadata/notification literal under Or/Not in a foreign entity filter is unsupported; returning no results"
                 );
                 return Ok(Vec::new());
             }
@@ -393,6 +368,19 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
             return Ok(Vec::new());
         }
 
+        let participant_github_user_id = if includes_me {
+            let Some(requesting_user) = requesting_user.as_deref() else {
+                return Ok(Vec::new());
+            };
+            match self.github_user_id_for_macro_user(requesting_user).await? {
+                Some(github_user_id) => Some(github_user_id),
+                // No linked GitHub identity: the user participates in nothing.
+                None => return Ok(Vec::new()),
+            }
+        } else {
+            None
+        };
+
         let notification_sets: Option<Vec<i32>> = notification_matches.map(|table| {
             (0..8)
                 .filter(|present| table & (1 << present) != 0)
@@ -400,123 +388,24 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
         });
         // Notification states are scoped to the requesting user's per-user notification row.
         // Without a requesting user the predicate matches nothing, so an active notification
-        // filter yields no results.
+        // filter yields no results (consistent with the participant filter above).
         let notification_user_id = requesting_user.as_deref();
 
         let (source_ids, source_auth_entities) = source_id_parts(&source_ids);
         let (cursor_id, cursor_value) = query.vals();
 
-        self.get_foreign_entities_for_user_batch(ForeignEntityBatchQuery {
+        self.fetch_listing(ListingQuery {
             source_ids: &source_ids,
             source_auth_entities: &source_auth_entities,
             sort_method: *query.sort_method(),
             filter_jsonpath: filter_jsonpath.as_deref(),
+            participant_github_user_id: participant_github_user_id.as_deref(),
             notification_user_id,
             notification_sets: notification_sets.as_deref(),
             cursor_id: cursor_id.copied(),
             cursor_value: cursor_value.copied(),
             limit: limit as i64,
         })
-        .await
-    }
-
-    #[tracing::instrument(err, skip(self, create))]
-    async fn create_foreign_entity(
-        &self,
-        id: Uuid,
-        create: CreateForeignEntity,
-    ) -> Result<ForeignEntity, Self::Err> {
-        sqlx::query_as!(
-            ForeignEntity,
-            r#"
-            INSERT INTO foreign_entity (
-                id,
-                foreign_entity_id,
-                foreign_entity_source,
-                metadata,
-                stored_for_id,
-                stored_for_auth_entity
-            )
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING
-                id as "id!: Uuid",
-                foreign_entity_id as "foreign_entity_id!: String",
-                foreign_entity_source as "foreign_entity_source!: String",
-                metadata as "metadata!: serde_json::Value",
-                stored_for_id as "stored_for_id!: String",
-                stored_for_auth_entity as "stored_for_auth_entity!: String",
-                created_at as "created_at!: DateTime<Utc>",
-                updated_at as "updated_at!: DateTime<Utc>"
-            "#,
-            id,
-            create.foreign_entity_id,
-            create.foreign_entity_source,
-            create.metadata,
-            create.stored_for_id,
-            create.stored_for_auth_entity,
-        )
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn delete_foreign_entity(&self, id: Uuid) -> Result<bool, Self::Err> {
-        let result = sqlx::query!(
-            r#"
-            DELETE FROM foreign_entity
-            WHERE id = $1
-            "#,
-            id,
-        )
-        .execute(&self.pool)
-        .await?;
-
-        Ok(result.rows_affected() > 0)
-    }
-
-    #[tracing::instrument(err, skip(self, patch))]
-    async fn patch_foreign_entity(
-        &self,
-        id: Uuid,
-        patch: PatchForeignEntity,
-    ) -> Result<Option<ForeignEntity>, Self::Err> {
-        let PatchForeignEntity {
-            foreign_entity_id,
-            foreign_entity_source,
-            metadata,
-            stored_for_id,
-            stored_for_auth_entity,
-        } = patch;
-
-        sqlx::query_as!(
-            ForeignEntity,
-            r#"
-            UPDATE foreign_entity
-            SET foreign_entity_id = COALESCE($2::text, foreign_entity_id),
-                foreign_entity_source = COALESCE($3::text, foreign_entity_source),
-                metadata = COALESCE($4::jsonb, metadata),
-                stored_for_id = COALESCE($5::text, stored_for_id),
-                stored_for_auth_entity = COALESCE($6::text, stored_for_auth_entity),
-                updated_at = NOW()
-            WHERE id = $1
-            RETURNING
-                id as "id!: Uuid",
-                foreign_entity_id as "foreign_entity_id!: String",
-                foreign_entity_source as "foreign_entity_source!: String",
-                metadata as "metadata!: serde_json::Value",
-                stored_for_id as "stored_for_id!: String",
-                stored_for_auth_entity as "stored_for_auth_entity!: String",
-                created_at as "created_at!: DateTime<Utc>",
-                updated_at as "updated_at!: DateTime<Utc>"
-            "#,
-            id,
-            foreign_entity_id,
-            foreign_entity_source,
-            metadata,
-            stored_for_id,
-            stored_for_auth_entity,
-        )
-        .fetch_optional(&self.pool)
         .await
     }
 }

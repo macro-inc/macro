@@ -26,7 +26,7 @@ use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
-    ports::{ForeignEntityListQuery, ForeignEntityService},
+    ports::ForeignEntityListQuery,
 };
 use frecency::domain::{
     models::{
@@ -34,6 +34,7 @@ use frecency::domain::{
     },
     ports::FrecencyQueryService,
 };
+use github_pull_requests::domain::ports::GithubPullRequestListing;
 use item_filters::ast::{
     EntityFilterAst,
     channel::{ChannelLiteral, ChannelThreadLiteral},
@@ -210,8 +211,8 @@ pub struct SoupImpl<T, U, V, C, K, Crm, F, Rem> {
     call_record_service: K,
     /// the interface for interacting with CRM (companies)
     crm_service: Crm,
-    /// the interface for interacting with foreign entities
-    foreign_entity_service: F,
+    /// the interface for listing GitHub pull requests
+    github_pull_request_service: F,
     /// the interface for interacting with reminders
     reminders_service: Rem,
     /// Optional captured branch facts supplied by the owning changes domain.
@@ -227,7 +228,7 @@ where
     C: ChannelListService,
     K: CallRecordQueryService,
     Crm: CrmService,
-    F: ForeignEntityService,
+    F: GithubPullRequestListing,
     Rem: RemindersService,
 {
     /// Creates a soup service from its repository and dependent domain services.
@@ -239,7 +240,7 @@ where
         comms_service: C,
         call_record_service: K,
         crm_service: Crm,
-        foreign_entity_service: F,
+        github_pull_request_service: F,
         reminders_service: Rem,
     ) -> Self {
         SoupImpl {
@@ -249,7 +250,7 @@ where
             comms_service,
             call_record_service,
             crm_service,
-            foreign_entity_service,
+            github_pull_request_service,
             reminders_service,
             agent_branches: None,
         }
@@ -1262,8 +1263,8 @@ where
         };
 
         Ok(Either::Right(
-            self.foreign_entity_service
-                .get_foreign_entities_for_user(requesting_user, source_ids, limit, query)
+            self.github_pull_request_service
+                .list_pull_requests(requesting_user, source_ids, limit, query)
                 .await?
                 .into_iter()
                 .map(|entity| SoupCandidate::plain(foreign_entity_to_soup_item(entity))),
@@ -1686,7 +1687,7 @@ where
             SoupOutput::Notified(page) => &mut page.items,
         };
         agent_metadata::enrich(
-            &self.foreign_entity_service,
+            &self.github_pull_request_service,
             self.agent_branches.as_deref(),
             metadata_user,
             metadata_source_ids,
@@ -1706,7 +1707,7 @@ where
     C: ChannelListService,
     K: CallRecordQueryService,
     Crm: CrmService,
-    F: ForeignEntityService,
+    F: GithubPullRequestListing,
     Rem: RemindersService,
 {
     #[tracing::instrument(err, skip(self, req, team_receipt))]
