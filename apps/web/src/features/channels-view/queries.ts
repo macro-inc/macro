@@ -156,6 +156,29 @@ export function useChannelsByIdsQuery(channelIds: Accessor<readonly string[]>) {
   return query;
 }
 
+/**
+ * The channels a by-id lookup has resolved.
+ *
+ * A settled lookup answers for every id it asked about — its data covers the
+ * pages fetched so far — so it replaces the previous answer and a channel it
+ * stops returning reads as unresolved. A pending or failed lookup keeps the
+ * last answer instead, so a failed page does not empty the rows built from it.
+ */
+export function resolveReferencedChannels(
+  previous: ChannelEntity[],
+  lookup: {
+    isEnabled: boolean;
+    isLoading: boolean;
+    error: unknown;
+    entities: readonly EntityData[] | undefined;
+  }
+): ChannelEntity[] {
+  if (!lookup.isEnabled || lookup.isLoading || lookup.error || !lookup.entities)
+    return previous;
+
+  return lookup.entities.filter(isChannelEntity);
+}
+
 export function deduplicateChannels(
   collections: readonly (readonly ChannelEntity[])[]
 ): ChannelEntity[] {

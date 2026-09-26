@@ -116,6 +116,11 @@ export type ChannelsRailContext = {
   selectTab: (tab: ChannelsTab) => void;
   sources: ChannelsSources;
   favorites: Accessor<readonly Favorite[]>;
+  /**
+   * A channel the rail has loaded, from its sections or fetched by id for a
+   * label or favorite row. Undefined until the fetch settles.
+   */
+  channelById: (channelId: string) => ChannelEntity | undefined;
   selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
   isGroupOpen: (group: ChannelsRailSection) => boolean;
   toggleGroup: (group: ChannelsRailSection) => void;

@@ -1,8 +1,6 @@
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
-import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
-import { useFavoriteDisplayName } from '@app/util/favorites';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -13,7 +11,6 @@ import CheckIcon from '@phosphor/check.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import SortIcon from '@phosphor/sort-ascending.svg';
 import XIcon from '@phosphor/x.svg';
-import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import {
   createDraggable,
   createDroppable,
@@ -35,6 +32,7 @@ import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
 import type { ChannelListSort, ChannelsGroup } from '../../types';
 import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
+import { ChannelFavoritesSection } from './ChannelFavoriteRows';
 import {
   ChannelLabelMenuItems,
   ChannelLabelRow,
@@ -57,7 +55,6 @@ import {
   type ChannelSectionRow,
   domIdForRow,
   rowKeyForChannel,
-  rowKeyForFavorite,
   useChannelsRail,
 } from './ChannelsRailContext';
 import {
@@ -68,8 +65,6 @@ import {
   RailListLoadingMore,
 } from './ChannelsRailSection';
 import {
-  useChannelRailFavoriteItemState,
-  useChannelRailFavoritesState,
   useChannelRailItemState,
   useChannelRailScopeState,
   useChannelRailSectionState,
@@ -165,38 +160,6 @@ function ChannelSortDropdown(props: { group: ChannelsGroup; label: string }) {
         </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
-  );
-}
-
-function FavoriteOption(props: { favorite: Favorite }) {
-  const rail = useChannelsRail();
-  const displayName = useFavoriteDisplayName(props.favorite);
-  const item = useChannelRailFavoriteItemState(() => props.favorite);
-
-  return (
-    <ViewSidebar.Item
-      id={item().domId}
-      type="button"
-      role="treeitem"
-      tabIndex={-1}
-      class={cn(
-        'group/channel-option relative',
-        !item().selected &&
-          !isTouchDevice() &&
-          item().focused &&
-          'bg-hover text-ink'
-      )}
-      active={item().selected && !isTouchDevice()}
-      aria-current={item().selected ? 'page' : undefined}
-      onClick={(event) =>
-        rail.activateRow(rowKeyForFavorite(props.favorite), event)
-      }
-    >
-      <ViewSidebar.Icon>
-        <FavoriteIcon favorite={props.favorite} class="size-4" />
-      </ViewSidebar.Icon>
-      <span class="min-w-0 flex-1 truncate">{displayName()}</span>
-    </ViewSidebar.Item>
   );
 }
 
@@ -389,53 +352,6 @@ function ChannelOption(props: {
         </ViewSidebar.Item>
       </ChannelRailItemContextMenu>
     </div>
-  );
-}
-
-function ExpandedFavoritesSection() {
-  const rail = useChannelsRail();
-  const section = useChannelRailFavoritesState();
-
-  return (
-    <Show when={section().items.length > 0}>
-      <CollapsibleSection.Root open={section().open} sizing="content">
-        <CollapsibleSection.Header
-          focused={section().focused}
-          focusWithin={section().containsFocus}
-        >
-          <button
-            id={section().domId}
-            type="button"
-            role="treeitem"
-            tabIndex={-1}
-            class="relative flex h-full min-w-0 flex-1 items-center gap-1 rounded-xl px-2 text-left outline-none"
-            aria-expanded={section().open}
-            onMouseDown={(event) => {
-              if (!isPrimaryMouseDown(event)) return;
-              event.preventDefault();
-              rail.toggleGroup('favorites');
-            }}
-          >
-            <span class="min-w-0 truncate">Favorites</span>
-            <CaretDownIcon
-              class={cn(
-                'size-2.5 shrink-0 opacity-0 transition-[opacity,rotate] duration-200 motion-reduce:transition-none group-hover/sidebar-section:opacity-100',
-                !section().open && '-rotate-90 opacity-100'
-              )}
-            />
-          </button>
-        </CollapsibleSection.Header>
-        <CollapsibleSection.Content
-          open={section().open}
-          contentRef={(element) => rail.registerScrollRef('favorites', element)}
-          class="flex min-h-0 flex-col gap-0.5"
-        >
-          <For each={section().items}>
-            {(favorite) => <FavoriteOption favorite={favorite} />}
-          </For>
-        </CollapsibleSection.Content>
-      </CollapsibleSection.Root>
-    </Show>
   );
 }
 
@@ -902,7 +818,7 @@ function ExpandedBrowse() {
       </Match>
       <Match when={true}>
         <ViewSidebar.Content class="h-full overflow-hidden">
-          <ExpandedFavoritesSection />
+          <ChannelFavoritesSection />
           {/* The groups split the height left after favorites between them.
               Their half-height caps resolve against this column, not the
               whole sidebar, so favorites is never squeezed out. */}
