@@ -55,6 +55,9 @@ async function resolveActorName(
   ) {
     return meta.content.botName;
   }
+  if (meta.tag === 'initiative_discussion' && meta.content.senderDisplayName) {
+    return meta.content.senderDisplayName;
+  }
   if (meta.tag === 'agent_session_mentioned') {
     return meta.content.mentionedBy
       ? await resolveUserName(meta.content.mentionedBy)

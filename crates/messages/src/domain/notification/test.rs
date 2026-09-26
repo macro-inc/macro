@@ -49,3 +49,20 @@ fn channel_messages_do_not_generate_comment_notifications() {
     let parent = MessageParent::Channel(Uuid::from_u128(1));
     assert!(comment_recipients(&parent, "actor", true, &audience()).is_empty());
 }
+
+#[test]
+fn initiative_recipients_follow_mentions_replies_assignments_and_live_access() {
+    let recipients = comment_recipients(
+        &MessageParent::Initiative(Uuid::from_u128(2)),
+        "actor",
+        true,
+        &audience(),
+    );
+    assert_eq!(recipients.len(), 4);
+    assert_eq!(recipients["mentioned"], CommentNotificationReason::Mention);
+    assert_eq!(recipients["participant"], CommentNotificationReason::Reply);
+    assert_eq!(recipients["assignee"], CommentNotificationReason::Assignee);
+    assert_eq!(recipients["owner"], CommentNotificationReason::Owner);
+    assert!(!recipients.contains_key("revoked"));
+    assert!(!recipients.contains_key("actor"));
+}

@@ -12,7 +12,7 @@ use model_notifications::{
 use model_owner::Owner;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
 
-/// Uses notification ingress with the existing document comment type names.
+/// Uses notification ingress with document or initiative discussion metadata.
 #[derive(Clone)]
 pub struct MessageNotificationSender<N>(pub std::sync::Arc<N>);
 
@@ -29,6 +29,7 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
             std::collections::HashSet::from([MacroUserIdStr::try_from(n.recipient)?]);
         let kind = match n.event.parent {
             MessageParent::Document(_) => EntityType::Document,
+            MessageParent::Initiative(_) => EntityType::Initiative,
             MessageParent::Channel(_) => {
                 return Err(rootcause::report!(
                     "comment notification requires discussion parent"
@@ -56,6 +57,30 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
             };
         }
         let owner = Owner::from_principal_str(&n.context.owner)?;
+        if matches!(n.event.parent, MessageParent::Initiative(_)) {
+            use model_notifications::{InitiativeDiscussionMetadata, InitiativeDiscussionReason};
+            send!(InitiativeDiscussionMetadata {
+                project_name: n.context.name.clone(),
+                owner,
+                reason: match n.reason {
+                    CommentNotificationReason::Mention => InitiativeDiscussionReason::Mention,
+                    CommentNotificationReason::Reply => InitiativeDiscussionReason::Reply,
+                    CommentNotificationReason::Assignee => InitiativeDiscussionReason::Assignee,
+                    CommentNotificationReason::Owner => InitiativeDiscussionReason::Owner,
+                },
+                message_id: n.message.id,
+                thread_id: n.message.root_id(),
+                text: n.message.content.clone(),
+                sender_display_name,
+                sender_profile_picture_url: n
+                    .message
+                    .bot_profile
+                    .as_ref()
+                    .and_then(|profile| profile.avatar_url.clone())
+                    .or_else(|| n.context.sender_profile_picture.clone()),
+            });
+            return Ok(());
+        }
         let sub_type = n
             .context
             .is_task

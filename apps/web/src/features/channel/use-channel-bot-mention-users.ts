@@ -28,11 +28,11 @@ export function availableBotMentionUsers(
   channelBots: readonly Bot[],
   agents: readonly Agent[],
   cursorEnabled: boolean,
-  surface: 'channel' | 'document' = 'channel'
+  surface: MessageParent['type'] = 'channel'
 ): IUser[] {
   const globalAgents = agents.filter(
     (agent) =>
-      (surface === 'document' || agent.channel_scope === 'all') &&
+      (surface !== 'channel' || agent.channel_scope === 'all') &&
       agent.bot.has_agent
   );
   const seen = new Set<string>();

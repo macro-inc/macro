@@ -1106,16 +1106,16 @@
       },
       "AgentSessionOriginParent": {
         "type": "object",
-        "description": "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface.",
+        "description": "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel, document,\nor initiative. Spelled like the message API's parent for client routing.",
         "required": ["type", "id"],
         "properties": {
           "id": {
             "type": "string",
-            "description": "The channel or document id."
+            "description": "The parent entity id."
           },
           "type": {
             "type": "string",
-            "description": "`channel` or `document`."
+            "description": "`channel`, `document`, or `initiative`."
           }
         }
       },
@@ -2038,6 +2038,59 @@
           }
         }
       },
+      "InitiativeDiscussionMetadata": {
+        "type": "object",
+        "description": "Project discussion metadata. The notification entity identifies the initiative;\nmessage and thread UUIDs select the discussion inside that project.",
+        "required": [
+          "projectName",
+          "owner",
+          "reason",
+          "messageId",
+          "threadId",
+          "text"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical shared message UUID."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Authenticated project owner."
+          },
+          "projectName": {
+            "type": "string",
+            "description": "Name displayed in the project header."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/InitiativeDiscussionReason",
+            "description": "Semantic reason selected by the message delivery domain."
+          },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public display name for a bot author."
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "Optional avatar for push notification attachments."
+          },
+          "text": {
+            "type": "string",
+            "description": "Posted Markdown content."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical discussion root UUID."
+          }
+        }
+      },
+      "InitiativeDiscussionReason": {
+        "type": "string",
+        "description": "Why a project discussion notification was delivered.",
+        "enum": ["mention", "reply", "assignee", "owner"]
+      },
       "InviteToTeamMetadata": {
         "type": "object",
         "description": "Metadata for when a user is invited to a team.",
@@ -2262,6 +2315,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["commented_on_document"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone commented, replied, or mentioned the recipient on a project.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/InitiativeDiscussionMetadata",
+                "description": "Someone commented, replied, or mentioned the recipient on a project."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["initiative_discussion"]
               }
             }
           },

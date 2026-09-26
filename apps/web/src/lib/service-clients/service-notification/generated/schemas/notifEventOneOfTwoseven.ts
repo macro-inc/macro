@@ -6,13 +6,13 @@
  */
 
 import type { NotifEventOneOfTwosevenTag } from './notifEventOneOfTwosevenTag';
-import type { ReminderMetadata } from './reminderMetadata';
+import type { TaskAssignedMetadata } from './taskAssignedMetadata';
 
 /**
- * A reminder the user set for themselves came due.
+ * A user was assigned to a task.
  */
 export type NotifEventOneOfTwoseven = {
-  /** A reminder the user set for themselves came due. */
-  content: ReminderMetadata;
+  /** A user was assigned to a task. */
+  content: TaskAssignedMetadata;
   tag: NotifEventOneOfTwosevenTag;
 };

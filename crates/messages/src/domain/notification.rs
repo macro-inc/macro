@@ -11,22 +11,22 @@ pub enum CommentNotificationReason {
     Mention,
     /// Reply to a discussion the recipient contributed to.
     Reply,
-    /// Comment on an assigned task.
+    /// Comment on an assigned task or initiative.
     Assignee,
     /// Comment on an entity owned by the recipient.
     Owner,
 }
 
-/// Facts used to select a document discussion's notification audience.
+/// Facts used to select an entity discussion's notification audience.
 #[derive(Debug, Default)]
 pub struct CommentAudience {
     /// Explicitly mentioned users.
     pub mentioned: Vec<String>,
     /// Authors who have contributed to this thread.
     pub participants: Vec<String>,
-    /// Task assignees; empty for non-task documents.
+    /// Task or initiative assignees; empty for other documents.
     pub assignees: Vec<String>,
-    /// Document owners.
+    /// Parent owners.
     pub owners: Vec<String>,
     /// Candidate users whose current parent view access was verified.
     pub authorized: HashSet<String>,
@@ -58,7 +58,7 @@ pub fn comment_recipients(
         (
             &audience.assignees,
             CommentNotificationReason::Assignee,
-            matches!(parent, MessageParent::Document(_)),
+            parent.is_discussion(),
         ),
         (&audience.owners, CommentNotificationReason::Owner, true),
     ];

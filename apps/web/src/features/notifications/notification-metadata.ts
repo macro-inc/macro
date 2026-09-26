@@ -28,6 +28,15 @@ export function getNotificationAction(n: UnifiedNotification): string {
         'replied_to_document_comment_thread',
         () => 'replied to a comment on'
       )
+      .with('initiative_discussion', () => {
+        const meta = n.notification_metadata;
+        if (meta.tag !== 'initiative_discussion') return 'commented on';
+        return meta.content.reason === 'mention'
+          ? 'mentioned you in a comment on'
+          : meta.content.reason === 'reply'
+            ? 'replied to a comment on'
+            : 'commented on';
+      })
       .with('commented_on_document', () => 'commented on')
       .with('channel_message_send', () => 'sent a message in')
       .with('ai_response', () => 'AI responded')
@@ -83,6 +92,7 @@ export function getNotificationTargetName(
         { tag: 'replied_to_document_comment_thread' },
         (m) => m.content.documentName
       )
+      .with({ tag: 'initiative_discussion' }, (m) => m.content.projectName)
       .with({ tag: 'commented_on_document' }, (m) => m.content.documentName)
       .with({ tag: 'invite_to_team' }, (m) => m.content.teamName)
       .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
@@ -135,6 +145,7 @@ export function getNotificationContent(
         { tag: 'replied_to_document_comment_thread' },
         (m) => m.content.text
       )
+      .with({ tag: 'initiative_discussion' }, (m) => m.content.text)
       .with({ tag: 'commented_on_document' }, (m) => m.content.text)
       .with({ tag: 'new_email' }, (m) => m.content.subject)
       .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
@@ -223,6 +234,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'document_mention' }, () => true)
       .with({ tag: 'mentioned_in_document_comment' }, () => true)
       .with({ tag: 'replied_to_document_comment_thread' }, () => true)
+      .with({ tag: 'initiative_discussion' }, () => true)
       .with({ tag: 'commented_on_document' }, () => true)
       .with({ tag: 'channel_invite' }, () => true)
       .with({ tag: 'invite_to_team' }, () => true)

@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild the browser cache with initiative properties and GraphQL schema support.
-version = "0.6.20"
+# Rebuild the browser cache with initiative discussion notification schema support.
+version = "0.6.21"
 
 [features]
 default = []

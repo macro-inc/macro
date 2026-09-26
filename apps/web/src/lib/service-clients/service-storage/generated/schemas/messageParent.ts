@@ -5,9 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MessageParentOneOf } from './messageParentOneOf';
+import type { MessageParentOneOfFive } from './messageParentOneOfFive';
 import type { MessageParentOneOfThree } from './messageParentOneOfThree';
 
 /**
  * The entity whose permissions and lifecycle govern a message.
  */
-export type MessageParent = MessageParentOneOf | MessageParentOneOfThree;
+export type MessageParent =
+  | MessageParentOneOf
+  | MessageParentOneOfThree
+  | MessageParentOneOfFive;

@@ -20,7 +20,7 @@ impl RequiredPermission for MessageView {
     }
 }
 
-/// Minimum posting permission: channel member or document commenter.
+/// Minimum posting permission: channel member or entity commenter.
 #[derive(Debug, Clone, Copy)]
 pub struct MessageWrite;
 
@@ -413,6 +413,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             return Err(MessageError::Invalid("thread update must change a field"));
         }
         if patch.detach_anchor {
+            if !matches!(parent, MessageParent::Document(_)) {
+                return Err(MessageError::Invalid(
+                    "only document discussions have anchors",
+                ));
+            }
             if !access.entity_permission().satisfies::<EditAccessLevel>() {
                 return Err(MessageError::Forbidden);
             }
@@ -703,6 +708,7 @@ fn parent_from_receipt<P: RequiredPermission>(
     let kind = match entity.entity_type {
         EntityType::Channel => "channel",
         EntityType::Document => "document",
+        EntityType::Initiative => "initiative",
         _ => return Err(MessageError::Forbidden),
     };
     MessageParent::parse(kind, &entity.entity_id)

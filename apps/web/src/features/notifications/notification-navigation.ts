@@ -347,7 +347,7 @@ function getSupportedHandler(
           );
         };
       })
-      .with('inbox_reauth_required', () => null)
+      .with('inbox_reauth_required', 'initiative_discussion', () => null)
       .exhaustive()
   );
 }

@@ -188,6 +188,29 @@ async fn document_mentions_inherit_link_sharing_for_uuid_parents() {
     assert_eq!(*shares.0.lock().unwrap(), vec![document]);
 }
 
+#[tokio::test]
+async fn initiative_mentions_recheck_access_without_granting_document_shares() {
+    let log = DeliveryLog::default();
+    let shares = Shares::default();
+    let delivery = DiscussionDelivery::new(Context, Access, log.clone(), log.clone())
+        .with_sharing(shares.clone());
+    let mut event = event();
+    event.parent = MessageParent::Initiative(Uuid::from_u128(23));
+    delivery.publish(event).await.unwrap();
+    assert!(shares.0.lock().unwrap().is_empty());
+    assert_eq!(
+        *log.live.lock().unwrap(),
+        HashSet::from(["viewer".to_owned()])
+    );
+    assert!(
+        !log.notices
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(user, _)| user == "revoked")
+    );
+}
+
 #[derive(Clone, Default)]
 struct Sink(Arc<Mutex<Vec<MessageParent>>>);
 impl MessageEventPublisher for Sink {
@@ -207,8 +230,14 @@ async fn document_events_never_reach_channel_delivery_and_vice_versa() {
     channel.parent = MessageParent::Channel(Uuid::from_u128(4));
     publisher.publish(document.clone()).await.unwrap();
     publisher.publish(channel.clone()).await.unwrap();
+    let mut initiative = event();
+    initiative.parent = MessageParent::Initiative(Uuid::from_u128(5));
+    publisher.publish(initiative.clone()).await.unwrap();
     assert_eq!(*channels.0.lock().unwrap(), vec![channel.parent]);
-    assert_eq!(*discussions.0.lock().unwrap(), vec![document.parent]);
+    assert_eq!(
+        *discussions.0.lock().unwrap(),
+        vec![document.parent, initiative.parent]
+    );
 }
 
 #[tokio::test]

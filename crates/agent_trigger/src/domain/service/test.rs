@@ -209,6 +209,7 @@ fn allow_invocation(
             entity_type: match parent {
                 MessageParent::Channel(_) => EntityType::Channel,
                 MessageParent::Document(_) => EntityType::Document,
+                MessageParent::Initiative(_) => EntityType::Initiative,
             },
             entity_id: parent.entity_id(),
         },
@@ -216,9 +217,11 @@ fn allow_invocation(
             MessageParent::Channel(_) => EntityPermission::ChannelRole {
                 role: ParticipantRole::Member,
             },
-            MessageParent::Document(_) => EntityPermission::AccessLevel {
-                access_level: AccessLevel::Comment,
-            },
+            MessageParent::Document(_) | MessageParent::Initiative(_) => {
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::Comment,
+                }
+            }
         },
     )
     .unwrap();
@@ -1070,78 +1073,99 @@ async fn an_explicit_reply_to_a_shared_originating_message_yields_nothing() {
 }
 
 #[tokio::test]
-async fn document_mentions_use_owned_agents_without_channel_participation() {
-    for scope in [AgentChannelScope::All, AgentChannelScope::Selected] {
+async fn discussion_mentions_use_owned_agents_without_channel_participation() {
+    for parent in [
+        MessageParent::parse("document", "doc").unwrap(),
+        MessageParent::Initiative(Uuid::from_u128(901)),
+    ] {
+        for scope in [AgentChannelScope::All, AgentChannelScope::Selected] {
+            let mut posted = message(vec![mention_of(BotId::TEST_A)]);
+            posted.parent = parent.clone();
+            let mut bots = MockAgentBotLookup::new();
+            bots.expect_get_agent().once().return_once(move |id| {
+                Box::pin(async move {
+                    let mut agent = private_agent(id);
+                    agent.channel_scope = scope;
+                    Ok(Some(agent))
+                })
+            });
+            assert!(mention_yields_event(&posted, bots).await);
+        }
+    }
+}
+
+#[tokio::test]
+async fn discussion_agents_respect_team_membership() {
+    for parent in [
+        MessageParent::parse("document", "doc").unwrap(),
+        MessageParent::Initiative(Uuid::from_u128(901)),
+    ] {
+        for allowed in [true, false] {
+            let mut posted = message(vec![mention_of(BotId::TEST_A)]);
+            posted.parent = parent.clone();
+            let team_id = Uuid::from_u128(99);
+            let mut facts = FactMocks::from(MockAgentBotLookup::new());
+            facts.bots.expect_get_agent().once().return_once(move |id| {
+                Box::pin(async move {
+                    Ok(Some(agent_with(
+                        id,
+                        BotOwner::Team { team_id },
+                        AgentChannelScope::Selected,
+                    )))
+                })
+            });
+            facts
+                .teams
+                .expect_user_has_team()
+                .once()
+                .return_once(move |_, _| Box::pin(async move { Ok(allowed) }));
+            assert_eq!(mention_yields_event(&posted, facts).await, allowed);
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_discussion_cannot_invoke_another_users_private_agent() {
+    for parent in [
+        MessageParent::parse("document", "doc").unwrap(),
+        MessageParent::Initiative(Uuid::from_u128(901)),
+    ] {
         let mut posted = message(vec![mention_of(BotId::TEST_A)]);
-        posted.parent = MessageParent::parse("document", "doc").unwrap();
+        posted.parent = parent.clone();
+        posted.sender = ChannelSender::new_from_user(
+            MacroUserIdStr::try_from_email("other@example.com").unwrap(),
+        );
         let mut bots = MockAgentBotLookup::new();
-        bots.expect_get_agent().once().return_once(move |id| {
-            Box::pin(async move {
-                let mut agent = private_agent(id);
-                agent.channel_scope = scope;
-                Ok(Some(agent))
-            })
-        });
-        assert!(mention_yields_event(&posted, bots).await);
-    }
-}
-
-#[tokio::test]
-async fn document_agents_respect_team_membership() {
-    for allowed in [true, false] {
-        let mut posted = message(vec![mention_of(BotId::TEST_A)]);
-        posted.parent = MessageParent::parse("document", "doc").unwrap();
-        let team_id = Uuid::from_u128(99);
-        let mut facts = FactMocks::from(MockAgentBotLookup::new());
-        facts.bots.expect_get_agent().once().return_once(move |id| {
-            Box::pin(async move {
-                Ok(Some(agent_with(
-                    id,
-                    BotOwner::Team { team_id },
-                    AgentChannelScope::Selected,
-                )))
-            })
-        });
-        facts
-            .teams
-            .expect_user_has_team()
+        bots.expect_get_agent()
             .once()
-            .return_once(move |_, _| Box::pin(async move { Ok(allowed) }));
-        assert_eq!(mention_yields_event(&posted, facts).await, allowed);
+            .return_once(|id| Box::pin(async move { Ok(Some(private_agent(id))) }));
+        assert!(!mention_yields_event(&posted, bots).await);
     }
 }
 
 #[tokio::test]
-async fn a_document_cannot_invoke_another_users_private_agent() {
-    let mut posted = message(vec![mention_of(BotId::TEST_A)]);
-    posted.parent = MessageParent::parse("document", "doc").unwrap();
-    posted.sender =
-        ChannelSender::new_from_user(MacroUserIdStr::try_from_email("other@example.com").unwrap());
-    let mut bots = MockAgentBotLookup::new();
-    bots.expect_get_agent()
-        .once()
-        .return_once(|id| Box::pin(async move { Ok(Some(private_agent(id))) }));
-    assert!(!mention_yields_event(&posted, bots).await);
-}
-
-#[tokio::test]
-async fn a_queued_document_mention_cannot_invoke_after_access_is_revoked() {
-    let mut posted = message(vec![mention_of(BotId::TEST_A)]);
-    posted.parent = MessageParent::parse("document", "doc").unwrap();
-    let mut history = MockThreadHistory::new();
-    history
-        .expect_authorize_invocation()
-        .once()
-        .return_once(|_, _, _| Box::pin(async { Ok(None) }));
-    let (replies, judge) = no_implicit();
-    let service = service_reading(
-        MockAgentSessionRepo::new(),
-        MockAgentBotLookup::new(),
-        replies,
-        judge,
-        history,
-    );
-    assert!(service.evaluate(&posted).await.unwrap().is_empty());
+async fn a_queued_discussion_mention_cannot_invoke_after_access_is_revoked() {
+    for parent in [
+        MessageParent::parse("document", "doc").unwrap(),
+        MessageParent::Initiative(Uuid::from_u128(901)),
+    ] {
+        let mut posted = message(vec![mention_of(BotId::TEST_A)]);
+        posted.parent = parent.clone();
+        let mut history = MockThreadHistory::new();
+        history
+            .expect_authorize_invocation()
+            .once()
+            .return_once(|_, _, _| Box::pin(async { Ok(None) }));
+        let (replies, judge) = no_implicit();
+        let service = service_reading(
+            MockAgentSessionRepo::new(),
+            MockAgentBotLookup::new(),
+            replies,
+            judge,
+            history,
+        );
+        assert!(service.evaluate(&posted).await.unwrap().is_empty());
+    }
 }
 
 #[tokio::test]

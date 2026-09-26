@@ -121,9 +121,9 @@ impl Access {
             return Err(rootcause::report!("document access revoked"));
         }
         Ok(match parent {
-            MessageParent::Document(_) => (
+            MessageParent::Document(_) | MessageParent::Initiative(_) => (
                 entity_access::domain::models::Entity {
-                    entity_type: EntityType::Document,
+                    entity_type: parent.access_entity_type(),
                     entity_id: parent.entity_id(),
                 },
                 EntityPermission::AccessLevel {

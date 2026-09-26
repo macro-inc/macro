@@ -43,6 +43,7 @@ function getNotificationIcon(
       ),
       () => ChatTeardropIcon
     )
+    .with('initiative_discussion', () => ChatIcon)
     .with('channel_message_reply', () => ArrowBendUpLeftIcon)
     .with('channel_message_send', () => ChatIcon)
     .with('new_email', () => EnvelopeIcon)
@@ -82,6 +83,12 @@ export function NotificationIcon(props: NotificationIconProps) {
   };
 
   const icon = () => {
+    const metadata = (props.notification ?? props.stack?.notifications[0])
+      ?.notification_metadata;
+    if (metadata?.tag === 'initiative_discussion') {
+      if (metadata.content.reason === 'mention') return AtIcon;
+      if (metadata.content.reason === 'reply') return ArrowBendUpLeftIcon;
+    }
     const type = notificationType();
     if (!type) return ChatIcon;
     return getNotificationIcon(type);
