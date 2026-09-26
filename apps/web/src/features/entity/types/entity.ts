@@ -274,6 +274,13 @@ export type EmailEntity = EntityBase & {
   isDraft: boolean;
   snippet?: string;
   isImportant: boolean;
+  /**
+   * The server's Signal/Noise classification (`email_threads.is_signal`), the
+   * flag the Importance filter evaluates — distinct from `isImportant`, which
+   * is Gmail's IMPORTANT label. Absent on rows mapped from sources that carry
+   * no classification, such as thread previews.
+   */
+  isSignal?: boolean;
   done: boolean;
   projectId?: string;
   participants?: EmailThreadParticipants;
