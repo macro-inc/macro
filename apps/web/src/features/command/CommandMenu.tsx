@@ -5,7 +5,6 @@ import { getSearchSplit } from '@app/features/next-soup/soup-view/search-control
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
@@ -285,19 +284,13 @@ export function CommandMenuInner(props: {
     if (isEntityItem(item)) {
       if (isGithubPrEntity(item.data)) {
         if (USE_MACRO_PR_SUMMARY_BLOCK) {
-          const result = openWithSplit(
+          openWithSplit(
             { type: 'pr', id: item.data.id },
             {
               referredFrom: 'kommand-menu',
               preferNewSplit: openInNewSplit,
             }
           );
-          if (
-            result.status === 'reused' &&
-            result.owner !== result.sourceOwner
-          ) {
-            toast.alert('Content already open');
-          }
         } else {
           openExternalUrl(item.data.metadata.url);
         }
@@ -309,7 +302,7 @@ export function CommandMenuInner(props: {
       if (item.data.type !== 'foreign') {
         const blockName = itemToBlockName(item.data);
         if (blockName) {
-          const result = openWithSplit(
+          openWithSplit(
             { type: blockName, id: item.id },
             {
               referredFrom: 'kommand-menu',
@@ -317,12 +310,6 @@ export function CommandMenuInner(props: {
               reopen: blockName === 'channel' ? 'latest' : undefined,
             }
           );
-          if (
-            result.status === 'reused' &&
-            result.owner !== result.sourceOwner
-          ) {
-            toast.alert('Content already open');
-          }
         }
       }
       CommandState.close();

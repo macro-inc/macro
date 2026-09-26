@@ -2,7 +2,6 @@ import {
   NavigationStack,
   useNavigationStack,
 } from '@app/components/navigation-stack/NavigationStack';
-import { toast } from '@core/component/Toast/Toast';
 import { render } from '@solidjs/testing-library';
 import {
   createEffect,
@@ -20,7 +19,6 @@ import type { SplitManager } from './split-layout/layoutManager';
 
 let manager: Pick<SplitManager, 'findOpenView' | 'registerOpenViews'>;
 const activate = vi.hoisted(() => vi.fn());
-vi.mock('@core/component/Toast/Toast', () => ({ toast: { alert: vi.fn() } }));
 vi.mock('./split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { activate } }),
 }));
@@ -40,7 +38,6 @@ beforeEach(() => {
     findOpenView: registry.find,
     registerOpenViews: registry.register,
   };
-  vi.mocked(toast.alert).mockClear();
   activate.mockClear();
 });
 
@@ -54,7 +51,6 @@ it('activates the split owning a preview and stops exposing it after close', () 
   existing?.activate?.();
   expect(activate).toHaveBeenCalledOnce();
   expect(view.stack.active()?.data).toEqual(channel);
-  expect(toast.alert).not.toHaveBeenCalled();
 
   view.stack.clear();
   expect(manager.findOpenView(channel)).toBeUndefined();
@@ -116,17 +112,15 @@ function setup(defaultValue?: PreviewPanelSelection[]) {
   return { stack, selectionGuard, ...view };
 }
 
-it('does not move focus or toast for a conflicting restored selection', () => {
+it('does not move focus for a conflicting restored selection', () => {
   const channel = { type: 'channel', id: 'channel' } as const;
   const first = setup([channel]);
   const restored = setup([channel]);
   expect(restored.stack.active()).toBeUndefined();
   expect(activate).not.toHaveBeenCalled();
-  expect(toast.alert).not.toHaveBeenCalled();
 
   restored.stack.reset(channel);
   expect(activate).toHaveBeenCalledOnce();
-  expect(toast.alert).toHaveBeenCalledWith('Content already open');
   restored.unmount();
   first.unmount();
 });
@@ -147,14 +141,11 @@ it('uses the change reason independently of mount timing', () => {
     </Layout>
   ));
   expect(activate).toHaveBeenCalledOnce();
-  expect(toast.alert).toHaveBeenCalledWith('Content already open');
 
   activate.mockClear();
-  vi.mocked(toast.alert).mockClear();
   // Restoring after mount must remain passive.
   expect(selectPreview(channel, 'restore')).toBe(false);
   expect(activate).not.toHaveBeenCalled();
-  expect(toast.alert).not.toHaveBeenCalled();
   second.unmount();
   first.unmount();
 });
@@ -168,7 +159,6 @@ it('rejects a second detail selection without changing its current entry and rel
   expect(second.stack.reset({ type: 'email', id: 'one' })).toBeUndefined();
   expect(second.stack.active()).toBe(current);
   expect(activate).toHaveBeenCalledOnce();
-  expect(toast.alert).toHaveBeenCalledWith('Content already open');
   first.stack.clear();
   expect(second.stack.reset({ type: 'email', id: 'one' })).toBeDefined();
   first.unmount();
@@ -242,7 +232,6 @@ it('treats Markdown as single-instance and allows revisiting the owning preview'
   const document = { type: 'document', fileType: 'md', id: 'doc' } as const;
   expect(first.stack.reset(document)).toBeDefined();
   expect(second.stack.reset(document)).toBeUndefined();
-  expect(toast.alert).toHaveBeenCalledWith('Content already open');
   expect(first.stack.reset(document)).toBeDefined();
   first.unmount();
   second.unmount();

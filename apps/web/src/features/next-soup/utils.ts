@@ -713,20 +713,14 @@ export const openEntityInSplitFromUnifiedList = async (
   if (isGithubPrEntity(entity)) {
     if (USE_MACRO_PR_SUMMARY_BLOCK) {
       const content = { type: 'pr' as const, id: entity.id };
-      const result = splitManager.openWithSplit(
-        reviewsHostedContent(content) ?? content,
-        {
-          referredFrom: options.referredFrom,
-          activate: true,
-          preferNewSplit: openInNewSplit,
-          handle: splitHandle,
-          mergeHistory,
-          allowDuplicate: true,
-        }
-      );
-      if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-        toast.alert('Content already open');
-      }
+      splitManager.openWithSplit(reviewsHostedContent(content) ?? content, {
+        referredFrom: options.referredFrom,
+        activate: true,
+        preferNewSplit: openInNewSplit,
+        handle: splitHandle,
+        mergeHistory,
+        allowDuplicate: true,
+      });
     } else {
       openExternalUrl(entity.metadata.url);
     }
@@ -845,9 +839,6 @@ export const openEntityInSplitFromUnifiedList = async (
         ? 'latest'
         : undefined,
   });
-  if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-    toast.alert('Content already open');
-  }
 
   // Routed calls have no block handle. Update a reused split's route search
   // instead of waiting for a legacy block method that will never register.

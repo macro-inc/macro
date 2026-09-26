@@ -15,7 +15,6 @@ import {
 } from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { toast } from '@core/component/Toast/Toast';
 import { enableTasksReviews } from '@core/constant/featureFlags';
 import CheckSquareIcon from '@phosphor/check-square.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
@@ -122,13 +121,10 @@ function TaskFavorites(props: {
   ) => {
     if (openTask({ id: favorite.entityId, fallbackName }, { event })) return;
 
-    const result = layout.openWithSplit(favoriteSplitContent(favorite), {
+    layout.openWithSplit(favoriteSplitContent(favorite), {
       referredFrom: 'sidebar',
       preferNewSplit: event.shiftKey,
     });
-    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-      toast.alert('Content already open');
-    }
   };
 
   return (

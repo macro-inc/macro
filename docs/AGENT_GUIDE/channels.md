@@ -321,8 +321,8 @@ records `path` (`catch_up` or `full`) and `reason`
 
 Following a channel mention or browser notification for the conversation already
 shown in Chat activates that workspace and jumps to the targeted message or reply.
-It keeps the shared channel detail mounted and does not show a **Content already open**
-toast. The same applies to a channel preview in Home; a closed channel opens normally.
+It keeps the shared channel detail mounted and does not toast. The same applies
+to a channel preview in Home; a closed channel opens normally.
 In Chat, the detail uses the shared channel top bar with Messages, Attachments,
 Participants, and Calls tabs (when calls are enabled). A message target switches
 back to Messages; changing unread notifications does not restart navigation.

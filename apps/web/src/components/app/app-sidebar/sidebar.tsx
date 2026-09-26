@@ -1778,9 +1778,6 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       mergeHistory: false,
       referredFrom: 'sidebar',
     });
-    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-      toast.alert('Content already open');
-    }
     const split = result.split;
     if (split) props.onOpened?.(split, 'current-split');
   };
@@ -1805,9 +1802,6 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       replaceWhenFull: false,
       referredFrom: 'sidebar',
     });
-    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-      toast.alert('Content already open');
-    }
     const split = result.split;
     if (split) props.onOpened?.(split, 'new-split');
   };

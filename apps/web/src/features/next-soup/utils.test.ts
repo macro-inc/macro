@@ -15,9 +15,8 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
 }));
 
-const toastAlert = vi.hoisted(() => vi.fn());
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { alert: toastAlert },
+  toast: { alert: vi.fn(), failure: vi.fn() },
 }));
 
 const operationMocks = vi.hoisted(() => {
@@ -182,18 +181,13 @@ describe('agent session search navigation', () => {
     expect(getRowClickFallbackLocation(titleOnly)).toBeUndefined();
   });
   it.each([
-    { status: 'opened', notify: false },
-    { status: 'unavailable', notify: false },
-    { status: 'reused', owner: 'existing', sourceOwner: 'list', notify: true },
-    {
-      status: 'reused',
-      owner: 'existing',
-      sourceOwner: 'existing',
-      notify: false,
-    },
+    { status: 'opened' },
+    { status: 'unavailable' },
+    { status: 'reused', owner: 'existing', sourceOwner: 'list' },
+    { status: 'reused', owner: 'existing', sourceOwner: 'existing' },
   ])(
-    'owns the toast policy for $status from $sourceOwner',
-    async ({ notify, ...result }) => {
+    'opens through the split manager for $status from $sourceOwner',
+    async (result) => {
       const openWithSplit = vi.fn(() => result);
       setGlobalSplitManager({
         activeSplit: () => undefined,
@@ -204,11 +198,6 @@ describe('agent session search navigation', () => {
       } as unknown as SplitManager);
       await openEntityInSplitFromUnifiedList(entity, {});
       expect(openWithSplit).toHaveBeenCalledOnce();
-      if (notify)
-        expect(toastAlert).toHaveBeenCalledExactlyOnceWith(
-          'Content already open'
-        );
-      else expect(toastAlert).not.toHaveBeenCalled();
     }
   );
 
