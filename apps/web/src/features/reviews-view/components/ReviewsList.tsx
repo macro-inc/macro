@@ -339,7 +339,6 @@ export function ReviewsList(props: ReviewsListProps) {
                 }
               >
                 <ListLayoutProvider ref={listElement}>
-                  {/* virtua can briefly render an old index while the list shrinks. */}
                   <Virtualizer
                     as={ReviewListElement}
                     item="li"
@@ -353,54 +352,46 @@ export function ReviewsList(props: ReviewsListProps) {
                     itemSize={48}
                     onScroll={checkNearEnd}
                   >
-                    {(candidate: GithubPullRequestEntity | undefined) => (
-                      <Show when={candidate} keyed>
-                        {(review) => (
-                          <ReviewRow
-                            review={review}
-                            checked={list.selection.isSelected(review.id)}
-                            authorDisplayName={
-                              isAuthoredBy(
-                                review,
-                                props.authorLogin,
-                                props.authorId
-                              )
-                                ? props.viewerName
-                                : undefined
-                            }
-                            favoriteAction={favoriteAction}
-                            onOpen={props.onOpen}
-                            onChecked={(checked, shiftKey) =>
-                              listInteractions.selection.set(
-                                review.id,
-                                checked,
-                                {
-                                  range: shiftKey,
-                                }
-                              )
-                            }
-                            onFocus={() =>
-                              list.focus.set(review.id, { reason: 'pointer' })
-                            }
-                            onClick={(event) => {
-                              if (event.metaKey || event.ctrlKey) {
-                                listInteractions.selection.toggle(review.id);
-                                return;
-                              }
-                              list.activate.key(review.id, {
-                                reason: 'pointer',
-                                metadata: { newSplit: event.shiftKey },
-                              });
-                            }}
-                            onActivate={(newSplit) =>
-                              list.activate.key(review.id, {
-                                reason: 'keyboard',
-                                metadata: { newSplit },
-                              })
-                            }
-                          />
-                        )}
-                      </Show>
+                    {(review) => (
+                      <ReviewRow
+                        review={review}
+                        checked={list.selection.isSelected(review.id)}
+                        authorDisplayName={
+                          isAuthoredBy(
+                            review,
+                            props.authorLogin,
+                            props.authorId
+                          )
+                            ? props.viewerName
+                            : undefined
+                        }
+                        favoriteAction={favoriteAction}
+                        onOpen={props.onOpen}
+                        onChecked={(checked, shiftKey) =>
+                          listInteractions.selection.set(review.id, checked, {
+                            range: shiftKey,
+                          })
+                        }
+                        onFocus={() =>
+                          list.focus.set(review.id, { reason: 'pointer' })
+                        }
+                        onClick={(event) => {
+                          if (event.metaKey || event.ctrlKey) {
+                            listInteractions.selection.toggle(review.id);
+                            return;
+                          }
+                          list.activate.key(review.id, {
+                            reason: 'pointer',
+                            metadata: { newSplit: event.shiftKey },
+                          });
+                        }}
+                        onActivate={(newSplit) =>
+                          list.activate.key(review.id, {
+                            reason: 'keyboard',
+                            metadata: { newSplit },
+                          })
+                        }
+                      />
                     )}
                   </Virtualizer>
                 </ListLayoutProvider>
