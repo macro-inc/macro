@@ -1,3 +1,4 @@
+import type { BackgroundEffect } from '@core/media/background-effect';
 import type { Accessor } from 'solid-js';
 import type { MeetingSessionLifecycle } from './meeting-session-lifecycle';
 
@@ -20,6 +21,10 @@ export type MeetingLocalTracks = {
 export type MeetingMediaPreferences = {
   microphoneEnabled: boolean;
   cameraEnabled: boolean;
+  microphoneDeviceId?: string;
+  cameraDeviceId?: string;
+  speakerDeviceId?: string;
+  backgroundEffect?: BackgroundEffect;
   /** Owned by `connect` once passed; the session stops them on early exits. */
   localTracks?: MeetingLocalTracks;
 };

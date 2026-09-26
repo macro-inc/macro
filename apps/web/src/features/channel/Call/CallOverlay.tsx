@@ -350,10 +350,8 @@ export function CallOverlay(props: {
         </Show>
       </div>
 
-      {/* Controls bar — soup-notification vocabulary. Share toggle is an
-          icon button (with optional inline label), active state = subtle
-          accent tint. No chunky toggle switch. */}
-      <div class="flex items-center py-2 relative justify-center">
+      {/* Settings expand over the tiles; sharing stays clear of the controls. */}
+      <div class="flex flex-col items-center gap-2 py-3 relative">
         <Show
           when={
             callCtx.activeChannelId() !== null &&
@@ -376,7 +374,7 @@ export function CallOverlay(props: {
               role="checkbox"
               aria-checked={sharedWithTeam()}
               class={cn(
-                'absolute left-0 inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none',
+                'order-1 inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none',
                 'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
                 'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
                 sharedWithTeam() && 'text-ink',

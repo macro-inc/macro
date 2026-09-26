@@ -1,13 +1,12 @@
+import type { BackgroundEffect } from '@core/media/background-effect';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import Phone from '@phosphor/phone-call.svg';
-import { Button, ToggleSwitch } from '@ui';
+import { Button } from '@ui';
 import {
   type Accessor,
   batch,
-  children,
   createEffect,
   createSignal,
-  For,
   type JSX,
   Match,
   on,
@@ -16,6 +15,10 @@ import {
 } from 'solid-js';
 import { MeetingCallHeading } from '../components/meeting-call-heading';
 import { MeetingCopyButton } from '../components/meeting-copy-button';
+import {
+  MeetingParticipants,
+  type MeetingParticipantsState,
+} from '../components/meeting-participants';
 import type {
   MeetingPageState,
   MeetingSessionCapabilities,
@@ -25,14 +28,18 @@ import {
   type MeetingMediaAccess,
 } from '../primitives/meeting-media';
 import { createMeetingSession } from '../primitives/meeting-session';
+import { MeetingMediaSetup } from './meeting-media-setup';
 
 export function MeetingPage(props: {
   source: Accessor<MeetingPageState>;
   session: MeetingSessionCapabilities;
   mediaAccess?: MeetingMediaAccess;
+  initialBackground?: BackgroundEffect;
+  readBackgroundImage?: (file: File) => Promise<string>;
   authenticated: Accessor<boolean | undefined>;
   author: Accessor<string>;
   avatar?: JSX.Element;
+  participants?: MeetingParticipantsState;
   startCall?: boolean;
   url?: string;
   onCopy: () => Promise<void>;
@@ -47,11 +54,11 @@ export function MeetingPage(props: {
   onSignIn?: () => void;
   renderCall: (onLeave: () => void, name: Accessor<string>) => JSX.Element;
 }) {
-  const avatar = children(() => props.avatar);
   const session = createMeetingSession(props.session);
   const [name, setName] = createSignal('');
   const [leaving, setLeaving] = createSignal(false);
-  const media = createMeetingMedia(props.mediaAccess);
+  const media = createMeetingMedia(props.mediaAccess, props.initialBackground);
+  const [uploadingBackground, setUploadingBackground] = createSignal(false);
   const ready = () => {
     const state = props.source();
     return state.kind === 'ready' ? state : undefined;
@@ -82,18 +89,18 @@ export function MeetingPage(props: {
       }
     )
   );
-  let videoElement: HTMLVideoElement | undefined;
-  createEffect(() => {
-    const stream = media.video();
-    if (videoElement) videoElement.srcObject = stream ?? null;
-  });
   const join = () => {
-    if (membersOnly() || leaving() || media.pending()) return;
+    if (membersOnly() || leaving() || media.pending() || uploadingBackground())
+      return;
     // The call publishes the preview tracks rather than re-opening the
     // devices, so the waiting room is the only place permission is asked.
     return session.join(props.authenticated() ? undefined : name(), {
       microphoneEnabled: media.microphoneEnabled(),
       cameraEnabled: media.cameraEnabled(),
+      microphoneDeviceId: media.selectedDevices().microphone,
+      cameraDeviceId: media.selectedDevices().camera,
+      speakerDeviceId: media.selectedDevices().speaker,
+      backgroundEffect: media.backgroundEffect(),
       localTracks: media.handoff(),
     });
   };
@@ -188,32 +195,15 @@ export function MeetingPage(props: {
           </div>
         </Match>
         <Match when={ready()}>
-          <div class="m-auto grid w-full max-w-4xl gap-8 py-6 md:grid-cols-2 md:items-center">
-            <div class="flex aspect-video flex-col items-center justify-center gap-5 rounded-2xl border border-edge-muted bg-message px-6">
-              <video
-                ref={videoElement}
-                autoplay
-                muted
-                playsinline
-                aria-label="Camera preview"
-                class="max-h-full w-full rounded-xl object-cover -scale-x-100"
-                classList={{ hidden: !media.video() }}
-              />
-              <Show when={!media.video()}>
-                <div class="flex size-24 items-center justify-center rounded-full bg-accent/10 text-4xl font-medium text-accent">
-                  <Show
-                    when={avatar()}
-                    fallback={
-                      displayName().charAt(0).toUpperCase() || (
-                        <Phone class="size-10" />
-                      )
-                    }
-                  >
-                    {avatar()}
-                  </Show>
-                </div>
-              </Show>
-            </div>
+          <div class="m-auto grid w-full max-w-6xl gap-8 py-6 md:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)] md:items-center">
+            <MeetingMediaSetup
+              media={media}
+              name={displayName()}
+              avatar={props.avatar}
+              disabled={session.joining()}
+              readBackgroundImage={props.readBackgroundImage}
+              onUploading={setUploadingBackground}
+            />
             <form
               class="flex flex-col gap-5"
               onSubmit={(event) => {
@@ -245,6 +235,9 @@ export function MeetingPage(props: {
                   </Show>
                 </div>
               </div>
+              <Show when={props.participants}>
+                {(state) => <MeetingParticipants state={state()} />}
+              </Show>
               <Show
                 when={!props.authenticated()}
                 fallback={
@@ -267,31 +260,6 @@ export function MeetingPage(props: {
                   />
                 </label>
               </Show>
-              <div class="flex flex-wrap items-center gap-6">
-                <ToggleSwitch
-                  checked={media.microphoneEnabled()}
-                  disabled={session.joining()}
-                  onChange={media.setMicrophoneEnabled}
-                  size="sm"
-                  label="Microphone"
-                  labelClass="whitespace-nowrap text-xs text-ink-muted"
-                />
-                <ToggleSwitch
-                  checked={media.cameraEnabled()}
-                  disabled={session.joining()}
-                  onChange={media.setCameraEnabled}
-                  size="sm"
-                  label="Camera"
-                  labelClass="whitespace-nowrap text-xs text-ink-muted"
-                />
-              </div>
-              <For each={media.errors()}>
-                {(error) => (
-                  <p role="alert" class="text-sm text-failure">
-                    {error} You can still join with it off.
-                  </p>
-                )}
-              </For>
               <Show when={session.error()}>
                 <p role="alert" class="text-sm text-failure">
                   {session.error()}
@@ -308,11 +276,12 @@ export function MeetingPage(props: {
               <Button
                 variant="ghost"
                 size="lg"
-                class="bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
+                class="w-full bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
                 type="submit"
                 disabled={
                   session.joining() ||
                   media.pending() ||
+                  uploadingBackground() ||
                   (!props.authenticated() && !name().trim())
                 }
               >
@@ -327,20 +296,10 @@ export function MeetingPage(props: {
                       ? 'Start call'
                       : 'Join call'}
               </Button>
-              <Show when={session.joining()}>
-                <Button type="button" onClick={() => void session.leave()}>
-                  Cancel
-                </Button>
-              </Show>
               <p class="text-xs text-ink-muted">
                 Calls are recorded and transcribed for the organizer and Macro
                 participants.
               </p>
-              <Show when={props.url}>
-                {(url) => (
-                  <MeetingCopyButton url={url()} onCopy={props.onCopy} />
-                )}
-              </Show>
             </form>
           </div>
         </Match>
