@@ -755,7 +755,9 @@ the event details without sending a response.
 The standalone Calendar view has a left navigation sidebar. The `New` menu
 above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
 `Reminder`. An icon-only shortcut in the `Upcoming events` header opens the
-availability dialog with working-hour settings above rounded copy options.
+availability dialog. Start/end time selectors and a weekend switch sit above
+copy ranges that wrap on narrow screens; a successful copy briefly shows a
+green `Copied` button with a check icon.
 Collapsible `Upcoming events` and `Calendars` sections follow; calendar
 account rows use Drive-style trailing disclosure buttons and animated nested
 branches. Their 14px visibility checkboxes precede the swatch and label, with
