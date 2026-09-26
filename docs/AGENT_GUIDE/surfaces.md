@@ -151,6 +151,15 @@ prefer the current channel cache, then a matching thread notification's name,
 then **Unknown channel** if neither source has a name. Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
 
+When one channel holds more than one row in the same date group — its own
+unread messages plus a mention or thread reply — those rows are brought together
+and stacked. The first row names the channel; the rows under it are indented and
+say what happened instead (**Mentioned you**, **Replied in a thread**,
+**New message**, **New messages**; on desktop's single-line rows, **teo mentioned
+you**). A stacked channel row previews the message its own notification is about,
+not the channel's latest. Every row stays separately selectable and actionable,
+and a stack never spans two date groups.
+
 Items in the 256px desktop rail use single-line pills with 16px icons: profile photos for
 DMs and model logos for AI chats (Claude sunburst or ChatGPT knot). Other items
 use the same glyphs as entity rows elsewhere: document file-type and

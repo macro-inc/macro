@@ -10,6 +10,7 @@ import {
 import { getChannelThreadName } from '@entity/utils/channel-thread-name';
 import { cn } from '@ui';
 import { createMemo, Show } from 'solid-js';
+import { type InboxChannelStack, isStackFollower } from './channel-stacks';
 import { InboxCardLayout, toInboxCardDisplayItem } from './inbox-card-layouts';
 import { scopeThreadNotifications } from './utils';
 
@@ -27,6 +28,8 @@ type InboxListEntityProps = BaseListEntityProps & {
   cardClass?: string;
   focusable?: boolean;
   occurrenceKey?: string;
+  /** Set when the row shares a channel with the rows around it. */
+  stack?: InboxChannelStack;
 };
 
 export function InboxListEntity(props: InboxListEntityProps) {
@@ -53,6 +56,9 @@ export function InboxListEntity(props: InboxListEntityProps) {
       class={cn(
         'group/inbox-item soup-list-entity relative mx-(--soup-row-gutter)',
         SOUP_ROW_CLASS.card,
+        // The row nests whole: its rail, avatar and text all shift together,
+        // so the card's own geometry is untouched.
+        isStackFollower(props.stack) && 'pl-(--soup-inbox-stack-indent)',
         props.class
       )}
       ref={props.ref}
@@ -65,6 +71,7 @@ export function InboxListEntity(props: InboxListEntityProps) {
         <InboxCardLayout
           class={props.cardClass}
           item={item()}
+          stack={props.stack}
           selected={props.checked}
           highlighted={props.highlighted}
           focusable={props.focusable}

@@ -60,12 +60,18 @@ import { parseISO } from 'date-fns';
 import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
+import {
+  type InboxChannelStack,
+  inboxStackFollowerText,
+  isStackFollower,
+} from './channel-stacks';
 import { InboxCard } from './InboxCard';
 import {
   getGithubTitle,
   getInboxTaskProperties,
   getNotificationTag,
   itemContent,
+  notificationItemContent,
 } from './utils';
 
 export interface InboxCardLayoutProps {
@@ -80,7 +86,25 @@ export interface InboxCardLayoutProps {
   focusable?: boolean;
   /** Render unread state beside the title instead of in a row gutter. */
   showUnreadIndicator?: boolean;
+  /** Set when the row shares a channel with the rows around it. */
+  stack?: InboxChannelStack;
 }
+
+/**
+ * The title a channel-family card shows. A row nested under one that already
+ * named the channel says what happened instead of repeating where.
+ */
+const createStackAwareTitle = (
+  props: InboxCardLayoutProps,
+  ownTitle: () => string | undefined
+) => {
+  const followerTitle = () =>
+    isStackFollower(props.stack)
+      ? inboxStackFollowerText(props.item.entity, props.item.notification)
+          ?.label
+      : undefined;
+  return () => followerTitle() ?? ownTitle();
+};
 
 /** Glyph size inside the card's avatar bubble — grows with the circle on
  * mobile, matching the narrow rows' icon factor (see InboxCard.Icon). */
@@ -617,10 +641,18 @@ const attachmentSummary = (count: number): string | undefined =>
 export function ChannelCardLayout(props: InboxCardLayoutProps) {
   const entity = createMemo(() => props.item.entity);
 
+  // Nested under a row that is already showing the channel's latest message,
+  // this row is about its own notification instead.
+  const nested = () => isStackFollower(props.stack);
+
   const messageSenderId = createMemo(() => {
     const value = props.item.entity;
 
     if (value.type !== 'channel') return;
+
+    if (nested() && props.item.notification?.sender_id) {
+      return props.item.notification.sender_id;
+    }
 
     const latestSender = value.latestRootMessage?.senderId;
 
@@ -671,7 +703,10 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
       action = 'shared a document with you';
     }
 
-    const content = itemContent(value, props.item.notification);
+    const content = nested()
+      ? (notificationItemContent(props.item.notification) ??
+        itemContent(value, props.item.notification))
+      : itemContent(value, props.item.notification);
     const latestMessage =
       value.type === 'channel' ? value.latestRootMessage : undefined;
 
@@ -687,6 +722,8 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
       contentIsAttachmentSummary,
     };
   });
+
+  const title = createStackAwareTitle(props, () => text().title);
 
   return (
     <BaseCard
@@ -704,7 +741,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
           />
         </Show>
       }
-      title={text().title}
+      title={title()}
     >
       <CardClampedMarkdown
         text={text().content}
@@ -744,13 +781,15 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
     };
   });
 
+  const title = createStackAwareTitle(props, () => text().title);
+
   // Two-line clamped message body (like the channel card) so the row matches
   // its three-line neighbors.
   return (
     <BaseCard
       {...props}
       icon={<ActionBubble tag={getNotificationTag(props.item.notification)} />}
-      title={text().title}
+      title={title()}
     >
       <CardClampedMarkdown text={text().content} />
     </BaseCard>
@@ -860,6 +899,8 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
     };
   });
 
+  const title = createStackAwareTitle(props, () => text().title);
+
   // The one bespoke card kept on raw InboxCard.Root: unlike BaseCard's shape,
   // its title sits inside the body row (icon and timestamp align to it), with
   // the quoted-original block stacked beneath.
@@ -886,7 +927,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
               <UnreadIndicator active class="mobile:hidden" />
             </Show>
             <InboxCard.Title class="flex items-center gap-1">
-              <span class="truncate">{text().title}</span>
+              <span class="truncate">{title()}</span>
             </InboxCard.Title>
           </InboxCard.Header>
 

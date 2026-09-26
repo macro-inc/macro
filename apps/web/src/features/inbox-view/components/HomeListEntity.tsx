@@ -1,5 +1,10 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { AgentSessionListItem } from '@app/features/agents-view/views/AgentSessionListItem';
+import {
+  type InboxChannelStack,
+  inboxStackFollowerText,
+  isStackFollower,
+} from '@app/features/next-soup/soup-view/views/inbox/channel-stacks';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { Entity, MaybeEntityRow } from '@entity';
@@ -19,6 +24,8 @@ import { HomeEntityIcon } from './HomeEntityIcon';
 type HomeListEntityProps = BaseListEntityProps & {
   occurrenceKey: string;
   channelName?: string;
+  /** Set when the row shares a channel with the rows around it. */
+  stack?: InboxChannelStack;
 };
 
 /** One compact, single-line Home item; the list owns focus and activation. */
@@ -30,9 +37,23 @@ export function HomeListEntity(props: HomeListEntityProps) {
   const commentNotification = () =>
     getDocumentCommentNotification(props.entity);
   const unread = () => unreadFilterFn(props.entity);
+  // Nested under a row that already named the channel: say what happened
+  // rather than repeating where it happened.
+  const followerText = () =>
+    isStackFollower(props.stack)
+      ? inboxStackFollowerText(
+          props.entity,
+          props.entity.notifications?.()?.[0]
+        )
+      : undefined;
 
   return (
-    <div class="soup-list-entity relative mx-(--sidebar-gutter) my-(--sidebar-row-gap)">
+    <div
+      class={cn(
+        'soup-list-entity relative mx-(--sidebar-gutter) my-(--sidebar-row-gap)',
+        isStackFollower(props.stack) && 'pl-(--soup-inbox-stack-indent)'
+      )}
+    >
       <MaybeEntityRow
         entityId={props.occurrenceKey}
         config={props.entityRowConfig}
@@ -78,6 +99,22 @@ export function HomeListEntity(props: HomeListEntityProps) {
                     </Show>
                   }
                 >
+                  <Match when={followerText()}>
+                    {(text) => (
+                      <Show
+                        when={threadEntity()}
+                        fallback={<span class="truncate">{text().label}</span>}
+                      >
+                        {(thread) => (
+                          <HomeThreadTitle
+                            entity={thread()}
+                            channelName={props.channelName}
+                            action={text().action}
+                          />
+                        )}
+                      </Show>
+                    )}
+                  </Match>
                   <Match when={threadEntity()}>
                     {(thread) => (
                       <HomeThreadTitle
@@ -133,7 +170,10 @@ export function HomeListEntity(props: HomeListEntityProps) {
 }
 
 function HomeThreadTitle(
-  props: Pick<HomeListEntityProps, 'entity' | 'channelName'>
+  props: Pick<HomeListEntityProps, 'entity' | 'channelName'> & {
+    /** Replaces the location when a row above already named the channel. */
+    action?: string;
+  }
 ) {
   const currentUserId = useUserId();
   const sender = () => {
@@ -169,8 +209,19 @@ function HomeThreadTitle(
   return (
     <span class="flex min-w-0 items-center">
       <span class="max-w-1/2 truncate">{senderLabel()}</span>
-      <span class="shrink-0 whitespace-pre"> in </span>
-      <span class="min-w-0 truncate">{location()}</span>
+      <Show
+        when={props.action}
+        fallback={
+          <>
+            <span class="shrink-0 whitespace-pre"> in </span>
+            <span class="min-w-0 truncate">{location()}</span>
+          </>
+        }
+      >
+        {(action) => (
+          <span class="min-w-0 truncate whitespace-pre"> {action()}</span>
+        )}
+      </Show>
     </span>
   );
 }

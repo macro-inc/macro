@@ -17,19 +17,9 @@
       var(--soup-inbox-icon-padding-r)
   );
 
-  --soup-stack-icon-diameter: 24px;
-  --soup-stack-row-padding-l: calc(
-    var(--soup-inbox-unread) + 0.5 * var(--soup-inbox-icon-diameter)
-  );
-  --soup-stack-row-border-l: 2px;
-  --soup-stack-header-icon-padding-l: calc(
-    var(--soup-inbox-unread) + 0.5 * var(--soup-inbox-icon-diameter) - 0.5 *
-      var(--soup-stack-icon-diameter) - var(--soup-stack-row-padding-l)
-  );
-  --soup-stack-row-unread-column-width: calc(
-    var(--soup-inbox-left-of-content) - var(--soup-stack-row-padding-l) -
-      var(--soup-stack-row-border-l)
-  );
+  /* How far a channel's follow-on rows nest under the row that names it. The
+     whole row shifts by this, rail and all, so nothing inside has to move. */
+  --soup-inbox-stack-indent: 1.5rem;
 }
 
 /* Row geometry. These are the source of truth for a row's leading edge: the row

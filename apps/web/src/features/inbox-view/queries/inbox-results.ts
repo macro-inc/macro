@@ -1,3 +1,4 @@
+import { clusterInboxChannelEntities } from '@app/features/next-soup/soup-view/views/inbox/channel-stacks';
 import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import {
   deduplicateItems,
@@ -38,6 +39,15 @@ export const inboxGroupTimestamp = (
   (inboxTabIsNotificationFeed(context.tab) ? entity.notifiedAt : undefined) ??
   inboxSortTimestamp(entity);
 
+/** Same groups, with each one's channel rows brought together into stacks. */
+const withChannelStacks = <T extends EntityData>(
+  groups: SoupGroup<T>[]
+): SoupGroup<T>[] =>
+  groups.map((group) => ({
+    ...group,
+    entities: clusterInboxChannelEntities(group.entities),
+  }));
+
 export function groupInboxEntitiesByDate<T extends EntityData>(
   entities: T[],
   context: InboxOrderContext,
@@ -46,11 +56,13 @@ export function groupInboxEntitiesByDate<T extends EntityData>(
     entity
   ) => inboxGroupTimestamp(entity, context)
 ): SoupGroup<T>[] {
-  return groupSoupEntities(entities, {
-    getGroupId: (entity) => dateBucket(getTimestamp(entity), now).key,
-    getGroupLabel: (_groupId, firstEntity) =>
-      dateBucket(getTimestamp(firstEntity), now).label,
-  });
+  return withChannelStacks(
+    groupSoupEntities(entities, {
+      getGroupId: (entity) => dateBucket(getTimestamp(entity), now).key,
+      getGroupLabel: (_groupId, firstEntity) =>
+        dateBucket(getTimestamp(firstEntity), now).label,
+    })
+  );
 }
 
 const compareHomeDates = (first: unknown, second: unknown) => {
@@ -116,11 +128,13 @@ export function groupHomeEntitiesByDate<T extends EntityData>(
   entities: T[],
   now: Date
 ): SoupGroup<T>[] {
-  return groupSoupEntities([...entities].sort(compareHomeEntities), {
-    getGroupId: (entity) => homeDateBucket(entity.sortTs, now).key,
-    getGroupLabel: (_groupId, firstEntity) =>
-      homeDateBucket(firstEntity.sortTs, now).label,
-    compareGroups: (a, b) =>
-      homeDateBucketRank(a.id) - homeDateBucketRank(b.id),
-  });
+  return withChannelStacks(
+    groupSoupEntities([...entities].sort(compareHomeEntities), {
+      getGroupId: (entity) => homeDateBucket(entity.sortTs, now).key,
+      getGroupLabel: (_groupId, firstEntity) =>
+        homeDateBucket(firstEntity.sortTs, now).label,
+      compareGroups: (a, b) =>
+        homeDateBucketRank(a.id) - homeDateBucketRank(b.id),
+    })
+  );
 }
