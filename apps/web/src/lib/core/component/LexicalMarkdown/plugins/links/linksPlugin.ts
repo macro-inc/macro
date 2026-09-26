@@ -484,6 +484,10 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
     }),
 
     editor.registerNodeTransform(TextNode, (textNode: TextNode) => {
+      // Suggestion text and glide typing are one composition. Rewriting the
+      // node into a link mid-composition drops the caret and the IME session.
+      if (editor.isComposing() || textNode.isComposing()) return;
+
       const parent = textNode.getParentOrThrow();
       const prevSibling = textNode.getPreviousSibling();
 
