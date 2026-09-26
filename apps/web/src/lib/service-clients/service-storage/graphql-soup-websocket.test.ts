@@ -186,8 +186,9 @@ describe('GraphQL Soup subscription lifecycle', () => {
     lifecycle.dispose();
   });
 
-  it('signals a terminal subscription failure once across both subscriptions', () => {
+  it('logs a terminal subscription failure without surfacing a toast', () => {
     toastFailure.mockClear();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const receive: Array<(result: { error?: unknown }) => void> = [];
     const client = {
       subscription: vi.fn(() => ({
@@ -209,10 +210,9 @@ describe('GraphQL Soup subscription lifecycle', () => {
     receive[0]?.({ error: new Error('retry budget exhausted') });
     receive[1]?.({ error: new Error('duplicate terminal result') });
 
-    expect(toastFailure).toHaveBeenCalledOnce();
-    expect(toastFailure).toHaveBeenCalledWith('Live updates disconnected', {
-      subtext: 'Refresh to reconnect.',
-    });
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(toastFailure).not.toHaveBeenCalled();
+    warn.mockRestore();
     lifecycle.dispose();
   });
 });
