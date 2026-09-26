@@ -5,7 +5,7 @@ import {
 } from '@core/component/EntityLoadGate';
 import { EmailDebouncedReadMarker } from '@notifications';
 import type { ComponentProps, ParentProps } from 'solid-js';
-import { Suspense } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 
 export type EmailThreadLoadGateProps<Data> = ParentProps<{
   result: EntityLoadResult<Data>;
@@ -29,12 +29,16 @@ export function EmailThreadLoadGate<Data>(
         loadErrorTitle="Unable to load this email"
         onRetry={props.onRetry}
       >
-        <EmailDebouncedReadMarker
-          notificationSource={props.notificationSource}
-          threadId={props.threadId}
-          linkId={props.linkId}
-          debounceTime={props.debounceTime}
-        />
+        <Show when={props.threadId} keyed>
+          {(threadId) => (
+            <EmailDebouncedReadMarker
+              notificationSource={props.notificationSource}
+              threadId={threadId}
+              linkId={props.linkId}
+              debounceTime={props.debounceTime}
+            />
+          )}
+        </Show>
         {props.children}
       </EntityLoadGate>
     </Suspense>

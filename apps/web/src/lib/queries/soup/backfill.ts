@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { offerEmailPreparationHints } from '@app/lib/email-render-cache/hints';
 import {
   ENABLE_GRAPHQL_BACKFILL,
   enableGraphqlSoup,
@@ -48,8 +49,21 @@ type SoupBackfillFetchPage = (
 const fetchSoupPage: SoupBackfillFetchPage = (input, options) =>
   hydrateGraphqlSoup(SoupBackfillDocument, { input }, options);
 
-const fetchEmailContentPage: SoupBackfillFetchPage = (input, options) =>
-  hydrateGraphqlSoup(SoupBackfillDocument, { input }, options);
+const fetchEmailContentPage: SoupBackfillFetchPage = async (input, options) => {
+  const page = await hydrateGraphqlSoup(
+    SoupBackfillDocument,
+    { input },
+    options
+  );
+  if (!options?.signal?.aborted && page.preparationIds?.length) {
+    const ids = page.preparationIds;
+    // This is optional derived work, outside durable checkpoint ordering.
+    setTimeout(() => {
+      if (!options?.signal?.aborted) offerEmailPreparationHints(ids);
+    }, 0);
+  }
+  return page;
+};
 
 export type SoupBackfillParams = {
   /** Stable checkpoint namespace. Change it when the input changes. */

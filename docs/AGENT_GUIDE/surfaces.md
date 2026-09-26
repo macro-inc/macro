@@ -300,6 +300,21 @@ The mobile task drawer retains its existing layout.
 
 ## Email — `/app/component/mail`
 
+With `enable-email-render-cache` enabled, focused rows and nearby threads prepare
+their likely visible bodies ahead of opening. A body can show **Loading message…**
+while its header and the rest of the thread remain usable; **Retry loading message**
+retries a failed preparation. Quote reveal keeps the current body until its variant
+is ready. Equal-body metadata updates preserve the existing body DOM. Markdown
+messages and document mentions keep their existing presentation.
+
+The prepared cache is separate from mailbox data: it cannot make an unavailable
+thread readable or guarantee complete offline history. Browser reloads can reuse
+compatible artifacts after checking current cached body fields. Logout, identity
+resets, access loss, and mailbox removal invalidate artifacts. Native currently
+uses memory caching only. To compare the uncached fallback locally, set
+`VITE_ENABLE_EMAIL_RENDER_CACHE=false`; this disables preparation storage and
+speculation while preserving normal message behavior.
+
 Email's Tags sidebar uses the same [nested tag tree as Tasks](tasks.md#nested-sidebar-tags).
 Carets and folder-only parents expand branches; actual tags select their exact ID
 and switch the mailbox to All. Parent selection does not include descendant tags.

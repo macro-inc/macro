@@ -223,6 +223,12 @@ export const ENABLE_EMAIL = defineFlag({
   default: true,
 }).enabled;
 
+export const enableEmailRenderCache = defineFlag({
+  key: 'enable-email-render-cache',
+  env: 'ENABLE_EMAIL_RENDER_CACHE',
+  default: LOCAL_ONLY || undefined,
+});
+
 export const ENABLE_BLOCK_IN_BLOCK = defineFlag({
   env: 'ENABLE_BLOCK_IN_BLOCK',
   default: true,

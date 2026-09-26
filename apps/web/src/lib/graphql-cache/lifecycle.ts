@@ -2,6 +2,19 @@ import type { CacheHost } from './host/types';
 import { rotateCacheScope } from './scope';
 
 const hosts = new Set<CacheHost>();
+const resetListeners = new Set<() => Promise<void>>();
+
+/** Derived app caches follow identity resets without observing body hydration. */
+export function registerCacheResetListener(
+  listener: () => Promise<void>
+): () => void {
+  resetListeners.add(listener);
+  return () => resetListeners.delete(listener);
+}
+
+export async function notifyCacheIdentityReset(): Promise<void> {
+  await Promise.allSettled([...resetListeners].map((listener) => listener()));
+}
 
 function clearExternalCacheState(): void {
   try {
@@ -24,6 +37,7 @@ export function registerCacheHost(host: CacheHost): () => void {
 
 /** Best-effort reset of each active cache database during logout. */
 export async function clearRegisteredCaches(): Promise<void> {
+  await notifyCacheIdentityReset();
   // Soup cursors live outside the normalized cache. Reset them in the same
   // lifecycle operation so no later login resumes past records wiped below.
   clearExternalCacheState();

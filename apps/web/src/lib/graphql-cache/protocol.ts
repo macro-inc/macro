@@ -594,7 +594,7 @@ export type CachePush =
       /** Changed entity keys, for diagnostics/advanced consumers. */
       keys: string[];
     }
-  | { kind: 'cache-changed'; revision: CacheRevision }
+  | { kind: 'cache-changed'; revision: CacheRevision; identityReset?: boolean }
   | { kind: 'cache-hydrated'; revision: CacheRevision }
   | { kind: 'mutation-settled'; settlement: MutationSettlement };
 

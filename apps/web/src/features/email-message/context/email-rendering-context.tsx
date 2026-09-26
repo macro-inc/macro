@@ -5,9 +5,13 @@ import type {
 } from '@macro-inc/email-renderer/browser';
 import { type Accessor, createContext, useContext } from 'solid-js';
 import type { EmailAttachment } from '../core/email-message';
+import type { EmailPreparation } from './email-preparation';
 
 /** Rendering capabilities shared by email surfaces; no thread or block state. */
 export interface EmailRenderingContextValue {
+  /** Revokes mounted content/resources when the owning session ends. */
+  canRender?: Accessor<boolean>;
+  preparation?: EmailPreparation;
   theme: Accessor<ThemeColorParams>;
   images?: ImagePolicy;
   prepareLinks?: (container: HTMLElement) => void;

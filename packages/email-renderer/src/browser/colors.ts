@@ -161,6 +161,46 @@ function hasOpaqueAncestorBackground(el: HTMLElement, root: Node): boolean {
 
 function computeTextNodeColor(root: Node): TextNodeContrast[] {
   const out: TextNodeContrast[] = [];
+  // This pass only reads styles; processEmailColors writes after it returns.
+  // Snapshot primitives once per element rather than repeatedly resolving every
+  // text node's entire ancestor chain. Keep caches local to this presentation.
+  const styles = new Map<Element, { color: string; backgroundColor: string }>();
+  const backgrounds = new Map<Element, RGBA | null>();
+  const readStyle = (element: Element) => {
+    const cached = styles.get(element);
+    if (cached) return cached;
+    const computed = getComputedStyle(element);
+    const value = {
+      color: computed.color,
+      backgroundColor: computed.backgroundColor,
+    };
+    styles.set(element, value);
+    return value;
+  };
+  const effectiveBackground = (element: Element): RGBA | null => {
+    const ancestors: Element[] = [];
+    let current: Element | null = element;
+    let background: RGBA | null = null;
+    while (current && current !== root) {
+      const cached = backgrounds.get(current);
+      if (cached !== undefined) {
+        background = cached;
+        break;
+      }
+      ancestors.push(current);
+      const color = readStyle(current).backgroundColor;
+      const parsed = color.startsWith('rgb')
+        ? normalizeRGBA(parseRGBA(color))
+        : null;
+      if (parsed && parsed.a > 0) {
+        background = parsed;
+        break;
+      }
+      current = current.parentElement;
+    }
+    for (const ancestor of ancestors) backgrounds.set(ancestor, background);
+    return background;
+  };
 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node: Node) {
@@ -180,25 +220,13 @@ function computeTextNodeColor(root: Node): TextNodeContrast[] {
     }
 
     if (el) {
-      const cs = getComputedStyle(el);
+      const cs = readStyle(el);
       const fg = cs.color.startsWith('rgb')
         ? normalizeRGBA(parseRGBA(cs.color))
         : null;
       // Walk up ancestors to find the effective background color,
       // since background-color doesn't inherit in CSS
-      let bgRgba: RGBA | null = null;
-      let bgEl: Element | null = el;
-      while (bgEl && bgEl !== root) {
-        const bgCs = getComputedStyle(bgEl);
-        const parsed = bgCs.backgroundColor.startsWith('rgb')
-          ? normalizeRGBA(parseRGBA(bgCs.backgroundColor))
-          : null;
-        if (parsed && parsed.a > 0) {
-          bgRgba = parsed;
-          break;
-        }
-        bgEl = bgEl.parentElement;
-      }
+      const bgRgba = effectiveBackground(el);
       if (fg) {
         const fgOklch = rgbaToOklch(fg);
         const bgOklch = rgbaToOklch(bgRgba);

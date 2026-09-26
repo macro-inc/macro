@@ -84,13 +84,17 @@ describe('independent email body', () => {
         attachments: [{ ...original.attachments[0], sfs_id: 'new-file' }],
       });
       await Promise.resolve();
-      expect(root.body.host()).not.toBe(host);
+      expect(root.body.host()).toBe(host);
+      expect(root.body.host()?.shadowRoot?.querySelector('img')).not.toBe(
+        image
+      );
       expect(releaseImages).toHaveBeenCalledTimes(1);
       expect(resolveImages).toHaveBeenCalledTimes(2);
 
       const updatedHost = root.body.host();
       root.setValue({ ...original, body_html_sanitized: '<p>Edited</p>' });
-      expect(root.body.host()).not.toBe(updatedHost);
+      expect(root.body.host()).toBe(updatedHost);
+      expect(root.body.host()?.shadowRoot?.querySelector('img')).toBeNull();
       expect(root.body.host()?.shadowRoot?.textContent).toContain('Edited');
     } finally {
       root.dispose();
