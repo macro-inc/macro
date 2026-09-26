@@ -20,6 +20,9 @@ vi.mock('@entity', () => ({
   MaybeEntityRow: (props: { children: JSX.Element }) => props.children,
 }));
 vi.mock('@entity/utils/filter', () => ({ unreadFilterFn: () => false }));
+vi.mock('@components/app/GlobalAppState', () => ({
+  useGlobalNotificationSource: () => ({ mutedEntities: () => [] }),
+}));
 vi.mock('./HomeEntityIcon', () => ({ HomeEntityIcon: () => null }));
 vi.mock('@ui', async () => ({
   ...(await import('@app/components/ui/utils/press')),
