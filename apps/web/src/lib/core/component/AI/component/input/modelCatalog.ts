@@ -29,11 +29,12 @@ export type ModelCatalog = {
 const RECOMMENDED_PREFIXES = [
   'Auto',
   'Cursor Grok 4.6',
-  'Claude Opus 5',
-  'Claude Sonnet 5',
+  'Opus 5',
+  'Sonnet 5',
   'GPT-5.6 Sol',
   'Gemini 3.8 Flash',
   'Codex',
+  'GLM 5.3',
   'Kimi K3',
 ] as const;
 

@@ -18,6 +18,8 @@ import {
 
 type ModelCatalogPickerProps = {
   value: string | null;
+  /** Model to feature first without marking it selected. */
+  recommendedId?: string | null;
   options: CatalogModelOption[];
   onSelect: (id: string) => void;
   disabled?: boolean;
@@ -143,6 +145,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
       >
         <ModelCatalogMenu
           value={props.value}
+          recommendedId={props.recommendedId}
           options={props.options}
           onSelect={props.onSelect}
           emptyMessage={props.emptyMessage}
@@ -163,6 +166,7 @@ export function ModelCatalogMenu(
   props: Pick<
     ModelCatalogPickerProps,
     | 'value'
+    | 'recommendedId'
     | 'options'
     | 'onSelect'
     | 'emptyMessage'
@@ -187,7 +191,10 @@ export function ModelCatalogMenu(
   const catalog = createMemo(() =>
     props.options.length <= MAX_RECOMMENDED_MODELS
       ? { recommended: props.options, families: [] }
-      : buildModelCatalog(props.options, props.value ?? undefined)
+      : buildModelCatalog(
+          props.options,
+          props.value ?? props.recommendedId ?? undefined
+        )
   );
   const extraFamilies = createMemo(() => moreModelFamilies(catalog()));
   const extraCount = createMemo(() =>

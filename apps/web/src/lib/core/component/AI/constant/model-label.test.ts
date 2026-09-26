@@ -13,6 +13,14 @@ describe('modelLabel', () => {
       'DeepSeek V4 Pro'
     );
     expect(modelLabel('fireworks/muse-glimmer-30b')).toBe('Muse Glimmer');
+    expect(modelLabel('fireworks/glm-5p3')).toBe('GLM 5.3');
+    expect(modelLabel('fireworks/glm-5p3-flash')).toBe('GLM 5.3 Flash');
+    expect(modelLabel('fireworks/qwen3p8-max')).toBe('Qwen 3.8 Max');
+    expect(modelLabel('fireworks/minimax-m3')).toBe('MiniMax M3');
+    expect(modelLabel('cerebras/gpt-oss-120b')).toBe('GPT OSS 120B');
+    expect(modelLabel('fireworks/nemotron-lightning-3p5-30b-a3b')).toBe(
+      'Nemotron Lightning 3.5 30B A3B'
+    );
     expect(modelLabel('google/gemini-3.8-flash')).toBe('Gemini 3.8 Flash');
     expect(modelLabel('gemini-3.8-flash')).toBe('Gemini 3.8 Flash');
   });
