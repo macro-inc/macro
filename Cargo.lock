@@ -1321,6 +1321,7 @@ dependencies = [
  "asynk-strim",
  "base64 0.22.1",
  "bytes",
+ "chrono",
  "fast_chemail",
  "fnv",
  "futures-channel",
@@ -3151,7 +3152,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.19"
+version = "0.6.20"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -4089,6 +4090,7 @@ dependencies = [
  "graphql_email",
  "graphql_entity_mutation",
  "graphql_favorite",
+ "graphql_initiative",
  "graphql_notification",
  "graphql_permission",
  "graphql_properties",
@@ -5644,6 +5646,7 @@ dependencies = [
  "frecency",
  "futures",
  "github",
+ "graphql_initiative",
  "graphql_soup",
  "harnesses",
  "hex",
@@ -7733,6 +7736,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_initiative"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "entity_access",
+ "graphql_common",
+ "graphql_permission",
+ "graphql_soup",
+ "initiative",
+ "macro_user_id",
+ "model-entity",
+ "models_permissions",
+ "rootcause",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_notification"
 version = "0.1.0"
 dependencies = [
@@ -9128,11 +9152,14 @@ dependencies = [
  "model-error-response",
  "model_user",
  "models_permissions",
+ "models_properties",
+ "properties",
  "rootcause",
  "serde",
  "serde_json",
  "share_permission_db_utils",
  "sqlx",
+ "system_properties",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -19559,6 +19586,7 @@ dependencies = [
  "ahash",
  "aho-corasick",
  "anyhow",
+ "async-graphql",
  "async-openai",
  "aws-config",
  "aws-credential-types",

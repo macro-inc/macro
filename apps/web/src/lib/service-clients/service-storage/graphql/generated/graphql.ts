@@ -914,6 +914,8 @@ export type GraphqlPropertyEntityType =
   | 'COMPANY'
   /** Document entity. */
   | 'DOCUMENT'
+  /** Initiative entity. */
+  | 'INITIATIVE'
   /** Project entity. */
   | 'PROJECT'
   /** Task entity. */
@@ -935,7 +937,9 @@ export type GraphqlPropertyTargetEntityType =
   | 'COMPANY'
   /** Document target, including tasks and snippets. */
   | 'DOCUMENT'
-  /** Project target. */
+  /** Initiative target, displayed as a Project in the application. */
+  | 'INITIATIVE'
+  /** Folder project target. */
   | 'PROJECT'
   /** Email thread target. */
   | 'THREAD'

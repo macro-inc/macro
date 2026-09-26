@@ -186,3 +186,19 @@ async fn all_lifecycle_operations_validate_initiative_entity_type() {
         Err(InitiativeError::BadRequest(_))
     ));
 }
+
+#[tokio::test]
+async fn assignee_sharing_deduplicates_and_keeps_owner_assignable() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_grant_assignees()
+        .withf(|id, users| *id == initiative_id() && users == &vec![user(OWNER), user(MEMBER)])
+        .times(1)
+        .return_once(|_, _| Box::pin(async { Ok(()) }));
+    service(repo)
+        .grant_assignees(
+            edit_receipt(),
+            vec![user(OWNER), user(MEMBER), user(MEMBER)],
+        )
+        .await
+        .expect("granted");
+}

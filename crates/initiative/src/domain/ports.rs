@@ -1,11 +1,16 @@
 //! Ports (trait contracts) for the initiative domain.
 
+use super::reads::{
+    InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeTasksPage,
+    InitiativeTasksRequest, TaskInitiativeReferences, TaskInitiativeReferencesRequest,
+};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::team_share::TeamShareCreation;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
+use std::collections::HashMap;
 
 use crate::domain::models::{
     AssignTasksResponse, AssignTasksResult, CreateInitiativeRepoArgs, CreateInitiativeRequest,
@@ -38,6 +43,12 @@ pub trait InitiativeDescriptionDocuments: Send + Sync + 'static {
 pub trait InitiativeRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<InitiativeError> + Send + std::fmt::Debug;
+
+    /// Read task membership in one batch. Callers authorize both ends before displaying it.
+    fn task_memberships(
+        &self,
+        task_ids: Vec<String>,
+    ) -> impl Future<Output = Result<HashMap<String, InitiativeId>, Self::Err>> + Send;
 
     /// Persist a new initiative, its members, and initial share state, mirroring the member
     /// and team grants onto `args.description_document_id` in the same transaction.
@@ -103,6 +114,15 @@ pub trait InitiativeRepo: Send + Sync + 'static {
     /// Clear any initiative association for a task. Already unassigned tasks succeed.
     fn clear_task(&self, task_id: &str) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Grant assignees edit access to the initiative and description in one transaction,
+    /// recording non-owner recipients as collaborators without removing anyone or
+    /// downgrading existing grants. Clearing the property does not undo this share.
+    fn grant_assignees(
+        &self,
+        id: InitiativeId,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Delete the initiative and clean up its own rows in one transaction, returning the
     /// description document id for the caller to purge afterwards.
     fn delete(
@@ -113,6 +133,32 @@ pub trait InitiativeRepo: Send + Sync + 'static {
 
 /// Inbound service port: the initiative API used by drivers (HTTP).
 pub trait InitiativeService: Send + Sync + 'static {
+    /// Read canonical properties and visible task progress for one authorized initiative.
+    fn summary(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<InitiativePageRow, InitiativeError>> + Send;
+
+    /// Filter, order and page the caller's discoverable initiatives.
+    fn page(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: InitiativePageRequest,
+    ) -> impl Future<Output = Result<InitiativePage, InitiativeError>> + Send;
+
+    /// Page visible tasks within an authorized initiative.
+    fn tasks_page(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        request: InitiativeTasksRequest,
+    ) -> impl Future<Output = Result<InitiativeTasksPage, InitiativeError>> + Send;
+
+    /// Resolve task chips without revealing inaccessible initiative metadata.
+    fn task_references(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        request: TaskInitiativeReferencesRequest,
+    ) -> impl Future<Output = Result<TaskInitiativeReferences, InitiativeError>> + Send;
     /// Create an initiative owned by `user_id`.
     fn create(
         &self,
@@ -165,6 +211,14 @@ pub trait InitiativeService: Send + Sync + 'static {
     fn clear_task(
         &self,
         task_receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
+
+    /// Share both project entities with assignees, adding non-owner collaborators.
+    /// Clearing an assignee does not revoke access or membership, matching task sharing.
+    fn grant_assignees(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        user_ids: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
 
     /// Delete the initiative the receipt already authorized as owner.

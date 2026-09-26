@@ -21,6 +21,7 @@ pub async fn get_owner_and_deleted(
         // owning channel (see `access_entity_type`), so the caller skips this
         // path for them entirely.
         EntityType::CallRecord
+        | EntityType::Initiative
         | EntityType::Channel
         | EntityType::Company
         | EntityType::User

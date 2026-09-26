@@ -126,6 +126,12 @@ impl SystemPropertyKey {
                 Self::COMPANY_OWNER_UUID,
                 Self::REVENUE_UUID,
             ],
+            EntityType::Initiative => &[
+                Self::ASSIGNEES_UUID,
+                Self::STATUS_UUID,
+                Self::PRIORITY_UUID,
+                Self::DUE_DATE_UUID,
+            ],
             // Other entity types don't have required properties yet
             // Add new cases here as needed:
             // EntityType::Email => &[...],

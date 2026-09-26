@@ -51,6 +51,7 @@ members = [
   "crates/graphql_email",
   "crates/graphql_entity_mutation",
   "crates/graphql_favorite",
+  "crates/graphql_initiative",
   "crates/graphql_notification",
   "crates/graphql_permission",
   "crates/graphql_properties",
