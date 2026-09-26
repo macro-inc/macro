@@ -184,8 +184,15 @@ export function EmailDetailView(props: {
       });
       registerScopeSignalHotkey(hotkeyScope, {
         hotkey: 'escape',
-        description: 'Collapse or unselect message',
-        keyDownHandler: handlers.cancel,
+        description: 'Collapse message or back to list',
+        // Escape unwinds thread state first (reply, expanded body, focused
+        // message). Once nothing is left to unwind it follows the breadcrumb
+        // back to the list this thread was opened from.
+        keyDownHandler: () => {
+          if (handlers.cancel()) return true;
+          closeThread();
+          return true;
+        },
         hotkeyToken: TOKENS.email.cancelReply,
         hide: true,
       });
