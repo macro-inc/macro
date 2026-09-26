@@ -2616,3 +2616,43 @@ async fn turn_projection_is_atomic_fenced_and_backfill_cannot_overwrite_live_sta
     assert_eq!(turn.as_deref(), Some("blocked"));
     repo.release(&current).await.unwrap();
 }
+
+#[test]
+fn log_json_drops_null_bytes_before_it_reaches_postgres() {
+    let message = Message::ToServer(ToServerMessage::Acp(AcpMessage(
+        RawJsonRpcMessage::notification(
+            "session/update".to_owned(),
+            serde_json::json!({
+                "update": {
+                    "content": {"type": "text", "text": "before\0after"},
+                    "k\0": ["v\0", "plain"]
+                }
+            }),
+        )
+        .expect("notification"),
+    )));
+
+    let (direction, content) = message_columns(&message).expect("columns");
+
+    assert_eq!(direction, "to_server");
+    let encoded = serde_json::to_string(&content).expect("encode");
+    assert!(
+        !encoded.contains("\\u0000"),
+        "jsonb would reject this payload: {encoded}"
+    );
+    assert_eq!(
+        content
+            .pointer("/params/update/content/text")
+            .and_then(|value| value.as_str()),
+        Some("beforeafter")
+    );
+    assert_eq!(
+        content
+            .pointer("/params/update/k")
+            .and_then(|value| value.as_array()),
+        Some(&vec![
+            serde_json::Value::String("v".to_owned()),
+            serde_json::Value::String("plain".to_owned()),
+        ])
+    );
+}

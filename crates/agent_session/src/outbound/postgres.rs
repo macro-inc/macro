@@ -96,9 +96,42 @@ fn parse_sandbox_size(value: &str) -> anyhow::Result<SandboxSize> {
 
 /// The wire direction and JSON payload for a [`Message`].
 fn message_columns(message: &Message) -> anyhow::Result<(&'static str, serde_json::Value)> {
-    match message {
-        Message::ToServer(message) => Ok(("to_server", serde_json::to_value(message)?)),
-        Message::ToRuntime(message) => Ok(("to_runtime", serde_json::to_value(message)?)),
+    let (direction, mut content) = match message {
+        Message::ToServer(message) => ("to_server", serde_json::to_value(message)?),
+        Message::ToRuntime(message) => ("to_runtime", serde_json::to_value(message)?),
+    };
+    // Postgres `jsonb` rejects U+0000, and a failed log insert stops the session.
+    strip_json_nuls(&mut content);
+    Ok((direction, content))
+}
+
+/// Remove U+0000 from every string in `value`, including object keys.
+fn strip_json_nuls(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(text) => {
+            if text.contains('\0') {
+                text.retain(|character| character != '\0');
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                strip_json_nuls(item);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            if map.keys().any(|key| key.contains('\0')) {
+                let entries = std::mem::take(map);
+                for (key, mut child) in entries {
+                    strip_json_nuls(&mut child);
+                    map.insert(key.replace('\0', ""), child);
+                }
+            } else {
+                for child in map.values_mut() {
+                    strip_json_nuls(child);
+                }
+            }
+        }
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
     }
 }
 
