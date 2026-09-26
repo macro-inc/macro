@@ -237,7 +237,11 @@ Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
 the other entity actions used on Home.
 
 Home's inner rail starts with a full-width **New chat** plus button that returns
-to Home's starting pane without creating a chat. Email and Tasks use the same
+to Home's starting pane without creating a chat. Pressing the outer rail's
+`Go to Home` button while Home is already active (including while it shows an
+item inline) also returns to the starting pane and focuses the chat composer,
+so typing right after the press lands in the input; the Home list keeps its
+state. Shift-press still opens Home in a new split. Email and Tasks use the same
 pill styling and top placement for **New email** and **New task**, replacing
 the sidebar title bars. When multiple desktop splits are open, a **Close** (X)
 button appears beside each sidebar's New button and closes that split. The last

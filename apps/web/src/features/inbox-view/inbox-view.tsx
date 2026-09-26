@@ -12,12 +12,13 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createEffect, onMount, Show } from 'solid-js';
+import { createEffect, onCleanup, onMount, Show } from 'solid-js';
 import { HomeChatStart } from './components/HomeChatStart';
 import { HomeReturnBreadcrumb } from './components/HomeReturnBreadcrumb';
 import { InboxListLayout } from './components/InboxHeader';
 import { InboxList } from './components/InboxList';
 import { InboxTabs } from './components/InboxTabs';
+import { registerHomeSplit } from './home-controllers';
 import { InboxViewProvider, useInboxView } from './inbox-view-context';
 import { inboxCalendarRoute } from './route';
 import type { InboxViewStateOptions } from './types';
@@ -88,6 +89,31 @@ function InboxViewRoot() {
     if (entity) openPreview(entity);
     else closePreview();
   };
+  const detailOpen = () => previewTarget() !== undefined || calendarOpen();
+
+  // The start pane is the detail outlet's fallback, so while a detail is open
+  // its composer is not mounted and cannot be focused directly. Closing the
+  // detail mounts a fresh one; it takes the request as its mount-time
+  // autofocus, which the editor applies once it is connected to the DOM.
+  let focusComposer: (() => void) | undefined;
+  let focusComposerOnStart = false;
+  const takeFocusOnStart = () => {
+    const requested = focusComposerOnStart;
+    focusComposerOnStart = false;
+    return requested;
+  };
+  onCleanup(
+    registerHomeSplit(panel.handle.id, {
+      startNewChat: () => {
+        if (detailOpen()) {
+          focusComposerOnStart = true;
+          closePreview();
+          return;
+        }
+        focusComposer?.();
+      },
+    })
+  );
 
   // The touch nav item and legacy touch view both call this "Notifications".
   onMount(() =>
@@ -112,9 +138,7 @@ function InboxViewRoot() {
                     <ViewShell.Aside class="flex flex-col bg-panel">
                       <DebugSuspense name="InboxView.list-pane">
                         <HomeListPane
-                          hasPreview={
-                            previewTarget() !== undefined || calendarOpen()
-                          }
+                          hasPreview={detailOpen()}
                           onPreviewEntityChange={onPreviewEntityChange}
                           onNewChat={newChat}
                         />
@@ -129,7 +153,19 @@ function InboxViewRoot() {
                         fallback={<InboxFallback />}
                       >
                         <SplitRouter.Outlet
-                          fallback={() => <HomeChatStart />}
+                          fallback={() => {
+                            // Consumed once per mount, not through a prop
+                            // getter, so re-reads cannot see a cleared flag.
+                            const autoFocus = takeFocusOnStart();
+                            return (
+                              <HomeChatStart
+                                autoFocus={autoFocus}
+                                registerFocus={(focus) => {
+                                  focusComposer = focus;
+                                }}
+                              />
+                            );
+                          }}
                         />
                       </DebugSuspense>
                     </ViewShell.Main>
@@ -141,9 +177,7 @@ function InboxViewRoot() {
                 <ViewShell.Main>
                   <DebugSuspense name="InboxView.list-pane">
                     <HomeListPane
-                      hasPreview={
-                        previewTarget() !== undefined || calendarOpen()
-                      }
+                      hasPreview={detailOpen()}
                       onPreviewEntityChange={onPreviewEntityChange}
                       onNewChat={newChat}
                     />

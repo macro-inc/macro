@@ -1,4 +1,5 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
+import { requestHomeStart } from '@app/features/inbox-view/home-controllers';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
@@ -150,6 +151,11 @@ export const ListNav = (props: ListNavProps) => {
       return;
     }
 
+    // Home stays the active view while it shows an item inline, so pressing
+    // its button again is the way back to the start pane.
+    if (activeSplit && props.item.id === 'inbox') {
+      requestHomeStart(activeSplit.id);
+    }
     globalSplitManager()?.returnFocus();
   };
 

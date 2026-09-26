@@ -6,7 +6,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { createEffect, createSignal } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 import '../agents-view/agents-view.css';
 import { modeForKind } from '../agents-view/core/agent-kind';
 import { kindForBot } from '../agents-view/core/roster';
@@ -19,7 +19,14 @@ import {
 import { buildHomeAgentPrompt } from './queries/home-agent-prompt';
 
 /** Home supplies suggestions and navigation to the same composer used by Agents. */
-export function HomeAgentComposer(props: { autoFocus?: boolean }) {
+export function HomeAgentComposer(props: {
+  autoFocus?: boolean;
+  /**
+   * Receives a function that focuses the composer once it is mounted, and
+   * `undefined` again when it unmounts.
+   */
+  registerFocus?: (focus: (() => void) | undefined) => void;
+}) {
   const panel = useSplitPanelOrThrow();
   const input = useChatInputContext();
   const roster = createAgentRosterSource();
@@ -55,6 +62,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
     input.setPendingDraft(null);
     void applySuggestion(requested);
   });
+  onCleanup(() => props.registerFocus?.(undefined));
   registerHotkey({
     hotkey: 'enter',
     scopeId: panel.splitHotkeyScope,
@@ -92,6 +100,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
         autoFocus={props.autoFocus}
         registerFocus={(callback) => {
           focus = callback;
+          props.registerFocus?.(callback);
         }}
         onStart={start}
         onOpenRoster={() => settings.openSettings('Agents')}

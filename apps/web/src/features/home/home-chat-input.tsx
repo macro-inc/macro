@@ -18,7 +18,7 @@ import { createRenameDssEntityMutation } from '@entity';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { $getRoot } from 'lexical';
-import { createEffect, Show } from 'solid-js';
+import { createEffect, onCleanup, onMount, Show } from 'solid-js';
 import { HomeAgentComposer } from './home-agent-composer';
 import { replaceHomeComposerDraft } from './home-composer-selection';
 
@@ -27,6 +27,12 @@ export type HomeChatInputProps = {
   class?: string;
   placeholder?: string;
   autoFocusOnMount?: boolean;
+  /**
+   * Receives a function that focuses the composer once it is mounted, and
+   * `undefined` again when it unmounts. Lets a host focus the input from
+   * outside (the sidebar's Home button) without holding an editor reference.
+   */
+  registerFocus?: (focus: (() => void) | undefined) => void;
   /**
    * Where a newly created chat opens. By default the composer's split is
    * replaced with the chat block; a host that keeps its own chrome around
@@ -50,7 +56,10 @@ export const HomeChatInput = (props: HomeChatInputProps) => {
         name="Home.agent-composer"
         fallback={<div class="min-h-24" />}
       >
-        <HomeAgentComposer autoFocus={props.autoFocusOnMount} />
+        <HomeAgentComposer
+          autoFocus={props.autoFocusOnMount}
+          registerFocus={props.registerFocus}
+        />
       </DebugSuspense>
     </Show>
   );
@@ -102,6 +111,9 @@ export const LegacyHomeChatInput = (props: HomeChatInputProps) => {
     hotkeyToken: TOKENS.block.focus,
     hide: true,
   });
+
+  onMount(() => props.registerFocus?.(() => editor.controls.focus()));
+  onCleanup(() => props.registerFocus?.(undefined));
 
   const renameMutation = createRenameDssEntityMutation();
 
