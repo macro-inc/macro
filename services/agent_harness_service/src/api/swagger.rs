@@ -14,6 +14,10 @@ use agent_harness::inbound::repositories::{
 };
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{SandboxSize, SessionBot};
+use agent_session::domain::pull_request_links::{PullRequestLinkSource, SessionPullRequestLink};
+use agent_session::inbound::axum_router::pull_requests::{
+    PullRequestSessionsResponse, PullRequestUrl, SessionPullRequestsResponse,
+};
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionPreviewData,
     AgentSessionPreviewDto, AgentSessionQueueResponse, AgentSessionResponse, ControlRequest,
@@ -56,6 +60,10 @@ impl Modify for SecurityAddon {
         axum_router::rename_agent_session_handler,
         axum_router::sharing::get_agent_session_permissions,
         axum_router::sharing::update_agent_session_permissions,
+        axum_router::pull_requests::list_session_pull_requests,
+        axum_router::pull_requests::link_session_pull_request,
+        axum_router::pull_requests::unlink_session_pull_request,
+        axum_router::pull_requests::sessions_for_pull_request,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
         axum_router::get_agent_session_queue_handler,
@@ -96,6 +104,11 @@ impl Modify for SecurityAddon {
         AgentSessionPreviewData,
         WithAgentSessionId,
         RenameAgentSessionRequest,
+        PullRequestUrl,
+        SessionPullRequestsResponse,
+        PullRequestSessionsResponse,
+        SessionPullRequestLink,
+        PullRequestLinkSource,
         SessionStatusDto,
         AgentSessionLogResponse,
         AgentSessionLogEntryDto,

@@ -1042,6 +1042,21 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
     let http_port = config.port;
+    let pull_requests =
+        agent_session::inbound::axum_router::pull_requests::agent_session_pull_request_router(
+            AgentSessionRouterState::new(
+                agent_session::domain::pull_request_links::SessionPullRequestLinkService::new(
+                    session_repo.clone(),
+                    Arc::new(
+                        agent_session::domain::audience::EntityAccessSessionView::new(
+                            (*entity_access).clone(),
+                        ),
+                    ),
+                ),
+                entity_access.clone(),
+                MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+            ),
+        );
     let sharing = agent_session::inbound::axum_router::sharing::agent_session_sharing_router(
         AgentSessionRouterState::new(
             agent_session::domain::sharing::SessionSharingService::new(session_repo.clone()),
@@ -1061,7 +1076,8 @@ async fn run() -> anyhow::Result<()> {
                 changes_state,
             )
             .with_claude_auth(claude_auth)
-            .with_sharing(sharing),
+            .with_sharing(sharing)
+            .with_pull_requests(pull_requests),
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),

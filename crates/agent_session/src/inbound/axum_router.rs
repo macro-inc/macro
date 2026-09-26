@@ -63,6 +63,9 @@ mod test;
 /// Link, channel, and team sharing routes.
 pub mod sharing;
 
+/// Routes associating pull requests with sessions.
+pub mod pull_requests;
+
 /// Shared state for the agent session router: the agent session service plus
 /// the authorization state the request extractors authenticate against.
 pub struct AgentSessionRouterState<T, Access, Auth> {
@@ -368,9 +371,10 @@ impl IntoResponse for AgentSessionApiError {
             Self::Domain(error @ AgentSessionError::ControlQueueFull(_)) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response()
             }
-            Self::Domain(error @ AgentSessionError::TooManyPreviewIds(_)) => {
-                (StatusCode::BAD_REQUEST, error.to_string()).into_response()
-            }
+            Self::Domain(
+                error @ (AgentSessionError::TooManyPreviewIds(_)
+                | AgentSessionError::InvalidPullRequestUrl),
+            ) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
             // Somebody else answered first, or the agent moved on: nothing to
             // answer anymore, and the transcript already shows how it went.
             Self::Domain(error @ AgentSessionError::PermissionRequestNotFound(_)) => {
