@@ -66,6 +66,7 @@ type TargetAstKey =
   | 'propf';
 
 type AstBody = Partial<Record<TargetAstKey, RestAst>> & {
+  favorites_only?: SoupAstBody['favorites_only'];
   /** CRM-address and CRM-domain filters are REST-only today. */
   eca?: string[];
   ecd?: string[];
