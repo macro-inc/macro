@@ -24,6 +24,32 @@ pub enum GithubPullRequestLiteral {
     /// Whether the pull request is a draft.
     #[serde(rename = "draft")]
     Draft(bool),
+    /// The pull request is assigned to the GitHub user with this numeric id.
+    #[serde(rename = "as")]
+    Assignee(String),
+    /// The pull request has a label with this name.
+    #[serde(rename = "lbl")]
+    Label(String),
+    /// The pull request's reviews are in this state.
+    #[serde(rename = "rs")]
+    ReviewStatus(GithubPullRequestReviewStatus),
+    /// The GitHub user with this numeric id has submitted a review of the pull request.
+    #[serde(rename = "rb")]
+    ReviewedBy(String),
+}
+
+/// The review state of a GitHub pull request, from each reviewer's latest review.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GithubPullRequestReviewStatus {
+    /// Nobody has submitted a review.
+    None,
+    /// Reviews are requested and no reviewer has approved or requested changes.
+    Required,
+    /// A reviewer approved and none has outstanding requested changes.
+    Approved,
+    /// A reviewer requested changes.
+    ChangesRequested,
 }
 
 /// The lifecycle state of a GitHub pull request.

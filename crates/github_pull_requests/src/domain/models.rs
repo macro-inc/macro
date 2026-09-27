@@ -131,8 +131,18 @@ impl GithubPullRequestRow {
     }
 }
 
-/// Repositories and authors among the GitHub pull requests a caller can see, each with the
-/// number of pull requests it covers.
+/// Which end of the sort order a pull request listing starts from and pages toward.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GithubPullRequestSortDirection {
+    /// Smallest sort value first: oldest created or least recently updated.
+    Asc,
+    /// Largest sort value first.
+    #[default]
+    Desc,
+}
+
+/// Repositories, authors, assignees, and labels among the GitHub pull requests a caller can see,
+/// each with the number of pull requests it covers.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -140,7 +150,11 @@ pub struct GithubPullRequestFacets {
     /// Repositories, most pull requests first.
     pub repositories: Vec<GithubRepositoryFacet>,
     /// Authors, most pull requests first.
-    pub authors: Vec<GithubAuthorFacet>,
+    pub authors: Vec<GithubUserFacet>,
+    /// Assignees, most pull requests first.
+    pub assignees: Vec<GithubUserFacet>,
+    /// Labels, most pull requests first.
+    pub labels: Vec<GithubLabelFacet>,
 }
 
 /// A repository among the visible GitHub pull requests.
@@ -156,16 +170,30 @@ pub struct GithubRepositoryFacet {
     pub count: i64,
 }
 
-/// An author among the visible GitHub pull requests.
+/// A GitHub user among the visible pull requests, as an author or an assignee.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct GithubAuthorFacet {
-    /// The author's numeric GitHub user id.
+pub struct GithubUserFacet {
+    /// The user's numeric GitHub user id.
     pub github_user_id: String,
-    /// The author's most recently synced GitHub login, when known.
+    /// The user's most recently synced GitHub login, when known.
     pub login: Option<String>,
-    /// Number of visible pull requests the author opened.
+    /// Number of visible pull requests the user opened, or is assigned to.
+    pub count: i64,
+}
+
+/// A label among the visible GitHub pull requests. Labels with the same name in different
+/// repositories count together.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubLabelFacet {
+    /// The label's name.
+    pub name: String,
+    /// The label's most recently synced color, as six hex digits without `#`.
+    pub color: Option<String>,
+    /// Number of visible pull requests with the label.
     pub count: i64,
 }
 

@@ -58,6 +58,7 @@ async fn notification_boolean_filters_match_every_present_state_set(pool: PgPool
                 100,
                 filter_query(Some(Arc::new(expr))),
                 None,
+                GithubPullRequestSortDirection::Desc,
             )
             .await
             .unwrap()
@@ -80,6 +81,7 @@ async fn notification_boolean_filters_match_every_present_state_set(pool: PgPool
             100,
             filter_query(Some(Arc::new(Expr::is_not(leaf(Done))))),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .unwrap();

@@ -80,6 +80,7 @@ pub(super) async fn enrich<F: GithubPullRequestListing>(
                 keys.len() as u32,
                 Query::new(None, SimpleSortMethod::UpdatedAt, Some(ids)),
                 None,
+                GithubPullRequestSortDirection::Desc,
             )
             .await
             .map_err(anyhow::Error::from)

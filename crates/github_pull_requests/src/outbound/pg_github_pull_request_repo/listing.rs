@@ -12,15 +12,20 @@ use foreign_entity::domain::{
     ports::ForeignEntityListQuery,
 };
 use item_filters::ast::{
-    LiteralTree, foreign_entity::ForeignEntityLiteral,
-    github_pull_request::GithubPullRequestLiteral,
+    LiteralTree,
+    foreign_entity::ForeignEntityLiteral,
+    github_pull_request::{GithubPullRequestLiteral, GithubPullRequestReviewStatus},
 };
 use models_pagination::SimpleSortMethod;
 use uuid::Uuid;
 
 use super::PgGithubPullRequestRepo;
 use crate::domain::{
-    models::GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, ports::GithubPullRequestListingRepository,
+    models::{
+        GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubPullRequestReviewDecision,
+        GithubPullRequestSortDirection,
+    },
+    ports::GithubPullRequestListingRepository,
 };
 
 struct ListingQuery<'a> {
@@ -39,6 +44,8 @@ struct ListingQuery<'a> {
     limit: i64,
     /// Keeps only pull requests whose typed columns match this jsonpath.
     github_pull_request_jsonpath: Option<&'a str>,
+    /// Smallest sort value first, with the cursor paging toward larger values.
+    ascending: bool,
 }
 
 fn source_id_parts(source_ids: &[SourceId]) -> (Vec<String>, Vec<String>) {
@@ -228,6 +235,24 @@ fn github_pull_request_literal_jsonpath(literal: &GithubPullRequestLiteral) -> S
             jsonpath_array_contains("requestedReviewers", id)
         }
         GithubPullRequestLiteral::Draft(draft) => format!("($.draft == {draft})"),
+        GithubPullRequestLiteral::Assignee(id) => jsonpath_array_contains("assignees", id),
+        GithubPullRequestLiteral::Label(name) => jsonpath_array_contains("labels", name),
+        GithubPullRequestLiteral::ReviewStatus(status) => {
+            let decision = match status {
+                GithubPullRequestReviewStatus::None => return "($.reviewCount == 0)".to_string(),
+                GithubPullRequestReviewStatus::Required => {
+                    GithubPullRequestReviewDecision::ReviewRequired
+                }
+                GithubPullRequestReviewStatus::Approved => {
+                    GithubPullRequestReviewDecision::Approved
+                }
+                GithubPullRequestReviewStatus::ChangesRequested => {
+                    GithubPullRequestReviewDecision::ChangesRequested
+                }
+            };
+            jsonpath_text_eq("reviewDecision", decision.as_str())
+        }
+        GithubPullRequestLiteral::ReviewedBy(id) => jsonpath_array_contains("reviewers", id),
     }
 }
 
@@ -259,6 +284,7 @@ impl PgGithubPullRequestRepo {
             cursor_value,
             limit,
             github_pull_request_jsonpath,
+            ascending,
         } = query;
         let sort_method = sort_method.to_string();
 
@@ -313,7 +339,12 @@ impl PgGithubPullRequestRepo {
                             'status', gpr.status,
                             'draft', gpr.draft,
                             'requestedReviewers', to_jsonb(gpr.requested_reviewer_github_user_ids),
-                            'participants', to_jsonb(gpr.participant_github_user_ids)
+                            'participants', to_jsonb(gpr.participant_github_user_ids),
+                            'assignees', jsonb_path_query_array(gpr.assignees, '$[*].githubUserId'),
+                            'labels', jsonb_path_query_array(gpr.labels, '$[*].name'),
+                            'reviewers', jsonb_path_query_array(gpr.reviews, '$[*].reviewerGithubUserId'),
+                            'reviewDecision', gpr.review_decision,
+                            'reviewCount', jsonb_array_length(gpr.reviews)
                         ),
                         ($11::text)::jsonpath
                     ))
@@ -349,8 +380,13 @@ impl PgGithubPullRequestRepo {
                 updated_at as "updated_at!: DateTime<Utc>"
             FROM deduped
             WHERE $5::timestamptz IS NULL
-               OR (sort_at, id) < ($5::timestamptz, $6::uuid)
-            ORDER BY sort_at DESC, id DESC
+               OR ($12::bool AND (sort_at, id) > ($5::timestamptz, $6::uuid))
+               OR (NOT $12::bool AND (sort_at, id) < ($5::timestamptz, $6::uuid))
+            ORDER BY
+                CASE WHEN $12::bool THEN sort_at END ASC,
+                CASE WHEN $12::bool THEN id END ASC,
+                sort_at DESC,
+                id DESC
             LIMIT $7
             "#,
             source_ids,
@@ -364,6 +400,7 @@ impl PgGithubPullRequestRepo {
             notification_user_id,
             GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
             github_pull_request_jsonpath,
+            ascending,
         )
         .fetch_all(&self.pool)
         .await
@@ -397,6 +434,7 @@ impl GithubPullRequestListingRepository for PgGithubPullRequestRepo {
         limit: u32,
         query: ForeignEntityListQuery,
         github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
+        sort_direction: GithubPullRequestSortDirection,
     ) -> Result<Vec<ForeignEntity>, Self::Err> {
         if source_ids.is_empty() || limit == 0 {
             return Ok(Vec::new());
@@ -477,6 +515,7 @@ impl GithubPullRequestListingRepository for PgGithubPullRequestRepo {
             cursor_value: cursor_value.copied(),
             limit: limit as i64,
             github_pull_request_jsonpath: github_pull_request_jsonpath.as_deref(),
+            ascending: sort_direction == GithubPullRequestSortDirection::Asc,
         })
         .await
     }

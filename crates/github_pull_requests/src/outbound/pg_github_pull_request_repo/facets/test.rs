@@ -13,8 +13,9 @@ use uuid::Uuid;
 use super::super::PgGithubPullRequestRepo;
 use crate::domain::{
     models::{
-        GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubAuthorFacet, GithubPullRequestFacets,
-        GithubPullRequestRow, GithubPullRequestStatus, GithubRepositoryFacet,
+        GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubLabelFacet, GithubPullRequestFacets,
+        GithubPullRequestLabel, GithubPullRequestRow, GithubPullRequestStatus,
+        GithubPullRequestUser, GithubRepositoryFacet, GithubUserFacet,
     },
     ports::{GithubPullRequestFacetRepository, GithubPullRequestRepository},
 };
@@ -115,17 +116,109 @@ async fn facets_count_each_visible_pull_request_once_by_repository_and_author(po
                 count: 2,
             }],
             authors: vec![
-                GithubAuthorFacet {
+                GithubUserFacet {
                     github_user_id: "42".to_string(),
                     login: Some("octocat".to_string()),
                     count: 1,
                 },
-                GithubAuthorFacet {
+                GithubUserFacet {
                     github_user_id: "7".to_string(),
                     login: None,
                     count: 1,
                 },
             ],
+            assignees: Vec::new(),
+            labels: Vec::new(),
         }
+    );
+}
+
+fn assignee(github_user_id: &str, login: &str) -> GithubPullRequestUser {
+    GithubPullRequestUser {
+        github_user_id: github_user_id.to_string(),
+        login: Some(login.to_string()),
+    }
+}
+
+fn label(name: &str, color: &str) -> GithubPullRequestLabel {
+    GithubPullRequestLabel {
+        name: name.to_string(),
+        color: Some(color.to_string()),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn facets_count_assignees_and_labels_once_per_visible_pull_request(pool: PgPool) {
+    let repo = PgGithubPullRequestRepo::new(pool.clone());
+
+    store_for(&pool, "macro/app/pull/7", USER, "user").await;
+    store_for(&pool, "macro/app/pull/7", TEAM, "team").await;
+    repo.upsert_row(&GithubPullRequestRow {
+        assignees: vec![assignee("42", "octocat"), assignee("7", "hubot")],
+        labels: vec![label("bug", "000000")],
+        ..row("macro/app/pull/7", Some(99), 7)
+    })
+    .await
+    .unwrap();
+
+    store_for(&pool, "macro/app/pull/8", USER, "user").await;
+    repo.upsert_row(&GithubPullRequestRow {
+        assignees: vec![assignee("42", "octocat-renamed")],
+        labels: vec![label("bug", "d73a4a"), label("docs", "0075ca")],
+        github_updated_at: Some(chrono::Utc::now()),
+        ..row("macro/app/pull/8", Some(99), 8)
+    })
+    .await
+    .unwrap();
+
+    store_for(
+        &pool,
+        "macro/other/pull/1",
+        "macro|other@example.com",
+        "user",
+    )
+    .await;
+    repo.upsert_row(&GithubPullRequestRow {
+        assignees: vec![assignee("9", "invisible")],
+        labels: vec![label("secret", "ffffff")],
+        ..row("macro/other/pull/1", Some(100), 1)
+    })
+    .await
+    .unwrap();
+
+    let facets = repo
+        .github_pull_request_facets(vec![SourceId::user(USER), SourceId::new(TEAM, "team")])
+        .await
+        .expect("facets should load");
+
+    assert_eq!(
+        facets.assignees,
+        vec![
+            GithubUserFacet {
+                github_user_id: "42".to_string(),
+                login: Some("octocat-renamed".to_string()),
+                count: 2,
+            },
+            GithubUserFacet {
+                github_user_id: "7".to_string(),
+                login: Some("hubot".to_string()),
+                count: 1,
+            },
+        ]
+    );
+    assert_eq!(
+        facets.labels,
+        vec![
+            GithubLabelFacet {
+                name: "bug".to_string(),
+                color: Some("d73a4a".to_string()),
+                count: 2,
+            },
+            GithubLabelFacet {
+                name: "docs".to_string(),
+                color: Some("0075ca".to_string()),
+                count: 1,
+            },
+        ]
     );
 }

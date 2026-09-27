@@ -20,7 +20,9 @@ use frecency::domain::models::{FrecencyPageRequest, FrecencyPageResponse};
 use frecency::domain::ports::MockFrecencyQueryService;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencyStorage};
-use github_pull_requests::domain::models::GithubPullRequestError;
+use github_pull_requests::domain::models::{
+    GithubPullRequestError, GithubPullRequestSortDirection,
+};
 use item_filters::{
     ChannelThreadFilters, EntityFilters, ForeignEntityFilters,
     ast::{
@@ -260,6 +262,7 @@ impl GithubPullRequestListing for NoopPullRequestListing {
         _limit: u32,
         _query: ForeignEntityListQuery,
         _github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
+        _sort_direction: GithubPullRequestSortDirection,
     ) -> Result<Vec<ForeignEntity>, GithubPullRequestError> {
         Ok(Vec::new())
     }
@@ -282,6 +285,7 @@ struct RecordedPullRequestListingCall {
     limit: u32,
     query: ForeignEntityListQuery,
     github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
+    sort_direction: GithubPullRequestSortDirection,
 }
 
 fn foreign_entity_matches_filter(
@@ -346,6 +350,7 @@ impl GithubPullRequestListing for RecordingPullRequestListing {
         limit: u32,
         query: ForeignEntityListQuery,
         github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
+        sort_direction: GithubPullRequestSortDirection,
     ) -> Result<Vec<ForeignEntity>, GithubPullRequestError> {
         let filter = query.filter().clone();
 
@@ -359,6 +364,7 @@ impl GithubPullRequestListing for RecordingPullRequestListing {
                 limit,
                 query,
                 github_pull_request_filter,
+                sort_direction,
             });
 
         Ok(self
@@ -796,6 +802,55 @@ async fn simple_soup_passes_the_github_pull_request_filter_to_the_listing() {
         format!("{:?}", calls[0].github_pull_request_filter),
         format!("{:?}", Some(draft))
     );
+    assert_eq!(
+        calls[0].sort_direction,
+        GithubPullRequestSortDirection::Desc
+    );
+}
+
+#[tokio::test]
+async fn ascending_simple_soup_lists_pull_requests_oldest_first() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let pull_request_listing = RecordingPullRequestListing::new(Vec::new());
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        NoopCommsService,
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        pull_request_listing.clone(),
+        NoOpRemindersService,
+    )
+    .get_user_soup(
+        SoupRequest {
+            sort_direction: SoupSortDirection::Asc,
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![],
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::UpdatedAt,
+                EntityFilterAst::mock_empty(),
+            ),
+            user: user.clone(),
+        },
+        None,
+    )
+    .await
+    .unwrap();
+
+    let calls = pull_request_listing.calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].sort_direction, GithubPullRequestSortDirection::Asc);
 }
 
 #[tokio::test]

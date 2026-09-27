@@ -1,6 +1,7 @@
 import type {
   GithubRepositoryFacet,
-  GithubAuthorFacet as WireGithubAuthorFacet,
+  GithubLabelFacet as WireGithubLabelFacet,
+  GithubUserFacet as WireGithubUserFacet,
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -8,18 +9,38 @@ import { ForeignEntity } from './foreign-entity';
 
 export type { GithubRepositoryFacet };
 
-/** An author among the GitHub pull requests visible to the caller. */
-export type GithubAuthorFacet = Omit<WireGithubAuthorFacet, 'login'> & {
-  /** The author's most recently synced GitHub login, when known. */
+/** A GitHub user among the pull requests visible to the caller, as an author or an assignee. */
+export type GithubUserFacet = Omit<WireGithubUserFacet, 'login'> & {
+  /** The user's most recently synced GitHub login, when known. */
   login?: string;
 };
 
-/** Repositories and authors among the GitHub pull requests visible to the caller. */
+/** A label among the GitHub pull requests visible to the caller. */
+export type GithubLabelFacet = Omit<WireGithubLabelFacet, 'color'> & {
+  /** The label's most recently synced color, as six hex digits without `#`. */
+  color?: string;
+};
+
+/**
+ * Repositories, authors, assignees, and labels among the GitHub pull requests
+ * visible to the caller.
+ */
 export interface GithubPullRequestFacets {
   /** Repositories, most pull requests first. */
   repositories: GithubRepositoryFacet[];
   /** Authors, most pull requests first. */
-  authors: GithubAuthorFacet[];
+  authors: GithubUserFacet[];
+  /** Assignees, most pull requests first. */
+  assignees: GithubUserFacet[];
+  /** Labels, most pull requests first. */
+  labels: GithubLabelFacet[];
+}
+
+function withoutNullLogin({
+  login,
+  ...user
+}: WireGithubUserFacet): GithubUserFacet {
+  return { ...user, login: login ?? undefined };
 }
 
 export class ForeignEntityNamespace {
@@ -50,19 +71,22 @@ export class ForeignEntityNamespace {
   }
 
   /**
-   * Repositories and authors among the GitHub pull requests visible to the
-   * authenticated user and their team, each with how many pull requests it
-   * covers. A pull request visible to both the user and the team counts once.
+   * Repositories, authors, assignees, and labels among the GitHub pull
+   * requests visible to the authenticated user and their team, each with how
+   * many pull requests it covers. A pull request visible to both the user and
+   * the team counts once.
    */
   async githubPullRequestFacets(): Promise<GithubPullRequestFacets> {
-    const { repositories, authors } = unwrap(
+    const { repositories, authors, assignees, labels } = unwrap(
       await this.client.storage.getGithubPullRequestFacets()
     );
     return {
       repositories,
-      authors: authors.map(({ login, ...author }) => ({
-        ...author,
-        login: login ?? undefined,
+      authors: authors.map(withoutNullLogin),
+      assignees: assignees.map(withoutNullLogin),
+      labels: labels.map(({ color, ...label }) => ({
+        ...label,
+        color: color ?? undefined,
       })),
     };
   }

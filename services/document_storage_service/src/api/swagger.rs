@@ -88,7 +88,7 @@ use favorites::inbound::axum_router::{
 };
 use foreign_entity::domain::models::ForeignEntity;
 use github_pull_requests::domain::models::{
-    GithubAuthorFacet, GithubPullRequestFacets, GithubRepositoryFacet,
+    GithubLabelFacet, GithubPullRequestFacets, GithubRepositoryFacet, GithubUserFacet,
 };
 use initiative::domain::models::{
     AssignTaskStatus, AssignTasksRequest, AssignTasksResponse, AssignTasksResult,
@@ -546,7 +546,8 @@ use utoipa::OpenApi;
             ForeignEntity,
             GithubPullRequestFacets,
             GithubRepositoryFacet,
-            GithubAuthorFacet,
+            GithubUserFacet,
+            GithubLabelFacet,
             Favorite,
             FavoritesList,
             CreatedUserApiKey,

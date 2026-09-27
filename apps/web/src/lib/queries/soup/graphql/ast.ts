@@ -15,6 +15,7 @@ import type {
   GraphqlEntityFilterAst as GraphqlEntityFilterAstInput,
   GraphqlForeignEntityLiteral as GraphqlForeignEntityLiteralInput,
   GraphqlGithubPullRequestLiteral as GraphqlGithubPullRequestLiteralInput,
+  GraphqlGithubPullRequestReviewStatus,
   GraphqlGithubPullRequestState,
   GraphqlGroupByInput,
   GroupedSoupContinuationInput as GraphqlGroupedSoupContinuationInput,
@@ -523,6 +524,17 @@ function mapGithubPullRequestState(
   unsupported(`unsupported pull request status ${state}`);
 }
 
+function mapGithubPullRequestReviewStatus(
+  value: unknown
+): GraphqlGithubPullRequestReviewStatus {
+  const status = mapString(value, 'reviewStatus');
+  if (status === 'none') return 'NONE';
+  if (status === 'required') return 'REQUIRED';
+  if (status === 'approved') return 'APPROVED';
+  if (status === 'changes_requested') return 'CHANGES_REQUESTED';
+  unsupported(`unsupported pull request review status ${status}`);
+}
+
 function mapGithubPullRequestLiteral(
   literal: unknown
 ): GraphqlGithubPullRequestLiteralInput {
@@ -545,6 +557,14 @@ function mapGithubPullRequestLiteral(
       return { reviewRequested: mapString(value, 'reviewRequested') };
     case 'draft':
       return { draft: mapBoolean(value, 'draft') };
+    case 'as':
+      return { assignee: mapString(value, 'assignee') };
+    case 'lbl':
+      return { label: mapString(value, 'label') };
+    case 'rs':
+      return { reviewStatus: mapGithubPullRequestReviewStatus(value) };
+    case 'rb':
+      return { reviewedBy: mapString(value, 'reviewedBy') };
     default:
       unsupported(`github pull request literal ${field}`);
   }

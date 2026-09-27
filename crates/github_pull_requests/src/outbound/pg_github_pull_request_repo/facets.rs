@@ -1,4 +1,4 @@
-//! Repository and author counts over the pull requests a caller can see.
+//! Repository, author, assignee, and label counts over the pull requests a caller can see.
 
 #[cfg(test)]
 mod test;
@@ -8,8 +8,8 @@ use foreign_entity::domain::models::SourceId;
 use super::PgGithubPullRequestRepo;
 use crate::domain::{
     models::{
-        GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubAuthorFacet, GithubPullRequestFacets,
-        GithubRepositoryFacet,
+        GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubLabelFacet, GithubPullRequestFacets,
+        GithubRepositoryFacet, GithubUserFacet,
     },
     ports::GithubPullRequestFacetRepository,
 };
@@ -95,6 +95,74 @@ impl GithubPullRequestFacetRepository for PgGithubPullRequestRepo {
         .fetch_all(&self.pool)
         .await?;
 
+        let assignees = sqlx::query!(
+            r#"
+            WITH sources AS (
+                SELECT DISTINCT id, auth_entity
+                FROM UNNEST($1::text[], $2::text[]) AS source(id, auth_entity)
+            )
+            SELECT
+                assignee.value ->> 'githubUserId' AS "github_user_id!",
+                (ARRAY_AGG(
+                    assignee.value ->> 'login'
+                    ORDER BY COALESCE(gpr.github_updated_at, gpr.updated_at) DESC
+                ) FILTER (WHERE assignee.value ->> 'login' IS NOT NULL))[1] AS login,
+                COUNT(*) AS "count!"
+            FROM github_pull_request gpr
+            CROSS JOIN LATERAL jsonb_array_elements(gpr.assignees) AS assignee(value)
+            WHERE assignee.value ->> 'githubUserId' IS NOT NULL
+              AND EXISTS (
+                SELECT 1
+                FROM foreign_entity fe
+                JOIN sources s
+                  ON s.id = fe.stored_for_id AND s.auth_entity = fe.stored_for_auth_entity
+                WHERE fe.foreign_entity_source = $3::text
+                  AND fe.foreign_entity_id = gpr.github_key
+              )
+            GROUP BY assignee.value ->> 'githubUserId'
+            ORDER BY COUNT(*) DESC, assignee.value ->> 'githubUserId'
+            "#,
+            &ids,
+            &auth_entities,
+            GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let labels = sqlx::query!(
+            r#"
+            WITH sources AS (
+                SELECT DISTINCT id, auth_entity
+                FROM UNNEST($1::text[], $2::text[]) AS source(id, auth_entity)
+            )
+            SELECT
+                label.value ->> 'name' AS "name!",
+                (ARRAY_AGG(
+                    label.value ->> 'color'
+                    ORDER BY COALESCE(gpr.github_updated_at, gpr.updated_at) DESC
+                ) FILTER (WHERE label.value ->> 'color' IS NOT NULL))[1] AS color,
+                COUNT(*) AS "count!"
+            FROM github_pull_request gpr
+            CROSS JOIN LATERAL jsonb_array_elements(gpr.labels) AS label(value)
+            WHERE label.value ->> 'name' IS NOT NULL
+              AND EXISTS (
+                SELECT 1
+                FROM foreign_entity fe
+                JOIN sources s
+                  ON s.id = fe.stored_for_id AND s.auth_entity = fe.stored_for_auth_entity
+                WHERE fe.foreign_entity_source = $3::text
+                  AND fe.foreign_entity_id = gpr.github_key
+              )
+            GROUP BY label.value ->> 'name'
+            ORDER BY COUNT(*) DESC, label.value ->> 'name'
+            "#,
+            &ids,
+            &auth_entities,
+            GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
         Ok(GithubPullRequestFacets {
             repositories: repositories
                 .into_iter()
@@ -106,9 +174,25 @@ impl GithubPullRequestFacetRepository for PgGithubPullRequestRepo {
                 .collect(),
             authors: authors
                 .into_iter()
-                .map(|row| GithubAuthorFacet {
+                .map(|row| GithubUserFacet {
                     github_user_id: row.github_user_id,
                     login: row.login,
+                    count: row.count,
+                })
+                .collect(),
+            assignees: assignees
+                .into_iter()
+                .map(|row| GithubUserFacet {
+                    github_user_id: row.github_user_id,
+                    login: row.login,
+                    count: row.count,
+                })
+                .collect(),
+            labels: labels
+                .into_iter()
+                .map(|row| GithubLabelFacet {
+                    name: row.name,
+                    color: row.color,
                     count: row.count,
                 })
                 .collect(),

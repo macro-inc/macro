@@ -14,7 +14,9 @@ use foreign_entity::{
 use item_filters::ast::{
     LiteralTree,
     foreign_entity::ForeignEntityLiteral,
-    github_pull_request::{GithubPullRequestLiteral, GithubPullRequestState},
+    github_pull_request::{
+        GithubPullRequestLiteral, GithubPullRequestReviewStatus, GithubPullRequestState,
+    },
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_pagination::{Cursor, CursorVal, Query, SimpleSortMethod};
@@ -23,7 +25,9 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::super::PgGithubPullRequestRepo;
-use crate::domain::ports::GithubPullRequestListingRepository;
+use crate::domain::{
+    models::GithubPullRequestSortDirection, ports::GithubPullRequestListingRepository,
+};
 
 fn create_request_for_source(
     foreign_entity_id: impl Into<String>,
@@ -297,6 +301,7 @@ async fn list_returns_matching_user_and_team_sources(pool: PgPool) {
             10,
             list_query(SimpleSortMethod::UpdatedAt),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("foreign entities should be listed for matching sources");
@@ -329,6 +334,7 @@ async fn list_empty_sources_returns_empty(pool: PgPool) {
             10,
             list_query(SimpleSortMethod::UpdatedAt),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("empty source list should succeed");
@@ -386,6 +392,7 @@ async fn list_dedupes_duplicate_source_grants(pool: PgPool) {
             10,
             list_query(SimpleSortMethod::UpdatedAt),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("duplicate foreign entity grants should be listed once");
@@ -455,6 +462,7 @@ async fn list_paginates_by_created_at(pool: PgPool) {
             2,
             list_query(SimpleSortMethod::CreatedAt),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("first created_at page should be fetched");
@@ -465,12 +473,61 @@ async fn list_paginates_by_created_at(pool: PgPool) {
             2,
             cursor_query(&first_page[1], SimpleSortMethod::CreatedAt),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("second created_at page should be fetched");
 
     assert_eq!(first_page, vec![first, second]);
     assert_eq!(second_page, vec![third]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_paginates_ascending_from_the_oldest(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let user = "macro|user@example.com";
+    let now = Utc::now();
+    let mut entities = Vec::new();
+    for minutes_ago in [1, 2, 3] {
+        let entity = insert_foreign_entity_for_source(
+            &repo,
+            &format!("pr-{minutes_ago}"),
+            "github_pull_request",
+            user,
+            "user",
+        )
+        .await;
+        let created_at = now - chrono::Duration::minutes(minutes_ago);
+        entities.push(set_timestamps(&pool, &repo, &entity, created_at, created_at).await);
+    }
+    let [newest, middle, oldest] = <[ForeignEntity; 3]>::try_from(entities).unwrap();
+
+    let first_page = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user(user)],
+            2,
+            list_query(SimpleSortMethod::CreatedAt),
+            None,
+            GithubPullRequestSortDirection::Asc,
+        )
+        .await
+        .expect("first ascending page should be fetched");
+    let second_page = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user(user)],
+            2,
+            cursor_query(&first_page[1], SimpleSortMethod::CreatedAt),
+            None,
+            GithubPullRequestSortDirection::Asc,
+        )
+        .await
+        .expect("second ascending page should be fetched");
+
+    assert_eq!(first_page, vec![oldest, middle]);
+    assert_eq!(second_page, vec![newest]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -534,6 +591,7 @@ async fn list_paginates_by_updated_at(pool: PgPool) {
             2,
             list_query(SimpleSortMethod::UpdatedAt),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("first updated_at page should be fetched");
@@ -544,6 +602,7 @@ async fn list_paginates_by_updated_at(pool: PgPool) {
             2,
             cursor_query(&first_page[1], SimpleSortMethod::UpdatedAt),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("second updated_at page should be fetched");
@@ -583,6 +642,7 @@ async fn list_applies_foreign_entity_filters(pool: PgPool) {
             10,
             filter_query(source_filter),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("foreign entity source filter should be applied");
@@ -597,6 +657,7 @@ async fn list_applies_foreign_entity_filters(pool: PgPool) {
             10,
             filter_query(not_linear_filter),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("foreign entity negated filter should be applied");
@@ -625,6 +686,7 @@ async fn list_includes_me_matches_the_typed_participants(pool: PgPool) {
             10,
             filter_query(includes_me_filter()),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("includes_me filter should be applied");
@@ -646,6 +708,7 @@ async fn list_includes_me_without_github_link_returns_empty(pool: PgPool) {
             10,
             filter_query(includes_me_filter()),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("includes_me without a github link should succeed");
@@ -668,6 +731,7 @@ async fn list_includes_me_without_requesting_user_returns_empty(pool: PgPool) {
             10,
             filter_query(includes_me_filter()),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("includes_me without a requesting user should succeed");
@@ -700,6 +764,7 @@ async fn list_includes_me_composes_with_other_filters(pool: PgPool) {
             10,
             filter_query(filter),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("includes_me composed with a source filter should be applied");
@@ -723,6 +788,7 @@ async fn list_includes_me_composes_with_the_pull_request_filter(pool: PgPool) {
             10,
             filter_query(includes_me_filter()),
             Some(Arc::new(Expr::val(GithubPullRequestLiteral::Draft(draft)))),
+            GithubPullRequestSortDirection::Desc,
         )
     };
 
@@ -749,6 +815,7 @@ async fn list_includes_me_under_not_fails_closed(pool: PgPool) {
             10,
             filter_query(filter),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("unsupported includes_me placement should fail closed");
@@ -795,6 +862,7 @@ async fn list_notification_done_filters_by_done_state(pool: PgPool) {
                 item_filters::NotificationState::Done,
             ])),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("done=true filter should be applied");
@@ -809,6 +877,7 @@ async fn list_notification_done_filters_by_done_state(pool: PgPool) {
                 item_filters::NotificationState::Seen,
             ])),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("done=false filter should be applied");
@@ -848,6 +917,7 @@ async fn list_notification_seen_filters_by_seen_state(pool: PgPool) {
                 item_filters::NotificationState::Done,
             ])),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("seen=true filter should be applied");
@@ -861,6 +931,7 @@ async fn list_notification_seen_filters_by_seen_state(pool: PgPool) {
                 item_filters::NotificationState::Unseen,
             ])),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("seen=false filter should be applied");
@@ -906,6 +977,7 @@ async fn list_notification_done_composes_with_source(pool: PgPool) {
             10,
             filter_query(filter),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("source AND notification done filter should be applied");
@@ -940,6 +1012,7 @@ async fn list_notification_done_scopes_to_requesting_user(pool: PgPool) {
                 item_filters::NotificationState::Done,
             ])),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("notification filter scoped to requesting user should be applied");
@@ -967,6 +1040,7 @@ async fn list_notification_filter_without_requesting_user_returns_empty(pool: Pg
                 item_filters::NotificationState::Done,
             ])),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("notification filter without a requesting user should succeed");
@@ -995,6 +1069,7 @@ async fn list_notification_state_and_requires_each_witness(pool: PgPool) {
                 item_filters::NotificationState::Done,
             ])),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("done=true filter should be applied");
@@ -1022,6 +1097,7 @@ async fn list_notification_state_and_requires_each_witness(pool: PgPool) {
             10,
             filter_query(contradiction),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("contradictory notification filter should be applied");
@@ -1051,6 +1127,7 @@ async fn list_excludes_other_foreign_entity_sources(pool: PgPool) {
             10,
             list_query(SimpleSortMethod::UpdatedAt),
             None,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("listing should succeed");
@@ -1107,6 +1184,7 @@ async fn list_filtered(
             10,
             list_query(SimpleSortMethod::UpdatedAt),
             github_pull_request_filter,
+            GithubPullRequestSortDirection::Desc,
         )
         .await
         .expect("listing should succeed")
@@ -1224,6 +1302,156 @@ async fn list_pull_request_filters_match_the_typed_columns(pool: PgPool) {
     assert_eq!(
         ids(&list_filtered(&listing, None).await),
         vec![open_for_me.id, merged.id, without_row.id]
+    );
+}
+
+async fn set_review_columns(
+    pool: &PgPool,
+    github_key: &str,
+    assignees: serde_json::Value,
+    labels: serde_json::Value,
+    reviews: serde_json::Value,
+    review_decision: Option<&str>,
+) {
+    sqlx::query(
+        r#"
+        UPDATE github_pull_request
+        SET assignees = $2, labels = $3, reviews = $4, review_decision = $5
+        WHERE github_key = $1
+        "#,
+    )
+    .bind(github_key)
+    .bind(assignees)
+    .bind(labels)
+    .bind(reviews)
+    .bind(review_decision)
+    .execute(pool)
+    .await
+    .expect("review columns should be updated");
+}
+
+async fn listed(listing: &PgGithubPullRequestRepo, literal: GithubPullRequestLiteral) -> Vec<Uuid> {
+    ids(&list_filtered(listing, Some(Arc::new(Expr::val(literal)))).await)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_pull_request_filters_match_assignees_labels_and_reviews(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let user = "macro|user@example.com";
+    let mut entities = Vec::new();
+    for number in [1, 2, 3] {
+        let github_key = format!("macro/app/pull/{number}");
+        entities.push(
+            insert_foreign_entity_for_source(
+                &repo,
+                &github_key,
+                "github_pull_request",
+                user,
+                "user",
+            )
+            .await,
+        );
+        insert_pull_request_row(
+            &pool,
+            PullRequestRow {
+                github_key: &github_key,
+                repository_id: 99,
+                number,
+                status: "open",
+                author: "7",
+                requested_reviewers: &[],
+                participants: &[],
+                github_updated_minutes_ago: number as i32,
+            },
+        )
+        .await;
+    }
+    let [approved, changes_requested, unreviewed] =
+        <[ForeignEntity; 3]>::try_from(entities).unwrap();
+    set_review_columns(
+        &pool,
+        "macro/app/pull/1",
+        json!([{ "githubUserId": "42", "login": "octocat" }]),
+        json!([{ "name": "bug", "color": "d73a4a" }]),
+        json!([{ "reviewerGithubUserId": "42", "state": "approved" }]),
+        Some("approved"),
+    )
+    .await;
+    set_review_columns(
+        &pool,
+        "macro/app/pull/2",
+        json!([]),
+        json!([{ "name": "bug" }, { "name": "docs" }]),
+        json!([
+            { "reviewerGithubUserId": "42", "state": "commented" },
+            { "reviewerGithubUserId": "8", "state": "changes_requested" }
+        ]),
+        Some("changes_requested"),
+    )
+    .await;
+    set_review_columns(
+        &pool,
+        "macro/app/pull/3",
+        json!([]),
+        json!([]),
+        json!([]),
+        Some("review_required"),
+    )
+    .await;
+    assert_eq!(
+        listed(
+            &listing,
+            GithubPullRequestLiteral::Assignee("42".to_owned())
+        )
+        .await,
+        vec![approved.id]
+    );
+    assert_eq!(
+        listed(&listing, GithubPullRequestLiteral::Label("bug".to_owned())).await,
+        vec![approved.id, changes_requested.id]
+    );
+    assert_eq!(
+        listed(
+            &listing,
+            GithubPullRequestLiteral::ReviewedBy("42".to_owned())
+        )
+        .await,
+        vec![approved.id, changes_requested.id]
+    );
+    assert_eq!(
+        listed(
+            &listing,
+            GithubPullRequestLiteral::ReviewStatus(GithubPullRequestReviewStatus::ChangesRequested)
+        )
+        .await,
+        vec![changes_requested.id]
+    );
+    assert_eq!(
+        listed(
+            &listing,
+            GithubPullRequestLiteral::ReviewStatus(GithubPullRequestReviewStatus::Required)
+        )
+        .await,
+        vec![unreviewed.id]
+    );
+    assert_eq!(
+        listed(
+            &listing,
+            GithubPullRequestLiteral::ReviewStatus(GithubPullRequestReviewStatus::None)
+        )
+        .await,
+        vec![unreviewed.id]
+    );
+    assert_eq!(
+        ids(&list_filtered(
+            &listing,
+            Some(Arc::new(Expr::is_not(Expr::val(
+                GithubPullRequestLiteral::ReviewedBy("42".to_owned())
+            ))))
+        )
+        .await),
+        vec![unreviewed.id]
     );
 }
 

@@ -191,6 +191,10 @@ export const FILTER_TARGETS = {
     githubPullRequestInvolves: { backend: 'inv' },
     githubPullRequestReviewRequested: { backend: 'rr' },
     githubPullRequestDraft: { backend: 'draft', domain: [true, false] },
+    githubPullRequestAssigneeId: { backend: 'as' },
+    githubPullRequestLabel: { backend: 'lbl' },
+    githubPullRequestReviewStatus: { backend: 'rs' },
+    githubPullRequestReviewedBy: { backend: 'rb' },
   },
 
   // ccf — crm companies
@@ -330,6 +334,18 @@ type FilterTargetsMeta = {
     /** Numeric GitHub user id of a requested reviewer. */
     githubPullRequestReviewRequested: string[];
     githubPullRequestDraft: boolean;
+    /** Numeric GitHub user id of an assignee. */
+    githubPullRequestAssigneeId: string[];
+    /** Label name. */
+    githubPullRequestLabel: string[];
+    githubPullRequestReviewStatus: (
+      | 'none'
+      | 'required'
+      | 'approved'
+      | 'changes_requested'
+    )[];
+    /** Numeric GitHub user id of someone who submitted a review. */
+    githubPullRequestReviewedBy: string[];
   };
 
   // ccf — crm companies
