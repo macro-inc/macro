@@ -1,0 +1,109 @@
+use super::*;
+
+fn line(value: Value) -> String {
+    value.to_string()
+}
+
+#[test]
+fn a_tool_turn_streams_calls_results_and_its_end() {
+    let mut log = ClaudeLog::default();
+    let call = line(json!({
+        "type": "assistant", "uuid": "u1",
+        "message": {"stop_reason": "tool_use", "content": [
+            {"type": "thinking", "thinking": "need a file"},
+            {"type": "tool_use", "id": "toolu_1", "name": "Write", "input": {"file_path": "/r/todo.html", "content": "<html>"}}
+        ]}
+    }));
+    assert_eq!(
+        log.entry(&call),
+        [
+            LogEvent::Update(json!({
+                "sessionUpdate": "agent_thought_chunk",
+                "content": {"type": "text", "text": "need a file"},
+            })),
+            LogEvent::Update(json!({
+                "sessionUpdate": "tool_call",
+                "toolCallId": "toolu_1",
+                "title": "Write /r/todo.html",
+                "kind": "edit",
+                "status": "in_progress",
+                "rawInput": {"file_path": "/r/todo.html", "content": "<html>"},
+            })),
+        ]
+    );
+    // Reopening the transcript must not replay a line.
+    assert!(log.entry(&call).is_empty());
+
+    let result = line(json!({
+        "type": "user", "uuid": "u2",
+        "message": {"content": [{"type": "tool_result", "tool_use_id": "toolu_1", "content": "File created"}]}
+    }));
+    assert_eq!(
+        log.entry(&result),
+        [LogEvent::Update(json!({
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": "toolu_1",
+            "status": "completed",
+            "content": [{"type": "content", "content": {"type": "text", "text": "File created"}}],
+        }))]
+    );
+
+    let done = line(json!({
+        "type": "assistant", "uuid": "u3",
+        "message": {"stop_reason": "end_turn", "content": [{"type": "text", "text": "Built it."}]}
+    }));
+    assert_eq!(
+        log.entry(&done),
+        [
+            LogEvent::Update(json!({
+                "sessionUpdate": "agent_message_chunk",
+                "content": {"type": "text", "text": "Built it."},
+            })),
+            LogEvent::TurnEnded("end_turn"),
+        ]
+    );
+}
+
+#[test]
+fn failed_tools_and_block_results_are_reported() {
+    let mut log = ClaudeLog::default();
+    let result = line(json!({
+        "type": "user", "uuid": "u",
+        "message": {"content": [{"type": "tool_result", "tool_use_id": "t", "is_error": true,
+            "content": [{"type": "text", "text": "exit 1"}, {"type": "text", "text": "boom"}]}]}
+    }));
+    assert_eq!(
+        log.entry(&result),
+        [LogEvent::Update(json!({
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": "t",
+            "status": "failed",
+            "content": [{"type": "content", "content": {"type": "text", "text": "exit 1\nboom"}}],
+        }))]
+    );
+}
+
+#[test]
+fn prompts_bookkeeping_and_sidechains_are_skipped() {
+    let mut log = ClaudeLog::default();
+    for entry in [
+        json!({"type": "user", "uuid": "a", "message": {"content": "build a todo app"}}),
+        json!({"type": "attachment", "uuid": "b"}),
+        json!({"type": "ai-title", "aiTitle": "Todo app"}),
+        json!({"type": "assistant", "uuid": "c", "isSidechain": true,
+            "message": {"stop_reason": "end_turn", "content": [{"type": "text", "text": "sub"}]}}),
+    ] {
+        assert!(log.entry(&line(entry)).is_empty());
+    }
+    assert!(log.entry("not json").is_empty());
+}
+
+#[test]
+fn bash_calls_are_titled_by_their_description() {
+    assert_eq!(
+        tool_title("Bash", &json!({"command": "npm test", "description": "Run tests"})),
+        "Bash Run tests"
+    );
+    assert_eq!(tool_title("Bash", &json!({"command": "ls"})), "Bash ls");
+    assert_eq!(tool_title("TodoWrite", &json!({})), "TodoWrite");
+}

@@ -357,7 +357,7 @@ impl HubState {
 }
 
 /// The first line of a prompt, short enough for a tab label.
-fn title_from(text: &str) -> Option<String> {
+pub(crate) fn title_from(text: &str) -> Option<String> {
     let line = text.lines().map(str::trim).find(|line| !line.is_empty())?;
     let mut title: String = line.chars().take(TITLE_LIMIT).collect();
     if line.chars().count() > TITLE_LIMIT {
