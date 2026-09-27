@@ -43,26 +43,20 @@ function SnoozeNotificationsDialog(
     });
   };
   const controller = createSnoozeController({
-    save: async (until) => {
-      const results = await Promise.allSettled(
-        props.items.map((item) =>
-          mutation.mutateAsync({ ...item, snoozed_until: until })
-        )
-      );
-      if (results.some((result) => result.status === 'rejected'))
-        throw new Error('Snooze failed');
-    },
-    onSaved: (until) => {
+    items: props.items,
+    saveItem: (item, until) =>
+      mutation.mutateAsync({ ...item, snoozed_until: until }),
+    onSaved: (until, count) => {
       props.onOpenChange(false);
       toast.success(
-        `Notifications snoozed until ${formatSnoozeDeadline(until)}`
+        `Snoozed ${count} ${count === 1 ? 'item' : 'items'} until ${formatSnoozeDeadline(until)}`
       );
     },
   });
   return (
     <SnoozePicker
       {...props}
-      count={props.items.length}
+      count={controller.remainingCount()}
       query={query()}
       onQueryChange={setQuery}
       options={options()}

@@ -6,7 +6,12 @@ describe('snoozing notifications', () => {
   it('rejects expired and invalid selections without sending a request', async () => {
     const save = vi.fn();
     const controller = createRoot(() =>
-      createSnoozeController({ save, onSaved: vi.fn(), now: () => 1000 })
+      createSnoozeController({
+        items: ['one'],
+        saveItem: save,
+        onSaved: vi.fn(),
+        now: () => 1000,
+      })
     );
     await controller.submit(new Date(1000));
     await controller.submit(new Date('invalid'));
@@ -21,14 +26,19 @@ describe('snoozing notifications', () => {
       .mockResolvedValueOnce(undefined);
     const onSaved = vi.fn();
     const controller = createRoot(() =>
-      createSnoozeController({ save, onSaved, now: () => 0 })
+      createSnoozeController({
+        items: ['one'],
+        saveItem: save,
+        onSaved,
+        now: () => 0,
+      })
     );
     await controller.submit(new Date(1000));
     expect(onSaved).not.toHaveBeenCalled();
     expect(controller.error()).toBeTruthy();
     expect(controller.pending()).toBe(false);
     await controller.submit(new Date(1000));
-    expect(onSaved).toHaveBeenCalledWith('1970-01-01T00:00:01.000Z');
+    expect(onSaved).toHaveBeenCalledWith('1970-01-01T00:00:01.000Z', 1);
     expect(controller.error()).toBeUndefined();
   });
 
@@ -41,7 +51,12 @@ describe('snoozing notifications', () => {
         })
     );
     const controller = createRoot(() =>
-      createSnoozeController({ save, onSaved: vi.fn(), now: () => 0 })
+      createSnoozeController({
+        items: ['one'],
+        saveItem: save,
+        onSaved: vi.fn(),
+        now: () => 0,
+      })
     );
     const first = controller.submit(new Date(1000));
     await controller.submit(new Date(2000));
@@ -49,5 +64,41 @@ describe('snoozing notifications', () => {
     finish();
     await first;
     expect(controller.pending()).toBe(false);
+  });
+
+  it('reports partial success and retries only unsaved items at the new deadline', async () => {
+    const saved = new Map<string, string>();
+    const saveItem = vi.fn(async (item: string, until: string) => {
+      if (item === 'two' && until === '1970-01-01T00:00:01.000Z') {
+        throw new Error('offline');
+      }
+      saved.set(item, until);
+    });
+    const onSaved = vi.fn();
+    const controller = createRoot(() =>
+      createSnoozeController({
+        items: ['one', 'two'],
+        saveItem,
+        onSaved,
+        now: () => 0,
+      })
+    );
+    await controller.submit(new Date(1000));
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(controller.remainingCount()).toBe(1);
+    expect(controller.error()).toBe(
+      '1 of 2 items snoozed. Choose a time to retry the 1 remaining. Closing keeps saved snoozes.'
+    );
+    expect(saved.size).toBe(1);
+
+    await controller.submit(new Date(2000));
+    expect(saveItem).toHaveBeenCalledTimes(3);
+    expect(saved.get('one')).toBe('1970-01-01T00:00:01.000Z');
+    expect(saved.get('two')).toBe('1970-01-01T00:00:02.000Z');
+    expect(controller.error()).toBeUndefined();
+    expect(controller.remainingCount()).toBe(0);
+    expect(onSaved).toHaveBeenCalledWith('1970-01-01T00:00:02.000Z', 1);
+    await controller.submit(new Date(3000));
+    expect(saveItem).toHaveBeenCalledTimes(3);
   });
 });

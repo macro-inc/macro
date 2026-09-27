@@ -36,16 +36,18 @@ export function useMutedEntitiesQuery(args?: { limit?: number }) {
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
     refetchOnWindowFocus: 'always',
-    // Reconcile snoozes at expiry, including changes made on another device.
+    // Poll only while snoozes exist; focus refetches pick up other devices' changes.
     refetchInterval: (query) => {
       const deadlines = (query.state.data ?? [])
         .flatMap((item) =>
           item.snoozed_until ? [Date.parse(item.snoozed_until)] : []
         )
-        .filter((deadline) => deadline > Date.now());
+        .filter(Number.isFinite);
+      if (!deadlines.length) return false;
+      const now = Date.now();
       return Math.min(
         60_000,
-        ...deadlines.map((deadline) => deadline - Date.now() + 50)
+        ...deadlines.map((deadline) => Math.max(1000, deadline - now + 50))
       );
     },
   }));

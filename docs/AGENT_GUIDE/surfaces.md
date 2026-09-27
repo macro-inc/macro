@@ -1286,12 +1286,15 @@ in Cmd/Ctrl+K. Multi-selection applies the chosen deadline to all selected items
 Use arrow keys and Enter, click a preset, or type a future date/time such as
 `2h` or `tomorrow 10am`. The next morning means the next local 9 AM; the weekend
 preset resumes on Monday at 9 AM. The picker displays the exact local date and
-time before saving. Escape cancels without changing anything.
+time before saving. Escape closes the picker; before choosing a time, it makes
+no changes.
 
 Snoozing pauses notifications only: it does not hide, archive, mark read, or mark
 done. Channel message/thread rows target their parent channel, matching mute.
 The server enforces expiration even when no client is open. A failed save keeps
 the picker open for retry; a successful save appears in notification settings.
+If only some selected items save, the picker shows the saved count and retries
+only the remaining items. Closing it keeps any snoozes already saved.
 
 Design references: [Slack notification pause/resume](https://slack.com/help/articles/214908388-Pause-your-Slack-notifications)
 and [Superhuman's keyboard-driven Remind Me picker](https://new.superhuman.com/remind-me-29124).

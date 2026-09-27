@@ -4,11 +4,16 @@ import { ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { queryClient } from '../../client';
 import { notificationKeys } from '../keys';
-import { useMuteItemMutation, useUnmuteItemMutation } from '../unsubscribes';
+import {
+  useMutedEntitiesQuery,
+  useMuteItemMutation,
+  useUnmuteItemMutation,
+} from '../unsubscribes';
 
 const client = vi.hoisted(() => ({
   unsubscribeItem: vi.fn(),
   removeUnsubscribeItem: vi.fn(),
+  getUnsubscribes: vi.fn(),
 }));
 vi.mock('@service-notification/client', () => ({
   notificationServiceClient: client,
@@ -47,6 +52,55 @@ afterEach(() => {
   cleanup();
   queryClient.clear();
   vi.clearAllMocks();
+  vi.useRealTimers();
+});
+
+describe('snooze expiry polling', () => {
+  function setupQuery() {
+    function Test() {
+      useMutedEntitiesQuery();
+      return null;
+    }
+    render(() => (
+      <QueryClientProvider client={queryClient}>
+        <Test />
+      </QueryClientProvider>
+    ));
+  }
+
+  it.each([{ items: [] }, { items: [item] }])(
+    'does not poll without snoozes: $items',
+    async ({ items }) => {
+      vi.useFakeTimers();
+      client.getUnsubscribes.mockResolvedValue(ok({ data: items }));
+      setupQuery();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(client.getUnsubscribes).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(client.getUnsubscribes).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('refetches at expiry and stops when the server drops the expired snooze', async () => {
+    vi.useFakeTimers();
+    const until = new Date(Date.now() + 90_000).toISOString();
+    client.getUnsubscribes.mockImplementation(async () =>
+      ok({
+        data:
+          Date.parse(until) > Date.now()
+            ? [{ ...item, snoozed_until: until }]
+            : [],
+      })
+    );
+    setupQuery();
+    await vi.advanceTimersByTimeAsync(60_001);
+    expect(client.getUnsubscribes).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(30_100);
+    expect(client.getUnsubscribes).toHaveBeenCalledTimes(3);
+    expect(queryClient.getQueryData(key)).toEqual([]);
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(client.getUnsubscribes).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe('item snooze mutations', () => {

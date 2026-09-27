@@ -201,7 +201,7 @@ export function Notifications() {
           </Show>
           <SettingsRow
             label="Snooze an item"
-            description="Pause notifications for a channel, document, task, email, or other item."
+            description="Pause notifications for a channel, document, email, or other item."
           >
             <button
               type="button"

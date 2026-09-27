@@ -10,6 +10,31 @@ fn user(email: &str) -> MacroUserIdStr<'static> {
         .into_owned()
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("legacy_item_preferences"))
+)]
+async fn lists_supported_preferences_despite_unknown_legacy_types(pool: PgPool) {
+    let repo = PgItemNotificationPreferenceRepository(pool);
+    let listed = repo.list(user("alice")).await.unwrap();
+    let preferences: Vec<_> = listed
+        .iter()
+        .map(|item| (item.entity.entity_id.as_ref(), item.entity.entity_type))
+        .collect();
+    assert_eq!(
+        preferences,
+        vec![
+            ("document-snoozed", EntityType::Document),
+            ("channel-muted", EntityType::Channel),
+            ("email-alias", EntityType::EmailThread),
+            ("foreign-alias", EntityType::ForeignEntity),
+            ("thread-alias", EntityType::EmailThread),
+        ]
+    );
+    assert!(listed[0].snoozed_until.is_some());
+    assert!(listed[1..].iter().all(|item| item.snoozed_until.is_none()));
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn snooze_expiry_replacement_and_owner_isolation(pool: PgPool) {
     let repo = PgItemNotificationPreferenceRepository(pool.clone());

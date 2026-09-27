@@ -27,19 +27,30 @@ impl ItemNotificationPreferenceRepository for PgItemNotificationPreferenceReposi
         )
         .fetch_all(&self.0)
         .await?;
-        rows.into_iter()
-            .map(|row| {
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
                 let entity_type: EntityType = match row.item_type.as_str() {
                     "email" | "thread" => EntityType::EmailThread,
                     "foreign" => EntityType::ForeignEntity,
-                    value => value.parse()?,
+                    value => match value.parse() {
+                        Ok(entity_type) => entity_type,
+                        Err(error) => {
+                            tracing::warn!(
+                                item_type = value,
+                                ?error,
+                                "Skipping unknown notification preference type"
+                            );
+                            return None;
+                        }
+                    },
                 };
-                Ok(ItemNotificationPreference {
+                Some(ItemNotificationPreference {
                     entity: entity_type.with_entity_string(row.item_id),
                     snoozed_until: row.snoozed_until,
                 })
             })
-            .collect()
+            .collect())
     }
 
     async fn set(
