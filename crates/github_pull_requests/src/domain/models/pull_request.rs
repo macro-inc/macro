@@ -156,6 +156,149 @@ pub struct GithubPullRequestCheckRun {
     pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+/// A GitHub user named on a pull request, such as an assignee.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestUser {
+    /// The stable numeric GitHub user id, as a string.
+    pub github_user_id: String,
+    /// The user's GitHub login, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login: Option<String>,
+}
+
+/// A label on a GitHub pull request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestLabel {
+    /// The label name, unique within its repository regardless of case.
+    pub name: String,
+    /// The label color as six hex digits without a leading `#`, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+}
+
+/// What a reviewer's latest review on a pull request said.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum GithubPullRequestReviewState {
+    /// The reviewer approved the changes.
+    Approved,
+    /// The reviewer asked for changes.
+    ChangesRequested,
+    /// The reviewer commented without approving or asking for changes.
+    Commented,
+    /// The reviewer's review was dismissed.
+    Dismissed,
+}
+
+impl GithubPullRequestReviewState {
+    /// The state GitHub reports for a submitted review, such as `APPROVED`. `None` for a pending
+    /// review, which only its author can see.
+    pub fn from_github(state: &str) -> Option<Self> {
+        match state.to_ascii_uppercase().as_str() {
+            "APPROVED" => Some(Self::Approved),
+            "CHANGES_REQUESTED" => Some(Self::ChangesRequested),
+            "COMMENTED" => Some(Self::Commented),
+            "DISMISSED" => Some(Self::Dismissed),
+            _ => None,
+        }
+    }
+}
+
+/// A reviewer's latest submitted review on a pull request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestReview {
+    /// The stable numeric GitHub user id of the reviewer, as a string.
+    pub reviewer_github_user_id: String,
+    /// The reviewer's GitHub login, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviewer_login: Option<String>,
+    /// What the review said.
+    pub state: GithubPullRequestReviewState,
+    /// When the review was submitted, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub submitted_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl GithubPullRequestReview {
+    /// Whether this review replaces `current` as its reviewer's latest. A comment does not
+    /// replace an approval, a change request, or a dismissal, as on GitHub. Otherwise the later
+    /// submission wins, a review with no submission time loses to one with a time, and a tie goes
+    /// to this review.
+    fn supersedes(&self, current: &Self) -> bool {
+        if self.state == GithubPullRequestReviewState::Commented
+            && current.state != GithubPullRequestReviewState::Commented
+        {
+            return false;
+        }
+        self.submitted_at >= current.submitted_at
+    }
+}
+
+/// Each reviewer's latest review among `reviews`, taken in order, ordered by reviewer id.
+pub fn latest_reviews(
+    reviews: impl IntoIterator<Item = GithubPullRequestReview>,
+) -> Vec<GithubPullRequestReview> {
+    let mut latest: std::collections::BTreeMap<String, GithubPullRequestReview> =
+        std::collections::BTreeMap::new();
+    for review in reviews {
+        let replaces = latest
+            .get(&review.reviewer_github_user_id)
+            .is_none_or(|current| review.supersedes(current));
+        if replaces {
+            latest.insert(review.reviewer_github_user_id.clone(), review);
+        }
+    }
+    latest.into_values().collect()
+}
+
+/// Where a pull request's review stands, from its reviewers' latest reviews.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum GithubPullRequestReviewDecision {
+    /// A reviewer's latest review approves and none asks for changes.
+    Approved,
+    /// A reviewer's latest review asks for changes.
+    ChangesRequested,
+    /// Reviews are requested and none has approved or asked for changes yet.
+    ReviewRequired,
+}
+
+impl GithubPullRequestReviewDecision {
+    /// Derive the decision from each reviewer's latest review and the outstanding review
+    /// requests. Unlike GitHub's own decision it does not know how many approvals branch
+    /// protection requires.
+    pub fn derive(
+        reviews: &[GithubPullRequestReview],
+        requested_reviewer_github_user_ids: &[String],
+    ) -> Option<Self> {
+        let states = || reviews.iter().map(|review| review.state);
+        if states().any(|state| state == GithubPullRequestReviewState::ChangesRequested) {
+            return Some(Self::ChangesRequested);
+        }
+        if states().any(|state| state == GithubPullRequestReviewState::Approved) {
+            return Some(Self::Approved);
+        }
+        (!requested_reviewer_github_user_ids.is_empty()).then_some(Self::ReviewRequired)
+    }
+
+    /// The decision as stored in the `github_pull_request.review_decision` column.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Approved => "approved",
+            Self::ChangesRequested => "changes_requested",
+            Self::ReviewRequired => "review_required",
+        }
+    }
+}
+
 /// GitHub API pull request details used to enrich a pull request reference.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -221,6 +364,27 @@ pub struct GithubPullRequestDetails {
     #[cfg_attr(feature = "schema", schema(ignore))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// The users assigned to the pull request, when available.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_array"
+    )]
+    pub assignees: Option<Vec<GithubPullRequestUser>>,
+    /// The pull request's labels, when available.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_array"
+    )]
+    pub labels: Option<Vec<GithubPullRequestLabel>>,
+    /// Each reviewer's latest submitted review, when enrichment includes reviews.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_array"
+    )]
+    pub reviews: Option<Vec<GithubPullRequestReview>>,
 }
 
 impl GithubPullRequestDetails {
@@ -292,6 +456,16 @@ pub struct EnrichedGithubPullRequest {
     #[cfg_attr(feature = "schema", schema(ignore))]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// The users assigned to the pull request, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignees: Option<Vec<GithubPullRequestUser>>,
+    /// The pull request's labels, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub labels: Option<Vec<GithubPullRequestLabel>>,
+    /// Each reviewer's latest submitted review, when known. Stored metadata merges this per
+    /// reviewer, so a write that knows one review keeps the others.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviews: Option<Vec<GithubPullRequestReview>>,
 }
 
 impl EnrichedGithubPullRequest {
@@ -318,6 +492,9 @@ impl EnrichedGithubPullRequest {
             draft: None,
             requested_reviewer_github_user_ids: None,
             github_updated_at: None,
+            assignees: None,
+            labels: None,
+            reviews: None,
         }
     }
 
@@ -349,6 +526,9 @@ impl EnrichedGithubPullRequest {
             draft: details.draft,
             requested_reviewer_github_user_ids: details.requested_reviewer_github_user_ids,
             github_updated_at: details.github_updated_at,
+            assignees: details.assignees,
+            labels: details.labels,
+            reviews: details.reviews,
         }
     }
 
@@ -357,8 +537,9 @@ impl EnrichedGithubPullRequest {
     /// Partial refreshes may omit `comments` or `checks`. When an omitted field exists as an array in
     /// `existing_metadata`, the existing array is copied forward so richer metadata is not discarded.
     /// The same applies to `authorLogin`, `authorId`, `description`, `repositoryId`, `draft`,
-    /// `requestedReviewerGithubUserIds`, and `githubUpdatedAt`, which fallback write paths (such
-    /// as comment webhooks without a `pull_request` payload) omit.
+    /// `requestedReviewerGithubUserIds`, `githubUpdatedAt`, `assignees`, and `labels`, which
+    /// fallback write paths (such as comment webhooks without a `pull_request` payload) omit.
+    /// `reviews` merges per reviewer, keeping each reviewer's most recently submitted review.
     pub fn foreign_entity_metadata(
         &self,
         existing_metadata: Option<&serde_json::Value>,
@@ -391,6 +572,8 @@ impl EnrichedGithubPullRequest {
             "draft",
             "requestedReviewerGithubUserIds",
             "githubUpdatedAt",
+            "assignees",
+            "labels",
         ] {
             if metadata_object.contains_key(field) {
                 continue;
@@ -401,6 +584,15 @@ impl EnrichedGithubPullRequest {
             {
                 metadata_object.insert(field.to_string(), existing_value.clone());
             }
+        }
+
+        const REVIEWS_FIELD: &str = "reviews";
+        let reviews = merge_reviews(
+            existing_object.get(REVIEWS_FIELD),
+            metadata_object.get(REVIEWS_FIELD),
+        );
+        if !reviews.is_empty() {
+            metadata_object.insert(REVIEWS_FIELD.to_string(), serde_json::to_value(reviews)?);
         }
 
         // Participants are unioned rather than carried forward or replaced: write paths produce
@@ -432,6 +624,19 @@ impl EnrichedGithubPullRequest {
 
         Ok(metadata)
     }
+}
+
+/// Each reviewer's latest review across the stored and then the incoming metadata.
+fn merge_reviews(
+    existing: Option<&serde_json::Value>,
+    incoming: Option<&serde_json::Value>,
+) -> Vec<GithubPullRequestReview> {
+    let parse = |value: Option<&serde_json::Value>| -> Vec<GithubPullRequestReview> {
+        value
+            .and_then(|value| serde_json::from_value(value.clone()).ok())
+            .unwrap_or_default()
+    };
+    latest_reviews(parse(existing).into_iter().chain(parse(incoming)))
 }
 
 /// Request body for the authenticated pull request enrichment proxy.

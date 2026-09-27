@@ -15,9 +15,11 @@ use crate::domain::{
     models::{
         EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
         GithubInstallationAccessToken, GithubInstallationSetupAction, GithubKey,
-        GithubPullRequestDetails, GithubPullRequestStatus, GithubWebhookEventType,
-        InstallationState, MacroTaskId, ResolvedTeamTaskReference, TeamTaskReference,
-        ValidatedGithubWebhookEvent, sign_installation_state, verify_installation_state,
+        GithubPullRequestDetails, GithubPullRequestLabel, GithubPullRequestReview,
+        GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser,
+        GithubWebhookEventType, InstallationState, MacroTaskId, ResolvedTeamTaskReference,
+        TeamTaskReference, ValidatedGithubWebhookEvent, latest_reviews, sign_installation_state,
+        verify_installation_state,
     },
     ports::{GithubSyncClient, GithubSyncRealtime, GithubSyncRepo, GithubSyncService},
 };
@@ -283,6 +285,52 @@ impl<
                 .and_then(|value| value.as_str())
                 .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
                 .map(|updated_at| updated_at.with_timezone(&chrono::Utc)),
+            assignees: pull_request
+                .and_then(|pr| pr.get("assignees"))
+                .and_then(|value| value.as_array())
+                .map(|users| users.iter().filter_map(Self::user_from_payload).collect()),
+            labels: pull_request
+                .and_then(|pr| pr.get("labels"))
+                .and_then(|value| value.as_array())
+                .map(|labels| labels.iter().filter_map(Self::label_from_payload).collect()),
+            reviews: Self::review_from_payload(event.payload.get("review"))
+                .map(|review| vec![review]),
+        })
+    }
+
+    fn user_from_payload(user: &serde_json::Value) -> Option<GithubPullRequestUser> {
+        Some(GithubPullRequestUser {
+            github_user_id: user.get("id")?.as_u64()?.to_string(),
+            login: user
+                .get("login")
+                .and_then(|value| value.as_str())
+                .map(str::to_string),
+        })
+    }
+
+    fn label_from_payload(label: &serde_json::Value) -> Option<GithubPullRequestLabel> {
+        Some(GithubPullRequestLabel {
+            name: label.get("name")?.as_str()?.to_string(),
+            color: label
+                .get("color")
+                .and_then(|value| value.as_str())
+                .map(str::to_string),
+        })
+    }
+
+    /// The review a `pull_request_review` event carries, as its reviewer's state.
+    fn review_from_payload(review: Option<&serde_json::Value>) -> Option<GithubPullRequestReview> {
+        let review = review?;
+        let reviewer = Self::user_from_payload(review.get("user")?)?;
+        Some(GithubPullRequestReview {
+            reviewer_github_user_id: reviewer.github_user_id,
+            reviewer_login: reviewer.login,
+            state: GithubPullRequestReviewState::from_github(review.get("state")?.as_str()?)?,
+            submitted_at: review
+                .get("submitted_at")
+                .and_then(|value| value.as_str())
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|submitted_at| submitted_at.with_timezone(&chrono::Utc)),
         })
     }
 
@@ -392,6 +440,17 @@ impl<
                 .requested_reviewer_github_user_ids
                 .or(fallback.requested_reviewer_github_user_ids),
             github_updated_at: details.github_updated_at.or(fallback.github_updated_at),
+            assignees: details.assignees.or(fallback.assignees),
+            labels: details.labels.or(fallback.labels),
+            reviews: match (details.reviews, fallback.reviews) {
+                (None, None) => None,
+                (details, fallback) => Some(latest_reviews(
+                    details
+                        .into_iter()
+                        .flatten()
+                        .chain(fallback.into_iter().flatten()),
+                )),
+            },
         }
     }
 

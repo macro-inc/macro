@@ -18,7 +18,8 @@ pub use github_pull_requests::domain::models::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
     EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubKey,
     GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
-    GithubPullRequestRef, GithubPullRequestStatus,
+    GithubPullRequestLabel, GithubPullRequestRef, GithubPullRequestReview,
+    GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser, latest_reviews,
 };
 pub use installation_state::{
     InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,

@@ -47,6 +47,12 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
 
     #[tracing::instrument(err, skip(self, row), fields(github_key = %row.github_key))]
     async fn upsert_row(&self, row: &GithubPullRequestRow) -> Result<(), Self::Err> {
+        let json = |value: serde_json::Result<serde_json::Value>| {
+            value.map_err(|error| sqlx::Error::Encode(error.into()))
+        };
+        let assignees = json(serde_json::to_value(&row.assignees))?;
+        let labels = json(serde_json::to_value(&row.labels))?;
+        let reviews = json(serde_json::to_value(&row.reviews))?;
         sqlx::query!(
             r#"
             INSERT INTO github_pull_request (
@@ -62,9 +68,16 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
                 author_login,
                 requested_reviewer_github_user_ids,
                 participant_github_user_ids,
-                github_updated_at
+                github_updated_at,
+                assignees,
+                labels,
+                reviews,
+                review_decision
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                $14::jsonb, $15::jsonb, $16::jsonb, $17
+            )
             ON CONFLICT (github_key) DO UPDATE SET
                 repository_id = COALESCE(EXCLUDED.repository_id, github_pull_request.repository_id),
                 number = EXCLUDED.number,
@@ -78,6 +91,10 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
                 requested_reviewer_github_user_ids = EXCLUDED.requested_reviewer_github_user_ids,
                 participant_github_user_ids = EXCLUDED.participant_github_user_ids,
                 github_updated_at = EXCLUDED.github_updated_at,
+                assignees = EXCLUDED.assignees,
+                labels = EXCLUDED.labels,
+                reviews = EXCLUDED.reviews,
+                review_decision = EXCLUDED.review_decision,
                 updated_at = NOW()
             "#,
             row.github_key,
@@ -93,6 +110,10 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
             &row.requested_reviewer_github_user_ids,
             &row.participant_github_user_ids,
             row.github_updated_at,
+            assignees,
+            labels,
+            reviews,
+            row.review_decision.map(|decision| decision.as_str()),
         )
         .execute(&self.pool)
         .await?;

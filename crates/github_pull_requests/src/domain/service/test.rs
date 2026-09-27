@@ -322,6 +322,9 @@ fn pull_request(status: GithubPullRequestStatus) -> EnrichedGithubPullRequest {
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
     }
 }
 
@@ -525,6 +528,10 @@ async fn upsert_writes_the_row_from_the_merged_metadata() {
             requested_reviewer_github_user_ids: vec!["8".to_string()],
             participant_github_user_ids: vec!["42".to_string()],
             github_updated_at: None,
+            assignees: Vec::new(),
+            labels: Vec::new(),
+            reviews: Vec::new(),
+            review_decision: None,
         }]
     );
 }

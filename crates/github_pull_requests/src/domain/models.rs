@@ -14,7 +14,9 @@ pub use pull_request::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
     EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
     GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
-    GithubPullRequestRef, GithubPullRequestStatus,
+    GithubPullRequestLabel, GithubPullRequestRef, GithubPullRequestReview,
+    GithubPullRequestReviewDecision, GithubPullRequestReviewState, GithubPullRequestStatus,
+    GithubPullRequestUser, latest_reviews,
 };
 
 /// A pull request's latest data, for the record stored for one source.
@@ -78,6 +80,14 @@ pub struct GithubPullRequestRow {
     pub participant_github_user_ids: Vec<String>,
     /// When GitHub last updated the pull request.
     pub github_updated_at: Option<DateTime<Utc>>,
+    /// The users assigned to the pull request.
+    pub assignees: Vec<GithubPullRequestUser>,
+    /// The pull request's labels.
+    pub labels: Vec<GithubPullRequestLabel>,
+    /// Each reviewer's latest submitted review.
+    pub reviews: Vec<GithubPullRequestReview>,
+    /// Where the review stands, derived from `reviews` and the outstanding review requests.
+    pub review_decision: Option<GithubPullRequestReviewDecision>,
 }
 
 impl GithubPullRequestRow {
@@ -100,13 +110,23 @@ impl GithubPullRequestRow {
             draft: pull_request.draft.unwrap_or(false),
             author_github_user_id: pull_request.author_id.map(|id| id.to_string()),
             author_login: pull_request.author_login,
-            requested_reviewer_github_user_ids: pull_request
-                .requested_reviewer_github_user_ids
-                .unwrap_or_default(),
             participant_github_user_ids: pull_request
                 .participant_github_user_ids
                 .unwrap_or_default(),
             github_updated_at: pull_request.github_updated_at,
+            assignees: pull_request.assignees.unwrap_or_default(),
+            labels: pull_request.labels.unwrap_or_default(),
+            review_decision: GithubPullRequestReviewDecision::derive(
+                pull_request.reviews.as_deref().unwrap_or_default(),
+                pull_request
+                    .requested_reviewer_github_user_ids
+                    .as_deref()
+                    .unwrap_or_default(),
+            ),
+            reviews: pull_request.reviews.unwrap_or_default(),
+            requested_reviewer_github_user_ids: pull_request
+                .requested_reviewer_github_user_ids
+                .unwrap_or_default(),
         })
     }
 }

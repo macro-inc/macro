@@ -1352,6 +1352,9 @@ fn expected_pull_request_metadata(
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
     })
     .unwrap()
 }
@@ -1533,6 +1536,9 @@ fn backfilled_pull_request(title: &str) -> EnrichedGithubPullRequest {
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
     }
 }
 
@@ -1560,6 +1566,9 @@ fn expected_pull_request_metadata_from_details(
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
     })
     .unwrap()
 }
@@ -1620,6 +1629,9 @@ fn pull_request_details(
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
     }
 }
 

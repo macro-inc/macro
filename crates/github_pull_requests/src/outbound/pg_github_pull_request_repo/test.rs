@@ -3,7 +3,11 @@ use sqlx::PgPool;
 
 use super::PgGithubPullRequestRepo;
 use crate::domain::{
-    models::{GithubPullRequestRow, GithubPullRequestStatus},
+    models::{
+        GithubPullRequestLabel, GithubPullRequestReview, GithubPullRequestReviewDecision,
+        GithubPullRequestReviewState, GithubPullRequestRow, GithubPullRequestStatus,
+        GithubPullRequestUser,
+    },
     ports::GithubPullRequestRepository,
 };
 
@@ -39,6 +43,10 @@ fn row(github_key: &str, repository_id: Option<i64>) -> GithubPullRequestRow {
         requested_reviewer_github_user_ids: vec!["8".to_string()],
         participant_github_user_ids: vec!["8".to_string(), "42".to_string()],
         github_updated_at: None,
+        assignees: Vec::new(),
+        labels: Vec::new(),
+        reviews: Vec::new(),
+        review_decision: None,
     }
 }
 
@@ -119,4 +127,57 @@ async fn rename_moves_the_row_or_drops_it_when_the_new_key_has_one(pool: PgPool)
 
     assert_eq!(stored_row(&pool, "macro/app/pull/8").await, None);
     assert!(stored_row(&pool, "macro/renamed/pull/8").await.is_some());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn upsert_stores_assignees_labels_and_reviews(pool: PgPool) {
+    let repo = PgGithubPullRequestRepo::new(pool.clone());
+
+    repo.upsert_row(&GithubPullRequestRow {
+        assignees: vec![GithubPullRequestUser {
+            github_user_id: "7".to_string(),
+            login: Some("hubot".to_string()),
+        }],
+        labels: vec![GithubPullRequestLabel {
+            name: "bug".to_string(),
+            color: Some("d73a4a".to_string()),
+        }],
+        reviews: vec![GithubPullRequestReview {
+            reviewer_github_user_id: "8".to_string(),
+            reviewer_login: Some("monalisa".to_string()),
+            state: GithubPullRequestReviewState::Approved,
+            submitted_at: None,
+        }],
+        review_decision: Some(GithubPullRequestReviewDecision::Approved),
+        ..row("macro/app/pull/7", Some(99))
+    })
+    .await
+    .expect("upsert should succeed");
+
+    let stored: (serde_json::Value, serde_json::Value, serde_json::Value, Option<String>) =
+        sqlx::query_as(
+            "SELECT assignees, labels, reviews, review_decision FROM github_pull_request WHERE github_key = $1",
+        )
+        .bind("macro/app/pull/7")
+        .fetch_one(&pool)
+        .await
+        .expect("row lookup should succeed");
+
+    assert_eq!(
+        stored.0,
+        serde_json::json!([{ "githubUserId": "7", "login": "hubot" }])
+    );
+    assert_eq!(
+        stored.1,
+        serde_json::json!([{ "name": "bug", "color": "d73a4a" }])
+    );
+    assert_eq!(
+        stored.2,
+        serde_json::json!([{
+            "reviewerGithubUserId": "8",
+            "reviewerLogin": "monalisa",
+            "state": "approved"
+        }])
+    );
+    assert_eq!(stored.3.as_deref(), Some("approved"));
 }

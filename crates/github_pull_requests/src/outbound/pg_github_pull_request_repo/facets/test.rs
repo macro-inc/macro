@@ -53,6 +53,10 @@ fn row(github_key: &str, repository_id: Option<i64>, number: i64) -> GithubPullR
         requested_reviewer_github_user_ids: Vec::new(),
         participant_github_user_ids: Vec::new(),
         github_updated_at: None,
+        assignees: Vec::new(),
+        labels: Vec::new(),
+        reviews: Vec::new(),
+        review_decision: None,
     }
 }
 

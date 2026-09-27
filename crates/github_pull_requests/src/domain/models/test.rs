@@ -38,6 +38,9 @@ fn pull_request_details(
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
     }
 }
 
@@ -173,6 +176,9 @@ fn pull_request_response_serializes_with_camel_case_fields() {
             draft: None,
             requested_reviewer_github_user_ids: None,
             github_updated_at: None,
+            assignees: None,
+            labels: None,
+            reviews: None,
         }],
     };
 
@@ -306,6 +312,9 @@ fn pull_request_enrichment_copies_details_fields() {
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
     };
 
     let enriched = EnrichedGithubPullRequest::from_details(reference.clone(), details);
@@ -361,6 +370,9 @@ fn pull_request_foreign_entity_metadata_serializes_enriched_pull_request() {
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
     };
     let enriched = EnrichedGithubPullRequest::from_details(reference, details);
 
@@ -486,6 +498,9 @@ fn pull_request_foreign_entity_metadata_keeps_fresh_arrays() {
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
     };
     let enriched = EnrichedGithubPullRequest::from_details(pull_request_reference(), details);
     let existing_metadata = serde_json::json!({
@@ -594,5 +609,110 @@ fn pull_request_foreign_entity_metadata_carries_existing_participants_forward() 
     assert_eq!(
         metadata.get("participantGithubUserIds"),
         Some(&serde_json::json!(["7"]))
+    );
+}
+
+fn review(
+    reviewer: &str,
+    state: GithubPullRequestReviewState,
+    minute: u32,
+) -> GithubPullRequestReview {
+    GithubPullRequestReview {
+        reviewer_github_user_id: reviewer.to_string(),
+        reviewer_login: None,
+        state,
+        submitted_at: Some(
+            chrono::DateTime::parse_from_rfc3339(&format!("2026-09-26T12:{minute:02}:00Z"))
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        ),
+    }
+}
+
+#[test]
+fn a_later_comment_does_not_replace_an_approval() {
+    let latest = latest_reviews([
+        review("8", GithubPullRequestReviewState::Approved, 1),
+        review("8", GithubPullRequestReviewState::Commented, 2),
+        review("9", GithubPullRequestReviewState::Commented, 1),
+        review("9", GithubPullRequestReviewState::ChangesRequested, 2),
+    ]);
+
+    assert_eq!(
+        latest.iter().map(|review| review.state).collect::<Vec<_>>(),
+        vec![
+            GithubPullRequestReviewState::Approved,
+            GithubPullRequestReviewState::ChangesRequested,
+        ]
+    );
+}
+
+#[test]
+fn a_dismissal_replaces_an_approval() {
+    let latest = latest_reviews([
+        review("8", GithubPullRequestReviewState::Approved, 1),
+        review("8", GithubPullRequestReviewState::Dismissed, 1),
+    ]);
+
+    assert_eq!(latest[0].state, GithubPullRequestReviewState::Dismissed);
+}
+
+#[test]
+fn review_decision_prefers_changes_requested_then_approval_then_requests() {
+    use GithubPullRequestReviewState::{Approved, ChangesRequested, Commented};
+    let requested = vec!["10".to_string()];
+
+    assert_eq!(
+        GithubPullRequestReviewDecision::derive(
+            &[review("8", Approved, 1), review("9", ChangesRequested, 1)],
+            &requested
+        ),
+        Some(GithubPullRequestReviewDecision::ChangesRequested)
+    );
+    assert_eq!(
+        GithubPullRequestReviewDecision::derive(&[review("8", Approved, 1)], &requested),
+        Some(GithubPullRequestReviewDecision::Approved)
+    );
+    assert_eq!(
+        GithubPullRequestReviewDecision::derive(&[review("8", Commented, 1)], &requested),
+        Some(GithubPullRequestReviewDecision::ReviewRequired)
+    );
+    assert_eq!(
+        GithubPullRequestReviewDecision::derive(&[review("8", Commented, 1)], &[]),
+        None
+    );
+}
+
+#[test]
+fn stored_reviews_merge_per_reviewer() {
+    let mut existing = EnrichedGithubPullRequest::from_reference(pull_request_reference());
+    existing.reviews = Some(vec![
+        review("8", GithubPullRequestReviewState::Approved, 1),
+        review("9", GithubPullRequestReviewState::Commented, 1),
+    ]);
+    let existing = existing.foreign_entity_metadata(None).unwrap();
+    let mut incoming = EnrichedGithubPullRequest::from_reference(pull_request_reference());
+    incoming.reviews = Some(vec![review(
+        "9",
+        GithubPullRequestReviewState::ChangesRequested,
+        2,
+    )]);
+
+    let merged = incoming.foreign_entity_metadata(Some(&existing)).unwrap();
+    let row = GithubPullRequestRow::from_metadata(&merged).unwrap();
+
+    assert_eq!(
+        row.reviews
+            .iter()
+            .map(|review| (review.reviewer_github_user_id.as_str(), review.state))
+            .collect::<Vec<_>>(),
+        vec![
+            ("8", GithubPullRequestReviewState::Approved),
+            ("9", GithubPullRequestReviewState::ChangesRequested),
+        ]
+    );
+    assert_eq!(
+        row.review_decision,
+        Some(GithubPullRequestReviewDecision::ChangesRequested)
     );
 }

@@ -226,6 +226,9 @@ fn default_pull_request_details() -> GithubPullRequestDetails {
         draft: None,
         requested_reviewer_github_user_ids: None,
         github_updated_at: None,
+        assignees: None,
+        labels: None,
+        reviews: None,
     }
 }
 
