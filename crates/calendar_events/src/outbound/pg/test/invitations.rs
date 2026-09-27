@@ -131,15 +131,9 @@ async fn invitation_moved_instance_uses_original_key_and_instance_revision(pool:
     request.occurrence_key = Some(original.clone());
     request.revision.sequence = 8;
     let resolver = CalendarInvitationResolver::new(repo);
-    let result = resolver
-        .resolve(viewer, &[identity(link), request.clone()])
-        .await
-        .unwrap();
+    let result = resolver.resolve(viewer, &[request.clone()]).await.unwrap();
     assert!(
-        matches!(&result[0], InvitationResolution::Resolved { occurrence, .. } if occurrence.occurrence_key != original)
-    );
-    assert!(
-        matches!(&result[1], InvitationResolution::Resolved { occurrence, event, is_stale: false, .. } if occurrence.occurrence_key == original && occurrence.time == moved && event.sequence == 8),
+        matches!(&result[0], InvitationResolution::Resolved { occurrence, event, is_stale: false, .. } if occurrence.occurrence_key == original && occurrence.time == moved && event.sequence == 8),
         "{result:?}"
     );
     request.series_revision = Some(revision(2, true));
@@ -188,6 +182,8 @@ async fn master_invitation_does_not_compare_revisions_with_first_exception(pool:
         status: None,
         attendees: None,
     });
+    // The exception is the series' only live occurrence, so the master resolves to it.
+    upsert.occurrences[1].is_cancelled = true;
     repo.upsert_event_fixture(upsert).await.unwrap();
     let resolver = CalendarInvitationResolver::new(repo);
     let mut cancel = identity(link);
@@ -211,4 +207,59 @@ async fn master_invitation_does_not_compare_revisions_with_first_exception(pool:
         ),
         "{result:?}"
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn master_invitation_resolves_the_current_or_next_live_occurrence(pool: PgPool) {
+    use chrono::SubsecRound;
+    let viewer = "macro|series-reader@example.com";
+    insert_user(&pool, viewer).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let link = insert_link(&pool, viewer).await;
+    persist_complete_grant(&pool, link, 1).await;
+    let provider = provider_ids(&repo, link).await;
+    let mut upsert = timed_upsert(viewer, link, provider, "invite-uid", "Review", 1);
+    let template = upsert.occurrences[0].clone();
+    let occurrence = |from_now: Duration, is_cancelled: bool| {
+        let starts_at = Utc::now().trunc_subsecs(0) + from_now;
+        CalendarOccurrence {
+            occurrence_key: starts_at.to_rfc3339(),
+            time: EventTime::Timed {
+                starts_at,
+                ends_at: starts_at + Duration::hours(1),
+                time_zone: Some("UTC".to_string()),
+            },
+            is_cancelled,
+            ..template.clone()
+        }
+    };
+    upsert.occurrences = vec![
+        occurrence(Duration::days(-7), true),
+        occurrence(Duration::days(-2), false),
+        occurrence(Duration::days(2), true),
+        occurrence(Duration::days(9), false),
+        occurrence(Duration::minutes(-30), false),
+    ];
+    let latest = upsert.occurrences[1].occurrence_key.clone();
+    let upcoming = upsert.occurrences[3].occurrence_key.clone();
+    let ongoing = upsert.occurrences[4].occurrence_key.clone();
+    let resolver = CalendarInvitationResolver::new(PgCalendarRepository::new(pool.clone()));
+    for (occurrences, expected, reason) in [
+        (5, ongoing, "an occurrence in progress is the current one"),
+        (4, upcoming, "a series skips cancelled and past occurrences"),
+        (
+            2,
+            latest,
+            "an ended series falls back to its latest live occurrence",
+        ),
+    ] {
+        let mut upsert = upsert.clone();
+        upsert.occurrences.truncate(occurrences);
+        repo.upsert_event_fixture(upsert).await.unwrap();
+        let result = resolver.resolve(viewer, &[identity(link)]).await.unwrap();
+        assert!(
+            matches!(&result[0], InvitationResolution::Resolved { occurrence, can_join: true, .. } if occurrence.occurrence_key == expected),
+            "{reason}: {result:?}"
+        );
+    }
 }

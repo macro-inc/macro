@@ -114,7 +114,7 @@ type RsvpMutationContext = CalendarMutationContext & {
 
 let rsvpRevisionCounter = 0;
 /**
- * Latest optimistic writer per (event, occurrence). Value equality cannot
+ * Latest optimistic writer per (event, occurrence, attendee). Value equality cannot
  * tell overlapping same-response mutations apart, so rollback ownership is
  * tracked explicitly: an older mutation's failure must not revert an
  * occurrence a newer mutation has since answered.
@@ -186,24 +186,22 @@ function patchRsvpQueries(
     { queryKey: calendarKeys.invitations._def },
     (old) => {
       if (!old) return old;
-      return Object.fromEntries(
+      let changed = false;
+      const next = Object.fromEntries(
         Object.entries(old).map(([id, item]) => {
           if (item.kind !== 'resolved') return [id, item];
-          const [updated] = update([
-            { event: item.event, occurrence: item.occurrence },
-          ]);
+          const current = { event: item.event, occurrence: item.occurrence };
+          const [updated] = update([current]);
+          if (updated === current) return [id, item];
+          changed = true;
           return [
             id,
-            updated
-              ? {
-                  ...item,
-                  event: updated.event,
-                  occurrence: updated.occurrence,
-                }
-              : item,
+            { ...item, event: updated.event, occurrence: updated.occurrence },
           ];
         })
       );
+      // Writing an unaffected thread would also clear its failed-refresh state.
+      return changed ? next : undefined;
     }
   );
 }

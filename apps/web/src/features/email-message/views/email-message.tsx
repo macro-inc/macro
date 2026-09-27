@@ -7,6 +7,7 @@ import { EmailMessageBody } from '@app/features/email-message/views/email-messag
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { VideoPreview } from '@core/component/VideoPreview';
 import CaretRight from '@phosphor/caret-right.svg';
+import { Key } from '@solid-primitives/keyed';
 import type { JSX } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { CalendarInviteCard } from '../components/calendar-invite-card';
@@ -18,7 +19,10 @@ import {
 import type { EmailAttachment } from '../core/email-message';
 export interface EmailMessageViewProps {
   message: EmailMessage;
-  renderInvitation?: (invitation: CalendarInvitation) => JSX.Element;
+  renderInvitation?: (
+    message: EmailMessage,
+    invitation: CalendarInvitation
+  ) => JSX.Element;
   renderAvatar?: (message: EmailMessage) => JSX.Element;
   viewerEmail?: string;
   isTouch: boolean;
@@ -51,7 +55,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
   );
   const renderInvitation = (invitation: CalendarInvitation) =>
     props.renderInvitation ? (
-      props.renderInvitation(invitation)
+      props.renderInvitation(props.message, invitation)
     ) : (
       <CalendarInviteCard invitation={invitation} />
     );
@@ -156,25 +160,31 @@ export function EmailMessageView(props: EmailMessageViewProps) {
               </div>
             }
           />
-          <For each={invitationGroups()}>
-            {(group) => (
-              <div>
-                {renderInvitation(group.primary)}
-                <Show when={group.related.length > 0}>
-                  <details class="group border-t border-edge-muted">
-                    <summary class={DISCLOSURE_SUMMARY}>
-                      <CaretRight class={DISCLOSURE_CARET} />
-                      View {group.related.length} related{' '}
-                      {group.related.length === 1
-                        ? 'occurrence'
-                        : 'occurrences'}
-                    </summary>
-                    <For each={group.related}>{renderInvitation}</For>
-                  </details>
-                </Show>
-              </div>
-            )}
-          </For>
+          {/* Keyed by component so thread refreshes keep each card's state. */}
+          <Key each={invitationGroups()} by={(group) => group.primary.id}>
+            {(group) => {
+              const primary = renderInvitation(group().primary);
+              return (
+                <div>
+                  {primary}
+                  <Show when={group().related.length > 0}>
+                    <details class="group border-t border-edge-muted">
+                      <summary class={DISCLOSURE_SUMMARY}>
+                        <CaretRight class={DISCLOSURE_CARET} />
+                        View {group().related.length} related{' '}
+                        {group().related.length === 1
+                          ? 'occurrence'
+                          : 'occurrences'}
+                      </summary>
+                      <Key each={group().related} by={(invite) => invite.id}>
+                        {(invite) => renderInvitation(invite())}
+                      </Key>
+                    </details>
+                  </Show>
+                </div>
+              );
+            }}
+          </Key>
           <Show when={invitationGroups().length > 0} fallback={body()}>
             {/* The card replaces the body; the original stays one click away. */}
             <details class="group mb-3 border-t border-edge-muted">

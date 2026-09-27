@@ -1506,13 +1506,15 @@ sync. Expand guests and descriptions with their explicit controls. `View origina
 is an accessible disclosure that starts closed; attachments remain below it.
 Related recurring components are grouped behind their own disclosure. Only mail synced
 after the feature shipped gets a card; older invitations render as plain email.
-Scheduling updates pause RSVP and Join until their current calendar state has been checked.
+A newly arrived scheduling update shows RSVP and Join only once its calendar state has
+been checked. A series invitation shows its current or next live occurrence.
 
 A connected, resolved invitation shows the responding address and Yes / Maybe / No.
 Local verification requires both email and calendar services: email supplies saved
 snapshots and resolves them against the synced calendar, while calendar service handles
-the RSVP write. Email's calendar-sync flag is intentionally off after the local service
-cutover; calendar service's flag controls whether an RSVP write succeeds.
+the RSVP write. With calendar service's `CALENDAR_SYNC_ENABLED` off, its RSVP route is
+not mounted, so a response fails with an error. Seeded local accounts have no Google
+token, so an RSVP there fails at the provider write and rolls back.
 The selected response remains pressed while a save is pending. Recurring invitations ask
 for `This event` or `All events`. Failures keep the card in place and report a retryable
 error; offline responses are not sent. Cancellation and response/proposal notifications

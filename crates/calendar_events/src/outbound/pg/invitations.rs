@@ -31,8 +31,13 @@ impl CalendarInvitationRepository for PgCalendarRepository {
         let matches = sqlx::query!(r#"
             SELECT requested.ord AS "ord!", candidate.id, candidate.source_link_id, candidate.email_address, candidate.sequence, candidate.status, candidate.updated_at,
                 (SELECT o.occurrence_key FROM calendar_event_occurrences o
+                 CROSS JOIN LATERAL (SELECT COALESCE(o.starts_at, o.start_date::timestamp AT TIME ZONE 'UTC') AS starts,
+                    COALESCE(o.ends_at, o.end_date::timestamp AT TIME ZONE 'UTC') AS ends) span
                  WHERE o.event_id = candidate.id AND (requested.occurrence_key IS NULL OR o.occurrence_key = requested.occurrence_key OR o.recurrence_id = requested.occurrence_key)
-                 ORDER BY o.occurrence_key LIMIT 1) AS occurrence_key
+                 -- A series resolves to its current or next live occurrence, else its latest.
+                 ORDER BY o.is_cancelled, (span.ends > now()) DESC,
+                    CASE WHEN span.ends > now() THEN span.starts END, span.starts DESC, o.occurrence_key
+                 LIMIT 1) AS occurrence_key
             FROM unnest($2::text[], $3::text[]) WITH ORDINALITY requested(uid, occurrence_key, ord)
             CROSS JOIN LATERAL (
                 SELECT e.id, e.source_link_id, l.email_address, e.sequence, e.status, e.updated_at

@@ -61,19 +61,39 @@ async fn saving_is_idempotent_and_flags_the_thread(pool: PgPool) -> Result<(), R
 async fn thread_invitations_are_newest_first_and_bounded(pool: PgPool) -> Result<(), Report> {
     use crate::domain::invitation_resolution::InvitationSnapshotRepository;
     let repo = InvitationPgRepository(pool.clone());
-    let thread = uuid::uuid!("11111111-1111-1111-1111-111111111111");
     let newest = uuid::uuid!("11111111-aaaa-0003-aaaa-111111111111");
     repo.save(MESSAGE, &request("oldest")).await?;
     repo.save(newest, &request("newest")).await?;
-    let all = repo.thread_invitations(thread, 100).await?;
+    let all = repo.thread_invitations(THREAD, 100).await?;
     assert_eq!(
         all.iter()
             .map(|saved| (saved.message_id, saved.invitation.uid.as_str()))
             .collect::<Vec<_>>(),
         [(newest, "newest"), (MESSAGE, "oldest")]
     );
-    let bounded = repo.thread_invitations(thread, 1).await?;
+    let bounded = repo.thread_invitations(THREAD, 1).await?;
     assert_eq!(bounded.len(), 1);
     assert_eq!(bounded[0].message_id, newest);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_thread"))
+)]
+async fn undecodable_snapshots_are_skipped_instead_of_failing_reads(
+    pool: PgPool,
+) -> Result<(), Report> {
+    use crate::domain::invitation_resolution::InvitationSnapshotRepository;
+    let repo = InvitationPgRepository(pool.clone());
+    repo.save(MESSAGE, &request("valid")).await?;
+    sqlx::query!(
+        "INSERT INTO email_message_calendar_invites(message_id, component_id, snapshot) VALUES ($1, 'unknown-shape', '{}')",
+        MESSAGE
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(saved(&pool, MESSAGE).await?.len(), 1);
+    assert_eq!(repo.thread_invitations(THREAD, 100).await?.len(), 1);
     Ok(())
 }

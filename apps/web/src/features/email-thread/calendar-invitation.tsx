@@ -31,28 +31,24 @@ export function EmailCalendarInvitation(props: {
   hour12: boolean;
   openCalendar?: (target: CalendarInvitationOpenTarget) => void;
 }) {
+  const calendarEnabled = useCalendarUiFlag();
+  const saved = () => (
+    <CalendarInviteCard invitation={props.invitation} hour12={props.hour12} />
+  );
+  // Without the calendar UI, the saved invitation renders with no calendar lookup.
   return (
-    <Suspense
-      fallback={
-        <CalendarInviteCard
-          invitation={props.invitation}
-          hour12={props.hour12}
-        />
-      }
-    >
-      <ConnectedInvitation {...props} />
-    </Suspense>
+    <Show when={calendarEnabled()} fallback={saved()}>
+      <Suspense fallback={saved()}>
+        <ConnectedInvitation {...props} />
+      </Suspense>
+    </Show>
   );
 }
 function ConnectedInvitation(
   props: Parameters<typeof EmailCalendarInvitation>[0]
 ) {
-  const calendarEnabled = useCalendarUiFlag();
   const startAddInbox = useAddInboxFlow();
-  const query = useCalendarInvitationsQuery(
-    () => props.threadId,
-    calendarEnabled
-  );
+  const query = useCalendarInvitationsQuery(() => props.threadId);
   const [showDay, setShowDay] = createSignal(false);
   let dayTrigger: HTMLElement | undefined;
   const toggleDay = () => {
@@ -74,7 +70,6 @@ function ConnectedInvitation(
       : getCachedCalendarInvitations(props.threadId)?.[key];
   };
   const state = (): InvitationResolution => {
-    if (!calendarEnabled()) return { kind: 'unavailable' };
     if (query.isPending) return { kind: 'loading' };
     const current = wire();
     if (!current && query.isError) return { kind: 'unavailable' };
@@ -85,7 +80,7 @@ function ConnectedInvitation(
       : resolution;
   };
   const openTarget = (): CalendarInvitationOpenTarget | undefined => {
-    const current = calendarEnabled() && query.isSuccess ? wire() : undefined;
+    const current = query.isSuccess ? wire() : undefined;
     return current?.kind === 'resolved'
       ? {
           eventId: current.event.id,
@@ -125,19 +120,11 @@ function ConnectedInvitation(
                 : 'Calendar unavailable. Showing saved invitation details.'
               : undefined;
           },
-          get retryCalendar() {
-            return query.isError
-              ? () => {
-                  void query.refetch();
-                }
-              : undefined;
+          retryCalendar: () => {
+            void query.refetch();
           },
-          get connectCalendar() {
-            return calendarEnabled()
-              ? () => {
-                  void startAddInbox({ scopes: 'gmail_and_calendar' });
-                }
-              : undefined;
+          connectCalendar: () => {
+            void startAddInbox({ scopes: 'gmail_and_calendar' });
           },
           openExternal: (url) => {
             openExternalUrl(url);

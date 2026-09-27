@@ -150,7 +150,8 @@ fn parse_date(p: &Property) -> Option<InvitationDateTime> {
     Some(match instant {
         Some(instant) => InvitationDateTime::Zoned {
             value: instant.to_rfc3339(),
-            time_zone: tz.map(|tz| tz.name()).or(zone).unwrap_or("UTC").to_owned(),
+            // A UTC value with an unknown TZID stays UTC, keeping this an IANA name.
+            time_zone: tz.map_or("UTC", |tz| tz.name()).to_owned(),
         },
         None => InvitationDateTime::Unresolved {
             value: local.format("%Y-%m-%dT%H:%M:%S").to_string(),

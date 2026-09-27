@@ -244,8 +244,10 @@ pub async fn upsert_message(
             })
         })?;
 
-    // Saved messages are immutable, except a draft that has just been sent.
-    if !message.is_draft && existing_message_was_draft != Some(false) {
+    // Also runs for a message already saved by a whole-thread fetch, which carries no
+    // calendar parts. Saves skip existing components; an attachment-only invitation is
+    // downloaded again on a re-sync.
+    if !message.is_draft {
         crate::pubsub::invitation_extraction::save_discovered(
             ctx,
             link.id,

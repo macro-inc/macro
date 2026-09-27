@@ -152,6 +152,20 @@ fn provider_compatibility_resolves_iana_and_windows_zones() {
 }
 
 #[test]
+fn utc_times_with_unknown_zones_keep_an_iana_zone_and_duration_end() {
+    let parsed = parse(
+        "DTSTART;TZID=Customized Time Zone:20260924T170000Z\r\nDURATION:PT30M",
+        "REQUEST",
+    );
+    assert!(
+        matches!(&parsed[0].start, Some(InvitationDateTime::Zoned { time_zone, .. }) if time_zone == "UTC")
+    );
+    assert!(
+        matches!(&parsed[0].end, Some(InvitationDateTime::Zoned { value, .. }) if value == "2026-09-24T17:30:00+00:00")
+    );
+}
+
+#[test]
 fn windows_zone_table_is_sorted_and_known_to_chrono_tz() {
     let zones = windows_zones::WINDOWS_ZONES;
     assert!(zones.windows(2).all(|pair| pair[0].0 < pair[1].0));

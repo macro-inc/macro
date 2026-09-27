@@ -6,6 +6,7 @@ import type { CalendarInvitation } from '../email-message/core/calendar-invitati
 import { invitationFixture } from '../email-message/core/calendar-invitation-fixtures';
 import { EmailCalendarInvitation } from './calendar-invitation';
 
+const calendarUi = vi.hoisted(() => ({ enabled: true }));
 const queryState = vi.hoisted(() => ({
   failed: (): boolean => false,
   data: {} as Record<string, InvitationResolution>,
@@ -32,7 +33,7 @@ vi.mock('@queries/calendar/invitations', () => ({
 vi.mock('@core/email-link', () => ({ useAddInboxFlow: () => vi.fn() }));
 vi.mock('@core/util/url', () => ({ openExternalUrl: vi.fn() }));
 vi.mock('../calendar/hooks/use-calendar-ui-flag', () => ({
-  useCalendarUiFlag: () => () => true,
+  useCalendarUiFlag: () => () => calendarUi.enabled,
 }));
 vi.mock('../calendar/hooks/create-calendar-rsvp-controller', () => ({
   createCalendarRsvpController: () => ({
@@ -57,7 +58,10 @@ vi.mock('@ui', async () => ({
     <button {...props} />
   ),
 }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  calendarUi.enabled = true;
+});
 
 const time = {
   kind: 'timed' as const,
@@ -169,4 +173,19 @@ describe('email invitation production host', () => {
       );
     }
   );
+});
+
+it('shows the saved invitation without calendar state when the calendar UI is off', () => {
+  calendarUi.enabled = false;
+  render(() => (
+    <EmailCalendarInvitation
+      threadId="thread"
+      messageId="message"
+      invitation={invitationFixture}
+      hour12
+    />
+  ));
+  expect(screen.queryByText(/Calendar unavailable/)).toBeNull();
+  expect(screen.getByText(/Saved invitation/)).toBeTruthy();
+  expect(screen.queryByRole('group', { name: 'Your response' })).toBeNull();
 });

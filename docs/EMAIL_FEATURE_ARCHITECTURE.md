@@ -436,25 +436,24 @@ remaining difference before accepting it.
 
 ## Calendar invitation snapshots
 
-Calendar MIME extraction belongs to the email domain and happens once, when live sync
-or backfill saves a message. `email_message_calendar_invites` stores the immutable
+Calendar MIME extraction belongs to the email domain and happens at sync time, when live
+sync or backfill saves a message; re-syncing a message repeats it idempotently. `email_message_calendar_invites` stores the immutable
 components; mail without calendar parts gets no rows. Sync parses the inline bytes it
 already fetched. When a message has no inline calendar part, sync downloads its `.ics`
 attachments best-effort; a failed or oversized download leaves the message as plain
 mail, with no retry. Mail synced before the feature shipped is not reinspected, and a
 parser change applies only to newly synced mail. Opening a message never fetches
 provider MIME or parses ICS.
-When an already-loaded thread's snapshots change, that thread's calendar resolution is
-revalidated and its actions withdrawn until the refetch lands. A thread's first load or
-a switch between threads does not trigger it. During RSVP, revalidation is left to the
-settling mutation so an email refresh cannot overwrite the optimistic attendee response.
+When an already-loaded thread's saved invitations change, that thread's calendar
+resolution is revalidated in the background; its first load or a switch between threads
+does not trigger it. Cards are keyed by component, so thread refreshes keep their state.
+Without the calendar UI flag, cards render the saved invitation with no calendar lookup.
 
 Scheduling revisions come only from the thread's own saved components, and are
 reconciled separately for each original occurrence and its series master. A lower-sequence master cancellation still cancels an instance
 with a higher independent sequence. RSVP carries the displayed responding address;
 the calendar domain verifies inbox ownership before passing only that address to
 Google. Optimistic responses and rollback ownership are scoped to that attendee.
-
 
 The parser compatibility corpus is in `crates/email/fixtures/calendar`. `ical` 0.11
 handles folded properties, parameters, and embedded VTIMEZONE syntax. `chrono-tz`
@@ -484,12 +483,14 @@ It calls the calendar domain's `CalendarInvitationService` port in-process: the 
 service composition root constructs `CalendarInvitationResolver` over
 `PgCalendarRepository`, as it already does for its other calendar services. The
 calendar domain limits lookup to the verified viewer's owned, connected Google-backed
-copies, prefers the thread's inbox, and withholds ambiguous, read-only, stale,
+copies, prefers the thread's inbox, resolves a series to its current or next live occurrence
+(else its latest), and withholds ambiguous, read-only, stale,
 cancelled, mismatched-organizer, or unresolved-instance responses. Newer saved
 scheduling revisions in the thread suppress stale actions while calendar sync catches
 up. Exception revisions are preserved independently of the master. Reads never create
 calendar events. Resolution does not consult calendar_service's sync kill switch: when
-it is off, the RSVP write itself is rejected and the card reports a retryable error.
+it is off, calendar_service does not mount the RSVP route, so a response fails and the
+card reports that it could not be saved.
 Resolution failures leave the saved card useful and are retried through the existing
 frontend resolution query.
 

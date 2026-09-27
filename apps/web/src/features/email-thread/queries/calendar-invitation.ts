@@ -13,24 +13,17 @@ export function invitationResolution(
   if (!wire || wire.kind !== 'resolved')
     return { kind: wire?.kind ?? 'no_match' };
   const time = wire.occurrence.time;
+  const timeZone =
+    wire.event.time.kind === 'timed'
+      ? (wire.event.time.timeZone ?? 'UTC')
+      : 'UTC';
   const start: InvitationDateTime =
     time.kind === 'timed'
-      ? {
-          kind: 'zoned',
-          value: time.startsAt,
-          time_zone:
-            wire.event.time.kind === 'timed'
-              ? (wire.event.time.timeZone ?? 'UTC')
-              : 'UTC',
-        }
+      ? { kind: 'zoned', value: time.startsAt, time_zone: timeZone }
       : { kind: 'date', value: time.startDate };
   const end: InvitationDateTime =
     time.kind === 'timed'
-      ? {
-          kind: 'zoned',
-          value: time.endsAt,
-          time_zone: start.kind === 'zoned' ? start.time_zone : 'UTC',
-        }
+      ? { kind: 'zoned', value: time.endsAt, time_zone: timeZone }
       : { kind: 'date', value: time.endDate };
   const cancelled =
     wire.event.status === 'cancelled' || wire.occurrence.isCancelled;
@@ -64,7 +57,6 @@ export function invitationResolution(
       start,
       end,
       conference_url: wire.event.conferenceUrl,
-      status: cancelled ? 'CANCELLED' : wire.event.status,
     },
   };
 }

@@ -169,5 +169,5 @@ pub async fn resolve<C: CalendarInvitationService, S: InvitationSnapshotReposito
         .collect())
 }
 
-#[cfg(all(test, feature = "calendar_invitations"))]
+#[cfg(test)]
 mod test;

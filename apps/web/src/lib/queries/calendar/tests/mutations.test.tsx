@@ -769,48 +769,36 @@ it('binds provider writes and optimistic rollback to one address across both hos
   await secondCall;
 });
 
-it('withdraws stale actions on email changes without refetching over a pending response', async () => {
-  testQueryClient.removeQueries({ queryKey: calendarKeys.occurrences._def });
-  const key = calendarKeys.invitations('thread').queryKey;
-  const item = standaloneItem();
-  const initial = {
+it('revalidates only the thread whose saved invitations changed', () => {
+  const changed = calendarKeys.invitations('thread').queryKey;
+  const other = calendarKeys.invitations('other').queryKey;
+  testQueryClient.setQueryData(changed, {});
+  testQueryClient.setQueryData(other, {});
+  invalidateInvitationScheduling('thread');
+  expect(testQueryClient.getQueryState(changed)?.isInvalidated).toBe(true);
+  expect(testQueryClient.getQueryState(other)?.isInvalidated).toBe(false);
+});
+
+it('leaves unrelated invitation lookups, including failed ones, untouched by a response', async () => {
+  const failed = calendarKeys.invitations('failed').queryKey;
+  const other = standaloneItem();
+  testQueryClient.setQueryData(failed, {
     invite: {
       kind: 'resolved' as const,
-      ...item,
+      ...other,
+      event: { ...other.event, id: 'other-event' },
       responding_email: 'self@example.com',
       can_respond: true,
       can_join: true,
       is_stale: false,
     },
-  };
-  testQueryClient.setQueryData(key, initial);
-  const response = deferredResult();
-  rsvpCalendarEventMock.mockReturnValueOnce(response.promise);
-  const invalidate = vi.spyOn(testQueryClient, 'invalidateQueries');
+  });
+  testQueryClient
+    .getQueryCache()
+    .find({ queryKey: failed })
+    ?.setState({ status: 'error', error: new Error('refresh failed') });
+  rsvpCalendarEventMock.mockResolvedValueOnce(ok(standaloneItem().event));
   const rsvp = renderHook(() => useRsvpCalendarEventMutation());
-  const pending = rsvp.mutateAsync({
-    eventId: 'event-1',
-    respondingEmail: 'self@example.com',
-    response: 'accepted',
-  });
-  await vi.waitFor(() =>
-    expect(
-      testQueryClient.getQueryData<typeof initial>(key)?.invite.event
-        .attendees[0].responseStatus
-    ).toBe('accepted')
-  );
-  invalidateInvitationScheduling('thread');
-  expect(invalidate).not.toHaveBeenCalledWith({ queryKey: key });
-  expect(
-    testQueryClient.getQueryData<typeof initial>(key)?.invite
-  ).toMatchObject({ can_respond: false, can_join: false });
-  expect(
-    testQueryClient.getQueryData<typeof initial>(key)?.invite.event.attendees[0]
-      .responseStatus
-  ).toBe('accepted');
-  response.resolve(ok(item.event));
-  await pending;
-  expect(invalidate).toHaveBeenCalledWith({
-    queryKey: calendarKeys.invitations._def,
-  });
+  await rsvp.mutateAsync({ eventId: 'event-1', response: 'accepted' });
+  expect(testQueryClient.getQueryState(failed)?.status).toBe('error');
 });

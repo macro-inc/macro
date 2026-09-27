@@ -68,8 +68,7 @@ export function CalendarInviteCard(props: {
   const cancelled = () =>
     props.actions?.resolution?.kind === 'cancelled' ||
     invitationIsCancelled(props.invitation) ||
-    resolved()?.isCancelled ||
-    invitationIsCancelled(invite());
+    resolved()?.isCancelled;
   const notification = () =>
     ['reply', 'counter'].includes(props.invitation.method);
   const schedule = () =>
@@ -111,7 +110,7 @@ export function CalendarInviteCard(props: {
     };
   };
   const conference = () =>
-    !cancelled() && resolved()?.canJoin
+    resolved()?.canJoin
       ? safeInvitationUrl(invite().conference_url)
       : undefined;
   // The calendar already withholds responses for stale, cancelled, and read-only events.

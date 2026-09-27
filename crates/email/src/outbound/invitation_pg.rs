@@ -1,13 +1,23 @@
 //! Email-owned display snapshots.
 use crate::domain::models::calendar_invitation::CalendarInvitation;
+#[cfg(feature = "calendar_invitations")]
 use rootcause::Report;
-use sqlx::{PgPool, types::Json};
+use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-/// Snapshot persistence adapter shared by ingestion and thread reads.
+/// Snapshot persistence adapter for ingestion and invitation resolution.
 #[derive(Clone)]
 pub struct InvitationPgRepository(pub PgPool);
+
+/// An undecodable snapshot hides its card instead of failing the whole thread read.
+fn decode(message_id: Uuid, snapshot: serde_json::Value) -> Option<CalendarInvitation> {
+    serde_json::from_value(snapshot)
+        .inspect_err(|error| {
+            tracing::warn!(error = ?error, %message_id, "skipping undecodable invitation snapshot");
+        })
+        .ok()
+}
 
 /// Load saved components for fully hydrated messages in one query.
 pub(crate) async fn load(
@@ -15,7 +25,7 @@ pub(crate) async fn load(
     ids: &[Uuid],
 ) -> Result<HashMap<Uuid, Vec<CalendarInvitation>>, sqlx::Error> {
     let rows = sqlx::query!(
-        r#"SELECT message_id, snapshot AS "snapshot: Json<CalendarInvitation>"
+        r#"SELECT message_id, snapshot
         FROM email_message_calendar_invites
         WHERE message_id = ANY($1)
         ORDER BY message_id, component_id"#,
@@ -25,10 +35,9 @@ pub(crate) async fn load(
     .await?;
     let mut loaded = HashMap::<Uuid, Vec<CalendarInvitation>>::new();
     for row in rows {
-        loaded
-            .entry(row.message_id)
-            .or_default()
-            .push(row.snapshot.0);
+        if let Some(invitation) = decode(row.message_id, row.snapshot) {
+            loaded.entry(row.message_id).or_default().push(invitation);
+        }
     }
     Ok(loaded)
 }
@@ -80,7 +89,7 @@ impl crate::domain::invitation_resolution::InvitationSnapshotRepository for Invi
         limit: i64,
     ) -> Result<Vec<crate::domain::invitation_resolution::ThreadInvitation>, Report> {
         let rows = sqlx::query!(
-            r#"SELECT m.id AS message_id, m.link_id, i.snapshot AS "snapshot!: Json<CalendarInvitation>"
+            r#"SELECT m.id AS message_id, m.link_id, i.snapshot
             FROM email_message_calendar_invites i JOIN email_messages m ON m.id = i.message_id
             WHERE m.thread_id = $1
             ORDER BY COALESCE(m.internal_date_ts, m.sent_at, m.created_at) DESC, m.id DESC, i.component_id
@@ -92,10 +101,12 @@ impl crate::domain::invitation_resolution::InvitationSnapshotRepository for Invi
         .await?;
         Ok(rows
             .into_iter()
-            .map(|r| crate::domain::invitation_resolution::ThreadInvitation {
-                message_id: r.message_id,
-                link_id: r.link_id,
-                invitation: r.snapshot.0,
+            .filter_map(|r| {
+                Some(crate::domain::invitation_resolution::ThreadInvitation {
+                    invitation: decode(r.message_id, r.snapshot)?,
+                    message_id: r.message_id,
+                    link_id: r.link_id,
+                })
             })
             .collect())
     }

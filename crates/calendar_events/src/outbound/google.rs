@@ -2022,11 +2022,7 @@ fn map_upsert(
                 let time = google_time(&exception)?;
                 Ok(CalendarEventOverride {
                     sequence: exception.sequence,
-                    source_updated_at: exception
-                        .updated
-                        .as_ref()
-                        .and_then(|value| DateTime::parse_from_rfc3339(value).ok())
-                        .map(|date| date.with_timezone(&Utc)),
+                    source_updated_at: parse_datetime(exception.updated.as_deref()),
                     recurrence_id: original.occurrence_key(),
                     original_time: original,
                     time,
