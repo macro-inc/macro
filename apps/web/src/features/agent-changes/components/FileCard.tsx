@@ -33,8 +33,6 @@ export function FileCard(props: {
 }) {
   const file = () => props.entry.file;
   const path = () => splitPath(file().path);
-  const hidden = () =>
-    `${file().additions} ${file().additions === 1 ? 'addition' : 'additions'}, ${file().deletions} ${file().deletions === 1 ? 'deletion' : 'deletions'} hidden`;
   return (
     <article
       ref={props.ref}
@@ -44,7 +42,12 @@ export function FileCard(props: {
       )}
       data-path={file().path}
     >
-      <header class="sticky top-0 z-5 flex min-h-8.5 items-center gap-2 border-b border-edge-muted bg-surface-1 pr-2">
+      <header
+        class={cn(
+          'sticky top-0 z-5 flex min-h-8.5 items-center gap-2 bg-surface-1 pr-2',
+          !props.collapsed && 'border-b border-edge-muted'
+        )}
+      >
         <Button
           variant="ghost"
           size="icon-sm"
@@ -101,22 +104,7 @@ export function FileCard(props: {
           <CopyIcon />
         </Button>
       </header>
-      <Show
-        when={!props.collapsed}
-        fallback={
-          <button
-            type="button"
-            class="flex w-full items-center gap-2 px-3 py-2.5 text-left font-mono text-[11.5px] text-ink-placeholder hover:bg-hover hover:text-ink-muted"
-            onClick={() => props.onToggleCollapsed()}
-          >
-            <CaretRightIcon class="size-3" />
-            <span class="font-sans font-medium text-ink-muted">
-              {props.entry.note ? 'Show' : 'Show diff'}
-            </span>
-            <span class="flex-1">{props.entry.note ?? hidden()}</span>
-          </button>
-        }
-      >
+      <Show when={!props.collapsed}>
         <Show
           when={!props.entry.note}
           fallback={<DiffNote>{props.entry.note}</DiffNote>}
