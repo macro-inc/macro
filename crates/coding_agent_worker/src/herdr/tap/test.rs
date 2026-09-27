@@ -33,7 +33,9 @@ fn session_new_answer_opens_the_session_with_its_macro_id() {
 fn session_new_without_meta_opens_an_unnamed_session() {
     let mut tap = WireTap::default();
     tap.observe(
-        &line(json!({"jsonrpc": "2.0", "id": "a", "method": "session/new", "params": {"cwd": "/"}})),
+        &line(
+            json!({"jsonrpc": "2.0", "id": "a", "method": "session/new", "params": {"cwd": "/"}}),
+        ),
         Stdin,
     );
     assert_eq!(
@@ -163,7 +165,9 @@ fn a_permission_request_blocks_until_answered() {
     // client's: the same id answered on stdin is the permission answer.
     assert_eq!(
         tap.observe(
-            &line(json!({"jsonrpc": "2.0", "id": 0, "result": {"outcome": {"outcome": "cancelled"}}})),
+            &line(
+                json!({"jsonrpc": "2.0", "id": 0, "result": {"outcome": {"outcome": "cancelled"}}})
+            ),
             Stdin
         ),
         [TapEvent::PermissionAnswered {
@@ -175,7 +179,10 @@ fn a_permission_request_blocks_until_answered() {
 #[test]
 fn stderr_and_noise_are_ignored() {
     let mut tap = WireTap::default();
-    assert!(tap.observe("{\"method\":\"session/update\"}", Stderr).is_empty());
+    assert!(
+        tap.observe("{\"method\":\"session/update\"}", Stderr)
+            .is_empty()
+    );
     assert!(tap.observe("not json", Stdout).is_empty());
     assert!(
         tap.observe(

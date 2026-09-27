@@ -125,10 +125,7 @@ impl Daemon {
 /// Inside herdr, the directory macrod was started from is the repository
 /// every session works in, and each session gets a herdr window.
 #[cfg(unix)]
-fn start_herdr(
-    config: &mut Config,
-    credentials: &HarnessCredentials,
-) -> Option<crate::herdr::Hub> {
+fn start_herdr(config: &mut Config, credentials: &HarnessCredentials) -> Option<crate::herdr::Hub> {
     let herdr = crate::herdr::HerdrSession::detect()?;
     match std::env::current_dir() {
         Ok(cwd) => config.workspace.path = cwd,

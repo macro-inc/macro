@@ -104,8 +104,7 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
         while let Some(message) = out_rx.recv().await {
             let mut line = message.to_string();
             line.push('\n');
-            if stdout.write_all(line.as_bytes()).await.is_err() || stdout.flush().await.is_err()
-            {
+            if stdout.write_all(line.as_bytes()).await.is_err() || stdout.flush().await.is_err() {
                 return;
             }
         }
@@ -313,7 +312,11 @@ impl Adapter {
         json!({"sessionId": id, "configOptions": config_options(DEFAULT_MODEL)})
     }
 
-    async fn prompt(self: &Arc<Self>, session: &Arc<Session>, text: &str) -> Result<&'static str, RpcError> {
+    async fn prompt(
+        self: &Arc<Self>,
+        session: &Arc<Session>,
+        text: &str,
+    ) -> Result<&'static str, RpcError> {
         let herdr = self.herdr.as_ref().ok_or_else(|| {
             RpcError::internal("macrod herdr-acp needs a macrod started inside herdr")
         })?;
@@ -330,7 +333,9 @@ impl Adapter {
 
         let model = lock(&session.model).clone();
         if model != live.model {
-            herdr.prompt_agent(&live.name, &format!("/model {model}")).await?;
+            herdr
+                .prompt_agent(&live.name, &format!("/model {model}"))
+                .await?;
             live.model = model;
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
@@ -349,7 +354,12 @@ impl Adapter {
     }
 
     /// Open the session's herdr window and start Claude Code in it.
-    async fn launch(&self, herdr: &HerdrCli, session: &Session, first_prompt: &str) -> Result<Live, RpcError> {
+    async fn launch(
+        &self,
+        herdr: &HerdrCli,
+        session: &Session,
+        first_prompt: &str,
+    ) -> Result<Live, RpcError> {
         let label = title_from(first_prompt).unwrap_or_else(|| "claude".to_owned());
         let window = herdr
             .open_window(&session.cwd, &label, !self.options.no_focus)
@@ -366,10 +376,15 @@ impl Adapter {
             args.extend(["--permission-mode".to_owned(), mode.clone()]);
         }
         if let Some(config) = self.write_mcp_config(session)? {
-            args.extend(["--mcp-config".to_owned(), config.to_string_lossy().into_owned()]);
+            args.extend([
+                "--mcp-config".to_owned(),
+                config.to_string_lossy().into_owned(),
+            ]);
         }
         let name = agent_name(&session.id);
-        herdr.start_agent(&name, "claude", &window.pane_id, &args).await?;
+        herdr
+            .start_agent(&name, "claude", &window.pane_id, &args)
+            .await?;
         tracing::info!(session = %session.id, pane = %window.pane_id, "claude code started in herdr");
         Ok(Live {
             session: session.id.clone(),
@@ -392,7 +407,8 @@ impl Adapter {
         std::fs::create_dir_all(&dir).map_err(|error| RpcError::internal(error.to_string()))?;
         let path = dir.join(format!("{}.mcp.json", session.id));
         let body = json!({"mcpServers": servers}).to_string();
-        write_private(&path, body.as_bytes()).map_err(|error| RpcError::internal(error.to_string()))?;
+        write_private(&path, body.as_bytes())
+            .map_err(|error| RpcError::internal(error.to_string()))?;
         Ok(Some(path))
     }
 
@@ -431,7 +447,7 @@ impl Adapter {
             }
 
             ticks += 1;
-            if ticks % STATUS_EVERY != 0 {
+            if !ticks.is_multiple_of(STATUS_EVERY) {
                 continue;
             }
             let status = match herdr.agent_status(&live.name).await {

@@ -48,7 +48,10 @@ fn render_header(frame: &mut Frame, view: &PaneView, area: Rect) {
         (true, AgentState::Blocked) => ("needs permission".to_owned(), ERR),
     };
     let mut spans = vec![
-        Span::styled(" ◆ Macro agent ", Style::new().fg(THEME.accent_text).bg(ACCENT).bold()),
+        Span::styled(
+            " ◆ Macro agent ",
+            Style::new().fg(THEME.accent_text).bg(ACCENT).bold(),
+        ),
         Span::raw("  "),
         Span::styled(state, Style::new().fg(color).bold()),
     ];
@@ -243,7 +246,11 @@ fn render_permission(frame: &mut Frame, pending: &PendingPermission, area: Rect)
     }
     for (index, option) in pending.options.iter().enumerate() {
         let selected = index == pending.selected;
-        let color = if option.kind.starts_with("allow") { OK } else { ERR };
+        let color = if option.kind.starts_with("allow") {
+            OK
+        } else {
+            ERR
+        };
         lines.push(Line::from(vec![
             Span::styled(
                 if selected { "▸ " } else { "  " },

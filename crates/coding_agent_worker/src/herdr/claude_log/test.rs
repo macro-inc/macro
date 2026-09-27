@@ -101,7 +101,10 @@ fn prompts_bookkeeping_and_sidechains_are_skipped() {
 #[test]
 fn bash_calls_are_titled_by_their_description() {
     assert_eq!(
-        tool_title("Bash", &json!({"command": "npm test", "description": "Run tests"})),
+        tool_title(
+            "Bash",
+            &json!({"command": "npm test", "description": "Run tests"})
+        ),
         "Bash Run tests"
     );
     assert_eq!(tool_title("Bash", &json!({"command": "ls"})), "Bash ls");

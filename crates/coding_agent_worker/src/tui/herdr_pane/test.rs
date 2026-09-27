@@ -26,14 +26,35 @@ fn streamed_output_folds_into_readable_entries() {
     view.apply(ToPane::Prompted {
         text: "fix it".to_owned(),
     });
-    update(&mut view, json!({"sessionUpdate": "agent_thought_chunk", "content": {"type": "text", "text": "hmm "}}));
-    update(&mut view, json!({"sessionUpdate": "agent_thought_chunk", "content": {"type": "text", "text": "ok"}}));
-    update(&mut view, json!({"sessionUpdate": "tool_call", "toolCallId": "t1", "title": "Read main.rs", "status": "in_progress"}));
-    update(&mut view, json!({"sessionUpdate": "tool_call_update", "toolCallId": "t1", "status": "completed"}));
-    update(&mut view, json!({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Done"}}));
-    update(&mut view, json!({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "."}}));
+    update(
+        &mut view,
+        json!({"sessionUpdate": "agent_thought_chunk", "content": {"type": "text", "text": "hmm "}}),
+    );
+    update(
+        &mut view,
+        json!({"sessionUpdate": "agent_thought_chunk", "content": {"type": "text", "text": "ok"}}),
+    );
+    update(
+        &mut view,
+        json!({"sessionUpdate": "tool_call", "toolCallId": "t1", "title": "Read main.rs", "status": "in_progress"}),
+    );
+    update(
+        &mut view,
+        json!({"sessionUpdate": "tool_call_update", "toolCallId": "t1", "status": "completed"}),
+    );
+    update(
+        &mut view,
+        json!({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "Done"}}),
+    );
+    update(
+        &mut view,
+        json!({"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "."}}),
+    );
     // Live prompts arrive as `Prompted`; an echoed user chunk is not doubled.
-    update(&mut view, json!({"sessionUpdate": "user_message_chunk", "content": {"type": "text", "text": "fix it"}}));
+    update(
+        &mut view,
+        json!({"sessionUpdate": "user_message_chunk", "content": {"type": "text", "text": "fix it"}}),
+    );
 
     assert_eq!(
         view.transcript.entries,
@@ -53,9 +74,18 @@ fn streamed_output_folds_into_readable_entries() {
 #[test]
 fn replayed_history_shows_user_messages() {
     let mut view = PaneView::new("s");
-    update(&mut view, json!({"sessionUpdate": "user_message_chunk", "content": {"type": "text", "text": "earlier"}}));
-    update(&mut view, json!({"sessionUpdate": "plan", "entries": [{"content": "a", "status": "completed"}]}));
-    update(&mut view, json!({"sessionUpdate": "plan", "entries": [{"content": "a", "status": "completed"}, {"content": "b", "status": "pending"}]}));
+    update(
+        &mut view,
+        json!({"sessionUpdate": "user_message_chunk", "content": {"type": "text", "text": "earlier"}}),
+    );
+    update(
+        &mut view,
+        json!({"sessionUpdate": "plan", "entries": [{"content": "a", "status": "completed"}]}),
+    );
+    update(
+        &mut view,
+        json!({"sessionUpdate": "plan", "entries": [{"content": "a", "status": "completed"}, {"content": "b", "status": "pending"}]}),
+    );
     assert_eq!(
         view.transcript.entries,
         [
@@ -93,7 +123,10 @@ fn ctrl_c_interrupts_a_turn_and_otherwise_closes() {
         detail: None,
     });
     assert_eq!(view.on_event(ctrl_c()), PaneAction::Send(FromPane::Stop));
-    assert_eq!(press(&mut view, KeyCode::Esc), PaneAction::Send(FromPane::Stop));
+    assert_eq!(
+        press(&mut view, KeyCode::Esc),
+        PaneAction::Send(FromPane::Stop)
+    );
 
     view.apply(ToPane::State {
         state: AgentState::Idle,
@@ -118,7 +151,10 @@ fn permission_requests_are_answered_in_place() {
     view.apply(ToPane::Permission {
         request_id: json!("req-1"),
         title: Some("Run tests".to_owned()),
-        options: vec![choice("allow", "allow_once"), choice("reject", "reject_once")],
+        options: vec![
+            choice("allow", "allow_once"),
+            choice("reject", "reject_once"),
+        ],
     });
 
     // Typing does not leak into the prompt while a request is open.
