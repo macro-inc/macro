@@ -153,7 +153,13 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
               {(id) => <ProjectAttachment id={id} />}
             </For>
           </div>
-          <Show when={rows().length === 0 && attachmentsQuery.hasNextPage}>
+          <Show
+            when={
+              !soupQuery.isLoading &&
+              rows().length === 0 &&
+              attachmentsQuery.hasNextPage
+            }
+          >
             <LoadMoreButton
               onLoadMore={() => attachmentsQuery.fetchNextPage()}
               isFetching={() => attachmentsQuery.isFetchingNextPage}
