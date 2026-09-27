@@ -313,9 +313,10 @@ connected account. Search is `Ctrl+F` within the surface.
 Noise, and archived mail. It respects the selected inboxes and filters; search
 within the tab is also restricted to favorites. Removing a star removes the row
 from this view. The tab persists across reloads. With `enable-graphql-soup` on,
-favorite membership comes from the filtered GraphQL favorites query, then thread
-IDs scope the paginated GraphQL Soup query. With the flag off, the same scope
-uses the REST queries. An empty favorites list shows `No favorite emails`.
+the paginated GraphQL Soup query uses `favoritesOnly: true`. With the flag off,
+REST Soup uses `favorites_only: true`. Starring changes membership without
+changing the list query. Text search still resolves favorite IDs for the search
+service. An empty favorites list shows `No favorite emails`.
 
 On desktop, a favorited email keeps a filled, muted star just before its
 timestamp. Other rows reserve only that small star slot. Hovering reveals
