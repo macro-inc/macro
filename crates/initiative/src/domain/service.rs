@@ -243,6 +243,8 @@ where
                     if self.repo.delete(id).await.inspect_err(|cleanup| {
                         tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization");
                     }).is_ok() {
+                        self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
+                            .await;
                         let _ = self.description_documents.purge(description_document_id).await.inspect_err(|cleanup| tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization"));
                     }
                     return Err(error);

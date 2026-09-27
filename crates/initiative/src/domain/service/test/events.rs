@@ -11,7 +11,7 @@ use std::{
 };
 
 #[derive(Default)]
-struct Events(Mutex<Vec<InitiativeTopicEvent>>);
+pub(super) struct Events(pub(super) Mutex<Vec<InitiativeTopicEvent>>);
 
 impl InitiativeEventPublisher for Events {
     fn publish(
