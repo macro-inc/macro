@@ -841,7 +841,9 @@ where
         let _turn = match gate {
             Some(guard) => guard,
             None => {
-                tracing::info!("waiting for the turn gate behind a mirror of a run started elsewhere");
+                tracing::info!(
+                    "waiting for the turn gate behind a mirror of a run started elsewhere"
+                );
                 tokio::select! {
                     biased;
                     () = cancel.cancelled() => {

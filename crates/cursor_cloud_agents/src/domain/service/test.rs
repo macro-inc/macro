@@ -3776,10 +3776,7 @@ async fn mirror_following_a_live_run(
     })
     .await
     .expect("the mirror captures the foreign run");
-    assert!(
-        service.has_active_turn(),
-        "the mirror holds the turn gate"
-    );
+    assert!(service.has_active_turn(), "the mirror holds the turn gate");
     (mirror, foreign)
 }
 
@@ -3871,8 +3868,10 @@ async fn a_stop_ends_a_mirror_following_a_run_cursor_never_ends() {
     assert!(!service.has_active_turn(), "the mirror let go of the gate");
     let entries = service.journal.read(&id).await.unwrap();
     assert!(
-        entries.iter().any(|e| e.run.as_ref().map(CursorRunId::as_str) == Some("R1")
-            && matches!(e.input, JournalInput::Interrupted(_))),
+        entries
+            .iter()
+            .any(|e| e.run.as_ref().map(CursorRunId::as_str) == Some("R1")
+                && matches!(e.input, JournalInput::Interrupted(_))),
         "the run is recorded as one this session gave up on"
     );
     assert!(
