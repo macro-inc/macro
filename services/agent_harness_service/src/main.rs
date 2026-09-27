@@ -29,7 +29,6 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use agent_changes::domain::pull_request::PullRequestChanges;
 use agent_changes::domain::service::{AgentChangesService, CaptureOnTurnEnd};
 use agent_changes::inbound::axum_router::AgentChangesRouterState;
-use agent_changes::outbound::github_pull_request::GithubPullRequestDiff;
 use agent_changes::outbound::postgres::PgChangesetRepo;
 use agent_changes::outbound::s3::S3ChangesetBlobStore;
 use agent_egress::domain::service::EgressServiceImpl;
@@ -110,6 +109,7 @@ use github::domain::service::{
 };
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use github::outbound::pull_request_diff::GithubPullRequestDiffClient;
 use harness_bindings::{PgHarnessBindings, PgHarnessPresence};
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
@@ -882,15 +882,16 @@ async fn run() -> anyhow::Result<()> {
         MacrodModels::new(Arc::clone(&runtimes), redis.clone(), model_probe_timeout);
 
     // Capture only the session's linked GitHub pull request, for every harness.
-    let changes_extractor =
-        PullRequestChanges::new(GithubPullRequestDiff::new(InstallationTokenService::new(
+    let changes_extractor = PullRequestChanges::new(GithubPullRequestDiffClient::new(
+        InstallationTokenService::new(
             InstallationTokenConfig {
                 client_id: config.github_sync_app_client_id.clone(),
                 private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
             },
             PgGithubSyncRepo::new(pool.clone()),
             GithubSyncClientImpl::default(),
-        )));
+        ),
+    ));
     let changes = AgentChangesService::new(
         session_repo.clone(),
         changes_extractor,

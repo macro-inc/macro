@@ -141,22 +141,3 @@ pub trait ChangesetBlobStore: Send + Sync + 'static {
         key: &PatchBlobKey,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
-
-/// The patch and actual base/head refs of a GitHub pull request.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PullRequestDiff {
-    /// Git-style unified diff returned by GitHub.
-    pub patch: String,
-    /// The PR's target and source, including forks and non-default bases.
-    pub range: super::model::ChangesetRange,
-}
-
-/// Reads a pull request using the session owner's GitHub repository access.
-pub trait PullRequestDiffReader: Send + Sync + 'static {
-    /// Read the PR itself; never fall back to a branch or workspace diff.
-    fn read(
-        &self,
-        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
-        pull_request: &super::model::PullRequestRef,
-    ) -> impl Future<Output = Result<PullRequestDiff, super::error::CompareError>> + Send;
-}

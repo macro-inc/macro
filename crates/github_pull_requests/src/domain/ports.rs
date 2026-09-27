@@ -11,8 +11,9 @@ use item_filters::ast::{LiteralTree, github_pull_request::GithubPullRequestLiter
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::models::{
-    EnrichedGithubPullRequest, GithubPullRequestError, GithubPullRequestFacets,
-    GithubPullRequestRow, GithubPullRequestSortDirection, GithubRepositoryIdentity,
+    EnrichedGithubPullRequest, GithubPullRequestDiff, GithubPullRequestDiffError,
+    GithubPullRequestError, GithubPullRequestFacets, GithubPullRequestRow,
+    GithubPullRequestSortDirection, GithubRepositoryIdentity, PullRequestRef,
     StoredGithubPullRequest, UpsertGithubPullRequest, UpsertedGithubPullRequest,
 };
 
@@ -138,6 +139,17 @@ pub trait GithubPullRequestListingRepository: Send + Sync + 'static {
         github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
         sort_direction: GithubPullRequestSortDirection,
     ) -> impl Future<Output = Result<Vec<ForeignEntity>, Self::Err>> + Send;
+}
+
+/// Reads a pull request's diff from GitHub with a user's repository access.
+pub trait GithubPullRequestDiffReader: Send + Sync + 'static {
+    /// The pull request's patch and actual base and head, read through the GitHub App on
+    /// `user`'s behalf. Never falls back to a branch or workspace diff.
+    fn read(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        pull_request: &PullRequestRef,
+    ) -> impl Future<Output = Result<GithubPullRequestDiff, GithubPullRequestDiffError>> + Send;
 }
 
 /// Aggregate views over the GitHub pull requests a caller can see.

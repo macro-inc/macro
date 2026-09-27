@@ -11,6 +11,8 @@ use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
 pub use agent_session::domain::model::AgentSessionId;
+pub use git_patch::{ChangedFile, ChangesetRange, FileChangeKind, GitRef};
+pub use github_pull_requests::domain::models::{PullRequestRef, RepositorySlug};
 
 /// A captured branch together with the repository it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,84 +66,6 @@ impl std::fmt::Display for ChangesetId {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(formatter)
     }
-}
-
-/// What happened to one file, as a diff reports it.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
-)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum FileChangeKind {
-    /// The file did not exist before.
-    Added,
-    /// The file exists on both sides with different contents.
-    Modified,
-    /// The file no longer exists.
-    Deleted,
-    /// The file moved; `previous_path` names where from. Contents may also
-    /// have changed.
-    Renamed,
-}
-
-/// One file in a changeset, as much as the pane's tree and headers need.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChangedFile {
-    /// The file's path after the change - or before it, for a deletion.
-    pub path: String,
-    /// Where a renamed file came from.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub previous_path: Option<String>,
-    /// What happened to the file.
-    pub kind: FileChangeKind,
-    /// Lines added.
-    pub additions: u32,
-    /// Lines removed.
-    pub deletions: u32,
-    /// The diff carries no text for this file (an image, an archive, ...).
-    #[serde(default)]
-    pub binary: bool,
-    /// This file's hunks were left out of the stored patch because the
-    /// changeset exceeded the size budget; the summary is still complete.
-    #[serde(default)]
-    pub patch_omitted: bool,
-}
-
-/// One end of the compared range, as much of it as the provider told us.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GitRef {
-    /// The branch name, when the provider names one.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    /// The commit the diff was taken at, when known.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sha: Option<String>,
-}
-
-impl GitRef {
-    /// A ref known by name only.
-    #[must_use]
-    pub fn named(name: impl Into<String>) -> Self {
-        Self {
-            name: Some(name.into()),
-            sha: None,
-        }
-    }
-}
-
-/// What was compared with what.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChangesetRange {
-    /// The linked pull request's repository, as `https://github.com/owner/name`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub repository: Option<String>,
-    /// The side the work started from.
-    pub base: GitRef,
-    /// The side carrying the work.
-    pub head: GitRef,
 }
 
 /// The source of the captured diff.
@@ -250,105 +174,5 @@ pub struct SessionChanges {
     pub attempt: Option<CaptureAttempt>,
 }
 
-/// An `owner/name` GitHub repository, parsed from any of the spellings a
-/// provider uses (`https://github.com/o/n`, `github.com/o/n`, `o/n`, with or
-/// without a trailing `.git`).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RepositorySlug {
-    /// The account the repository lives under.
-    pub owner: String,
-    /// The repository's name.
-    pub name: String,
-}
-
-impl RepositorySlug {
-    /// Parse a repository reference. `None` when the text does not name a
-    /// GitHub repository.
-    #[must_use]
-    pub fn parse(text: &str) -> Option<Self> {
-        let trimmed = text.trim().trim_end_matches('/');
-        let without_scheme = trimmed
-            .strip_prefix("https://")
-            .or_else(|| trimmed.strip_prefix("http://"))
-            .or_else(|| trimmed.strip_prefix("git@"))
-            .unwrap_or(trimmed);
-        let path = without_scheme
-            .strip_prefix("github.com/")
-            .or_else(|| without_scheme.strip_prefix("github.com:"))
-            .unwrap_or(without_scheme);
-        let path = path.strip_suffix(".git").unwrap_or(path);
-        let mut parts = path.split('/');
-        let owner = parts.next()?;
-        let name = parts.next()?;
-        if parts.next().is_some() || owner.is_empty() || name.is_empty() {
-            return None;
-        }
-        let valid = |part: &str| {
-            part.chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-        };
-        if !valid(owner) || !valid(name) {
-            return None;
-        }
-        Some(Self {
-            owner: owner.to_owned(),
-            name: name.to_owned(),
-        })
-    }
-
-    /// The canonical `https://github.com/{owner}/{name}` address.
-    #[must_use]
-    pub fn https_url(&self) -> String {
-        format!("https://github.com/{}/{}", self.owner, self.name)
-    }
-}
-
-impl std::fmt::Display for RepositorySlug {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "{}/{}", self.owner, self.name)
-    }
-}
-
 #[cfg(test)]
 mod test;
-
-/// A validated GitHub pull request URL, used to build a fixed-origin API request.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PullRequestRef {
-    /// The repository containing the PR, including when its head is a fork.
-    pub repository: RepositorySlug,
-    /// The positive GitHub pull request number.
-    pub number: std::num::NonZeroU64,
-}
-
-impl PullRequestRef {
-    /// Accept GitHub PR links, optionally with a files/commits suffix or fragment.
-    pub fn parse(value: &str) -> Option<Self> {
-        let url = url::Url::parse(value).ok()?;
-        if url.scheme() != "https"
-            || url.host_str() != Some("github.com")
-            || !url.username().is_empty()
-            || url.password().is_some()
-            || url.port().is_some()
-        {
-            return None;
-        }
-        let mut segments = url.path_segments()?;
-        let owner = segments.next()?;
-        let repo = segments.next()?;
-        if segments.next()? != "pull" {
-            return None;
-        }
-        let number = segments.next()?.parse().ok()?;
-        match segments.next() {
-            None => {}
-            Some("") if segments.next().is_none() => {}
-            Some("files" | "commits" | "checks") if segments.next().is_none() => {}
-            _ => return None,
-        }
-        Some(Self {
-            repository: RepositorySlug::parse(&format!("{owner}/{repo}"))?,
-            number,
-        })
-    }
-}

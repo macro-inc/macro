@@ -3,12 +3,17 @@
 #[cfg(test)]
 mod test;
 
+mod diff;
 mod key;
 mod pull_request;
 
 use chrono::{DateTime, Utc};
 use foreign_entity::domain::models::{ForeignEntity, ForeignEntityError, SourceId};
 
+pub use diff::{
+    ChangesetRange, GitRef, GithubPullRequestDiff, GithubPullRequestDiffError, PullRequestRef,
+    RepositorySlug,
+};
 pub use key::GithubKey;
 pub use pull_request::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,

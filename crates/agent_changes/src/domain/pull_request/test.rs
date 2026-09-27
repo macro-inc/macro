@@ -1,23 +1,23 @@
 use super::*;
 use crate::domain::model::{ChangesetRange, GitRef};
-use crate::domain::ports::PullRequestDiff;
 use agent_session::domain::model::AgentSessionId;
 use agent_session::testing::test_agent_session;
+use github_pull_requests::domain::models::GithubPullRequestDiff;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Mutex;
 
 #[derive(Default)]
 struct Reader {
     calls: Mutex<Vec<(String, PullRequestRef)>>,
-    error: Option<fn() -> CompareError>,
+    error: Option<fn() -> GithubPullRequestDiffError>,
 }
 
-impl PullRequestDiffReader for Reader {
+impl GithubPullRequestDiffReader for Reader {
     async fn read(
         &self,
         user: &MacroUserIdStr<'static>,
         pr: &PullRequestRef,
-    ) -> Result<PullRequestDiff, CompareError> {
+    ) -> Result<GithubPullRequestDiff, GithubPullRequestDiffError> {
         self.calls
             .lock()
             .unwrap()
@@ -25,7 +25,7 @@ impl PullRequestDiffReader for Reader {
         if let Some(error) = self.error {
             return Err(error());
         }
-        Ok(PullRequestDiff {
+        Ok(GithubPullRequestDiff {
             patch: "PR diff".to_owned(),
             range: ChangesetRange {
                 repository: Some(pr.repository.https_url()),
@@ -87,9 +87,9 @@ async fn missing_or_invalid_pr_never_falls_back_to_a_branch_or_runtime() {
 #[tokio::test]
 async fn inaccessible_and_oversized_prs_remain_unavailable_without_a_fallback() {
     for error in [
-        || CompareError::NotFound,
-        || CompareError::Unavailable,
-        || CompareError::TooLarge,
+        || GithubPullRequestDiffError::NotFound,
+        || GithubPullRequestDiffError::Unavailable,
+        || GithubPullRequestDiffError::TooLarge,
     ] {
         let extractor = PullRequestChanges::new(Reader {
             error: Some(error),

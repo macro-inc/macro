@@ -18,22 +18,22 @@ fn metadata_uses_the_prs_actual_base_and_head_including_a_fork() {
 fn inaccessible_or_oversized_diffs_map_to_unavailable_states() {
     assert!(matches!(
         status_error(StatusCode::NOT_FOUND, ""),
-        CompareError::NotFound
+        GithubPullRequestDiffError::NotFound
     ));
     assert!(matches!(
         status_error(StatusCode::FORBIDDEN, ""),
-        CompareError::Unavailable
+        GithubPullRequestDiffError::Unavailable
     ));
     assert!(matches!(
         status_error(StatusCode::UNAUTHORIZED, ""),
-        CompareError::Unavailable
+        GithubPullRequestDiffError::Unavailable
     ));
     assert!(matches!(
         status_error(StatusCode::NOT_ACCEPTABLE, ""),
-        CompareError::TooLarge
+        GithubPullRequestDiffError::TooLarge
     ));
     assert!(matches!(
         status_error(StatusCode::BAD_GATEWAY, ""),
-        CompareError::Other(_)
+        GithubPullRequestDiffError::Other(_)
     ));
 }

@@ -192,12 +192,12 @@ dependencies = [
  "chrono",
  "dashmap",
  "entity_access",
- "github",
+ "git_patch",
+ "github_pull_requests",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
- "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
@@ -206,7 +206,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "url",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -7499,6 +7498,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "git_patch"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "strum 0.27.2",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "github"
 version = "0.1.0"
 dependencies = [
@@ -7566,6 +7577,7 @@ dependencies = [
  "entity_access",
  "filter_ast",
  "foreign_entity",
+ "git_patch",
  "item_filters",
  "macro_authorization",
  "macro_db_migrator",
@@ -7578,6 +7590,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "url",
  "utoipa",
  "uuid",
  "workspace-hack",
