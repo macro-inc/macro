@@ -19,4 +19,3 @@
                 WHERE sp.id = i.share_permission_id AND sp."linkShare" = 'TEAM'
                 AND owner_team.team_id::text IN (SELECT source_id FROM user_source_ids))
         )
-        
