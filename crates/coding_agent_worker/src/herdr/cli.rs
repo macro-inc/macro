@@ -48,6 +48,15 @@ pub(crate) struct Window {
     pub pane_id: String,
 }
 
+/// What herdr knows about a running agent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AgentInfo {
+    /// `idle`, `working`, `blocked`, `done`, or `unknown`.
+    pub status: String,
+    /// The agent's own session id, when its integration reports one.
+    pub session_id: Option<String>,
+}
+
 /// Drives the herdr session through its CLI.
 #[derive(Debug, Clone)]
 pub(crate) struct HerdrCli {
@@ -180,20 +189,31 @@ impl HerdrCli {
         self.run(&["agent", "prompt", name, text]).await.map(drop)
     }
 
-    /// The agent's lifecycle state: `idle`, `working`, `blocked`, `done`,
-    /// or `unknown`.
-    pub(crate) async fn agent_status(&self, name: &str) -> Result<String, HerdrError> {
+    /// A named agent's lifecycle state and the agent's own session id.
+    pub(crate) async fn agent_info(&self, name: &str) -> Result<AgentInfo, HerdrError> {
         let output = self.run(&["agent", "get", name]).await?;
         let answer: Value =
             serde_json::from_str(output.trim()).map_err(|source| HerdrError::Unparsable {
                 command: "agent get".to_owned(),
                 source,
             })?;
-        Ok(answer
-            .pointer("/result/agent/agent_status")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown")
-            .to_owned())
+        Ok(AgentInfo {
+            status: answer
+                .pointer("/result/agent/agent_status")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+                .to_owned(),
+            session_id: answer
+                .pointer("/result/agent/agent_session/value")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        })
+    }
+
+    /// The text a named agent's pane currently shows.
+    pub(crate) async fn read_agent(&self, name: &str) -> Result<String, HerdrError> {
+        self.run(&["agent", "read", name, "--source", "visible"])
+            .await
     }
 
     /// Press logical keys (`enter`, `esc`, `ctrl+c`) in a named agent's TUI.

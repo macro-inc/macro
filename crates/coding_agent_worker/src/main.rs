@@ -56,10 +56,13 @@ enum Command {
         #[arg(long)]
         session: String,
     },
-    /// Serve ACP on stdio with each session as a live Claude Code TUI in its
-    /// own herdr window. Set as the harness of a macrod run inside herdr.
+    /// Serve ACP on stdio with each session as a live coding-agent TUI in
+    /// its own herdr window. Set as the harness of a macrod run inside herdr.
     #[cfg(unix)]
     HerdrAcp {
+        /// Which agent TUI each session runs.
+        #[arg(long, value_enum, default_value_t)]
+        kind: herdr::acp_agent::TuiAgent,
         /// Claude Code's `--permission-mode` for every session, e.g.
         /// `acceptEdits` or `bypassPermissions`.
         #[arg(long)]
@@ -68,6 +71,9 @@ enum Command {
         /// herdr to it.
         #[arg(long)]
         no_focus: bool,
+        /// Extra arguments for every agent launch, e.g. `-- -s workspace-write`.
+        #[arg(last = true)]
+        agent_args: Vec<String>,
     },
 }
 
@@ -100,16 +106,20 @@ async fn main() -> ExitCode {
             };
         }
         Some(Command::HerdrAcp {
+            kind,
             permission_mode,
             no_focus,
+            agent_args,
         }) => {
             // stdout is the protocol: logs go to stderr, which macrod drains.
             tracing_subscriber::fmt()
                 .with_writer(std::io::stderr)
                 .init();
             return match herdr::acp_agent::run(herdr::acp_agent::AdapterOptions {
+                kind,
                 permission_mode,
                 no_focus,
+                agent_args,
             })
             .await
             {

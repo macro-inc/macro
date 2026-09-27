@@ -3,7 +3,7 @@
 mod claude_code;
 mod codex;
 #[cfg(unix)]
-mod herdr_claude;
+mod herdr_tui;
 mod hermes;
 mod npm_adapter;
 mod open_claw;
@@ -30,7 +30,9 @@ mod environment {
 
 static PRESETS: &[&dyn AgentPreset] = &[
     #[cfg(unix)]
-    &herdr_claude::HerdrClaude,
+    &herdr_tui::HerdrTui(crate::herdr::acp_agent::TuiAgent::Claude),
+    #[cfg(unix)]
+    &herdr_tui::HerdrTui(crate::herdr::acp_agent::TuiAgent::Codex),
     &hermes::Hermes,
     &claude_code::ClaudeCode,
     &codex::Codex,
@@ -95,6 +97,7 @@ pub enum AgentKind {
     Hermes,
     ClaudeCode,
     HerdrClaude,
+    HerdrCodex,
     Codex,
     OpenClaw,
     OpenCode,

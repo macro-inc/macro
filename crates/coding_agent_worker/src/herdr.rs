@@ -12,14 +12,19 @@
 //! Macro: windows steer through the same control API the web app uses.
 //!
 //! With `macrod herdr-acp` as the harness, the window instead hosts the real
-//! Claude Code TUI, driven over ACP by that adapter (see [`acp_agent`]).
+//! Claude Code or Codex TUI, driven over ACP by that adapter (see
+//! [`acp_agent`]).
 
 pub(crate) mod acp_agent;
 mod claude_log;
 mod cli;
+mod codex_log;
 mod hub;
 mod tap;
 pub(crate) mod wire;
+
+#[cfg(test)]
+mod test;
 
 use std::path::PathBuf;
 
@@ -31,6 +36,25 @@ use crate::config::Harness;
 /// windows for real agent TUIs, so no session needs a viewer window.
 pub(crate) fn drives_herdr(harness: &Harness) -> bool {
     harness.args.first().map(String::as_str) == Some(acp_agent::SUBCOMMAND)
+}
+
+/// The TUI a `macrod herdr-acp` harness runs, if the harness is one.
+pub(crate) fn herdr_agent(harness: &Harness) -> Option<acp_agent::TuiAgent> {
+    if !drives_herdr(harness) {
+        return None;
+    }
+    let mut args = harness.args.iter().skip(1).map(String::as_str);
+    while let Some(arg) = args.next() {
+        let kind = match arg {
+            "--" => break,
+            "--kind" => args.next(),
+            arg => arg.strip_prefix("--kind="),
+        };
+        if let Some(kind) = kind {
+            return <acp_agent::TuiAgent as clap::ValueEnum>::from_str(kind, true).ok();
+        }
+    }
+    Some(acp_agent::TuiAgent::default())
 }
 
 mod environment {
