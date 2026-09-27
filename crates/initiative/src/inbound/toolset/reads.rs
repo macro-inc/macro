@@ -139,7 +139,7 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ReadInitiative",
-    description = "Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The descriptionDocumentId can be read or edited with document tools. Use entity_type='initiative' with property tools. Discussion and activity tools read the project's collaboration history."
+    description = "Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The descriptionDocumentId can be read or edited with document tools. Use entity_type='initiative' with property tools. ReadInitiativeActivity returns the project's activity history."
 )]
 pub struct ReadInitiative {
     /// Project identifier.
@@ -314,7 +314,7 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ReadInitiativeActivity",
-    description = "Read project creation, edits, property changes, and task membership changes, newest first. Task references require current task view access. Each page scans at most 100 events and may contain fewer visible records. Pass nextCursor back as cursor with the same time filters to continue, including after an empty page. Discussions are read separately with ReadInitiativeDiscussions."
+    description = "Read project creation, edits, property changes, and task membership changes, newest first. Task references require current task view access. Each page scans at most 100 events and may contain fewer visible records. Pass nextCursor back as cursor with the same time filters to continue, including after an empty page."
 )]
 pub struct ReadInitiativeActivity {
     /// Project identifier.

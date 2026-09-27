@@ -132,7 +132,7 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "DeleteInitiative",
-    description = "Permanently delete a project, its description and project-owned discussions/properties. Associated tasks remain and lose their project association. Requires ownership. This operation cannot be undone."
+    description = "Permanently delete a project, its description and properties. Associated tasks remain and lose their project association. Requires ownership. This operation cannot be undone."
 )]
 pub struct DeleteInitiative {
     /// Project to permanently delete.

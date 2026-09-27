@@ -625,23 +625,14 @@ async fn main() -> anyhow::Result<()> {
         user_email_service,
     );
 
-    let (initiative_tool_context, initiative_discussion_tool_context) =
-        ai_tools::build_initiative_tool_contexts(
-            db.clone(),
-            &document_tool_context,
-            properties_service.clone(),
-            entity_access_service.clone(),
-            ai_tools::ChannelSideEffectClients {
-                connection_gateway: Arc::new(
-                    connection_gateway_client::ConnectionGatewayClient::new(
-                        internal_api_key.clone(),
-                        ConnectionGatewayUrl::new()?.to_string(),
-                    ),
-                ),
-                sqs: aws_sdk_sqs::Client::new(&aws_config),
-                macro_event_broker: macro_event_broker.clone(),
-            },
-        );
+    let initiative_tool_context = ai_tools::build_initiative_tool_context(
+        db.clone(),
+        &document_tool_context,
+        properties_service.clone(),
+        entity_access_service.clone(),
+        aws_sdk_sqs::Client::new(&aws_config),
+        macro_event_broker.clone(),
+    );
 
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
@@ -680,7 +671,6 @@ async fn main() -> anyhow::Result<()> {
         ),
         project_tool_context,
         initiative_tool_context,
-        initiative_discussion_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
         skill_tool_context: ai_tools::build_skill_tool_context(

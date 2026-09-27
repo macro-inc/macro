@@ -358,23 +358,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         user_email_service,
     );
 
-    let (initiative_tool_context, initiative_discussion_tool_context) =
-        ai_tools::build_initiative_tool_contexts(
-            pool.clone(),
-            &document_tool_context,
-            properties_service.clone(),
-            entity_access_service.clone(),
-            ai_tools::ChannelSideEffectClients {
-                connection_gateway: Arc::new(
-                    connection_gateway_client::ConnectionGatewayClient::new(
-                        "test".into(),
-                        "http://localhost:1".into(),
-                    ),
-                ),
-                sqs: aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
-                macro_event_broker: macro_event_broker.clone(),
-            },
-        );
+    let initiative_tool_context = ai_tools::build_initiative_tool_context(
+        pool.clone(),
+        &document_tool_context,
+        properties_service.clone(),
+        entity_access_service.clone(),
+        aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
+        macro_event_broker.clone(),
+    );
 
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
@@ -414,7 +405,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         project_tool_context,
         initiative_tool_context,
-        initiative_discussion_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         skill_tool_context: ai_tools::build_skill_tool_context(

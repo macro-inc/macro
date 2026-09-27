@@ -14,7 +14,6 @@ use initiative::{
     inbound::toolset::InitiativeToolContext,
     outbound::{PgInitiativeRepo, resources::ProjectResources},
 };
-use messages::inbound::toolset::InitiativeDiscussionToolContext;
 
 type ToolDescriptionDocuments = initiative_documents::InitiativeDescriptionDocumentsAdapter<
     Arc<ToolDocumentService>,
@@ -34,36 +33,30 @@ pub type ToolInitiativeToolContext = InitiativeToolContext<
     activity::outbound::pg_activity_repo::PgActivityRepo,
 >;
 
-/// Shared discussion workflow context for every AI/MCP host.
-pub type ToolInitiativeDiscussionToolContext =
-    InitiativeDiscussionToolContext<ToolEntityAccessService>;
-
-/// Compose project lifecycle and discussion tools with all production side effects.
-pub fn build_initiative_tool_contexts(
+/// Compose project lifecycle tools with document cleanup and activity publication.
+pub fn build_initiative_tool_context(
     pool: sqlx::PgPool,
     documents: &ToolDocumentToolContext,
     properties: Arc<ToolPropertiesService>,
     access: Arc<ToolEntityAccessService>,
-    clients: ChannelSideEffectClients,
-) -> (
-    ToolInitiativeToolContext,
-    ToolInitiativeDiscussionToolContext,
-) {
+    sqs: aws_sdk_sqs::Client,
+    event_broker: ToolEventBroker,
+) -> ToolInitiativeToolContext {
     let document_queue = Arc::new(
-        sqs_client::SQS::new(clients.sqs.clone())
+        sqs_client::SQS::new(sqs)
             .document_delete_queue(macro_queues::DocumentDeleteQueue::new().as_ref()),
     );
     let purger = DocumentPurger::new(
         LegacyDocumentPurgeRepository::new(pool.clone()),
         SqsDocumentPurgeQueue::new(document_queue),
-        clients.macro_event_broker.clone(),
+        event_broker.clone(),
     );
     let description = initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
         documents.creator.clone(),
         purger,
     );
     let resources: Arc<dyn InitiativeResources> = Arc::new(ProjectResources::new(
-        properties.clone(),
+        properties,
         Arc::new(SystemPropertiesServiceImpl::new(
             PgSystemPropertiesRepository::new(pool.clone()),
         )),
@@ -76,10 +69,10 @@ pub fn build_initiative_tool_contexts(
     )
     .with_event_publisher(Arc::new(
         initiative::outbound::event_publisher::BrokerInitiativeEventPublisher::new(
-            clients.macro_event_broker.clone(),
+            event_broker.clone(),
         ),
     ));
-    let project_context = InitiativeToolContext {
+    InitiativeToolContext {
         service: Arc::new(service),
         access: access.clone(),
         history: Arc::new(InitiativeHistory::new(
@@ -88,41 +81,5 @@ pub fn build_initiative_tool_contexts(
         )),
         resources,
         actor: bot_id::MACRO_AI_BOT_ID,
-    };
-    let notification_ingress = Arc::new(SqsNotificationIngress {
-        queue: notification::outbound::queue::SqsQueue::new(
-            clients.sqs,
-            macro_queues::NotificationIngressQueue::new().to_string(),
-        ),
-    });
-    let delivery = messages::domain::delivery::DiscussionDelivery::new(
-        messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
-            .with_initiatives(
-                initiative::domain::lookup::InitiativeLookup::new(PgInitiativeRepo::new(
-                    pool.clone(),
-                )),
-                properties,
-            ),
-        messages::outbound::entity_access_audience::EntityAccessMessageAudience((*access).clone()),
-        messages::outbound::connection_gateway::ConnectionGatewayMessages(
-            clients.connection_gateway,
-        ),
-        messages::outbound::notification_sender::MessageNotificationSender(notification_ingress),
-    )
-    .with_sharing(messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()));
-    let effects = messages::domain::effects::MessageEffects::new(
-        messages::outbound::broker::BrokerMessagePublisher::new(clients.macro_event_broker),
-        messages::domain::ports::NoMessageEventPublisher,
-        delivery,
-    );
-    let discussion_context = InitiativeDiscussionToolContext {
-        service: Arc::new(shared_message_service(
-            pool,
-            effects,
-            documents.lexical_client.clone(),
-        )),
-        access,
-        actor: bot_id::MACRO_AI_BOT_ID,
-    };
-    (project_context, discussion_context)
+    }
 }

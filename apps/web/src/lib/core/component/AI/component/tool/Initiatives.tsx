@@ -57,28 +57,4 @@ export const initiativeToolHandlers = {
     'ReadInitiativeActivity',
     'Read project activity'
   ),
-  ReadInitiativeDiscussions: initiativeHandler(
-    'ReadInitiativeDiscussions',
-    'Read project discussions'
-  ),
-  PostInitiativeComment: initiativeHandler(
-    'PostInitiativeComment',
-    'Post project comment'
-  ),
-  UpdateInitiativeComment: initiativeHandler(
-    'UpdateInitiativeComment',
-    'Update project comment'
-  ),
-  DeleteInitiativeComment: initiativeHandler(
-    'DeleteInitiativeComment',
-    'Delete project comment'
-  ),
-  ReactToInitiativeComment: initiativeHandler(
-    'ReactToInitiativeComment',
-    'React to project comment'
-  ),
-  SetInitiativeDiscussionResolved: initiativeHandler(
-    'SetInitiativeDiscussionResolved',
-    'Update discussion status'
-  ),
 };

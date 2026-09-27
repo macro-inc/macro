@@ -26,7 +26,6 @@ pub enum MessageError {
 
 /// Cursor for a chronological parent timeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "toolset", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageCursor {
     /// Last root creation time.

@@ -72,10 +72,6 @@ type ToolParserMap = {
     call: types.DeleteInitiative;
     response: types.ProjectOperationComplete;
   };
-  DeleteInitiativeComment: {
-    call: types.DeleteInitiativeComment;
-    response: types.DiscussionOperationComplete;
-  };
   DeleteReminder: {
     call: types.DeleteReminder;
     response: types.DeleteReminderResponse;
@@ -175,14 +171,6 @@ type ToolParserMap = {
     response: types.MoveToProjectResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
-  PostInitiativeComment: {
-    call: types.PostInitiativeComment;
-    response: types.Message;
-  };
-  ReactToInitiativeComment: {
-    call: types.ReactToInitiativeComment;
-    response: types.Message;
-  };
   ReadActivity: {
     call: types.ReadActivity;
     response: types.ReadActivityResponse;
@@ -212,10 +200,6 @@ type ToolParserMap = {
   ReadInitiativeActivity: {
     call: types.ReadInitiativeActivity;
     response: types.ProjectActivityResult;
-  };
-  ReadInitiativeDiscussions: {
-    call: types.ReadInitiativeDiscussions;
-    response: types.InitiativeDiscussionsResult;
   };
   ReadMetadata: {
     call: types.ReadMetadata;
@@ -272,10 +256,6 @@ type ToolParserMap = {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
   };
-  SetInitiativeDiscussionResolved: {
-    call: types.SetInitiativeDiscussionResolved;
-    response: types.ThreadState;
-  };
   SetSenderPolicy: {
     call: types.SetSenderPolicy;
     response: types.SetSenderPolicyResponse;
@@ -296,10 +276,6 @@ type ToolParserMap = {
   UpdateInitiative: {
     call: types.UpdateInitiative;
     response: types.ProjectDetails;
-  };
-  UpdateInitiativeComment: {
-    call: types.UpdateInitiativeComment;
-    response: types.Message;
   };
   UpdateInitiativeSharing: {
     call: types.UpdateInitiativeSharing;
@@ -382,10 +358,6 @@ const toolParserMap = {
   DeleteInitiative: {
     call: schemas.DeleteInitiative,
     response: schemas.ProjectOperationComplete,
-  },
-  DeleteInitiativeComment: {
-    call: schemas.DeleteInitiativeComment,
-    response: schemas.DiscussionOperationComplete,
   },
   DeleteReminder: {
     call: schemas.DeleteReminder,
@@ -501,14 +473,6 @@ const toolParserMap = {
     call: schemas.NameSearch,
     response: schemas.SearchToolResponse,
   },
-  PostInitiativeComment: {
-    call: schemas.PostInitiativeComment,
-    response: schemas.Message,
-  },
-  ReactToInitiativeComment: {
-    call: schemas.ReactToInitiativeComment,
-    response: schemas.Message,
-  },
   ReadActivity: {
     call: schemas.ReadActivity,
     response: schemas.ReadActivityResponse,
@@ -541,10 +505,6 @@ const toolParserMap = {
   ReadInitiativeActivity: {
     call: schemas.ReadInitiativeActivity,
     response: schemas.ProjectActivityResult,
-  },
-  ReadInitiativeDiscussions: {
-    call: schemas.ReadInitiativeDiscussions,
-    response: schemas.InitiativeDiscussionsResult,
   },
   ReadMetadata: {
     call: schemas.ReadMetadata,
@@ -607,10 +567,6 @@ const toolParserMap = {
     call: schemas.SetEntityProperty,
     response: schemas.SetEntityPropertyResponse,
   },
-  SetInitiativeDiscussionResolved: {
-    call: schemas.SetInitiativeDiscussionResolved,
-    response: schemas.ThreadState,
-  },
   SetSenderPolicy: {
     call: schemas.SetSenderPolicy,
     response: schemas.SetSenderPolicyResponse,
@@ -631,10 +587,6 @@ const toolParserMap = {
   UpdateInitiative: {
     call: schemas.UpdateInitiative,
     response: schemas.ProjectDetails,
-  },
-  UpdateInitiativeComment: {
-    call: schemas.UpdateInitiativeComment,
-    response: schemas.Message,
   },
   UpdateInitiativeSharing: {
     call: schemas.UpdateInitiativeSharing,
@@ -728,10 +680,6 @@ type ToolDataMap = {
   DeleteInitiative: {
     call: types.DeleteInitiative;
     response: types.ProjectOperationComplete;
-  };
-  DeleteInitiativeComment: {
-    call: types.DeleteInitiativeComment;
-    response: types.DiscussionOperationComplete;
   };
   DeleteReminder: {
     call: types.DeleteReminder;
@@ -832,14 +780,6 @@ type ToolDataMap = {
     response: types.MoveToProjectResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
-  PostInitiativeComment: {
-    call: types.PostInitiativeComment;
-    response: types.Message;
-  };
-  ReactToInitiativeComment: {
-    call: types.ReactToInitiativeComment;
-    response: types.Message;
-  };
   ReadActivity: {
     call: types.ReadActivity;
     response: types.ReadActivityResponse;
@@ -869,10 +809,6 @@ type ToolDataMap = {
   ReadInitiativeActivity: {
     call: types.ReadInitiativeActivity;
     response: types.ProjectActivityResult;
-  };
-  ReadInitiativeDiscussions: {
-    call: types.ReadInitiativeDiscussions;
-    response: types.InitiativeDiscussionsResult;
   };
   ReadMetadata: {
     call: types.ReadMetadata;
@@ -929,10 +865,6 @@ type ToolDataMap = {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
   };
-  SetInitiativeDiscussionResolved: {
-    call: types.SetInitiativeDiscussionResolved;
-    response: types.ThreadState;
-  };
   SetSenderPolicy: {
     call: types.SetSenderPolicy;
     response: types.SetSenderPolicyResponse;
@@ -953,10 +885,6 @@ type ToolDataMap = {
   UpdateInitiative: {
     call: types.UpdateInitiative;
     response: types.ProjectDetails;
-  };
-  UpdateInitiativeComment: {
-    call: types.UpdateInitiativeComment;
-    response: types.Message;
   };
   UpdateInitiativeSharing: {
     call: types.UpdateInitiativeSharing;

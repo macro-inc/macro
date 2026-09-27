@@ -785,26 +785,6 @@ export type ParticipantAction = 'add' | 'remove';
  */
 export type MoveableEntityType = 'document' | 'chat' | 'email' | 'project';
 /**
- * The entity whose permissions and lifecycle govern a message.
- */
-export type MessageParent =
-  | {
-      type: 'channel';
-      id: string;
-    }
-  | {
-      type: 'document';
-      id: DocumentId;
-    }
-  | {
-      type: 'initiative';
-      id: string;
-    };
-/**
- * A validated document identifier. Historical document ids need not be UUIDs.
- */
-export type DocumentId = string;
-/**
  * One activity action returned to the AI.
  */
 export type ToolActivityAction =
@@ -1030,68 +1010,6 @@ export type CommentAnchor =
        */
       anchorId: string;
       type: 'pdfPin';
-    };
-/**
- * One full thread or a bounded timeline.
- */
-export type InitiativeDiscussionsResult =
-  | {
-      thread: MessageThread;
-      type: 'thread';
-    }
-  | {
-      /**
-       * Matching discussion roots.
-       */
-      discussions: MessageListItem[];
-      /**
-       * More discussions may match; follow nextCursor.
-       */
-      truncated: boolean;
-      /**
-       * Stable continuation, absent after the final matching page.
-       */
-      nextCursor?: MessageCursor | null;
-      type: 'timeline';
-    };
-/**
- * A thread's location within its document. Geometry remains annotation-owned.
- */
-export type ThreadAnchor =
-  | {
-      /**
-       * Mark UUID serialized in the document.
-       */
-      mark_id: string;
-      /**
-       * The marked text as it read when the discussion was created, already
-       * trimmed and bounded. Absent on threads created or imported before
-       * snapshots were captured: the text a mark covers cannot be recovered
-       * from the mark id alone.
-       */
-      marked_text?: string | null;
-      type: 'markdown';
-    }
-  | {
-      /**
-       * Highlight annotation UUID.
-       */
-      anchor_id: string;
-      /**
-       * The text the highlight covers, trimmed and bounded like a markdown
-       * snapshot. The highlight owns it and it can be edited there, so it is
-       * read from the highlight whenever the thread is, never stored on the
-       * thread. Absent when the highlight carries no text.
-       */
-      marked_text?: string | null;
-      type: 'pdf_highlight';
-    }
-  | {
-      /**
-       * Placeable annotation UUID.
-       */
-      anchor_id: string;
-      type: 'pdf_placeable';
     };
 /**
  * API-visible content lifecycle state derived from current document metadata.
@@ -3336,7 +3254,7 @@ export interface DeleteImportEntityResponse {
   message: string;
 }
 /**
- * Permanently delete a project, its description and project-owned discussions/properties. Associated tasks remain and lose their project association. Requires ownership. This operation cannot be undone.
+ * Permanently delete a project, its description and properties. Associated tasks remain and lose their project association. Requires ownership. This operation cannot be undone.
  */
 export interface DeleteInitiative {
   /**
@@ -3350,32 +3268,6 @@ export interface DeleteInitiative {
 export interface ProjectOperationComplete {
   /**
    * True when the operation completed.
-   */
-  success: boolean;
-}
-/**
- * Delete a project comment, or delete an entire discussion when wholeDiscussion is true and messageId is its root id. Comment deletion leaves a tombstone so replies remain readable; whole-discussion deletion hides the thread. The service enforces author and project moderation permissions.
- */
-export interface DeleteInitiativeComment {
-  /**
-   * Project identifier.
-   */
-  initiativeId: string;
-  /**
-   * Comment id, or root id for whole-discussion deletion.
-   */
-  messageId: string;
-  /**
-   * Delete the entire discussion rather than one comment. Defaults to false.
-   */
-  wholeDiscussion?: boolean;
-}
-/**
- * The requested discussion operation completed.
- */
-export interface DiscussionOperationComplete {
-  /**
-   * True after successful completion.
    */
   success: boolean;
 }
@@ -5039,212 +4931,6 @@ export interface NameSearch {
   tagsMatch?: TagMatch;
 }
 /**
- * Post a Markdown comment on a project, or reply to a project discussion. Requires comment access. The bot is the author and the requesting user is recorded as its invoker. Uses the shared discussions system, including mention authorization, realtime updates and notifications.
- */
-export interface PostInitiativeComment {
-  /**
-   * Project identifier.
-   */
-  initiativeId: string;
-  /**
-   * Markdown comment body.
-   */
-  content: string;
-  /**
-   * Root message id to reply to. Omit to start a discussion.
-   */
-  threadId?: string | null;
-  /**
-   * Explicit user/entity mentions; Markdown mentions are also extracted by the service.
-   */
-  mentions?: SimpleMention[];
-  /**
-   * Entity attachments, checked under the same caller's access.
-   */
-  attachments?: NewAttachment[];
-}
-/**
- * A mention tracked in a message body.
- */
-export interface SimpleMention {
-  /**
-   * Mentioned entity type.
-   */
-  entity_type: string;
-  /**
-   * Mentioned entity identifier.
-   */
-  entity_id: string;
-}
-/**
- * An attachment to add to a message.
- */
-export interface NewAttachment {
-  /**
-   * Attached entity type.
-   */
-  entity_type: string;
-  /**
-   * Attached entity identifier.
-   */
-  entity_id: string;
-  /**
-   * Optional media width.
-   */
-  width?: number | null;
-  /**
-   * Optional media height.
-   */
-  height?: number | null;
-}
-/**
- * Shared message representation for channel timelines and entity discussions.
- */
-export interface Message {
-  /**
-   * Message UUID.
-   */
-  id: string;
-  parent: MessageParent;
-  /**
-   * Root message UUID for replies; absent on roots.
-   */
-  thread_id?: string | null;
-  /**
-   * Authenticated actor or owner of imported content.
-   */
-  sender_id: string;
-  /**
-   * Original external author, when imported.
-   */
-  imported_author?: ImportedAuthor | null;
-  /**
-   * Public bot name and avatar for rendering shared message authors.
-   */
-  bot_profile?: BotSenderProfile | null;
-  /**
-   * Tracked mentions, retained when a caller changes attachments only.
-   */
-  mentions: SimpleMention[];
-  /**
-   * User who triggered a bot-authored message.
-   */
-  triggered_by?: string | null;
-  /**
-   * Macro Markdown body.
-   */
-  content: string;
-  /**
-   * Creation time.
-   */
-  created_at: string;
-  /**
-   * Last persisted update.
-   */
-  updated_at: string;
-  /**
-   * Last content edit, if any.
-   */
-  edited_at?: string | null;
-  /**
-   * Message tombstone, independent of thread deletion.
-   */
-  deleted_at?: string | null;
-  /**
-   * Attached entities.
-   */
-  attachments: MessageAttachment[];
-  /**
-   * Aggregated reactions.
-   */
-  reactions: CountedReaction[];
-}
-/**
- * Display attribution for a comment imported from an external document.
- */
-export interface ImportedAuthor {
-  /**
-   * Original author text; never interpreted as an authenticated principal.
-   */
-  name: string;
-}
-/**
- * Public bot profile attached to bot-authored messages.
- */
-export interface BotSenderProfile {
-  /**
-   * Bot display name.
-   */
-  name: string;
-  /**
-   * Bot avatar URL.
-   */
-  avatar_url?: string | null;
-}
-/**
- * An entity attached to a message.
- */
-export interface MessageAttachment {
-  /**
-   * Attachment UUID.
-   */
-  id: string;
-  /**
-   * Attached entity type.
-   */
-  entity_type: string;
-  /**
-   * Attached entity identifier.
-   */
-  entity_id: string;
-  /**
-   * Optional media width.
-   */
-  width?: number | null;
-  /**
-   * Optional media height.
-   */
-  height?: number | null;
-  /**
-   * When the attachment was added.
-   */
-  created_at: string;
-}
-/**
- * Reaction emoji and the users who added it.
- */
-export interface CountedReaction {
-  /**
-   * Emoji being reacted with.
-   */
-  emoji: string;
-  /**
-   * User identifiers.
-   */
-  users: string[];
-}
-/**
- * Add or remove the acting bot's emoji reaction on a project comment. Requires comment access and a live comment in that project.
- */
-export interface ReactToInitiativeComment {
-  /**
-   * Project identifier.
-   */
-  initiativeId: string;
-  /**
-   * Comment identifier.
-   */
-  messageId: string;
-  /**
-   * Emoji to react with.
-   */
-  emoji: string;
-  /**
-   * True adds the reaction; false removes it.
-   */
-  add: boolean;
-}
-/**
  * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
  */
 export interface ReadActivity {
@@ -5953,7 +5639,7 @@ export interface DocumentComment {
   editedAt?: string | null;
 }
 /**
- * Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The descriptionDocumentId can be read or edited with document tools. Use entity_type='initiative' with property tools. Discussion and activity tools read the project's collaboration history.
+ * Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The descriptionDocumentId can be read or edited with document tools. Use entity_type='initiative' with property tools. ReadInitiativeActivity returns the project's activity history.
  */
 export interface ReadInitiative {
   /**
@@ -5981,7 +5667,7 @@ export interface ProjectReadResult {
   nextTaskCursor?: string | null;
 }
 /**
- * Read project creation, edits, property changes, and task membership changes, newest first. Task references require current task view access. Each page scans at most 100 events and may contain fewer visible records. Pass nextCursor back as cursor with the same time filters to continue, including after an empty page. Discussions are read separately with ReadInitiativeDiscussions.
+ * Read project creation, edits, property changes, and task membership changes, newest first. Task references require current task view access. Each page scans at most 100 events and may contain fewer visible records. Pass nextCursor back as cursor with the same time filters to continue, including after an empty page.
  */
 export interface ReadInitiativeActivity {
   /**
@@ -6065,174 +5751,6 @@ export interface InitiativeActivityRecord {
    * Time of the change.
    */
   occurredAt: string;
-}
-/**
- * Read discussions and comments on a project using Macro's shared discussions system. Without threadId returns up to 100 roots with reply previews. Pass nextCursor back as cursor with the same date filters to read older roots. Use a root id as threadId to read the complete discussion. Date filters select discussions with activity in that interval.
- */
-export interface ReadInitiativeDiscussions {
-  /**
-   * Project identifier.
-   */
-  initiativeId: string;
-  /**
-   * Root message id for a complete thread. Omit to list discussions.
-   */
-  threadId?: string | null;
-  /**
-   * Include discussions with roots or live replies at or after this timestamp.
-   */
-  after?: string | null;
-  /**
-   * Include discussions with roots or live replies before this timestamp.
-   */
-  before?: string | null;
-  /**
-   * Opaque nextCursor from the preceding timeline page; omit when reading a thread.
-   */
-  cursor?: MessageCursor | null;
-  /**
-   * Maximum roots to return, from 1 through 100; defaults to 100.
-   */
-  limit?: number | null;
-}
-/**
- * Cursor for a chronological parent timeline.
- */
-export interface MessageCursor {
-  /**
-   * Last root creation time.
-   */
-  created_at: string;
-  /**
-   * Last root UUID, used to break timestamp ties.
-   */
-  id: string;
-}
-/**
- * A discussion with its root and ordered replies, including root tombstones.
- */
-export interface MessageThread {
-  state: ThreadState;
-  root: Message;
-  /**
-   * Replies in display order.
-   */
-  replies: Message[];
-}
-/**
- * State belonging to a whole thread, keyed by its root message.
- */
-export interface ThreadState {
-  /**
-   * Root message UUID; there is no separate thread identity.
-   */
-  root_id: string;
-  /**
-   * User who owns this discussion, including imported discussions.
-   */
-  user_id: string;
-  /**
-   * Whether this discussion has been resolved.
-   */
-  resolved: boolean;
-  /**
-   * No anchor means a discussion on the entire parent. Deleted Markdown
-   * threads retain their mark identity so closed documents can reconcile it.
-   */
-  anchor?: ThreadAnchor | null;
-  /**
-   * Creation time of the discussion.
-   */
-  created_at: string;
-  /**
-   * Last state change.
-   */
-  updated_at: string;
-  /**
-   * Explicit deletion of the entire thread, distinct from root deletion.
-   */
-  deleted_at?: string | null;
-}
-/**
- * Root message with its small thread preview, independent of its parent type.
- */
-export interface MessageListItem {
-  /**
-   * Message UUID.
-   */
-  id: string;
-  parent: MessageParent;
-  /**
-   * Root message UUID for replies; absent on roots.
-   */
-  thread_id?: string | null;
-  /**
-   * Authenticated actor or owner of imported content.
-   */
-  sender_id: string;
-  /**
-   * Original external author, when imported.
-   */
-  imported_author?: ImportedAuthor | null;
-  /**
-   * Public bot name and avatar for rendering shared message authors.
-   */
-  bot_profile?: BotSenderProfile | null;
-  /**
-   * Tracked mentions, retained when a caller changes attachments only.
-   */
-  mentions: SimpleMention[];
-  /**
-   * User who triggered a bot-authored message.
-   */
-  triggered_by?: string | null;
-  /**
-   * Macro Markdown body.
-   */
-  content: string;
-  /**
-   * Creation time.
-   */
-  created_at: string;
-  /**
-   * Last persisted update.
-   */
-  updated_at: string;
-  /**
-   * Last content edit, if any.
-   */
-  edited_at?: string | null;
-  /**
-   * Message tombstone, independent of thread deletion.
-   */
-  deleted_at?: string | null;
-  /**
-   * Attached entities.
-   */
-  attachments: MessageAttachment[];
-  /**
-   * Aggregated reactions.
-   */
-  reactions: CountedReaction[];
-  state: ThreadState;
-  thread: MessageThreadPreview;
-}
-/**
- * Thread counts and its oldest three live replies.
- */
-export interface MessageThreadPreview {
-  /**
-   * Total live reply count.
-   */
-  reply_count: number;
-  /**
-   * Creation time of the latest live reply.
-   */
-  latest_reply_at?: string | null;
-  /**
-   * Bounded preview using the canonical message shape.
-   */
-  preview: Message[];
 }
 /**
  * Retrieve a documents metadata
@@ -6845,23 +6363,6 @@ export interface SetEntityPropertyResponse {
   message: string;
 }
 /**
- * Resolve or reopen a project discussion using the shared discussion policy. Requires comment access and any additional author/moderator permissions enforced by the discussion service.
- */
-export interface SetInitiativeDiscussionResolved {
-  /**
-   * Project identifier.
-   */
-  initiativeId: string;
-  /**
-   * Root message id of the discussion.
-   */
-  threadId: string;
-  /**
-   * True resolves; false reopens.
-   */
-  resolved: boolean;
-}
-/**
  * Set where future mail from a sender lands in one of the user's inboxes. This is the same control a human has in the inbox menus: Sender → Signal, Sender → Noise, and Block Sender.
  *
  * Policies:
@@ -7106,35 +6607,6 @@ export interface UpdateInitiative {
    * Owner-only complete replacement member list; omitted preserves existing members, [] clears it.
    */
   memberIds?: string[] | null;
-}
-/**
- * Edit a project comment's Markdown or attachments. The shared discussion service enforces authorship: having project edit access alone does not authorize rewriting another author's comment. Omitted fields are unchanged.
- */
-export interface UpdateInitiativeComment {
-  /**
-   * Project identifier.
-   */
-  initiativeId: string;
-  /**
-   * Comment identifier.
-   */
-  messageId: string;
-  /**
-   * Replacement Markdown body.
-   */
-  content?: string | null;
-  /**
-   * Replacement explicit mentions; omitted preserves the existing authored mentions.
-   */
-  mentions?: SimpleMention[] | null;
-  /**
-   * Existing attachment ids to remove.
-   */
-  removeAttachmentIds?: string[];
-  /**
-   * New attachments to append.
-   */
-  addAttachments?: NewAttachment[];
 }
 /**
  * Change a project's team, link or channel sharing. Only the actual project owner may change sharing. Each omitted field remains unchanged; off disables that share. Project and description document permissions change together. Collaboration member changes use UpdateInitiative.
