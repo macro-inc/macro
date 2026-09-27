@@ -8,10 +8,10 @@ use std::time::Duration;
 use serde::de::DeserializeOwned;
 
 use crate::domain::models::{
-    EnrichedGithubPullRequest, GithubKey, GithubPullRequestCheckRun, GithubPullRequestComment,
-    GithubPullRequestDetails, GithubPullRequestLabel, GithubPullRequestReview,
-    GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser, GithubRepository,
-    latest_reviews,
+    EnrichedGithubPullRequest, GitRef, GithubKey, GithubPullRequestCheckRun,
+    GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestLabel,
+    GithubPullRequestReview, GithubPullRequestReviewState, GithubPullRequestStatus,
+    GithubPullRequestUser, GithubRepository, latest_reviews,
 };
 
 const GITHUB_API_BASE_URL: &str = "https://api.github.com";
@@ -76,6 +76,8 @@ pub(crate) async fn fetch_pull_request_metadata(
         assignees: Some(pull_request_users(&pull_request.assignees)),
         labels: Some(pull_request_labels(&pull_request.labels)),
         reviews,
+        base: pull_request.base.git_ref(),
+        head: Some(pull_request.head.git_ref()),
     })
 }
 
@@ -201,6 +203,8 @@ struct GithubOpenPullRequestResponse {
     #[serde(default)]
     base: GithubPullRequestBaseResponse,
     #[serde(default)]
+    head: Option<GithubPullRequestHeadResponse>,
+    #[serde(default)]
     draft: Option<bool>,
     #[serde(default)]
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -263,17 +267,39 @@ fn structural_participant_ids(
 
 #[derive(Debug, serde::Deserialize)]
 struct GithubPullRequestHeadResponse {
+    #[serde(default, rename = "ref")]
+    name: Option<String>,
     sha: String,
+}
+
+impl GithubPullRequestHeadResponse {
+    fn git_ref(&self) -> GitRef {
+        GitRef {
+            name: self.name.clone(),
+            sha: Some(self.sha.clone()),
+        }
+    }
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
 struct GithubPullRequestBaseResponse {
     repo: Option<GithubRepositoryIdResponse>,
+    #[serde(default, rename = "ref")]
+    name: Option<String>,
+    #[serde(default)]
+    sha: Option<String>,
 }
 
 impl GithubPullRequestBaseResponse {
     fn repository_id(&self) -> Option<u64> {
         self.repo.as_ref().map(|repo| repo.id)
+    }
+
+    fn git_ref(&self) -> Option<GitRef> {
+        (self.name.is_some() || self.sha.is_some()).then(|| GitRef {
+            name: self.name.clone(),
+            sha: self.sha.clone(),
+        })
     }
 }
 
@@ -710,6 +736,11 @@ impl GithubOpenPullRequestResponse {
             assignees: Some(pull_request_users(&self.assignees)),
             labels: Some(pull_request_labels(&self.labels)),
             reviews: None,
+            base: self.base.git_ref(),
+            head: self
+                .head
+                .as_ref()
+                .map(GithubPullRequestHeadResponse::git_ref),
         }
     }
 }

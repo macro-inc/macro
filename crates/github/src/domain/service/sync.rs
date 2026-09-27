@@ -13,7 +13,7 @@ mod realtime;
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
+        EnrichedGithubPullRequest, GitRef, GithubAppInstallationSource, GithubError,
         GithubInstallationAccessToken, GithubInstallationSetupAction, GithubKey,
         GithubPullRequestDetails, GithubPullRequestLabel, GithubPullRequestReview,
         GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser,
@@ -295,7 +295,22 @@ impl<
                 .map(|labels| labels.iter().filter_map(Self::label_from_payload).collect()),
             reviews: Self::review_from_payload(event.payload.get("review"))
                 .map(|review| vec![review]),
+            base: pull_request.and_then(|pr| Self::git_ref_from_payload(pr.get("base")?)),
+            head: pull_request.and_then(|pr| Self::git_ref_from_payload(pr.get("head")?)),
         })
+    }
+
+    /// A pull request payload's `base` or `head`: the branch and the commit it points at.
+    fn git_ref_from_payload(branch: &serde_json::Value) -> Option<GitRef> {
+        let name = branch
+            .get("ref")
+            .and_then(|value| value.as_str())
+            .map(str::to_string);
+        let sha = branch
+            .get("sha")
+            .and_then(|value| value.as_str())
+            .map(str::to_string);
+        (name.is_some() || sha.is_some()).then_some(GitRef { name, sha })
     }
 
     fn user_from_payload(user: &serde_json::Value) -> Option<GithubPullRequestUser> {
@@ -451,6 +466,8 @@ impl<
                         .chain(fallback.into_iter().flatten()),
                 )),
             },
+            base: details.base.or(fallback.base),
+            head: details.head.or(fallback.head),
         }
     }
 

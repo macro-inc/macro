@@ -58,6 +58,8 @@ fn row(github_key: &str, repository_id: Option<i64>, number: i64) -> GithubPullR
         labels: Vec::new(),
         reviews: Vec::new(),
         review_decision: None,
+        base: None,
+        head: None,
     }
 }
 

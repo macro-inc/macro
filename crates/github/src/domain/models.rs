@@ -16,7 +16,7 @@ pub use app_jwt::AppJwt;
 pub(crate) use app_jwt::app_jwt;
 pub use github_pull_requests::domain::models::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
-    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubKey,
+    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GitRef, GithubKey,
     GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
     GithubPullRequestLabel, GithubPullRequestRef, GithubPullRequestReview,
     GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser, latest_reviews,

@@ -8,7 +8,10 @@ mod test;
 
 use sqlx::PgPool;
 
-use crate::domain::{models::GithubPullRequestRow, ports::GithubPullRequestRepository};
+use crate::domain::{
+    models::{GitRef, GithubPullRequestRow},
+    ports::GithubPullRequestRepository,
+};
 
 /// Stores pull request rows in the `github_pull_request` table.
 #[derive(Clone)]
@@ -72,11 +75,15 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
                 assignees,
                 labels,
                 reviews,
-                review_decision
+                review_decision,
+                base_ref,
+                base_sha,
+                head_ref,
+                head_sha
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                $14::jsonb, $15::jsonb, $16::jsonb, $17
+                $14::jsonb, $15::jsonb, $16::jsonb, $17, $18, $19, $20, $21
             )
             ON CONFLICT (github_key) DO UPDATE SET
                 repository_id = COALESCE(EXCLUDED.repository_id, github_pull_request.repository_id),
@@ -95,6 +102,10 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
                 labels = EXCLUDED.labels,
                 reviews = EXCLUDED.reviews,
                 review_decision = EXCLUDED.review_decision,
+                base_ref = COALESCE(EXCLUDED.base_ref, github_pull_request.base_ref),
+                base_sha = COALESCE(EXCLUDED.base_sha, github_pull_request.base_sha),
+                head_ref = COALESCE(EXCLUDED.head_ref, github_pull_request.head_ref),
+                head_sha = COALESCE(EXCLUDED.head_sha, github_pull_request.head_sha),
                 updated_at = NOW()
             "#,
             row.github_key,
@@ -114,6 +125,10 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
             labels,
             reviews,
             row.review_decision.map(|decision| decision.as_str()),
+            row.base.as_ref().and_then(|base| base.name.as_deref()),
+            row.base.as_ref().and_then(|base| base.sha.as_deref()),
+            row.head.as_ref().and_then(|head| head.name.as_deref()),
+            row.head.as_ref().and_then(|head| head.sha.as_deref()),
         )
         .execute(&self.pool)
         .await?;
@@ -169,7 +184,11 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
                 assignees,
                 labels,
                 reviews,
-                review_decision
+                review_decision,
+                base_ref,
+                base_sha,
+                head_ref,
+                head_sha
             FROM github_pull_request
             WHERE github_key = $1
             "#,
@@ -205,8 +224,14 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
                 .review_decision
                 .map(|decision| decode(serde_json::Value::String(decision)))
                 .transpose()?,
+            base: git_ref(row.base_ref, row.base_sha),
+            head: git_ref(row.head_ref, row.head_sha),
         }))
     }
+}
+
+fn git_ref(name: Option<String>, sha: Option<String>) -> Option<GitRef> {
+    (name.is_some() || sha.is_some()).then_some(GitRef { name, sha })
 }
 
 fn decode<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> Result<T, sqlx::Error> {

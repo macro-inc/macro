@@ -4,6 +4,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use super::GitRef;
+
 /// Foreign entity source used for GitHub pull request records.
 pub const GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE: &str = "github_pull_request";
 
@@ -385,6 +387,14 @@ pub struct GithubPullRequestDetails {
         deserialize_with = "deserialize_optional_array"
     )]
     pub reviews: Option<Vec<GithubPullRequestReview>>,
+    /// The branch and commit the pull request merges into, when available.
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base: Option<GitRef>,
+    /// The branch and commit carrying the pull request's changes, when available.
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head: Option<GitRef>,
 }
 
 impl GithubPullRequestDetails {
@@ -466,6 +476,14 @@ pub struct EnrichedGithubPullRequest {
     /// reviewer, so a write that knows one review keeps the others.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reviews: Option<Vec<GithubPullRequestReview>>,
+    /// The branch and commit the pull request merges into, when known.
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base: Option<GitRef>,
+    /// The branch and commit carrying the pull request's changes, when known.
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head: Option<GitRef>,
 }
 
 impl EnrichedGithubPullRequest {
@@ -495,6 +513,8 @@ impl EnrichedGithubPullRequest {
             assignees: None,
             labels: None,
             reviews: None,
+            base: None,
+            head: None,
         }
     }
 
@@ -529,6 +549,8 @@ impl EnrichedGithubPullRequest {
             assignees: details.assignees,
             labels: details.labels,
             reviews: details.reviews,
+            base: details.base,
+            head: details.head,
         }
     }
 
@@ -537,8 +559,9 @@ impl EnrichedGithubPullRequest {
     /// Partial refreshes may omit `comments` or `checks`. When an omitted field exists as an array in
     /// `existing_metadata`, the existing array is copied forward so richer metadata is not discarded.
     /// The same applies to `authorLogin`, `authorId`, `description`, `repositoryId`, `draft`,
-    /// `requestedReviewerGithubUserIds`, `githubUpdatedAt`, `assignees`, and `labels`, which
-    /// fallback write paths (such as comment webhooks without a `pull_request` payload) omit.
+    /// `requestedReviewerGithubUserIds`, `githubUpdatedAt`, `assignees`, `labels`, `base`, and
+    /// `head`, which fallback write paths (such as comment webhooks without a `pull_request`
+    /// payload) omit.
     /// `reviews` merges per reviewer, keeping each reviewer's most recently submitted review.
     pub fn foreign_entity_metadata(
         &self,
@@ -574,6 +597,8 @@ impl EnrichedGithubPullRequest {
             "githubUpdatedAt",
             "assignees",
             "labels",
+            "base",
+            "head",
         ] {
             if metadata_object.contains_key(field) {
                 continue;

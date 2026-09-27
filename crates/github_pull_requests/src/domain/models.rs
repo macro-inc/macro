@@ -9,6 +9,7 @@ mod pull_request;
 
 use chrono::{DateTime, Utc};
 use foreign_entity::domain::models::{ForeignEntity, ForeignEntityError, SourceId};
+use git_patch::wire::GitRefDto;
 
 pub use diff::{
     ChangesetRange, GitRef, GithubPullRequestDiff, GithubPullRequestDiffError, PullRequestRef,
@@ -93,6 +94,10 @@ pub struct GithubPullRequestRow {
     pub reviews: Vec<GithubPullRequestReview>,
     /// Where the review stands, derived from `reviews` and the outstanding review requests.
     pub review_decision: Option<GithubPullRequestReviewDecision>,
+    /// The branch and commit the pull request merges into, when known.
+    pub base: Option<GitRef>,
+    /// The branch and commit carrying the pull request's changes, when known.
+    pub head: Option<GitRef>,
 }
 
 impl GithubPullRequestRow {
@@ -132,6 +137,8 @@ impl GithubPullRequestRow {
             requested_reviewer_github_user_ids: pull_request
                 .requested_reviewer_github_user_ids
                 .unwrap_or_default(),
+            base: pull_request.base,
+            head: pull_request.head,
         })
     }
 }
@@ -198,6 +205,12 @@ pub struct StoredGithubPullRequest {
     /// When GitHub last updated the pull request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_updated_at: Option<DateTime<Utc>>,
+    /// The branch and commit the pull request merges into, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base: Option<GitRefDto>,
+    /// The branch and commit carrying the pull request's changes, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub head: Option<GitRefDto>,
 }
 
 impl StoredGithubPullRequest {
@@ -237,6 +250,8 @@ impl StoredGithubPullRequest {
             comments: pull_request.comments.unwrap_or_default(),
             checks: pull_request.checks.unwrap_or_default(),
             github_updated_at: row.github_updated_at,
+            base: row.base.map(Into::into),
+            head: row.head.map(Into::into),
         })
     }
 }

@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use super::PgGithubPullRequestRepo;
 use crate::domain::{
     models::{
-        GithubPullRequestLabel, GithubPullRequestReview, GithubPullRequestReviewDecision,
+        GitRef, GithubPullRequestLabel, GithubPullRequestReview, GithubPullRequestReviewDecision,
         GithubPullRequestReviewState, GithubPullRequestRow, GithubPullRequestStatus,
         GithubPullRequestUser,
     },
@@ -47,6 +47,8 @@ fn row(github_key: &str, repository_id: Option<i64>) -> GithubPullRequestRow {
         labels: Vec::new(),
         reviews: Vec::new(),
         review_decision: None,
+        base: None,
+        head: None,
     }
 }
 
@@ -202,6 +204,14 @@ async fn lookup_reads_back_the_stored_row(pool: PgPool) {
             submitted_at: None,
         }],
         review_decision: Some(GithubPullRequestReviewDecision::ChangesRequested),
+        base: Some(GitRef {
+            name: Some("main".to_string()),
+            sha: Some("base-sha".to_string()),
+        }),
+        head: Some(GitRef {
+            name: Some("feature".to_string()),
+            sha: Some("head-sha".to_string()),
+        }),
         ..row("macro/app/pull/7", Some(99))
     };
     repo.upsert_row(&stored)

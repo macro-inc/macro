@@ -21,7 +21,7 @@ outbound = [
   "ports",
 ]
 ports = ["dep:entity_access", "dep:item_filters", "foreign_entity/ports"]
-schema = ["dep:utoipa"]
+schema = ["dep:utoipa", "git_patch/schema"]
 service = ["ports"]
 
 [dependencies]
