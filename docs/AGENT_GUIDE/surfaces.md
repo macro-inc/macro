@@ -1288,8 +1288,10 @@ no changes.
 
 Snoozing pauses notifications only: it does not hide, archive, mark read, or mark
 done. Channel message/thread rows target their parent channel, matching mute.
-The server enforces expiration even when no client is open. A failed save keeps
-the picker open for retry; a successful save appears in notification settings.
+The server enforces expiration even when no client is open. Displayed snooze
+state refreshes when the window regains focus or a mute/snooze changes; the
+client does not poll. A failed save keeps the picker open for retry; a successful
+save appears in notification settings.
 If only some selected items save, the picker shows the saved count and retries
 only the remaining items. Closing it keeps any snoozes already saved.
 

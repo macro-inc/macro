@@ -1,5 +1,5 @@
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
-import { QueryClientProvider } from '@tanstack/solid-query';
+import { focusManager, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { queryClient } from '../../client';
@@ -51,11 +51,12 @@ function setup() {
 afterEach(() => {
   cleanup();
   queryClient.clear();
+  focusManager.setFocused(undefined);
   vi.clearAllMocks();
   vi.useRealTimers();
 });
 
-describe('snooze expiry polling', () => {
+describe('snooze query refresh', () => {
   function setupQuery() {
     function Test() {
       useMutedEntitiesQuery();
@@ -68,20 +69,22 @@ describe('snooze expiry polling', () => {
     ));
   }
 
-  it.each([{ items: [] }, { items: [item] }])(
-    'does not poll without snoozes: $items',
-    async ({ items }) => {
-      vi.useFakeTimers();
-      client.getUnsubscribes.mockResolvedValue(ok({ data: items }));
-      setupQuery();
-      await vi.advanceTimersByTimeAsync(1);
-      expect(client.getUnsubscribes).toHaveBeenCalledTimes(1);
-      await vi.advanceTimersByTimeAsync(180_000);
-      expect(client.getUnsubscribes).toHaveBeenCalledTimes(1);
-    }
-  );
+  it.each([
+    { items: [] },
+    { items: [item] },
+    { items: [original] },
+    { items: [{ ...item, snoozed_until: '2000-01-01T00:00:00.000Z' }] },
+  ])('does not poll: $items', async ({ items }) => {
+    vi.useFakeTimers();
+    client.getUnsubscribes.mockResolvedValue(ok({ data: items }));
+    setupQuery();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(client.getUnsubscribes).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(client.getUnsubscribes).toHaveBeenCalledTimes(1);
+  });
 
-  it('refetches at expiry and stops when the server drops the expired snooze', async () => {
+  it('refreshes expired snoozes when the window regains focus', async () => {
     vi.useFakeTimers();
     const until = new Date(Date.now() + 90_000).toISOString();
     client.getUnsubscribes.mockImplementation(async () =>
@@ -93,13 +96,15 @@ describe('snooze expiry polling', () => {
       })
     );
     setupQuery();
-    await vi.advanceTimersByTimeAsync(60_001);
+    await vi.advanceTimersByTimeAsync(90_100);
+    expect(client.getUnsubscribes).toHaveBeenCalledTimes(1);
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+    await vi.advanceTimersByTimeAsync(1);
     expect(client.getUnsubscribes).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(30_100);
-    expect(client.getUnsubscribes).toHaveBeenCalledTimes(3);
     expect(queryClient.getQueryData(key)).toEqual([]);
     await vi.advanceTimersByTimeAsync(180_000);
-    expect(client.getUnsubscribes).toHaveBeenCalledTimes(3);
+    expect(client.getUnsubscribes).toHaveBeenCalledTimes(2);
   });
 });
 
