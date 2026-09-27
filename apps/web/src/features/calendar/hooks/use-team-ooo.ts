@@ -124,6 +124,8 @@ export function useTeamOooEvents(
 export interface TeamOooWindow {
   ownerId: string;
   eventId: string;
+  /** Read-only event model used to open the shared event details surface. */
+  event: CalendarEvent;
   occurrenceKey: string;
   /** Teammate display name, resolved reactively from the shared cache. */
   name: string;
@@ -171,6 +173,7 @@ export function useUpcomingTeamOoo(): UpcomingTeamOoo {
         eventId: item.eventId,
         occurrenceKey: item.occurrenceKey,
         name: getDisplayName(tryMacroId(item.ownerId)),
+        event: mapTeamOooItem(item),
         title: item.title ?? undefined,
         start,
         end,

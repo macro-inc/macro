@@ -4,7 +4,7 @@
 use crate::{
     AgentSessionFilters, CalendarEventFilters, CallFilters, ChannelFilters, ChannelThreadFilters,
     ChatFilters, CrmCompanyFilters, DocumentFilters, EmailFilters, EntityFilters,
-    ForeignEntityFilters, ProjectFilters, PropertyFilter, ReminderFilters,
+    ForeignEntityFilters, InitiativeFilters, ProjectFilters, PropertyFilter, ReminderFilters,
     ast::{
         agent_session::AgentSessionLiteral,
         calendar_event::CalendarEventLiteral,
@@ -14,6 +14,7 @@ use crate::{
         crm_company::CrmCompanyLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
+        initiative::InitiativeLiteral,
         project::ProjectLiteral,
         properties::PropertiesLiteral,
         reminder::ReminderLiteral,
@@ -46,6 +47,8 @@ pub mod document;
 pub mod email;
 /// contains the ast literal value for foreign entities
 pub mod foreign_entity;
+/// Initiative filter literals.
+pub mod initiative;
 /// contains the ast literal value for projects
 pub mod project;
 /// contains the ast literal value for property-based filtering
@@ -236,6 +239,10 @@ pub struct EntityFilterAst {
     #[serde(default, rename = "asf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub agent_session_filter: LiteralTree<AgentSessionLiteral>,
+    /// Initiative filter, absent for queries that do not request initiatives.
+    #[serde(default, rename = "if")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
+    pub initiative_filter: LiteralTree<InitiativeLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -291,6 +298,8 @@ impl EntityFilterAst {
                 entity_filter.agent_session_filters,
             )?
             .map(Arc::new),
+            initiative_filter: InitiativeFilters::expand_ast(entity_filter.initiative_filters)?
+                .map(Arc::new),
             properties_filter: Vec::<PropertyFilter>::expand_ast(entity_filter.property_filters)?
                 .map(Arc::new),
         }))
@@ -330,6 +339,7 @@ impl EntityFilterAst {
             foreign_entity_filter: None,
             reminder_filter: None,
             agent_session_filter: None,
+            initiative_filter: None,
             properties_filter: None,
         }
     }
@@ -365,6 +375,7 @@ impl IsEmpty for EntityFilterAst {
             foreign_entity_filter,
             reminder_filter,
             agent_session_filter,
+            initiative_filter,
             properties_filter,
         } = self;
         calendar_event_filter.is_none()
@@ -379,6 +390,7 @@ impl IsEmpty for EntityFilterAst {
             && foreign_entity_filter.is_none()
             && reminder_filter.is_none()
             && agent_session_filter.is_none()
+            && initiative_filter.is_none()
             && properties_filter.is_none()
     }
 }

@@ -181,16 +181,16 @@ const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
 
 const SIDEBAR_LINKS = [
   {
-    id: 'inbox',
+    id: 'home',
     get label() {
       return isTouchDevice() ? 'Notifications' : 'Home';
     },
-    href: LIST_VIEW_PATHS.inbox,
+    href: LIST_VIEW_PATHS.home,
     get icon() {
       return isTouchDevice() ? BellIcon : HomeIcon;
     },
     hotkey: ['h', 'i'],
-    hotkeyToken: TOKENS.sidebar.goTo.inbox,
+    hotkeyToken: TOKENS.sidebar.goTo.home,
   },
   {
     id: 'search',
@@ -1022,14 +1022,6 @@ const COMPANIES_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.companies,
 };
 
-const DASHBOARD_LINK: SidebarItem = {
-  id: 'home',
-  label: 'Assistant',
-  href: '/home',
-  icon: HomeIcon,
-  hotkeyToken: TOKENS.sidebar.goTo.home,
-};
-
 const GETTING_STARTED_LINK: SidebarItem = {
   id: 'getting-started',
   label: 'Getting Started',
@@ -1060,9 +1052,9 @@ const RECENT_LINK: SidebarItem = {
 };
 
 /**
- * Assemble the ordered sidebar link list: the static links plus Home, Getting
- * started, and the flag-gated Activity, Calendar, Calls, and CRM entries in
- * their correct positions.
+ * Assemble the ordered sidebar link list: the static links plus Getting
+ * started and the flag-gated Recent, Activity, Calendar, Calls, and CRM
+ * entries in their correct positions.
  * Shared by the rendered sidebar (`AppSidebar.visibleLinks`) and the
  * always-mounted `GoToHotkeys` registrar so their link sets can't drift. Call
  * from a reactive context — it reads `ENABLE_CALLS` / `isFeatureEnabled(enableCrm)`.
@@ -1078,27 +1070,26 @@ const buildSidebarLinks = (
   showActivity: boolean,
   showRecent: boolean
 ): SidebarItem[] => {
-  let links: SidebarItem[] = [
-    DASHBOARD_LINK,
-    ...(showGettingStarted ? [GETTING_STARTED_LINK] : []),
-    ...SIDEBAR_LINKS.filter((link) => showCalendar || link.id !== 'calendar'),
-  ];
+  let links: SidebarItem[] = SIDEBAR_LINKS.filter(
+    (link) => showCalendar || link.id !== 'calendar'
+  );
 
+  const insertAfter = (anchorId: string, link: SidebarItem) => {
+    const idx = links.findIndex((l) => l.id === anchorId);
+    links = [...links.slice(0, idx + 1), link, ...links.slice(idx + 1)];
+  };
+
+  // Home leads; Getting started, Recent, and Activity follow it in that order.
+  let anchorId = 'home';
+  if (showGettingStarted) {
+    insertAfter(anchorId, GETTING_STARTED_LINK);
+    anchorId = 'getting-started';
+  }
   if (showRecent) {
-    // Directly below Inbox; Activity anchors after it.
-    const idx = links.findIndex((link) => link.id === 'inbox');
-    links = [...links.slice(0, idx + 1), RECENT_LINK, ...links.slice(idx + 1)];
+    insertAfter(anchorId, RECENT_LINK);
+    anchorId = 'recent';
   }
-
-  if (showActivity) {
-    const anchorId = showRecent ? 'recent' : 'inbox';
-    const idx = links.findIndex((link) => link.id === anchorId);
-    links = [
-      ...links.slice(0, idx + 1),
-      ACTIVITY_LINK,
-      ...links.slice(idx + 1),
-    ];
-  }
+  if (showActivity) insertAfter(anchorId, ACTIVITY_LINK);
 
   if (ENABLE_CALLS) {
     const idx = links.findIndex((l) => l.id === 'channels');
@@ -1358,7 +1349,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   // lives in the collapsible Workspace section. `findLink` drops ids that
   // `buildSidebarLinks` gated out, so flag-gated rows need no filter here.
   const topLinks = createMemo(() =>
-    ['home', 'getting-started', 'inbox', 'recent', 'activity']
+    ['home', 'getting-started', 'recent', 'activity']
       .filter(
         (id) => id !== 'getting-started' || !gettingStartedVisibility.hidden()
       )

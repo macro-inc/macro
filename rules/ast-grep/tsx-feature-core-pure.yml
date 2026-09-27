@@ -15,6 +15,7 @@ note: |-
   The shared @core/util/base64 codec is also pure and may be reused by email.
   Block-agent names its rendering layers `ui/` and `component/`.
 files:
+  - apps/web/src/features/channel/core/channel-invite*
   - apps/web/src/features/block-agent/core/**
   - apps/web/src/features/meetings/core/**
   - apps/web/src/features/block-spreadsheet/core/**

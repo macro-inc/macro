@@ -440,7 +440,12 @@ async fn run() -> anyhow::Result<()> {
             Some(permission_checker),
             Some(notification_service),
         )
-        .with_event_broker(macro_event_broker.clone()),
+        .with_event_broker(macro_event_broker.clone())
+        .with_initiative_assignees(Arc::new(
+            initiative::domain::assignees::InitiativeAssignees::new(PgInitiativeRepo::new(
+                db.clone(),
+            )),
+        )),
     );
 
     // Create the channel list service used by soup.
@@ -1211,12 +1216,23 @@ async fn run() -> anyhow::Result<()> {
     );
     let initiative_service = Arc::new(InitiativeServiceImpl::new(
         PgInitiativeRepo::new(db.clone()),
-        outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter::new(
+        initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
             document_creator.clone(),
-            db.clone(),
-            sqs_client.clone(),
-            macro_event_broker.clone(),
+            documents_hex::domain::purge::DocumentPurger::new(
+                documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(
+                    db.clone(),
+                ),
+                documents_hex::outbound::document_purge::SqsDocumentPurgeQueue::new(
+                    sqs_client.clone(),
+                ),
+                macro_event_broker.clone(),
+            ),
         ),
+        Arc::new(initiative::outbound::resources::ProjectResources::new(
+            properties_service.clone(),
+            system_properties_service.clone(),
+            entity_access_service.clone(),
+        )),
     ));
 
     let collab_surface_service = CollabSurfaceServiceImpl::new(
@@ -1226,6 +1242,29 @@ async fn run() -> anyhow::Result<()> {
             sync_service_client.as_ref().clone(),
         )),
         config.document_permission_jwt.as_ref().to_string(),
+    );
+
+    // Individual initiative reads preserve read-after-write consistency when a
+    // newly created project opens immediately. Lists retain the replica reader.
+    // Reuse Soup hydration so detail and mutation metadata include viewer history.
+    let initiative_entity_soup = Arc::new(
+        SoupImpl::new(
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
+            frecency_service.clone(),
+            ReadonlyEmailPreviewAdapter(email_service.clone()),
+            ChannelListServiceImpl::new(
+                PgChannelsRepo::new(db.clone()),
+                PgChannelsRepo::new(db.clone()),
+                frecency_storage.clone(),
+            ),
+            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
+            crm_service.clone(),
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+            reminders_service.clone(),
+        )
+        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
+            db.clone(),
+        )),
     );
 
     // Keep the replica-backed Soup reader alongside the primary-backed email
@@ -1527,7 +1566,7 @@ async fn run() -> anyhow::Result<()> {
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),
-            email_service,
+            email_service.clone(),
             entity_access_service.clone(),
             authorization_state.clone(),
         )
@@ -1556,6 +1595,13 @@ async fn run() -> anyhow::Result<()> {
             Arc::new(reminders_service),
             entity_access_service.clone(),
             authorization_state.clone(),
+        ),
+        graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader(
+            graphql_soup::soup_item_loader(initiative_entity_soup, Arc::new(email_service.clone())),
+        ),
+        graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
+            initiative_service.clone(),
+            entity_access_service.clone(),
         ),
         initiative_state: InitiativeRouterState::new(
             initiative_service,

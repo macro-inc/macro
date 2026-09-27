@@ -118,7 +118,11 @@ export function createLayoutAdapter<TSplitId>(
         return { changed: true, layoutChanged: false, splitId: targetId };
       }
 
-      layout.updateCurrentLocation(targetId, () => options.entry.location);
+      layout.updateCurrentLocation(
+        targetId,
+        () => options.entry.location,
+        options.replace
+      );
       const applied = find(targetId);
       if (!deepEqual(applied?.location, options.entry.location)) {
         throw new Error('Split layout did not apply the requested location');

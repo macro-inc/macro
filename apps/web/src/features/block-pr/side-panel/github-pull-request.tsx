@@ -12,7 +12,7 @@ import type {
   GithubPullRequestCheckRun,
 } from '@service-storage/generated/schemas';
 import { cn, Layer } from '@ui';
-import { type Accessor, For, Match, Show, Switch } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 
 type GithubPullRequestWithPanelDetails = GithubPullRequest & {
   authorLogin?: string | null;
@@ -133,10 +133,10 @@ export function GithubPullRequestStatusChip(props: {
 }
 
 export function GithubPullRequestDetailsContent(props: {
-  enrichment: Accessor<GithubPullRequestWithPanelDetails | undefined>;
+  enrichment?: GithubPullRequestWithPanelDetails;
 }) {
   return (
-    <Show when={props.enrichment()} fallback={<SidePanel.Loading />}>
+    <Show when={props.enrichment} fallback={<SidePanel.Loading />}>
       {(enrichment) => (
         <SidePanel.Grid>
           <GithubPullRequestDetailsRows enrichment={enrichment()} />
@@ -218,9 +218,9 @@ export function GithubPullRequestDetailsRows(props: {
 }
 
 export function GithubPullRequestChecksContent(props: {
-  enrichment: Accessor<GithubPullRequestWithPanelDetails | undefined>;
+  enrichment?: GithubPullRequestWithPanelDetails;
 }) {
-  const checks = () => props.enrichment()?.checks ?? [];
+  const checks = () => props.enrichment?.checks ?? [];
   return (
     <Show
       when={checks().length > 0}

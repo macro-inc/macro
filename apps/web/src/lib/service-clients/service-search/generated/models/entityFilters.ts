@@ -14,6 +14,7 @@ import type { CrmCompanyFilters } from './crmCompanyFilters';
 import type { DocumentFilters } from './documentFilters';
 import type { EmailFilters } from './emailFilters';
 import type { ForeignEntityFilters } from './foreignEntityFilters';
+import type { InitiativeFilters } from './initiativeFilters';
 import type { ProjectFilters } from './projectFilters';
 import type { PropertyFilter } from './propertyFilter';
 import type { ReminderFilters } from './reminderFilters';
@@ -43,6 +44,8 @@ export interface EntityFilters {
   email_filters?: EmailFilters;
   /** the bundled [ForeignEntityFilters] */
   foreign_entity_filters?: ForeignEntityFilters;
+  /** Initiative filters. Initiatives are opt-in. */
+  initiative_filters?: InitiativeFilters;
   /** the bundled [ProjectFilters] */
   project_filters?: ProjectFilters;
   /** property-based filters applied across entity types */

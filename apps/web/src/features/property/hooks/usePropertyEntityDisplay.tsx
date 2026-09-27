@@ -103,6 +103,7 @@ export function usePropertyEntityDisplay(
 
   const name = createMemo(() =>
     match(entityType())
+      .with('INITIATIVE', () => 'Project')
       .with('USER', () => userName())
       .with('CHANNEL', () => channelName() || 'Channel')
       .with('COMPANY', () => entityId())

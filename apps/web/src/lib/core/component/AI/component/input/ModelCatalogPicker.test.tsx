@@ -14,6 +14,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelCatalogPicker } from './ModelCatalogPicker';
 import type { CatalogModelOption } from './modelCatalog';
 
+const { isMobileWidth, setMobileWidth } = vi.hoisted(() => {
+  let mobile = false;
+  return {
+    isMobileWidth: () => mobile,
+    setMobileWidth: (value: boolean) => {
+      mobile = value;
+    },
+  };
+});
+
+vi.mock('@core/mobile/mobileWidth', () => ({ isMobileWidth }));
+
 vi.mock('@ui', () => {
   const cn = (...args: unknown[]) =>
     args.flat(Infinity).filter(Boolean).join(' ');
@@ -95,6 +107,7 @@ const OPTIONS: CatalogModelOption[] = [
 
 afterEach(() => {
   cleanup();
+  setMobileWidth(false);
 });
 
 function mountPicker() {
@@ -142,5 +155,23 @@ describe('ModelCatalogPicker search focus', () => {
         screen.getByRole('textbox', { name: 'Search models' })
       );
     });
+  });
+});
+
+describe('ModelCatalogPicker more models at phone width', () => {
+  it('replaces the list in place and comes back', () => {
+    setMobileWidth(true);
+    mountPicker();
+    fireEvent.click(screen.getByRole('button', { name: 'Agent model' }));
+
+    expect(screen.queryByText('Gemini 3.8 Flash High')).toBeNull();
+
+    fireEvent.click(screen.getByText('More models'));
+    expect(screen.getByText('Gemini 3.8 Flash High')).toBeTruthy();
+    expect(screen.queryByText('Claude Opus 5 High')).toBeNull();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Recommended' }));
+    expect(screen.getByText('Claude Opus 5 High')).toBeTruthy();
+    expect(screen.queryByText('Gemini 3.8 Flash High')).toBeNull();
   });
 });

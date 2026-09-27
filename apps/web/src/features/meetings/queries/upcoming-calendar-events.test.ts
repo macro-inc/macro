@@ -116,6 +116,7 @@ describe('upcoming calendar events source', () => {
     expect(result.events().map((call) => call.title)).toEqual(
       [1, 2, 3, 4, 5].map((day) => `event-${day}`)
     );
+    expect(result.events()[0].color).toBe(source.color);
     expect(list).toHaveBeenCalledTimes(1);
     expect(result.loading()).toBe(false);
     expect(result.findEvent(result.events()[0].id)).toEqual(

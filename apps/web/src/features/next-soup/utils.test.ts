@@ -6,10 +6,10 @@ import {
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  inboxCalendarNavigation,
-  inboxPreviewNavigation,
-} from '../inbox-view/inbox-preview-navigation';
-import { inboxPreviewTarget } from '../inbox-view/inbox-route';
+  homeCalendarNavigation,
+  homePreviewNavigation,
+} from '../home/home-preview-navigation';
+import { homePreviewTarget } from '../home/home-route';
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -664,7 +664,7 @@ describe('calendar view navigation', () => {
       }),
     });
     expect(
-      inboxCalendarNavigation(target, 'timeGridWeek')?.search.calendar
+      homeCalendarNavigation(target, 'timeGridWeek')?.search.calendar
     ).toEqual({
       eventId: ['event-1'],
       occurrenceKey: ['2026-09-23T22:00:00+00:00'],
@@ -674,7 +674,44 @@ describe('calendar view navigation', () => {
   });
 });
 
-describe('Drive document routing', () => {
+describe('Hosted details and Drive document routing', () => {
+  it('opens GitHub pull requests as Reviews-hosted content', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      {
+        type: 'foreign',
+        id: 'pr-1',
+        foreignSource: 'github_pull_request',
+        metadata: { url: 'https://github.com/example/repo/pull/1' },
+      } as EntityData,
+      { openInNewSplit: true }
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'component',
+        id: 'reviews',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'view-reviews', params: {} },
+              { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } },
+            ],
+          },
+        },
+      },
+      expect.objectContaining({
+        allowDuplicate: true,
+        preferNewSplit: true,
+      })
+    );
+  });
+
   it('keeps task documents as legacy task blocks on touch', async () => {
     vi.mocked(isTouchDevice).mockReturnValue(true);
     const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
@@ -783,7 +820,7 @@ describe('Inbox calendar preview navigation', () => {
       endDate: '2025-01-02',
     };
     expect(
-      inboxCalendarNavigation(
+      homeCalendarNavigation(
         { eventId: 'event-1', occurrenceKey: 'occurrence-1', range },
         'timeGridWeek'
       )
@@ -799,13 +836,13 @@ describe('Inbox calendar preview navigation', () => {
         },
       },
     });
-    expect(inboxCalendarNavigation({}, 'timeGridWeek')).toBeUndefined();
+    expect(homeCalendarNavigation({}, 'timeGridWeek')).toBeUndefined();
   });
 });
 
 describe('Inbox channel preview navigation', () => {
   it('preserves explicit message targets on whole-channel selections', () => {
-    const result = inboxPreviewNavigation({
+    const result = homePreviewNavigation({
       type: 'channel',
       id: 'channel-1',
       target: { messageId: 'message-1', threadId: 'thread-1' },
@@ -820,12 +857,12 @@ describe('Inbox channel preview navigation', () => {
   });
   it('keeps untargeted channels at latest', () => {
     expect(
-      inboxPreviewNavigation({ type: 'channel', id: 'channel-1' }).search
+      homePreviewNavigation({ type: 'channel', id: 'channel-1' }).search
     ).toEqual({ channels: undefined });
   });
   it('names markdown subtypes in the path', () => {
     expect(
-      inboxPreviewNavigation({
+      homePreviewNavigation({
         type: 'document',
         id: 'task-1',
         fileType: 'md',
@@ -1246,14 +1283,14 @@ describe('getDocumentCommentTarget', () => {
   });
 
   it('carries the comment through the Inbox preview route', () => {
-    const result = inboxPreviewNavigation(
+    const result = homePreviewNavigation(
       documentRow([commentNotification('n1', 'comment-1')]) as never
     );
     expect(result.params).toEqual({ blockType: 'md', previewId: 'doc-1' });
     expect(result.search.drive).toEqual({
       commentId: ['comment-1'],
     });
-    const target = inboxPreviewTarget(result.params, {
+    const target = homePreviewTarget(result.params, {
       channel: { messageId: '', threadId: '' },
       document: { commentId: 'comment-1' },
     });
@@ -1335,5 +1372,65 @@ describe('getRowClickFallbackLocation', () => {
   it('returns no location for non-snippet entities', () => {
     const entity = { type: 'document', id: 'd1' } as unknown as EntityData;
     expect(getRowClickFallbackLocation(entity)).toBeUndefined();
+  });
+});
+
+describe('call navigation', () => {
+  it('opens calls in Drive without mounting a call block', async () => {
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: () => undefined,
+      getOrchestrator: () => ({}),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(searchEntity('call', null), {});
+    expect(openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'component',
+        id: 'documents',
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'drive', params: {} },
+              { id: 'drive-call', params: { callId: 'call-1' } },
+            ],
+          },
+        },
+      },
+      expect.objectContaining({ allowDuplicate: true })
+    );
+  });
+
+  it('carries a transcript target into the Drive call route', async () => {
+    const openWithSplit = vi.fn((..._args: unknown[]) => ({
+      status: 'unavailable',
+    }));
+    setGlobalSplitManager({
+      activeSplit: () => undefined,
+      getOrchestrator: () => ({}),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(searchEntity('call', null), {
+      location: {
+        type: 'call_record',
+        callId: 'call-1',
+        transcriptId: 'segment-1',
+      },
+    });
+    expect(openWithSplit.mock.calls[0]?.[0]).toMatchObject({
+      type: 'component',
+      id: 'documents',
+      entryMetadata: {
+        route: {
+          matches: [
+            { id: 'drive', params: {} },
+            { id: 'drive-call', params: { callId: 'call-1' } },
+          ],
+        },
+        search: { 'call-detail': { transcriptId: ['segment-1'] } },
+      },
+    });
   });
 });

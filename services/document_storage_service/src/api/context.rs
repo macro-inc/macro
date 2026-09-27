@@ -498,12 +498,16 @@ pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
 
 pub(crate) type InitiativeDescriptionDocumentsType =
-    crate::outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter<
+    initiative_documents::InitiativeDescriptionDocumentsAdapter<
         Arc<DocumentService>,
         documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer,
         documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
         documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker,
-        DssEventBroker,
+        documents_hex::domain::purge::DocumentPurger<
+            documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository,
+            documents_hex::outbound::document_purge::SqsDocumentPurgeQueue,
+            DssEventBroker,
+        >,
     >;
 
 /// Type alias for the initiative service.
@@ -597,6 +601,8 @@ pub(crate) struct ApiContext {
     pub user_api_key_state: DssUserApiKeyState,
     pub reminders_state: DssRemindersState,
     pub initiative_state: DssInitiativeState,
+    pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
+    pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,

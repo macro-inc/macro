@@ -27,16 +27,20 @@ import {
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
-import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
-import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
+import {
+  useCanEdit,
+  useGetPermissions,
+  useIsDocumentOwner,
+} from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import { useCopyLink } from '@core/util/useCopyLink';
 import IconShared from '@icon/share.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
@@ -53,17 +57,18 @@ export function TopBar() {
     () => projectBlockDataSignal()?.projectMetadata.name ?? ''
   );
 
-  const shareCtx = useShareDialogContext();
-
-  function handleCopyLink() {
-    navigator.clipboard.writeText(
-      buildSimpleEntityUrl({
-        type: 'project',
-        id,
-      })
-    );
-    toast.success('Link copied to clipboard');
-  }
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id,
+    blockAlias: 'project',
+    itemType: 'project',
+    name: name(),
+    userPermissions: permissions(),
+    owner: projectBlockDataSignal()?.projectMetadata.userId,
+  }));
+  const copyLink = useCopyLink();
+  const handleCopyLink = () =>
+    copyLink(buildSimpleEntityUrl({ type: 'project', id }));
 
   const ops = createMemo<FileOperation[]>(() => [
     ...(isOwner() && !isSpecialProject
@@ -95,9 +100,11 @@ export function TopBar() {
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
+      action: openShare,
       condition: () => ENABLE_PROJECT_SHARING && !isSpecialProject,
-      buttonComponent: () => <ShareTrigger copyLink={handleCopyLink} />,
+      buttonComponent: () => (
+        <ShareTrigger onClick={openShare} copyLink={handleCopyLink} />
+      ),
       focusTarget: getShareDrawerRecipientInput,
     },
   ];
@@ -112,7 +119,7 @@ export function TopBar() {
       <SplitHeaderRight>
         <div class="order-[1000] flex items-center gap-1">
           <Show when={showShare()}>
-            <ShareTrigger copyLink={handleCopyLink} />
+            <ShareTrigger onClick={openShare} copyLink={handleCopyLink} />
           </Show>
         </div>
       </SplitHeaderRight>

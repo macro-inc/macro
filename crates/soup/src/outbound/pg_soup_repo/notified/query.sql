@@ -44,6 +44,7 @@ WHERE CASE nc.entity_type
     WHEN 'document' THEN {document_gate}
     WHEN 'chat' THEN {chat_gate}
     WHEN 'project' THEN {project_gate}
+    WHEN 'initiative' THEN {initiative_gate}
     WHEN 'channel' THEN {channel_gate}
     WHEN 'channel_message' THEN {channel_thread_gate}
     WHEN 'email_thread' THEN {email_gate}

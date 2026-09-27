@@ -236,7 +236,6 @@ export function CreateChannelModal() {
     <Dialog
       open={newChannelModalOpen()}
       onOpenChange={(open) => !open && close()}
-      position="center"
       class="w-150"
     >
       <Panel depth={2} class="rounded-xl *:max-h-[85vh]">

@@ -126,6 +126,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+/** Shows the Reviews shortcut in Tasks; copied Reviews links remain accessible. */
+export const enableTasksReviews = defineFlag({
+  key: 'enable-tasks-reviews',
+  env: 'ENABLE_TASKS_REVIEWS',
+  default: onInDev,
+});
+
 // Claude Cloud demo onboarding and harness/model discovery. Off until PostHog
 // enables it, including in dev; override locally with VITE_CLAUDE_CLOUD.
 export const claudeCloud = defineFlag({
@@ -393,6 +400,7 @@ export const ENABLE_CALLS = true;
 export const enableQuickCalls = defineFlag({
   key: 'enable-quick-calls',
   env: 'ENABLE_QUICK_CALLS',
+  default: true,
 });
 
 // Email signatures: the settings editor, the compose / reply / AI-chat signature
@@ -519,20 +527,6 @@ export function isAutoUpdateUiEnabled(): boolean {
   }
   return !isFeatureEnabled(disableAutoUpdateUi);
 }
-
-export const enableHomeView = defineFlag({
-  key: 'enable-home-view',
-  default: onInDev,
-});
-
-// AI-generated recommendations on Home. Keep the whole data-owning component
-// behind this gate so disabled users do not fetch notifications or start AI
-// projections. Override locally with VITE_ENABLE_HOME_RECOMMENDATIONS.
-export const enableHomeRecommendations = defineFlag({
-  key: 'enable-home-recommendations',
-  env: 'ENABLE_HOME_RECOMMENDATIONS',
-  default: onInDev,
-});
 
 export const enableNewPricing = defineFlag({
   key: 'enable-new-pricing',

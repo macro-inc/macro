@@ -2,6 +2,9 @@
 
 use models_properties::EntityType;
 
+#[cfg(test)]
+mod test;
+
 use crate::{
     StatusOption,
     domain::{
@@ -30,6 +33,13 @@ pub trait SystemPropertiesService: Clone + Send + Sync + 'static {
     /// Initializes all task-related system properties with null values.
     /// All properties are upserted in a single query.
     fn attach_task_properties(
+        &self,
+        entity_ids: Vec<String>,
+    ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+
+    /// Attach the task-style initiative properties with null default values.
+    /// Existing assignments are preserved so retries never clear edited values.
+    fn attach_initiative_properties(
         &self,
         entity_ids: Vec<String>,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
@@ -99,6 +109,19 @@ where
             .collect();
 
         self.repository.bulk_upsert_properties(rows).await
+    }
+
+    #[tracing::instrument(skip(self, entity_ids))]
+    async fn attach_initiative_properties(
+        &self,
+        entity_ids: Vec<String>,
+    ) -> Result<(), SystemPropertyError> {
+        let rows = entity_ids
+            .iter()
+            .flat_map(|entity_id| collect_required_property_rows(entity_id, EntityType::Initiative))
+            .collect();
+
+        self.repository.bulk_insert_properties_if_absent(rows).await
     }
 
     #[tracing::instrument(skip(self))]
@@ -199,36 +222,12 @@ fn collect_email_property_rows(
 /// All task properties are initialized with null values.
 /// Tasks are always applied to Task entities.
 fn collect_task_property_rows(entity_id: &str) -> Vec<PropertyRow> {
-    let entity_type = EntityType::Task;
+    collect_required_property_rows(entity_id, EntityType::Task)
+}
 
-    vec![
-        // Assignees
-        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Assignees.uuid()),
-        // Status
-        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Status.uuid()),
-        // Priority
-        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Priority.uuid()),
-        // Due Date
-        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::DueDate.uuid()),
-        // Parent Task
-        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::ParentTask.uuid()),
-        // Subtasks
-        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Subtasks.uuid()),
-        // Depends On
-        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::DependsOn.uuid()),
-        // Effort
-        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Effort.uuid()),
-        // Story Points
-        PropertyRow::null_value(
-            entity_id,
-            entity_type,
-            SystemPropertyKey::StoryPoints.uuid(),
-        ),
-        // Relevant Documents
-        PropertyRow::null_value(
-            entity_id,
-            entity_type,
-            SystemPropertyKey::RelevantDocuments.uuid(),
-        ),
-    ]
+fn collect_required_property_rows(entity_id: &str, entity_type: EntityType) -> Vec<PropertyRow> {
+    SystemPropertyKey::required_property_ids_for_entity(entity_type)
+        .iter()
+        .map(|property_id| PropertyRow::null_value(entity_id, entity_type, *property_id))
+        .collect()
 }

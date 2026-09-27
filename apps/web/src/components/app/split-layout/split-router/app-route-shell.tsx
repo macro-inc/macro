@@ -50,6 +50,8 @@ export function NewAppView(props: {
   detailRequested?: () => boolean;
   detailFallback?: JSX.Element;
   detailDesktopOnly?: boolean;
+  /** Keep routed details in their host shell when the list view flag is off. */
+  alwaysRenderDetail?: boolean;
 }) {
   usePageViewTracking(props.id);
   const flag = useFeatureFlag(enableNewAppViews);
@@ -64,7 +66,11 @@ export function NewAppView(props: {
     );
   const surfaceSupported = () => !props.desktopOnly || !isTouchDevice();
   const renderModern = () =>
-    enabled() && surfaceSupported() && !detailUnsupported();
+    (enabled() ||
+      (ready() &&
+        Boolean(props.alwaysRenderDetail && props.detailRequested?.()))) &&
+    surfaceSupported() &&
+    !detailUnsupported();
   const fallback = () => {
     if (!props.detailRequested?.()) return props.fallback;
     const detail = props.detailFallback;

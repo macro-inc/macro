@@ -1,10 +1,10 @@
 import type { SortDefinition } from '@app/features/soup';
 import { compareDateDesc } from '@core/util/date';
 import type { TaskEntityWithProperties } from '@entity';
-import type { TaskGroupBy, TaskSortId, TaskTab } from './types';
+import type { TaskGroupBy, TaskSortId, TasksTab } from './types';
 
 export type TaskTabItem = {
-  id: TaskTab;
+  id: TasksTab;
   label: string;
 };
 
@@ -19,7 +19,7 @@ export const TEAM_TASK_TABS: TaskTabItem[] = [
 
 export const TASK_TABS = [...PERSONAL_TASK_TABS, ...TEAM_TASK_TABS];
 
-export const TASK_DEFAULT_GROUP_BY: Record<TaskTab, TaskGroupBy> = {
+export const TASK_DEFAULT_GROUP_BY: Record<TasksTab, TaskGroupBy> = {
   'my-tasks': 'priority',
   'created-by-me': 'status',
   'team-tasks': 'priority',

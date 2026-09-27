@@ -24,6 +24,7 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
+import { useEmailLinksQuery } from '@queries/email/link';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import {
   type Accessor,
@@ -45,7 +46,9 @@ import {
   emailTabSearch,
   emailTabSearchCodec,
 } from './email-route';
+import { normalizeInboxSelection } from './inbox-selection';
 import { createEmailViewPersistence } from './persistence';
+import { createInboxSelectionReconciliation } from './primitives/inbox-selection-reconciliation';
 import {
   type EmailDataSource,
   type EmailDataSourceItem,
@@ -123,8 +126,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     createStore<EmailViewState>({
       tab: initial.tab ?? DEFAULT_EMAIL_TAB,
       search: initial.search ?? '',
-      inboxIds:
-        initial.inboxIds === undefined ? undefined : [...initial.inboxIds],
+      inboxIds: normalizeInboxSelection(initial.inboxIds),
       facets: normalizeFacetSelection(initial.facets),
       collapsedSidebarSectionIds: [
         ...(initial.collapsedSidebarSectionIds ?? []),
@@ -311,8 +313,18 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
 
   const setInboxIds = (ids: string[] | undefined) => {
     closeThread();
-    setState('inboxIds', ids === undefined ? undefined : [...ids]);
+    setState('inboxIds', normalizeInboxSelection(ids));
   };
+
+  // This belongs to the view lifecycle, even while every inbox picker is unmounted.
+  const linksQuery = useEmailLinksQuery();
+  createInboxSelectionReconciliation({
+    selectedIds: () => state.inboxIds,
+    loadedLinks: () =>
+      linksQuery.isSuccess ? linksQuery.data.links : undefined,
+    // Widening stale scope to all inboxes should preserve the current thread.
+    clearSelection: () => setState('inboxIds', undefined),
+  });
 
   const setFacets = (facets: EmailViewState['facets']) => {
     closeThread();

@@ -10,9 +10,11 @@
 //! accepted, so the reply sits on the follow-up rather than after the
 //! cancelled turn or behind work queued earlier.
 //!
-//! In-memory on purpose. The queue lives beside the session's live actor on
-//! the replica that manages it, and dies with the process - a restart loses
-//! whatever was waiting, exactly like it always lost an in-flight turn.
+//! The live replica keeps this working copy beside the session's actor so
+//! edits and dispatch stay serialized on the command worker. Every mutation
+//! is written through to the session store as it happens; resume (and the
+//! first local command after a restart) restores that row. An in-flight
+//! turn is still process-local.
 //!
 //! Callers mutate this only from the session's command worker, which is what
 //! serializes an edit against the dispatch that might be claiming the same
@@ -24,6 +26,7 @@ use agent_fold::domain::model::TurnId;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::events::{InFlightTurnSummary, TurnSummary};
 use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::StoredQueuedAction;
 use agent_session::domain::ports::QueuedControl;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
@@ -122,6 +125,36 @@ impl From<&QueuedEntry> for QueuedControl {
             actor: entry.actor.clone(),
             created_at: entry.created_at,
         }
+    }
+}
+
+impl QueuedEntry {
+    /// The durable form written to the session store.
+    pub fn to_stored(&self) -> anyhow::Result<StoredQueuedAction> {
+        Ok(StoredQueuedAction {
+            action_id: self.action_id,
+            action: self.action.clone(),
+            actor: self.actor.clone(),
+            created_at: self.created_at,
+            announce: self
+                .announce
+                .as_ref()
+                .map(serde_json::to_value)
+                .transpose()?,
+            announced_message_id: self.announced,
+        })
+    }
+
+    /// Rebuild the working-copy entry from a persisted row.
+    pub fn from_stored(stored: StoredQueuedAction) -> anyhow::Result<Self> {
+        Ok(Self {
+            action_id: stored.action_id,
+            action: stored.action,
+            actor: stored.actor,
+            announce: stored.announce.map(serde_json::from_value).transpose()?,
+            announced: stored.announced_message_id,
+            created_at: stored.created_at,
+        })
     }
 }
 
@@ -270,6 +303,24 @@ impl SessionQueues {
     /// deleted, whose entries will never dispatch.
     pub fn drop_session(&self, session: AgentSessionId) {
         self.queues.remove(&session);
+    }
+
+    /// Everything waiting, as the working-copy entries.
+    #[must_use]
+    pub fn snapshot(&self, session: AgentSessionId) -> Vec<QueuedEntry> {
+        self.queues
+            .get(&session)
+            .map(|queue| queue.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// Replace a session's working copy, used when hydrating from the store.
+    pub fn replace(&self, session: AgentSessionId, entries: Vec<QueuedEntry>) {
+        if entries.is_empty() {
+            self.queues.remove(&session);
+        } else {
+            self.queues.insert(session, entries.into());
+        }
     }
 
     /// Remove a waiting entry.

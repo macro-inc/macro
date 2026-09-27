@@ -37,6 +37,7 @@ type DriveDetailRootOptions = EntityDetailNavigationOptions & {
 };
 
 type DriveDetailNavigation = {
+  activeCallId: Accessor<string | undefined>;
   entries: Accessor<readonly EntityDetailNavigationEntry[]>;
   active: Accessor<EntityDetailNavigationEntry | undefined>;
   navigate: (
@@ -69,11 +70,12 @@ function opensInline(options?: EntityDetailNavigationOptions) {
 export function DriveDetailNavigationProvider(
   props: ParentProps<{ location: Accessor<DriveLocation> }>
 ) {
-  const params = useParams<DriveRouteParams>();
+  const params = useParams<DriveRouteParams & { callId?: string }>();
   const navigate = useNavigate();
   const routeTrail = useRouteState(driveSplitRoute);
   const selectPreview = createPreviewSelectionGuard();
   const activeDocument = createMemo(() => driveDocumentFromParams(params));
+  const activeCallId = () => params.callId;
   const activeTarget = createMemo(() =>
     documentTargetFromRoute(activeDocument())
   );
@@ -126,6 +128,7 @@ export function DriveDetailNavigationProvider(
 
   const value: DriveDetailNavigation = {
     entries,
+    activeCallId,
     active,
 
     navigate(target, options) {
@@ -195,7 +198,7 @@ export function DriveDetailNavigationProvider(
     clear(options) {
       // Location navigation already lands on a list route. Clearing again must
       // not climb out of the folder/tab the user just selected.
-      if (!activeDocument()) return;
+      if (!activeDocument() && !activeCallId()) return;
       selectPreview(undefined);
       navigate(driveDestination(props.location()), {
         replace: options?.replace,

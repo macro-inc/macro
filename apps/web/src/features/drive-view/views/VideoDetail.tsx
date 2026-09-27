@@ -1,10 +1,6 @@
 import { VideoContent } from '@block-video/component/VideoContent';
 import type { JSX } from 'solid-js';
-import {
-  FileDetailLayout,
-  FileDetailLoadGate,
-  type FileDetailShareProps,
-} from '../components/FileDetail';
+import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
 import { downloadFileOperation } from '../components/file-detail-operations';
 import { getFileDocumentBlob } from '../queries/file-document';
 import {
@@ -17,13 +13,11 @@ import type { FileDetailContext } from '../util/file-detail-context';
 
 export type VideoDetailContext = FileDetailContext<VideoDocumentData>;
 
-export function VideoDetailDocument(
-  props: FileDetailShareProps & {
-    documentId: string;
-    data: VideoDocumentData;
-    children?: (context: VideoDetailContext) => JSX.Element;
-  }
-) {
+export function VideoDetailDocument(props: {
+  documentId: string;
+  data: VideoDocumentData;
+  children?: (context: VideoDetailContext) => JSX.Element;
+}) {
   const operations = [
     downloadFileOperation(() => {
       const fileName = documentDownloadName(props.data.documentMetadata);
@@ -44,10 +38,7 @@ export function VideoDetailDocument(
       documentId={props.documentId}
       documentMetadata={props.data.documentMetadata}
       userAccessLevel={props.data.userAccessLevel}
-      blockType="video"
       defaultSidePanelOpen
-      shareOpen={props.shareOpen}
-      onShareOpenChange={props.onShareOpenChange}
     >
       {props.children?.({
         data: props.data,
@@ -64,12 +55,10 @@ export function VideoDetailDocument(
   );
 }
 
-export function VideoDetail(
-  props: FileDetailShareProps & {
-    documentId: string;
-    children?: (context: VideoDetailContext) => JSX.Element;
-  }
-) {
+export function VideoDetail(props: {
+  documentId: string;
+  children?: (context: VideoDetailContext) => JSX.Element;
+}) {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
@@ -80,8 +69,6 @@ export function VideoDetail(
         <VideoDetailDocument
           documentId={props.documentId}
           data={data}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
           children={props.children}
         />
       )}

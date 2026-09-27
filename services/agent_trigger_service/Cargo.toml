@@ -28,6 +28,7 @@ messages = { path = "../../crates/messages", features = ["broker", "outbound"] }
 rdkafka = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
+static_file = { path = "../../crates/static_file" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

@@ -121,7 +121,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/EntityType"
             }
           },
           {
@@ -130,6 +130,16 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "snoozed_until",
+            "in": "query",
+            "description": "A future resume time. Omit to mute indefinitely.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "date-time"
             }
           }
         ],
@@ -140,6 +150,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -176,7 +196,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/EntityType"
             }
           },
           {
@@ -2849,7 +2869,7 @@
             "type": "string"
           },
           "item_type": {
-            "type": "string"
+            "$ref": "#/components/schemas/EntityType"
           }
         }
       },
@@ -2864,6 +2884,11 @@
           "item_type": {
             "type": "string",
             "description": "The item type"
+          },
+          "snoozed_until": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "None for permanent mutes; notifications resume automatically at this deadline."
           }
         }
       }

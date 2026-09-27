@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+
+mod access;
 use std::sync::{Arc, Mutex};
 
 use axum::http::{StatusCode, header};
@@ -291,8 +293,9 @@ enum ServiceCall {
     Create { name: String },
     Get,
     Update,
-    Assign(Vec<TaskAssignment>),
+    Assign(Vec<AssignTasksResult>),
     Unassign { task_id: String },
+    Clear { task_id: String },
     Delete,
 }
 
@@ -321,6 +324,46 @@ fn reject_name(name: &str) -> Result<(), InitiativeError> {
 }
 
 impl InitiativeService for FakeInitiativeService {
+    async fn summary(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<crate::domain::reads::InitiativePageRow, InitiativeError> {
+        Err(InitiativeError::NotFound)
+    }
+
+    async fn page(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _request: crate::domain::reads::InitiativePageRequest,
+    ) -> Result<crate::domain::reads::InitiativePage, InitiativeError> {
+        Ok(crate::domain::reads::InitiativePage {
+            initiatives: Vec::new(),
+            next_cursor: None,
+        })
+    }
+
+    async fn tasks_page(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _request: crate::domain::reads::InitiativeTasksRequest,
+    ) -> Result<crate::domain::reads::InitiativeTasksPage, InitiativeError> {
+        Ok(crate::domain::reads::InitiativeTasksPage {
+            task_ids: Vec::new(),
+            next_cursor: None,
+            total: 0,
+        })
+    }
+
+    async fn task_references(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _request: crate::domain::reads::TaskInitiativeReferencesRequest,
+    ) -> Result<crate::domain::reads::TaskInitiativeReferences, InitiativeError> {
+        Ok(crate::domain::reads::TaskInitiativeReferences {
+            references: Vec::new(),
+        })
+    }
+
     async fn create(
         &self,
         _user_id: &MacroUserIdStr<'_>,
@@ -373,13 +416,12 @@ impl InitiativeService for FakeInitiativeService {
         _receipt: EntityAccessReceipt<EditAccessLevel>,
         assignments: Vec<TaskAssignment>,
     ) -> Result<AssignTasksResponse, InitiativeError> {
-        self.record(ServiceCall::Assign(assignments.clone()));
-        Ok(AssignTasksResponse {
+        let response = AssignTasksResponse {
             results: assignments
                 .into_iter()
                 .map(|assignment| AssignTasksResult {
                     status: match &assignment {
-                        TaskAssignment::Candidate { .. } => AssignTaskStatus::Assigned,
+                        TaskAssignment::Authorized { .. } => AssignTaskStatus::Assigned,
                         TaskAssignment::NotFound { .. } => AssignTaskStatus::NotFound,
                         TaskAssignment::SkippedNoPermission { .. } => {
                             AssignTaskStatus::SkippedNoPermission
@@ -388,17 +430,37 @@ impl InitiativeService for FakeInitiativeService {
                     task_id: assignment.task_id().to_string(),
                 })
                 .collect(),
-        })
+        };
+        self.record(ServiceCall::Assign(response.results.clone()));
+        Ok(response)
     }
 
     async fn unassign_task(
         &self,
         _receipt: EntityAccessReceipt<EditAccessLevel>,
-        task_id: &str,
+        task_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<(), InitiativeError> {
         self.record(ServiceCall::Unassign {
-            task_id: task_id.to_string(),
+            task_id: task_receipt.entity().entity_id.clone(),
         });
+        Ok(())
+    }
+
+    async fn clear_task(
+        &self,
+        task_receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<(), InitiativeError> {
+        self.record(ServiceCall::Clear {
+            task_id: task_receipt.entity().entity_id.clone(),
+        });
+        Ok(())
+    }
+
+    async fn grant_assignees(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        _user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), InitiativeError> {
         Ok(())
     }
 
@@ -645,8 +707,9 @@ async fn assign_tasks_returns_200() {
     );
     assert_eq!(
         service.calls(),
-        vec![ServiceCall::Assign(vec![TaskAssignment::Candidate {
-            task_id: TASK_OK.to_string()
+        vec![ServiceCall::Assign(vec![AssignTasksResult {
+            task_id: TASK_OK.to_string(),
+            status: AssignTaskStatus::Assigned,
         }])]
     );
 }

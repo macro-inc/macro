@@ -12,7 +12,7 @@ use agent_trigger::domain::service::AgentTriggerService;
 use agent_trigger::domain::sources::{ChannelTriggerEvents, MessageTriggerEvents, TriggerEvents};
 use agent_trigger::outbound::{
     BotRepoAgentLookup, ChannelRepoTypeLookup, FastModelTriggerJudge,
-    LexicalExplicitReplyExtractor, MessageThreadHistory,
+    LexicalExplicitReplyExtractor, MessageThreadHistory, VisionImageCaptioner,
 };
 use anyhow::Context as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
@@ -25,7 +25,7 @@ use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEventBrokerService, MacroEventCollection,
     MacroEventConsumerService,
 };
-use macro_service_urls::LexicalServiceUrl;
+use macro_service_urls::{LexicalServiceUrl, StaticFileServiceUrl};
 use messages::outbound::pg_message_repo::PgMessageRepository;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
@@ -89,13 +89,18 @@ async fn run() -> anyhow::Result<()> {
         config.internal_api_key.clone(),
         LexicalServiceUrl::new()?.to_string(),
     );
+    let recorder = ai_usage::pg_recorder(pool.clone());
+    let images = VisionImageCaptioner::new(
+        static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
+        recorder.clone(),
+    );
     let trigger = AgentTriggerService::new(
         PgAgentSessionRepo::new(pool.clone()),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         LexicalExplicitReplyExtractor::new(lexical),
-        FastModelTriggerJudge::new(ai_usage::pg_recorder(pool.clone())),
+        FastModelTriggerJudge::new(recorder, images),
         MessageThreadHistory::new(
             std::sync::Arc::new(messages::domain::service::MessageService::new(
                 PgMessageRepository::new(pool.clone()),

@@ -1,14 +1,20 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { SidePanel } from '@components/app/side-panel';
-import { useBlockId } from '@core/block';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';
+import SpinnerIcon from '@phosphor/spinner.svg';
 import type { CallRecord } from '@service-call/client';
 import { format } from 'date-fns';
-import type { Accessor } from 'solid-js';
-import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  Show,
+  Suspense,
+} from 'solid-js';
+import type { CallTranscriptTarget } from '../../constants';
 import { formatCallDuration } from '../../utils';
-import type { CallTranscriptTarget } from '../CallBlockAdapter';
 import { CallTranscript } from '../CallTranscript';
 import {
   getActiveTranscriptSequenceNum,
@@ -16,7 +22,6 @@ import {
   sortTranscriptSegments,
 } from '../transcript-playback';
 import { CallRecordingParticipantsSection } from './CallRecordingParticipants';
-import { CallRecordingSplitHeader } from './CallRecordingSplitHeader';
 import { CallRecordingSummarySection } from './CallRecordingSummary';
 import { CallRecordingVideo } from './CallRecordingVideo';
 import {
@@ -25,11 +30,12 @@ import {
 } from './call-recording-utils';
 
 export function CallRecordingBody(props: {
-  data: Accessor<CallRecord>;
-  transcriptTarget?: Accessor<CallTranscriptTarget | undefined>;
+  record: CallRecord;
+  callId: string;
+  transcriptTarget?: CallTranscriptTarget;
+  showOverlayHeaderGap?: boolean;
 }) {
-  const record = props.data;
-  const blockId = useBlockId();
+  const record = () => props.record;
   const hasTranscripts = createMemo(() => record().transcript.length > 0);
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
   const [allowFutureLead, setAllowFutureLead] = createSignal(true);
@@ -111,7 +117,7 @@ export function CallRecordingBody(props: {
 
   createEffect(
     on(
-      () => props.transcriptTarget?.(),
+      () => props.transcriptTarget,
       (target) => {
         if (!target) return;
         goToTranscriptSegment(target.transcriptId);
@@ -136,81 +142,89 @@ export function CallRecordingBody(props: {
   });
 
   return (
-    <>
-      <CallRecordingSplitHeader record={record} />
-      <div class="relative flex-1 min-h-0 overflow-hidden">
-        <SidePanel.Section
-          id="call-ai-actions"
-          title="Actions"
-          defaultOpen
-          order={0}
-        >
-          <div class="m-px flex items-center justify-start gap-2">
-            <AskMacroButton
-              entity={{
-                type: 'document',
-                id: blockId,
-                name: callTitle(),
-                fileType: 'call',
-              }}
-            />
-          </div>
-        </SidePanel.Section>
-        <div
-          class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
-          ref={setScrollRef}
-        >
-          <div class="mx-auto max-w-3xl min-w-0 px-6 pt-12 pb-16 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-            <div class="flex flex-col gap-10">
-              <header>
-                <Show when={!isMobile()}>
-                  <div class="h-8 mb-4" />
-                </Show>
-                <h1 class="text-2xl font-semibold text-ink text-balance">
-                  {callTitle()}
-                </h1>
-                <div class="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
-                  <Show when={formattedDate()}>
-                    {(date) => <span>{date()}</span>}
-                  </Show>
-                  <Show when={formattedDuration()}>
-                    {(dur) => (
-                      <>
-                        <span class="text-ink-extra-muted">&middot;</span>
-                        <span>{dur()}</span>
-                      </>
-                    )}
-                  </Show>
-                  <Show when={record().isActive}>
-                    <span class="text-success font-medium">In progress</span>
-                  </Show>
-                </div>
-              </header>
-
-              <CallRecordingParticipantsSection record={record} />
-
-              <CallRecordingSummarySection record={record} />
-
-              <Show when={record().recordingUrl}>
-                {(url) => (
-                  <section class="flex flex-col gap-3">
-                    <h3 class="text-sm font-semibold text-ink">Recording</h3>
-                    <div class="overflow-hidden rounded border border-edge-muted/50">
-                      <CallRecordingVideo
-                        url={url()}
-                        posterUrl={record().recordingPreviewUrl ?? undefined}
-                        onTimeUpdate={handleTimeUpdate}
-                        setVideoRef={setVideoRef}
-                      />
-                    </div>
-                  </section>
-                )}
+    <div class="relative flex-1 min-h-0 overflow-hidden">
+      <SidePanel.Section
+        id="call-ai-actions"
+        title="Actions"
+        defaultOpen
+        order={0}
+      >
+        <div class="m-px flex items-center justify-start gap-2">
+          <AskMacroButton
+            entity={{
+              type: 'document',
+              id: props.callId,
+              name: callTitle(),
+              fileType: 'call',
+            }}
+          />
+        </div>
+      </SidePanel.Section>
+      <div
+        class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
+        ref={setScrollRef}
+      >
+        <div class="mx-auto max-w-3xl min-w-0 px-6 pt-12 pb-16 touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+          <div class="flex flex-col gap-10">
+            <header>
+              <Show when={!isMobile() && props.showOverlayHeaderGap}>
+                <div class="h-8 mb-4" />
               </Show>
+              <h1 class="text-2xl font-semibold text-ink text-balance">
+                {callTitle()}
+              </h1>
+              <div class="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
+                <Show when={formattedDate()}>
+                  {(date) => <span>{date()}</span>}
+                </Show>
+                <Show when={formattedDuration()}>
+                  {(dur) => (
+                    <>
+                      <span class="text-ink-extra-muted">&middot;</span>
+                      <span>{dur()}</span>
+                    </>
+                  )}
+                </Show>
+                <Show when={record().isActive}>
+                  <span class="text-success font-medium">In progress</span>
+                </Show>
+              </div>
+            </header>
 
-              <Show when={hasTranscripts()}>
+            <CallRecordingParticipantsSection record={props.record} />
+
+            <CallRecordingSummarySection record={props.record} />
+
+            <Show when={record().recordingUrl}>
+              {(url) => (
                 <section class="flex flex-col gap-3">
-                  <h3 class="text-sm font-semibold text-ink">Transcript</h3>
-                  <div class="flex flex-col max-h-[min(600px,60vh)] overflow-hidden rounded border border-edge-muted/50">
+                  <h3 class="text-sm font-semibold text-ink">Recording</h3>
+                  <div class="overflow-hidden rounded border border-edge-muted/50">
+                    <CallRecordingVideo
+                      url={url()}
+                      posterUrl={record().recordingPreviewUrl ?? undefined}
+                      onTimeUpdate={handleTimeUpdate}
+                      setVideoRef={setVideoRef}
+                    />
+                  </div>
+                </section>
+              )}
+            </Show>
+
+            <Show when={hasTranscripts()}>
+              <section class="flex flex-col gap-3">
+                <h3 class="text-sm font-semibold text-ink">Transcript</h3>
+                <div class="flex flex-col max-h-[min(600px,60vh)] overflow-hidden rounded border border-edge-muted/50">
+                  <Suspense
+                    fallback={
+                      <div class="grid min-h-32 place-items-center text-ink-muted">
+                        <SpinnerIcon
+                          aria-label="Loading transcript"
+                          class="size-5 animate-spin"
+                        />
+                      </div>
+                    }
+                  >
                     <CallTranscript
                       transcript={record().transcript}
                       channelId={record().channelId}
@@ -221,14 +235,14 @@ export function CallRecordingBody(props: {
                       onSeekToSeconds={seekToSeconds}
                       hideHeader
                     />
-                  </div>
-                </section>
-              </Show>
-            </div>
+                  </Suspense>
+                </div>
+              </section>
+            </Show>
           </div>
         </div>
-        <CustomScrollbar scrollContainer={scrollRef} />
       </div>
-    </>
+      <CustomScrollbar scrollContainer={scrollRef} />
+    </div>
   );
 }

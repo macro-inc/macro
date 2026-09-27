@@ -50,9 +50,9 @@ import { tasksTabSearch, tasksTabSearchCodec } from './tasks-tab-search';
 import type {
   TaskDetailTarget,
   TaskSortId,
+  TasksTab,
   TasksViewState,
   TasksViewStateOptions,
-  TaskTab,
 } from './types';
 
 type TasksViewProviderProps = ContextProviderProps & {
@@ -89,7 +89,7 @@ export type TasksViewContext = {
     options?: EntityDetailNavigationOptions
   ) => boolean;
   closeTask: () => void;
-  setTab: (tab: TaskTab) => void;
+  setTab: (tab: TasksTab) => void;
   setFacets: (facets: TasksViewState['facets']) => void;
   setPrimarySort: (id: TaskSortId) => void;
   isSidebarSectionOpen: (id: string) => boolean;
@@ -136,25 +136,20 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     })
   );
 
+  const routeTab = (): TasksTab => tabSearch.tab;
   createEffect(
-    on(
-      () => tabSearch.tab,
-      (tab) => {
-        if (state.tab === tab) return;
-        setState(
-          produce((draft) => {
-            draft.tab = tab;
-            draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
-            draft.facets = normalizeFacetSelection(
-              DEFAULT_TASK_FACET_SELECTION
-            );
-            draft.collapsedGroupIds = [];
-          })
-        );
-      }
-    )
+    on(routeTab, (tab) => {
+      if (state.tab === tab) return;
+      setState(
+        produce((draft) => {
+          draft.tab = tab;
+          draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
+          draft.facets = normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION);
+          draft.collapsedGroupIds = [];
+        })
+      );
+    })
   );
-
   const isGroupExpanded = (groupId: string) =>
     !state.collapsedGroupIds.includes(groupId);
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
@@ -281,7 +276,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     })
   );
 
-  const setTab = (tab: TaskTab) => {
+  const setTab = (tab: TasksTab) => {
     if (state.tab === tab) {
       closeTask();
       return;

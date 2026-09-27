@@ -463,6 +463,12 @@ where
             Some((s, f)) => (Some(s), f),
         };
 
+        let include_initiatives = item_filters::ast::initiative::initiatives_requested(
+            filters
+                .as_ref()
+                .and_then(|filter| filter.initiative_filter.as_deref()),
+        );
+
         let res = self
             .frecency
             .get_frecency_page(FrecencyPageRequest {
@@ -473,7 +479,11 @@ where
             })
             .await?;
 
-        let entities: Vec<_> = res.ids().map(|f| f.entity.copied()).collect();
+        let entities: Vec<_> = res
+            .ids()
+            .filter(|f| include_initiatives || f.entity.entity_type != EntityType::Initiative)
+            .map(|f| f.entity.copied())
+            .collect();
 
         let res = self
             .handle_soup_by_ids(
@@ -572,7 +582,7 @@ where
         let mut email_ids = Vec::new();
         for candidate in &touched {
             match candidate.entity.entity_type {
-                EntityType::Document | EntityType::Chat => {
+                EntityType::Document | EntityType::Chat | EntityType::Initiative => {
                     main_entities.push(candidate.entity.copied())
                 }
                 // Projects are rows of this feed in both soup types, but the
@@ -848,7 +858,8 @@ where
                 EntityType::Document
                 | EntityType::Chat
                 | EntityType::CalendarEvent
-                | EntityType::AgentSession => main_entities.push(candidate.entity.copied()),
+                | EntityType::AgentSession
+                | EntityType::Initiative => main_entities.push(candidate.entity.copied()),
                 // Same split as the touched feed: the expanded by-ids query
                 // omits project rows, so they hydrate unexpanded separately.
                 EntityType::Project => match soup_type {

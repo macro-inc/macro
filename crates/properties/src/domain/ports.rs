@@ -4,6 +4,7 @@
 //! Implementations live in the outbound module.
 
 use std::collections::HashMap;
+use std::pin::Pin;
 
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::EntityType as AccessEntityType;
@@ -111,6 +112,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         &self,
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Vec<PropertyOption>, Self::Err>> + Send;
+
+    /// Read options for requested system, caller-owned, or caller-team definitions.
+    /// Missing or inaccessible definitions are omitted; visible definitions with no options remain.
+    fn get_visible_property_options_batch<'a>(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &MacroUserIdStr<'a>,
+        team_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, Vec<PropertyOption>>, Self::Err>> + Send;
 
     /// Create a new property option.
     fn create_property_option(
@@ -458,4 +468,16 @@ pub trait NotificationService: Send + Sync + 'static {
         &self,
         notification: TaskAssignedNotification<'a>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Initiative-owned sharing operations required when assigning a project.
+/// The implementation keeps grants on the initiative and its description in
+/// sync while leaving the owning initiative service in charge of sharing side effects.
+pub trait InitiativeAssigneeService: std::fmt::Debug + Send + Sync + 'static {
+    /// Grant assignees edit access, preserving existing grants when cleared.
+    fn grant_assignees<'a>(
+        &'a self,
+        access: &'a EditReceipt,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), super::error::PropertiesErr>> + Send + 'a>>;
 }

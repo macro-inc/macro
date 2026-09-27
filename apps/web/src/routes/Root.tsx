@@ -90,7 +90,10 @@ import {
 import { useChatRenameWebsocketSync } from '@queries/chat';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
-import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
+import {
+  useRefreshTrackedEntitiesOnFocus,
+  useReopenTrackedEntitiesOnReconnect,
+} from '@service-connection/client';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
@@ -344,6 +347,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   const notifInterface = usePlatformNotificationState();
   useChatRenameWebsocketSync();
   useReopenTrackedEntitiesOnReconnect();
+  useRefreshTrackedEntitiesOnFocus();
 
   if (isNativeMobilePlatform()) {
     useInvalidateQueriesOnReconnect();

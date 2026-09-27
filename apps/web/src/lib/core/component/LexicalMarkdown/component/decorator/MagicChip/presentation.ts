@@ -18,6 +18,14 @@ export type MagicChipActivity = {
   label: string;
   detail?: string;
   busy: boolean;
+  tone?:
+    | 'neutral'
+    | 'active'
+    | 'tool'
+    | 'attention'
+    | 'success'
+    | 'failure'
+    | 'stopped';
 };
 
 /** Who is answering, for the chip's header: the persona and its model. */
@@ -171,7 +179,10 @@ function partActivity(part: MessagePart): MagicChipActivity {
         detail: text.trim() || undefined,
         busy: true,
       }))
-      .with({ kind: 'tool_use' }, toolActivity)
+      .with({ kind: 'tool_use' }, (part) => ({
+        ...toolActivity(part),
+        tone: 'tool' as const,
+      }))
       .with({ kind: 'permission', outcome: { kind: 'cancelled' } }, () => ({
         label: 'Permission cancelled',
         busy: false,
@@ -183,6 +194,7 @@ function partActivity(part: MessagePart): MagicChipActivity {
       .with({ kind: 'permission', outcome: { kind: 'pending' } }, () => ({
         label: 'Permission needed',
         busy: false,
+        tone: 'attention' as const,
       }))
       .with({ kind: 'permission', outcome: { kind: 'errored' } }, () => ({
         label: 'Permission failed',
@@ -208,6 +220,7 @@ function partActivity(part: MessagePart): MagicChipActivity {
       .with({ kind: 'elicitation', outcome: { kind: 'pending' } }, () => ({
         label: 'Waiting for your input',
         busy: false,
+        tone: 'attention' as const,
       }))
       .with({ kind: 'elicitation', outcome: { kind: 'accepted' } }, () => ({
         label: 'Resuming work',
@@ -254,46 +267,49 @@ function turnEndedActivity(
 ): MagicChipActivity | undefined {
   const stop = response?.stop;
   if (!stop) return undefined;
-  return (
-    match(stop)
-      .with({ kind: 'end_turn' }, () => ({
-        // A clean end with prose settles before activity is consulted, so
-        // reaching this arm means the agent closed the turn empty-handed.
-        label: 'Agent finished without a response',
-        busy: false,
-      }))
-      .with({ kind: 'cancelled' }, () => ({ label: 'Stopped', busy: false }))
-      .with({ kind: 'refusal' }, () => ({
-        label: 'Request refused',
-        busy: false,
-      }))
-      .with({ kind: 'max_tokens' }, () => ({
-        label: 'Response limit reached',
-        busy: false,
-      }))
-      .with({ kind: 'max_turn_requests' }, () => ({
-        label: 'Turn limit reached',
-        busy: false,
-      }))
-      .with({ kind: 'other' }, ({ reason }) => ({ label: reason, busy: false }))
-      // A failure the runtime wrote in the person's terms — a spent Cursor
-      // budget — is shown in those terms; the link lives in the session,
-      // which the chip opens.
-      .with({ kind: 'failed', notice: P.nonNullable }, ({ notice }) => ({
-        label: notice.title,
-        detail: notice.body,
-        busy: false,
-      }))
-      // The runtime errored the prompt. The label says that much; the
-      // runtime's own message goes in the detail line, because some of these
-      // are the user's to act on — a repository Cursor cannot reach, say.
-      .with({ kind: 'failed' }, ({ message }) => ({
-        label: "Agent couldn't answer",
-        detail: message,
-        busy: false,
-      }))
-      .exhaustive()
-  );
+  const activity = match(stop)
+    .with({ kind: 'end_turn' }, () => ({
+      // A clean end with prose settles before activity is consulted, so
+      // reaching this arm means the agent closed the turn empty-handed.
+      label: 'Agent finished without a response',
+      busy: false,
+    }))
+    .with({ kind: 'cancelled' }, () => ({ label: 'Stopped', busy: false }))
+    .with({ kind: 'refusal' }, () => ({
+      label: 'Request refused',
+      busy: false,
+    }))
+    .with({ kind: 'max_tokens' }, () => ({
+      label: 'Response limit reached',
+      busy: false,
+    }))
+    .with({ kind: 'max_turn_requests' }, () => ({
+      label: 'Turn limit reached',
+      busy: false,
+    }))
+    .with({ kind: 'other' }, ({ reason }) => ({ label: reason, busy: false }))
+    // A failure the runtime wrote in the person's terms — a spent Cursor
+    // budget — is shown in those terms; the link lives in the session,
+    // which the chip opens.
+    .with({ kind: 'failed', notice: P.nonNullable }, ({ notice }) => ({
+      label: notice.title,
+      detail: notice.body,
+      busy: false,
+    }))
+    // The runtime errored the prompt. The label says that much; the
+    // runtime's own message goes in the detail line, because some of these
+    // are the user's to act on — a repository Cursor cannot reach, say.
+    .with({ kind: 'failed' }, ({ message }) => ({
+      label: "Agent couldn't answer",
+      detail: message,
+      busy: false,
+    }))
+    .exhaustive();
+  const tone = match(stop.kind)
+    .with('end_turn', () => 'success' as const)
+    .with('cancelled', () => 'stopped' as const)
+    .otherwise(() => 'failure' as const);
+  return { ...activity, tone };
 }
 
 /**
@@ -327,7 +343,11 @@ function turnInFlightActivity(
 /** The session's persisted lifecycle, when the fold has nothing livelier. */
 function statusActivity(status: MagicChipStatus): MagicChipActivity {
   return match(status)
-    .with('no_messages', () => ({ label: 'Starting session', busy: false }))
+    .with('no_messages', () => ({
+      label: 'Queued',
+      busy: false,
+      tone: 'neutral' as const,
+    }))
     .with('booting', () => ({
       label: 'Booting agent',
       detail: 'Preparing workspace',
@@ -338,6 +358,7 @@ function statusActivity(status: MagicChipStatus): MagicChipActivity {
     .with('disconnected', () => ({
       label: 'Session disconnected',
       busy: false,
+      tone: 'stopped' as const,
     }))
     .exhaustive();
 }
@@ -371,24 +392,6 @@ function latestChunk(response: FoldedMessage | undefined): string {
   );
 }
 
-/** The one line the chip's header reads for the turn. */
-/**
- * What the status dot says at a glance: the turn is running, it has stopped
- * to ask, or it is over. Colour only - whether the dot pulses is the
- * activity's `busy`, which a running turn can drop while still running.
- */
-export type MagicChipTone = 'busy' | 'asking' | 'done';
-
-export function presentationTone(
-  presentation: MagicChipPresentation
-): MagicChipTone {
-  return match(presentation)
-    .with({ kind: 'asking' }, () => 'asking' as const)
-    .with({ kind: 'settled' }, () => 'done' as const)
-    .with({ kind: 'working' }, { kind: 'answering' }, () => 'busy' as const)
-    .exhaustive();
-}
-
 /**
  * Markdown flattened to the single line the console's output row shows.
  *
@@ -404,7 +407,7 @@ export function presentationTone(
  */
 export function flattenToLine(markdown: string): string {
   return markdownToPlainText(markdown)
-    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s*```[^\n]*$/gm, ' ')
     .replace(/^\s{0,3}(?:[-*+]|\d+[.)])\s+/gm, '')
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')
     .replace(/^\s{0,3}>\s?/gm, '')
@@ -431,11 +434,11 @@ export function presentationLine(
   presentation: MagicChipPresentation
 ): string | undefined {
   if (presentation.kind === 'asking') {
-    const { request, action, detail } = presentation.asking;
+    const { request, action } = presentation.asking;
     const asked =
       request.kind === 'elicitation'
         ? request.message
-        : [action, detail].filter(Boolean).join(' · ');
+        : action || 'Open session to respond';
     return asked || undefined;
   }
   if (presentation.kind === 'working') return undefined;
@@ -482,7 +485,9 @@ export function deriveMagicChipPresentation(
     turnEndedActivity(response) ??
     liveEventActivity(latestEvent, 'disconnected') ??
     turnInFlightActivity(response) ??
-    (prompt ? { label: 'Waiting for agent', busy: true } : undefined) ??
+    (prompt
+      ? { label: 'Waiting for agent', busy: true, tone: 'neutral' as const }
+      : undefined) ??
     liveEventActivity(latestEvent, 'acp_ready') ??
     statusActivity(persistedStatus);
 

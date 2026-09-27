@@ -1415,6 +1415,7 @@ impl ApiEntityFilterAst {
             reminder_filter,
             agent_session_filter,
             properties_filter,
+            initiative_filter: None,
         })
     }
 }

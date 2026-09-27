@@ -8,7 +8,7 @@ import type {
 } from './types';
 import { encodeSplitRouterLocation } from './url';
 
-function externalLocationSignature(
+export function externalLocationSignature(
   location: SplitRouterExternalLocationValue
 ): string {
   const query = [...new URLSearchParams(location.search)].sort(
