@@ -25,9 +25,11 @@ import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import ArrowsIn from '@phosphor/arrows-in.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
-import { Button, cn, Layer, SideNav } from '@ui';
+import { Button, cn, Input, Layer, SideNav } from '@ui';
 import {
+  createMemo,
   createRenderEffect,
   createSignal,
   For,
@@ -106,6 +108,43 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const variant = () => props.variant ?? 'split';
   const activeNavigationTab = () =>
     activeTabId() === 'Harness' ? 'Agents' : activeTabId();
+
+  const [searchQuery, setSearchQuery] = createSignal('');
+
+  const searchKeywords: Record<string, string[]> = {
+    'API Keys': ['cursor', 'api', 'key', 'token', 'authentication'],
+    Account: ['profile', 'user', 'email', 'name'],
+    Notifications: ['alerts', 'email', 'sound'],
+    Billing: ['payment', 'subscription', 'invoice', 'plan'],
+    Appearance: ['theme', 'dark', 'light', 'color'],
+    Agents: ['ai', 'assistant', 'bot'],
+    'Mobile App': ['phone', 'ios', 'android'],
+    Shortcuts: ['keyboard', 'hotkey', 'keybinding'],
+    Team: ['members', 'users', 'workspace'],
+    Tags: ['label', 'category'],
+    CRM: ['contacts', 'customers', 'deals'],
+    Connected: ['integrations', 'apps', 'connections'],
+    Agent: ['mcp', 'server', 'protocol'],
+    Bots: ['automation', 'bot'],
+  };
+
+  const filteredGroups = createMemo(() => {
+    const query = searchQuery().toLowerCase().trim();
+    if (!query) return groups();
+
+    return groups()
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => {
+          const labelMatch = item.label.toLowerCase().includes(query);
+          const keywordMatch = searchKeywords[item.tab]?.some((keyword) =>
+            keyword.includes(query)
+          );
+          return labelMatch || keywordMatch;
+        }),
+      }))
+      .filter((group) => group.items.length > 0);
+  });
 
   // Responsive state, driven by the panel's own width (see breakpoints above).
   const [panelWidth, setPanelWidth] = createSignal(Number.POSITIVE_INFINITY);
@@ -333,24 +372,44 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 {moveToSplitButton()}
               </div>
             </Show>
-            <For each={groups()}>
-              {(group) => (
-                <SideNav.Group label={group.label}>
-                  <For each={group.items}>
-                    {(item) => (
-                      <SideNav.Item
-                        icon={item.icon}
-                        active={activeNavigationTab() === item.tab}
-                        onSelect={() => handleTabChange(item.tab)}
-                        class="text-xs py-1.5"
-                      >
-                        {item.label}
-                      </SideNav.Item>
-                    )}
-                  </For>
-                </SideNav.Group>
-              )}
-            </For>
+            <div class="relative">
+              <MagnifyingGlassIcon class="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-ink-muted pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="Search settings..."
+                value={searchQuery()}
+                onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                size="sm"
+                class="pl-8"
+              />
+            </div>
+            <Show
+              when={filteredGroups().length > 0}
+              fallback={
+                <div class="text-xs text-ink-muted text-center py-4">
+                  No settings found
+                </div>
+              }
+            >
+              <For each={filteredGroups()}>
+                {(group) => (
+                  <SideNav.Group label={group.label}>
+                    <For each={group.items}>
+                      {(item) => (
+                        <SideNav.Item
+                          icon={item.icon}
+                          active={activeNavigationTab() === item.tab}
+                          onSelect={() => handleTabChange(item.tab)}
+                          class="text-xs py-1.5"
+                        >
+                          {item.label}
+                        </SideNav.Item>
+                      )}
+                    </For>
+                  </SideNav.Group>
+                )}
+              </For>
+            </Show>
             <div class="mt-auto border-t border-edge-muted pt-2">
               <button
                 type="button"
