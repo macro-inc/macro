@@ -471,6 +471,18 @@ fn patches_from_property_event(event: &PropertyTopicEvent) -> Vec<SoupRealtimePa
         PropertyTopicEvent::EntityPropertyDeleted(metadata) => {
             property_update(metadata.entity_type, &metadata.entity_id)
         }
+        PropertyTopicEvent::EntityPropertiesCleared(metadata)
+            if metadata.entity_type == PropertyEntityType::Initiative
+                && metadata.actor_user_id.is_none()
+                && metadata.actor.is_none()
+                && metadata.on_behalf_of.is_none() =>
+        {
+            // Initiative deletion clears properties with an internal receipt after
+            // publishing Purged. The topics have no shared ordering; refreshing here
+            // could replace the deletion with a stale replica row. User/bot clears
+            // remain ordinary property updates below.
+            Vec::new()
+        }
         PropertyTopicEvent::EntityPropertiesCleared(metadata) => {
             property_update(metadata.entity_type, &metadata.entity_id)
         }

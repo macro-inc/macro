@@ -384,6 +384,74 @@ fn deleting_or_clearing_properties_updates_the_soup_entity() {
 }
 
 #[test]
+fn initiative_purge_cleanup_cannot_replace_the_deletion_in_either_event_order() {
+    let id = Uuid::now_v7();
+    let purged = InitiativeTopicEvent::Purged {
+        initiative_id: initiative::domain::models::InitiativeId::from_uuid(id),
+    };
+    let cleanup = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
+        entity_id: id.to_string(),
+        entity_type: PropertyEntityType::Initiative,
+        actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
+    });
+
+    for cleanup_first in [false, true] {
+        let deletion = patches_from_initiative_event(&purged);
+        let cleanup = patches_from_property_event(&cleanup);
+        let patches = if cleanup_first {
+            [cleanup, deletion].concat()
+        } else {
+            [deletion, cleanup].concat()
+        };
+        assert_eq!(patches.len(), 1);
+        assert!(matches!(patches[0].patch, Patch::Deleted(_)));
+        assert_eq!(
+            patch_entity(&patches[0]).entity_type,
+            EntityType::Initiative
+        );
+        assert_eq!(patch_entity(&patches[0]).entity_id, id.to_string());
+    }
+}
+
+#[test]
+fn attributed_initiative_clears_and_other_system_clears_still_refresh_soup() {
+    let metadata = EntityPropertiesClearedMetadata {
+        entity_id: Uuid::now_v7().to_string(),
+        entity_type: PropertyEntityType::Initiative,
+        actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
+    };
+    for metadata in [
+        EntityPropertiesClearedMetadata {
+            actor_user_id: Some(user()),
+            ..metadata.clone()
+        },
+        EntityPropertiesClearedMetadata {
+            actor: Some(ChannelSender::new_from_user(user())),
+            ..metadata.clone()
+        },
+        EntityPropertiesClearedMetadata {
+            on_behalf_of: Some(user()),
+            ..metadata.clone()
+        },
+        EntityPropertiesClearedMetadata {
+            entity_type: PropertyEntityType::Company,
+            ..metadata
+        },
+    ] {
+        let entity_id = metadata.entity_id.clone();
+        let patches =
+            patches_from_property_event(&PropertyTopicEvent::EntityPropertiesCleared(metadata));
+        assert_eq!(patches.len(), 1);
+        assert!(matches!(patches[0].patch, Patch::Updated(_)));
+        assert_eq!(patch_entity(&patches[0]).entity_id, entity_id);
+    }
+}
+
+#[test]
 fn property_events_for_non_property_soup_items_are_ignored() {
     for entity_type in [PropertyEntityType::Channel, PropertyEntityType::User] {
         let event = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
