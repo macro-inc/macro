@@ -1,4 +1,3 @@
-import { queryKeys } from '@entity/queries/key';
 import { muteItemForEntity } from '@entity/utils/notification';
 import type { ApiThreadPreviewCursor } from '@service-email/generated/schemas';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
@@ -60,7 +59,6 @@ function searchResult(id: string, name: string) {
 }
 
 function setup() {
-  client.setQueryData(queryKeys.auth.apiToken, 'test-token');
   const [term, setTerm] = createSignal('');
   let emails!: ReturnType<typeof useSnoozeEmails>;
   function Harness() {
@@ -91,7 +89,7 @@ afterEach(() => {
 });
 
 describe('email threads in the snooze picker', () => {
-  it('browses and paginates email threads independently of Quick Access', async () => {
+  it('browses and paginates email threads without requiring a separate API token', async () => {
     clients.getPreviews
       .mockResolvedValueOnce(
         ok({ items: [preview('recent', 'Recent email')], next_cursor: 'older' })
@@ -112,6 +110,9 @@ describe('email threads in the snooze picker', () => {
       view: 'all',
       cursor: 'older',
     });
+    expect(clients.getPreviews.mock.calls[0]).toEqual([
+      { view: 'all', limit: 50, sort_method: undefined, cursor: undefined },
+    ]);
     expect(emails.hasMore()).toBe(false);
     expect(clients.search).not.toHaveBeenCalled();
   });
