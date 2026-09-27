@@ -56,6 +56,7 @@ enum CursorPosition {
     },
     Name {
         id: InitiativeId,
+        updated_at: DateTime<Utc>,
     },
     Due {
         id: InitiativeId,
@@ -71,7 +72,10 @@ impl CursorPosition {
                 id,
                 updated_at: row.initiative.updated_at,
             },
-            InitiativeSort::Name => Self::Name { id },
+            InitiativeSort::Name => Self::Name {
+                id,
+                updated_at: row.initiative.updated_at,
+            },
             InitiativeSort::Due => Self::Due {
                 id,
                 due_date: row.properties.due_date,
@@ -97,13 +101,16 @@ impl CursorPosition {
                 updated_at: DateTime::UNIX_EPOCH,
                 due_date,
             }),
-            (Self::Name { id }, InitiativeSort::Name) => rows
+            (Self::Name { id, updated_at }, InitiativeSort::Name) => rows
                 .iter()
-                .find(|row| row.initiative.id == id)
+                // A renamed anchor must not silently move the continuation point.
+                // Names have no byte bound, so keep a bounded row version instead
+                // of embedding their potentially unbounded sort key in the cursor.
+                .find(|row| row.initiative.id == id && row.initiative.updated_at == updated_at)
                 .map(Into::into)
                 .ok_or_else(|| {
                     InitiativeError::BadRequest(
-                        "cursor anchor is unavailable; restart pagination".into(),
+                        "cursor anchor changed or is unavailable; restart pagination".into(),
                     )
                 }),
             _ => Err(InitiativeError::BadRequest(

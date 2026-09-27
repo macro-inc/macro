@@ -462,3 +462,64 @@ async fn removed_name_cursor_anchor_requires_restarting_instead_of_silently_skip
         matches!(error, InitiativeError::BadRequest(message) if message.contains("restart pagination"))
     );
 }
+
+#[tokio::test]
+async fn renamed_name_cursor_anchor_requires_restarting_in_both_directions() {
+    for descending in [false, true] {
+        let mut repo = MockInitiativeRepo::new();
+        let mut sequence = Sequence::new();
+        repo.expect_list_accessible()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .return_once(|_| {
+                Box::pin(async {
+                    Ok(InitiativeList {
+                        initiatives: vec![summary(1, "Alpha"), summary(2, "Beta")],
+                    })
+                })
+            });
+        repo.expect_list_accessible()
+            .times(1)
+            .in_sequence(&mut sequence)
+            .return_once(move |_| {
+                Box::pin(async move {
+                    let mut renamed = if descending {
+                        summary(2, "Aaron")
+                    } else {
+                        summary(1, "Zulu")
+                    };
+                    renamed.updated_at += chrono::Duration::seconds(1);
+                    Ok(InitiativeList {
+                        initiatives: vec![
+                            renamed,
+                            if descending {
+                                summary(1, "Alpha")
+                            } else {
+                                summary(2, "Beta")
+                            },
+                        ],
+                    })
+                })
+            });
+        repo.expect_get_detail()
+            .times(1)
+            .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
+        let svc = service_with_resources(repo, FakeResources::default());
+        let mut request = InitiativePageRequest {
+            limit: Some(1),
+            sort: InitiativeSort::Name,
+            descending: Some(descending),
+            ..Default::default()
+        };
+        let first = svc.page(&user(OWNER), request.clone()).await.unwrap();
+        assert_eq!(first.initiatives.len(), 1);
+        request.cursor = first.next_cursor;
+        assert!(request.cursor.is_some());
+        // Continuing from the anchor's new name would silently skip Beta/Alpha.
+        let error = svc.page(&user(OWNER), request).await.unwrap_err();
+        assert!(matches!(
+            error,
+            InitiativeError::BadRequest(message) if message.contains("restart pagination")
+        ));
+    }
+}
