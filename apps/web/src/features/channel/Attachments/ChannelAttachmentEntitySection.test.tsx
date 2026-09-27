@@ -26,10 +26,16 @@ vi.mock('@queries/soup/items', () => ({
 vi.mock('@service-storage/client', () => ({
   stringToItemType: (type: string) => type,
 }));
-vi.mock('./AttachmentEntityList', () => ({ AttachmentEntityList: () => null }));
+vi.mock('./AttachmentEntityRow', () => ({
+  AttachmentEntityRow: (props: { entity: { id: string } }) => (
+    <span>{props.entity.id}</span>
+  ),
+}));
 vi.mock('./attachment-utils', () => ({ getEntityClickContent: vi.fn() }));
 vi.mock('./SectionHeader', () => ({
-  AttachmentSection: (props: ParentProps) => props.children,
+  AttachmentSection: (props: ParentProps<{ label: string }>) => (
+    <section aria-label={props.label}>{props.children}</section>
+  ),
   LoadMoreButton: (props: { onLoadMore(): void; isFetching(): boolean }) => (
     <button onClick={props.onLoadMore} disabled={props.isFetching()}>
       Load More
@@ -69,6 +75,8 @@ it('retains cached project attachments after a background refetch failure withou
     <ChannelAttachmentEntitySection channelId="channel" />
   ));
   expect(view.queryByText('Shared project')).toBeNull();
+  expect(view.queryByText('No documents in this channel yet.')).toBeNull();
+  expect(view.getByLabelText('Loading documents')).toBeTruthy();
   setPending(false);
   expect(view.getByText('Shared project')).toBeTruthy();
   setFailed(true);
@@ -109,13 +117,20 @@ it.each([true, false])(
       <ChannelAttachmentEntitySection channelId="channel" />
     ));
     expect(view.getByText('Shared project')).toBeTruthy();
+    expect(view.queryByText('No documents in this channel yet.')).toBeNull();
+    expect(view.getByLabelText('Loading documents')).toBeTruthy();
     expect(view.queryByRole('button', { name: 'Load More' })).toBeNull();
     expect(fetchNextPage).not.toHaveBeenCalled();
 
     setLoading(false);
+    expect(view.queryByLabelText('Loading documents')).toBeNull();
+    const projects = view.getByRole('region', { name: 'Projects' });
     if (hasDocuments) {
-      expect(view.queryByRole('button', { name: 'Load More' })).toBeNull();
+      expect(view.getByText('document')).toBeTruthy();
+      expect(view.queryByText('No documents in this channel yet.')).toBeNull();
+      expect(projects.querySelector('button')).toBeNull();
     } else {
+      expect(view.getByText('No documents in this channel yet.')).toBeTruthy();
       fireEvent.click(view.getByRole('button', { name: 'Load More' }));
       expect(fetchNextPage).toHaveBeenCalledOnce();
     }
