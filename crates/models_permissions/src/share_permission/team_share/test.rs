@@ -311,7 +311,7 @@ fn creation_contract_distinguishes_ordinary_task_call_and_initiative_defaults() 
         TeamShareCreation::ExplicitTask.resolve(Some(team_id)),
         Ok(Some(TeamShareGrant {
             team_id,
-            level: TeamShareLevel::Comment,
+            level: TeamShareLevel::Edit,
         }))
     );
     assert_eq!(TeamShareCreation::Initiative.resolve(None), Ok(None));

@@ -211,7 +211,7 @@ pub enum TeamShareCreation {
     /// Ordinary creation and copies initialize NULL explicit sharing.
     #[default]
     Unshared,
-    /// An explicitly shared task initializes Comment; missing membership is an error.
+    /// An explicitly shared task initializes Edit; missing membership is an error.
     ExplicitTask,
     /// A new call initializes View only if its creator currently belongs to a team.
     Call,
@@ -231,7 +231,7 @@ impl TeamShareCreation {
             Self::Unshared => Ok(None),
             Self::ExplicitTask => Ok(Some(TeamShareGrant {
                 team_id: owner_team_id.ok_or(TeamSharePolicyError::MissingTeam)?,
-                level: TeamShareLevel::Comment,
+                level: TeamShareLevel::Edit,
             })),
             Self::Call => Ok(owner_team_id.map(|team_id| TeamShareGrant {
                 team_id,
