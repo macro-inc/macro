@@ -21,9 +21,9 @@ use super::GithubPullRequestServiceImpl;
 use crate::domain::{
     models::{
         EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
-        GithubPullRequestError, GithubPullRequestFacets, GithubPullRequestRow,
-        GithubPullRequestSortDirection, GithubPullRequestStatus, GithubRepositoryIdentity,
-        UpsertGithubPullRequest,
+        GithubPullRequestError, GithubPullRequestFacets, GithubPullRequestLabel,
+        GithubPullRequestRow, GithubPullRequestSortDirection, GithubPullRequestStatus,
+        GithubRepositoryIdentity, UpsertGithubPullRequest,
     },
     ports::{
         GithubPullRequestFacetRepository, GithubPullRequestFacetService,
@@ -71,9 +71,10 @@ impl StubForeignEntityService {
 impl ForeignEntityService for StubForeignEntityService {
     async fn get_foreign_entity(
         &self,
-        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<ForeignEntity, ForeignEntityError> {
-        unreachable!("pull request storage does not read records by receipt")
+        let id = Uuid::parse_str(&receipt.entity().entity_id).unwrap();
+        self.get_foreign_entity_by_id(id).await
     }
 
     async fn get_foreign_entity_by_id(
@@ -233,6 +234,16 @@ impl GithubPullRequestRepository for StubPullRequestRows {
             row.github_key = to.to_owned();
         }
         Ok(())
+    }
+
+    async fn pull_request_row(
+        &self,
+        github_key: &str,
+    ) -> Result<Option<GithubPullRequestRow>, Self::Err> {
+        Ok(self
+            .rows()
+            .into_iter()
+            .find(|row| row.github_key == github_key))
     }
 }
 
@@ -817,4 +828,71 @@ async fn facets_reject_a_receipt_for_anything_but_a_team() {
 
     assert!(matches!(result, Err(GithubPullRequestError::BadRequest(_))));
     assert!(rows.facet_requests.lock().unwrap().is_empty());
+}
+
+fn view_receipt(record: &ForeignEntity) -> EntityAccessReceipt<ViewAccessLevel> {
+    EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
+        facet_user(),
+        &record.id.to_string(),
+        EntityType::ForeignEntity,
+    )
+}
+
+#[tokio::test]
+async fn lookup_takes_typed_fields_from_the_row_and_the_rest_from_the_record() {
+    let mut stale = pull_request(GithubPullRequestStatus::Open);
+    stale.description = Some("Adds storage".to_string());
+    let record = stored_record(&user(), serde_json::to_value(&stale).unwrap());
+    let foreign_entities = StubForeignEntityService::with_records(vec![record.clone()]);
+    let rows = StubPullRequestRows::default();
+    let mut row = GithubPullRequestRow::from_metadata(&record.metadata).unwrap();
+    row.status = Some(GithubPullRequestStatus::Merged);
+    row.labels = vec![GithubPullRequestLabel {
+        name: "bug".to_string(),
+        color: None,
+    }];
+    rows.rows.lock().unwrap().push(row);
+
+    let stored = service(&foreign_entities, &rows)
+        .get_pull_request(view_receipt(&record))
+        .await
+        .unwrap();
+
+    assert_eq!(stored.id, record.id);
+    assert_eq!(stored.status, Some(GithubPullRequestStatus::Merged));
+    assert_eq!(stored.labels[0].name, "bug");
+    assert_eq!(stored.description.as_deref(), Some("Adds storage"));
+    assert_eq!(stored.additions, Some(10));
+}
+
+#[tokio::test]
+async fn lookup_without_a_row_reads_the_record() {
+    let record = stored_record(
+        &user(),
+        serde_json::to_value(pull_request(GithubPullRequestStatus::Closed)).unwrap(),
+    );
+    let foreign_entities = StubForeignEntityService::with_records(vec![record.clone()]);
+
+    let stored = service(&foreign_entities, &StubPullRequestRows::default())
+        .get_pull_request(view_receipt(&record))
+        .await
+        .unwrap();
+
+    assert_eq!(stored.status, Some(GithubPullRequestStatus::Closed));
+    assert_eq!(stored.github_key, GITHUB_KEY);
+}
+
+#[tokio::test]
+async fn lookup_does_not_find_records_from_other_sources() {
+    let record = ForeignEntity {
+        foreign_entity_source: "linear_issue".to_string(),
+        ..stored_record(&user(), serde_json::json!({}))
+    };
+    let foreign_entities = StubForeignEntityService::with_records(vec![record.clone()]);
+
+    let result = service(&foreign_entities, &StubPullRequestRows::default())
+        .get_pull_request(view_receipt(&record))
+        .await;
+
+    assert!(matches!(result, Err(GithubPullRequestError::NotFound(id)) if id == record.id));
 }

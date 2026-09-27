@@ -89,6 +89,7 @@ use favorites::inbound::axum_router::{
 use foreign_entity::domain::models::ForeignEntity;
 use github_pull_requests::domain::models::{
     GithubLabelFacet, GithubPullRequestFacets, GithubRepositoryFacet, GithubUserFacet,
+    StoredGithubPullRequest,
 };
 use initiative::domain::models::{
     AssignTaskStatus, AssignTasksRequest, AssignTasksResponse, AssignTasksResult,
@@ -410,6 +411,7 @@ use utoipa::OpenApi;
 
         // github_pull_requests
         github_pull_requests::inbound::axum_router::get_github_pull_request_facets_handler,
+        github_pull_requests::inbound::axum_router::get_github_pull_request_handler,
 
         // threads
         threads::edit_thread::edit_thread_handler,
@@ -548,6 +550,7 @@ use utoipa::OpenApi;
             GithubRepositoryFacet,
             GithubUserFacet,
             GithubLabelFacet,
+            StoredGithubPullRequest,
             Favorite,
             FavoritesList,
             CreatedUserApiKey,

@@ -3,7 +3,9 @@
 #[cfg(test)]
 mod test;
 
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberTeamRole};
+use entity_access::domain::models::{
+    EntityAccessReceipt, EntityType, MemberTeamRole, ViewAccessLevel,
+};
 use foreign_entity::domain::{
     models::{CreateForeignEntity, ForeignEntity, PatchForeignEntity, SourceId},
     ports::{ForeignEntityListQuery, ForeignEntityService},
@@ -16,7 +18,7 @@ use super::{
         EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
         GithubPullRequestError, GithubPullRequestFacets, GithubPullRequestRow,
         GithubPullRequestSortDirection, GithubPullRequestStatus, GithubRepositoryIdentity,
-        UpsertGithubPullRequest, UpsertedGithubPullRequest,
+        StoredGithubPullRequest, UpsertGithubPullRequest, UpsertedGithubPullRequest,
     },
     ports::{
         GithubPullRequestFacetRepository, GithubPullRequestFacetService,
@@ -215,6 +217,27 @@ impl<F: ForeignEntityService, R: GithubPullRequestRepository> GithubPullRequestS
             self.store_row(&latest.metadata, None).await;
         }
         Ok(refreshed)
+    }
+
+    #[tracing::instrument(err, skip(self, receipt))]
+    async fn get_pull_request(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<StoredGithubPullRequest, GithubPullRequestError> {
+        let record = self
+            .foreign_entity_service
+            .get_foreign_entity(receipt)
+            .await?;
+        if record.foreign_entity_source != GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE {
+            return Err(GithubPullRequestError::NotFound(record.id));
+        }
+        let row = self
+            .repo
+            .pull_request_row(&record.foreign_entity_id)
+            .await
+            .map_err(repository_error)?;
+
+        StoredGithubPullRequest::from_record(&record, row)
     }
 }
 

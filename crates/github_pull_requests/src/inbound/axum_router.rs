@@ -10,17 +10,23 @@ use axum::{
     routing::get,
 };
 use entity_access::{
-    domain::{models::MemberTeamRole, ports::EntityAccessService},
-    inbound::axum_extractors::OptionalMacroUserTeamExtractorV2,
+    domain::{
+        models::{MemberTeamRole, ViewAccessLevel},
+        ports::EntityAccessService,
+    },
+    inbound::axum_extractors::{
+        ForeignEntityAccessLevelExtractor, OptionalMacroUserTeamExtractorV2,
+    },
 };
+use foreign_entity::domain::models::ForeignEntityError;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
-    models::{GithubPullRequestError, GithubPullRequestFacets},
-    ports::GithubPullRequestFacetService,
+    models::{GithubPullRequestError, GithubPullRequestFacets, StoredGithubPullRequest},
+    ports::{GithubPullRequestFacetService, GithubPullRequestService},
 };
 
 /// Router state for GitHub pull request endpoints.
@@ -81,11 +87,12 @@ impl<S, AccessSvc, Auth> FromRef<GithubPullRequestRouterState<S, AccessSvc, Auth
 /// - `GET /facets` — repositories and authors among the pull requests visible to the caller,
 ///   scoped like the Soup listing: the caller's own pull requests plus those of the team in the
 ///   request's team context, if any.
+/// - `GET /{id}` — the pull request behind a record the caller can view.
 pub fn github_pull_requests_router<S, AccessSvc, Auth, T>(
     state: GithubPullRequestRouterState<S, AccessSvc, Auth>,
 ) -> Router<T>
 where
-    S: GithubPullRequestFacetService,
+    S: GithubPullRequestFacetService + GithubPullRequestService,
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
     T: Send + Sync + 'static,
@@ -95,7 +102,46 @@ where
             "/facets",
             get(get_github_pull_request_facets_handler::<S, AccessSvc, Auth>),
         )
+        .route(
+            "/{id}",
+            get(get_github_pull_request_handler::<S, AccessSvc, Auth>),
+        )
         .with_state(state)
+}
+
+/// Get the pull request behind a foreign entity record the caller can view.
+#[utoipa::path(
+    get,
+    tag = "github_pull_requests",
+    operation_id = "get_github_pull_request",
+    path = "/github_pull_requests/{id}",
+    params(
+        ("id" = uuid::Uuid, Path, description = "The caller's foreign entity record for the pull request")
+    ),
+    responses(
+        (status = 200, body = StoredGithubPullRequest),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_github_pull_request_handler<S, AccessSvc, Auth>(
+    State(state): State<GithubPullRequestRouterState<S, AccessSvc, Auth>>,
+    access: ForeignEntityAccessLevelExtractor<ViewAccessLevel, AccessSvc, Auth>,
+) -> Result<Json<StoredGithubPullRequest>, GithubPullRequestError>
+where
+    S: GithubPullRequestService,
+    AccessSvc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let pull_request = state
+        .service
+        .get_pull_request(access.entity_access_receipt)
+        .await?;
+
+    Ok(Json(pull_request))
 }
 
 /// List the repositories and authors among the GitHub pull requests visible to the caller.
@@ -137,6 +183,10 @@ impl IntoResponse for GithubPullRequestError {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
             GithubPullRequestError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            GithubPullRequestError::NotFound(_)
+            | GithubPullRequestError::ForeignEntity(ForeignEntityError::NotFound(_)) => {
+                StatusCode::NOT_FOUND
+            }
             GithubPullRequestError::Metadata(_)
             | GithubPullRequestError::ForeignEntity(_)
             | GithubPullRequestError::Repository(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -148,6 +198,7 @@ impl IntoResponse for GithubPullRequestError {
 
         let message = match &self {
             GithubPullRequestError::BadRequest(_) => self.to_string(),
+            _ if status_code == StatusCode::NOT_FOUND => "pull request not found".to_string(),
             _ => "internal server error".to_string(),
         };
 

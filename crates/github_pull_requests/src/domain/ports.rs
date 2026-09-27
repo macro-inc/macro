@@ -2,7 +2,7 @@
 
 use std::future::Future;
 
-use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole, ViewAccessLevel};
 use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
     ports::ForeignEntityListQuery,
@@ -13,7 +13,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::models::{
     EnrichedGithubPullRequest, GithubPullRequestError, GithubPullRequestFacets,
     GithubPullRequestRow, GithubPullRequestSortDirection, GithubRepositoryIdentity,
-    UpsertGithubPullRequest, UpsertedGithubPullRequest,
+    StoredGithubPullRequest, UpsertGithubPullRequest, UpsertedGithubPullRequest,
 };
 
 /// Stores GitHub pull requests as foreign entity records, one record per user or team the pull
@@ -35,6 +35,13 @@ pub trait GithubPullRequestService: Send + Sync + 'static {
         &self,
         pull_request: &EnrichedGithubPullRequest,
     ) -> impl Future<Output = Result<Vec<ForeignEntity>, GithubPullRequestError>> + Send;
+
+    /// The pull request behind the record `receipt` grants view access to. A record that is not
+    /// a pull request is not found.
+    fn get_pull_request(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<StoredGithubPullRequest, GithubPullRequestError>> + Send;
 }
 
 /// Writes typed rows for pull requests stored before rows existed.
@@ -73,6 +80,12 @@ pub trait GithubPullRequestRepository: Send + Sync + 'static {
         from: &str,
         to: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// The row stored for `github_key`, if the pull request has one.
+    fn pull_request_row(
+        &self,
+        github_key: &str,
+    ) -> impl Future<Output = Result<Option<GithubPullRequestRow>, Self::Err>> + Send;
 }
 
 /// Reads the stored pull request records the indexer writes rows from.

@@ -181,3 +181,39 @@ async fn upsert_stores_assignees_labels_and_reviews(pool: PgPool) {
     );
     assert_eq!(stored.3.as_deref(), Some("approved"));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn lookup_reads_back_the_stored_row(pool: PgPool) {
+    let repo = PgGithubPullRequestRepo::new(pool);
+    let stored = GithubPullRequestRow {
+        draft: true,
+        assignees: vec![GithubPullRequestUser {
+            github_user_id: "7".to_string(),
+            login: Some("hubot".to_string()),
+        }],
+        labels: vec![GithubPullRequestLabel {
+            name: "bug".to_string(),
+            color: Some("d73a4a".to_string()),
+        }],
+        reviews: vec![GithubPullRequestReview {
+            reviewer_github_user_id: "8".to_string(),
+            reviewer_login: None,
+            state: GithubPullRequestReviewState::ChangesRequested,
+            submitted_at: None,
+        }],
+        review_decision: Some(GithubPullRequestReviewDecision::ChangesRequested),
+        ..row("macro/app/pull/7", Some(99))
+    };
+    repo.upsert_row(&stored)
+        .await
+        .expect("upsert should succeed");
+
+    assert_eq!(
+        repo.pull_request_row("macro/app/pull/7").await.unwrap(),
+        Some(stored)
+    );
+    assert_eq!(
+        repo.pull_request_row("macro/app/pull/8").await.unwrap(),
+        None
+    );
+}

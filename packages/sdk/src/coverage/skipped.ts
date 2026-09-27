@@ -385,6 +385,7 @@ export const storageBacklog = [
   'getDocumentPermissionsV2',
   'getDocumentVersion',
   'getEntityPermission',
+  'getGithubPullRequest',
   'getProjectPermissionsV2',
   'getProjectUserAccessLevel',
   'getHarnessPairing',

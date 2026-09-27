@@ -144,4 +144,71 @@ impl GithubPullRequestRepository for PgGithubPullRequestRepo {
 
         Ok(())
     }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn pull_request_row(
+        &self,
+        github_key: &str,
+    ) -> Result<Option<GithubPullRequestRow>, Self::Err> {
+        let Some(row) = sqlx::query!(
+            r#"
+            SELECT
+                github_key,
+                repository_id,
+                number,
+                owner,
+                repo,
+                title,
+                status,
+                draft,
+                author_github_user_id,
+                author_login,
+                requested_reviewer_github_user_ids,
+                participant_github_user_ids,
+                github_updated_at,
+                assignees,
+                labels,
+                reviews,
+                review_decision
+            FROM github_pull_request
+            WHERE github_key = $1
+            "#,
+            github_key,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(GithubPullRequestRow {
+            github_key: row.github_key,
+            repository_id: row.repository_id,
+            number: row.number,
+            owner: row.owner,
+            repo: row.repo,
+            title: row.title,
+            status: row
+                .status
+                .map(|status| decode(serde_json::Value::String(status)))
+                .transpose()?,
+            draft: row.draft,
+            author_github_user_id: row.author_github_user_id,
+            author_login: row.author_login,
+            requested_reviewer_github_user_ids: row.requested_reviewer_github_user_ids,
+            participant_github_user_ids: row.participant_github_user_ids,
+            github_updated_at: row.github_updated_at,
+            assignees: decode(row.assignees)?,
+            labels: decode(row.labels)?,
+            reviews: decode(row.reviews)?,
+            review_decision: row
+                .review_decision
+                .map(|decision| decode(serde_json::Value::String(decision)))
+                .transpose()?,
+        }))
+    }
+}
+
+fn decode<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> Result<T, sqlx::Error> {
+    serde_json::from_value(value).map_err(|error| sqlx::Error::Decode(error.into()))
 }

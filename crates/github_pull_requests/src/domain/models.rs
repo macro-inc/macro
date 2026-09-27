@@ -141,6 +141,101 @@ pub enum GithubPullRequestSortDirection {
     Desc,
 }
 
+/// A GitHub pull request as Macro stores it, read through one of the caller's records.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct StoredGithubPullRequest {
+    /// The caller's record for the pull request.
+    pub id: uuid::Uuid,
+    /// The pull request's `owner/repo/pull/number` key.
+    pub github_key: String,
+    /// The repository owner the pull request was last synced under.
+    pub owner: String,
+    /// The repository name the pull request was last synced under.
+    pub repo: String,
+    /// The pull request number within its repository.
+    pub number: i64,
+    /// The pull request's page on GitHub.
+    pub url: String,
+    /// The pull request title.
+    pub title: Option<String>,
+    /// The normalized pull request status.
+    // Inline: the storage client already generates a `GithubPullRequestStatus` type.
+    #[cfg_attr(feature = "schema", schema(inline))]
+    pub status: Option<GithubPullRequestStatus>,
+    /// Whether the pull request is a draft.
+    pub draft: bool,
+    /// The author's GitHub login when the pull request was last synced.
+    pub author_login: Option<String>,
+    /// Stable numeric GitHub user id of the author.
+    pub author_github_user_id: Option<String>,
+    /// The pull request body, as GitHub markdown.
+    pub description: Option<String>,
+    /// Lines added across the pull request's changes.
+    pub additions: Option<u64>,
+    /// Lines deleted across the pull request's changes.
+    pub deletions: Option<u64>,
+    /// The users assigned to the pull request.
+    pub assignees: Vec<GithubPullRequestUser>,
+    /// The pull request's labels.
+    pub labels: Vec<GithubPullRequestLabel>,
+    /// Stable numeric GitHub user ids of the users asked to review.
+    pub requested_reviewer_github_user_ids: Vec<String>,
+    /// Each reviewer's latest submitted review.
+    pub reviews: Vec<GithubPullRequestReview>,
+    /// Where the review stands, derived from `reviews` and the outstanding review requests.
+    pub review_decision: Option<GithubPullRequestReviewDecision>,
+    /// Comments from the pull request's conversation, reviews, and review threads.
+    pub comments: Vec<GithubPullRequestComment>,
+    /// The latest check runs on the pull request's head commit.
+    pub checks: Vec<GithubPullRequestCheckRun>,
+    /// When GitHub last updated the pull request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_updated_at: Option<DateTime<Utc>>,
+}
+
+impl StoredGithubPullRequest {
+    /// Combine a pull request record with its row. The row's typed columns win: every write
+    /// updates the row, but a record only changes when its own source is written. The record
+    /// contributes what only records store. Without a row, the record's metadata stands in.
+    pub fn from_record(
+        record: &ForeignEntity,
+        row: Option<GithubPullRequestRow>,
+    ) -> Result<Self, GithubPullRequestError> {
+        let pull_request: EnrichedGithubPullRequest =
+            serde_json::from_value(record.metadata.clone())?;
+        let row = row
+            .or_else(|| GithubPullRequestRow::from_metadata(&record.metadata))
+            .ok_or(GithubPullRequestError::NotFound(record.id))?;
+
+        Ok(Self {
+            id: record.id,
+            github_key: row.github_key,
+            owner: row.owner,
+            repo: row.repo,
+            number: row.number,
+            url: pull_request.url,
+            title: row.title.or(pull_request.name),
+            status: row.status,
+            draft: row.draft,
+            author_login: row.author_login,
+            author_github_user_id: row.author_github_user_id,
+            description: pull_request.description,
+            additions: pull_request.additions,
+            deletions: pull_request.deletions,
+            assignees: row.assignees,
+            labels: row.labels,
+            requested_reviewer_github_user_ids: row.requested_reviewer_github_user_ids,
+            reviews: row.reviews,
+            review_decision: row.review_decision,
+            comments: pull_request.comments.unwrap_or_default(),
+            checks: pull_request.checks.unwrap_or_default(),
+            github_updated_at: row.github_updated_at,
+        })
+    }
+}
+
 /// Repositories, authors, assignees, and labels among the GitHub pull requests a caller can see,
 /// each with the number of pull requests it covers.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
@@ -203,6 +298,9 @@ pub enum GithubPullRequestError {
     /// The request was malformed.
     #[error("{0}")]
     BadRequest(String),
+    /// The record does not exist or is not a pull request.
+    #[error("pull request {0} not found")]
+    NotFound(uuid::Uuid),
     /// The pull request could not be serialized into record metadata.
     #[error("failed to serialize pull request metadata: {0}")]
     Metadata(#[from] serde_json::Error),

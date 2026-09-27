@@ -1233,6 +1233,13 @@ impl GithubPullRequestRepository for NoPullRequestRows {
     async fn rename_row(&self, _from: &str, _to: &str) -> Result<(), Self::Err> {
         Ok(())
     }
+
+    async fn pull_request_row(
+        &self,
+        _github_key: &str,
+    ) -> Result<Option<GithubPullRequestRow>, Self::Err> {
+        Ok(None)
+    }
 }
 
 fn pull_request_service(
