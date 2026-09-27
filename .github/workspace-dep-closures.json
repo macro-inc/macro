@@ -5706,6 +5706,7 @@
       "crates/entity_registry/entity_registry",
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
+      "crates/favorites",
       "crates/filter_ast",
       "crates/foreign_entity",
       "crates/frecency",

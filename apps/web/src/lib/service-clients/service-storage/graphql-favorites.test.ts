@@ -65,30 +65,36 @@ describe('favorites GraphQL mutations', () => {
     });
   });
 
-  it('updates the normalized email favorite field without changing a Soup query', async () => {
-    await executeGraphqlSetFavoriteMutation(
-      client,
-      { entityType: 'email_thread', entityId: 'thread-1' },
-      false,
-      0
-    );
-    expect(
-      mutationMock.mock.calls[0][2].normalizedCacheOptimistic.optimisticResponse
-        .setFavorite.result.effects
-    ).toEqual([
-      {
-        __typename: 'SoupUpdated',
-        item: {
-          __typename: 'GraphqlSoupEmailThread',
-          id: 'thread-1',
-          isFavorited: false,
+  it.each([
+    { entityType: 'email_thread', typename: 'GraphqlSoupEmailThread' },
+    { entityType: 'initiative', typename: 'GraphqlSoupInitiative' },
+  ] as const)(
+    'updates the normalized $entityType favorite field without changing a Soup query',
+    async ({ entityType, typename }) => {
+      await executeGraphqlSetFavoriteMutation(
+        client,
+        { entityType, entityId: 'entity-1' },
+        false,
+        0
+      );
+      expect(
+        mutationMock.mock.calls[0][2].normalizedCacheOptimistic
+          .optimisticResponse.setFavorite.result.effects
+      ).toEqual([
+        {
+          __typename: 'SoupUpdated',
+          item: {
+            __typename: typename,
+            id: 'entity-1',
+            isFavorited: false,
+          },
         },
-      },
-    ]);
-    expect(
-      mutationMock.mock.calls[0][2].normalizedCacheOptimistic.revalidations
-    ).toEqual(revalidations);
-  });
+      ]);
+      expect(
+        mutationMock.mock.calls[0][2].normalizedCacheOptimistic.revalidations
+      ).toEqual(revalidations);
+    }
+  );
 
   it.each([
     { favorite: true, patchKind: 'prependUnique' },

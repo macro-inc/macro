@@ -7050,6 +7050,7 @@ export type SetFavoriteMutation = { setFavorite: { __typename: 'SetFavoritePaylo
               | { __typename: 'GraphqlSoupDocument', id: string, isFavorited: boolean }
               | { __typename: 'GraphqlSoupEmailThread', id: string, isFavorited: boolean }
               | { __typename: 'GraphqlSoupForeignEntity', id: string, isFavorited: boolean }
+              | { __typename: 'GraphqlSoupInitiative', id: string, isFavorited: boolean }
               | { __typename: 'GraphqlSoupProject', id: string, isFavorited: boolean }
               | { __typename: 'GraphqlSoupReminder', id: string, isFavorited: boolean }
              }

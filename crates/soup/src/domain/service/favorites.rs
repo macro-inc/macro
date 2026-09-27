@@ -2,8 +2,13 @@
 use super::*;
 use ::favorites::domain::{models::FavoriteFilter, ports::FavoritesService};
 use item_filters::ast::{
-    agent_session::AgentSessionLiteral, calendar_event::CalendarEventLiteral, call::CallLiteral,
-    chat::ChatLiteral, document::DocumentLiteral, project::ProjectLiteral,
+    agent_session::AgentSessionLiteral,
+    calendar_event::CalendarEventLiteral,
+    call::CallLiteral,
+    chat::ChatLiteral,
+    document::DocumentLiteral,
+    initiative::{InitiativeLiteral, initiatives_requested},
+    project::ProjectLiteral,
 };
 use std::{future::Future, pin::Pin};
 
@@ -108,6 +113,14 @@ pub(super) fn apply(mut ast: EntityFilterAst, entities: &[Entity<'_>]) -> Entity
         ids(entities, EntityType::AgentSession),
         AgentSessionLiteral::Id,
     );
+    // Preserve initiatives' opt-in behavior when applying the favorite IDs.
+    if initiatives_requested(ast.initiative_filter.as_deref()) {
+        constrain(
+            &mut ast.initiative_filter,
+            ids(entities, EntityType::Initiative),
+            InitiativeLiteral::Id,
+        );
+    }
     // CRM and reminders expose an ID-list service contract instead of arbitrary
     // AST evaluation. Intersect those lists separately, never OR them together.
     ast

@@ -434,4 +434,9 @@ fn initiative_queries_use_server_instead_of_incomplete_local_index() {
         check_soup_flat_v3(&ast, request()),
         Eligibility::Unsupported(UnsupportedReason::Partition("initiative"))
     );
+    ast.favorites_only = Some(true);
+    assert_eq!(
+        properties::compile_soup(&ast, request()).unwrap(),
+        LocalCompileOutcome::Unsupported(UnsupportedReason::Partition("initiative"))
+    );
 }
