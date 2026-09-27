@@ -33,7 +33,7 @@ use crate::domain::models::{NotifiedEntity, NotifiedSoupRequest};
 use crate::outbound::pg_soup_repo::candidate_gates::{
     channel_gate, channel_thread_gate, chat_gate, document_gate, email_gate, implied_conjuncts_sql,
     includes_channels, includes_chats, includes_documents, includes_email_threads,
-    includes_projects, project_gate, uuid_guarded,
+    includes_initiatives, includes_projects, initiative_gate, project_gate, uuid_guarded,
 };
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     build_notification_state_clause, build_properties_filter, calendar_event_filter_is_impossible,
@@ -198,6 +198,9 @@ fn included_types(req: &NotifiedSoupRequest<'_>) -> Vec<&'static str> {
     if includes_chats(req.filter) {
         types.push(EntityType::Chat.into());
     }
+    if includes_initiatives(req.filter) {
+        types.push(EntityType::Initiative.into());
+    }
     if includes_projects(req.filter) {
         types.push(EntityType::Project.into());
     }
@@ -247,6 +250,7 @@ fn build_query(filter: Option<&EntityFilterAst>) -> String {
         document_gate = document_gate(ID_SQL, filter),
         chat_gate = chat_gate(ID_SQL, filter),
         project_gate = project_gate(ID_SQL, filter),
+        initiative_gate = initiative_gate(ID_SQL, filter),
         channel_gate = channel_gate(ID_SQL, filter),
         channel_thread_gate = channel_thread_gate(ID_SQL, filter),
         email_gate = email_gate(ID_SQL, filter),

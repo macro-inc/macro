@@ -471,6 +471,53 @@ impl IsEmpty for ReminderFilters {
     }
 }
 
+/// Filters for initiatives.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct InitiativeFilters {
+    /// Opt this query into initiatives at all. Initiatives are off by
+    /// default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
+    /// Asking for specific `initiative_ids` or `owners` also opts in.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include: bool,
+    /// Initiative ids to filter by. Empty to include all accessible initiatives.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub initiative_ids: Vec<String>,
+    /// Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
+    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+    /// owner.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub owners: Vec<String>,
+    /// Case-insensitive name substring.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Inclusive upper due-date bound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_before: Option<chrono::DateTime<chrono::Utc>>,
+    /// Inclusive lower due-date bound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_after: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl IsEmpty for InitiativeFilters {
+    fn is_empty(&self) -> bool {
+        let InitiativeFilters {
+            include,
+            initiative_ids,
+            owners,
+            name,
+            due_before,
+            due_after,
+        } = self;
+        !include
+            && initiative_ids.is_empty()
+            && owners.is_empty()
+            && name.is_none()
+            && due_before.is_none()
+            && due_after.is_none()
+    }
+}
+
 /// Filters for agent sessions.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -802,6 +849,9 @@ pub struct EntityFilters {
     /// the bundled [ReminderFilters]
     #[serde(default)]
     pub reminder_filters: ReminderFilters,
+    /// Initiative filters. Initiatives are opt-in.
+    #[serde(default)]
+    pub initiative_filters: InitiativeFilters,
     /// the bundled [AgentSessionFilters]
     #[serde(default)]
     pub agent_session_filters: AgentSessionFilters,
@@ -834,6 +884,7 @@ impl IsEmpty for EntityFilters {
             foreign_entity_filters,
             reminder_filters,
             agent_session_filters,
+            initiative_filters,
             property_filters,
             tag_option_ids,
             // Mode is a modifier on tag_option_ids, not a filter by itself.
@@ -851,6 +902,7 @@ impl IsEmpty for EntityFilters {
             && foreign_entity_filters.is_empty()
             && reminder_filters.is_empty()
             && agent_session_filters.is_empty()
+            && initiative_filters.is_empty()
             && property_filters.iter().all(IsEmpty::is_empty)
             && tag_option_ids.is_empty()
     }

@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn unsupported_initiative_filter_is_rejected_instead_of_losing_its_scope() {
+fn initiative_property_filter_preserves_its_scope() {
     let input = GraphqlPropertiesLiteral {
         property_definition_id: ID::from("00000001-0000-0000-0000-000000000002"),
         entity_type: Some(GraphqlPropertyEntityType::Initiative),
@@ -9,7 +9,13 @@ fn unsupported_initiative_filter_is_rejected_instead_of_losing_its_scope() {
             "00000001-0000-0000-0002-000000000001",
         )),
     };
-    assert!(input.into_expr().is_err());
+    assert!(matches!(
+        input.into_expr().unwrap(),
+        Expr::Literal(PropertiesLiteral {
+            entity_type: Some(PropertyEntityType::Initiative),
+            ..
+        })
+    ));
     assert_eq!(
         GraphqlPropertyEntityType::new(models_properties::EntityType::Initiative).into_model(),
         models_properties::EntityType::Initiative,

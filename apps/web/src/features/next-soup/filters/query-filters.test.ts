@@ -185,6 +185,53 @@ describe('filterSoupItemByRequestBody', () => {
   });
 });
 
+describe('initiative cache membership', () => {
+  const initiative: SoupApiItem = {
+    tag: 'initiative',
+    is_favorited: false,
+    frecency_score: 0,
+    data: {
+      id: 'initiative',
+      name: 'Launch',
+      ownerId: 'owner',
+      createdAt: '2026-09-01',
+      updatedAt: '2026-09-26',
+      properties: [],
+    },
+  };
+  it('requires explicit initiative inclusion and never confuses projects with folders', () => {
+    expect(filterSoupItemByRequestBody(initiative, {})).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(initiative, { ...QUERY_FILTERS_BASE })
+    ).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        project_filters: { project_ids: ['initiative'] },
+      })
+    ).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { initiative_ids: ['initiative'] },
+      })
+    ).toBe(true);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { initiative_ids: ['another'] },
+      })
+    ).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { include: true, owners: ['owner'] },
+      })
+    ).toBe(true);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { include: true, owners: ['another'] },
+      })
+    ).toBe(false);
+  });
+});
+
 describe('soupItemMatchesProjectMembership', () => {
   const PROJECT = 'proj-1';
 

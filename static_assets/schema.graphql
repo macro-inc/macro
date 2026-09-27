@@ -2210,6 +2210,10 @@ input GraphqlEntityFilterAst {
 	"""
 	agentSessionFilter: GraphqlAgentSessionExpr
 	"""
+	The initiative filter to apply. Initiatives are opt-in.
+	"""
+	initiativeFilter: GraphqlInitiativeExpr
+	"""
 	The properties filter to apply.
 	"""
 	propertiesFilter: GraphqlFilterPropertiesExpr
@@ -3200,6 +3204,20 @@ type GraphqlInitiative {
 }
 
 """
+The two operands of a recursive `InitiativeFilterExpr` binary expression.
+"""
+input GraphqlInitiativeBinaryExpr {
+	"""
+	Left expression.
+	"""
+	left: GraphqlInitiativeExpr!
+	"""
+	Right expression.
+	"""
+	right: GraphqlInitiativeExpr!
+}
+
+"""
 represents the initiative description subtype fields
 """
 type GraphqlInitiativeDescriptionSubType {
@@ -3207,6 +3225,58 @@ type GraphqlInitiativeDescriptionSubType {
 	this object has nothing as a field but we need at least 1 field
 	"""
 	nothing: Boolean!
+}
+
+"""
+A recursive `InitiativeFilterExpr` filter expression.
+"""
+input GraphqlInitiativeExpr @oneOf {
+	"""
+	Both expressions must match.
+	"""
+	and: GraphqlInitiativeBinaryExpr
+	"""
+	Either expression may match.
+	"""
+	or: GraphqlInitiativeBinaryExpr
+	"""
+	Negate an expression.
+	"""
+	not: GraphqlInitiativeExpr
+	"""
+	Match a literal.
+	"""
+	literal: GraphqlInitiativeLiteral
+}
+
+"""
+GraphQL input for selecting initiatives through Soup.
+"""
+input GraphqlInitiativeLiteral @oneOf {
+	"""
+	Opt into initiatives; must be true. Omit the filter to exclude them.
+	"""
+	include: Boolean
+	"""
+	Match an initiative identifier.
+	"""
+	id: ID
+	"""
+	Match the owning principal.
+	"""
+	owner: String
+	"""
+	Match a case-insensitive substring of the name.
+	"""
+	nameContains: String
+	"""
+	Match projects due before this RFC 3339 timestamp.
+	"""
+	dueBefore: String
+	"""
+	Match projects due after this RFC 3339 timestamp.
+	"""
+	dueAfter: String
 }
 
 """
@@ -5817,6 +5887,10 @@ GraphQL representation of Soup entity types.
 """
 enum GraphqlSoupEntityType {
 	"""
+	Initiative entity, presented as a project in the frontend.
+	"""
+	INITIATIVE
+	"""
 	Document entity.
 	"""
 	DOCUMENT
@@ -5918,6 +5992,62 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	The updated timestamp in RFC 3339 format.
 	"""
 	updatedAt: String!
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+}
+
+"""
+GraphQL representation of a Soup initiative.
+"""
+type GraphqlSoupInitiative implements GraphqlSoupEntity {
+	"""
+	The canonical initiative identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	User-visible project name.
+	"""
+	displayName: String
+	"""
+	Common initiative metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	Document backing the project's description, when one exists.
+	"""
+	descriptionDocumentId: ID
 	"""
 	Properties assigned to this entity that the authenticated user may view.
 	"""

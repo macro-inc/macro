@@ -157,9 +157,8 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Task => Self::Task,
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
-            // Calls and initiatives use their owning domain's query surface.
-            other @ (GraphqlPropertyEntityType::CallRecord
-            | GraphqlPropertyEntityType::Initiative) => return Err(other),
+            GraphqlPropertyEntityType::Initiative => Self::Initiative,
+            other @ GraphqlPropertyEntityType::CallRecord => return Err(other),
         })
     }
 }

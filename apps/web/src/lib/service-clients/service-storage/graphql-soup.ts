@@ -1288,6 +1288,9 @@ function mapGraphqlReminderSchedule(entity: {
 }
 
 export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
+  // No client opts into initiatives until the Projects UI adds its fragment.
+  if (item.__typename === 'GraphqlSoupInitiative') return null;
+
   const frecency = item.frecencyScore ?? 0;
 
   return match(item)

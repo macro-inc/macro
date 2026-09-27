@@ -29,6 +29,7 @@ use item_filters::{
         document::DocumentLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
+        initiative::InitiativeLiteral,
         project::ProjectLiteral,
         reminder::ReminderLiteral,
     },
@@ -336,6 +337,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
     let mut documents = Vec::new();
     let mut chats = Vec::new();
     let mut projects = Vec::new();
+    let mut initiatives = Vec::new();
     let mut email_threads = Vec::new();
     let mut channels = Vec::new();
     let mut channel_threads = Vec::new();
@@ -359,6 +361,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             EntityType::Document => documents.push(DocumentLiteral::Id(id)),
             EntityType::Chat => chats.push(ChatLiteral::ChatId(id)),
             EntityType::Project => projects.push(ProjectLiteral::ProjectIdSelf(id)),
+            EntityType::Initiative => initiatives.push(InitiativeLiteral::Id(id)),
             EntityType::EmailThread => email_threads.push(EmailLiteral::ThreadId(id)),
             EntityType::Channel => channels.push(ChannelLiteral::ChannelId(id)),
             EntityType::ChannelMessage => {
@@ -375,8 +378,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             | EntityType::StaticFile
             | EntityType::CrmContact
             | EntityType::Skill
-            | EntityType::ScheduledAction
-            | EntityType::Initiative => {
+            | EntityType::ScheduledAction => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",
                     entity.entity_type
@@ -414,6 +416,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
         )),
         reminder_filter: Some(literal_tree(reminders, ReminderLiteral::Id(nil))),
         agent_session_filter: Some(literal_tree(agent_sessions, AgentSessionLiteral::Id(nil))),
+        initiative_filter: Some(literal_tree(initiatives, InitiativeLiteral::Id(nil))),
         properties_filter: None,
     })
 }

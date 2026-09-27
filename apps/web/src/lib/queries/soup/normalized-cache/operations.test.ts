@@ -259,6 +259,11 @@ describe('buildSingleEntityFilter', () => {
       idKey: 'project_ids',
     },
     {
+      entityType: 'initiative' as const,
+      filterKey: 'initiative_filters',
+      idKey: 'initiative_ids',
+    },
+    {
       entityType: 'call' as const,
       filterKey: 'call_filters',
       idKey: 'call_ids',

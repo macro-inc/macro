@@ -397,3 +397,15 @@ fn invalid_limit_is_a_validation_error_not_unsupported() {
         Err(CompileError::Validation(ValidationError::Limit(0)))
     );
 }
+
+#[test]
+fn initiative_queries_use_server_instead_of_incomplete_local_index() {
+    let mut ast = excluded_deferred_partitions();
+    ast.initiative_filter = Some(Arc::new(Expr::val(
+        item_filters::ast::initiative::InitiativeLiteral::Include,
+    )));
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("initiative"))
+    );
+}

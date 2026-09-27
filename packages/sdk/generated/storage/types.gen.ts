@@ -5476,6 +5476,10 @@ export type EntityFilters = {
      */
     foreign_entity_filters?: ForeignEntityFilters;
     /**
+     * Initiative filters. Initiatives are opt-in.
+     */
+    initiative_filters?: InitiativeFilters;
+    /**
      * the bundled [ProjectFilters]
      */
     project_filters?: ProjectFilters;
@@ -6724,6 +6728,40 @@ export type InitiativeDetail = {
      * Caller's access level on this initiative.
      */
     userAccessLevel: AccessLevel;
+};
+
+/**
+ * Filters for initiatives.
+ */
+export type InitiativeFilters = {
+    /**
+     * Inclusive lower due-date bound.
+     */
+    due_after?: string | null;
+    /**
+     * Inclusive upper due-date bound.
+     */
+    due_before?: string | null;
+    /**
+     * Opt this query into initiatives at all. Initiatives are off by
+     * default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
+     * Asking for specific `initiative_ids` or `owners` also opts in.
+     */
+    include?: boolean;
+    /**
+     * Initiative ids to filter by. Empty to include all accessible initiatives.
+     */
+    initiative_ids?: Array<string>;
+    /**
+     * Case-insensitive name substring.
+     */
+    name?: string | null;
+    /**
+     * Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+     * owner.
+     */
+    owners?: Array<string>;
 };
 
 /**
@@ -9652,6 +9690,45 @@ export type SoupForeignEntity = {
 };
 
 /**
+ * An initiative (called a project in the frontend) in the Soup feed.
+ */
+export type SoupInitiativeSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * Creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Document holding the initiative description.
+     */
+    descriptionDocumentId?: string | null;
+    /**
+     * Initiative identifier.
+     */
+    id: string;
+    /**
+     * Initiative display name.
+     */
+    name: string;
+    /**
+     * Initiative owner.
+     */
+    ownerId: string;
+    /**
+     * Last modification timestamp.
+     */
+    updatedAt: string;
+    /**
+     * Last time the requesting user viewed the initiative.
+     */
+    viewedAt?: string | null;
+};
+
+/**
  * A single item in the Soup feed.
  */
 export type SoupItem = {
@@ -9672,6 +9749,12 @@ export type SoupItem = {
      */
     data: SoupProjectSoupPropertiesField;
     tag: 'project';
+} | {
+    /**
+     * Initiative entity.
+     */
+    data: SoupInitiativeSoupPropertiesField;
+    tag: 'initiative';
 } | {
     /**
      * Email thread item.

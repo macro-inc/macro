@@ -272,6 +272,9 @@ fn check_soup_flat(
     supports_status_properties: bool,
     supports_notifications: bool,
 ) -> Eligibility {
+    if ast.initiative_filter.is_some() {
+        return Eligibility::Unsupported(UnsupportedReason::Partition("initiative"));
+    }
     if request.has_cursor {
         return Eligibility::Unsupported(UnsupportedReason::Cursor);
     }
