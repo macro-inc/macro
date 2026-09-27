@@ -31,6 +31,7 @@ async fn unspawnable_harness_reports_failure() {
         &harness("macro-no-such-harness-binary"),
         std::path::Path::new("/"),
         runtime,
+        None,
     )
     .await
     .expect_err("a harness that cannot be spawned must not look like success");
@@ -50,7 +51,7 @@ async fn harness_that_exits_immediately_disconnects() {
 
     // `true` spawns cleanly and closes its stdio at once, which is the
     // shutdown path rather than the spawn-failure path above.
-    let _ = bridge(&harness("true"), std::path::Path::new("/"), runtime).await;
+    let _ = bridge(&harness("true"), std::path::Path::new("/"), runtime, None).await;
 
     assert_eq!(
         events(service),
@@ -65,7 +66,7 @@ async fn dropped_service_channel_does_not_panic_the_bridge() {
 
     // Announcing readiness into a closed channel is a failure to announce, not
     // a harness failure: nothing was ever spawned.
-    let error = bridge(&harness("true"), std::path::Path::new("/"), runtime)
+    let error = bridge(&harness("true"), std::path::Path::new("/"), runtime, None)
         .await
         .expect_err("announcing into a closed channel must fail");
 

@@ -3,6 +3,8 @@
 use agent_session::domain::model::AgentSessionId;
 use agent_session::inbound::axum_router::{CreateAgentSessionRequest, CreateSessionThread};
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use crate::config::Workspace;
 use crate::outbound::agent_session::{ApiError, HarnessApi};
 use crate::runtime::Runtime;
@@ -24,6 +26,8 @@ pub struct Dispatcher {
     api: HarnessApi,
     runtime: Runtime,
     workspace: Workspace,
+    #[cfg(unix)]
+    herdr: Option<crate::herdr::Hub>,
 }
 
 impl Dispatcher {
@@ -33,7 +37,36 @@ impl Dispatcher {
             api,
             runtime,
             workspace,
+            #[cfg(unix)]
+            herdr: None,
         }
+    }
+
+    /// Tell `hub` about every session this dispatcher opens or prompts, so
+    /// its herdr windows can steer them as the right user.
+    #[cfg(unix)]
+    #[must_use]
+    pub fn with_herdr(mut self, hub: crate::herdr::Hub) -> Self {
+        self.herdr = Some(hub);
+        self
+    }
+
+    fn created(&self, session: AgentSessionId, sender: &MacroUserIdStr<'static>) {
+        #[cfg(unix)]
+        if let Some(hub) = &self.herdr {
+            hub.session_created(session, sender.clone());
+        }
+        #[cfg(not(unix))]
+        let _ = (session, sender);
+    }
+
+    fn prompted(&self, session: AgentSessionId, sender: &MacroUserIdStr<'static>) {
+        #[cfg(unix)]
+        if let Some(hub) = &self.herdr {
+            hub.owner_seen(session, sender.clone());
+        }
+        #[cfg(not(unix))]
+        let _ = (session, sender);
     }
 }
 
@@ -104,6 +137,7 @@ impl WorkExecutor for Dispatcher {
                         session: Some(session),
                     }) => {
                         tracing::info!(%thread_id, %session, "thread already has a session; resuming it");
+                        self.prompted(session, &sender);
                         self.runtime
                             .ensure_connected()
                             .await
@@ -118,6 +152,7 @@ impl WorkExecutor for Dispatcher {
                     Err(error) => return Err(error.into()),
                 };
                 let session = AgentSessionId::new_from_uuid(created.session.id);
+                self.created(session, &sender);
                 self.runtime
                     .ensure_connected()
                     .await
@@ -155,6 +190,7 @@ impl WorkExecutor for Dispatcher {
                     model: None,
                 };
                 self.api.create_session(&request, &sender).await?;
+                self.created(session, &sender);
                 // Be dialed in before the prompt the requester is about to
                 // send arrives, so it lands on a runtime that is serving.
                 self.runtime
@@ -168,6 +204,7 @@ impl WorkExecutor for Dispatcher {
                 sender,
                 content,
             } => {
+                self.prompted(session, &sender);
                 self.runtime
                     .ensure_connected()
                     .await
