@@ -19,9 +19,9 @@ import { makeSubject, onEnd, pipe } from 'wonka';
 import {
   DeleteEntityPropertyDocument,
   EntityPropertiesDocument,
-  InitiativePropertiesDocument,
 } from '../../service-clients/service-storage/graphql/generated/graphql';
 import { createUrqlQuery } from '../../urql-solid';
+import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
 
 const useFeatureFlagMock = vi.hoisted(() => vi.fn());
 const graphqlEntityPropertyMutationMock = vi.hoisted(() => vi.fn());
@@ -115,8 +115,8 @@ vi.mock('../../service-clients/service-properties/client', () => ({
 vi.mock('./graphql/entity', () => ({
   refetchGraphqlInitiativeProperties: async (initiativeId: string) => {
     await initiativePropertyQueryMock(
-      InitiativePropertiesDocument,
-      { initiativeId },
+      EntityPropertiesDocument,
+      { input: buildGraphqlEntitySoupInput('INITIATIVE', initiativeId)! },
       { requestPolicy: 'network-only' }
     ).toPromise();
   },
@@ -795,8 +795,8 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
       }
     );
     expect(initiativePropertyQueryMock).toHaveBeenCalledWith(
-      InitiativePropertiesDocument,
-      { initiativeId: 'initiative-1' },
+      EntityPropertiesDocument,
+      { input: buildGraphqlEntitySoupInput('INITIATIVE', 'initiative-1')! },
       { requestPolicy: 'network-only' }
     );
   });

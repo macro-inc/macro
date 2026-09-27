@@ -19,14 +19,19 @@ import type { InitiativeDetailFieldsFragment } from './graphql/generated/graphql
 import { createInitiativeClient, initiativeUpdateInput } from './initiative';
 
 const project = {
-  __typename: 'GraphqlInitiative',
+  __typename: 'GraphqlSoupInitiative',
   id: 'project-1',
-  name: 'Launch',
+  displayName: 'Launch',
   descriptionDocumentId: 'description-1',
-  updatedAt: '2026-09-22T12:00:00Z',
-  createdAt: '2026-09-20T12:00:00Z',
-  userAccessLevel: 'COMMENT',
-  ownerId: 'macro|owner@example.com',
+  metadata: {
+    ownerId: 'macro|owner@example.com',
+    updatedAt: '2026-09-22T12:00:00Z',
+    createdAt: '2026-09-20T12:00:00Z',
+  },
+  viewerPermission: {
+    __typename: 'GraphqlAccessLevelPermission',
+    accessLevel: 'COMMENT',
+  },
   memberIds: [],
   taskIds: ['task-1'],
   taskCount: 1,
@@ -64,38 +69,6 @@ function clientWith(
 }
 
 describe('initiative GraphQL transport', () => {
-  it('maps collection filters, pagination and access without a second property request', async () => {
-    const { client, requests } = clientWith(() => ({
-      data: {
-        user: {
-          initiatives: { initiatives: [project], nextCursor: 'next-page' },
-        },
-      },
-    }));
-    const signal = new AbortController().signal;
-    const result = await client.page(
-      { query: 'Launch', sort: 'due', descending: false, cursor: 'page-2' },
-      signal
-    );
-    expect(result.isOk() && result.value).toMatchObject({
-      initiatives: [
-        { id: 'project-1', userAccessLevel: 'comment', properties: [] },
-      ],
-      nextCursor: 'next-page',
-    });
-    expect(requests).toHaveLength(1);
-    expect(requests[0].variables).toEqual({
-      input: {
-        query: 'Launch',
-        sort: 'DUE',
-        descending: false,
-        cursor: 'page-2',
-      },
-    });
-    expect(requests[0].context.fetchOptions).toEqual({ signal });
-    expect(requests[0].context.requestPolicy).toBe('network-only');
-  });
-
   it('pages project membership through GraphQL before task hydration', async () => {
     const { client, requests } = clientWith(() => ({
       data: {
@@ -124,12 +97,21 @@ describe('initiative GraphQL transport', () => {
   });
 
   it('preserves project identity and sharing levels on detail reads', async () => {
-    const { client } = clientWith(() => ({
+    const { client, requests } = clientWith(() => ({
       data: { user: { initiative: project } },
     }));
-    const result = await client.get('project-1');
+    const signal = new AbortController().signal;
+    const result = await client.get('project-1', signal);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].variables).toEqual({ initiativeId: 'project-1' });
+    expect(requests[0].context.fetchOptions).toEqual({ signal });
+    expect(requests[0].context.requestPolicy).toBe('network-only');
     expect(result.isOk() && result.value).toMatchObject({
       id: 'project-1',
+      name: 'Launch',
+      ownerId: 'macro|owner@example.com',
+      updatedAt: '2026-09-22T12:00:00Z',
+      createdAt: '2026-09-20T12:00:00Z',
       descriptionDocumentId: 'description-1',
       userAccessLevel: 'comment',
       taskIds: ['task-1'],
@@ -142,6 +124,14 @@ describe('initiative GraphQL transport', () => {
         ],
       },
     });
+  });
+
+  it('keeps detail controls read-only when no viewer permission is returned', async () => {
+    const { client } = clientWith(() => ({
+      data: { user: { initiative: { ...project, viewerPermission: null } } },
+    }));
+    const result = await client.get('project-1');
+    expect(result.isOk() && result.value.userAccessLevel).toBe('view');
   });
 
   it('keeps omitted sharing fields distinct from explicit null when serializing a patch', () => {
@@ -197,7 +187,11 @@ describe('initiative GraphQL transport', () => {
             {
               taskId: 'task-2',
               state: 'VISIBLE',
-              initiative: { id: 'project-1', name: 'Launch' },
+              initiative: {
+                __typename: 'GraphqlSoupInitiative',
+                id: 'project-1',
+                displayName: 'Launch',
+              },
             },
           ],
         },

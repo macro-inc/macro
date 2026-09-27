@@ -1,25 +1,14 @@
-import type {
-  mapInitiativeDetail,
-  mapInitiativeSummary,
-} from '@service-storage/initiative';
-import type { Project, ProjectDetail } from '../core/project';
-
-export function toProject(
-  project: ReturnType<typeof mapInitiativeSummary>
-): Project {
-  return {
-    id: project.id,
-    name: project.name,
-    descriptionDocumentId: project.descriptionDocumentId,
-    updatedAt: project.updatedAt,
-  };
-}
+import type { mapInitiativeDetail } from '@service-storage/initiative';
+import type { ProjectDetail } from '../core/project';
 
 export function toProjectDetail(
   project: ReturnType<typeof mapInitiativeDetail>
 ): ProjectDetail {
   return {
-    ...toProject(project),
+    id: project.id,
+    name: project.name,
+    descriptionDocumentId: project.descriptionDocumentId,
+    updatedAt: project.updatedAt,
     ownerId: project.ownerId,
     memberIds: project.memberIds,
     taskIds: project.taskIds,

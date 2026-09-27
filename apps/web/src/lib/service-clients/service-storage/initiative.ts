@@ -15,20 +15,12 @@ import {
   type InitiativeDetailFieldsFragment,
   InitiativeDocument,
   type InitiativeLinkShare,
-  type InitiativePageInput,
-  type InitiativeSummaryFieldsFragment,
-  InitiativesDocument,
   InitiativeTasksDocument,
   TaskInitiativeReferencesDocument,
   UpdateInitiativeDocument,
   type UpdateInitiativeInput,
 } from './graphql/generated/graphql';
 import { getGraphqlSoupClient, mapGraphqlProperties } from './graphql-soup';
-
-/** Filters are applied by the initiative service before cursor pagination. */
-export type InitiativePageParams = Omit<InitiativePageInput, 'sort'> & {
-  sort?: 'updated' | 'name' | 'due';
-};
 
 type InitiativeAccess = Lowercase<GraphqlEntityAccessLevel>;
 export type InitiativeSharingPatch = {
@@ -62,11 +54,6 @@ const ACCESS_TO_GRAPHQL = {
   edit: 'EDIT',
   owner: 'OWNER',
 } as const;
-const SORT_TO_GRAPHQL = {
-  updated: 'UPDATED',
-  name: 'NAME',
-  due: 'DUE',
-} as const;
 const ASSIGNMENT_FROM_GRAPHQL = {
   ASSIGNED: 'assigned',
   MOVED: 'moved',
@@ -85,27 +72,25 @@ const REFERENCE_FROM_GRAPHQL = {
   VISIBLE: 'visible',
 } as const;
 
-export function mapInitiativeSummary(project: InitiativeSummaryFieldsFragment) {
+export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
+  const sharing = project.sharePermission;
+  const permission = project.viewerPermission;
   return {
     id: project.id,
-    name: project.name,
-    descriptionDocumentId: project.descriptionDocumentId,
-    updatedAt: project.updatedAt,
-    userAccessLevel: ACCESS_FROM_GRAPHQL[project.userAccessLevel],
+    name: project.displayName ?? 'Untitled project',
+    descriptionDocumentId: project.descriptionDocumentId ?? '',
+    updatedAt: project.metadata.updatedAt ?? '',
+    userAccessLevel:
+      permission?.__typename === 'GraphqlAccessLevelPermission'
+        ? ACCESS_FROM_GRAPHQL[permission.accessLevel]
+        : ('view' as const),
     taskCount: project.taskCount,
     completedTaskCount: project.completedTaskCount,
     properties: mapGraphqlProperties(project.properties),
-  };
-}
-
-export function mapInitiativeDetail(project: InitiativeDetailFieldsFragment) {
-  const sharing = project.sharePermission;
-  return {
-    ...mapInitiativeSummary(project),
-    ownerId: project.ownerId,
+    ownerId: project.metadata.ownerId ?? '',
     memberIds: project.memberIds,
     taskIds: project.taskIds,
-    createdAt: project.createdAt,
+    createdAt: project.metadata.createdAt ?? '',
     sharePermission: {
       id: sharing.id,
       owner: sharing.owner,
@@ -203,24 +188,6 @@ export function createInitiativeClient(client: () => Client) {
     );
   }
   return {
-    page: (params: InitiativePageParams, signal?: AbortSignal) =>
-      catchToResult(async () => {
-        const data = await query(
-          InitiativesDocument,
-          {
-            input: {
-              ...params,
-              sort: params.sort ? SORT_TO_GRAPHQL[params.sort] : undefined,
-            },
-          },
-          signal
-        );
-        return {
-          initiatives:
-            data.user.initiatives.initiatives.map(mapInitiativeSummary),
-          nextCursor: data.user.initiatives.nextCursor,
-        };
-      }),
     get: (id: string, signal?: AbortSignal) =>
       catchToResult(async () =>
         mapInitiativeDetail(
@@ -250,7 +217,12 @@ export function createInitiativeClient(client: () => Client) {
         ).user.taskInitiativeReferences.map((reference) => ({
           taskId: reference.taskId,
           state: REFERENCE_FROM_GRAPHQL[reference.state],
-          initiative: reference.initiative,
+          initiative: reference.initiative
+            ? {
+                id: reference.initiative.id,
+                name: reference.initiative.displayName ?? 'Untitled project',
+              }
+            : null,
         })),
       })),
     create: (input: CreateInitiativeInput) =>

@@ -1,23 +1,26 @@
-fragment InitiativeSummaryFields on GraphqlInitiative {
+fragment InitiativeDetailFields on GraphqlSoupInitiative {
   __typename
   id
-  name
+  displayName
   descriptionDocumentId
-  updatedAt
-  userAccessLevel
-  taskCount
-  completedTaskCount
+  metadata {
+    ownerId
+    createdAt
+    updatedAt
+  }
+  viewerPermission {
+    __typename
+    ... on GraphqlAccessLevelPermission {
+      accessLevel
+    }
+  }
   properties {
     ...SoupPropertyFields
   }
-}
-
-fragment InitiativeDetailFields on GraphqlInitiative {
-  ...InitiativeSummaryFields
-  ownerId
+  taskCount
+  completedTaskCount
   memberIds
   taskIds
-  createdAt
   sharePermission {
     __typename
     id
@@ -37,18 +40,6 @@ query Initiative($initiativeId: ID!) {
     id
     initiative(initiativeId: $initiativeId) {
       ...InitiativeDetailFields
-    }
-  }
-}
-
-query Initiatives($input: InitiativePageInput) {
-  user {
-    id
-    initiatives(input: $input) {
-      initiatives {
-        ...InitiativeSummaryFields
-      }
-      nextCursor
     }
   }
 }
@@ -73,20 +64,7 @@ query TaskInitiativeReferences($taskIds: [ID!]!) {
       initiative {
         __typename
         id
-        name
-      }
-    }
-  }
-}
-
-query InitiativeProperties($initiativeId: ID!) {
-  user {
-    id
-    initiative(initiativeId: $initiativeId) {
-      __typename
-      id
-      properties {
-        ...SoupPropertyFields
+        displayName
       }
     }
   }
