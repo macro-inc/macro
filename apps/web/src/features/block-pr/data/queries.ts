@@ -78,6 +78,7 @@ function prForeignEntityDataFromParts(args: {
       displayName: optionalString(metadata.displayName) ?? prDisplayName(prRef),
       foreignEntityId: args.id,
       githubKey,
+      labels: optionalArray(metadata.labels),
       name: optionalString(metadata.name),
       number: prRef.number,
       owner: prRef.owner,

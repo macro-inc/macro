@@ -7,6 +7,7 @@ import {
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { openExternalUrl } from '@core/util/url';
+import { GithubLabelPills } from '@entity/components/GithubLabelPill';
 import { DebouncedNotificationReadMarker } from '@notifications';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { Button, cn, Layer, Scroll } from '@ui';
@@ -267,6 +268,11 @@ function PrMetadata(props: {
           </span>
         </Layer>
       </Show>
+      <GithubLabelPills
+        labels={props.pullRequest?.labels ?? []}
+        class="contents"
+        pillClass="h-auto px-2 py-1 text-sm leading-tight"
+      />
     </div>
   );
 }

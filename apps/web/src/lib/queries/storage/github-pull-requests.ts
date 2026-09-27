@@ -1,4 +1,5 @@
 import { throwOnErr } from '@core/util/result';
+import type { GithubPullRequestLabel } from '@entity/types/entity';
 import { authServiceClient } from '@service-auth/client';
 import type {
   EnrichedGithubPullRequest,
@@ -39,12 +40,13 @@ function readEnabled(enabled: EnabledInput | undefined): boolean {
 
 /**
  * Storage pull request extended with enrichment-only fields. The documents
- * service doesn't expose body/author yet, so they only arrive via the live
- * enrich merge and must stay optional.
+ * service doesn't expose body/author/labels yet, so they only arrive via the
+ * live enrich merge or stored metadata and must stay optional.
  */
 export type GithubPullRequestWithDetails = GithubPullRequest & {
   description?: string | null;
   authorLogin?: string | null;
+  labels?: GithubPullRequestLabel[] | null;
 };
 
 function toGithubPullRequestRef(

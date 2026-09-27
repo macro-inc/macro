@@ -224,7 +224,7 @@ export function ReviewsFilterDrawer(props: ReviewsControlProps) {
                         props.onFilterChange(group.id, option.id, selected)
                       }
                     >
-                      {option.label}
+                      {option.content?.() ?? option.label}
                     </MobileFilterDrawer.Option>
                   )}
                 </For>

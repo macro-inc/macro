@@ -1,5 +1,9 @@
 import { DEFAULT_TAG_COLOR } from '@property/tags/tagColors';
 import { cn } from '@ui';
+import { For, Show } from 'solid-js';
+import type { GithubPullRequestLabel } from '../types/entity';
+
+const GITHUB_HEX_COLOR = /^#?([0-9a-f]{6})$/i;
 
 /**
  * A GitHub label drawn the way GitHub draws it. Dark themes tint the pill and
@@ -8,10 +12,15 @@ import { cn } from '@ui';
  */
 export function GithubLabelPill(props: {
   name: string;
-  /** A CSS color; falls back to the default tag color. */
-  color?: string;
+  /** GitHub's six-digit hex color, with or without `#`. */
+  color?: string | null;
   class?: string;
 }) {
+  const color = () => {
+    const hex = props.color && GITHUB_HEX_COLOR.exec(props.color)?.[1];
+    return hex ? `#${hex}` : DEFAULT_TAG_COLOR;
+  };
+
   return (
     <span
       class={cn(
@@ -20,9 +29,35 @@ export function GithubLabelPill(props: {
         'light-mode:border-[color:oklch(from_var(--label-color)_calc(l_-_0.25)_c_h/clamp(0,(l_-_0.95)_*_100,1))] light-mode:bg-(--label-color) light-mode:text-[color:oklch(from_var(--label-color)_clamp(0,(0.66_-_l)_*_1000,1)_0_0)]',
         props.class
       )}
-      style={{ '--label-color': props.color ?? DEFAULT_TAG_COLOR }}
+      style={{ '--label-color': color() }}
     >
       <span class="truncate">{props.name}</span>
     </span>
+  );
+}
+
+/** A pull request's labels as pills, in GitHub's order. */
+export function GithubLabelPills(props: {
+  labels: readonly GithubPullRequestLabel[];
+  class?: string;
+  pillClass?: string;
+}) {
+  return (
+    <Show when={props.labels.length > 0}>
+      <span
+        class={cn('flex min-w-0 items-center gap-1', props.class)}
+        title={props.labels.map((label) => label.name).join(', ')}
+      >
+        <For each={props.labels}>
+          {(label) => (
+            <GithubLabelPill
+              name={label.name}
+              color={label.color}
+              class={props.pillClass}
+            />
+          )}
+        </For>
+      </span>
+    </Show>
   );
 }

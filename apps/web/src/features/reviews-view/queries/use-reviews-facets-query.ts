@@ -1,16 +1,10 @@
 import type { ListControlOption } from '@app/components/view-shell';
 import { throwOnErr } from '@core/util/result';
+import type { GithubPullRequestLabel } from '@entity/types/entity';
 import { storageServiceClient } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
 
 const REVIEWS_FACETS_STALE_TIME = 60_000;
-
-/** A label among the visible pull requests, for the sidebar's Labels section. */
-export type ReviewsLabel = {
-  name: string;
-  /** A CSS color, when GitHub reported one. */
-  color?: string;
-};
 
 type UserFacet = { githubUserId: string; login?: string | null };
 
@@ -42,11 +36,7 @@ export function useReviewsFacetsQuery() {
     (facets()?.authors ?? []).map(userOption);
   const assignees = (): ListControlOption<string>[] =>
     (facets()?.assignees ?? []).map(userOption);
-  const labels = (): ReviewsLabel[] =>
-    (facets()?.labels ?? []).map((label) => ({
-      name: label.name,
-      color: label.color ? `#${label.color}` : undefined,
-    }));
+  const labels = (): GithubPullRequestLabel[] => facets()?.labels ?? [];
 
   return { query, repositories, authors, assignees, labels };
 }

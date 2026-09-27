@@ -12,6 +12,8 @@ import {
 import { prDisplayName } from '@block-pr/util/prKey';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import { GithubLabelPill } from '@entity/components/GithubLabelPill';
+import type { GithubPullRequestLabel } from '@entity/types/entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import SplitIcon from '@phosphor/columns.svg';
 import EyeIcon from '@phosphor/eye.svg';
@@ -29,9 +31,7 @@ import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { makePersisted } from '@solid-primitives/storage';
 import { useQueries } from '@tanstack/solid-query';
 import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
-import type { ReviewsLabel } from '../queries/use-reviews-facets-query';
 import { REVIEWS_SCOPES, type ReviewsScope } from '../reviews-types';
-import { GithubLabelPill } from './GithubLabelPill';
 
 const SCOPE_ITEMS: Record<
   ReviewsScope,
@@ -157,7 +157,7 @@ function ReviewFavorites(props: {
  * label clears it.
  */
 function ReviewLabels(props: {
-  labels: ReviewsLabel[];
+  labels: GithubPullRequestLabel[];
   activeLabels: readonly string[];
   onActiveLabelsChange: (labels: string[]) => void;
 }) {
@@ -199,7 +199,7 @@ function ReviewLabels(props: {
 export function ReviewsSidebar(props: {
   scope: ReviewsScope;
   onScopeChange: (scope: ReviewsScope) => void;
-  labels: ReviewsLabel[];
+  labels: GithubPullRequestLabel[];
   activeLabels: readonly string[];
   onActiveLabelsChange: (labels: string[]) => void;
   onOpenReview: (id: string, newSplit: boolean) => void;

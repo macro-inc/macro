@@ -16,6 +16,7 @@ import { SplitPanel } from '@components/app/split-panel';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
+import { GithubLabelPill } from '@entity/components/GithubLabelPill';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import {
   createMemo,
@@ -157,9 +158,11 @@ function ReviewsRoot() {
     repositories: facets.repositories(),
     authors: facets.authors(),
     assignees: facets.assignees(),
-    labels: facets
-      .labels()
-      .map((label) => ({ id: label.name, label: label.name })),
+    labels: facets.labels().map((label) => ({
+      id: label.name,
+      label: label.name,
+      content: () => <GithubLabelPill name={label.name} color={label.color} />,
+    })),
     hasGithubIdentity: Boolean(authorId()),
     selected: filters(),
     onFilterChange: changeFilter,
