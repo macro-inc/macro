@@ -81,8 +81,14 @@ export function describeActionForEntity(action: ActivityAction): {
   connector?: string;
 } {
   return match(action)
-    .with({ kind: 'task-added' }, () => ({ verb: 'added' }))
-    .with({ kind: 'task-removed' }, () => ({ verb: 'removed' }))
+    .with({ kind: 'task-added' }, () => ({
+      verb: 'added a task',
+      connector: 'to',
+    }))
+    .with({ kind: 'task-removed' }, () => ({
+      verb: 'removed a task',
+      connector: 'from',
+    }))
     .with({ kind: 'created' }, () => ({
       verb: 'created',
     }))
