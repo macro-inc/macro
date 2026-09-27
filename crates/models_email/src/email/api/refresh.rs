@@ -46,6 +46,4 @@ pub enum RefreshEmailEvent {
         completed_threads: i32,
         total_threads: i32,
     },
-    /// Saved calendar snapshots changed; refresh message data without a new-mail notification.
-    CalendarInvitationsUpdated { link_id: Uuid },
 }

@@ -290,32 +290,6 @@ it('revalidates capabilities when newer scheduling snapshots arrive in a fresh t
   }
 });
 
-it('refreshes again when extraction completes during the initial message request', async () => {
-  const initial = Promise.withResolvers<void>();
-  const refetch = vi
-    .fn()
-    .mockReturnValueOnce(initial.promise)
-    .mockResolvedValue(undefined);
-  const { source, dispose } = createRoot((dispose) => ({
-    dispose,
-    source: createEmailThreadSource(() => 'thread', {
-      isLoading: true,
-      isSuccess: false,
-      isError: false,
-      refetch,
-    } as unknown as ThreadQueryResult<ThreadQueryData>),
-  }));
-  try {
-    const completed = source.refresh();
-    expect(refetch).toHaveBeenCalledOnce();
-    initial.resolve();
-    await completed;
-    expect(refetch).toHaveBeenCalledTimes(2);
-  } finally {
-    dispose();
-  }
-});
-
 it('does not revalidate capabilities for unchanged snapshots or ordinary email changes', async () => {
   const { setData, dispose } = createRoot((dispose) => {
     const [data, setData] = createSignal<ThreadQueryData>({

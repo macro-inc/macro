@@ -1296,9 +1296,9 @@ In `/app/component/mail`, open an invitation message; the same card appears in
 `/app/email/:threadId`. Saved details appear below the sender without waiting for calendar
 sync. Expand guests and descriptions with their explicit controls. `View original email`
 is an accessible disclosure that starts closed; attachments remain below it.
-Related recurring components are grouped behind their own disclosure. Cards also appear
-when background extraction finishes while the thread is open. Scheduling updates pause
-RSVP and Join until their current calendar state has been checked.
+Related recurring components are grouped behind their own disclosure. Only mail synced
+after the feature shipped gets a card; older invitations render as plain email.
+Scheduling updates pause RSVP and Join until their current calendar state has been checked.
 
 A connected, resolved invitation shows the responding address and Yes / Maybe / No.
 Local verification requires both email and calendar services: email supplies saved

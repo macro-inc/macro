@@ -7,7 +7,6 @@
 import type { RefreshEmailEventOneOf } from './refreshEmailEventOneOf';
 import type { RefreshEmailEventOneOfFive } from './refreshEmailEventOneOfFive';
 import type { RefreshEmailEventOneOfNine } from './refreshEmailEventOneOfNine';
-import type { RefreshEmailEventOneOfOnefive } from './refreshEmailEventOneOfOnefive';
 import type { RefreshEmailEventOneOfOneone } from './refreshEmailEventOneOfOneone';
 import type { RefreshEmailEventOneOfOnethree } from './refreshEmailEventOneOfOnethree';
 import type { RefreshEmailEventOneOfSeven } from './refreshEmailEventOneOfSeven';
@@ -24,5 +23,4 @@ export type RefreshEmailEvent =
   | RefreshEmailEventOneOfSeven
   | RefreshEmailEventOneOfNine
   | RefreshEmailEventOneOfOneone
-  | RefreshEmailEventOneOfOnethree
-  | RefreshEmailEventOneOfOnefive;
+  | RefreshEmailEventOneOfOnethree;

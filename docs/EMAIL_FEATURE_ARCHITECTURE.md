@@ -436,22 +436,17 @@ remaining difference before accepting it.
 
 ## Calendar invitation snapshots
 
-Calendar MIME extraction belongs to the email domain. `email_message_calendar_invites`
-stores immutable components; `email_message_calendar_extraction` stores parser version,
-status, leased retries, and refresh delivery. Only messages with calendar parts get
-extraction state: live sync consumes already fetched inline bytes and saves attachment
-IDs for the worker, and skips mail without calendar parts. The worker also resumes
-recent (90-day) calendar-flagged history in batches of 16, which also recovers
-attachment invitations whose inline extraction failed. Historical inline-only mail
-needs an explicit MIME reinspection backfill; opening a message never fetches provider
-MIME or parses ICS.
-Extraction emits `refresh_email/calendar_invitations_updated` only when saved snapshots
-change. Mounted REST and GraphQL thread hosts refresh their messages; inactive REST
-caches become stale. A completion received during the initial read triggers a follow-up
-read. Ordinary new mail never revalidates invitation cards.
-Snapshot changes invalidate calendar resolutions, immediately withdrawing stale
-actions. During RSVP, revalidation waits until all responses settle so an email
-refresh cannot overwrite the optimistic attendee response.
+Calendar MIME extraction belongs to the email domain and happens once, when live sync
+or backfill saves a message. `email_message_calendar_invites` stores the immutable
+components; mail without calendar parts gets no rows. Sync parses the inline bytes it
+already fetched. When a message has no inline calendar part, sync downloads its `.ics`
+attachments best-effort; a failed or oversized download leaves the message as plain
+mail, with no retry. Mail synced before the feature shipped is not reinspected, and a
+parser change applies only to newly synced mail. Opening a message never fetches
+provider MIME or parses ICS.
+When an open thread's snapshots change, its calendar resolutions are invalidated,
+immediately withdrawing stale actions. During RSVP, revalidation waits until all
+responses settle so an email refresh cannot overwrite the optimistic attendee response.
 
 Scheduling revisions are reconciled separately for each original occurrence and
 its series master. A lower-sequence master cancellation still cancels an instance
@@ -471,9 +466,9 @@ Fully hydrated message reads batch-load snapshots, expose them through REST and 
 as a plain component list, and preserve them in the cached message projection. Parsed
 list previews never load them. GraphQL JSON is validated at its transport
 adapter. `email-message` owns the typed card and groups recurrence components by UID.
-Original bodies and attachments remain accessible. The original-body disclosure starts
-open: unverified provider templates, forwarding, and organizer commentary must not be
-hidden based on PRODID, subject, or a meeting URL alone.
+Original bodies and attachments remain accessible. When a message has invitations, the
+card replaces the body and the original sits behind a "View original email" disclosure
+that starts closed.
 
 `email-thread/calendar-invitation.tsx` composes the refreshable calendar query, shared
 RSVP controller, and agenda. `queries/calendar-invitation.ts` maps transport data to

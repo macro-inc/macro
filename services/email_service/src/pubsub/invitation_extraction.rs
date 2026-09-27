@@ -1,34 +1,32 @@
-//! Translate provider MIME discovery into the email extraction use case.
+//! Translate provider MIME parts into the email extraction use case.
 use super::context::PubSubContext;
-use email::domain::{
-    calendar_invitation_parser::MAX_INVITATION_COMPONENTS,
-    invitation_extraction::PendingInvitationPart,
-};
+use email::domain::invitation_extraction::InvitationPart;
 use email_api_client::domain::models::CalendarPart;
 use uuid::Uuid;
 
-/// Save inline snapshots and durable attachment work after the email commit.
-pub async fn save_discovered(ctx: &PubSubContext, message_id: Uuid, parts: &[CalendarPart]) {
-    let parts = &parts[..parts.len().min(MAX_INVITATION_COMPONENTS)];
-    let inline = parts
+/// Save invitation snapshots after the email commit. Failures leave plain mail.
+pub async fn save_discovered(
+    ctx: &PubSubContext,
+    link_id: Uuid,
+    provider_id: &str,
+    message_id: Uuid,
+    parts: &[CalendarPart],
+) {
+    let parts = parts
         .iter()
-        .filter_map(|p| p.inline_data.as_deref())
-        .collect::<Vec<_>>();
-    let pending = parts
-        .iter()
-        .filter(|p| p.inline_data.is_none())
-        .filter_map(|p| {
-            p.provider_attachment_id
-                .clone()
-                .map(|attachment_id| PendingInvitationPart { attachment_id })
-        })
+        .filter_map(
+            |part| match (&part.inline_data, &part.provider_attachment_id) {
+                (Some(bytes), _) => Some(InvitationPart::Inline(bytes)),
+                (None, Some(attachment_id)) => Some(InvitationPart::Attachment(attachment_id)),
+                (None, None) => None,
+            },
+        )
         .collect::<Vec<_>>();
     if let Err(error) = ctx
         .invitation_extractor
-        .ingest(message_id, &inline, &pending)
+        .ingest(message_id, link_id, provider_id, &parts)
         .await
     {
-        // Calendar-flagged threads are rediscovered by the extraction worker.
-        tracing::warn!(error=?error, "inline invitation extraction deferred");
+        tracing::warn!(error=?error, "invitation extraction failed");
     }
 }

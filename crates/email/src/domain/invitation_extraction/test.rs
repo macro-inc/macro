@@ -1,149 +1,73 @@
 use super::*;
 use std::sync::{Arc, Mutex};
 
-#[derive(Default)]
-struct State {
-    jobs: Vec<InvitationExtractionJob>,
-    saves: Vec<(ParsedInvitations, Vec<PendingInvitationPart>)>,
-    notified: usize,
-}
+const GOOGLE: &[u8] = include_bytes!("../../../fixtures/calendar/google.ics");
+
 #[derive(Clone, Default)]
-struct Repository(Arc<Mutex<State>>);
+struct Repository(Arc<Mutex<Vec<Vec<CalendarInvitation>>>>);
 impl InvitationExtractionRepository for Repository {
-    async fn is_processed(&self, _: Uuid) -> Result<bool, Report> {
-        Ok(false)
-    }
-    async fn save(
-        &self,
-        _: Uuid,
-        parsed: &ParsedInvitations,
-        pending: &[PendingInvitationPart],
-        _: Option<i64>,
-    ) -> Result<bool, Report> {
-        self.0
-            .lock()
-            .unwrap()
-            .saves
-            .push((parsed.clone(), pending.to_vec()));
-        Ok(true)
-    }
-    async fn claim(&self) -> Result<Vec<InvitationExtractionJob>, Report> {
-        Ok(std::mem::take(&mut self.0.lock().unwrap().jobs))
-    }
-    async fn notified(&self, _: Uuid, _: i64) -> Result<(), Report> {
-        self.0.lock().unwrap().notified += 1;
+    async fn save(&self, _: Uuid, invitations: &[CalendarInvitation]) -> Result<(), Report> {
+        self.0.lock().unwrap().push(invitations.to_vec());
         Ok(())
     }
 }
-struct Provider;
+#[derive(Clone, Default)]
+struct Provider(Arc<Mutex<Vec<String>>>);
 impl InvitationAttachmentProvider for Provider {
-    async fn discover(&self, _: Uuid, _: &str) -> Result<Vec<DiscoveredInvitationPart>, Report> {
-        panic!("notification/attachment jobs must not fetch MIME")
-    }
     async fn download(&self, _: Uuid, _: &str, attachment: &str) -> Result<Vec<u8>, Report> {
+        self.0.lock().unwrap().push(attachment.into());
         if attachment == "unavailable" {
             return Err(rootcause::report!("temporary provider failure"));
         }
-        Ok(include_bytes!("../../../fixtures/calendar/google.ics").to_vec())
+        Ok(GOOGLE.to_vec())
     }
 }
-struct Notifier;
-impl InvitationExtractionNotifier for Notifier {
-    async fn completed(&self, _: Uuid) -> Result<(), Report> {
-        Ok(())
-    }
-}
-fn job(notification_only: bool) -> InvitationExtractionJob {
-    InvitationExtractionJob {
-        message_id: Uuid::now_v7(),
-        link_id: Uuid::now_v7(),
-        provider_id: "provider".into(),
-        discover: false,
-        notification_only,
-        generation: 1,
-        parts: vec![],
-    }
-}
-#[tokio::test]
-async fn notification_retry_preserves_unsupported_content_status() {
-    let repository = Repository::default();
-    repository.0.lock().unwrap().jobs.push(job(true));
+async fn ingest(parts: &[InvitationPart<'_>]) -> (Vec<Vec<CalendarInvitation>>, Vec<String>) {
     let service = InvitationExtractionService {
-        repository: repository.clone(),
-        provider: Provider,
-        notifier: Notifier,
+        repository: Repository::default(),
+        provider: Provider::default(),
     };
-    service.run_once().await.unwrap();
-    let state = repository.0.lock().unwrap();
-    assert!(
-        state.saves.is_empty(),
-        "notification must not rewrite Unsupported to Absent"
-    );
-    assert_eq!(state.notified, 1);
-}
-#[tokio::test]
-async fn unavailable_attachment_keeps_durable_work_without_losing_valid_parts() {
-    let repository = Repository::default();
-    let mut work = job(false);
-    work.parts = ["available", "unavailable"]
-        .map(|id| PendingInvitationPart {
-            attachment_id: id.into(),
-        })
-        .to_vec();
-    repository.0.lock().unwrap().jobs.push(work);
-    InvitationExtractionService {
-        repository: repository.clone(),
-        provider: Provider,
-        notifier: Notifier,
-    }
-    .run_once()
-    .await
-    .unwrap();
-    let state = repository.0.lock().unwrap();
-    assert_eq!(state.saves[0].0.invitations.len(), 1);
-    assert_eq!(state.saves[0].1.len(), 1);
-    assert_eq!(state.saves[0].1[0].attachment_id, "unavailable");
+    service
+        .ingest(Uuid::now_v7(), Uuid::now_v7(), "provider", parts)
+        .await
+        .unwrap();
+    let saves = service.repository.0.lock().unwrap().clone();
+    let downloads = service.provider.0.lock().unwrap().clone();
+    (saves, downloads)
 }
 
 #[tokio::test]
-async fn messages_without_calendar_parts_keep_no_extraction_state() {
-    let repository = Repository::default();
-    InvitationExtractionService {
-        repository: repository.clone(),
-        provider: Provider,
-        notifier: Notifier,
-    }
-    .ingest(Uuid::now_v7(), &[], &[])
-    .await
-    .unwrap();
-    assert!(repository.0.lock().unwrap().saves.is_empty());
-}
-
-struct UnavailableProvider;
-impl InvitationAttachmentProvider for UnavailableProvider {
-    async fn discover(&self, _: Uuid, _: &str) -> Result<Vec<DiscoveredInvitationPart>, Report> {
-        Err(rootcause::report!("source message unavailable"))
-    }
-    async fn download(&self, _: Uuid, _: &str, _: &str) -> Result<Vec<u8>, Report> {
-        panic!("failed discovery cannot download attachments")
-    }
+async fn inline_content_skips_attachment_downloads() {
+    let (saves, downloads) = ingest(&[
+        InvitationPart::Inline(GOOGLE),
+        InvitationPart::Attachment("invite.ics"),
+    ])
+    .await;
+    assert_eq!(saves.len(), 1);
+    assert_eq!(saves[0].len(), 1);
+    assert!(downloads.is_empty());
 }
 
 #[tokio::test]
-async fn unavailable_discovery_never_saves_or_acknowledges_extraction() {
-    let repository = Repository::default();
-    let mut work = job(false);
-    work.discover = true;
-    repository.0.lock().unwrap().jobs.push(work);
-    InvitationExtractionService {
-        repository: repository.clone(),
-        provider: UnavailableProvider,
-        notifier: Notifier,
+async fn unavailable_attachment_does_not_lose_valid_parts() {
+    let (saves, downloads) = ingest(&[
+        InvitationPart::Attachment("available"),
+        InvitationPart::Attachment("unavailable"),
+    ])
+    .await;
+    assert_eq!(saves.len(), 1);
+    assert_eq!(saves[0].len(), 1);
+    assert_eq!(downloads, ["available", "unavailable"]);
+}
+
+#[tokio::test]
+async fn messages_without_invitations_save_nothing() {
+    for parts in [
+        &[][..],
+        &[InvitationPart::Inline(b"not a calendar")][..],
+        &[InvitationPart::Attachment("unavailable")][..],
+    ] {
+        let (saves, _) = ingest(parts).await;
+        assert!(saves.is_empty());
     }
-    .run_once()
-    .await
-    .unwrap();
-    let state = repository.0.lock().unwrap();
-    assert!(state.saves.is_empty());
-    assert_eq!(state.notified, 0);
 }

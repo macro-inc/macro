@@ -247,6 +247,8 @@ pub async fn upsert_message(
     if !message.is_draft {
         crate::pubsub::invitation_extraction::save_discovered(
             ctx,
+            link.id,
+            &payload.provider_message_id,
             message_db_id,
             &fetched.calendar_parts,
         )

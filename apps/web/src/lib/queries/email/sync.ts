@@ -1,6 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_INBOX_SYNC_STATUS } from '@core/constant/featureFlags';
-import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
 import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import {
@@ -17,7 +16,6 @@ import {
 } from './backfill';
 import { emailKeys } from './keys';
 import { invalidateEmailLinks } from './link';
-import { refreshEmailThreads } from './thread-refresh';
 
 const BACKFILL_SOUP_REFRESH_INTERVAL = 5_000;
 
@@ -40,11 +38,9 @@ function asRefreshEmailEvent(payload: unknown): RefreshEmailEvent | undefined {
 /**
  * Handles `refresh_email` websocket events. Steady-state mutations
  * (`upsert_message`, `update_labels`, `delete_message`) already invalidate soup
- * through the notification-driven path, so here they only refresh compose draft
- * state; `calendar_invitations_updated`, `backfill_progress`, `backfill`,
- * `link_removed`, and `photo_synced` handle the rest. Extraction sends
- * `calendar_invitations_updated` only when saved snapshots change; it refreshes
- * message data and revalidates cards in every thread sharing the UID.
+ * through the notification-driven path, and reacting to them again would
+ * double-refetch, so only `backfill_progress`, `backfill`, `link_removed`, and
+ * `photo_synced` act here.
  *
  * Backfill produces no notifications, so these are its only refresh signals.
  * `backfill_progress` carries live progress: it refetches soup (throttled,
@@ -57,15 +53,6 @@ function asRefreshEmailEvent(payload: unknown): RefreshEmailEvent | undefined {
 export function handleRefreshEmail(payload: unknown): void {
   const event = asRefreshEmailEvent(payload);
   if (!event) return;
-
-  if (
-    event.event === 'calendar_invitations_updated' &&
-    typeof event.link_id === 'string'
-  ) {
-    refreshEmailThreads(event.link_id);
-    void invalidateInvitationScheduling();
-    return;
-  }
 
   if (
     event.event === 'upsert_message' ||

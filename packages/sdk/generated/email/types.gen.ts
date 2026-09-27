@@ -1430,9 +1430,6 @@ export type RefreshEmailEvent = {
     link_id: string;
     status: BackfillStatus;
     total_threads: number;
-} | {
-    event: 'calendar_invitations_updated';
-    link_id: string;
 };
 
 /**

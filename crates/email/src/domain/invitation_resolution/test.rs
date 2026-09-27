@@ -5,9 +5,7 @@ fn invite(method: &str, occurrence: &str, sequence: u32) -> CalendarInvitation {
     let bytes = format!(
         "BEGIN:VCALENDAR\nMETHOD:{method}\nBEGIN:VEVENT\nUID:series\nORGANIZER:mailto:alex@example.com\nSEQUENCE:{sequence}\nRECURRENCE-ID{occurrence}\nEND:VEVENT\nEND:VCALENDAR\n"
     );
-    parse_invitation_parts(&[bytes.as_bytes()])
-        .invitations
-        .remove(0)
+    parse_invitation_parts(&[bytes.as_bytes()]).remove(0)
 }
 #[test]
 fn recurrence_revisions_use_original_instant_not_property_spelling() {

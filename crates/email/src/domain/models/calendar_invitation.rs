@@ -2,30 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Version of the normalized snapshot format and extraction policy.
-pub const INVITATION_PARSER_VERSION: u16 = 1;
-
-/// Parser outcome for one message's calendar parts; internal to extraction.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum InvitationExtractionStatus {
-    /// One or more scheduling components were found.
-    Ready,
-    /// There were no calendar parts to inspect.
-    #[default]
-    Absent,
-    /// Calendar content could not be rendered safely.
-    Unsupported,
-}
-
-/// Components parsed from one message's calendar parts.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ParsedInvitations {
-    /// Whether any usable component was found.
-    pub status: InvitationExtractionStatus,
-    /// Distinct scheduling components, including recurrence overrides.
-    pub invitations: Vec<CalendarInvitation>,
-}
-
 /// Original scheduling method, including methods unsupported for actions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

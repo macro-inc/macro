@@ -13,8 +13,8 @@ pub const MAX_INVITATION_COMPONENTS: usize = 32;
 
 /// Normalize independently parsed decoded MIME parts and collapse inline/attachment
 /// duplicates. A malformed part never discards valid components from another part.
-pub fn parse_invitation_parts(parts: &[&[u8]]) -> ParsedInvitations {
-    let mut result = ParsedInvitations::default();
+pub fn parse_invitation_parts(parts: &[&[u8]]) -> Vec<CalendarInvitation> {
+    let mut invitations = Vec::new();
     let mut seen = HashSet::new();
     for &bytes in parts.iter().take(MAX_INVITATION_COMPONENTS) {
         if bytes.len() > MAX_INVITATION_BYTES || std::str::from_utf8(bytes).is_err() {
@@ -36,7 +36,7 @@ pub fn parse_invitation_parts(parts: &[&[u8]]) -> ParsedInvitations {
                 _ => InvitationMethod::Unknown,
             };
             for event in calendar.events {
-                if result.invitations.len() >= MAX_INVITATION_COMPONENTS {
+                if invitations.len() >= MAX_INVITATION_COMPONENTS {
                     break;
                 }
                 let props = &event.properties;
@@ -65,7 +65,7 @@ pub fn parse_invitation_parts(parts: &[&[u8]]) -> ParsedInvitations {
                     .or_else(|| value(props, "CONFERENCE").and_then(|v| safe_url(&v)))
                     .or_else(|| location.as_deref().and_then(conference_url))
                     .or_else(|| description.as_deref().and_then(conference_url));
-                result.invitations.push(CalendarInvitation {
+                invitations.push(CalendarInvitation {
                     id,
                     uid,
                     method,
@@ -94,14 +94,7 @@ pub fn parse_invitation_parts(parts: &[&[u8]]) -> ParsedInvitations {
             }
         }
     }
-    result.status = if !result.invitations.is_empty() {
-        InvitationExtractionStatus::Ready
-    } else if parts.is_empty() {
-        InvitationExtractionStatus::Absent
-    } else {
-        InvitationExtractionStatus::Unsupported
-    };
-    result
+    invitations
 }
 
 fn property<'a>(props: &'a [Property], name: &str) -> Option<&'a Property> {

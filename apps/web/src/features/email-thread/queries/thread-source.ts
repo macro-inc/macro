@@ -127,11 +127,7 @@ export function createEmailThreadSource(
       await query.fetchNextPage();
     },
     refresh: async () => {
-      // With no cached data, query libraries may join the initial request instead
-      // of replacing it. Follow it with a request that starts after the change.
-      const pendingInitialRead = query.isLoading;
       await query.refetch();
-      if (pendingInitialRead) await query.refetch();
     },
   };
 }

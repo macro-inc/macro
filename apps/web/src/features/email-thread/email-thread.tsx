@@ -6,7 +6,6 @@ import { useContacts } from '@core/user';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
 import type { ThreadQueryTransport } from '@queries/email/thread';
-import { onEmailThreadRefresh } from '@queries/email/thread-refresh';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { useCalendarPreferences } from '../calendar/utils/preferences';
 import { createEmailComposeContext } from '../email-compose/compose-adapter';
@@ -95,18 +94,6 @@ export function EmailThread(props: EmailThreadProps) {
       ),
     },
   };
-  onCleanup(
-    onEmailThreadRefresh((linkId) => {
-      const thread = source.thread();
-      if (
-        !thread ||
-        thread.link_id === linkId ||
-        thread?.messages.some((message) => message.link_id === linkId)
-      ) {
-        void source.refresh().catch(compose.notices.reportError);
-      }
-    })
-  );
   const rendering = createEmailRenderingContext();
   createEffectOnEntityTypeNotification(
     useGlobalNotificationSource(),

@@ -55,6 +55,8 @@ pub async fn backfill_message(
     if !message.is_draft {
         crate::pubsub::invitation_extraction::save_discovered(
             ctx,
+            link.id,
+            &p.message_provider_id,
             message_id,
             &fetched.calendar_parts,
         )

@@ -5791,21 +5791,6 @@
                 "format": "int32"
               }
             }
-          },
-          {
-            "type": "object",
-            "description": "Saved calendar snapshots changed; refresh message data without a new-mail notification.",
-            "required": ["link_id", "event"],
-            "properties": {
-              "event": {
-                "type": "string",
-                "enum": ["calendar_invitations_updated"]
-              },
-              "link_id": {
-                "type": "string",
-                "format": "uuid"
-              }
-            }
           }
         ],
         "description": "Payload for the `refresh_email` connection gateway event: identifies the\ninbox that changed and the kind of change."
