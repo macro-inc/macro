@@ -386,7 +386,7 @@ impl Launcher {
     async fn handle(&mut self, work: Work) -> Result<(), super::cli::HerdrError> {
         match work {
             Work::Open { session } => {
-                let window = self.cli.open_window(&self.workspace, "macro").await?;
+                let window = self.cli.open_window(&self.workspace, "macro", false).await?;
                 let mut command = self.pane_command.clone();
                 command.extend(["--session".to_owned(), session.clone()]);
                 self.cli

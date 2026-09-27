@@ -64,6 +64,10 @@ enum Command {
         /// `acceptEdits` or `bypassPermissions`.
         #[arg(long)]
         permission_mode: Option<String>,
+        /// Open each session's tab in the background rather than switching
+        /// herdr to it.
+        #[arg(long)]
+        no_focus: bool,
     },
 }
 
@@ -95,11 +99,15 @@ async fn main() -> ExitCode {
                 }
             };
         }
-        Some(Command::HerdrAcp { permission_mode }) => {
+        Some(Command::HerdrAcp {
+            permission_mode,
+            no_focus,
+        }) => {
             // stdout is the protocol: logs go to stderr, which macrod drains.
             tracing_subscriber::fmt().with_writer(std::io::stderr).init();
             return match herdr::acp_agent::run(herdr::acp_agent::AdapterOptions {
                 permission_mode,
+                no_focus,
             })
             .await
             {

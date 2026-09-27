@@ -58,6 +58,8 @@ const MISSING_AGENT_CHECKS: u32 = 5;
 pub(crate) struct AdapterOptions {
     /// Passed to Claude Code as `--permission-mode`.
     pub permission_mode: Option<String>,
+    /// Open session windows in the background instead of switching to them.
+    pub no_focus: bool,
 }
 
 #[derive(Debug)]
@@ -349,7 +351,9 @@ impl Adapter {
     /// Open the session's herdr window and start Claude Code in it.
     async fn launch(&self, herdr: &HerdrCli, session: &Session, first_prompt: &str) -> Result<Live, RpcError> {
         let label = title_from(first_prompt).unwrap_or_else(|| "claude".to_owned());
-        let window = herdr.open_window(&session.cwd, &label).await?;
+        let window = herdr
+            .open_window(&session.cwd, &label, !self.options.no_focus)
+            .await?;
         // The tab's shell must reach its prompt before an agent can start.
         tokio::time::sleep(Duration::from_millis(800)).await;
 

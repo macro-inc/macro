@@ -65,8 +65,13 @@ impl HerdrCli {
         }
     }
 
-    /// Open a tab in macrod's workspace without stealing focus.
-    pub(crate) async fn open_window(&self, cwd: &Path, label: &str) -> Result<Window, HerdrError> {
+    /// Open a tab in macrod's workspace, switching herdr to it when `focus`.
+    pub(crate) async fn open_window(
+        &self,
+        cwd: &Path,
+        label: &str,
+        focus: bool,
+    ) -> Result<Window, HerdrError> {
         let mut args = vec!["tab".to_owned(), "create".to_owned()];
         if let Some(workspace) = &self.workspace_id {
             args.extend(["--workspace".to_owned(), workspace.clone()]);
@@ -76,7 +81,7 @@ impl HerdrCli {
             cwd.to_string_lossy().into_owned(),
             "--label".to_owned(),
             label.to_owned(),
-            "--no-focus".to_owned(),
+            if focus { "--focus" } else { "--no-focus" }.to_owned(),
         ]);
         let output = self.run(&args).await?;
         parse_window(&output)
