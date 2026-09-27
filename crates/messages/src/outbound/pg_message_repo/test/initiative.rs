@@ -37,76 +37,7 @@ fn input(content: &str, root: Option<Uuid>) -> PostMessage {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn initiative_parent_key_preserves_legacy_writers_and_cannot_be_disconnected(pool: PgPool) {
-    setup(&pool).await;
-    let initiative = macro_uuid::generate_uuid_v7();
-    create_project(&pool, initiative, "message-doc-a").await;
-    let channel = macro_uuid::generate_uuid_v7();
-    sqlx::query!(
-        "INSERT INTO comms_channels(id, channel_type, owner_id) VALUES ($1, 'private', $2)",
-        channel,
-        USER
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
-    // Deployed channel writers still omit every parent column. The two parent
-    // triggers must coexist without casting channel/document IDs as initiatives.
-    let legacy = sqlx::query!(
-        r#"INSERT INTO comms_messages(id, channel_id, sender_id, content)
-           VALUES ($1, $2, $3, 'Legacy channel message')
-           RETURNING parent_entity_type, parent_entity_id, initiative_message_parent_id"#,
-        macro_uuid::generate_uuid_v7(),
-        channel,
-        USER
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(legacy.parent_entity_type, "channel");
-    assert_eq!(legacy.parent_entity_id, channel.to_string());
-    assert_eq!(legacy.initiative_message_parent_id, None);
-
-    let repo = PgMessageRepository::new(pool.clone())
-        .with_initiatives(InitiativeLookup::new(PgInitiativeRepo::new(pool.clone())));
-    let document = repo
-        .create(command("message-doc-a", None, "Document discussion"))
-        .await
-        .unwrap();
-    let mut initiative_post = command("unused", None, "Project discussion");
-    initiative_post.parent = MessageParent::Initiative(initiative);
-    let project_message = repo.create(initiative_post).await.unwrap();
-    let keys = sqlx::query!(
-        "SELECT id, initiative_message_parent_id FROM comms_messages WHERE id = ANY($1)",
-        &[document.id, project_message.id]
-    )
-    .fetch_all(&pool)
-    .await
-    .unwrap();
-    assert_eq!(keys.len(), 2);
-    for key in keys {
-        assert_eq!(
-            key.initiative_message_parent_id,
-            (key.id == project_message.id).then_some(initiative)
-        );
-    }
-
-    // The maintained column must retain the generated column's invariant:
-    // callers cannot clear the key to bypass parent deletion or FK enforcement.
-    let retained = sqlx::query_scalar!(
-        "UPDATE comms_messages SET initiative_message_parent_id = NULL WHERE id = $1
-         RETURNING initiative_message_parent_id",
-        project_message.id
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(retained, Some(initiative));
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn project_discussion_lifecycle_cascades_on_parent_deletion(pool: PgPool) {
+async fn project_discussions_use_shared_parent_lifecycle_checks(pool: PgPool) {
     setup(&pool).await;
     let id = macro_uuid::generate_uuid_v7();
     create_project(&pool, id, "message-doc-a").await;
@@ -198,43 +129,37 @@ async fn project_discussion_lifecycle_cascades_on_parent_deletion(pool: PgPool) 
             .is_some()
     );
     assert!(repo.replies(&parent, root.id).await.unwrap().is_empty());
+    // Like document discussions, deleting the parent prevents service access
+    // without a parent-specific database cascade over the shared message store.
+    let active = service
+        .post(receipt(id), input("Active discussion", None))
+        .await
+        .unwrap();
     sqlx::query!("DELETE FROM initiative WHERE id = $1", id)
         .execute(&pool)
         .await
         .unwrap();
+    assert!(!repo.parent_exists(&parent).await.unwrap());
     assert!(matches!(
-        service.get_thread(receipt(id), root.id).await,
+        service.get(receipt::<MessageView>(id), active.id).await,
+        Err(MessageError::NotFound)
+    ));
+    assert!(matches!(
+        service.get_thread(receipt(id), active.id).await,
+        Err(MessageError::NotFound)
+    ));
+    assert!(matches!(
+        service
+            .timeline(receipt(id), MessageTimelineQuery::default())
+            .await,
         Err(MessageError::NotFound)
     ));
     assert!(matches!(
         service.post(receipt(id), input("too late", None)).await,
         Err(MessageError::NotFound)
     ));
-    assert!(
-        repo.get(&MessageParent::Initiative(id), reply.id)
-            .await
-            .unwrap()
-            .is_none()
-    );
-    assert!(
-        repo.thread(&MessageParent::Initiative(id), root.id)
-            .await
-            .unwrap()
-            .is_none()
-    );
-    // Even a direct repository caller with a stale identity cannot bypass the FK.
-    let residual = sqlx::query!(r#"SELECT
-        EXISTS(SELECT 1 FROM comms_attachments WHERE message_id = ANY($1)) AS "attachments!",
-        EXISTS(SELECT 1 FROM comms_reactions WHERE message_id = ANY($1)) AS "reactions!",
-        EXISTS(SELECT 1 FROM comms_entity_mentions WHERE source_entity_type = 'message' AND source_entity_id = ANY($2)) AS "mentions!""#,
-        &[root.id, reply.id], &[root.id.to_string(), reply.id.to_string()]).fetch_one(&pool).await.unwrap();
-    assert!(!residual.attachments && !residual.reactions && !residual.mentions);
-    let mut late = command("unused", None, "race");
-    late.parent = MessageParent::Initiative(id);
-    assert!(matches!(
-        repo.create(late).await,
-        Err(MessageError::NotFound)
-    ));
+    assert!(repo.get(&parent, active.id).await.unwrap().is_some());
+    assert!(repo.thread(&parent, active.id).await.unwrap().is_some());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
