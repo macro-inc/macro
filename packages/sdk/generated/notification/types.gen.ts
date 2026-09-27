@@ -1201,7 +1201,7 @@ export type TaskAssignedMetadata = {
 
 export type UnsubscribeItemPathParams = {
     item_id: string;
-    item_type: string;
+    item_type: EntityType;
 };
 
 export type UserUnsubscribe = {
@@ -1213,6 +1213,10 @@ export type UserUnsubscribe = {
      * The item type
      */
     item_type: string;
+    /**
+     * None for permanent mutes; notifications resume automatically at this deadline.
+     */
+    snoozed_until?: string | null;
 };
 
 export type HealthHandlerData = {
@@ -1274,7 +1278,7 @@ export type UnsubscribeEmailResponse = UnsubscribeEmailResponses[keyof Unsubscri
 export type RemoveUnsubscribeItemData = {
     body?: never;
     path: {
-        item_type: string;
+        item_type: EntityType;
         item_id: string;
     };
     query?: never;
@@ -1297,14 +1301,20 @@ export type RemoveUnsubscribeItemResponse = RemoveUnsubscribeItemResponses[keyof
 export type UnsubscribeItemData = {
     body?: never;
     path: {
-        item_type: string;
+        item_type: EntityType;
         item_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * A future resume time. Omit to mute indefinitely.
+         */
+        snoozed_until?: string | null;
+    };
     url: '/unsubscribe/item/{item_type}/{item_id}';
 };
 
 export type UnsubscribeItemErrors = {
+    400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
 };
