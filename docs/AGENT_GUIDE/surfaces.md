@@ -1277,6 +1277,9 @@ to search email subjects beyond the loaded threads, or use **Load more** to brow
 actions; **Resume** cancels a snooze immediately. Permanent mutes appear separately
 under **Muted items**, with **Snooze instead** to replace one with a timed pause.
 
+The Chat detail pane also supplies these commands for its current channel or DM;
+focus the conversation before opening the command menu.
+
 To snooze an entity, right-click its row (long-press on mobile) and choose
 **Snooze notifications…**, or select/open the entity and search for that command
 in Cmd/Ctrl+K. Multi-selection applies the chosen deadline to all selected items.
