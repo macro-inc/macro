@@ -45,6 +45,8 @@ pub enum MessageParent {
     Channel(Uuid),
     /// A document, including tasks and PDFs.
     Document(DocumentId),
+    /// An initiative, presented as a project in the application.
+    Initiative(Uuid),
 }
 
 impl MessageParent {
@@ -53,6 +55,9 @@ impl MessageParent {
         match entity_type {
             "channel" => Ok(Self::Channel(entity_id.parse().map_err(|_| InvalidParent)?)),
             "document" => Ok(Self::Document(entity_id.to_owned().try_into()?)),
+            "initiative" => Ok(Self::Initiative(
+                entity_id.parse().map_err(|_| InvalidParent)?,
+            )),
             _ => Err(InvalidParent),
         }
     }
@@ -62,13 +67,14 @@ impl MessageParent {
         match self {
             Self::Channel(_) => "channel",
             Self::Document(_) => "document",
+            Self::Initiative(_) => "initiative",
         }
     }
 
     /// Canonical parent identifier.
     pub fn entity_id(&self) -> String {
         match self {
-            Self::Channel(id) => id.to_string(),
+            Self::Channel(id) | Self::Initiative(id) => id.to_string(),
             Self::Document(id) => id.0.clone(),
         }
     }
@@ -84,6 +90,7 @@ impl MessageParent {
         match self {
             Self::Channel(_) => entity_access::domain::models::EntityType::Channel,
             Self::Document(_) => entity_access::domain::models::EntityType::Document,
+            Self::Initiative(_) => entity_access::domain::models::EntityType::Initiative,
         }
     }
 }
@@ -227,7 +234,7 @@ pub struct ThreadState {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
-/// Partial changes to the lifecycle and placement of a document discussion.
+/// Partial changes to discussion lifecycle or document anchor placement.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]

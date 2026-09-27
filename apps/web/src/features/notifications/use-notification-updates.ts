@@ -1,6 +1,7 @@
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEmailLinks } from '@queries/email/link';
+import { messageKeys } from '@queries/messages/keys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import {
   invalidateSoupEntity,
@@ -64,6 +65,17 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     })
     .with({ tag: 'replied_to_document_comment_thread' }, () => {
       refreshSoupEntity(notification, 'document');
+    })
+    .with({ tag: 'initiative_discussion' }, () => {
+      const parent = { type: 'initiative', id: notification.entity_id };
+      for (const key of [
+        messageKeys.messages,
+        messageKeys.messagesByIds,
+        messageKeys.threadReplies,
+      ]) {
+        void queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
+      }
+      void invalidateEntityNotifications(notification.entity_id);
     })
     .with({ tag: 'commented_on_document' }, () => {
       refreshSoupEntity(notification, 'document');

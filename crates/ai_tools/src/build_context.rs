@@ -252,17 +252,20 @@ pub async fn build_tool_service_context_from_env(
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         pool.clone(),
     )));
-    let properties_service =
-        crate::tool_context::build_properties_service(pool.clone(), entity_access_service.clone());
-    let task_properties_service = crate::tool_context::build_task_properties_adapter(
-        pool.clone(),
-        properties_service.clone(),
-        entity_access_service.clone(),
-    );
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
         event_task_tracker,
+    );
+    let properties_service = crate::tool_context::build_properties_service_with_broker(
+        pool.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+    );
+    let task_properties_service = crate::tool_context::build_task_properties_adapter(
+        pool.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
     );
     // Channel messages sent by AI tools dispatch the same side effects as the
     // document-storage channel API (realtime, notifications, contact sync, and

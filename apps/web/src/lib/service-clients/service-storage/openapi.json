@@ -26590,6 +26590,22 @@
                 "enum": ["document"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "An initiative, presented as a project in the application.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "An initiative, presented as a project in the application."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["initiative"]
+              }
+            }
           }
         ],
         "description": "The entity whose permissions and lifecycle govern a message."
@@ -28921,6 +28937,11 @@
                 "description": "Who wrote the prompt, absent when a bot acted on nobody's behalf."
               }
             ]
+          },
+          "origin_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The channel or document message the prompt was posted as, when it\narrived from a thread rather than the session view. That message\nalready notified the users it named when it was posted."
           }
         }
       },
@@ -31592,7 +31613,7 @@
       },
       "ThreadPatch": {
         "type": "object",
-        "description": "Partial changes to the lifecycle and placement of a document discussion.",
+        "description": "Partial changes to discussion lifecycle or document anchor placement.",
         "properties": {
           "detach_anchor": {
             "type": "boolean",

@@ -384,6 +384,7 @@ dependencies = [
  "github",
  "harness_id",
  "harnesses",
+ "initiative",
  "kafka_util",
  "lexical_client",
  "lexical_mention_extractor",
@@ -605,6 +606,7 @@ dependencies = [
  "channels",
  "database_env_vars",
  "entity_access",
+ "initiative",
  "kafka_util",
  "lexical_client",
  "macro_config",
@@ -775,6 +777,7 @@ dependencies = [
  "frecency",
  "futures",
  "import",
+ "initiative",
  "item_filters",
  "lazy_static",
  "lexical_client",
@@ -1729,6 +1732,7 @@ dependencies = [
  "github",
  "gtm_invite",
  "http-body-util",
+ "initiative",
  "jsonwebtoken 10.3.0",
  "last_online_tracker",
  "loops_client",
@@ -3156,7 +3160,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.24"
+version = "0.6.26"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -7748,6 +7752,7 @@ dependencies = [
 name = "graphql_initiative"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "async-graphql",
  "chrono",
  "entity_access",
@@ -9162,6 +9167,7 @@ dependencies = [
 name = "initiative"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "anyhow",
  "axum",
  "chrono",
@@ -9170,6 +9176,8 @@ dependencies = [
  "http-body-util",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -11079,6 +11087,7 @@ dependencies = [
  "chrono",
  "connection_gateway_client",
  "entity_access",
+ "initiative",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -11091,7 +11100,9 @@ dependencies = [
  "model_notifications",
  "model_owner",
  "models_pagination",
+ "models_properties",
  "notification",
+ "properties",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -16239,6 +16250,7 @@ dependencies = [
  "email",
  "entity_access",
  "futures",
+ "initiative",
  "kafka_util",
  "macro_event_broker",
  "macro_event_topics",

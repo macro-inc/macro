@@ -1046,7 +1046,13 @@ async fn run() -> anyhow::Result<()> {
         conn_gateway_client.clone(),
     );
     let discussion_delivery = messages::domain::delivery::DiscussionDelivery::new(
-        messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()),
+        messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone())
+            .with_initiatives(
+                initiative::domain::lookup::InitiativeLookup::new(
+                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                ),
+                properties_service.clone(),
+            ),
         messages::outbound::entity_access_audience::EntityAccessMessageAudience(
             (*entity_access_service).clone(),
         ),
@@ -1064,7 +1070,10 @@ async fn run() -> anyhow::Result<()> {
     );
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(
-            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
+                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                )),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
                 channel_bots::outbound::conversation::LocalBotPublisher::new(bot_trigger_sender),
@@ -1214,26 +1223,33 @@ async fn run() -> anyhow::Result<()> {
             lexical_client.clone(),
         ),
     );
-    let initiative_service = Arc::new(InitiativeServiceImpl::new(
-        PgInitiativeRepo::new(db.clone()),
-        initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
-            document_creator.clone(),
-            documents_hex::domain::purge::DocumentPurger::new(
-                documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(
-                    db.clone(),
+    let initiative_service = Arc::new(
+        InitiativeServiceImpl::new(
+            PgInitiativeRepo::new(db.clone()),
+            initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
+                document_creator.clone(),
+                documents_hex::domain::purge::DocumentPurger::new(
+                    documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(
+                        db.clone(),
+                    ),
+                    documents_hex::outbound::document_purge::SqsDocumentPurgeQueue::new(
+                        sqs_client.clone(),
+                    ),
+                    macro_event_broker.clone(),
                 ),
-                documents_hex::outbound::document_purge::SqsDocumentPurgeQueue::new(
-                    sqs_client.clone(),
-                ),
+            ),
+            Arc::new(initiative::outbound::resources::ProjectResources::new(
+                properties_service.clone(),
+                system_properties_service.clone(),
+                entity_access_service.clone(),
+            )),
+        )
+        .with_event_publisher(Arc::new(
+            initiative::outbound::event_publisher::BrokerInitiativeEventPublisher::new(
                 macro_event_broker.clone(),
             ),
-        ),
-        Arc::new(initiative::outbound::resources::ProjectResources::new(
-            properties_service.clone(),
-            system_properties_service.clone(),
-            entity_access_service.clone(),
         )),
-    ));
+    );
 
     let collab_surface_service = CollabSurfaceServiceImpl::new(
         Arc::new(PgCollabSurfaceRepo::new(db.clone())),
@@ -1623,7 +1639,10 @@ async fn run() -> anyhow::Result<()> {
         // GraphQL reads the activity log through the readonly pool; the
         // Kafka consumer's writer-pool repo above is separate on purpose.
         activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
-            activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+            initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+                activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+                entity_access_service.clone(),
+            ),
         )),
         graphql_entity_mutation_service,
         github_sync_service: Arc::new(github_sync_service_impl),

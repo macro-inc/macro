@@ -7250,6 +7250,12 @@ export type MessageParent = {
      */
     id: DocumentId;
     type: 'document';
+} | {
+    /**
+     * An initiative, presented as a project in the application.
+     */
+    id: string;
+    type: 'initiative';
 };
 
 /**
@@ -8564,6 +8570,12 @@ export type SessionMentionedMetadata = {
      */
     mentioned: Array<MacroUserIdStr>;
     mentioned_by?: null | MacroUserIdStr;
+    /**
+     * The channel or document message the prompt was posted as, when it
+     * arrived from a thread rather than the session view. That message
+     * already notified the users it named when it was posted.
+     */
+    origin_message_id?: string | null;
 };
 
 /**
@@ -10344,7 +10356,7 @@ export type ThreadOrigin = {
 };
 
 /**
- * Partial changes to the lifecycle and placement of a document discussion.
+ * Partial changes to discussion lifecycle or document anchor placement.
  */
 export type ThreadPatch = {
     /**

@@ -3,6 +3,8 @@
 #[cfg(test)]
 mod test;
 
+mod entity_history;
+
 use std::collections::HashMap;
 use std::num::{NonZeroU32, NonZeroU64};
 use std::str::FromStr;

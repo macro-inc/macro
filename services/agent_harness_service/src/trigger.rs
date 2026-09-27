@@ -105,7 +105,11 @@ async fn run(
         FastModelTriggerJudge::new(recorder, images),
         MessageThreadHistory::new(
             std::sync::Arc::new(messages::domain::service::MessageService::new(
-                PgMessageRepository::new(pool.clone()),
+                PgMessageRepository::new(pool.clone()).with_initiatives(
+                    initiative::domain::lookup::InitiativeLookup::new(
+                        initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+                    ),
+                ),
                 messages::domain::ports::NoMessageEventPublisher,
             )),
             entity_access::domain::service::EntityAccessServiceImpl::new(

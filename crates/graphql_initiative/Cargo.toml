@@ -28,5 +28,6 @@ models_properties = { path = "../models_properties" }
 model_owner = { path = "../model_owner" }
 serde = { workspace = true }
 chrono = { workspace = true }
+activity = { path = "../activity", default-features = false }
 rootcause = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }

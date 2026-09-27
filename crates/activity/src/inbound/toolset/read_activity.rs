@@ -97,6 +97,10 @@ pub enum ToolActivityAction {
         /// The started call's id.
         call_id: String,
     },
+    /// A task was added to the project. Resolve references through authorized project history.
+    TaskAdded,
+    /// A task was removed from the project.
+    TaskRemoved,
     /// An action outside this deployment's vocabulary.
     Unknown {
         /// The stored action tag.
@@ -141,6 +145,8 @@ impl ToolActivityAction {
             RecordedAction::Known(Action::CallStarted(start)) => Self::CallStarted {
                 call_id: start.call_id,
             },
+            RecordedAction::Known(Action::TaskAdded(_)) => Self::TaskAdded,
+            RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved,
             RecordedAction::Unknown { tag, payload } => Self::Unknown { tag, payload },
         }
     }

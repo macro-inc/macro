@@ -23,6 +23,7 @@ type Activity = NamedTool<
 function decodeToolEntityType(raw: string): ActivityEntityType {
   return match(raw)
     .with('document', () => 'document' as const)
+    .with('initiative', () => 'initiative' as const)
     .with('project', () => 'project' as const)
     .with('chat', () => 'chat' as const)
     .with('email_thread', () => 'email-thread' as const)
@@ -33,6 +34,8 @@ function decodeToolEntityType(raw: string): ActivityEntityType {
 
 function activityAction(action: Activity['action']): ActivityAction {
   return match(action)
+    .with({ type: 'taskAdded' }, () => ({ kind: 'task-added' as const }))
+    .with({ type: 'taskRemoved' }, () => ({ kind: 'task-removed' as const }))
     .with({ type: 'created' }, () => ({
       kind: 'created' as const,
     }))

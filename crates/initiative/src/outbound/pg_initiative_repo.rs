@@ -23,9 +23,10 @@ use share_permission_db_utils::team_share::TeamShareError;
 use sqlx::postgres::PgDatabaseError;
 use sqlx::{Executor, PgPool, Postgres};
 
+use crate::domain::events::{AssignedTasks, TaskMembershipChange};
 use crate::domain::models::{
-    AssignTasksResult, CreateInitiativeRepoArgs, DescriptionDocumentId, InitiativeBasic,
-    InitiativeDetail, InitiativeError, InitiativeId, InitiativeList, LockstepTeamShareFacts,
+    CreateInitiativeRepoArgs, DescriptionDocumentId, InitiativeBasic, InitiativeDetail,
+    InitiativeError, InitiativeId, InitiativeList, LockstepTeamShareFacts,
     UpdateInitiativeRepoArgs,
 };
 use crate::domain::ports::InitiativeRepo;
@@ -132,17 +133,21 @@ impl InitiativeRepo for PgInitiativeRepo {
         &self,
         id: InitiativeId,
         task_ids: Vec<String>,
-    ) -> Result<Vec<AssignTasksResult>, Self::Err> {
+    ) -> Result<AssignedTasks, Self::Err> {
         tasks::assign_tasks(&self.pool, id, task_ids).await
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn unassign_task(&self, id: InitiativeId, task_id: &str) -> Result<(), Self::Err> {
+    async fn unassign_task(
+        &self,
+        id: InitiativeId,
+        task_id: &str,
+    ) -> Result<Option<TaskMembershipChange>, Self::Err> {
         tasks::unassign_task(&self.pool, id, task_id).await
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn clear_task(&self, task_id: &str) -> Result<(), Self::Err> {
+    async fn clear_task(&self, task_id: &str) -> Result<Option<TaskMembershipChange>, Self::Err> {
         tasks::clear_task(&self.pool, task_id).await
     }
 

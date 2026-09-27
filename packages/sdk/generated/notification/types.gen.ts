@@ -62,17 +62,16 @@ export type AgentSessionNotificationRef = {
  * The session an agent-session notification is about, and where its magic
  * chip lives when it was opened from a thread.
  *
- * The conversation an agent session was opened from: a channel or a
- * document discussion. Spelled like the message API's parent so a client can
- * route to either surface.
+ * The conversation an agent session was opened from: a channel, document,
+ * or initiative. Spelled like the message API's parent for client routing.
  */
 export type AgentSessionOriginParent = {
     /**
-     * The channel or document id.
+     * The parent entity id.
      */
     id: string;
     /**
-     * `channel` or `document`.
+     * `channel`, `document`, or `initiative`.
      */
     type: string;
 };
@@ -741,6 +740,50 @@ export type InboxReauthRequiredMetadata = {
 };
 
 /**
+ * Project discussion metadata. The notification entity identifies the initiative;
+ * message and thread UUIDs select the discussion inside that project.
+ */
+export type InitiativeDiscussionMetadata = {
+    /**
+     * Canonical shared message UUID.
+     */
+    messageId: string;
+    /**
+     * Authenticated project owner.
+     */
+    owner: string;
+    /**
+     * Name displayed in the project header.
+     */
+    projectName: string;
+    /**
+     * Semantic reason selected by the message delivery domain.
+     */
+    reason: InitiativeDiscussionReason;
+    /**
+     * Public display name for a bot author.
+     */
+    senderDisplayName?: string | null;
+    /**
+     * Optional avatar for push notification attachments.
+     */
+    senderProfilePictureUrl?: string | null;
+    /**
+     * Posted Markdown content.
+     */
+    text: string;
+    /**
+     * Canonical discussion root UUID.
+     */
+    threadId: string;
+};
+
+/**
+ * Why a project discussion notification was delivered.
+ */
+export type InitiativeDiscussionReason = 'mention' | 'reply' | 'assignee' | 'owner';
+
+/**
  * Metadata for when a user is invited to a team.
  */
 export type InviteToTeamMetadata = {
@@ -885,6 +928,12 @@ export type NotifEvent = {
      */
     content: CommentedOnDocumentMetadata;
     tag: 'commented_on_document';
+} | {
+    /**
+     * Someone commented, replied, or mentioned the recipient on a project.
+     */
+    content: InitiativeDiscussionMetadata;
+    tag: 'initiative_discussion';
 } | {
     /**
      * The user was invited to a channel.

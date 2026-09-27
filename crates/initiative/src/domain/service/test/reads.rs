@@ -147,6 +147,7 @@ async fn failed_property_initialization_compensates_project_and_description() {
         .withf(|id| *id == description_document_id())
         .times(1)
         .return_once(|_| Box::pin(async { Ok(()) }));
+    let events = Arc::new(super::events::Events::default());
     let svc = InitiativeServiceImpl::new(
         repo,
         documents,
@@ -154,7 +155,8 @@ async fn failed_property_initialization_compensates_project_and_description() {
             fail_initialization: true,
             ..Default::default()
         }),
-    );
+    )
+    .with_event_publisher(events.clone());
     assert!(matches!(
         svc.create(
             &user(OWNER),
@@ -166,6 +168,52 @@ async fn failed_property_initialization_compensates_project_and_description() {
         .await,
         Err(InitiativeError::Internal(_))
     ));
+    assert!(matches!(
+        events.0.lock().unwrap().as_slice(),
+        [crate::domain::events::InitiativeTopicEvent::Purged { .. }]
+    ));
+}
+
+#[tokio::test]
+async fn failed_initialization_compensation_does_not_purge_a_remaining_project() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_get_team_default_link_share()
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    repo.expect_create()
+        .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
+    repo.expect_delete().times(1).return_once(|_| {
+        Box::pin(async {
+            Err(InitiativeError::Internal(rootcause::report!(
+                "delete failed"
+            )))
+        })
+    });
+    let mut documents = MockInitiativeDescriptionDocuments::new();
+    documents
+        .expect_create()
+        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+    let events = Arc::new(super::events::Events::default());
+    let svc = InitiativeServiceImpl::new(
+        repo,
+        documents,
+        Arc::new(FakeResources {
+            fail_initialization: true,
+            ..Default::default()
+        }),
+    )
+    .with_event_publisher(events.clone());
+    assert!(matches!(
+        svc.create(
+            &user(OWNER),
+            CreateInitiativeRequest {
+                name: "Launch".into(),
+                ..Default::default()
+            }
+        )
+        .await,
+        Err(InitiativeError::Internal(_))
+    ));
+    assert!(events.0.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

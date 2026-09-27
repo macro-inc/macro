@@ -1,5 +1,9 @@
 //! Typed GraphQL output models for realtime notification event metadata.
 
+/// Project discussion notification metadata.
+mod initiative_discussion;
+pub use initiative_discussion::GraphqlInitiativeDiscussionMetadata;
+
 use async_graphql::{Enum, ID, Object, Union};
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
@@ -1197,6 +1201,8 @@ pub enum GraphqlNotifEvent {
     RepliedToDocumentCommentThread(GraphqlRepliedToDocumentCommentThreadMetadata),
     /// Document comment metadata.
     CommentedOnDocument(GraphqlCommentedOnDocumentMetadata),
+    /// Project discussion metadata.
+    InitiativeDiscussion(GraphqlInitiativeDiscussionMetadata),
     /// Channel invitation metadata.
     ChannelInvite(GraphqlChannelInviteMetadata),
     /// Channel message metadata.
@@ -1258,6 +1264,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             }
             NotifEvent::CommentedOnDocument(metadata) => {
                 Self::CommentedOnDocument(GraphqlCommentedOnDocumentMetadata(metadata))
+            }
+            NotifEvent::InitiativeDiscussion(metadata) => {
+                Self::InitiativeDiscussion(metadata.into())
             }
             NotifEvent::ChannelInvite(metadata) => {
                 Self::ChannelInvite(GraphqlChannelInviteMetadata(metadata))

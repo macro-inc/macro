@@ -32,6 +32,14 @@ const ENTITY_CASES: Array<
   [ActivityAction, { verb: string; connector?: string }]
 > = [
   [{ kind: 'created' }, { verb: 'created' }],
+  [
+    { kind: 'task-added', taskId: 'task' },
+    { verb: 'added a task', connector: 'to' },
+  ],
+  [
+    { kind: 'task-removed', taskId: 'task' },
+    { verb: 'removed a task', connector: 'from' },
+  ],
   [{ kind: 'messaged' }, { verb: 'sent a message', connector: 'in' }],
   [
     { kind: 'participant-added', participant: 'macro|sarah@example.com' },

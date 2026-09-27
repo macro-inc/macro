@@ -94,59 +94,64 @@ impl crate::domain::ports::SessionViewAccess for GrantingViewAccess {
 }
 
 #[tokio::test]
-async fn previews_resolve_document_and_link_access_through_the_view_port() {
-    let fx = fixture();
-    let mut document_session = test_agent_session(AgentSessionId::new());
-    document_session.thread_parent =
-        Some(messages::domain::models::MessageParent::parse("document", "doc-1").unwrap());
-    let mut channel_session = test_agent_session(AgentSessionId::new());
-    channel_session.thread_parent = Some(messages::domain::models::MessageParent::Channel(
-        Uuid::from_u128(9),
-    ));
-    fx.repo.insert_session(document_session.clone());
-    fx.repo.insert_session(channel_session.clone());
-    let collaborator =
-        macro_user_id::user_id::MacroUserIdStr::try_from_email("collaborator@example.com").unwrap();
-    let ids = vec![document_session.id, channel_session.id, fx.session];
+async fn previews_resolve_discussion_and_link_access_through_the_view_port() {
+    for parent in [
+        messages::domain::models::MessageParent::parse("document", "doc-1").unwrap(),
+        messages::domain::models::MessageParent::Initiative(Uuid::from_u128(902)),
+    ] {
+        let fx = fixture();
+        let mut discussion_session = test_agent_session(AgentSessionId::new());
+        discussion_session.thread_parent = Some(parent);
+        let mut channel_session = test_agent_session(AgentSessionId::new());
+        channel_session.thread_parent = Some(messages::domain::models::MessageParent::Channel(
+            Uuid::from_u128(9),
+        ));
+        fx.repo.insert_session(discussion_session.clone());
+        fx.repo.insert_session(channel_session.clone());
+        let collaborator =
+            macro_user_id::user_id::MacroUserIdStr::try_from_email("collaborator@example.com")
+                .unwrap();
+        let ids = vec![discussion_session.id, channel_session.id, fx.session];
 
-    // Without a view port, only materialized grants count.
-    let mut previews = fx
-        .service
-        .preview_sessions(&collaborator, ids.clone())
-        .await
-        .unwrap();
-    previews.sort_by_key(|preview| preview.id().as_uuid());
-    assert!(
-        previews
-            .iter()
-            .all(|preview| matches!(preview, AgentSessionPreview::NoAccess(_)))
-    );
-
-    // The view port can resolve document inheritance or link sharing.
-    let service = fx
-        .service
-        .clone()
-        .with_view_access(Arc::new(GrantingViewAccess(document_session.id)));
-    let previews = service.preview_sessions(&collaborator, ids).await.unwrap();
-    let access: Vec<_> = previews
-        .iter()
-        .filter_map(|preview| match preview {
-            AgentSessionPreview::Access(data) => Some(data.id),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(access, vec![document_session.id]);
-    let channel_service = fx
-        .service
-        .clone()
-        .with_view_access(Arc::new(GrantingViewAccess(channel_session.id)));
-    assert!(matches!(
-        channel_service
-            .preview_sessions(&collaborator, vec![channel_session.id])
+        // Without a view port, only materialized grants count.
+        let mut previews = fx
+            .service
+            .preview_sessions(&collaborator, ids.clone())
             .await
-            .unwrap().as_slice(),
-        [AgentSessionPreview::Access(data)] if data.id == channel_session.id
-    ));
+            .unwrap();
+        previews.sort_by_key(|preview| preview.id().as_uuid());
+        assert!(
+            previews
+                .iter()
+                .all(|preview| matches!(preview, AgentSessionPreview::NoAccess(_)))
+        );
+
+        // The view port can resolve discussion inheritance or link sharing.
+        let service = fx
+            .service
+            .clone()
+            .with_view_access(Arc::new(GrantingViewAccess(discussion_session.id)));
+        let previews = service.preview_sessions(&collaborator, ids).await.unwrap();
+        let access: Vec<_> = previews
+            .iter()
+            .filter_map(|preview| match preview {
+                AgentSessionPreview::Access(data) => Some(data.id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(access, vec![discussion_session.id]);
+        let channel_service = fx
+            .service
+            .clone()
+            .with_view_access(Arc::new(GrantingViewAccess(channel_session.id)));
+        assert!(matches!(
+            channel_service
+                .preview_sessions(&collaborator, vec![channel_session.id])
+                .await
+                .unwrap().as_slice(),
+            [AgentSessionPreview::Access(data)] if data.id == channel_session.id
+        ));
+    }
 }
 
 #[tokio::test]

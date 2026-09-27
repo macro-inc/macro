@@ -4,15 +4,16 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::{AdapterError, map_sqlx};
+use crate::domain::events::{AssignedTasks, TaskMembershipChange};
 use crate::domain::models::{AssignTaskStatus, AssignTasksResult, InitiativeError, InitiativeId};
 
 pub(super) async fn assign_tasks(
     pool: &PgPool,
     id: InitiativeId,
     task_ids: Vec<String>,
-) -> Result<Vec<AssignTasksResult>, InitiativeError> {
+) -> Result<AssignedTasks, InitiativeError> {
     if task_ids.is_empty() {
-        return Ok(Vec::new());
+        return Ok(AssignedTasks::default());
     }
 
     let mut tx = pool
@@ -96,20 +97,32 @@ pub(super) async fn assign_tasks(
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
 
-    Ok(task_ids
+    let changes = task_ids
+        .iter()
+        .filter(|task_id| {
+            returned.contains(*task_id) && prior.get(*task_id) != Some(&initiative_id)
+        })
+        .map(|task_id| TaskMembershipChange {
+            task_id: task_id.clone(),
+            from: prior.get(task_id).copied().map(InitiativeId::from_uuid),
+            to: Some(id),
+        })
+        .collect();
+    let results = task_ids
         .into_iter()
         .map(|task_id| AssignTasksResult {
             status: assign_status_for(&task_id, &prior, &returned, initiative_id),
             task_id,
         })
-        .collect())
+        .collect();
+    Ok(AssignedTasks { results, changes })
 }
 
 pub(super) async fn unassign_task(
     pool: &PgPool,
     id: InitiativeId,
     task_id: &str,
-) -> Result<(), InitiativeError> {
+) -> Result<Option<TaskMembershipChange>, InitiativeError> {
     let mut tx = pool
         .begin()
         .await
@@ -151,11 +164,18 @@ pub(super) async fn unassign_task(
         .await
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
-    Ok(())
+    Ok(Some(TaskMembershipChange {
+        task_id: task_id.to_string(),
+        from: Some(id),
+        to: None,
+    }))
 }
 
-pub(super) async fn clear_task(pool: &PgPool, task_id: &str) -> Result<(), InitiativeError> {
-    sqlx::query_scalar!(
+pub(super) async fn clear_task(
+    pool: &PgPool,
+    task_id: &str,
+) -> Result<Option<TaskMembershipChange>, InitiativeError> {
+    let removed = sqlx::query_scalar!(
         r#"
         WITH removed AS (
             DELETE FROM task_initiative
@@ -173,7 +193,11 @@ pub(super) async fn clear_task(pool: &PgPool, task_id: &str) -> Result<(), Initi
     .await
     .map_err(AdapterError::Sqlx)
     .map_err(map_sqlx)?;
-    Ok(())
+    Ok(removed.map(|id| TaskMembershipChange {
+        task_id: task_id.to_string(),
+        from: Some(InitiativeId::from_uuid(id)),
+        to: None,
+    }))
 }
 
 async fn lock_initiative(

@@ -84,6 +84,6 @@ async fn task_side_clear_is_idempotent_and_preserves_the_task(pool: PgPool) -> a
     assert!(detail.updated_at > created.updated_at);
     // Reassignment also proves that clearing preserved the task document/subtype.
     let assigned = repo.assign_tasks(created.id, vec![task_id]).await?;
-    assert_eq!(assigned[0].status, AssignTaskStatus::Assigned);
+    assert_eq!(assigned.results[0].status, AssignTaskStatus::Assigned);
     Ok(())
 }
