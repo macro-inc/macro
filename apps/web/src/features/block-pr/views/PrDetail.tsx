@@ -1,4 +1,8 @@
 import { ViewShell } from '@app/components/view-shell';
+import {
+  AgentChangesSplit,
+  ChangesToggle,
+} from '@app/features/agent-changes/agent-changes';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitPanel } from '@components/app/split-panel';
@@ -12,6 +16,7 @@ import { DebouncedNotificationReadMarker } from '@notifications';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { Button, cn, Layer, Scroll } from '@ui';
 import { type Accessor, createMemo, Show, Suspense } from 'solid-js';
+import { PrChangesProvider } from '../component/PrChanges';
 import {
   PrDescriptionSkeleton,
   PrMetadataSkeleton,
@@ -116,7 +121,10 @@ export function PrDetailBody(props: PrDetailBodyProps) {
   );
 }
 
-/** Native hosts own their header and place this content below it. */
+/**
+ * Native hosts own their header and place this content below it, both inside
+ * `PrChangesProvider`.
+ */
 export function PrDetailContent(props: PrDetailBodyProps) {
   return (
     <div class="relative min-h-0 min-w-0 flex-1">
@@ -132,13 +140,15 @@ export function PrDetailContent(props: PrDetailBodyProps) {
         <SidePanel.Layout headerToggle={false}>
           <PrSidePanelSections enrichment={props.data?.pullRequest} />
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <PrDetailBody
-              foreignEntityId={props.foreignEntityId}
-              data={props.data}
-              status={props.status}
-              onRetry={props.onRetry}
-              discussionSource={props.discussionSource}
-            />
+            <AgentChangesSplit>
+              <PrDetailBody
+                foreignEntityId={props.foreignEntityId}
+                data={props.data}
+                status={props.status}
+                onRetry={props.onRetry}
+                discussionSource={props.discussionSource}
+              />
+            </AgentChangesSplit>
           </div>
         </SidePanel.Layout>
       </Suspense>
@@ -149,6 +159,7 @@ export function PrDetailContent(props: PrDetailBodyProps) {
 export function PrDetailActions(props: { url?: string }) {
   return (
     <div class="ml-auto flex shrink-0 items-center gap-2">
+      <ChangesToggle />
       <Show when={props.url}>
         {(url) => (
           <Button
@@ -180,23 +191,28 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
   };
   return (
     <SidePanel.Root persistKey={`pr:${props.foreignEntityId}`}>
-      <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-        <ViewShell.TopBar class="touch:flex">
-          <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-          <Show when={detail.data()?.pullRequest.status}>
-            {(status) => <PrStatusIcon status={status()} />}
-          </Show>
-          <span class="min-w-0 truncate text-sm font-semibold">{name()}</span>
-          <PrDetailActions url={githubUrl()} />
-        </ViewShell.TopBar>
-        <PrDetailContent
-          foreignEntityId={props.foreignEntityId}
-          data={detail.data()}
-          status={detail.query.status}
-          discussionSource={detail.discussionSource}
-          onRetry={() => void detail.query.refetch()}
-        />
-      </div>
+      <PrChangesProvider
+        foreignEntityId={props.foreignEntityId}
+        pullRequestUrl={githubUrl()}
+      >
+        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+          <ViewShell.TopBar class="touch:flex">
+            <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+            <Show when={detail.data()?.pullRequest.status}>
+              {(status) => <PrStatusIcon status={status()} />}
+            </Show>
+            <span class="min-w-0 truncate text-sm font-semibold">{name()}</span>
+            <PrDetailActions url={githubUrl()} />
+          </ViewShell.TopBar>
+          <PrDetailContent
+            foreignEntityId={props.foreignEntityId}
+            data={detail.data()}
+            status={detail.query.status}
+            discussionSource={detail.discussionSource}
+            onRetry={() => void detail.query.refetch()}
+          />
+        </div>
+      </PrChangesProvider>
     </SidePanel.Root>
   );
 }

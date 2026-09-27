@@ -46,6 +46,18 @@ export const documentGithubPullRequestsKeys = createQueryKeys(
   }
 );
 
+export const githubPullRequestChangesKeys = createQueryKeys(
+  'githubPullRequestChanges',
+  {
+    summary: (foreignEntityId: string) => ({
+      queryKey: [foreignEntityId],
+    }),
+    patch: (foreignEntityId: string, changesetId: string) => ({
+      queryKey: [foreignEntityId, changesetId],
+    }),
+  }
+);
+
 export const pullRequestMentionKeys = createQueryKeys('pullRequestMention', {
   foreignEntity: (id: string) => ({
     queryKey: [id],

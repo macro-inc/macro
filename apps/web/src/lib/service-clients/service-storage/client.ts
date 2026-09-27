@@ -120,6 +120,8 @@ import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendin
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
 import type { GetSystemSkillsHandler200 } from './generated/schemas/getSystemSkillsHandler200';
+import type { GithubPullRequestChangesPatchResponse } from './generated/schemas/githubPullRequestChangesPatchResponse';
+import type { GithubPullRequestChangesResponse } from './generated/schemas/githubPullRequestChangesResponse';
 import type { GithubPullRequestFacets } from './generated/schemas/githubPullRequestFacets';
 import type { GithubPullRequestsResponse } from './generated/schemas/githubPullRequestsResponse';
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
@@ -1674,6 +1676,45 @@ export const storageServiceClient = {
   > {
     return await dssFetch<StoredGithubPullRequest>(
       `/github_pull_requests/${id}`,
+      { method: 'GET' }
+    );
+  },
+
+  /**
+   * The changes of that pull request at its current base and head, or why
+   * GitHub could not provide them.
+   */
+  async getGithubPullRequestChanges({
+    id,
+  }: {
+    id: string;
+  }): Promise<
+    Result<
+      GithubPullRequestChangesResponse,
+      ResultError<FetchWithTokenErrorCode>[]
+    >
+  > {
+    return await dssFetch<GithubPullRequestChangesResponse>(
+      `/github_pull_requests/${id}/changes`,
+      { method: 'GET' }
+    );
+  },
+
+  /** The patch of one changeset of that pull request. */
+  async getGithubPullRequestChangesPatch({
+    id,
+    changeset,
+  }: {
+    id: string;
+    changeset: string;
+  }): Promise<
+    Result<
+      GithubPullRequestChangesPatchResponse,
+      ResultError<FetchWithTokenErrorCode>[]
+    >
+  > {
+    return await dssFetch<GithubPullRequestChangesPatchResponse>(
+      `/github_pull_requests/${id}/changes/patch?changeset=${encodeURIComponent(changeset)}`,
       { method: 'GET' }
     );
   },

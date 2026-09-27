@@ -644,7 +644,8 @@ Existing announcement chips remain locked to the turn they announced.
 
 Sessions with a linked GitHub pull request capture that PR's diff when each
 turn ends, regardless of the coding runtime. Unpushed workspace changes and
-branches without a PR are not included. The session header gains a **Changes**
+branches without a PR are not included. The capture is the same stored diff the
+PR's Changes pane in Reviews shows for that base and head. The session header gains a **Changes**
 toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it opens a resizable
 **Changes** pane beside the transcript (drag the 1px divider between them).
 Chat sessions on Macro's in-memory harness have no repository, so they show

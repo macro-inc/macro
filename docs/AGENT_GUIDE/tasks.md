@@ -68,12 +68,23 @@ Its breadcrumb returns to the Reviews list. Old `/app/pr/<id>` links redirect
 to the Reviews detail. When the flag is off, the Reviews shortcut is hidden,
 but copied PR detail links still work.
 
+The PR header has a **Changes** toggle (`aria-pressed`) with the diff's `+N −M`
+at the PR's current base and head. It opens the same resizable Changes pane as
+an agent session (see "Reviewing a linked GitHub pull request" in
+[AI chat](ai-chat.md)) beside the PR, read-only: there is no review-note gutter,
+notes chip, or hand-off card. The URL's `diff` parameter stores the pane under
+`pr:<foreignEntityId>`. The first view of a base and head reads GitHub; later
+views, and agent sessions linked to the same PR, reuse the stored diff. An
+unavailable or oversized PR is explained in the pane.
+
 Check all five tab URLs, the Labels section, author avatars and display names, row selection and
 context menu, favorites add/remove and collapse/empty visibility, filters, sort,
 illustrated empty states, loading, errors, and pagination after filtering. Use
 Open in new split from a PR row's context menu; verify the Reviews list stays in
 the original split and the PR appears beside it. Open a favorite from the global
 sidebar, return through the breadcrumb, and open a copied link in a second split.
+Open a PR's Changes pane; check the file tree, a file's diff, **Unified / Split**,
+refresh, and that reloading with the `diff` parameter restores the pane.
 Use existing PRs and do not modify hosted data.
 
 ## Create a task

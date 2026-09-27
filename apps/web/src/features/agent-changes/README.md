@@ -15,9 +15,10 @@ a chat-only (in-memory) session shows no GitHub chrome. Clipboard, external
 navigation, and notifications are host callbacks.
 
 The source owns fetching, cache identity, and conversion into the feature's core
-changeset types. A PR entity adapter should resolve its GitHub owner/repository/PR
-number and implement this same contract using shared queries. It does not need to
-construct an agent session. That adapter and its backend endpoint are not yet wired.
+changeset types. The PR page's adapter is `block-pr/data/pr-changes.ts`, over
+`GET /github_pull_requests/{id}/changes` and `/changes/patch` in the storage
+service; `block-pr/component/PrChanges.tsx` mounts it read-only under
+`pr:<foreign-entity-id>` without an agent session.
 
 Layout and diff style are controlled accessor/setter pairs. Hosts using the app
 router can use `url-diff-state.ts`; embedded viewers can provide local signals.
