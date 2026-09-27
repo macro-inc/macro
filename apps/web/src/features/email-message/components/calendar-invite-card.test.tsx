@@ -126,7 +126,7 @@ describe('native invitation card', () => {
   });
   it('expands guest identities and descriptions explicitly', () => {
     render(() => <CalendarInviteCard invitation={invitationFixture} />);
-    fireEvent.click(screen.getByRole('button', { name: '+3 guests' }));
+    fireEvent.click(screen.getByRole('button', { name: '+3 more' }));
     expect(screen.getByText(/Riley, Morgan, Taylor/)).toBeTruthy();
     const more = screen.getByRole('button', { name: 'Show more' });
     expect(more.getAttribute('aria-expanded')).toBe('false');

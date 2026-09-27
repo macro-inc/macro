@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   groupCalendarInvitations,
+  invitationDisplayTitle,
   invitationSchedule,
   safeInvitationUrl,
 } from './calendar-invitation';
@@ -59,5 +60,17 @@ describe('saved invitation presentation', () => {
       '/relative',
     ])
       expect(safeInvitationUrl(url)).toBeUndefined();
+  });
+  it('drops scheduling prefixes that restate the card status', () => {
+    for (const [title, responder, expected] of [
+      ['Accepted: Product review', undefined, 'Product review'],
+      ['Canceled event: Launch check-in', undefined, 'Launch check-in'],
+      ['Cancelled: Launch check-in', undefined, 'Launch check-in'],
+      ['Proposed time: Planning', undefined, 'Planning'],
+      ['Sam accepted Product review', 'Sam', 'Product review'],
+      ['Invitation strategy sync', undefined, 'Invitation strategy sync'],
+      ['Product review', 'Sam', 'Product review'],
+    ] as const)
+      expect(invitationDisplayTitle(title, responder)).toBe(expected);
   });
 });

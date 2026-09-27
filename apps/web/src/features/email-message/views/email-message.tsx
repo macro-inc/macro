@@ -6,6 +6,7 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 import { EmailMessageBody } from '@app/features/email-message/views/email-message-body';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { VideoPreview } from '@core/component/VideoPreview';
+import CaretRight from '@phosphor/caret-right.svg';
 import type { JSX } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { CalendarInviteCard } from '../components/calendar-invite-card';
@@ -36,6 +37,11 @@ export interface EmailMessageViewProps {
   onOpenAttachment?: (attachment: EmailAttachment) => void;
   children?: JSX.Element;
 }
+
+const DISCLOSURE_SUMMARY =
+  'flex min-h-10 list-none items-center gap-1.5 text-sm text-ink-muted [&::-webkit-details-marker]:hidden';
+const DISCLOSURE_CARET =
+  'size-3.5 shrink-0 text-ink-subtle transition-transform group-open:rotate-90 motion-reduce:transition-none';
 
 export function EmailMessageView(props: EmailMessageViewProps) {
   const [expandedHeader, setExpandedHeader] = createSignal(false);
@@ -155,9 +161,13 @@ export function EmailMessageView(props: EmailMessageViewProps) {
               <div>
                 {renderInvitation(group.primary)}
                 <Show when={group.related.length > 0}>
-                  <details class="mb-3">
-                    <summary class="min-h-11 py-3 text-sm text-accent">
-                      View {group.related.length} related occurrences or updates
+                  <details class="group border-t border-edge-muted">
+                    <summary class={DISCLOSURE_SUMMARY}>
+                      <CaretRight class={DISCLOSURE_CARET} />
+                      View {group.related.length} related{' '}
+                      {group.related.length === 1
+                        ? 'occurrence'
+                        : 'occurrences'}
                     </summary>
                     <For each={group.related}>{renderInvitation}</For>
                   </details>
@@ -166,9 +176,10 @@ export function EmailMessageView(props: EmailMessageViewProps) {
             )}
           </For>
           <Show when={invitationGroups().length > 0} fallback={body()}>
-            {/* Conservative policy: keep notes and uncertain provider bodies visible initially. */}
-            <details open>
-              <summary class="min-h-11 py-3 text-sm text-accent">
+            {/* The card replaces the body; the original stays one click away. */}
+            <details class="group mb-3 border-t border-edge-muted">
+              <summary class={DISCLOSURE_SUMMARY}>
+                <CaretRight class={DISCLOSURE_CARET} />
                 View original email
               </summary>
               {body()}

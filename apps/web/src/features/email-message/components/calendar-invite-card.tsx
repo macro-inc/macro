@@ -1,16 +1,53 @@
-import ArrowUpRight from '@phosphor/arrow-up-right.svg';
+import CalendarBlank from '@phosphor/calendar-blank.svg';
 import Check from '@phosphor/check.svg';
+import Clock from '@phosphor/clock.svg';
+import Info from '@phosphor/info.svg';
+import MapPin from '@phosphor/map-pin.svg';
+import PauseCircle from '@phosphor/pause-circle.svg';
+import Users from '@phosphor/users.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
-import { Avatar, AvatarGroup, Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import X from '@phosphor/x.svg';
+import { Button } from '@ui';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import {
   type CalendarInvitation,
   type CalendarInvitationActions,
   displayedInvitation,
+  type InvitationParticipant,
+  invitationDisplayTitle,
   invitationIsCancelled,
   invitationSchedule,
   safeInvitationUrl,
 } from '../core/calendar-invitation';
+
+const RESPONSES = [
+  { value: 'accepted', label: 'Yes' },
+  { value: 'tentative', label: 'Maybe' },
+  { value: 'declined', label: 'No' },
+] as const;
+
+const EYEBROW_TONE = {
+  neutral: 'text-ink-subtle',
+  accent: 'text-accent',
+  failure: 'text-failure-ink',
+} as const;
+
+function participantName(participant: InvitationParticipant) {
+  return participant.name || participant.email;
+}
+
+function MetaRow(props: { icon: JSX.Element; children: JSX.Element }) {
+  return (
+    <li class="flex min-w-0 items-start gap-3">
+      <span class="mt-0.5 flex shrink-0 text-ink-subtle [&>svg]:size-4">
+        {props.icon}
+      </span>
+      <div class="min-w-0 break-words [overflow-wrap:anywhere]">
+        {props.children}
+      </div>
+    </li>
+  );
+}
 
 /** Native host UI: no provider fetches, parser, grid, or HTML injection. */
 export function CalendarInviteCard(props: {
@@ -43,20 +80,35 @@ export function CalendarInviteCard(props: {
         }).resolvedOptions().hour12 !== false,
       props.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
     );
-  const status = () =>
-    cancelled()
-      ? 'Cancelled'
-      : props.invitation.method === 'reply'
-        ? 'Response notification'
-        : props.invitation.method === 'counter'
-          ? 'New time proposed'
-          : resolved()?.isStale
-            ? 'Calendar is catching up with this invitation'
-            : resolved()?.isNewer
-              ? 'Updated in your calendar'
-              : props.invitation.sequence > 0
-                ? 'Updated invitation'
-                : 'Invitation';
+  const organizer = () => {
+    const value = invite().organizer;
+    return value ? participantName(value) : undefined;
+  };
+  const eyebrow = (): {
+    text: string;
+    suffix?: string;
+    tone: keyof typeof EYEBROW_TONE;
+  } => {
+    if (cancelled())
+      return {
+        text: 'Cancelled',
+        suffix: organizer() && `by ${organizer()}`,
+        tone: 'failure',
+      };
+    if (resolved()?.isNewer)
+      return { text: 'Updated in your calendar', tone: 'accent' };
+    if (props.invitation.sequence > 0)
+      return {
+        text: 'Updated invitation',
+        suffix: organizer() && `from ${organizer()}`,
+        tone: 'accent',
+      };
+    return {
+      text: 'Invitation',
+      suffix: organizer() && `from ${organizer()}`,
+      tone: 'neutral',
+    };
+  };
   const conference = () =>
     !cancelled() && !notification() && resolved()?.canJoin
       ? safeInvitationUrl(invite().conference_url)
@@ -68,16 +120,10 @@ export function CalendarInviteCard(props: {
     !resolved()?.isStale &&
     resolved()?.canRespond &&
     props.actions?.respond;
-  const responseSummary = () =>
-    props.invitation.attendees
-      .map(
-        (a) =>
-          `${a.name || a.email} ${a.participation_status === 'ACCEPTED' ? 'accepted' : a.participation_status === 'DECLINED' ? 'declined' : a.participation_status === 'TENTATIVE' ? 'responded maybe' : 'replied'}`
-      )
-      .join(', ');
   const fallbackStatus = () => {
     const kind = props.actions?.resolution?.kind;
-    if (kind === 'disconnected') return 'Connect your calendar to respond.';
+    if (kind === 'disconnected')
+      return 'Connect a calendar to respond from Macro.';
     if (kind === 'ambiguous')
       return 'This invitation matches multiple accounts. Open your calendar to choose.';
     if (kind === 'still_syncing' || kind === 'loading')
@@ -86,254 +132,317 @@ export function CalendarInviteCard(props: {
       return 'Calendar unavailable. Saved invitation details are shown.';
     if (kind === 'resolved')
       return resolved()?.isStale
-        ? 'Actions will be available when calendar sync catches up.'
+        ? 'Waiting for your calendar to catch up. Responses are paused until it does.'
         : 'Your connected calendar does not allow a response to this event.';
     return 'Saved invitation. Open the original email or invitation attachment for more options.';
   };
+  const lastResponse = () => {
+    const response = resolved()?.response;
+    return RESPONSES.find((option) => option.value === response)?.label;
+  };
+  const visibleAttendees = () =>
+    attendeesExpanded() ? invite().attendees : invite().attendees.slice(0, 3);
+  // Duration and organizer zone repeat the range; keep all-day and zone warnings.
+  const scheduleNote = () =>
+    invite().start?.kind === 'zoned' ? undefined : schedule().secondary;
+  const title = () => invitationDisplayTitle(invite().title);
+  const scheduleIcon = () =>
+    invite().start?.kind === 'date' ? <CalendarBlank /> : <Clock />;
+
   return (
-    <section
-      aria-label={`Calendar invitation: ${invite().title || 'Untitled event'}`}
-      class="my-3 min-w-0 overflow-hidden rounded-xl border border-edge-muted bg-panel text-sm text-ink"
+    <Show
+      when={!notification()}
+      fallback={
+        <SchedulingNotification
+          invitation={props.invitation}
+          when={schedule().when}
+          actions={props.actions}
+        />
+      }
     >
-      <div class="flex items-start gap-4 p-4 sm:p-5">
-        <div
-          aria-hidden="true"
-          class="flex w-14 shrink-0 flex-col items-center rounded-lg bg-accent/10 py-2 text-accent"
-        >
-          <span class="text-xs font-medium uppercase">{schedule().month}</span>
-          <span class="text-2xl font-semibold leading-tight">
-            {schedule().day}
-          </span>
-        </div>
-        <div class="min-w-0 flex-1">
-          <div class="text-xs text-ink-muted">{status()}</div>
-          <h3 class="mt-1 break-words text-lg font-semibold [overflow-wrap:anywhere]">
-            {invite().title || 'Calendar notification'}
-          </h3>
-          <Show when={invite().organizer}>
-            {(organizer) => (
-              <p class="mt-1 break-words text-ink-muted [overflow-wrap:anywhere]">
-                Organized by {organizer().name || organizer().email}
-              </p>
-            )}
-          </Show>
-        </div>
-      </div>
-      <Show
-        when={
-          cancelled() ||
-          notification() ||
-          resolved()?.isStale ||
-          resolved()?.isNewer
-        }
+      <section
+        aria-label={`Calendar invitation: ${title() || 'Untitled event'}`}
+        class="my-3 flex min-w-0 flex-col gap-4 rounded-xl border border-edge bg-surface-2 p-5 text-sm text-ink"
       >
-        <p class="mx-4 mb-4 rounded-md bg-active px-3 py-2 text-ink-muted sm:mx-5">
-          {props.invitation.method === 'reply' ? responseSummary() : status()}
-          {props.invitation.comment ? ` · ${props.invitation.comment}` : ''}
-        </p>
-      </Show>
-      <Show when={props.actions?.notice}>
-        <div class="mx-4 mb-3 text-xs text-ink-muted" role="status">
-          {props.actions?.notice}
-          <Show when={props.actions?.retryCalendar}>
-            <Button
-              variant="ghost"
-              class="min-h-11 text-accent"
-              onClick={() => props.actions?.retryCalendar?.()}
-            >
-              Retry calendar
-            </Button>
-          </Show>
-        </div>
-      </Show>
-      <dl class="grid min-w-0 gap-x-5 gap-y-4 px-4 pb-5 sm:grid-cols-[3rem_minmax(0,1fr)] sm:px-5">
-        <dt class="text-ink-muted">When</dt>
-        <dd class="min-w-0 break-words [overflow-wrap:anywhere]">
-          <p>{schedule().when}</p>
-          <Show when={schedule().secondary}>
-            <p class="mt-1 text-xs text-ink-muted">{schedule().secondary}</p>
-          </Show>
-          <Show when={props.actions?.showDay && !cancelled()}>
-            <Button
-              variant="ghost"
-              class="mt-1 min-h-11 text-accent"
-              aria-expanded={props.actions?.dayExpanded}
-              onClick={() => props.actions?.showDay?.()}
-            >
-              View your day
-            </Button>
-          </Show>
-        </dd>
-        <Show when={invite().location || conference()}>
-          <dt class="text-ink-muted">Where</dt>
-          <dd class="flex min-w-0 flex-wrap items-center gap-2">
-            <span class="min-w-0 break-words [overflow-wrap:anywhere]">
-              {invite().location || 'Online meeting'}
-            </span>
-            <Show when={conference() && props.actions?.openExternal}>
-              <Button
-                variant="ghost"
-                class="min-h-11 shrink-0 gap-2 text-accent"
-                onClick={() => props.actions?.openExternal?.(conference()!)}
-              >
-                <VideoCamera class="size-4" />
-                Join meeting
-                <ArrowUpRight class="size-4" />
-              </Button>
-            </Show>
-          </dd>
-        </Show>
-        <Show when={invite().attendees.length}>
-          <dt class="text-ink-muted">Who</dt>
-          <dd class="min-w-0 break-words [overflow-wrap:anywhere]">
-            <AvatarGroup
-              class="mr-2 inline-flex align-middle"
-              aria-hidden="true"
-            >
-              <For each={invite().attendees.slice(0, 3)}>
-                {(attendee) => (
-                  <Avatar size="sm">
-                    <Avatar.Fallback>
-                      {(attendee.name || attendee.email)
-                        .slice(0, 1)
-                        .toUpperCase()}
-                    </Avatar.Fallback>
-                  </Avatar>
-                )}
-              </For>
-            </AvatarGroup>
-            <span>
-              {(attendeesExpanded()
-                ? invite().attendees
-                : invite().attendees.slice(0, 3)
-              )
-                .map((a) => a.name || a.email)
-                .join(', ')}
-            </span>
-            <Show when={invite().attendees.length > 3}>
-              <Button
-                variant="ghost"
-                class="min-h-11 text-accent"
-                aria-expanded={attendeesExpanded()}
-                onClick={() => setAttendeesExpanded((v) => !v)}
-              >
-                {attendeesExpanded()
-                  ? 'Show fewer guests'
-                  : `+${invite().attendees.length - 3} guests`}
-              </Button>
-            </Show>
-          </dd>
-        </Show>
-      </dl>
-      <Show when={invite().description}>
-        <div class="px-4 pb-5 sm:px-5">
-          <p
-            class="whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
-            classList={{ 'line-clamp-3': !descriptionExpanded() }}
-          >
-            {invite().description}
+        <header class="flex min-w-0 flex-col gap-1.5">
+          <p class={`text-xs font-medium ${EYEBROW_TONE[eyebrow().tone]}`}>
+            <span>{eyebrow().text}</span>
+            <Show when={eyebrow().suffix}> {eyebrow().suffix}</Show>
           </p>
-          <Show when={invite().description}>
+          <h3 class="break-words text-base font-semibold leading-snug [overflow-wrap:anywhere]">
+            {title() || 'Calendar notification'}
+          </h3>
+        </header>
+        <Show when={props.actions?.notice}>
+          <p
+            class="flex flex-wrap items-center gap-x-2 text-xs text-ink-muted"
+            role="status"
+          >
+            {props.actions?.notice}
+            <Show when={props.actions?.retryCalendar}>
+              <Button
+                variant="plain"
+                class="h-auto p-0 text-xs font-medium text-accent"
+                onClick={() => props.actions?.retryCalendar?.()}
+              >
+                Retry calendar
+              </Button>
+            </Show>
+          </p>
+        </Show>
+        <ul class="flex flex-col gap-2">
+          <MetaRow icon={scheduleIcon()}>
+            <p
+              classList={{
+                'text-ink-subtle line-through': cancelled(),
+              }}
+            >
+              {schedule().when}
+            </p>
+            <Show when={scheduleNote() && !cancelled()}>
+              <p class="mt-0.5 text-xs text-ink-muted">
+                {schedule().secondary}
+              </p>
+            </Show>
+          </MetaRow>
+          <Show when={!cancelled() && (invite().location || conference())}>
+            <MetaRow icon={conference() ? <VideoCamera /> : <MapPin />}>
+              {invite().location || 'Online meeting'}
+            </MetaRow>
+          </Show>
+          <Show when={!cancelled() && invite().attendees.length > 0}>
+            <MetaRow icon={<Users />}>
+              {visibleAttendees().map(participantName).join(', ')}
+              <Show when={invite().attendees.length > 3}>
+                {' '}
+                <Button
+                  variant="plain"
+                  class="h-auto p-0 align-baseline text-sm font-medium text-accent"
+                  aria-expanded={attendeesExpanded()}
+                  onClick={() => setAttendeesExpanded((value) => !value)}
+                >
+                  {attendeesExpanded()
+                    ? 'Show fewer'
+                    : `+${invite().attendees.length - 3} more`}
+                </Button>
+              </Show>
+            </MetaRow>
+          </Show>
+        </ul>
+        <Show when={!cancelled() && invite().description}>
+          <div class="flex flex-col items-start gap-1.5">
+            <p
+              class="whitespace-pre-wrap break-words text-ink-muted [overflow-wrap:anywhere]"
+              classList={{ 'line-clamp-2': !descriptionExpanded() }}
+            >
+              {invite().description}
+            </p>
             <Button
-              variant="ghost"
-              class="min-h-11 text-accent"
+              variant="plain"
+              class="h-auto p-0 text-xs font-medium text-accent"
               aria-expanded={descriptionExpanded()}
-              onClick={() => setDescriptionExpanded((v) => !v)}
+              onClick={() => setDescriptionExpanded((value) => !value)}
             >
               {descriptionExpanded() ? 'Show less' : 'Show more'}
             </Button>
-          </Show>
-        </div>
-      </Show>
-      <Show when={!cancelled() && !notification()}>
-        <div class="flex flex-wrap items-center gap-3 border-t border-edge-muted bg-active p-4 sm:px-5">
-          <Show
-            when={canRespond()}
-            fallback={
-              <p class="min-w-0 text-xs text-ink-muted">
-                {fallbackStatus()}
-                <Show
-                  when={
-                    resolved()?.response &&
-                    resolved()?.response !== 'needs_action'
-                  }
-                >
-                  <span class="mt-1 block">
-                    Last response:{' '}
-                    {resolved()?.response === 'accepted'
-                      ? 'Yes'
-                      : resolved()?.response === 'tentative'
-                        ? 'Maybe'
-                        : 'No'}
-                  </span>
-                </Show>
-              </p>
-            }
-          >
-            <p class="min-w-0 grow basis-full break-words text-xs text-ink-muted [overflow-wrap:anywhere] sm:basis-52">
-              Going as {resolved()?.respondingEmail}?
-            </p>
-            <div class="flex flex-wrap gap-2" aria-label="Your response">
-              <For
-                each={
-                  [
-                    { value: 'accepted', label: 'Yes' },
-                    { value: 'tentative', label: 'Maybe' },
-                    { value: 'declined', label: 'No' },
-                  ] as const
+          </div>
+        </Show>
+        <Show when={!cancelled()}>
+          <div class="flex flex-col gap-3 border-t border-edge pt-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <Show
+                when={canRespond()}
+                fallback={
+                  <div class="flex min-w-0 items-start gap-2 text-ink-muted">
+                    <Show
+                      when={resolved()?.isStale}
+                      fallback={
+                        <Info class="mt-0.5 size-4 shrink-0 text-ink-subtle" />
+                      }
+                    >
+                      <PauseCircle class="mt-0.5 size-4 shrink-0 text-ink-subtle" />
+                    </Show>
+                    <p class="min-w-0">
+                      {fallbackStatus()}
+                      <Show when={lastResponse()}>
+                        <span class="mt-1 block text-xs">
+                          Last response: {lastResponse()}
+                        </span>
+                      </Show>
+                    </p>
+                  </div>
                 }
               >
-                {(option) => (
+                <div
+                  role="group"
+                  aria-label="Your response"
+                  class="flex overflow-hidden rounded-lg border border-edge"
+                >
+                  <For each={RESPONSES}>
+                    {(option, index) => (
+                      <Button
+                        variant="plain"
+                        class={`h-10 gap-1 rounded-none px-3.5 text-sm text-ink aria-pressed:bg-accent-bg aria-pressed:font-semibold aria-pressed:text-accent ${index() > 0 ? 'border-l border-edge' : ''}`}
+                        aria-pressed={resolved()?.response === option.value}
+                        onClick={() => props.actions?.respond?.(option.value)}
+                      >
+                        <Show when={resolved()?.response === option.value}>
+                          <Check class="size-3.5" />
+                        </Show>
+                        {option.label}
+                      </Button>
+                    )}
+                  </For>
+                </div>
+              </Show>
+              <div class="flex items-center gap-2">
+                <Show
+                  when={
+                    props.actions?.resolution?.kind === 'disconnected' &&
+                    props.actions.connectCalendar
+                  }
+                >
                   <Button
-                    variant="ghost"
-                    class="min-h-11 min-w-14 gap-1 rounded-lg bg-ink/5 px-3 aria-pressed:bg-accent/15 aria-pressed:text-accent"
-                    aria-pressed={resolved()?.response === option.value}
-                    onClick={() => props.actions?.respond?.(option.value)}
+                    variant="plain"
+                    class="h-10 rounded-lg border border-edge px-3.5 text-sm font-semibold text-ink"
+                    onClick={() => props.actions?.connectCalendar?.()}
                   >
-                    <Show when={resolved()?.response === option.value}>
-                      <Check class="size-4" />
-                    </Show>
-                    {option.label}
+                    Connect calendar
                   </Button>
-                )}
-              </For>
+                </Show>
+                <Show when={conference() && props.actions?.openExternal}>
+                  <Button
+                    variant="plain"
+                    class="h-10 gap-1.5 rounded-lg bg-accent px-3.5 text-sm font-semibold text-accent-contrast"
+                    aria-label="Join meeting"
+                    onClick={() => props.actions?.openExternal?.(conference()!)}
+                  >
+                    <VideoCamera class="size-4" />
+                    Join
+                  </Button>
+                </Show>
+                <Show when={props.actions?.openCalendar}>
+                  <Button
+                    variant="plain"
+                    class="size-10 rounded-lg border border-edge p-0 text-ink-muted"
+                    aria-label="Open in calendar"
+                    onClick={() => props.actions?.openCalendar?.()}
+                  >
+                    <CalendarBlank class="size-4" />
+                  </Button>
+                </Show>
+              </div>
             </div>
-          </Show>
-          <Show
-            when={
-              props.actions?.resolution?.kind === 'disconnected' &&
-              props.actions.connectCalendar
-            }
-          >
-            <Button
-              variant="ghost"
-              class="min-h-11 text-accent"
-              onClick={() => props.actions?.connectCalendar?.()}
+            <Show when={canRespond() || props.actions?.showDay}>
+              <p class="flex flex-wrap items-center gap-x-1 text-xs text-ink-subtle">
+                <Show when={canRespond()}>
+                  <span class="break-words [overflow-wrap:anywhere]">
+                    Responding as {resolved()?.respondingEmail}
+                  </span>
+                </Show>
+                <Show when={canRespond() && props.actions?.showDay}>
+                  <span aria-hidden="true">·</span>
+                </Show>
+                <Show when={props.actions?.showDay}>
+                  <Button
+                    variant="plain"
+                    class="h-auto p-0 text-xs font-medium text-accent"
+                    aria-expanded={props.actions?.dayExpanded}
+                    onClick={() => props.actions?.showDay?.()}
+                  >
+                    View your day
+                  </Button>
+                </Show>
+              </p>
+            </Show>
+            <p
+              role="status"
+              aria-live="polite"
+              class="text-xs text-ink-muted empty:hidden"
             >
-              Connect calendar
-            </Button>
-          </Show>
-          <div
-            role="status"
-            aria-live="polite"
-            class="w-full text-xs text-ink-muted"
-          >
-            {props.actions?.pending ? 'Saving response…' : props.actions?.error}
+              {props.actions?.pending
+                ? 'Saving response…'
+                : props.actions?.error}
+            </p>
           </div>
-        </div>
-      </Show>
-      <Show when={props.actions?.openCalendar}>
-        <div class="border-t border-edge-muted px-4 py-1">
+        </Show>
+      </section>
+    </Show>
+  );
+}
+
+/** Replies and counter-proposals: who responded and what they said, never RSVP or Join. */
+function SchedulingNotification(props: {
+  invitation: CalendarInvitation;
+  when: string;
+  actions?: CalendarInvitationActions;
+}) {
+  const counter = () => props.invitation.method === 'counter';
+  const title = (responder: string) =>
+    invitationDisplayTitle(props.invitation.title, responder) ?? 'this event';
+  // A counter-proposal names its proposer as the one attendee.
+  const responders = () =>
+    counter()
+      ? props.invitation.attendees.slice(0, 1)
+      : props.invitation.attendees;
+  const verb = (status?: string | null) => {
+    if (counter()) return 'proposed a new time for';
+    if (status === 'ACCEPTED') return 'accepted';
+    if (status === 'DECLINED') return 'declined';
+    if (status === 'TENTATIVE') return 'responded maybe to';
+    return 'replied to';
+  };
+  const badge = (status?: string | null) => {
+    if (counter())
+      return { class: 'bg-accent-bg text-accent', icon: <Clock /> };
+    if (status === 'ACCEPTED')
+      return { class: 'bg-success-bg text-success-ink', icon: <Check /> };
+    if (status === 'DECLINED')
+      return { class: 'bg-failure-bg text-failure-ink', icon: <X /> };
+    return { class: 'bg-active text-ink-muted', icon: <Clock /> };
+  };
+  const row = (name: string, status?: string | null) => (
+    <div class="flex min-w-0 items-center gap-2.5">
+      <span
+        aria-hidden="true"
+        class={`flex size-7 shrink-0 items-center justify-center rounded-full [&>svg]:size-3.5 ${badge(status).class}`}
+      >
+        {badge(status).icon}
+      </span>
+      <p class="min-w-0 break-words [overflow-wrap:anywhere]">
+        <span class="font-semibold">{name}</span> {verb(status)}{' '}
+        <span class="text-ink-subtle">{title(name)}</span>
+      </p>
+    </div>
+  );
+  return (
+    <section
+      aria-label={`Calendar invitation: ${invitationDisplayTitle(props.invitation.title) || 'Untitled event'}`}
+      class="my-3 flex min-w-0 flex-col gap-3 rounded-xl border border-edge bg-surface-2 p-5 text-sm text-ink"
+    >
+      <For each={responders()} fallback={row('A guest', undefined)}>
+        {(participant) =>
+          row(participantName(participant), participant.participation_status)
+        }
+      </For>
+      <div class="flex min-w-0 flex-col items-start gap-1 pl-9.5">
+        <p class="text-xs text-ink-subtle">{props.when}</p>
+        <Show when={props.invitation.comment}>
+          <p class="break-words text-ink-muted [overflow-wrap:anywhere]">
+            “{props.invitation.comment}”
+          </p>
+        </Show>
+        <Show when={props.actions?.showDay}>
           <Button
-            variant="ghost"
-            class="min-h-11 gap-2 text-accent"
-            onClick={() => props.actions?.openCalendar?.()}
+            variant="plain"
+            class="h-auto p-0 text-xs font-medium text-accent"
+            aria-expanded={props.actions?.dayExpanded}
+            onClick={() => props.actions?.showDay?.()}
           >
-            Open in calendar
-            <ArrowUpRight class="size-4" />
+            View your day
           </Button>
-        </div>
-      </Show>
+        </Show>
+      </div>
     </section>
   );
 }

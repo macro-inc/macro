@@ -97,6 +97,29 @@ export function groupCalendarInvitations(
   });
 }
 
+// Mail-subject prefixes some clients copy into SUMMARY; the card states them itself.
+const SCHEDULING_PREFIX =
+  /^(?:updated invitation(?: with note)?|invitation|accepted|declined|tentative(?:ly accepted)?|cancell?ed(?: event)?|new time proposed|proposed time)\s*:\s*/i;
+
+/** The event title without scheduling prefixes or a restated "{responder} accepted". */
+export function invitationDisplayTitle(
+  title: string | null | undefined,
+  responder?: string
+): string | undefined {
+  let value = title?.trim().replace(SCHEDULING_PREFIX, '');
+  if (value && responder) {
+    const name = responder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    value = value.replace(
+      new RegExp(
+        `^${name}\\s+(?:has\\s+)?(?:accepted|declined|tentatively accepted|proposed a new time for)\\s*:?\\s*`,
+        'i'
+      ),
+      ''
+    );
+  }
+  return value || undefined;
+}
+
 export function invitationIsCancelled(invite: CalendarInvitation): boolean {
   return (
     invite.method === 'cancel' || invite.status?.toUpperCase() === 'CANCELLED'
