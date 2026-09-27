@@ -617,8 +617,14 @@ where
         // Mentions are a fact about the prompt, not the turn: published as
         // soon as the prompt is accepted, whether it dispatches now or waits.
         if let Some(prompt) = prompt {
-            self.publish_mentions(session_id, action_id, actor.clone(), &prompt)
-                .await;
+            self.publish_mentions(
+                session_id,
+                action_id,
+                actor.clone(),
+                &prompt,
+                announce.as_ref().map(|origin| origin.message_id),
+            )
+            .await;
         }
 
         if steers {

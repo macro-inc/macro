@@ -28921,6 +28921,11 @@
                 "description": "Who wrote the prompt, absent when a bot acted on nobody's behalf."
               }
             ]
+          },
+          "origin_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The channel or document message the prompt was posted as, when it\narrived from a thread rather than the session view. That message\nalready notified the users it named when it was posted."
           }
         }
       },

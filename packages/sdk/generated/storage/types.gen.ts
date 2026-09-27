@@ -8564,6 +8564,12 @@ export type SessionMentionedMetadata = {
      */
     mentioned: Array<MacroUserIdStr>;
     mentioned_by?: null | MacroUserIdStr;
+    /**
+     * The channel or document message the prompt was posted as, when it
+     * arrived from a thread rather than the session view. That message
+     * already notified the users it named when it was posted.
+     */
+    origin_message_id?: string | null;
 };
 
 /**
