@@ -1270,10 +1270,7 @@ it is separate from the signature editor's close control.
 ### Notification snoozes
 
 Open **Settings → Notifications** to see **Snoozed items** and their local resume
-times. **Choose item…** searches for an entity and opens its snooze picker.
-Email threads appear alongside other entities; enter at least three characters
-to search email subjects beyond the loaded threads, or use **Load more** to browse.
-**Change time** opens the same searchable time picker used by entity
+times. **Change time** opens the same searchable time picker used by entity
 actions; **Resume** cancels a snooze immediately. Permanent mutes appear separately
 under **Muted items**, with **Snooze instead** to replace one with a timed pause.
 
@@ -1296,13 +1293,13 @@ the picker open for retry; a successful save appears in notification settings.
 If only some selected items save, the picker shows the saved count and retries
 only the remaining items. Closing it keeps any snoozes already saved.
 
-On phones, long-press opens the entity actions drawer. The snooze time and item
-pickers use the same responsive `Dialog` and `CommandMenuShell` as Cmd/Ctrl+K,
+On phones, long-press opens the entity actions drawer. The snooze time picker
+uses the same responsive `Dialog`, width, and `CommandMenuShell` as Cmd/Ctrl+K,
 with larger touch targets and tap instructions. Swipe the preset list when the
 viewport is short. In **More views → Settings → Notifications**, item names and
 deadlines sit above **Change time** and **Resume**. Saving or cancelling a picker
-returns to the settings sheet; choosing an item keeps that sheet open through
-the transition to its time picker.
+returns to the settings sheet. Start new snoozes from an entity's actions or
+Cmd/Ctrl+K; Settings manages existing snoozes and mutes.
 
 Design references: [Slack notification pause/resume](https://slack.com/help/articles/214908388-Pause-your-Slack-notifications)
 and [Superhuman's keyboard-driven Remind Me picker](https://new.superhuman.com/remind-me-29124).

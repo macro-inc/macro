@@ -30,12 +30,7 @@ export function SnoozePicker(
     onSelect: select,
   });
   return (
-    <Dialog
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-      class="w-120 max-w-[calc(100vw-24px)]"
-      visibleScrim
-    >
+    <Dialog open={props.open} onOpenChange={props.onOpenChange} visibleScrim>
       <CommandMenuShell>
         <CommandMenuShell.Header>
           <CommandMenuSearchInput

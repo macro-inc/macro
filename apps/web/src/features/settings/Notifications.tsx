@@ -6,7 +6,6 @@ import {
   NOTIFICATION_EVENT_GROUPS,
 } from '@notifications/notification-event-catalog';
 import { useNotificationSettings } from '@notifications/notification-settings';
-import { openSnoozeEntityPicker } from '@notifications/SnoozeEntityDialog';
 import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
 import { queryReadyGate } from '@queries/gate';
 import {
@@ -202,18 +201,6 @@ export function Notifications() {
               </For>
             </Show>
           </Show>
-          <SettingsRow
-            label="Snooze an item"
-            description="Pause notifications for a channel, document, email, or other item."
-          >
-            <button
-              type="button"
-              class="text-sm text-ink-muted hover:text-ink mobile:min-h-11"
-              onClick={() => openSnoozeEntityPicker({ owner: dialogOwner })}
-            >
-              Choose item…
-            </button>
-          </SettingsRow>
         </SettingsCard>
       </SettingsSection>
 

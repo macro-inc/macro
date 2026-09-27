@@ -1,5 +1,5 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { openSnoozeEntityPicker } from '@notifications/SnoozeEntityDialog';
+import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
 import {
   cleanup,
   fireEvent,
@@ -25,27 +25,6 @@ vi.mock('@core/util/dateSearch/useDateSearch', () => ({
 }));
 vi.mock('@queries/notification/unsubscribes', () => ({
   useMuteItemMutation: () => ({ mutateAsync: save }),
-}));
-vi.mock('@core/context/quickAccess', () => ({
-  useQuickAccess: () => ({
-    useList: () => ({
-      items: () => [
-        {
-          data: { id: 'document-one', type: 'document', name: 'Test document' },
-        },
-      ],
-      isLoading: () => false,
-      isLoadingMore: () => false,
-      hasMore: () => false,
-    }),
-  }),
-}));
-vi.mock('@notifications/queries/snooze-emails', () => ({
-  useSnoozeEmails: () => ({
-    items: () => [],
-    isLoading: () => false,
-    hasMore: () => false,
-  }),
 }));
 
 beforeEach(() => {
@@ -77,8 +56,16 @@ function setup() {
   function SettingsActions() {
     const owner = getOwner();
     return (
-      <button type="button" onClick={() => openSnoozeEntityPicker({ owner })}>
-        Choose item
+      <button
+        type="button"
+        onClick={() =>
+          openSnoozeNotifications(
+            [{ item_id: 'document-one', item_type: 'document' }],
+            { owner }
+          )
+        }
+      >
+        Change time
       </button>
     );
   }
@@ -103,14 +90,10 @@ function setup() {
 
 describe('snooze pickers opened from mobile settings', () => {
   it.each(['save', 'cancel'] as const)(
-    'keeps settings open through the entity-to-time handoff and %s',
+    'keeps settings open while changing time and after %s',
     async (action) => {
       const settings = setup();
-      tap(screen.getByRole('button', { name: 'Choose item' }));
-      const chooser = await screen.findByRole('dialog', {
-        name: 'Snooze an item',
-      });
-      tap(within(chooser).getByRole('option', { name: /Test document/ }));
+      tap(screen.getByRole('button', { name: 'Change time' }));
       const picker = await screen.findByRole('dialog', {
         name: 'Snooze notifications',
       });
