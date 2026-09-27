@@ -1604,6 +1604,8 @@ export type EntityActivityQuery = { user: { id: string, soup: { items: Array<
               | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
               | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
               | { __typename: 'GraphqlActivitySent' }
+              | { __typename: 'GraphqlActivityTaskAdded' }
+              | { __typename: 'GraphqlActivityTaskRemoved' }
               | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
              }> }
         | { __typename: 'GraphqlSoupProject', id: string, activity: Array<{ __typename: 'GraphqlActivityEvent', id: string, actorId: string, subjectId: string, entityType: GraphqlEntityType, entityId: string, occurredAt: string, action:
@@ -1809,6 +1811,8 @@ type EntityActivityFields_GraphqlSoupInitiative_Fragment = { __typename: 'Graphq
       | { __typename: 'GraphqlActivityParticipantRemoved', participant: string }
       | { __typename: 'GraphqlActivityPropertyChanged', property: string, from: unknown, to: unknown }
       | { __typename: 'GraphqlActivitySent' }
+      | { __typename: 'GraphqlActivityTaskAdded' }
+      | { __typename: 'GraphqlActivityTaskRemoved' }
       | { __typename: 'GraphqlActivityUnknownAction', tag: string, payload: unknown }
      }> };
 

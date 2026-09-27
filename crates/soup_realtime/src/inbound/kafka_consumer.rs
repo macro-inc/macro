@@ -23,6 +23,7 @@ use channels::domain::{
 use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
 use email::domain::events::{EmailMacroEvent, EmailTopicEvent};
+use initiative::domain::events::{InitiativeMacroEvent, InitiativeTopicEvent};
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
@@ -56,6 +57,7 @@ macro_event_broker::declare_topics!(
         EmailMacroEvent,
         ChannelMacroEvent,
         PropertyMacroEvent,
+        InitiativeMacroEvent,
 );
 
 fn entity(entity_type: EntityType, entity_id: impl ToString) -> Entity<'static> {
@@ -144,6 +146,27 @@ fn patches_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimePa
         | DocumentTopicEvent::Purged(_) => {}
     }
     updates
+}
+
+fn patches_from_initiative_event(event: &InitiativeTopicEvent) -> Vec<SoupRealtimePatch> {
+    match event {
+        InitiativeTopicEvent::Created(change) | InitiativeTopicEvent::Updated(change) => {
+            vec![update(EntityType::Initiative, change.initiative_id)]
+        }
+        InitiativeTopicEvent::Purged { initiative_id } => {
+            vec![delete(EntityType::Initiative, initiative_id)]
+        }
+        InitiativeTopicEvent::TasksChanged(change) => {
+            let mut patches = Vec::new();
+            for membership in &change.changes {
+                push_unique_update(&mut patches, EntityType::Document, &membership.task_id);
+                for id in [membership.from, membership.to].into_iter().flatten() {
+                    push_unique_update(&mut patches, EntityType::Initiative, &id.to_string());
+                }
+            }
+            patches
+        }
+    }
 }
 
 fn patches_from_project_event(event: &ProjectTopicEvent) -> Vec<SoupRealtimePatch> {
@@ -427,10 +450,9 @@ fn soup_entity_type_from_property(entity_type: PropertyEntityType) -> Option<Ent
         PropertyEntityType::Document | PropertyEntityType::Task => Some(EntityType::Document),
         PropertyEntityType::Project => Some(EntityType::Project),
         PropertyEntityType::Thread => Some(EntityType::EmailThread),
+        PropertyEntityType::Initiative => Some(EntityType::Initiative),
         // Soup channels do not expose properties, and users are not Soup items.
-        PropertyEntityType::Channel | PropertyEntityType::User | PropertyEntityType::Initiative => {
-            None
-        }
+        PropertyEntityType::Channel | PropertyEntityType::User => None,
     }
 }
 
@@ -474,6 +496,9 @@ fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
         }
         DeclaredMacroEvent::ChannelMacroEvent(event) => {
             patches_from_channel_event(&event.event().event)
+        }
+        DeclaredMacroEvent::InitiativeMacroEvent(event) => {
+            patches_from_initiative_event(&event.event().event)
         }
         DeclaredMacroEvent::PropertyMacroEvent(event) => {
             patches_from_property_event(&event.event().event)

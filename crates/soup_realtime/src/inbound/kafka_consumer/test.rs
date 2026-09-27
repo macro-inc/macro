@@ -121,6 +121,7 @@ fn subscribes_to_all_existing_soup_source_topics() {
             "macro.email",
             "macro.channels",
             "macro.properties",
+            "macro.initiatives",
         ]
     );
 }
@@ -868,4 +869,68 @@ async fn cancellation_during_retry_backoff_leaves_the_event_uncommitted() {
     tokio::time::advance(Duration::from_secs(15)).await;
     assert_eq!(service.attempts.load(Ordering::SeqCst), 1);
     assert_eq!(commits.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn initiative_lifecycle_and_properties_refresh_the_soup_entity() {
+    use initiative::domain::{events::InitiativeChange, models::InitiativeId};
+
+    let id = InitiativeId::from_uuid(Uuid::from_u128(42));
+    for event in [
+        InitiativeTopicEvent::Created(InitiativeChange {
+            initiative_id: id,
+            attribution: None,
+            occurred_at: Utc::now(),
+        }),
+        InitiativeTopicEvent::Updated(InitiativeChange {
+            initiative_id: id,
+            attribution: None,
+            occurred_at: Utc::now(),
+        }),
+    ] {
+        assert_eq!(
+            patches_from_initiative_event(&event),
+            vec![update(EntityType::Initiative, id)]
+        );
+    }
+    assert_eq!(
+        property_update(PropertyEntityType::Initiative, &id.to_string()),
+        vec![update(EntityType::Initiative, id)]
+    );
+    assert_eq!(
+        patches_from_initiative_event(&InitiativeTopicEvent::Purged { initiative_id: id }),
+        vec![delete(EntityType::Initiative, id)]
+    );
+}
+
+#[test]
+fn moving_tasks_refreshes_both_initiatives_once_and_each_task() {
+    use initiative::domain::{
+        events::{InitiativeTasksChanged, TaskMembershipChange},
+        models::InitiativeId,
+    };
+
+    let from = InitiativeId::from_uuid(Uuid::from_u128(42));
+    let to = InitiativeId::from_uuid(Uuid::from_u128(43));
+    let event = InitiativeTopicEvent::TasksChanged(InitiativeTasksChanged {
+        attribution: None,
+        occurred_at: Utc::now(),
+        changes: ["task-1", "task-2"]
+            .into_iter()
+            .map(|task_id| TaskMembershipChange {
+                task_id: task_id.to_owned(),
+                from: Some(from),
+                to: Some(to),
+            })
+            .collect(),
+    });
+    assert_eq!(
+        patches_from_initiative_event(&event),
+        vec![
+            update(EntityType::Document, "task-1"),
+            update(EntityType::Initiative, from),
+            update(EntityType::Initiative, to),
+            update(EntityType::Document, "task-2"),
+        ]
+    );
 }
