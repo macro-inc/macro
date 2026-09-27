@@ -381,6 +381,7 @@ dependencies = [
  "entity_access",
  "futures",
  "github",
+ "github_pull_requests",
  "harness_id",
  "harnesses",
  "kafka_util",

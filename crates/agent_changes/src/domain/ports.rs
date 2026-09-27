@@ -5,6 +5,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use agent_session::domain::model::AgentSession;
+use macro_uuid::Uuid;
 
 use super::error::ExtractError;
 use super::model::{
@@ -31,14 +32,22 @@ pub trait SessionBranchReader: Send + Sync + 'static {
     fn working_branches<'a>(&'a self, sessions: &'a [AgentSessionId]) -> SessionBranchesFuture<'a>;
 }
 
-/// Reads the linked GitHub pull request for a session. The service derives
-/// per-file facts from the raw patch.
+/// Reads the linked GitHub pull request for a session.
 pub trait ChangesetExtractor: Send + Sync + 'static {
     /// The current diff for `session`, or why there is none.
     fn extract(
         &self,
         session: &AgentSession,
     ) -> impl Future<Output = Result<ExtractedChangeset, ExtractError>> + Send;
+
+    /// The patch of the pull request changeset `changeset` that an earlier
+    /// extraction for `session` handed back, or `None` when it can no longer
+    /// be read, for example because the pull request moved past it.
+    fn pull_request_patch(
+        &self,
+        session: &AgentSession,
+        changeset: Uuid,
+    ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send;
 }
 
 /// Where a stored patch lives in the blob store.
@@ -74,6 +83,16 @@ impl std::fmt::Display for PatchBlobKey {
     }
 }
 
+/// Where a session's current patch is read from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PatchLocation {
+    /// A patch stored under the session in the blob store.
+    Blob(PatchBlobKey),
+    /// The patch of a pull request changeset, shared with every reader of the
+    /// same base and head and never deleted on the session's behalf.
+    PullRequest(Uuid),
+}
+
 /// The summary row: one per session, replaced on every capture.
 pub trait ChangesetRepo: Send + Sync + 'static {
     /// Note that a capture started at `started_at`. Creates the session's
@@ -85,13 +104,13 @@ pub trait ChangesetRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 
     /// Replace the session's changeset with `changeset`, whose patch (if any)
-    /// is stored under `patch_key`, and close the running attempt as
-    /// captured. Returns the key of the patch this one superseded, so the
-    /// caller can delete the orphaned blob.
+    /// is read from `patch`, and close the running attempt as captured.
+    /// Returns the key of the session blob this one superseded, so the caller
+    /// can delete it.
     fn record_changeset(
         &self,
         changeset: &Changeset,
-        patch_key: Option<&PatchBlobKey>,
+        patch: Option<&PatchLocation>,
         finished_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<Option<PatchBlobKey>, rootcause::Report>> + Send;
 
@@ -112,11 +131,11 @@ pub trait ChangesetRepo: Send + Sync + 'static {
         session: AgentSessionId,
     ) -> impl Future<Output = Result<SessionChanges, rootcause::Report>> + Send;
 
-    /// Where the session's current patch is stored, if it has one.
-    fn patch_key(
+    /// Where the session's current patch is read from, if it has one.
+    fn patch_location(
         &self,
         session: AgentSessionId,
-    ) -> impl Future<Output = Result<Option<PatchBlobKey>, rootcause::Report>> + Send;
+    ) -> impl Future<Output = Result<Option<PatchLocation>, rootcause::Report>> + Send;
 }
 
 /// The patch bodies, kept out of the database because a patch can be

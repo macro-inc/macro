@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 
 pub use agent_session::domain::model::AgentSessionId;
 pub use git_patch::{ChangedFile, ChangesetRange, FileChangeKind, GitRef};
-pub use github_pull_requests::domain::models::{PullRequestRef, RepositorySlug};
+pub use github_pull_requests::domain::models::{
+    GithubPullRequestChangeset, PullRequestRef, RepositorySlug,
+};
 
 /// A captured branch together with the repository it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,9 +36,11 @@ impl CapturedBranch {
     }
 }
 
-/// Identity of one capture. Minted per capture (UUIDv7), so the patch blob's
-/// key changes every time and a reader never sees half of a newer capture
-/// under an older summary.
+/// Identity of one capture. Minted per capture (UUIDv7) for a patch stored
+/// under the session, so the patch blob's key changes every time and a reader
+/// never sees half of a newer capture under an older summary. A capture that
+/// shares a pull request changeset takes that changeset's id, which names the
+/// same base and head wherever it appears.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ChangesetId(Uuid);
@@ -79,20 +83,26 @@ pub enum ChangesetSource {
     GithubPullRequest,
 }
 
-/// What an extractor hands back: the raw patch plus the range it covers. The
-/// service derives every per-file fact from the patch, so no extractor has to
-/// count lines or classify files itself.
+/// What an extractor hands back.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExtractedChangeset {
-    /// Where it came from.
-    pub source: ChangesetSource,
-    /// What was compared.
-    pub range: ChangesetRange,
-    /// A git-style unified diff, possibly empty when nothing changed.
-    pub patch: String,
-    /// The extractor already cut the patch down to a size budget of its
-    /// own, so files past its cut are missing from `patch` entirely.
-    pub truncated: bool,
+pub enum ExtractedChangeset {
+    /// A raw patch plus the range it covers, stored under the session. The
+    /// service derives every per-file fact from the patch, so no extractor
+    /// has to count lines or classify files itself.
+    Patch {
+        /// Where it came from.
+        source: ChangesetSource,
+        /// What was compared.
+        range: ChangesetRange,
+        /// A git-style unified diff, possibly empty when nothing changed.
+        patch: String,
+        /// The extractor already cut the patch down to a size budget of its
+        /// own, so files past its cut are missing from `patch` entirely.
+        truncated: bool,
+    },
+    /// A pull request's changes as stored for every reader of the same base
+    /// and head. The session points at them rather than storing a copy.
+    PullRequest(GithubPullRequestChangeset),
 }
 
 /// One capture of a session's changes, as stored and served.

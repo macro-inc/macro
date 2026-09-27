@@ -49,6 +49,11 @@ github = { path = "../../crates/github", default-features = false, features = [
   "ports",
   "sync",
 ] }
+github_pull_requests = { path = "../../crates/github_pull_requests", default-features = false, features = [
+  "outbound",
+  "s3",
+  "service",
+] }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 url = { workspace = true }
 contacts = { path = "../../crates/contacts" }
