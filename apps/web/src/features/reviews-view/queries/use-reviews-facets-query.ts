@@ -2,21 +2,33 @@ import type { ListControlOption } from '@app/components/view-shell';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
 
 const REVIEWS_FACETS_STALE_TIME = 60_000;
 
+/** A label among the visible pull requests, for the sidebar's Labels section. */
+export type ReviewsLabel = {
+  name: string;
+  /** A CSS color, when GitHub reported one. */
+  color?: string;
+};
+
+type UserFacet = { githubUserId: string; login?: string | null };
+
+const userOption = (user: UserFacet): ListControlOption<string> => ({
+  id: user.githubUserId,
+  label: user.login ?? user.githubUserId,
+});
+
 /**
- * Repository and author filter options across every pull request visible to
- * the viewer and their team, not only the loaded pages. Option ids are the
- * numeric GitHub ids the backend filters match.
+ * Filter options across every pull request visible to the viewer and their
+ * team, not only the loaded pages. Repository, author, and assignee option ids
+ * are the numeric GitHub ids the backend filters match; label ids are names.
  */
-export function useReviewsFacetsQuery(enabled: Accessor<boolean>) {
+export function useReviewsFacetsQuery() {
   const query = useQuery(() => ({
     queryKey: ['reviews', 'githubPullRequestFacets'] as const,
     queryFn: () =>
       throwOnErr(() => storageServiceClient.getGithubPullRequestFacets()),
-    enabled: enabled(),
     staleTime: REVIEWS_FACETS_STALE_TIME,
   }));
   const facets = () => (query.isSuccess ? query.data : undefined);
@@ -27,10 +39,14 @@ export function useReviewsFacetsQuery(enabled: Accessor<boolean>) {
       label: repository.repository,
     }));
   const authors = (): ListControlOption<string>[] =>
-    (facets()?.authors ?? []).map((author) => ({
-      id: author.githubUserId,
-      label: author.login ?? author.githubUserId,
+    (facets()?.authors ?? []).map(userOption);
+  const assignees = (): ListControlOption<string>[] =>
+    (facets()?.assignees ?? []).map(userOption);
+  const labels = (): ReviewsLabel[] =>
+    (facets()?.labels ?? []).map((label) => ({
+      name: label.name,
+      color: label.color ? `#${label.color}` : undefined,
     }));
 
-  return { query, repositories, authors };
+  return { query, repositories, authors, assignees, labels };
 }

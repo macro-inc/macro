@@ -10,17 +10,23 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { Accordion } from '@kobalte/core/accordion';
 import { createSignal, For, Show } from 'solid-js';
-import type { ReviewsSortId } from '../reviews-types';
-
-export type ReviewsFilterId = 'repository' | 'author';
+import type {
+  ReviewsFilterId,
+  ReviewsFilterSelection,
+  ReviewsReviewFilterId,
+  ReviewsSortId,
+} from '../reviews-types';
 
 export type ReviewsControlProps = {
   sort: ReviewsSortId;
   onSortChange: (sort: ReviewsSortId) => void;
   repositories: ListControlOption<string>[];
   authors: ListControlOption<string>[];
-  selectedRepositories: readonly string[];
-  selectedAuthors: readonly string[];
+  assignees: ListControlOption<string>[];
+  labels: ListControlOption<string>[];
+  /** Offers the review filters that match the viewer's GitHub user id. */
+  hasGithubIdentity: boolean;
+  selected: ReviewsFilterSelection;
   onFilterChange: (
     group: ReviewsFilterId,
     id: string,
@@ -30,8 +36,23 @@ export type ReviewsControlProps = {
 };
 
 const SORT_OPTIONS: ListControlOption<ReviewsSortId>[] = [
-  { id: 'updated_at', label: 'Updated' },
-  { id: 'created_at', label: 'Created' },
+  { id: 'recently_updated', label: 'Recently updated' },
+  { id: 'least_recently_updated', label: 'Least recently updated' },
+  { id: 'newest', label: 'Newest' },
+  { id: 'oldest', label: 'Oldest' },
+];
+
+const REVIEW_OPTIONS: ListControlOption<ReviewsReviewFilterId>[] = [
+  { id: 'none', label: 'No reviews' },
+  { id: 'required', label: 'Review required' },
+  { id: 'approved', label: 'Approved review' },
+  { id: 'changes_requested', label: 'Changes requested' },
+];
+
+const VIEWER_REVIEW_OPTIONS: ListControlOption<ReviewsReviewFilterId>[] = [
+  { id: 'reviewed_by_me', label: 'Reviewed by you' },
+  { id: 'not_reviewed_by_me', label: 'Not reviewed by you' },
+  { id: 'awaiting_my_review', label: 'Awaiting review from you' },
 ];
 
 function filterGroups(
@@ -50,6 +71,25 @@ function filterGroups(
       options: props.authors,
       searchPlaceholder: 'Search authors',
     },
+    {
+      id: 'assignee',
+      label: 'Assignee',
+      options: props.assignees,
+      searchPlaceholder: 'Search assignees',
+    },
+    {
+      id: 'label',
+      label: 'Label',
+      options: props.labels,
+      searchPlaceholder: 'Search labels',
+    },
+    {
+      id: 'review',
+      label: 'Reviews',
+      options: props.hasGithubIdentity
+        ? [...REVIEW_OPTIONS, ...VIEWER_REVIEW_OPTIONS]
+        : REVIEW_OPTIONS,
+    },
   ];
 }
 
@@ -58,10 +98,11 @@ function isSelected(
   group: ReviewsFilterId,
   id: string
 ) {
-  return (
-    group === 'repository' ? props.selectedRepositories : props.selectedAuthors
-  ).includes(id);
+  return props.selected[group].includes(id);
 }
+
+export const activeReviewsFilterCount = (selected: ReviewsFilterSelection) =>
+  Object.values(selected).reduce((count, ids) => count + ids.length, 0);
 
 export function ReviewsControls(props: ReviewsControlProps) {
   const panel = useSplitPanelOrThrow();
@@ -97,8 +138,7 @@ export function ReviewsControls(props: ReviewsControlProps) {
     },
   });
 
-  const activeCount = () =>
-    props.selectedRepositories.length + props.selectedAuthors.length;
+  const activeCount = () => activeReviewsFilterCount(props.selected);
 
   return (
     <div class="flex min-w-0 shrink-0 items-center justify-end gap-2 @max-[720px]/view-shell:gap-1">
@@ -134,8 +174,7 @@ export function ReviewsControls(props: ReviewsControlProps) {
 
 export function ReviewsFilterDrawer(props: ReviewsControlProps) {
   const groups = () => filterGroups(props);
-  const activeCount = () =>
-    props.selectedRepositories.length + props.selectedAuthors.length;
+  const activeCount = () => activeReviewsFilterCount(props.selected);
 
   return (
     <MobileFilterDrawer

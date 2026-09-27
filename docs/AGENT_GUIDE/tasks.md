@@ -31,18 +31,26 @@ instead. Keyboard list navigation only moves focus; press Enter to open the focu
 
 With `enable-tasks-reviews` enabled (on by default in development), a
 `Reviews` shortcut appears above `My Tasks` in the Tasks sidebar and mobile tabs.
-It opens a separate `/app/reviews` shell with `Involving me` first and selected
-by default, followed by `All PRs` and `Authored by me`. The selected tab is
-stored in the URL and survives opening a PR and returning through the breadcrumb.
-The list contains accessible GitHub pull requests of any status. `Involving me`
+It opens a separate `/app/reviews` shell whose sidebar lists `Pull requests`,
+`Authored by me`, `Assigned to me`, `Involves me`, and `Review requests`;
+`Involves me` is selected by default. The selected tab is stored in the URL and
+survives opening a PR and returning through the breadcrumb.
+The list contains accessible GitHub pull requests of any status. `Involves me`
 uses the server's participant filter for your linked GitHub account: author,
 requested reviewer, assignee, commenter, or reviewer. Participant IDs are retained
 across partial GitHub refreshes, so this is not strictly a list of current
 review requests.
-`Authored by me` matches the linked GitHub login or user ID. If the link-status
-endpoint has no identity, the list explains why Authored by me is unavailable.
-Search, repository and author filters, and Updated/Created sort controls appear
-above the list. PR rows use the shared entity layout with selection checkboxes,
+`Authored by me`, `Assigned to me`, and `Review requests` match the linked
+GitHub user ID. If the link-status endpoint has no identity, the list explains
+why the tab is unavailable.
+Search, filter, and sort controls appear above the list. Filters cover
+repository, author, assignee, label, and reviews (No reviews, Review required,
+Approved review, Changes requested, plus Reviewed by you, Not reviewed by you,
+and Awaiting review from you when a GitHub identity is linked). Sort offers
+Recently updated, Least recently updated, Newest, and Oldest. When visible PRs
+have GitHub labels, a Labels section below Favorites lists them with their
+colors; choosing a label shows only PRs with it, and choosing it again clears
+it. PR rows use the shared entity layout with selection checkboxes,
 author avatars and names, and a context menu. The current user's Macro display
 name appears when their linked GitHub identity matches the PR author; other
 authors fall back to GitHub names. The virtualized list fetches more pages as
@@ -60,7 +68,7 @@ Its breadcrumb returns to the Reviews list. Old `/app/pr/<id>` links redirect
 to the Reviews detail. When the flag is off, the Reviews shortcut is hidden,
 but copied PR detail links still work.
 
-Check all three tab URLs, author avatars and display names, row selection and
+Check all five tab URLs, the Labels section, author avatars and display names, row selection and
 context menu, favorites add/remove and collapse/empty visibility, filters, sort,
 illustrated empty states, loading, errors, and pagination after filtering. Use
 Open in new split from a PR row's context menu; verify the Reviews list stays in

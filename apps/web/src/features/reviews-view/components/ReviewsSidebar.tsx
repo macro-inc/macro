@@ -14,10 +14,14 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import SplitIcon from '@phosphor/columns.svg';
+import EyeIcon from '@phosphor/eye.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
 import StarIcon from '@phosphor/star.svg';
 import UserIcon from '@phosphor/user.svg';
+import UserCircleCheckIcon from '@phosphor/user-circle-check.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
+import { selectSidebarTag } from '@property/tags/SidebarTagsSection';
+import { TagDot } from '@property/tags/TagDot';
 import {
   useFavoritesData,
   useRemoveFavoriteMutation,
@@ -25,8 +29,20 @@ import {
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { makePersisted } from '@solid-primitives/storage';
 import { useQueries } from '@tanstack/solid-query';
-import { createMemo, createSignal, For, Show } from 'solid-js';
-import type { ReviewsScope } from '../reviews-types';
+import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
+import type { ReviewsLabel } from '../queries/use-reviews-facets-query';
+import { REVIEWS_SCOPES, type ReviewsScope } from '../reviews-types';
+
+const SCOPE_ITEMS: Record<
+  ReviewsScope,
+  { label: string; icon: Component<{ class?: string }> }
+> = {
+  all: { label: 'Pull requests', icon: GitPullRequestIcon },
+  authored: { label: 'Authored by me', icon: UserIcon },
+  assigned: { label: 'Assigned to me', icon: UserCircleCheckIcon },
+  involving: { label: 'Involves me', icon: UsersThreeIcon },
+  review_requests: { label: 'Review requests', icon: EyeIcon },
+};
 
 function ReviewFavoriteRow(props: {
   favorite: Favorite;
@@ -135,9 +151,60 @@ function ReviewFavorites(props: {
   );
 }
 
+/**
+ * GitHub labels among the visible pull requests. Like the Tags section, a row
+ * is a destination: choosing a label shows it alone, and choosing the active
+ * label clears it.
+ */
+function ReviewLabels(props: {
+  labels: ReviewsLabel[];
+  activeLabels: readonly string[];
+  onActiveLabelsChange: (labels: string[]) => void;
+}) {
+  const [open, setOpen] = makePersisted(createSignal(true), {
+    name: 'reviews-labels-open',
+  });
+
+  return (
+    <Show when={props.labels.length > 0}>
+      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
+        <CollapsibleSection.Trigger>
+          <span class="min-w-0 truncate">Labels</span>
+          <CollapsibleSection.Indicator />
+        </CollapsibleSection.Trigger>
+        <CollapsibleSection.Content>
+          <ViewSidebar.Nav aria-label="Pull request labels">
+            <For each={props.labels}>
+              {(label) => (
+                <ViewSidebar.Item
+                  title={label.name}
+                  active={props.activeLabels.includes(label.name)}
+                  onClick={() =>
+                    props.onActiveLabelsChange(
+                      selectSidebarTag(props.activeLabels, label.name)
+                    )
+                  }
+                >
+                  <ViewSidebar.Icon>
+                    <TagDot color={label.color} />
+                  </ViewSidebar.Icon>
+                  <span class="truncate">{label.name}</span>
+                </ViewSidebar.Item>
+              )}
+            </For>
+          </ViewSidebar.Nav>
+        </CollapsibleSection.Content>
+      </CollapsibleSection.Root>
+    </Show>
+  );
+}
+
 export function ReviewsSidebar(props: {
   scope: ReviewsScope;
   onScopeChange: (scope: ReviewsScope) => void;
+  labels: ReviewsLabel[];
+  activeLabels: readonly string[];
+  onActiveLabelsChange: (labels: string[]) => void;
   onOpenReview: (id: string, newSplit: boolean) => void;
   activeForeignEntityId?: string;
 }) {
@@ -145,7 +212,7 @@ export function ReviewsSidebar(props: {
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    ids: () => ['involving', 'all', 'authored'] as ReviewsScope[],
+    ids: () => [...REVIEWS_SCOPES],
     activeId: () => props.scope,
     setActiveId: props.onScopeChange,
   });
@@ -157,37 +224,31 @@ export function ReviewsSidebar(props: {
       </ViewSidebar.Header>
       <ViewSidebar.Content>
         <ViewSidebar.Nav aria-label="Pull request views">
-          <ViewSidebar.Item
-            active={props.scope === 'involving'}
-            onClick={() => props.onScopeChange('involving')}
-          >
-            <ViewSidebar.Icon>
-              <UsersThreeIcon class="size-4" />
-            </ViewSidebar.Icon>
-            <span class="truncate">Involving me</span>
-          </ViewSidebar.Item>
-          <ViewSidebar.Item
-            active={props.scope === 'all'}
-            onClick={() => props.onScopeChange('all')}
-          >
-            <ViewSidebar.Icon>
-              <GitPullRequestIcon class="size-4" />
-            </ViewSidebar.Icon>
-            <span class="truncate">All PRs</span>
-          </ViewSidebar.Item>
-          <ViewSidebar.Item
-            active={props.scope === 'authored'}
-            onClick={() => props.onScopeChange('authored')}
-          >
-            <ViewSidebar.Icon>
-              <UserIcon class="size-4" />
-            </ViewSidebar.Icon>
-            <span class="truncate">Authored by me</span>
-          </ViewSidebar.Item>
+          <For each={REVIEWS_SCOPES}>
+            {(scope) => {
+              const Icon = SCOPE_ITEMS[scope].icon;
+              return (
+                <ViewSidebar.Item
+                  active={props.scope === scope}
+                  onClick={() => props.onScopeChange(scope)}
+                >
+                  <ViewSidebar.Icon>
+                    <Icon class="size-4" />
+                  </ViewSidebar.Icon>
+                  <span class="truncate">{SCOPE_ITEMS[scope].label}</span>
+                </ViewSidebar.Item>
+              );
+            }}
+          </For>
         </ViewSidebar.Nav>
         <ReviewFavorites
           onOpenReview={props.onOpenReview}
           activeForeignEntityId={props.activeForeignEntityId}
+        />
+        <ReviewLabels
+          labels={props.labels}
+          activeLabels={props.activeLabels}
+          onActiveLabelsChange={props.onActiveLabelsChange}
         />
       </ViewSidebar.Content>
     </ViewSidebar.Root>
