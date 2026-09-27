@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH user_source_ids AS (\n                SELECT cp.channel_id::text AS source_id\n                FROM comms_channel_participants cp\n                WHERE cp.user_id = $1 AND cp.left_at IS NULL\n                UNION ALL\n                SELECT t.team_id::text\n                FROM team_user t\n                WHERE t.user_id = $1\n                UNION ALL\n                SELECT $1\n            )\n            SELECT\n                p.id,\n                p.name,\n                p.\"userId\" AS \"user_id\",\n                p.\"parentId\" AS \"parent_id\",\n                p.\"createdAt\"::timestamptz AS \"created_at\",\n                p.\"updatedAt\"::timestamptz AS \"updated_at\",\n                p.\"deletedAt\"::timestamptz AS \"deleted_at\"\n            FROM \"Project\" p\n            WHERE p.\"deletedAt\" IS NULL\n                AND p.id IN (\n                    SELECT ea.entity_id::text\n                    FROM entity_access ea\n                    JOIN user_source_ids us ON us.source_id = ea.source_id\n                    WHERE ea.entity_type = 'project'\n                )\n            ORDER BY p.\"updatedAt\" DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "parent_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "27227c68846c7521e3665c5de73b9e7944a549e0bd0225a2662860d7d8139f3d"
+}

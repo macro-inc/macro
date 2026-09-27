@@ -173,6 +173,59 @@ impl ProjectRepo for PgProjectRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_accessible_projects_for_user(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<Project>, Self::Err> {
+        sqlx::query!(
+            r#"
+            WITH user_source_ids AS (
+                SELECT cp.channel_id::text AS source_id
+                FROM comms_channel_participants cp
+                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+                UNION ALL
+                SELECT t.team_id::text
+                FROM team_user t
+                WHERE t.user_id = $1
+                UNION ALL
+                SELECT $1
+            )
+            SELECT
+                p.id,
+                p.name,
+                p."userId" AS "user_id",
+                p."parentId" AS "parent_id",
+                p."createdAt"::timestamptz AS "created_at",
+                p."updatedAt"::timestamptz AS "updated_at",
+                p."deletedAt"::timestamptz AS "deleted_at"
+            FROM "Project" p
+            WHERE p."deletedAt" IS NULL
+                AND p.id IN (
+                    SELECT ea.entity_id::text
+                    FROM entity_access ea
+                    JOIN user_source_ids us ON us.source_id = ea.source_id
+                    WHERE ea.entity_type = 'project'
+                )
+            ORDER BY p."updatedAt" DESC
+            "#,
+            user_id,
+        )
+        .try_map(|row| {
+            map_project(
+                row.id,
+                row.name,
+                row.user_id,
+                row.parent_id,
+                row.created_at,
+                row.updated_at,
+                row.deleted_at,
+            )
+        })
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_pending_root_projects(
         &self,
         user_id: &str,

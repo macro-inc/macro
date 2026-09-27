@@ -40,9 +40,10 @@ use graphql_properties::{
     PropertiesMutationRoot,
 };
 use graphql_soup::{
-    GraphqlSoupEmailThread, GroupedSoup, GroupedSoupInput, SoupEmailThreadMutationOutput,
-    SoupEntityEdges, SoupInput, SoupPage, SoupPatch, resolve_grouped_soup, resolve_soup,
-    resolve_soup_email_thread, resolve_soup_updates,
+    GraphqlSoupEmailThread, GraphqlSoupProject, GroupedSoup, GroupedSoupInput,
+    SoupEmailThreadMutationOutput, SoupEntityEdges, SoupInput, SoupPage, SoupPatch,
+    resolve_folders, resolve_grouped_soup, resolve_soup, resolve_soup_email_thread,
+    resolve_soup_updates,
 };
 use macro_authorization::{
     InternalAuthConfig, MacroAuthorizationService, MacroAuthorizationServiceImpl,
@@ -630,6 +631,17 @@ where
         filter: Option<FavoritesFilterInput>,
     ) -> async_graphql::Result<Vec<GraphqlFavorite>> {
         resolve_favorites::<FR>(ctx, &self.user_id, filter.unwrap_or_default().into_model()).await
+    }
+
+    /// Non-deleted projects the authenticated user can access, as a flat list.
+    ///
+    /// Clients build the Drive sidebar tree from `parentId`. Membership is
+    /// gated by `entity_access` (not view history).
+    async fn folders(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupProject<SoupEdges<NR, PR, ER, FR, AR, AcR>>>> {
+        resolve_folders(ctx, &self.user_id).await
     }
 
     /// A page of the authenticated user's own activity, newest first.

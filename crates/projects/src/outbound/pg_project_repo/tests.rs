@@ -151,6 +151,53 @@ async fn history_listing_differs_from_owner_pending_listing(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))
 )]
+async fn accessible_listing_uses_entity_access_not_history(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgProjectRepo::new(pool);
+
+    let owner = repo
+        .get_accessible_projects_for_user("macro|owner@test.com")
+        .await?;
+    assert_eq!(
+        owner
+            .iter()
+            .map(|project| project.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "10000000-0000-0000-0000-000000000008",
+            "10000000-0000-0000-0000-000000000006",
+            "10000000-0000-0000-0000-000000000005",
+            ROOT_ID,
+            "10000000-0000-0000-0000-000000000003",
+            "10000000-0000-0000-0000-000000000002",
+        ]
+    );
+
+    let viewer = repo
+        .get_accessible_projects_for_user("macro|viewer@test.com")
+        .await?;
+    assert_eq!(
+        viewer
+            .iter()
+            .map(|project| project.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["10000000-0000-0000-0000-000000000007", ROOT_ID,]
+    );
+
+    // Shared-history project is in the viewer's UserHistory but not entity_access.
+    assert!(
+        !viewer
+            .iter()
+            .any(|project| { project.id == "10000000-0000-0000-0000-000000000005" })
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
 async fn basic_lookup_includes_deleted_but_full_lookup_excludes_it(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
