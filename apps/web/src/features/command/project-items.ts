@@ -59,6 +59,7 @@ export function useProjectCommandItems(
             },
           })) ?? [])
         : [],
+    isLoading: () => enabled() && query.loading(),
     hasMore: () => enabled() && query.hasMore(),
     isLoadingMore: () => enabled() && query.loadingMore(),
     loadMore: async () => {

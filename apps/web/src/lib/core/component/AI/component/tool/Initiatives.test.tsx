@@ -167,6 +167,34 @@ it('keeps successful deletion results inspectable without a stale project link',
   expect(screen.queryByRole('button', { name: 'Project' })).toBeNull();
 });
 
+it.each([
+  [
+    'DeleteInitiative',
+    { initiativeId: projectId },
+    'Project could not be deleted.',
+  ],
+  [
+    'DeleteInitiativeComment',
+    { initiativeId: projectId, messageId },
+    'Comment could not be deleted.',
+  ],
+  [
+    'DeleteInitiativeComment',
+    { initiativeId: projectId, messageId, wholeDiscussion: true },
+    'Discussion could not be deleted.',
+  ],
+] as const)(
+  'reports a failed %s deletion truthfully',
+  (name, input, message) => {
+    tool(name, input, { success: false });
+    fireEvent.click(screen.getByRole('button', { name: 'Not deleted' }));
+    expect(screen.getByText(message)).toBeTruthy();
+    expect(
+      screen.queryByText(/^(Project|Comment|Discussion) deleted\.$/)
+    ).toBeNull();
+  }
+);
+
 it('shows complete thread replies and hides deleted comment text', () => {
   tool(
     'ReadInitiativeDiscussions',

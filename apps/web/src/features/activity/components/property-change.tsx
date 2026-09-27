@@ -32,11 +32,10 @@ export function PropertyChangeText(props: {
   const name = () => definition()?.displayName ?? 'a property';
   const cleared = () =>
     props.action.to === null || props.action.to === undefined;
-  const hasFrom = () =>
-    propertyValueLabel(props.action.from, definition()) !== undefined;
-  const hasTo = () =>
-    !cleared() &&
-    propertyValueLabel(props.action.to, definition()) !== undefined;
+  const label = (raw: unknown) =>
+    props.valueLabel?.(raw) ?? propertyValueLabel(raw, definition());
+  const hasFrom = () => label(props.action.from) !== undefined;
+  const hasTo = () => !cleared() && label(props.action.to) !== undefined;
 
   return (
     <span class="inline-flex min-w-0 max-w-full items-center gap-1">

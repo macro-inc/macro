@@ -561,7 +561,8 @@ export function useCommandItems(
 
   return {
     items: filteredItems,
-    isLoadingEntities: category.isLoadingEntities,
+    isLoadingEntities: () =>
+      category.isLoadingEntities() || projects.isLoading(),
     pagination: {
       hasMore: () => category.pagination.hasMore() || projects.hasMore(),
       isLoadingMore: () =>

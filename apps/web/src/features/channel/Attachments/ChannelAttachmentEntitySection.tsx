@@ -14,6 +14,7 @@ import {
   flattenAttachments,
   useChannelDocumentAttachmentsQuery,
 } from '@queries/channel/channel-attachments';
+import { queryReadyGate } from '@queries/gate';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { stringToItemType } from '@service-storage/client';
 import type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
@@ -80,7 +81,7 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
 
   const documentAttachments = createMemo(() =>
     flattenAttachments(
-      attachmentsQuery.isSuccess
+      queryReadyGate(attachmentsQuery)
         ? (attachmentsQuery.data as ChannelAttachmentsData)
         : undefined
     )

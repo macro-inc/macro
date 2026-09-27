@@ -144,6 +144,7 @@ export function createProjectSoupSource(
       enabled: enabled(),
       initialPageParam: null,
       requestPolicy: 'cache-and-network',
+      keepPreviousData: false,
       variables: (cursor) => ({
         input: cursor
           ? {

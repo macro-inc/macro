@@ -18,7 +18,7 @@ export function ProjectCollaborators(props: {
   const save = async (ids: string[]) => {
     if (!owner() || props.pending) return;
     try {
-      await props.onMembers(ids);
+      await props.onMembers(ids.filter((id) => id !== props.project.ownerId));
       setPicking(false);
     } catch {
       // The sharing host renders the mutation error and retains the draft.
@@ -86,11 +86,7 @@ export function ProjectCollaborators(props: {
               <Button
                 size="sm"
                 disabled={props.pending}
-                onClick={() =>
-                  void save(
-                    [...selected()].filter((id) => id !== props.project.ownerId)
-                  )
-                }
+                onClick={() => void save([...selected()])}
               >
                 Save collaborators
               </Button>

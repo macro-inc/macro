@@ -122,6 +122,9 @@ name, properties, and sharing choice; `Clear Draft` resets an uncreated draft.
 Leaving a property unset keeps its normal server default. If creation succeeds
 but a property write fails, `Retry saving properties` finishes the existing
 project, including after continuing in a split, without creating a duplicate.
+Closing the popover keeps the underlying view open. Creating from the popover
+opens the project in another split; creating from a full composer replaces that
+composer with the project.
 
 Opening a project keeps the Tasks workspace and its navigation. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share

@@ -77,6 +77,7 @@ import {
   saveTaskComposerDraft,
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
+import { runTaskCreatedCallback } from '../util/taskCreatedCallback';
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { InlinePropertyValue } from './InlinePropertyValue';
 import { SimilarTasksSection } from './TaskDuplicateList';
@@ -602,11 +603,15 @@ export function ComposeTask(props: ComposeTaskProps) {
       }
 
       const { documentId, initialSnapshot } = createdTask;
-      await props.onTaskCreated?.({
-        documentId,
-        title: taskTitle,
-        content: taskContent,
-      });
+      await runTaskCreatedCallback(
+        props.onTaskCreated,
+        {
+          documentId,
+          title: taskTitle,
+          content: taskContent,
+        },
+        (message) => toast.failure(message)
+      );
       if (props.onSuccess) {
         props.onSuccess({ documentId, title: taskTitle, content: taskContent });
       } else {
@@ -634,11 +639,15 @@ export function ComposeTask(props: ComposeTaskProps) {
     // Success: clear draft and notify
     clearTaskComposerDraft();
     const { documentId, initialSnapshot } = createdTask;
-    await props.onTaskCreated?.({
-      documentId,
-      title: taskTitle,
-      content: taskContent,
-    });
+    await runTaskCreatedCallback(
+      props.onTaskCreated,
+      {
+        documentId,
+        title: taskTitle,
+        content: taskContent,
+      },
+      (message) => toast.failure(message)
+    );
     if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
@@ -694,11 +703,15 @@ export function ComposeTask(props: ComposeTaskProps) {
     }
 
     const { documentId, initialSnapshot } = createdTask;
-    await props.onTaskCreated?.({
-      documentId,
-      title: taskTitle,
-      content: taskContent,
-    });
+    await runTaskCreatedCallback(
+      props.onTaskCreated,
+      {
+        documentId,
+        title: taskTitle,
+        content: taskContent,
+      },
+      (message) => toast.failure(message)
+    );
     const snapshotParams = initialSnapshot
       ? {
           params: { optimisticSnapshot: initialSnapshot },

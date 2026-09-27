@@ -1,5 +1,5 @@
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
-import { isTaskEntity } from '@entity';
+import type { TaskEntityWithProperties } from '@entity';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import { withProjectStatusOptions } from '@property/utils/select-options';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
@@ -9,12 +9,8 @@ import {
 } from '@queries/properties/graphql/entity';
 import { propertiesKeys } from '@queries/properties/keys';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
-import { buildGraphqlEntitiesSoupInput } from '@queries/soup/graphql/entity-input';
 import { soupKeys } from '@queries/soup/keys';
-import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { SoupDocument } from '@service-storage/graphql/generated/graphql';
-import { fetchGraphqlSoup } from '@service-storage/graphql-soup';
 import type { initiativeClient } from '@service-storage/initiative';
 import {
   type QueryClient,
@@ -61,6 +57,10 @@ export function createProjectSources(
   cache: QueryClient,
   userId: Accessor<string | undefined>,
   observeTaskChanges: (source: ProjectTaskRefreshSource) => void,
+  hydrateTasks: (
+    taskIds: string[],
+    signal: AbortSignal
+  ) => Promise<TaskEntityWithProperties[]>,
   createReadGate: () => Accessor<boolean> = () => () => true
 ): ProjectsContext {
   const refresh = async () => {
@@ -151,29 +151,8 @@ export function createProjectSources(
                   signal
                 )
               );
-              const input = buildGraphqlEntitiesSoupInput(
-                page.taskIds.map((entityId) => ({
-                  entityId,
-                  entityType: 'TASK',
-                }))
-              );
-              if (!input) return { tasks: [], nextCursor: page.nextCursor };
-              const hydrated = await fetchGraphqlSoup(
-                SoupDocument,
-                { input },
-                {
-                  signal,
-                  requestPolicy: 'network-only',
-                  allowOfflineFallback: false,
-                }
-              );
-              signal.throwIfAborted();
               return {
-                tasks: hydrated.items
-                  .filter((item) => item.tag === 'document')
-                  .map(mapApiSoupItemToEntity)
-                  .filter(isTaskEntity)
-                  .filter((task) => page.taskIds.includes(task.id)),
+                tasks: await hydrateTasks(page.taskIds, signal),
                 nextCursor: page.nextCursor,
               };
             },

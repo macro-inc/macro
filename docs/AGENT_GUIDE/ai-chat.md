@@ -18,6 +18,8 @@ open Overview at the relevant discussion. Shift-click opens another split.
 Expanded comments show their text and reactions, and **Result data** reveals the
 complete returned response. Successful mutations refresh the project views.
 Deleting a project shows its result without a link to the deleted project.
+Failed project, comment, or discussion deletions show `Not deleted`. Clearing
+projects from several tasks reports each task's outcome, including partial failures.
 
 ## Uploading files with AI
 

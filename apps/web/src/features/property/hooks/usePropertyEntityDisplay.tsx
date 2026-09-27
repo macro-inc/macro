@@ -118,7 +118,7 @@ export function usePropertyEntityDisplay(
 
   const isLoading = createMemo(() => {
     if (entityType() === 'INITIATIVE')
-      return projectSource()?.isPending ?? false;
+      return projectsFlag().loading || (projectSource()?.isPending ?? false);
     if (!isPreviewable(entityType())) return false;
     const previewItem = preview();
     return !previewItem || previewItem.loading;
@@ -127,11 +127,15 @@ export function usePropertyEntityDisplay(
   const name = createMemo(() =>
     match(entityType())
       .with('INITIATIVE', () =>
-        projectSource()?.isPending
-          ? 'Loading…'
-          : projectSource()?.isError
-            ? 'Project unavailable'
-            : (projectSource()?.data?.name ?? 'Project unavailable')
+        !projectsFlag().enabled
+          ? projectsFlag().loading
+            ? 'Loading…'
+            : ''
+          : projectSource()?.isPending
+            ? 'Loading…'
+            : projectSource()?.isError
+              ? 'Project unavailable'
+              : (projectSource()?.data?.name ?? 'Project unavailable')
       )
       .with('USER', () => userName())
       .with('CHANNEL', () => channelName() || 'Channel')
@@ -148,7 +152,9 @@ export function usePropertyEntityDisplay(
 
   const icon = createMemo(() =>
     match(entityType())
-      .with('INITIATIVE', () => <ProjectIcon class="size-4" />)
+      .with('INITIATIVE', () =>
+        projectsFlag().enabled ? <ProjectIcon class="size-4" /> : null
+      )
       .with('USER', () => <UserIcon id={entityId()} size="sm" />)
       .with('CHANNEL', () => <CoreEntityIcon targetType="channel" size="xs" />)
       .with('TASK', () => <CoreEntityIcon targetType="task" size="xs" />)

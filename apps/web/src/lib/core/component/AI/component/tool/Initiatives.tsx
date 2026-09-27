@@ -261,9 +261,19 @@ export const initiativeToolHandlers = {
         renderContext={ctx.renderContext}
         hasResult={!!ctx.response}
         result={ctx.response?.data}
-        status={ctx.response?.data.success ? 'Deleted' : undefined}
+        status={
+          ctx.response
+            ? ctx.response.data.success
+              ? 'Deleted'
+              : 'Not deleted'
+            : undefined
+        }
       >
-        <p class="text-xs text-ink-muted">Project deleted.</p>
+        <p class="text-xs text-ink-muted">
+          {ctx.response?.data.success
+            ? 'Project deleted.'
+            : 'Project could not be deleted.'}
+        </p>
       </ProjectToolCard>
     ),
   }),
@@ -506,12 +516,22 @@ export const initiativeToolHandlers = {
         hasResult={!!ctx.response}
         result={ctx.response?.data}
         projectId={ctx.tool.data.initiativeId}
-        status={ctx.response?.data.success ? 'Deleted' : undefined}
+        status={
+          ctx.response
+            ? ctx.response.data.success
+              ? 'Deleted'
+              : 'Not deleted'
+            : undefined
+        }
       >
         <p class="text-xs text-ink-muted">
-          {ctx.tool.data.wholeDiscussion
-            ? 'Discussion deleted.'
-            : 'Comment deleted.'}
+          {ctx.response?.data.success
+            ? ctx.tool.data.wholeDiscussion
+              ? 'Discussion deleted.'
+              : 'Comment deleted.'
+            : ctx.tool.data.wholeDiscussion
+              ? 'Discussion could not be deleted.'
+              : 'Comment could not be deleted.'}
         </p>
       </ProjectToolCard>
     ),

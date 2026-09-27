@@ -23,6 +23,7 @@ import {
   type ProjectListActivation,
 } from './primitives/project-collection';
 import { createProjectCollectionPersistence } from './project-collection-persistence';
+import { hydrateProjectTasks } from './project-task-hydration';
 import { projectKeys } from './queries/keys';
 import { createProjectSources } from './queries/project-sources';
 import { observeProjectTaskChanges } from './queries/project-task-revalidation';
@@ -53,6 +54,7 @@ function createProjectsContext() {
     queryClient,
     userId,
     (source) => observeProjectTaskChanges(getGraphqlSoupClient, source),
+    hydrateProjectTasks,
     createProjectReadGate
   );
 }

@@ -272,6 +272,9 @@ export function useTasksDataSource(
   const usesServiceSearch = search.usesServiceSearch;
 
   const isLoading = () => {
+    if (options.enabled?.() === false) return false;
+    if (options.taskIds && (query.isLoading || query.isPlaceholderData))
+      return true;
     if (!search.isSearching()) {
       // A query held back for the tag sets is loading, not empty.
       return (query.isLoading || !facetOptionsReady()) && rows().length === 0;

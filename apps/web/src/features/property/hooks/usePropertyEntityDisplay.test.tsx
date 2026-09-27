@@ -9,14 +9,15 @@ const fixture = vi.hoisted(() => ({
   previewMounts: 0,
   previewDisposals: 0,
   channelMounts: 0,
-  projectsEnabled: undefined as (() => boolean) | undefined,
+  projectsEnabled: undefined as (() => boolean | undefined) | undefined,
   projectMounts: 0,
   projectDisposals: 0,
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({
-    enabled: fixture.projectsEnabled?.() ?? false,
+    enabled: fixture.projectsEnabled?.() === true,
+    loading: fixture.projectsEnabled?.() === undefined,
   }),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
@@ -107,6 +108,22 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
     expect(fixture.projectDisposals).toBe(1);
     expect(display.nativeProjectId()).toBeUndefined();
     expect(display.blockOrFileType()).toBeNull();
+    expect(display.name()).toBe('');
+    expect(display.icon()).toBeNull();
+  });
+
+  it('reports flag loading without inventing an access error or fetching project identity', () => {
+    const [enabled, setEnabled] = createSignal<boolean | undefined>();
+    fixture.projectsEnabled = enabled;
+    const display = setup('INITIATIVE');
+    expect(display.isLoading()).toBe(true);
+    expect(display.name()).toBe('Loading…');
+    expect(display.icon()).toBeNull();
+    expect(fixture.projectMounts).toBe(0);
+    setEnabled(false);
+    expect(display.isLoading()).toBe(false);
+    expect(display.name()).toBe('');
+    expect(fixture.projectMounts).toBe(0);
   });
 
   it('settles a live GraphQL preview batch without reacquiring itself', () => {

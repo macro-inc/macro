@@ -229,9 +229,40 @@ it('keeps standalone source adapters enabled when no rollout gate is injected', 
       initiativeClient,
       cache,
       () => 'viewer',
-      () => {}
+      () => {},
+      async () => []
     ).createProjectSource(() => 'launch');
   });
   await vi.waitFor(() => expect(source.project()?.name).toBe('Launch'));
+  cache.clear();
+});
+
+it('hydrates task membership through the injected transport capability', async () => {
+  const cache = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const { initiativeClient } = await import('@service-storage/initiative');
+  mocks.tasks.mockResolvedValue(
+    ok({ taskIds: ['task-a', 'task-b'], nextCursor: null })
+  );
+  const hydrateTasks = vi.fn(async () => []);
+  const source = createRoot((dispose) => {
+    disposeSource = dispose;
+    return createProjectSources(
+      initiativeClient,
+      cache,
+      () => 'viewer',
+      () => {},
+      hydrateTasks
+    ).createTasksSource(() => 'launch');
+  });
+  await vi.waitFor(() =>
+    expect(hydrateTasks).toHaveBeenCalledWith(
+      ['task-a', 'task-b'],
+      expect.any(AbortSignal)
+    )
+  );
+  expect(source.error()).toBeUndefined();
+  expect(mocks.soup).not.toHaveBeenCalled();
   cache.clear();
 });

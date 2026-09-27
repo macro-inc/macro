@@ -97,13 +97,16 @@ export function CreateProjectView(props: {
               });
             }}
             onCreated={(id) => {
-              if (panel.handle.isPopover()) panel.handle.close();
-              layout.replaceSplit({
-                content: {
-                  type: 'component',
-                  id: projectRouteId({ id, section: 'overview' }),
-                },
-              });
+              const content = {
+                type: 'component' as const,
+                id: projectRouteId({ id, section: 'overview' }),
+              };
+              if (panel.handle.isPopover()) {
+                panel.handle.close();
+                layout.openWithSplit(content, { preferNewSplit: true });
+                return;
+              }
+              layout.replaceSplit({ content });
             }}
           />
         </SplitPanel.Body>

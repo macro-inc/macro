@@ -1,10 +1,22 @@
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
-import { err, ok } from 'neverthrow';
+import {
+  CombinedError,
+  createClient,
+  type Exchange,
+  type Operation,
+  type OperationResult,
+} from '@urql/core';
 import { createSignal, Suspense } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { filter, fromPromise, mergeMap, pipe } from 'wonka';
 
 const fixtures = vi.hoisted(() => ({
-  page: vi.fn(),
+  reply:
+    vi.fn<
+      (operation: Operation) => Promise<Pick<OperationResult, 'data' | 'error'>>
+    >(),
+  client: undefined as unknown,
   projectFlag: (): boolean | undefined => true,
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -16,41 +28,74 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|viewer@macro.com',
 }));
-vi.mock('@service-storage/initiative', () => ({
-  initiativeClient: { page: fixtures.page },
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: () => fixtures.client,
+  mapGraphqlProperties: () => [],
 }));
-vi.mock('@queries/client', async () => {
-  const { QueryClient } = await import('@tanstack/solid-query');
-  return {
-    queryClient: new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    }),
-  };
-});
+vi.mock('@queries/activity/push-registry', () => ({
+  registerActivityRevalidator: () => () => {},
+}));
+vi.mock('@entity/extractors-property/property-helpers', () => ({
+  soupPropertyToProperty: vi.fn(),
+}));
 
-import { queryClient } from '@queries/client';
 import { useProjectCommandItems } from './project-items';
+
+const page = (id: string, nextCursor: string | null = null) => ({
+  data: {
+    user: {
+      soup: {
+        nextCursor,
+        items: [
+          {
+            __typename: 'GraphqlSoupInitiative',
+            id,
+            displayName: id,
+            descriptionDocumentId: 'description',
+            metadata: { updatedAt: '2026-09-22T12:00:00Z' },
+            viewerPermission: {
+              __typename: 'GraphqlAccessLevelPermission',
+              accessLevel: 'EDIT',
+            },
+            properties: [],
+          },
+        ],
+      },
+    },
+  },
+});
 
 beforeEach(() => {
   fixtures.projectFlag = () => true;
+  const exchange: Exchange = () => (operations) =>
+    pipe(
+      operations,
+      filter((operation) => operation.kind !== 'teardown'),
+      mergeMap((operation) =>
+        fromPromise(
+          (async () => ({
+            operation,
+            stale: false,
+            hasNext: false,
+            ...(await fixtures.reply(operation)),
+          }))()
+        )
+      )
+    );
+  fixtures.client = createClient({
+    url: 'https://example.test/graphql',
+    exchanges: [exchange],
+  });
 });
 afterEach(() => {
   cleanup();
-  queryClient.clear();
-  fixtures.page.mockReset();
+  fixtures.reply.mockReset();
 });
 
 it('does not search until enabled and hides cached results when disabled', async () => {
   const [enabled, setEnabled] = createSignal<boolean | undefined>(undefined);
   fixtures.projectFlag = enabled;
-  fixtures.page.mockResolvedValue(
-    ok({
-      initiatives: [
-        { id: 'first', name: 'Launch', updatedAt: '2026-09-22T12:00:00Z' },
-      ],
-      nextCursor: 'next',
-    })
-  );
+  fixtures.reply.mockResolvedValue(page('first', 'next'));
   let source!: ReturnType<typeof useProjectCommandItems>;
   render(() => {
     source = useProjectCommandItems(
@@ -60,39 +105,29 @@ it('does not search until enabled and hides cached results when disabled', async
     return <div>{source.items().length}</div>;
   });
   expect(source.enabled()).toBe(false);
-  expect(fixtures.page).not.toHaveBeenCalled();
+  expect(source.isLoading()).toBe(false);
+  expect(fixtures.reply).not.toHaveBeenCalled();
   setEnabled(false);
   await source.loadMore();
-  expect(fixtures.page).not.toHaveBeenCalled();
+  expect(fixtures.reply).not.toHaveBeenCalled();
   setEnabled(true);
+  expect(source.isLoading()).toBe(true);
   await waitFor(() => expect(source.items()).toHaveLength(1));
+  expect(source.isLoading()).toBe(false);
   expect(source.hasMore()).toBe(true);
   setEnabled(false);
   expect(source.enabled()).toBe(false);
   expect(source.items()).toEqual([]);
   expect(source.hasMore()).toBe(false);
+  expect(source.isLoading()).toBe(false);
   await source.loadMore();
-  expect(fixtures.page).toHaveBeenCalledTimes(1);
+  expect(fixtures.reply).toHaveBeenCalledTimes(1);
 });
 
-it('pages authorized results and clears prior results when the search changes', async () => {
-  fixtures.page
-    .mockResolvedValueOnce(
-      ok({
-        initiatives: [
-          { id: 'first', name: 'Launch', updatedAt: '2026-09-22T12:00:00Z' },
-        ],
-        nextCursor: 'next',
-      })
-    )
-    .mockResolvedValueOnce(
-      ok({
-        initiatives: [
-          { id: 'second', name: 'Launch 2', updatedAt: '2026-09-22T11:00:00Z' },
-        ],
-        nextCursor: null,
-      })
-    )
+it('pages authorized Soup results and reports loading when the search changes', async () => {
+  fixtures.reply
+    .mockResolvedValueOnce(page('first', 'next'))
+    .mockResolvedValueOnce(page('second'))
     .mockImplementation(() => new Promise(() => {}));
   const [query, setQuery] = createSignal('Launch');
   let source!: ReturnType<typeof useProjectCommandItems>;
@@ -106,33 +141,37 @@ it('pages authorized results and clears prior results when the search changes', 
     return <div>Results: {source.items().length}</div>;
   }
   await waitFor(() => expect(source.items()).toHaveLength(1));
+  expect(
+    fixtures.reply.mock.calls[0][0].variables!.input.initial.filters
+      .initiativeFilter
+  ).toEqual({
+    and: {
+      left: { literal: { include: true } },
+      right: { literal: { nameContains: 'Launch' } },
+    },
+  });
   await source.loadMore();
   await waitFor(() => expect(source.items()).toHaveLength(2));
-  expect(fixtures.page.mock.calls[1][0]).toMatchObject({
-    query: 'Launch',
-    cursor: 'next',
+  expect(fixtures.reply.mock.calls[1][0].variables).toMatchObject({
+    input: { continuation: { cursor: 'next' } },
   });
   setQuery('Other');
-  await waitFor(() => expect(fixtures.page).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(fixtures.reply).toHaveBeenCalledTimes(3));
   expect(source.items()).toEqual([]);
+  expect(source.isLoading()).toBe(true);
   expect(view.queryByText('Suspended')).toBeNull();
 });
 
 it('hides cached names when project access is revoked', async () => {
-  fixtures.page
-    .mockResolvedValueOnce(
-      ok({
-        initiatives: [
-          {
-            id: 'private',
-            name: 'Private project',
-            updatedAt: '2026-09-22T12:00:00Z',
-          },
+  fixtures.reply
+    .mockResolvedValueOnce(page('Private project'))
+    .mockResolvedValue({
+      error: new CombinedError({
+        graphQLErrors: [
+          { message: 'Access revoked', extensions: { code: 'FORBIDDEN' } },
         ],
-        nextCursor: null,
-      })
-    )
-    .mockResolvedValue(err([{ code: 'FORBIDDEN', message: 'Access revoked' }]));
+      }),
+    });
   let source!: ReturnType<typeof useProjectCommandItems>;
   render(() => {
     source = useProjectCommandItems(
@@ -142,6 +181,6 @@ it('hides cached names when project access is revoked', async () => {
     return <div>{source.items().length}</div>;
   });
   await waitFor(() => expect(source.items()).toHaveLength(1));
-  await queryClient.invalidateQueries({ queryKey: ['initiatives'] });
+  await refreshActiveGraphqlSoupQueries();
   await waitFor(() => expect(source.items()).toEqual([]));
 });
