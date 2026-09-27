@@ -780,6 +780,7 @@ where
             cursor.run.id = tracing::field::Empty,
             agent.turn.stop_reason = tracing::field::Empty,
             agent.turn.outcome = tracing::field::Empty,
+            agent.turn.gate_wait_ms = tracing::field::Empty,
         ),
         err,
     )]
@@ -841,6 +842,11 @@ where
         let _turn = match gate {
             Some(guard) => guard,
             None => {
+                // The wait is on the turn span, not only in a log line: it
+                // is the one place a turn's time goes that no Cursor call
+                // accounts for, and a trace of a slow turn has to show it.
+                let waiting_since = std::time::Instant::now();
+                let span = tracing::Span::current();
                 tracing::info!(
                     "waiting for the turn gate behind a mirror of a run started elsewhere"
                 );
@@ -850,11 +856,19 @@ where
                         // Nothing to journal: the prompt never reached the
                         // gate, so it never became part of this session's
                         // record. The client's own transcript has it.
-                        tracing::info!("stopped while waiting for the turn gate");
+                        let waited_ms = waiting_since.elapsed().as_millis() as u64;
+                        span.record("agent.turn.gate_wait_ms", waited_ms);
+                        tracing::info!(waited_ms, "stopped while waiting for the turn gate");
                         return Ok(StopReason::Cancelled);
                     }
-                    guard = session.turn_gate.lock() => guard,
+                    guard = session.turn_gate.lock() => {
+                        let waited_ms = waiting_since.elapsed().as_millis() as u64;
+                        span.record("agent.turn.gate_wait_ms", waited_ms);
+                        tracing::info!(waited_ms, "acquired the turn gate");
+                        guard
+                    }
                     () = tokio::time::sleep(GATE_WAIT_BUDGET) => {
+                        span.record("agent.turn.gate_wait_ms", GATE_WAIT_BUDGET.as_millis() as u64);
                         tracing::warn!(
                             waited_secs = GATE_WAIT_BUDGET.as_secs(),
                             "gave up waiting for the turn gate; a mirror is still following a run started elsewhere"
@@ -2047,6 +2061,10 @@ where
             .filter(|r| !r.status.is_terminal() && abandoned.contains(&r.id))
             .map(|r| r.id.clone())
             .collect();
+        let listing_status: std::collections::HashMap<_, _> = listings
+            .iter()
+            .map(|r| (r.id.clone(), r.status.clone()))
+            .collect();
         let mut runs = Vec::new();
         // A pending run omitted by the provider listing still has to recover.
         for run in &pending {
@@ -2065,18 +2083,44 @@ where
         let mirrored = !runs.is_empty();
         for run in &runs {
             if !reconciled.contains(run) {
-                self.ingest_run(
-                    session_id,
-                    session,
-                    agent,
-                    run,
-                    cancel,
-                    IngestMode {
-                        emit: false,
-                        ..IngestMode::LIVE
-                    },
-                )
-                .await?;
+                // Before the ingestion, not after: a run still going is
+                // followed to its end, however long that is, holding the
+                // turn gate the whole way. The first sign of one must not be
+                // a stream warning an hour in - it is this line, with the
+                // run's status as Cursor lists it right now.
+                let status = listing_status.get(run);
+                let still_running = status.is_some_and(|status| !status.is_terminal());
+                let started = std::time::Instant::now();
+                tracing::info!(
+                    %agent,
+                    %run,
+                    cursor.run.status = ?status,
+                    cursor.run.still_running = still_running,
+                    cursor.run.listed = status.is_some(),
+                    "recovering a run started elsewhere"
+                );
+                let outcome = self
+                    .ingest_run(
+                        session_id,
+                        session,
+                        agent,
+                        run,
+                        cancel,
+                        IngestMode {
+                            emit: false,
+                            ..IngestMode::LIVE
+                        },
+                    )
+                    .await;
+                tracing::info!(
+                    %agent,
+                    %run,
+                    cursor.run.still_running = still_running,
+                    elapsed_ms = started.elapsed().as_millis() as u64,
+                    outcome = ?outcome.as_ref().map_err(ToString::to_string),
+                    "finished recovering a run started elsewhere"
+                );
+                outcome?;
             }
             let complete = session
                 .state
