@@ -1,4 +1,3 @@
-import { DIFF_SEARCH_PARAM } from '@app/features/agent-changes/core/url-state';
 import { createRoutesManifest } from '@app/lib/split-router/routes';
 import {
   decodeSplitRouterLocation,
@@ -19,7 +18,7 @@ vi.mock('@service-connection/websocket', () => ({
 }));
 
 const routes = createRoutesManifest(appSplitRoutes);
-const viewerState = `${DIFF_SEARCH_PARAM}=session-1%3Asplit%3Aunified`;
+const viewerState = 's0.changes.pane=split';
 
 function roundTrip(pathname: string, search: string, committed: boolean) {
   const location = { pathname, search: `?${search}`, hash: '' };
@@ -39,16 +38,19 @@ describe('application route search ownership', () => {
     ['/agents/session-1', 'the agents workspace'],
     ['/coders/session-1', 'a coding session'],
     ['/agent/session-1', 'the agent block'],
-  ])('keeps the changes viewer state on %s (%s)', (pathname) => {
+  ])('keeps the changes pane state on %s (%s)', (pathname) => {
     expect(roundTrip(pathname, viewerState, false)).toContain(viewerState);
     expect(roundTrip(pathname, viewerState, true)).toContain(viewerState);
   });
 
-  it('keeps a neighbouring pane’s viewer state when one pane navigates', () => {
-    const search = `${DIFF_SEARCH_PARAM}=session-1%3Asplit%3Aunified%2Csession-2%3Achanges-only%3Asplit`;
-    expect(roundTrip('/agents/session-1/~/mail', search, true)).toContain(
-      search
+  it('drops the changes pane state of a split whose route does not own it', () => {
+    const result = roundTrip(
+      '/agents/session-1/~/reviews',
+      's0.changes.pane=split&s1.changes.pane=full',
+      true
     );
+    expect(result).toContain('s0.changes.pane=split');
+    expect(result).not.toContain('s1.changes');
   });
 
   it('drops search keys no route owns', () => {

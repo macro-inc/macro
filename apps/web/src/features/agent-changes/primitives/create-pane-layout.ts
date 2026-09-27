@@ -1,6 +1,6 @@
 /**
- * Pane visibility can be controlled by the host URL; the split width stays
- * local to the reviewer and session.
+ * Pane visibility belongs to the host (see `createPaneViewState`); the split
+ * width stays local to the reviewer and scope.
  */
 
 import type { Accessor } from 'solid-js';
@@ -30,53 +30,42 @@ export type PaneLayoutController = {
   backToSplit: () => void;
 };
 
-type StoredLayout = { layout: PaneLayout; share: number };
+type StoredShare = { share: number };
 
-const LAYOUTS: readonly PaneLayout[] = ['split', 'agent-only', 'changes-only'];
-
-function parseStored(raw: unknown): StoredLayout | undefined {
+function parseShare(raw: unknown): StoredShare | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
-  const { layout, share } = raw as Partial<StoredLayout>;
-  if (!layout || !LAYOUTS.includes(layout)) return undefined;
-  return {
-    layout,
-    share: clampChangesShare(typeof share === 'number' ? share : Number.NaN),
-  };
+  const { share } = raw as { share?: unknown };
+  return typeof share === 'number'
+    ? { share: clampChangesShare(share) }
+    : undefined;
 }
 
 export function createPaneLayout(options: {
   sessionId: Accessor<string | undefined>;
-  layout?: [get: Accessor<PaneLayout>, set: (layout: PaneLayout) => void];
+  layout: [get: Accessor<PaneLayout>, set: (layout: PaneLayout) => void];
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 }): PaneLayoutController {
-  const [stored, setStored] = createPersistedSessionState<StoredLayout>({
+  const [layout, setLayout] = options.layout;
+  const [stored, setStored] = createPersistedSessionState<StoredShare>({
     sessionId: options.sessionId,
     namespace: 'agent-changes:layout',
-    initial: () => ({ layout: 'agent-only', share: DEFAULT_CHANGES_SHARE }),
-    parse: parseStored,
+    initial: () => ({ share: DEFAULT_CHANGES_SHARE }),
+    parse: parseShare,
     storage: options.storage,
   });
-  const layout = () => (options.layout ? options.layout[0]() : stored().layout);
-  const setLayout = (next: (layout: PaneLayout) => PaneLayout) => {
-    if (options.layout) options.layout[1](next(layout()));
-    else
-      setStored((previous) => ({ ...previous, layout: next(previous.layout) }));
-  };
+  const move = (next: (current: PaneLayout) => PaneLayout) =>
+    setLayout(next(layout()));
 
   return {
     layout,
     changesVisible: () => isChangesVisible(layout()),
     sessionVisible: () => isSessionVisible(layout()),
     changesShare: () => stored().share,
-    setChangesShare: (share) =>
-      setStored((previous) => ({
-        ...previous,
-        share: clampChangesShare(share),
-      })),
-    toggle: () => setLayout(toggleChanges),
-    spotlight: () => setLayout(toggleSpotlight),
-    open: () => setLayout(ensureChangesVisible),
-    close: () => setLayout(() => 'agent-only'),
-    backToSplit: () => setLayout(() => 'split'),
+    setChangesShare: (share) => setStored({ share: clampChangesShare(share) }),
+    toggle: () => move(toggleChanges),
+    spotlight: () => move(toggleSpotlight),
+    open: () => move(ensureChangesVisible),
+    close: () => setLayout('closed'),
+    backToSplit: () => setLayout('split'),
   };
 }
