@@ -294,10 +294,12 @@ the shimmer.
   code and click **Look up**. Review the request and click **Approve** to connect.
   The setup guide contains configuration and pairing screenshots in that order.
   Enter the code from your own terminal, not the example screenshot.
-  Run inside a herdr pane, macrod's Quickstart also offers **Claude Code in herdr**:
-  each session of an agent on that runtime opens a herdr tab in the directory
-  macrod started from, running the real Claude Code TUI. The session page streams
-  its tool calls and replies, and its permission prompts appear as approvals.
+  Run inside a herdr pane, macrod's Quickstart also offers **Claude Code in herdr**
+  and **Codex in herdr**: each session of an agent on that runtime opens a herdr
+  tab in the directory macrod started from, running the real Claude Code or Codex
+  TUI. The session page streams its tool calls and replies, and its permission
+  prompts appear as approvals. Other runtimes started inside herdr get a live
+  view tab per session that can prompt and interrupt it; approvals stay in Macro.
   The agent form retains sharing, name, `@tag`, runtime, default model, connections,
   channels, instructions, and permission policy.
   Runtime and short model lists use styled dropdown buttons: open the field and

@@ -141,7 +141,7 @@ fn result_text(content: Option<&Value>) -> String {
     }
 }
 
-fn truncate(text: &str) -> String {
+pub(crate) fn truncate(text: &str) -> String {
     if text.chars().count() <= TOOL_OUTPUT_LIMIT {
         return text.to_owned();
     }

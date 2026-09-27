@@ -1,16 +1,17 @@
-//! `macrod herdr-acp`: an ACP agent whose sessions are live Claude Code TUIs
-//! in herdr windows.
+//! `macrod herdr-acp`: an ACP agent whose sessions are live coding-agent TUIs
+//! (Claude Code or Codex) in herdr windows.
 //!
 //! macrod runs this as its harness like any other ACP agent, so sessions
 //! still open, prompt, stream, and stop through Macro's ACP infrastructure.
-//! Behind the protocol, each session is a real interactive `claude` in its
-//! own herdr tab, rooted at the session's working directory:
+//! Behind the protocol, each session is a real interactive `claude` or
+//! `codex` in its own herdr tab, rooted at the session's working directory:
 //!
-//! - the first `session/prompt` opens the tab and starts Claude Code there
-//!   with the session's id, model, and Macro MCP servers;
+//! - the first `session/prompt` opens the tab and starts the agent there
+//!   with the session's model (and, for Claude Code, its id and Macro MCP
+//!   servers);
 //! - prompts are typed into the TUI with `herdr agent prompt`;
-//! - Claude Code's transcript is tailed and streamed back as
-//!   `session/update`s, and its final assistant message ends the turn;
+//! - the agent's own session transcript is tailed and streamed back as
+//!   `session/update`s, and its end-of-turn record ends the turn;
 //! - a permission dialog in the TUI becomes a `session/request_permission`,
 //!   answered by pressing the matching key; `session/cancel` presses Esc.
 //!
@@ -31,6 +32,7 @@ use tokio_util::sync::CancellationToken;
 use super::HerdrSession;
 use super::claude_log::{ClaudeLog, LogEvent};
 use super::cli::{HerdrCli, HerdrError};
+use super::codex_log::CodexLog;
 use super::hub::title_from;
 
 /// The subcommand macrod's harness config names to run this adapter.
@@ -38,11 +40,17 @@ pub(crate) const SUBCOMMAND: &str = "herdr-acp";
 
 const MODEL_CONFIG_ID: &str = "model";
 const DEFAULT_MODEL: &str = "default";
-const MODELS: &[(&str, &str)] = &[
+const CLAUDE_MODELS: &[(&str, &str)] = &[
     (DEFAULT_MODEL, "Default (Claude Code's choice)"),
     ("opus", "Opus"),
     ("sonnet", "Sonnet"),
     ("haiku", "Haiku"),
+];
+const CODEX_MODELS: &[(&str, &str)] = &[
+    (DEFAULT_MODEL, "Default (Codex's choice)"),
+    ("gpt-6-astra", "GPT-6 Astra"),
+    ("gpt-5.6", "GPT-5.6"),
+    ("gpt-5.5", "GPT-5.5"),
 ];
 const POLL: Duration = Duration::from_millis(250);
 /// Transcript polls per herdr status check.
@@ -52,14 +60,71 @@ const STATUS_EVERY: u32 = 4;
 const SETTLED_CHECKS: u32 = 3;
 const QUIET_START: Duration = Duration::from_secs(20);
 const MISSING_AGENT_CHECKS: u32 = 5;
+/// How long a submitted prompt may show no sign of a turn before the
+/// adapter presses Enter again: a TUI still settling after launch can take
+/// the pasted text but drop the Enter that follows it.
+const SUBMIT_GRACE: Duration = Duration::from_secs(5);
+
+/// Which coding-agent TUI each session runs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, clap::ValueEnum)]
+pub(crate) enum TuiAgent {
+    /// Claude Code (`claude`).
+    #[default]
+    Claude,
+    /// OpenAI Codex (`codex`).
+    Codex,
+}
+
+impl TuiAgent {
+    /// herdr's `--kind` for the agent, which is also its command.
+    pub(crate) fn herdr_kind(self) -> &'static str {
+        match self {
+            Self::Claude => "claude",
+            Self::Codex => "codex",
+        }
+    }
+
+    fn models(self) -> &'static [(&'static str, &'static str)] {
+        match self {
+            Self::Claude => CLAUDE_MODELS,
+            Self::Codex => CODEX_MODELS,
+        }
+    }
+
+    fn log(self) -> Transcript {
+        match self {
+            Self::Claude => Transcript::Claude(ClaudeLog::default()),
+            Self::Codex => Transcript::Codex(CodexLog::default()),
+        }
+    }
+}
+
+/// A session transcript reader for the agent that writes it.
+enum Transcript {
+    Claude(ClaudeLog),
+    Codex(CodexLog),
+}
+
+impl Transcript {
+    fn entry(&mut self, line: &str) -> Vec<LogEvent> {
+        match self {
+            Self::Claude(log) => log.entry(line),
+            Self::Codex(log) => log.entry(line),
+        }
+    }
+}
 
 /// How `macrod herdr-acp` runs its agents.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct AdapterOptions {
+    /// The agent TUI sessions run.
+    pub kind: TuiAgent,
     /// Passed to Claude Code as `--permission-mode`.
     pub permission_mode: Option<String>,
     /// Open session windows in the background instead of switching to them.
     pub no_focus: bool,
+    /// Extra arguments for every agent launch, after the adapter's own.
+    pub agent_args: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -120,8 +185,8 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
             .as_ref()
             .map(|herdr| HerdrCli::new(&herdr.bin, herdr.workspace_id.clone())),
         options,
-        claude_home: environment::Home::new()
-            .and_then(|home| home.value().map(|home| PathBuf::from(home).join(".claude"))),
+        home: environment::Home::new().and_then(|home| home.value().map(PathBuf::from)),
+        claimed: Mutex::new(std::collections::HashSet::new()),
     });
 
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
@@ -158,7 +223,10 @@ struct Adapter {
     sessions: Mutex<HashMap<String, Arc<Session>>>,
     herdr: Option<HerdrCli>,
     options: AdapterOptions,
-    claude_home: Option<PathBuf>,
+    home: Option<PathBuf>,
+    /// Transcripts already bound to a session, so two sessions in the same
+    /// directory never read the same Codex rollout.
+    claimed: Mutex<std::collections::HashSet<PathBuf>>,
 }
 
 struct Session {
@@ -173,9 +241,11 @@ struct Session {
 /// A session's running TUI.
 struct Live {
     session: String,
+    cwd: PathBuf,
+    started: std::time::SystemTime,
     name: String,
     model: String,
-    log: ClaudeLog,
+    log: Transcript,
     path: Option<PathBuf>,
     offset: u64,
 }
@@ -265,10 +335,15 @@ impl Adapter {
                 let value = params.get("value").and_then(Value::as_str);
                 match (config, value) {
                     (Some(MODEL_CONFIG_ID), Some(model))
-                        if MODELS.iter().any(|(id, _)| *id == model) =>
+                        if self
+                            .options
+                            .kind
+                            .models()
+                            .iter()
+                            .any(|(id, _)| *id == model) =>
                     {
                         model.clone_into(&mut lock(&session.model));
-                        Ok(json!({"configOptions": config_options(model)}))
+                        Ok(json!({"configOptions": config_options(self.options.kind, model)}))
                     }
                     _ => Err(RpcError::invalid("unsupported configuration option")),
                 }
@@ -309,7 +384,7 @@ impl Adapter {
                 cancel: Mutex::new(None),
             }),
         );
-        json!({"sessionId": id, "configOptions": config_options(DEFAULT_MODEL)})
+        json!({"sessionId": id, "configOptions": config_options(self.options.kind, DEFAULT_MODEL)})
     }
 
     async fn prompt(
@@ -332,7 +407,7 @@ impl Adapter {
         };
 
         let model = lock(&session.model).clone();
-        if model != live.model {
+        if model != live.model && self.options.kind == TuiAgent::Claude {
             herdr
                 .prompt_agent(&live.name, &format!("/model {model}"))
                 .await?;
@@ -353,14 +428,15 @@ impl Adapter {
         outcome
     }
 
-    /// Open the session's herdr window and start Claude Code in it.
+    /// Open the session's herdr window and start the agent in it.
     async fn launch(
         &self,
         herdr: &HerdrCli,
         session: &Session,
         first_prompt: &str,
     ) -> Result<Live, RpcError> {
-        let label = title_from(first_prompt).unwrap_or_else(|| "claude".to_owned());
+        let kind = self.options.kind;
+        let label = title_from(first_prompt).unwrap_or_else(|| kind.herdr_kind().to_owned());
         let window = herdr
             .open_window(&session.cwd, &label, !self.options.no_focus)
             .await?;
@@ -368,29 +444,41 @@ impl Adapter {
         tokio::time::sleep(Duration::from_millis(800)).await;
 
         let model = lock(&session.model).clone();
-        let mut args = vec!["--session-id".to_owned(), session.id.clone()];
+        let mut args = Vec::new();
         if model != DEFAULT_MODEL {
             args.extend(["--model".to_owned(), model.clone()]);
         }
-        if let Some(mode) = &self.options.permission_mode {
-            args.extend(["--permission-mode".to_owned(), mode.clone()]);
+        if kind == TuiAgent::Claude {
+            args.extend(["--session-id".to_owned(), session.id.clone()]);
+            if let Some(mode) = &self.options.permission_mode {
+                args.extend(["--permission-mode".to_owned(), mode.clone()]);
+            }
+            if let Some(config) = self.write_mcp_config(session)? {
+                args.extend([
+                    "--mcp-config".to_owned(),
+                    config.to_string_lossy().into_owned(),
+                ]);
+            }
         }
-        if let Some(config) = self.write_mcp_config(session)? {
-            args.extend([
-                "--mcp-config".to_owned(),
-                config.to_string_lossy().into_owned(),
-            ]);
-        }
+        args.extend(self.options.agent_args.iter().cloned());
         let name = agent_name(&session.id);
+        let started = std::time::SystemTime::now();
         herdr
-            .start_agent(&name, "claude", &window.pane_id, &args)
+            .start_agent(&name, kind.herdr_kind(), &window.pane_id, &args)
             .await?;
-        tracing::info!(session = %session.id, pane = %window.pane_id, "claude code started in herdr");
+        tracing::info!(
+            session = %session.id,
+            pane = %window.pane_id,
+            agent = kind.herdr_kind(),
+            "agent started in herdr"
+        );
         Ok(Live {
             session: session.id.clone(),
+            cwd: session.cwd.clone(),
+            started,
             name,
             model,
-            log: ClaudeLog::default(),
+            log: self.options.kind.log(),
             path: None,
             offset: 0,
         })
@@ -430,11 +518,18 @@ impl Adapter {
         // answer from Macro never presses keys into a different dialog.
         let generation = Arc::new(AtomicU64::new(0));
         let mut asking = false;
+        let mut resubmitted = false;
         loop {
             tokio::select! {
                 () = cancel.cancelled() => {
                     herdr.send_keys(&live.name, &["esc"]).await?;
-                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    if self.options.kind == TuiAgent::Claude {
+                        // Claude Code puts an interrupted prompt back in its
+                        // input box; left there, the next prompt is appended
+                        // to it. One Ctrl+C clears the box (two would quit).
+                        herdr.send_keys(&live.name, &["ctrl+c"]).await?;
+                    }
                     self.forward(session, live, &mut open_tool);
                     return Ok("cancelled");
                 }
@@ -450,16 +545,19 @@ impl Adapter {
             if !ticks.is_multiple_of(STATUS_EVERY) {
                 continue;
             }
-            let status = match herdr.agent_status(&live.name).await {
-                Ok(status) => {
+            let status = match herdr.agent_info(&live.name).await {
+                Ok(info) => {
                     missing = 0;
-                    status
+                    if live.path.is_none() {
+                        live.path = self.locate(live, info.session_id.as_deref());
+                    }
+                    info.status
                 }
                 Err(error) => {
                     missing += 1;
                     if missing >= MISSING_AGENT_CHECKS {
                         return Err(RpcError::internal(format!(
-                            "the Claude Code window is gone: {error}"
+                            "the agent's herdr window is gone: {error}"
                         )));
                     }
                     continue;
@@ -479,6 +577,11 @@ impl Adapter {
                         let current = generation.fetch_add(1, Ordering::SeqCst) + 1;
                         self.ask_permission(session, live, open_tool.clone(), current, &generation);
                     }
+                }
+                "idle" | "done" if !active && !resubmitted && started.elapsed() >= SUBMIT_GRACE => {
+                    resubmitted = true;
+                    tracing::warn!(agent = %live.name, "prompt shows no activity; pressing Enter again");
+                    herdr.send_keys(&live.name, &["enter"]).await?;
                 }
                 "idle" | "done" => {
                     settled += 1;
@@ -506,7 +609,11 @@ impl Adapter {
             match event {
                 LogEvent::Update(update) => {
                     moved = true;
-                    track_open_tool(open_tool, &update);
+                    // Codex logs a command only once it has run, so its log
+                    // never names the call a permission dialog is about.
+                    if self.options.kind == TuiAgent::Claude {
+                        track_open_tool(open_tool, &update);
+                    }
                     self.notify_update(&session.id, update);
                 }
                 LogEvent::TurnEnded(stop) => ended = Some(stop),
@@ -532,13 +639,18 @@ impl Adapter {
         let session_id = session.id.clone();
         let name = live.name.clone();
         let blocked = blocked.clone();
-        let (tool_id, title) = tool.unwrap_or_else(|| {
-            (
-                format!("herdr-permission-{generation}"),
-                "Claude Code is asking for permission".to_owned(),
-            )
-        });
+        let kind = self.options.kind;
         tokio::spawn(async move {
+            let (tool_id, title) = match tool {
+                Some(tool) => tool,
+                None => {
+                    let screen = herdr.read_agent(&name).await.unwrap_or_default();
+                    (
+                        format!("herdr-permission-{generation}"),
+                        permission_title(kind, &screen),
+                    )
+                }
+            };
             let answer = adapter
                 .call(
                     "session/request_permission",
@@ -562,18 +674,34 @@ impl Adapter {
                 == Some("allow");
             let key = if allowed { "enter" } else { "esc" };
             if let Err(error) = herdr.send_keys(&name, &[key]).await {
-                tracing::warn!(error = %error, "could not answer the Claude Code permission dialog");
+                tracing::warn!(error = %error, "could not answer the agent's permission dialog");
             }
         });
+    }
+
+    /// Where the agent writes the session's transcript, once it exists.
+    /// Claude Code names it after the id this adapter gave it; Codex mints
+    /// its own id, which herdr reports once the session is live.
+    fn locate(&self, live: &Live, agent_session: Option<&str>) -> Option<PathBuf> {
+        let home = self.home.as_deref()?;
+        let path = match self.options.kind {
+            TuiAgent::Claude => find_claude_transcript(&home.join(".claude"), &live.session),
+            TuiAgent::Codex => {
+                let sessions = home.join(".codex").join("sessions");
+                let claimed = lock(&self.claimed);
+                agent_session
+                    .and_then(|id| find_codex_rollout(&sessions, id))
+                    .or_else(|| newest_codex_rollout(&sessions, &live.cwd, live.started, &claimed))
+            }
+        }?;
+        lock(&self.claimed).insert(path.clone());
+        Some(path)
     }
 
     /// Read whole new lines from the session's transcript.
     fn drain(&self, live: &mut Live) -> Vec<LogEvent> {
         if live.path.is_none() {
-            live.path = self
-                .claude_home
-                .as_deref()
-                .and_then(|home| find_transcript(home, &live.session));
+            live.path = self.locate(live, None);
         }
         let Some(path) = &live.path else {
             return Vec::new();
@@ -597,6 +725,39 @@ impl Adapter {
             .flat_map(|line| live.log.entry(line))
             .collect()
     }
+}
+
+/// What a permission dialog on the agent's screen is asking about.
+pub(crate) fn permission_title(kind: TuiAgent, screen: &str) -> String {
+    let lines: Vec<&str> = screen.lines().map(str::trim).collect();
+    let asked = lines
+        .iter()
+        .rposition(|line| line.starts_with("Would you like to"))
+        .map(|index| (lines[index], &lines[index + 1..]));
+    if let Some((question, rest)) = asked {
+        if let Some(command) = rest.iter().find_map(|line| line.strip_prefix("$ ")) {
+            return format!("Run {}", clip_title(command));
+        }
+        if question.contains("edit") {
+            return "Edit files".to_owned();
+        }
+        if let Some(reason) = rest.iter().find_map(|line| line.strip_prefix("Reason: ")) {
+            return clip_title(reason);
+        }
+    }
+    match kind {
+        TuiAgent::Claude => "Claude Code is asking for permission".to_owned(),
+        TuiAgent::Codex => "Codex is asking for permission".to_owned(),
+    }
+}
+
+fn clip_title(text: &str) -> String {
+    const LIMIT: usize = 80;
+    let mut clipped: String = text.chars().take(LIMIT).collect();
+    if text.chars().count() > LIMIT {
+        clipped.push('…');
+    }
+    clipped
 }
 
 fn track_open_tool(open_tool: &mut Option<(String, String)>, update: &Value) {
@@ -627,14 +788,15 @@ pub(crate) fn agent_name(session: &str) -> String {
     format!("macro-{short}")
 }
 
-fn config_options(current: &str) -> Value {
+fn config_options(kind: TuiAgent, current: &str) -> Value {
     json!([{
         "id": MODEL_CONFIG_ID,
         "name": "Model",
         "category": "model",
         "type": "select",
         "currentValue": current,
-        "options": MODELS
+        "options": kind
+            .models()
             .iter()
             .map(|(value, name)| json!({"value": value, "name": name}))
             .collect::<Vec<_>>(),
@@ -693,7 +855,80 @@ pub(crate) fn claude_mcp_servers(servers: &[Value]) -> serde_json::Map<String, V
         .collect()
 }
 
-fn find_transcript(claude_home: &Path, session: &str) -> Option<PathBuf> {
+fn codex_rollouts(sessions: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut stack = vec![sessions.to_owned()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for path in entries.filter_map(Result::ok).map(|entry| entry.path()) {
+            if path.is_dir() {
+                stack.push(path);
+            } else if path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("rollout-") && name.ends_with(".jsonl"))
+            {
+                found.push(path);
+            }
+        }
+    }
+    found
+}
+
+/// The newest unclaimed rollout Codex started in `cwd` since `since`, for
+/// when herdr cannot name the Codex session.
+fn newest_codex_rollout(
+    sessions: &Path,
+    cwd: &Path,
+    since: std::time::SystemTime,
+    claimed: &std::collections::HashSet<PathBuf>,
+) -> Option<PathBuf> {
+    let since = since
+        .checked_sub(Duration::from_secs(2))
+        .unwrap_or(std::time::UNIX_EPOCH);
+    codex_rollouts(sessions)
+        .into_iter()
+        .filter(|path| !claimed.contains(path))
+        .filter_map(|path| {
+            let modified = std::fs::metadata(&path)
+                .and_then(|meta| meta.modified())
+                .ok()?;
+            (modified >= since).then_some((modified, path))
+        })
+        .filter(|(_, path)| rollout_cwd(path).is_some_and(|dir| dir == cwd))
+        .max_by_key(|(modified, _)| *modified)
+        .map(|(_, path)| path)
+}
+
+/// The working directory in a rollout's leading `session_meta` record.
+fn rollout_cwd(path: &Path) -> Option<PathBuf> {
+    use std::io::BufRead as _;
+    let mut first = String::new();
+    std::io::BufReader::new(std::fs::File::open(path).ok()?)
+        .read_line(&mut first)
+        .ok()?;
+    let meta: Value = serde_json::from_str(&first).ok()?;
+    (meta.get("type")?.as_str()? == "session_meta")
+        .then(|| meta.pointer("/payload/cwd")?.as_str().map(PathBuf::from))
+        .flatten()
+}
+
+/// `rollout-<time>-<session>.jsonl` under Codex's dated session folders.
+fn find_codex_rollout(sessions: &Path, session: &str) -> Option<PathBuf> {
+    if session.is_empty() {
+        return None;
+    }
+    let suffix = format!("-{session}.jsonl");
+    codex_rollouts(sessions).into_iter().find(|path| {
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(&suffix))
+    })
+}
+
+fn find_claude_transcript(claude_home: &Path, session: &str) -> Option<PathBuf> {
     if session.is_empty() {
         return None;
     }
