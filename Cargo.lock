@@ -7572,6 +7572,7 @@ name = "github_pull_requests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aws-sdk-s3",
  "axum",
  "chrono",
  "entity_access",

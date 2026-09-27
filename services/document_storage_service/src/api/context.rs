@@ -86,10 +86,20 @@ use github::inbound::pull_request_index_router::PullRequestIndexRouterState;
 use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use github::outbound::pull_request_diff::GithubPullRequestDiffClient;
 use github_pull_requests::{
-    domain::service::GithubPullRequestServiceImpl,
-    inbound::axum_router::GithubPullRequestRouterState,
-    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+    domain::service::{
+        GithubPullRequestChangesServiceImpl, GithubPullRequestChangesetStore,
+        GithubPullRequestServiceImpl,
+    },
+    inbound::{
+        axum_router::GithubPullRequestRouterState,
+        changes_router::GithubPullRequestChangesRouterState,
+    },
+    outbound::{
+        pg_github_pull_request_repo::PgGithubPullRequestRepo,
+        s3_patch_store::S3GithubPullRequestPatchStore,
+    },
 };
 use initiative::{
     domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
@@ -546,6 +556,23 @@ pub(crate) type DssGithubPullRequestState = GithubPullRequestRouterState<
     AuthorizationService,
 >;
 
+/// Type alias for the store of GitHub pull request changesets and their patches.
+pub(crate) type GithubPullRequestChangesetStoreType = GithubPullRequestChangesetStore<
+    GithubPullRequestDiffClient<PgGithubSyncRepo, GithubSyncClientImpl>,
+    PgGithubPullRequestRepo,
+    S3GithubPullRequestPatchStore,
+>;
+
+/// Type alias for the GitHub pull request changes router state.
+pub(crate) type DssGithubPullRequestChangesState = GithubPullRequestChangesRouterState<
+    GithubPullRequestChangesServiceImpl<
+        GithubPullRequestServiceType,
+        GithubPullRequestChangesetStoreType,
+    >,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 /// Type alias for the github sync service.
 pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl<
     DocumentService,
@@ -610,6 +637,7 @@ pub(crate) struct ApiContext {
     pub github_sync_service: Arc<GithubSyncServiceType>,
     pub github_pull_request_index_state: DssGithubPullRequestIndexState,
     pub github_pull_request_state: DssGithubPullRequestState,
+    pub github_pull_request_changes_state: DssGithubPullRequestChangesState,
     pub dynamodb_client: Arc<DynamodbClient>,
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,

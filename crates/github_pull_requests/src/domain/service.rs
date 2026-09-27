@@ -3,6 +3,10 @@
 #[cfg(test)]
 mod test;
 
+mod changes;
+
+pub use changes::{GithubPullRequestChangesServiceImpl, GithubPullRequestChangesetStore};
+
 use entity_access::domain::models::{
     EntityAccessReceipt, EntityType, MemberTeamRole, ViewAccessLevel,
 };

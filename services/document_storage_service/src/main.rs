@@ -88,16 +88,27 @@ use foreign_entity::{
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::{
-    GithubSyncConfig, GithubSyncServiceImpl, InstallationTokenConfig, PullRequestIndexService,
+    GithubSyncConfig, GithubSyncServiceImpl, InstallationTokenConfig, InstallationTokenService,
+    PullRequestIndexService,
 };
 use github::inbound::pull_request_index_router::PullRequestIndexRouterState;
 use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use github::outbound::pull_request_diff::GithubPullRequestDiffClient;
 use github_pull_requests::{
-    domain::service::GithubPullRequestServiceImpl,
-    inbound::axum_router::GithubPullRequestRouterState,
-    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+    domain::service::{
+        GithubPullRequestChangesServiceImpl, GithubPullRequestChangesetStore,
+        GithubPullRequestServiceImpl,
+    },
+    inbound::{
+        axum_router::GithubPullRequestRouterState,
+        changes_router::GithubPullRequestChangesRouterState,
+    },
+    outbound::{
+        pg_github_pull_request_repo::PgGithubPullRequestRepo,
+        s3_patch_store::S3GithubPullRequestPatchStore,
+    },
 };
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use initiative::{
@@ -595,6 +606,32 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(GithubPullRequestServiceImpl::new(
             ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
             PgGithubPullRequestRepo::new(db.clone()),
+        )),
+        entity_access_service.clone(),
+        authorization_state.clone(),
+    );
+
+    let github_pull_request_changes_state = GithubPullRequestChangesRouterState::new(
+        Arc::new(GithubPullRequestChangesServiceImpl::new(
+            GithubPullRequestServiceImpl::new(
+                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+                PgGithubPullRequestRepo::new(db.clone()),
+            ),
+            GithubPullRequestChangesetStore::new(
+                GithubPullRequestDiffClient::new(InstallationTokenService::new(
+                    InstallationTokenConfig {
+                        client_id: config.github_sync_app_client_id.to_string(),
+                        private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_string(),
+                    },
+                    PgGithubSyncRepo::new(db.clone()),
+                    GithubSyncClientImpl::default(),
+                )),
+                PgGithubPullRequestRepo::new(db.clone()),
+                S3GithubPullRequestPatchStore::new(
+                    macro_aws_config::s3_client().await,
+                    config.github_pull_request_patch_bucket.to_string(),
+                ),
+            ),
         )),
         entity_access_service.clone(),
         authorization_state.clone(),
@@ -1622,6 +1659,7 @@ async fn run() -> anyhow::Result<()> {
         github_sync_service: Arc::new(github_sync_service_impl),
         github_pull_request_index_state,
         github_pull_request_state,
+        github_pull_request_changes_state,
         foreign_entity_state,
         db: db.clone(),
         readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),

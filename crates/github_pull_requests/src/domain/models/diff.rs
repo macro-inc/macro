@@ -130,3 +130,21 @@ pub enum GithubPullRequestDiffError {
     #[error(transparent)]
     Other(anyhow::Error),
 }
+
+impl GithubPullRequestDiffError {
+    /// What a user can do about GitHub refusing the diff, in a sentence; `None` for failures
+    /// that are not theirs to fix.
+    #[must_use]
+    pub fn user_message(&self) -> Option<&'static str> {
+        match self {
+            Self::NotFound => Some("This pull request is not available on GitHub."),
+            Self::TooLarge => {
+                Some("This pull request is too large to load here. Review it on GitHub.")
+            }
+            Self::Unavailable => Some(
+                "Macro's GitHub App cannot read this pull request. Check its repository access.",
+            ),
+            Self::Other(_) => None,
+        }
+    }
+}

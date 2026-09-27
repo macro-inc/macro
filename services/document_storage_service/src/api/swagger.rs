@@ -91,6 +91,10 @@ use github_pull_requests::domain::models::{
     GithubLabelFacet, GithubPullRequestFacets, GithubRepositoryFacet, GithubUserFacet,
     StoredGithubPullRequest,
 };
+use github_pull_requests::inbound::changes_router::{
+    ChangedFileDto, ChangesetDto, ChangesetSourceDto, FileChangeKindDto, GitRefDto,
+    GithubPullRequestChangesPatchResponse, GithubPullRequestChangesResponse,
+};
 use initiative::domain::models::{
     AssignTaskStatus, AssignTasksRequest, AssignTasksResponse, AssignTasksResult,
     CreateInitiativeRequest, InitiativeDetail, InitiativeId, InitiativeList, InitiativeSummary,
@@ -412,6 +416,8 @@ use utoipa::OpenApi;
         // github_pull_requests
         github_pull_requests::inbound::axum_router::get_github_pull_request_facets_handler,
         github_pull_requests::inbound::axum_router::get_github_pull_request_handler,
+        github_pull_requests::inbound::changes_router::get_github_pull_request_changes_handler,
+        github_pull_requests::inbound::changes_router::get_github_pull_request_changes_patch_handler,
 
         // threads
         threads::edit_thread::edit_thread_handler,
@@ -551,6 +557,13 @@ use utoipa::OpenApi;
             GithubUserFacet,
             GithubLabelFacet,
             StoredGithubPullRequest,
+            GithubPullRequestChangesResponse,
+            GithubPullRequestChangesPatchResponse,
+            ChangesetDto,
+            ChangesetSourceDto,
+            ChangedFileDto,
+            FileChangeKindDto,
+            GitRefDto,
             Favorite,
             FavoritesList,
             CreatedUserApiKey,

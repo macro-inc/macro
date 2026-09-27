@@ -1,5 +1,6 @@
 //! PostgreSQL storage for the typed columns of GitHub pull requests.
 
+mod changesets;
 mod facets;
 mod index;
 mod listing;

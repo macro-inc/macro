@@ -36,6 +36,7 @@ type CreateCloudStorageServiceServiceArgs = {
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   documentStorageBucketArn: pulumi.Output<string> | string;
   docxUploadBucketArn: pulumi.Output<string> | string;
+  githubPullRequestPatchBucketArn: pulumi.Output<string> | string;
   serviceContainerPort: number;
   containerEnvVars?: { name: string; value: pulumi.Output<string> | string }[];
   healthCheckPath: string;
@@ -63,6 +64,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
       platform,
       documentStorageBucketArn,
       docxUploadBucketArn,
+      githubPullRequestPatchBucketArn,
       serviceContainerPort,
       healthCheckPath,
       containerEnvVars,
@@ -105,6 +107,8 @@ export class CloudStorageService extends pulumi.ComponentResource {
                 pulumi.interpolate`${documentStorageBucketArn}/*`,
                 docxUploadBucketArn,
                 pulumi.interpolate`${docxUploadBucketArn}/*`,
+                githubPullRequestPatchBucketArn,
+                pulumi.interpolate`${githubPullRequestPatchBucketArn}/*`,
               ],
               Effect: 'Allow',
             },

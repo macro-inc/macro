@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+mod changes;
 mod diff;
 mod key;
 mod pull_request;
@@ -11,6 +12,10 @@ use chrono::{DateTime, Utc};
 use foreign_entity::domain::models::{ForeignEntity, ForeignEntityError, SourceId};
 use git_patch::wire::GitRefDto;
 
+pub use changes::{
+    GithubPullRequestChangesError, GithubPullRequestChangeset, changeset_id, changeset_patch_key,
+    github_key_of,
+};
 pub use diff::{
     ChangesetRange, GitRef, GithubPullRequestDiff, GithubPullRequestDiffError, PullRequestRef,
     RepositorySlug,

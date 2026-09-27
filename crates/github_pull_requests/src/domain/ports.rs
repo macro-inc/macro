@@ -11,10 +11,11 @@ use item_filters::ast::{LiteralTree, github_pull_request::GithubPullRequestLiter
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::models::{
-    EnrichedGithubPullRequest, GithubPullRequestDiff, GithubPullRequestDiffError,
-    GithubPullRequestError, GithubPullRequestFacets, GithubPullRequestRow,
-    GithubPullRequestSortDirection, GithubRepositoryIdentity, PullRequestRef,
-    StoredGithubPullRequest, UpsertGithubPullRequest, UpsertedGithubPullRequest,
+    EnrichedGithubPullRequest, GithubPullRequestChangesError, GithubPullRequestChangeset,
+    GithubPullRequestDiff, GithubPullRequestDiffError, GithubPullRequestError,
+    GithubPullRequestFacets, GithubPullRequestRow, GithubPullRequestSortDirection,
+    GithubRepositoryIdentity, PullRequestRef, StoredGithubPullRequest, UpsertGithubPullRequest,
+    UpsertedGithubPullRequest,
 };
 
 /// Stores GitHub pull requests as foreign entity records, one record per user or team the pull
@@ -150,6 +151,90 @@ pub trait GithubPullRequestDiffReader: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         pull_request: &PullRequestRef,
     ) -> impl Future<Output = Result<GithubPullRequestDiff, GithubPullRequestDiffError>> + Send;
+}
+
+/// Stores the summary of each pull request changeset.
+pub trait GithubPullRequestChangesetRepository: Send + Sync + 'static {
+    /// Error type returned by repository operations.
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+
+    /// The changeset stored under `id`, if any.
+    fn get_changeset(
+        &self,
+        id: uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<GithubPullRequestChangeset>, Self::Err>> + Send;
+
+    /// Store `changeset`, unless a changeset with its id is already stored.
+    fn insert_changeset(
+        &self,
+        changeset: &GithubPullRequestChangeset,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Stores pull request patches, which can be megabytes and are read whole or not at all.
+pub trait GithubPullRequestPatchStore: Send + Sync + 'static {
+    /// Error type returned by store operations.
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+
+    /// The patch under `key`, or `None` when nothing is stored there, for example because it
+    /// expired.
+    fn get_patch(
+        &self,
+        key: &str,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Store `patch` under `key`, replacing whatever was there.
+    fn put_patch(
+        &self,
+        key: &str,
+        patch: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Pull request changesets for callers that authorized their own access, such as agent
+/// sessions linked to a pull request. The diff is read with `user`'s GitHub repository access.
+pub trait GithubPullRequestChangesets: Send + Sync + 'static {
+    /// The changeset stored under `id`, if any.
+    fn changeset(
+        &self,
+        id: uuid::Uuid,
+    ) -> impl Future<
+        Output = Result<Option<GithubPullRequestChangeset>, GithubPullRequestChangesError>,
+    > + Send;
+
+    /// Read the pull request's current diff and store it, once per base and head.
+    fn capture(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        pull_request: &PullRequestRef,
+    ) -> impl Future<Output = Result<GithubPullRequestChangeset, GithubPullRequestChangesError>> + Send;
+
+    /// The patch of the changeset under `id`, read again from GitHub when the stored copy
+    /// expired. [`GithubPullRequestChangesError::Moved`] when the pull request no longer has
+    /// that base and head.
+    fn patch(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: uuid::Uuid,
+    ) -> impl Future<Output = Result<String, GithubPullRequestChangesError>> + Send;
+}
+
+/// A pull request's changes, for callers with view access to one of its records.
+pub trait GithubPullRequestChanges: Send + Sync + 'static {
+    /// The changes of the pull request behind the record `receipt` grants view access to, at its
+    /// current base and head.
+    fn changes(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<GithubPullRequestChangeset, GithubPullRequestChangesError>> + Send;
+
+    /// The patch of the changeset `changeset`, which must belong to the pull request behind the
+    /// record `receipt` grants view access to.
+    fn patch(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        changeset: uuid::Uuid,
+    ) -> impl Future<Output = Result<String, GithubPullRequestChangesError>> + Send;
 }
 
 /// Aggregate views over the GitHub pull requests a caller can see.
