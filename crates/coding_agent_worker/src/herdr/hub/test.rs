@@ -45,10 +45,7 @@ fn a_named_session_opens_one_window_and_is_steerable() {
             },
         ]
     );
-    assert_eq!(
-        hub.control_target("acp-1"),
-        Some((macro_id(1), owner()))
-    );
+    assert_eq!(hub.control_target("acp-1"), Some((macro_id(1), owner())));
     assert!(hub.unclaimed_macro.is_empty());
 }
 
@@ -102,7 +99,10 @@ fn a_turn_titles_the_window_once_and_reports_each_state() {
             _ => None,
         })
         .collect();
-    assert_eq!(titles, ["Fix the flaky login test in the auth service ple…"]);
+    assert_eq!(
+        titles,
+        ["Fix the flaky login test in the auth service ple…"]
+    );
     let states: Vec<_> = work
         .iter()
         .filter_map(|item| match item {

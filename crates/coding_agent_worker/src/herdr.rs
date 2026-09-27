@@ -57,8 +57,7 @@ pub(crate) struct HerdrSession {
 impl HerdrSession {
     /// The session macrod is running inside, if any.
     pub(crate) fn detect() -> Option<Self> {
-        let inside = environment::HerdrEnv::new()
-            .is_some_and(|value| value.value() == Some("1"));
+        let inside = environment::HerdrEnv::new().is_some_and(|value| value.value() == Some("1"));
         if !inside {
             return None;
         }

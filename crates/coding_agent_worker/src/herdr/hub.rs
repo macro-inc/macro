@@ -224,7 +224,8 @@ impl HubState {
     }
 
     fn bind(&mut self, acp: &str, session: AgentSessionId) {
-        self.unclaimed_macro.retain(|unclaimed| *unclaimed != session);
+        self.unclaimed_macro
+            .retain(|unclaimed| *unclaimed != session);
         let view = self.sessions.entry(acp.to_owned()).or_default();
         view.macro_session = Some(session);
     }
@@ -286,7 +287,12 @@ impl HubState {
             TapEvent::Update { session, update } => {
                 let title = (update.get("sessionUpdate").and_then(Value::as_str)
                     == Some("session_info_update"))
-                .then(|| update.get("title").and_then(Value::as_str).and_then(title_from))
+                .then(|| {
+                    update
+                        .get("title")
+                        .and_then(Value::as_str)
+                        .and_then(title_from)
+                })
                 .flatten();
                 let view = self.sessions.entry(session.clone()).or_default();
                 view.push(ToPane::Update { update });
@@ -386,7 +392,10 @@ impl Launcher {
     async fn handle(&mut self, work: Work) -> Result<(), super::cli::HerdrError> {
         match work {
             Work::Open { session } => {
-                let window = self.cli.open_window(&self.workspace, "macro", false).await?;
+                let window = self
+                    .cli
+                    .open_window(&self.workspace, "macro", false)
+                    .await?;
                 let mut command = self.pane_command.clone();
                 command.extend(["--session".to_owned(), session.clone()]);
                 self.cli

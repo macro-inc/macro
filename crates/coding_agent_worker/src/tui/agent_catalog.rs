@@ -2,9 +2,9 @@
 
 mod claude_code;
 mod codex;
-mod hermes;
 #[cfg(unix)]
 mod herdr_claude;
+mod hermes;
 mod npm_adapter;
 mod open_claw;
 mod open_code;

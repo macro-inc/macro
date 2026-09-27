@@ -177,9 +177,7 @@ impl HerdrCli {
 
     /// Submit a prompt to a named agent's TUI, returning once it is typed.
     pub(crate) async fn prompt_agent(&self, name: &str, text: &str) -> Result<(), HerdrError> {
-        self.run(&["agent", "prompt", name, text])
-            .await
-            .map(drop)
+        self.run(&["agent", "prompt", name, text]).await.map(drop)
     }
 
     /// The agent's lifecycle state: `idle`, `working`, `blocked`, `done`,

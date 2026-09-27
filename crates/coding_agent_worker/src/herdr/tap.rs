@@ -86,15 +86,18 @@ impl WireTap {
         let Ok(message) = serde_json::from_str::<Value>(line) else {
             return Vec::new();
         };
-        let id = message.get("id").filter(|id| !id.is_null()).map(Value::to_string);
+        let id = message
+            .get("id")
+            .filter(|id| !id.is_null())
+            .map(Value::to_string);
         let method = message.get("method").and_then(Value::as_str);
         let params = message.get("params");
 
         let raw_id = message.get("id").filter(|id| !id.is_null());
 
         match (method, id) {
-            (Some(method), id) if to_agent => self.from_client(method, id, params),
-            (Some(method), id) => self.from_agent(method, id, raw_id, params),
+            (Some(method), id) if to_agent => self.client_sent(method, id, params),
+            (Some(method), id) => self.agent_sent(method, id, raw_id, params),
             (None, Some(id)) if to_agent => self
                 .permissions
                 .remove(&id)
@@ -105,7 +108,7 @@ impl WireTap {
         }
     }
 
-    fn from_client(
+    fn client_sent(
         &mut self,
         method: &str,
         id: Option<String>,
@@ -143,7 +146,7 @@ impl WireTap {
         }
     }
 
-    fn from_agent(
+    fn agent_sent(
         &mut self,
         method: &str,
         id: Option<String>,
@@ -221,10 +224,7 @@ impl WireTap {
 }
 
 fn session_id(params: Option<&Value>) -> Option<String> {
-    params?
-        .get("sessionId")?
-        .as_str()
-        .map(str::to_owned)
+    params?.get("sessionId")?.as_str().map(str::to_owned)
 }
 
 fn macro_session(params: Option<&Value>) -> Option<AgentSessionId> {

@@ -104,7 +104,9 @@ async fn main() -> ExitCode {
             no_focus,
         }) => {
             // stdout is the protocol: logs go to stderr, which macrod drains.
-            tracing_subscriber::fmt().with_writer(std::io::stderr).init();
+            tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .init();
             return match herdr::acp_agent::run(herdr::acp_agent::AdapterOptions {
                 permission_mode,
                 no_focus,
