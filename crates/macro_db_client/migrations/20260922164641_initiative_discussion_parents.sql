@@ -1,17 +1,38 @@
--- The generated key supplies a real FK for the polymorphic initiative parent.
--- It serializes concurrent deletion/creation and cascades the shared message
--- tree without an application-side check/delete race.
+-- Keep the initial table lock brief: neither adding the nullable column nor
+-- adding NOT VALID constraints rewrites or scans the existing message table.
+SET LOCAL lock_timeout = '5s';
+
+-- The previous validated parent-type check permits only channels/documents,
+-- whose initiative key is NULL. No existing rows need a backfill. Install the
+-- write trigger in this transaction before initiative parents become visible.
 ALTER TABLE comms_messages
     DROP CONSTRAINT comms_messages_parent_type_check,
     ADD CONSTRAINT comms_messages_parent_type_check
-        CHECK (parent_entity_type IN ('channel', 'document', 'initiative')),
-    ADD COLUMN initiative_message_parent_id uuid GENERATED ALWAYS AS (
-        CASE WHEN parent_entity_type = 'initiative' THEN parent_entity_id::uuid END
-    ) STORED REFERENCES initiative (id) ON DELETE CASCADE;
+        CHECK (parent_entity_type IN ('channel', 'document', 'initiative')) NOT VALID,
+    ADD COLUMN initiative_message_parent_id uuid,
+    ADD CONSTRAINT comms_messages_initiative_message_parent_id_fkey
+        FOREIGN KEY (initiative_message_parent_id)
+        REFERENCES initiative (id) ON DELETE CASCADE NOT VALID;
 
-CREATE INDEX idx_comms_messages_initiative_parent
-    ON comms_messages (initiative_message_parent_id)
-    WHERE initiative_message_parent_id IS NOT NULL;
+-- Keep the database-owned FK key consistent even for existing writers that
+-- know only parent_entity_type/parent_entity_id. The FK serializes concurrent
+-- parent deletion/message creation and cascades the message tree.
+CREATE FUNCTION sync_initiative_message_parent() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    NEW.initiative_message_parent_id := CASE
+        WHEN NEW.parent_entity_type = 'initiative' THEN NEW.parent_entity_id::uuid
+        ELSE NULL
+    END;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_sync_initiative_message_parent
+BEFORE INSERT OR UPDATE OF parent_entity_type, parent_entity_id, initiative_message_parent_id
+ON comms_messages
+FOR EACH ROW
+EXECUTE FUNCTION sync_initiative_message_parent();
 
 -- Mentions use a polymorphic source rather than a message FK. Remove their
 -- message-owned rows when the initiative FK cascades messages away.

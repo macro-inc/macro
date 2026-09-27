@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_messages SET initiative_message_parent_id = NULL WHERE id = $1\n         RETURNING initiative_message_parent_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "initiative_message_parent_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "cc222fdfaab33e722e825af1e1f1e138fb48f15f844713cc919bdd632958d5cb"
+}
