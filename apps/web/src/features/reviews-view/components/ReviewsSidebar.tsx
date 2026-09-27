@@ -21,7 +21,6 @@ import UserIcon from '@phosphor/user.svg';
 import UserCircleCheckIcon from '@phosphor/user-circle-check.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { selectSidebarTag } from '@property/tags/SidebarTagsSection';
-import { TagDot } from '@property/tags/TagDot';
 import {
   useFavoritesData,
   useRemoveFavoriteMutation,
@@ -32,6 +31,7 @@ import { useQueries } from '@tanstack/solid-query';
 import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
 import type { ReviewsLabel } from '../queries/use-reviews-facets-query';
 import { REVIEWS_SCOPES, type ReviewsScope } from '../reviews-types';
+import { GithubLabelPill } from './GithubLabelPill';
 
 const SCOPE_ITEMS: Record<
   ReviewsScope,
@@ -185,10 +185,7 @@ function ReviewLabels(props: {
                     )
                   }
                 >
-                  <ViewSidebar.Icon>
-                    <TagDot color={label.color} />
-                  </ViewSidebar.Icon>
-                  <span class="truncate">{label.name}</span>
+                  <GithubLabelPill name={label.name} color={label.color} />
                 </ViewSidebar.Item>
               )}
             </For>
