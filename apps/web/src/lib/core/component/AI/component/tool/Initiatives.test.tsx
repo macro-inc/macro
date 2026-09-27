@@ -35,7 +35,6 @@ vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({
     StaticMarkdownContext: (props: ParentProps) => props.children,
-    StaticMarkdown: (props: { markdown: string }) => <p>{props.markdown}</p>,
   })
 );
 vi.mock('@ui', () => ({
@@ -57,7 +56,6 @@ afterEach(() => {
 });
 
 const projectId = '01992d2f-8444-7000-8000-000000000001';
-const messageId = '01992d2f-8444-7000-8000-000000000002';
 function tool(
   name: keyof typeof initiativeToolHandlers,
   data: unknown,
@@ -113,26 +111,6 @@ it('expands project results and opens a native project view', () => {
   );
 });
 
-it('expands posted comments and links to the exact discussion', () => {
-  tool(
-    'PostInitiativeComment',
-    { initiativeId: projectId, content: 'Ship it' },
-    { id: messageId, content: 'Ship it', reactions: [], deleted_at: null }
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Done' }));
-  expect(screen.getByText('Ship it')).toBeTruthy();
-  fireEvent.click(
-    screen.getAllByRole('button', { name: 'Open discussion' })[0]
-  );
-  expect(open).toHaveBeenCalledWith(
-    {
-      type: 'component',
-      id: `initiative-view~${projectId}~overview~${messageId}`,
-    },
-    { preferNewSplit: false }
-  );
-});
-
 it('preserves per-task failures and unavailable references in expandable results', () => {
   tool(
     'SetTaskInitiative',
@@ -167,59 +145,11 @@ it('keeps successful deletion results inspectable without a stale project link',
   expect(screen.queryByRole('button', { name: 'Project' })).toBeNull();
 });
 
-it.each([
-  [
-    'DeleteInitiative',
-    { initiativeId: projectId },
-    'Project could not be deleted.',
-  ],
-  [
-    'DeleteInitiativeComment',
-    { initiativeId: projectId, messageId },
-    'Comment could not be deleted.',
-  ],
-  [
-    'DeleteInitiativeComment',
-    { initiativeId: projectId, messageId, wholeDiscussion: true },
-    'Discussion could not be deleted.',
-  ],
-] as const)(
-  'reports a failed %s deletion truthfully',
-  (name, input, message) => {
-    tool(name, input, { success: false });
-    fireEvent.click(screen.getByRole('button', { name: 'Not deleted' }));
-    expect(screen.getByText(message)).toBeTruthy();
-    expect(
-      screen.queryByText(/^(Project|Comment|Discussion) deleted\.$/)
-    ).toBeNull();
-  }
-);
-
-it('shows complete thread replies and hides deleted comment text', () => {
-  tool(
-    'ReadInitiativeDiscussions',
-    { initiativeId: projectId, threadId: messageId },
-    {
-      type: 'thread',
-      thread: {
-        root: { id: messageId, content: 'Original', reactions: [] },
-        replies: [
-          { id: 'reply', content: 'Reply content', reactions: [] },
-          {
-            id: 'deleted',
-            content: 'Removed text',
-            reactions: [],
-            deleted_at: '2026-09-22T12:00:00Z',
-          },
-        ],
-      },
-    }
-  );
-  fireEvent.click(screen.getByRole('button', { name: '3 comments' }));
-  expect(screen.getByText('Original')).toBeTruthy();
-  expect(screen.getByText('Reply content')).toBeTruthy();
-  expect(screen.getByText('Comment deleted')).toBeTruthy();
-  expect(screen.queryByText('Removed text')).toBeNull();
+it('reports a failed project deletion truthfully', () => {
+  tool('DeleteInitiative', { initiativeId: projectId }, { success: false });
+  fireEvent.click(screen.getByRole('button', { name: 'Not deleted' }));
+  expect(screen.getByText('Project could not be deleted.')).toBeTruthy();
+  expect(screen.queryByText('Project deleted.')).toBeNull();
 });
 
 it('refreshes native project caches after a completed tool mutation', async () => {

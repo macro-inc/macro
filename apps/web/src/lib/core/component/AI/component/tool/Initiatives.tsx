@@ -7,12 +7,8 @@ import { openProject } from '@app/features/projects/open-project';
 import { projectKeys } from '@app/features/projects/queries/keys';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import {
-  StaticMarkdown,
-  StaticMarkdownContext,
-} from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
-import Chat from '@phosphor-icons/core/regular/chat-circle.svg';
 import Stack from '@phosphor-icons/core/regular/stack.svg';
 import { queryClient } from '@queries/client';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
@@ -22,7 +18,6 @@ import { Tool } from './Tool';
 import { createToolRenderer, type RenderContext } from './ToolRenderer';
 
 type ProjectDetails = NamedTool<'CreateInitiative', 'response'>['data'];
-type Comment = NamedTool<'PostInitiativeComment', 'response'>['data'];
 
 async function refreshProjectsAfterMutation(): Promise<void> {
   if (!isFeatureEnabled(enableProjects)) return;
@@ -36,7 +31,6 @@ function resultCount(count: number, noun: string, more = false): string {
 function ProjectLink(props: {
   id: string;
   name?: string;
-  discussionId?: string;
   section?: ProjectSection;
 }) {
   const layout = useSplitLayout();
@@ -47,12 +41,10 @@ function ProjectLink(props: {
         reference={{
           state: 'visible',
           id: props.id,
-          name:
-            props.name ?? (props.discussionId ? 'Open discussion' : 'Project'),
+          name: props.name ?? 'Project',
         }}
         onOpen={(id, event) =>
           openProject(layout, id, {
-            discussionId: props.discussionId,
             section: props.section,
             newSplit: event.shiftKey,
           })
@@ -70,8 +62,6 @@ function ProjectToolCard(props: {
   result?: unknown;
   hasResult: boolean;
   projectId?: string | null;
-  discussionId?: string | null;
-  discussion?: boolean;
   section?: ProjectSection;
   children?: JSX.Element;
 }) {
@@ -79,7 +69,7 @@ function ProjectToolCard(props: {
   return (
     <BaseTool
       type="call"
-      icon={props.discussion ? Chat : Stack}
+      icon={Stack}
       renderContext={props.renderContext}
       response={
         props.hasResult && expanded() ? (
@@ -103,13 +93,7 @@ function ProjectToolCard(props: {
         <div class="flex min-w-0 items-center gap-2">
           <span class="truncate">{props.label}</span>
           <Show when={props.projectId}>
-            {(id) => (
-              <ProjectLink
-                id={id()}
-                discussionId={props.discussionId ?? undefined}
-                section={props.discussion ? 'overview' : props.section}
-              />
-            )}
+            {(id) => <ProjectLink id={id()} section={props.section} />}
           </Show>
         </div>
         <Tool.ResultToggle
@@ -137,27 +121,6 @@ function ProjectDetailsResult(props: { project: ProjectDetails }) {
           ? `${props.project.linkScope.toLowerCase()} (${props.project.linkAccess ?? 'view'})`
           : 'off'}
       </p>
-    </div>
-  );
-}
-
-function CommentResult(props: { projectId: string; message: Comment }) {
-  return (
-    <div class="space-y-2 rounded-md border border-edge-muted p-2">
-      <Show
-        when={!props.message.deleted_at}
-        fallback={<p class="text-xs text-ink-muted">Comment deleted</p>}
-      >
-        <StaticMarkdown markdown={props.message.content} />
-      </Show>
-      <Show when={props.message.reactions.length > 0}>
-        <p class="text-xs text-ink-muted">
-          {props.message.reactions
-            .map((reaction) => `${reaction.emoji} ${reaction.users.length}`)
-            .join(' · ')}
-        </p>
-      </Show>
-      <ProjectLink id={props.projectId} discussionId={props.message.id} />
     </div>
   );
 }
@@ -400,193 +363,6 @@ export const initiativeToolHandlers = {
             )}
           </For>
         </Show>
-      </ProjectToolCard>
-    ),
-  }),
-  ReadInitiativeDiscussions: createToolRenderer({
-    name: 'ReadInitiativeDiscussions',
-    render: (ctx) => {
-      const messages = () => {
-        const result = ctx.response?.data;
-        return result?.type === 'thread'
-          ? [result.thread.root, ...result.thread.replies]
-          : result?.type === 'timeline'
-            ? result.discussions
-            : [];
-      };
-      return (
-        <ProjectToolCard
-          label="Read project discussions"
-          discussion
-          renderContext={ctx.renderContext}
-          hasResult={!!ctx.response}
-          result={ctx.response?.data}
-          projectId={ctx.tool.data.initiativeId}
-          discussionId={ctx.tool.data.threadId}
-          status={resultCount(
-            messages().length,
-            'comment',
-            ctx.response?.data.type === 'timeline' &&
-              ctx.response.data.truncated
-          )}
-        >
-          <Show
-            when={messages().length}
-            fallback={
-              <p class="text-xs text-ink-muted">No matching discussions.</p>
-            }
-          >
-            <For each={messages()}>
-              {(message) => (
-                <CommentResult
-                  projectId={ctx.tool.data.initiativeId}
-                  message={message}
-                />
-              )}
-            </For>
-          </Show>
-        </ProjectToolCard>
-      );
-    },
-  }),
-  PostInitiativeComment: createToolRenderer({
-    name: 'PostInitiativeComment',
-    handleResponse: refreshProjectsAfterMutation,
-    render: (ctx) => (
-      <ProjectToolCard
-        label={
-          ctx.tool.data.threadId
-            ? 'Reply to project discussion'
-            : 'Comment on project'
-        }
-        discussion
-        renderContext={ctx.renderContext}
-        hasResult={!!ctx.response}
-        result={ctx.response?.data}
-        projectId={ctx.tool.data.initiativeId}
-        discussionId={ctx.response?.data.id ?? ctx.tool.data.threadId}
-      >
-        <Show when={ctx.response?.data}>
-          {(message) => (
-            <CommentResult
-              projectId={ctx.tool.data.initiativeId}
-              message={message()}
-            />
-          )}
-        </Show>
-      </ProjectToolCard>
-    ),
-  }),
-  UpdateInitiativeComment: createToolRenderer({
-    name: 'UpdateInitiativeComment',
-    handleResponse: refreshProjectsAfterMutation,
-    render: (ctx) => (
-      <ProjectToolCard
-        label="Edit project comment"
-        discussion
-        renderContext={ctx.renderContext}
-        hasResult={!!ctx.response}
-        result={ctx.response?.data}
-        projectId={ctx.tool.data.initiativeId}
-        discussionId={ctx.tool.data.messageId}
-      >
-        <Show when={ctx.response?.data}>
-          {(message) => (
-            <CommentResult
-              projectId={ctx.tool.data.initiativeId}
-              message={message()}
-            />
-          )}
-        </Show>
-      </ProjectToolCard>
-    ),
-  }),
-  DeleteInitiativeComment: createToolRenderer({
-    name: 'DeleteInitiativeComment',
-    handleResponse: refreshProjectsAfterMutation,
-    render: (ctx) => (
-      <ProjectToolCard
-        label={
-          ctx.tool.data.wholeDiscussion
-            ? 'Delete project discussion'
-            : 'Delete project comment'
-        }
-        discussion
-        renderContext={ctx.renderContext}
-        hasResult={!!ctx.response}
-        result={ctx.response?.data}
-        projectId={ctx.tool.data.initiativeId}
-        status={
-          ctx.response
-            ? ctx.response.data.success
-              ? 'Deleted'
-              : 'Not deleted'
-            : undefined
-        }
-      >
-        <p class="text-xs text-ink-muted">
-          {ctx.response?.data.success
-            ? ctx.tool.data.wholeDiscussion
-              ? 'Discussion deleted.'
-              : 'Comment deleted.'
-            : ctx.tool.data.wholeDiscussion
-              ? 'Discussion could not be deleted.'
-              : 'Comment could not be deleted.'}
-        </p>
-      </ProjectToolCard>
-    ),
-  }),
-  ReactToInitiativeComment: createToolRenderer({
-    name: 'ReactToInitiativeComment',
-    handleResponse: refreshProjectsAfterMutation,
-    render: (ctx) => (
-      <ProjectToolCard
-        label={`${ctx.tool.data.add ? 'Add' : 'Remove'} ${ctx.tool.data.emoji} reaction`}
-        discussion
-        renderContext={ctx.renderContext}
-        hasResult={!!ctx.response}
-        result={ctx.response?.data}
-        projectId={ctx.tool.data.initiativeId}
-        discussionId={ctx.tool.data.messageId}
-      >
-        <Show when={ctx.response?.data}>
-          {(message) => (
-            <CommentResult
-              projectId={ctx.tool.data.initiativeId}
-              message={message()}
-            />
-          )}
-        </Show>
-      </ProjectToolCard>
-    ),
-  }),
-  SetInitiativeDiscussionResolved: createToolRenderer({
-    name: 'SetInitiativeDiscussionResolved',
-    handleResponse: refreshProjectsAfterMutation,
-    render: (ctx) => (
-      <ProjectToolCard
-        label={
-          ctx.tool.data.resolved
-            ? 'Resolve project discussion'
-            : 'Reopen project discussion'
-        }
-        discussion
-        renderContext={ctx.renderContext}
-        hasResult={!!ctx.response}
-        result={ctx.response?.data}
-        projectId={ctx.tool.data.initiativeId}
-        discussionId={ctx.tool.data.threadId}
-        status={
-          ctx.response
-            ? ctx.response.data.resolved
-              ? 'Resolved'
-              : 'Reopened'
-            : undefined
-        }
-      >
-        <p class="text-xs text-ink-muted">
-          Discussion {ctx.response?.data.resolved ? 'resolved' : 'reopened'}.
-        </p>
       </ProjectToolCard>
     ),
   }),

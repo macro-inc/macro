@@ -8,18 +8,16 @@ lighter bubble with the normal text palette. Preview Markdown and controls at
 ## Working with projects
 
 Project tools can list, read, create, update, delete, and share projects; set or
-clear task associations; read project activity; and read, post, edit, delete,
-react to, resolve, and reopen discussions. Backend tool names use `Initiative`.
-These operate on the native Projects views in Tasks.
+clear task associations; and read project activity. Backend tool names use
+`Initiative`. These operate on the native Projects views in Tasks.
 
 Each completed tool row has an expandable result toggle, including empty results
-and per-task failures. Project chips open the native project; discussion chips
-open Overview at the relevant discussion. Shift-click opens another split.
-Expanded comments show their text and reactions, and **Result data** reveals the
-complete returned response. Successful mutations refresh the project views.
+and per-task failures. Project chips open the native project. Shift-click opens
+another split. **Result data** reveals the complete returned response. Successful
+mutations refresh the project views.
 Deleting a project shows its result without a link to the deleted project.
-Failed project, comment, or discussion deletions show `Not deleted`. Clearing
-projects from several tasks reports each task's outcome, including partial failures.
+Failed project deletions show `Not deleted`. Clearing projects from several tasks
+reports each task's outcome, including partial failures.
 
 ## Uploading files with AI
 
