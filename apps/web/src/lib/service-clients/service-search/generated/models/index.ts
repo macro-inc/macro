@@ -179,6 +179,7 @@ export * from './emailSearchResultScore';
 export * from './emailSearchResultSentAt';
 export * from './emptyResponse';
 export * from './entityFilters';
+export * from './entityFiltersFavoritesOnly';
 export * from './entityReference';
 export * from './entityReferenceSpecificMessageId';
 export * from './entityType';

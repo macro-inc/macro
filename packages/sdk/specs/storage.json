@@ -16883,6 +16883,10 @@
           "ef": {
             "description": "the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` / `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors."
           },
+          "favorites_only": {
+            "type": ["boolean", "null"],
+            "description": "Restrict to the authenticated viewer's favorites before pagination when true."
+          },
           "fef": {
             "description": "the filters that should be applied to foreign entity records"
           },
@@ -23458,6 +23462,10 @@
           "email_filters": {
             "$ref": "#/components/schemas/EmailFilters",
             "description": "the bundled [EmailFilters]"
+          },
+          "favorites_only": {
+            "type": ["boolean", "null"],
+            "description": "Restrict results to the authenticated viewer's favorites when true."
           },
           "foreign_entity_filters": {
             "$ref": "#/components/schemas/ForeignEntityFilters",

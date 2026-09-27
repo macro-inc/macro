@@ -5912,6 +5912,7 @@ fn mock_empty_ast() -> EntityFilterAst {
         agent_session_filter: None,
         initiative_filter: None,
         properties_filter: None,
+        favorites_only: None,
     }
 }
 
