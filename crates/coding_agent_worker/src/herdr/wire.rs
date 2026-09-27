@@ -66,9 +66,10 @@ pub(crate) enum ToPane {
         /// Why, when there is something to say (a stop reason, a permission).
         detail: Option<String>,
     },
-    /// The agent is waiting on a permission answer.
+    /// The agent is waiting on a permission answer, which only a user in
+    /// Macro may give: the service refuses approvals a runtime forwards.
     Permission {
-        /// The agent's request id, echoed back in the answer.
+        /// The agent's request id.
         request_id: serde_json::Value,
         /// The tool call it is about.
         title: Option<String>,
@@ -102,11 +103,4 @@ pub(crate) enum FromPane {
     },
     /// Interrupt the running turn.
     Stop,
-    /// Answer a permission request; no option dismisses it.
-    Answer {
-        /// The agent's request id, from [`ToPane::Permission`].
-        request_id: serde_json::Value,
-        /// The chosen option.
-        option_id: Option<String>,
-    },
 }

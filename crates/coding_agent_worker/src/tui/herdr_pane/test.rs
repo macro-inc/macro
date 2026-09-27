@@ -141,48 +141,27 @@ fn ctrl_c_interrupts_a_turn_and_otherwise_closes() {
 }
 
 #[test]
-fn permission_requests_are_answered_in_place() {
+fn permission_requests_are_shown_but_left_to_macro() {
     let mut view = PaneView::new("s");
-    let choice = |id: &str, kind: &str| PermissionChoice {
-        option_id: id.to_owned(),
-        name: id.to_owned(),
-        kind: kind.to_owned(),
-    };
     view.apply(ToPane::Permission {
         request_id: json!("req-1"),
         title: Some("Run tests".to_owned()),
-        options: vec![
-            choice("allow", "allow_once"),
-            choice("reject", "reject_once"),
-        ],
+        options: vec![PermissionChoice {
+            option_id: "allow".to_owned(),
+            name: "Allow".to_owned(),
+            kind: "allow_once".to_owned(),
+        }],
     });
+    assert_eq!(
+        view.permission
+            .as_ref()
+            .map(|pending| pending.title.as_deref()),
+        Some(Some("Run tests"))
+    );
 
-    // Typing does not leak into the prompt while a request is open.
-    press(&mut view, KeyCode::Char('x'));
-    assert_eq!(view.input.value(), "");
-
-    press(&mut view, KeyCode::Down);
-    assert_eq!(
-        press(&mut view, KeyCode::Enter),
-        PaneAction::Send(FromPane::Answer {
-            request_id: json!("req-1"),
-            option_id: Some("reject".to_owned()),
-        })
-    );
-    assert_eq!(
-        press(&mut view, KeyCode::Char('1')),
-        PaneAction::Send(FromPane::Answer {
-            request_id: json!("req-1"),
-            option_id: Some("allow".to_owned()),
-        })
-    );
-    assert_eq!(
-        press(&mut view, KeyCode::Esc),
-        PaneAction::Send(FromPane::Answer {
-            request_id: json!("req-1"),
-            option_id: None,
-        })
-    );
+    // Keys go to the prompt, and nothing answers the request from here.
+    assert_eq!(press(&mut view, KeyCode::Char('1')), PaneAction::Nothing);
+    assert_eq!(view.input.value(), "1");
 
     view.apply(ToPane::PermissionSettled);
     assert!(view.permission.is_none());

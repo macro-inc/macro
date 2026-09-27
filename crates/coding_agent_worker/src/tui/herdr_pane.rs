@@ -2,9 +2,10 @@
 //!
 //! The window attaches to its macrod over the local socket, replays what the
 //! session has done so far, then follows it live: prompts, streamed agent
-//! output, thoughts, tool calls, plans. Typing prompts the session, Esc
-//! interrupts it, and permission requests are answered in place - all
-//! carried to the session through Macro by the daemon.
+//! output, thoughts, tool calls, plans. Typing prompts the session and Esc
+//! interrupts it, both carried to the session through Macro by the daemon.
+//! Permission requests are shown but answered in Macro: the service accepts
+//! approvals only from a user, never from the runtime they would unblock.
 
 use std::path::Path;
 use std::time::Duration;
@@ -168,13 +169,11 @@ impl Transcript {
     }
 }
 
-/// A permission request waiting on an answer from this window or Macro.
+/// A permission request waiting on an answer in Macro.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PendingPermission {
-    pub(crate) request_id: Value,
     pub(crate) title: Option<String>,
     pub(crate) options: Vec<PermissionChoice>,
-    pub(crate) selected: usize,
 }
 
 /// Everything the window renders.
@@ -232,17 +231,8 @@ impl PaneView {
                 }
                 self.state = state;
             }
-            ToPane::Permission {
-                request_id,
-                title,
-                options,
-            } => {
-                self.permission = Some(PendingPermission {
-                    request_id,
-                    title,
-                    options,
-                    selected: 0,
-                });
+            ToPane::Permission { title, options, .. } => {
+                self.permission = Some(PendingPermission { title, options });
             }
             ToPane::PermissionSettled => self.permission = None,
             ToPane::Notice { text, error } => {
@@ -293,28 +283,6 @@ impl PaneView {
                 stop => stop,
             };
         }
-        if let Some(permission) = &mut self.permission {
-            let count = permission.options.len();
-            match key.code {
-                KeyCode::Up if count > 0 => {
-                    permission.selected = (permission.selected + count - 1) % count;
-                }
-                KeyCode::Down | KeyCode::Tab if count > 0 => {
-                    permission.selected = (permission.selected + 1) % count;
-                }
-                KeyCode::Char(digit @ '1'..='9') => {
-                    let index = usize::from(digit as u8 - b'1');
-                    if index < count {
-                        permission.selected = index;
-                        return self.answer(true);
-                    }
-                }
-                KeyCode::Enter if count > 0 => return self.answer(true),
-                KeyCode::Esc => return self.answer(false),
-                _ => {}
-            }
-            return PaneAction::Nothing;
-        }
         match key.code {
             KeyCode::Enter => {
                 let text = self.input.value().trim().to_owned();
@@ -339,20 +307,6 @@ impl PaneView {
                 PaneAction::Nothing
             }
         }
-    }
-
-    fn answer(&mut self, choose: bool) -> PaneAction {
-        let Some(permission) = &self.permission else {
-            return PaneAction::Nothing;
-        };
-        let option_id = choose
-            .then(|| permission.options.get(permission.selected))
-            .flatten()
-            .map(|option| option.option_id.clone());
-        PaneAction::Send(FromPane::Answer {
-            request_id: permission.request_id.clone(),
-            option_id,
-        })
     }
 }
 
