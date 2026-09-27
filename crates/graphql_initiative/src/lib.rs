@@ -30,6 +30,7 @@ use initiative::domain::models::InitiativeError;
 fn graphql_error(error: InitiativeError) -> async_graphql::Error {
     let (message, code) = match error {
         InitiativeError::NotFound => ("initiative not found".to_string(), "NOT_FOUND"),
+        InitiativeError::NotATask => ("document is not a task".to_string(), "BAD_USER_INPUT"),
         InitiativeError::Unauthorized => ("unauthorized".to_string(), "FORBIDDEN"),
         InitiativeError::BadRequest(message) => (message, "BAD_USER_INPUT"),
         InitiativeError::Conflict(message) => (message, "CONFLICT"),

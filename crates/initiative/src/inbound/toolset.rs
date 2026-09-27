@@ -6,6 +6,9 @@ mod sharing;
 mod tasks;
 mod types;
 
+#[cfg(test)]
+mod test;
+
 pub use lifecycle::{CreateInitiative, DeleteInitiative, UpdateInitiative};
 pub use reads::{ListInitiatives, ReadInitiative, ReadInitiativeActivity, ReadTaskInitiatives};
 pub use sharing::UpdateInitiativeSharing;
@@ -93,6 +96,10 @@ fn failure(error: InitiativeError) -> ToolCallError {
                 "You do not have permission to perform this project operation".into()
             }
             InitiativeError::NotFound => "The project is unavailable".into(),
+            InitiativeError::NameTooLong { max } => {
+                format!("Project names must be at most {max} graphemes long")
+            }
+            InitiativeError::NotATask => "The document is not a task".into(),
             _ => "The project operation failed".into(),
         },
         internal_error: error.into(),

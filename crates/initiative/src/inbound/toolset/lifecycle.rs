@@ -14,7 +14,7 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreateInitiative",
-    description = "Create a project for coordinating tasks (called an initiative in the API). Projects have status, priority, assignees, due dates, discussions and activity. Shares with the owner's team by default. This is different from CreateProject, which creates a folder. Use property tools with entityType initiative to set project properties."
+    description = "Create a project for coordinating tasks (called an initiative in the API). Projects have status, priority, assignees, due dates, discussions and activity. Shares with the owner's team by default. This is different from CreateProject, which creates a folder. Use property tools with entity_type='initiative' to set project properties."
 )]
 pub struct CreateInitiative {
     /// Project name, up to 100 graphemes.
@@ -73,7 +73,7 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "UpdateInitiative",
-    description = "Rename a project with edit access, or replace its collaboration member list as the owner. Members control sharing independently of the assignee property. Assigning a user grants collaboration access; removing an assignment retains that access. For status, priority, assignees and due date use SetEntityProperty with entityType initiative. ReadInitiative returns the description document id for document editing tools."
+    description = "Rename a project with edit access, or replace its collaboration member list as the owner. Members control sharing independently of the assignee property. Assigning a user grants collaboration access; removing an assignment retains that access. For status, priority, assignees and due date use SetEntityProperty with entity_type='initiative'. ReadInitiative returns the description document id for document editing tools."
 )]
 pub struct UpdateInitiative {
     /// Project identifier.

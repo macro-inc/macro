@@ -13,6 +13,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 mod reads;
+mod tasks;
+
+pub use tasks::{ClearTaskOutcome, ClearTaskStatus, clear_task_batch};
 
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,

@@ -403,6 +403,9 @@ pub enum InitiativeError {
     /// The initiative does not exist.
     #[error("initiative not found")]
     NotFound,
+    /// The document exists but does not have the task subtype.
+    #[error("document is not a task")]
+    NotATask,
     /// The caller cannot perform this action.
     #[error("unauthorized")]
     Unauthorized,

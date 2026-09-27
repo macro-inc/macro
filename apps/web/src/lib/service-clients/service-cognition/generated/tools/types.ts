@@ -3001,7 +3001,7 @@ export interface ImportEntityView {
   importedByTeammate: boolean;
 }
 /**
- * Create a project for coordinating tasks (called an initiative in the API). Projects have status, priority, assignees, due dates, discussions and activity. Shares with the owner's team by default. This is different from CreateProject, which creates a folder. Use property tools with entityType initiative to set project properties.
+ * Create a project for coordinating tasks (called an initiative in the API). Projects have status, priority, assignees, due dates, discussions and activity. Shares with the owner's team by default. This is different from CreateProject, which creates a folder. Use property tools with entity_type='initiative' to set project properties.
  */
 export interface CreateInitiative {
   /**
@@ -5953,7 +5953,7 @@ export interface DocumentComment {
   editedAt?: string | null;
 }
 /**
- * Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The descriptionDocumentId can be read or edited with document tools. Use entityType initiative with property tools. Discussion and activity tools read the project's collaboration history.
+ * Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The descriptionDocumentId can be read or edited with document tools. Use entity_type='initiative' with property tools. Discussion and activity tools read the project's collaboration history.
  */
 export interface ReadInitiative {
   /**
@@ -6938,7 +6938,7 @@ export interface TaskProjectOutcome {
    */
   taskId: string;
   /**
-   * assigned, moved, cleared, notATask, notFound, or skippedNoPermission.
+   * assigned, moved, cleared, notATask, notFound, skippedNoPermission, or failed.
    */
   status: string;
 }
@@ -7091,7 +7091,7 @@ export interface UpdateCalendarEvent {
   outOfOffice?: OutOfOfficeInput | null;
 }
 /**
- * Rename a project with edit access, or replace its collaboration member list as the owner. Members control sharing independently of the assignee property. Assigning a user grants collaboration access; removing an assignment retains that access. For status, priority, assignees and due date use SetEntityProperty with entityType initiative. ReadInitiative returns the description document id for document editing tools.
+ * Rename a project with edit access, or replace its collaboration member list as the owner. Members control sharing independently of the assignee property. Assigning a user grants collaboration access; removing an assignment retains that access. For status, priority, assignees and due date use SetEntityProperty with entity_type='initiative'. ReadInitiative returns the description document id for document editing tools.
  */
 export interface UpdateInitiative {
   /**

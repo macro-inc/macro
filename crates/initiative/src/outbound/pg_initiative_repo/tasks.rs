@@ -175,25 +175,38 @@ pub(super) async fn clear_task(
     pool: &PgPool,
     task_id: &str,
 ) -> Result<Option<TaskMembershipChange>, InitiativeError> {
-    let removed = sqlx::query_scalar!(
+    let outcome = sqlx::query!(
         r#"
-        WITH removed AS (
-            DELETE FROM task_initiative
-            WHERE task_id = $1
+        WITH task AS (
+            SELECT d.id, COALESCE(dst.sub_type = 'task', false) AS is_task
+            FROM "Document" d
+            LEFT JOIN document_sub_type dst ON dst.document_id = d.id
+            WHERE d.id = $1 AND d."deletedAt" IS NULL
+        ), removed AS (
+            DELETE FROM task_initiative ti
+            USING task
+            WHERE ti.task_id = task.id AND task.is_task
             RETURNING initiative_id
+        ), updated AS (
+            UPDATE initiative
+            SET updated_at = now()
+            WHERE id IN (SELECT initiative_id FROM removed)
+            RETURNING id
         )
-        UPDATE initiative
-        SET updated_at = now()
-        WHERE id IN (SELECT initiative_id FROM removed)
-        RETURNING id
+        SELECT task.is_task AS "is_task!", (SELECT id FROM updated) AS initiative_id
+        FROM task
         "#,
         task_id,
     )
     .fetch_optional(pool)
     .await
     .map_err(AdapterError::Sqlx)
-    .map_err(map_sqlx)?;
-    Ok(removed.map(|id| TaskMembershipChange {
+    .map_err(map_sqlx)?
+    .ok_or(InitiativeError::NotFound)?;
+    if !outcome.is_task {
+        return Err(InitiativeError::NotATask);
+    }
+    Ok(outcome.initiative_id.map(|id| TaskMembershipChange {
         task_id: task_id.to_string(),
         from: Some(InitiativeId::from_uuid(id)),
         to: None,

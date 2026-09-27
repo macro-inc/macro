@@ -1,7 +1,10 @@
 //! Task assignment with shared actor capabilities and bounded partial outcomes.
 
 use super::*;
-use crate::domain::models::{AssignTaskStatus, TaskAssignment, TaskAssignmentBatch};
+use crate::domain::{
+    models::{AssignTaskStatus, TaskAssignment, TaskAssignmentBatch},
+    service::{ClearTaskStatus, clear_task_batch},
+};
 use ai_toolset::{AsyncTool, ServiceContext, ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::models::{BotAccessScope, EditAccessLevel};
@@ -31,7 +34,7 @@ pub struct SetTaskInitiative {
 pub struct TaskProjectOutcome {
     /// Requested task identifier.
     pub task_id: String,
-    /// assigned, moved, cleared, notATask, notFound, or skippedNoPermission.
+    /// assigned, moved, cleared, notATask, notFound, skippedNoPermission, or failed.
     pub status: String,
 }
 
@@ -103,23 +106,22 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
                 })
                 .collect()
         } else {
-            let mut results = Vec::with_capacity(assignments.len());
-            for assignment in assignments {
-                let task_id = assignment.task_id().to_owned();
-                let status = match assignment {
-                    TaskAssignment::Authorized { receipt } => {
-                        context.service.clear_task(receipt).await.map_err(failure)?;
-                        "cleared"
+            clear_task_batch(context.service.as_ref(), assignments)
+                .await
+                .map_err(failure)?
+                .into_iter()
+                .map(|outcome| TaskProjectOutcome {
+                    task_id: outcome.task_id,
+                    status: match outcome.status {
+                        ClearTaskStatus::Cleared => "cleared",
+                        ClearTaskStatus::NotATask => "notATask",
+                        ClearTaskStatus::NotFound => "notFound",
+                        ClearTaskStatus::SkippedNoPermission => "skippedNoPermission",
+                        ClearTaskStatus::Failed => "failed",
                     }
-                    TaskAssignment::NotFound { .. } => "notFound",
-                    TaskAssignment::SkippedNoPermission { .. } => "skippedNoPermission",
-                };
-                results.push(TaskProjectOutcome {
-                    task_id,
-                    status: status.into(),
-                });
-            }
-            results
+                    .into(),
+                })
+                .collect()
         };
         Ok(TaskProjectOutcomes { results })
     }

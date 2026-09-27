@@ -1,10 +1,11 @@
 use super::*;
 use crate::inbound::toolset::{ListInitiatives, ReadInitiative};
-use entity_access::domain::models::EntityPermission;
+use entity_access::domain::models::{EntityPermission, EntityType};
 
 #[derive(Debug)]
 struct VisibleResources {
     hidden_task: String,
+    task_reads: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl InitiativeResources for VisibleResources {
@@ -20,6 +21,10 @@ impl InitiativeResources for VisibleResources {
         entity: Entity,
     ) -> ResourceFuture<'_, Option<EntityAccessReceipt<ViewAccessLevel>>> {
         Box::pin(async move {
+            if entity.entity_type == EntityType::Document {
+                self.task_reads
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
             if entity.entity_id == self.hidden_task {
                 return Ok(None);
             }
@@ -65,11 +70,13 @@ async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_visible_tasks
     }
     repo.assign_tasks(projects[0].id, task_ids.clone()).await?;
     let hidden_task = task_ids.remove(100);
+    let task_reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let context = context_with_resources(
         pool,
         Arc::new(Events::default()),
         Arc::new(VisibleResources {
             hidden_task: hidden_task.clone(),
+            task_reads: task_reads.clone(),
         }),
     );
     let mut list: ListInitiatives =
@@ -104,6 +111,7 @@ async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_visible_tasks
     expected.sort();
     assert_eq!(listed, expected);
 
+    task_reads.store(0, std::sync::atomic::Ordering::SeqCst);
     let mut read = ReadInitiative {
         initiative_id: projects[0].id.as_uuid(),
         task_cursor: None,
@@ -135,6 +143,11 @@ async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_visible_tasks
         assert!(page_count < 4, "task cursor must advance");
     }
     assert_eq!(page_count, 3);
+    assert_eq!(
+        task_reads.load(std::sync::atomic::Ordering::SeqCst),
+        202 * page_count,
+        "each tool read should perform one task visibility scan"
+    );
     task_ids.sort();
     assert_eq!(found, task_ids);
     Ok(())

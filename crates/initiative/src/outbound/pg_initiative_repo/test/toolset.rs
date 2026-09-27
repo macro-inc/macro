@@ -306,3 +306,58 @@ async fn oversized_tool_batch_fails_before_any_database_access() -> anyhow::Resu
     assert!(result.unwrap_err().description.contains("100"));
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn clear_tool_reports_non_tasks_and_keeps_clearing_the_remaining_tasks(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER).await?;
+    let ids: Vec<String> = (0..3).map(|_| Uuid::now_v7().to_string()).collect();
+    for (index, id) in ids.iter().enumerate() {
+        insert_document(&pool, id, OWNER, index != 1).await?;
+        entity_access_db_utils::upsert_user_entity_access_bulk(
+            &pool,
+            &[user(OWNER)],
+            &Uuid::parse_str(id)?,
+            model_entity::EntityType::Document,
+            AccessLevel::Owner,
+        )
+        .await?;
+    }
+    let repo = repo(pool.clone());
+    let initiative = repo
+        .create(
+            create_args(&pool, OWNER, "Launch", &[]).await?,
+            share_off(),
+            TeamShareCreation::Unshared,
+        )
+        .await?;
+    repo.assign_tasks(initiative.id, vec![ids[0].clone(), ids[2].clone()])
+        .await?;
+    let context = context(pool, Arc::new(Events::default()));
+    let result = SetTaskInitiative {
+        task_ids: ids.clone(),
+        initiative_id: None,
+    }
+    .call(ServiceContext(context), RequestContext::new(user(OWNER)))
+    .await
+    .map_err(|error| error.internal_error)?;
+    assert_eq!(
+        result
+            .results
+            .iter()
+            .map(|row| row.status.as_str())
+            .collect::<Vec<_>>(),
+        ["cleared", "notATask", "cleared"]
+    );
+    assert!(
+        repo.task_memberships(vec![ids[0].clone(), ids[2].clone()])
+            .await?
+            .is_empty()
+    );
+    assert!(matches!(
+        repo.clear_task(&Uuid::now_v7().to_string()).await,
+        Err(InitiativeError::NotFound)
+    ));
+    Ok(())
+}
