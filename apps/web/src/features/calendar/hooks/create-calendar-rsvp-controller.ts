@@ -20,7 +20,6 @@ export function createCalendarRsvpController(
   const [scope, setScope] = createSignal<CalendarRsvpScope>('this_event');
   const [error, setError] = createSignal<string>();
   const mutation = useRsvpCalendarEventMutation();
-  let submission = 0;
   const submit = (response: CalendarRsvpResponse, scope: CalendarRsvpScope) => {
     const event = target();
     if (!event) return;
@@ -29,7 +28,7 @@ export function createCalendarRsvpController(
       return;
     }
     setError(undefined);
-    const revision = ++submission;
+    // Only the latest mutate call's callbacks fire, so older failures stay silent.
     mutation.mutate(
       {
         eventId: event.eventId,
@@ -43,10 +42,8 @@ export function createCalendarRsvpController(
         occurrenceKey: scope === 'all' ? undefined : event.occurrenceKey,
       },
       {
-        onError: () => {
-          if (revision === submission)
-            setError('Could not save your response. Please try again.');
-        },
+        onError: () =>
+          setError('Could not save your response. Please try again.'),
       }
     );
   };

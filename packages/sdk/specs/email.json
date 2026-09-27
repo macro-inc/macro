@@ -4950,19 +4950,15 @@
           {
             "type": "object",
             "description": "Unambiguous instant with the original timezone retained.",
-            "required": ["value", "time_zone", "local", "kind"],
+            "required": ["value", "time_zone", "kind"],
             "properties": {
               "kind": {
                 "type": "string",
                 "enum": ["zoned"]
               },
-              "local": {
-                "type": "string",
-                "description": "Original local wall time."
-              },
               "time_zone": {
                 "type": "string",
-                "description": "Original TZID, or UTC."
+                "description": "IANA zone of the original TZID, or UTC."
               },
               "value": {
                 "type": "string",

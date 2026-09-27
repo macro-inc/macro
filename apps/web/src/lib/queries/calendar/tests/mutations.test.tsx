@@ -799,11 +799,8 @@ it('withdraws stale actions on email changes without refetching over a pending r
         .attendees[0].responseStatus
     ).toBe('accepted')
   );
-  await invalidateInvitationScheduling();
-  expect(invalidate).toHaveBeenCalledWith({
-    queryKey: calendarKeys.invitations._def,
-    refetchType: 'none',
-  });
+  invalidateInvitationScheduling('thread');
+  expect(invalidate).not.toHaveBeenCalledWith({ queryKey: key });
   expect(
     testQueryClient.getQueryData<typeof initial>(key)?.invite
   ).toMatchObject({ can_respond: false, can_join: false });
@@ -816,44 +813,4 @@ it('withdraws stale actions on email changes without refetching over a pending r
   expect(invalidate).toHaveBeenCalledWith({
     queryKey: calendarKeys.invitations._def,
   });
-});
-
-it('drains a scheduling refresh received during the final RSVP settlement', async () => {
-  const occurrenceRefresh = Promise.withResolvers<void>();
-  const originalInvalidate =
-    testQueryClient.invalidateQueries.bind(testQueryClient);
-  const invalidate = vi
-    .spyOn(testQueryClient, 'invalidateQueries')
-    .mockImplementation((filters, options) => {
-      if (
-        JSON.stringify(filters?.queryKey) ===
-        JSON.stringify(calendarKeys.occurrences._def)
-      )
-        return occurrenceRefresh.promise;
-      return originalInvalidate(filters, options);
-    });
-  rsvpCalendarEventMock.mockResolvedValue(ok(standaloneItem().event));
-  const rsvp = renderHook(() => useRsvpCalendarEventMutation());
-  const pending = rsvp.mutateAsync({
-    eventId: 'event-1',
-    response: 'accepted',
-  });
-  await vi.waitFor(() =>
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: calendarKeys.occurrences._def,
-    })
-  );
-  await invalidateInvitationScheduling();
-  expect(invalidate).toHaveBeenLastCalledWith({
-    queryKey: calendarKeys.invitations._def,
-    refetchType: 'none',
-  });
-  invalidate.mockClear();
-  occurrenceRefresh.resolve();
-  await pending;
-  await vi.waitFor(() =>
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: calendarKeys.invitations._def,
-    })
-  );
 });

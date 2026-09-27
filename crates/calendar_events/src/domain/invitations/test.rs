@@ -1,57 +1,36 @@
 use super::*;
 
-#[test]
-fn undated_cancellations_survive_timestamped_requests_in_both_revision_streams() {
-    let link = Uuid::now_v7();
+fn revision(sequence: u32, hour: Option<i64>, cancelled: bool) -> InvitationRevision {
     let stamp = chrono::DateTime::parse_from_rfc3339("2026-09-24T17:00:00Z")
         .unwrap()
         .to_utc();
-    let request = InvitationRevision {
-        link_id: link,
-        sequence: 2,
-        last_modified: Some(stamp),
-        cancelled: false,
-    };
-    let cancel = InvitationRevision {
-        last_modified: None,
-        cancelled: true,
-        ..request.clone()
-    };
-    let mut identity = InvitationIdentity {
-        id: "snapshot".into(),
-        uid: "series".into(),
-        preferred_link_id: link,
-        occurrence_key: None,
-        unresolved_instance: false,
-        cancelled: false,
-        related_revisions: Vec::new(),
-        series_revisions: Vec::new(),
-        organizer_email: None,
-        last_modified: request.last_modified,
-        sequence: request.sequence,
-    };
-    for revisions in [
-        vec![request.clone(), cancel.clone()],
-        vec![cancel.clone(), request.clone()],
-    ] {
-        identity.related_revisions = revisions.clone();
-        assert!(identity.effective_revision(Some(link)).cancelled);
-        identity.series_revisions = revisions;
-        assert!(identity.series_revision(Some(link)).unwrap().cancelled);
-        assert!(identity.is_cancelled(Some(link)));
+    InvitationRevision {
+        sequence,
+        last_modified: hour.map(|hour| stamp + chrono::Duration::hours(hour)),
+        cancelled,
     }
-    let newer_request = InvitationRevision {
-        sequence: 3,
-        ..request.clone()
-    };
-    identity.related_revisions.push(newer_request.clone());
-    identity.series_revisions.push(newer_request);
-    identity.series_revisions.reverse();
-    assert!(!identity.is_cancelled(Some(link)));
+}
 
-    let dated_cancel = InvitationRevision {
-        last_modified: Some(stamp - chrono::Duration::hours(1)),
-        ..cancel
+#[test]
+fn undated_cancellations_survive_timestamped_requests() {
+    let request = revision(2, Some(0), false);
+    assert!(revision(2, None, true).ordering_key() > request.ordering_key());
+    assert!(request.ordering_key() > revision(2, Some(-1), true).ordering_key());
+    assert!(revision(3, Some(-1), false).ordering_key() > revision(2, None, true).ordering_key());
+}
+
+#[test]
+fn a_series_cancellation_cancels_its_instances() {
+    let mut identity = InvitationIdentity {
+        uid: "series".into(),
+        preferred_link_id: Uuid::now_v7(),
+        occurrence_key: Some("2026-09-24T17:00:00Z".into()),
+        unresolved_instance: false,
+        revision: revision(8, None, false),
+        series_revision: None,
+        organizer_email: None,
     };
-    assert!(request.ordering_key() > dated_cancel.ordering_key());
+    assert!(!identity.is_cancelled());
+    identity.series_revision = Some(revision(2, None, true));
+    assert!(identity.is_cancelled());
 }

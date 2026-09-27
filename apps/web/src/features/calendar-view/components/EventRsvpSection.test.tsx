@@ -17,7 +17,7 @@ vi.mock('@ui', () => ({
     <button onClick={props.onClick}>{props.children}</button>
   ),
 }));
-vi.mock('./EventRsvpScopeDialog', () => ({
+vi.mock('../../calendar/components/EventRsvpScopeDialog', () => ({
   EventRsvpScopeDialog: (props: {
     open: boolean;
     scope: string;

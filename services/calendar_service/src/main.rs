@@ -189,12 +189,6 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let api_result = calendar_service::api::setup_and_serve(ApiContext {
-        invitation_resolver: Arc::new(
-            calendar_events::domain::invitations::CalendarInvitationResolver::new(
-                PgCalendarRepository::new(db.clone()),
-                config.calendar_sync_enabled,
-            ),
-        ),
         config: Arc::new(config),
         authorization_state,
         calendar_service,

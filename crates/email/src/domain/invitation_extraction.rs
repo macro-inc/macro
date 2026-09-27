@@ -1,8 +1,6 @@
 //! Display extraction at ingestion; errors in calendar content never reject mail.
 use super::{
-    calendar_invitation_parser::{
-        MAX_INVITATION_BYTES, MAX_INVITATION_COMPONENTS, parse_invitation_parts,
-    },
+    calendar_invitation_parser::{MAX_INVITATION_COMPONENTS, parse_invitation_parts},
     models::calendar_invitation::CalendarInvitation,
 };
 use rootcause::Report;
@@ -79,13 +77,11 @@ impl<R: InvitationExtractionRepository, P: InvitationAttachmentProvider>
                     .download(link_id, provider_id, attachment_id)
                     .await
                 {
-                    Ok(bytes) if bytes.len() <= MAX_INVITATION_BYTES => downloaded.push(bytes),
-                    Ok(_) => tracing::warn!(reason = "oversized", "invitation extraction skipped"),
-                    Err(error) => tracing::warn!(
-                        error = ?error,
-                        reason = "attachment_unavailable",
-                        "invitation extraction skipped"
-                    ),
+                    // The parser skips oversized or malformed parts.
+                    Ok(bytes) => downloaded.push(bytes),
+                    Err(error) => {
+                        tracing::warn!(error = ?error, "invitation attachment unavailable")
+                    }
                 }
             }
             content = downloaded.iter().map(Vec::as_slice).collect();

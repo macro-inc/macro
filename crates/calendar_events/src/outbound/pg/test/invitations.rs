@@ -1,21 +1,25 @@
 use super::*;
 use crate::domain::invitations::{
-    CalendarInvitationResolver, CalendarInvitationService, InvitationIdentity, InvitationResolution,
+    CalendarInvitationResolver, CalendarInvitationService, InvitationIdentity,
+    InvitationResolution, InvitationRevision,
 };
 
+fn revision(sequence: u32, cancelled: bool) -> InvitationRevision {
+    InvitationRevision {
+        sequence,
+        last_modified: None,
+        cancelled,
+    }
+}
 fn identity(link: Uuid) -> InvitationIdentity {
     InvitationIdentity {
-        id: "snapshot".into(),
         uid: "invite-uid".into(),
         preferred_link_id: link,
         occurrence_key: None,
         unresolved_instance: false,
-        related_revisions: Vec::new(),
-        series_revisions: Vec::new(),
-        cancelled: false,
+        revision: revision(1, false),
+        series_revision: None,
         organizer_email: Some("organizer@example.com".into()),
-        last_modified: None,
-        sequence: 1,
     }
 }
 async fn event(pool: &PgPool, repo: &PgCalendarRepository, viewer: &str, link: Uuid) -> Uuid {
@@ -42,19 +46,7 @@ async fn invitation_accounts_are_authorized_and_ambiguity_never_guesses(pool: Pg
     let b = insert_link(&pool, viewer).await;
     let event_a = event(&pool, &repo, viewer, a).await;
     event(&pool, &repo, viewer, b).await;
-    let disabled = CalendarInvitationResolver::new(PgCalendarRepository::new(pool.clone()), false);
-    assert!(
-        matches!(
-            disabled.resolve(viewer, &[identity(a)]).await.unwrap()[0],
-            InvitationResolution::Resolved {
-                can_respond: false,
-                can_join: true,
-                ..
-            }
-        ),
-        "calendar owner's kill switch disables writes while preserving reads"
-    );
-    let resolver = CalendarInvitationResolver::new(repo, true);
+    let resolver = CalendarInvitationResolver::new(repo);
     let result = resolver
         .resolve(viewer, &[identity(a), identity(Uuid::nil())])
         .await
@@ -72,7 +64,7 @@ async fn invitation_accounts_are_authorized_and_ambiguity_never_guesses(pool: Pg
         InvitationResolution::Disconnected
     ));
     let mut disconnected_cancel = identity(a);
-    disconnected_cancel.cancelled = true;
+    disconnected_cancel.revision.cancelled = true;
     assert!(matches!(
         resolver
             .resolve("macro|unrelated@example.com", &[disconnected_cancel])
@@ -80,17 +72,10 @@ async fn invitation_accounts_are_authorized_and_ambiguity_never_guesses(pool: Pg
             .unwrap()[0],
         InvitationResolution::Cancelled
     ));
-    let mut shared = identity(Uuid::nil());
-    shared
-        .related_revisions
-        .push(crate::domain::invitations::InvitationRevision {
-            link_id: a,
-            sequence: 2,
-            last_modified: None,
-            cancelled: true,
-        });
+    let mut ambiguous_cancel = identity(Uuid::nil());
+    ambiguous_cancel.revision = revision(2, true);
     assert!(matches!(
-        resolver.resolve(viewer, &[shared]).await.unwrap()[0],
+        resolver.resolve(viewer, &[ambiguous_cancel]).await.unwrap()[0],
         InvitationResolution::Cancelled
     ));
     let mut unresolved = identity(a);
@@ -100,7 +85,7 @@ async fn invitation_accounts_are_authorized_and_ambiguity_never_guesses(pool: Pg
         InvitationResolution::Unavailable
     ));
     let mut cancelled = identity(a);
-    cancelled.cancelled = true;
+    cancelled.revision.cancelled = true;
     assert!(matches!(
         resolver.resolve(viewer, &[cancelled]).await.unwrap()[0],
         InvitationResolution::Resolved {
@@ -144,8 +129,8 @@ async fn invitation_moved_instance_uses_original_key_and_instance_revision(pool:
     repo.upsert_event_fixture(upsert).await.unwrap();
     let mut request = identity(link);
     request.occurrence_key = Some(original.clone());
-    request.sequence = 8;
-    let resolver = CalendarInvitationResolver::new(repo, true);
+    request.revision.sequence = 8;
+    let resolver = CalendarInvitationResolver::new(repo);
     let result = resolver
         .resolve(viewer, &[identity(link), request.clone()])
         .await
@@ -157,14 +142,7 @@ async fn invitation_moved_instance_uses_original_key_and_instance_revision(pool:
         matches!(&result[1], InvitationResolution::Resolved { occurrence, event, is_stale: false, .. } if occurrence.occurrence_key == original && occurrence.time == moved && event.sequence == 8),
         "{result:?}"
     );
-    request
-        .series_revisions
-        .push(crate::domain::invitations::InvitationRevision {
-            link_id: link,
-            sequence: 2,
-            last_modified: None,
-            cancelled: true,
-        });
+    request.series_revision = Some(revision(2, true));
     assert!(
         matches!(
             resolver.resolve(viewer, &[request.clone()]).await.unwrap()[0],
@@ -172,17 +150,10 @@ async fn invitation_moved_instance_uses_original_key_and_instance_revision(pool:
         ),
         "a master cancellation at 2 supersedes the master at 1 even when the exception is at 8"
     );
-    request
-        .series_revisions
-        .push(crate::domain::invitations::InvitationRevision {
-            link_id: link,
-            sequence: 3,
-            last_modified: None,
-            cancelled: false,
-        });
+    request.series_revision = Some(revision(3, false));
     assert!(
         matches!(
-            resolver.resolve(viewer, &[request.clone()]).await.unwrap()[0],
+            resolver.resolve(viewer, &[request]).await.unwrap()[0],
             InvitationResolution::Resolved {
                 is_stale: true,
                 can_respond: false,
@@ -191,22 +162,6 @@ async fn invitation_moved_instance_uses_original_key_and_instance_revision(pool:
             }
         ),
         "a newer master request supersedes the older cancellation in the master stream"
-    );
-    request.series_revisions = vec![crate::domain::invitations::InvitationRevision {
-        link_id: Uuid::now_v7(),
-        sequence: 20,
-        last_modified: None,
-        cancelled: true,
-    }];
-    assert!(
-        matches!(
-            resolver.resolve(viewer, &[request]).await.unwrap()[0],
-            InvitationResolution::Resolved {
-                is_stale: false,
-                ..
-            }
-        ),
-        "another inbox's cancellation must not alter the selected calendar copy"
     );
 }
 
@@ -234,17 +189,15 @@ async fn master_invitation_does_not_compare_revisions_with_first_exception(pool:
         attendees: None,
     });
     repo.upsert_event_fixture(upsert).await.unwrap();
-    let resolver = CalendarInvitationResolver::new(repo, true);
+    let resolver = CalendarInvitationResolver::new(repo);
     let mut cancel = identity(link);
-    cancel.sequence = 2;
-    cancel.cancelled = true;
+    cancel.revision = revision(2, true);
     let result = resolver.resolve(viewer, &[cancel.clone()]).await.unwrap();
     assert!(
         matches!(&result[0], InvitationResolution::Resolved { event, can_respond: false, can_join: false, is_stale: true, .. } if event.sequence == 8),
         "{result:?}"
     );
-    cancel.cancelled = false;
-    cancel.sequence = 3;
+    cancel.revision = revision(3, false);
     let result = resolver.resolve(viewer, &[cancel]).await.unwrap();
     assert!(
         matches!(

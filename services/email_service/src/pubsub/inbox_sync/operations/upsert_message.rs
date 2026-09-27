@@ -244,7 +244,8 @@ pub async fn upsert_message(
             })
         })?;
 
-    if !message.is_draft {
+    // Saved messages are immutable, except a draft that has just been sent.
+    if !message.is_draft && existing_message_was_draft != Some(false) {
         crate::pubsub::invitation_extraction::save_discovered(
             ctx,
             link.id,

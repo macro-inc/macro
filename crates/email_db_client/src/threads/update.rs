@@ -143,8 +143,8 @@ pub async fn update_thread_provider_id(
 }
 
 /// Recomputes the denormalized `email_threads.has_calendar_attachment` flag
-/// from the thread's current attachment set. Mirrors the CalendarOnly
-/// predicate in the email crate's dynamic query builder.
+/// from the thread's calendar attachments and saved invitations. Mirrors the
+/// CalendarOnly predicate in the email crate's dynamic query builder.
 #[tracing::instrument(skip(tx), err)]
 pub async fn sync_thread_calendar_flag(
     tx: &mut sqlx::PgConnection,

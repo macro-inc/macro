@@ -1,6 +1,4 @@
-#![recursion_limit = "256"]
 #![allow(unused)]
-mod invitation_extraction;
 
 mod api;
 mod backfill_completion_service;

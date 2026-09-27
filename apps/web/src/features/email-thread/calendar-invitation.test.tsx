@@ -152,7 +152,6 @@ describe('email invitation production host', () => {
         start: {
           kind: 'zoned',
           value: '2026-09-25T17:00:00Z',
-          local: '2026-09-25T10:00:00',
           time_zone: 'America/Los_Angeles',
         },
       };

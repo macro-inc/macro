@@ -156,12 +156,6 @@ where
             .filter(|message| message.provider_id.is_none())
             .map(|message| message.db_id)
             .collect();
-        // Invitations are only extracted from delivered mail.
-        let delivered_message_ids: Vec<Uuid> = message_rows
-            .iter()
-            .filter(|message| !message.is_draft)
-            .map(|message| message.db_id)
-            .collect();
 
         let (
             mut scheduled,
@@ -196,7 +190,7 @@ where
             },
             async {
                 self.email_repo
-                    .calendar_invitations_by_message_ids(&delivered_message_ids)
+                    .calendar_invitations_by_message_ids(&message_ids)
                     .await
                     .map_err(anyhow::Error::from)
             },

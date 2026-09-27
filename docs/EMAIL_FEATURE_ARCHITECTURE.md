@@ -444,12 +444,13 @@ attachments best-effort; a failed or oversized download leaves the message as pl
 mail, with no retry. Mail synced before the feature shipped is not reinspected, and a
 parser change applies only to newly synced mail. Opening a message never fetches
 provider MIME or parses ICS.
-When an open thread's snapshots change, its calendar resolutions are invalidated,
-immediately withdrawing stale actions. During RSVP, revalidation waits until all
-responses settle so an email refresh cannot overwrite the optimistic attendee response.
+When an already-loaded thread's snapshots change, that thread's calendar resolution is
+revalidated and its actions withdrawn until the refetch lands. A thread's first load or
+a switch between threads does not trigger it. During RSVP, revalidation is left to the
+settling mutation so an email refresh cannot overwrite the optimistic attendee response.
 
-Scheduling revisions are reconciled separately for each original occurrence and
-its series master. A lower-sequence master cancellation still cancels an instance
+Scheduling revisions come only from the thread's own saved components, and are
+reconciled separately for each original occurrence and its series master. A lower-sequence master cancellation still cancels an instance
 with a higher independent sequence. RSVP carries the displayed responding address;
 the calendar domain verifies inbox ownership before passing only that address to
 Google. Optimistic responses and rollback ownership are scoped to that attendee.
@@ -457,8 +458,9 @@ Google. Optimistic responses and rollback ownership are scoped to that attendee.
 
 The parser compatibility corpus is in `crates/email/fixtures/calendar`. `ical` 0.11
 handles folded properties, parameters, and embedded VTIMEZONE syntax. `chrono-tz`
-resolves unambiguous IANA times. Windows/custom zones, floating times, and DST gaps or
-ambiguities remain explicitly unresolved. Snapshots keep only fields that reads use.
+resolves unambiguous IANA times, and the Windows zone IDs that Outlook writes map to
+IANA through the CLDR table in `calendar_invitation_parser/windows_zones.rs`. Custom
+zones, floating times, and DST gaps or ambiguities remain explicitly unresolved. Snapshots keep only fields that reads use.
 Limits are 512 KiB per part and 32 components/parts per message. Date-only
 ends remain exclusive; recurrence IDs retain the original occurrence identity.
 
@@ -477,22 +479,19 @@ small presentation values. The body renderer has no calendar dependencies.
 occurrence time, including when an instance has moved to another day.
 
 The email resolution endpoint first authorizes the thread, then derives identities from
-the thread's newest 100 stored components in one batch, without loading its messages. It calls the `CalendarInvitationService` port through the
-`CalendarServiceInvitations` HTTP adapter. `calendar_service` hosts the internal-only
-batch endpoint and constructs the PostgreSQL resolver; email does not read calendar
-tables for this operation. The internal call carries the verified viewer identity,
-and the calendar domain independently limits lookup to owned, connected
-Google-backed copies, prefers the owning inbox, and withholds ambiguous, read-only,
-stale, cancelled, mismatched-organizer, or unresolved-instance responses. Saved newer
-scheduling revisions suppress stale actions while calendar sync catches up. Exception
-revisions are preserved independently of the master. Reads never create calendar events.
-Response capabilities use **calendar_service's** sync/mutation gate. Email's legacy
-calendar-sync flag can stay disabled after the service cutover without disabling RSVP
-on invitation cards. The batch endpoint remains available when calendar writes are off,
-returning read-only capabilities. Calendar service failures leave the saved card useful
-and are retried through the existing frontend resolution query.
-Deploy the calendar endpoint before the email client. The shared gateway's `/calendar/*`
-route and the local service URL both target calendar service after the main cutover.
+the thread's newest 100 stored components in one batch, without loading its messages.
+It calls the calendar domain's `CalendarInvitationService` port in-process: the email
+service composition root constructs `CalendarInvitationResolver` over
+`PgCalendarRepository`, as it already does for its other calendar services. The
+calendar domain limits lookup to the verified viewer's owned, connected Google-backed
+copies, prefers the thread's inbox, and withholds ambiguous, read-only, stale,
+cancelled, mismatched-organizer, or unresolved-instance responses. Newer saved
+scheduling revisions in the thread suppress stale actions while calendar sync catches
+up. Exception revisions are preserved independently of the master. Reads never create
+calendar events. Resolution does not consult calendar_service's sync kill switch: when
+it is off, the RSVP write itself is rejected and the card reports a retryable error.
+Resolution failures leave the saved card useful and are retried through the existing
+frontend resolution query.
 
 RSVP uses the existing provider write-through mutation. Its writer revisions cover both
 occurrence and invitation caches, including email-only views. Failed older requests

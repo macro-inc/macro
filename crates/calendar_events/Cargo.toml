@@ -17,8 +17,6 @@ google = ["dep:reqwest", "dep:urlencoding"]
 # The calendar-service HTTP adapter implementing the mutation port, for hosts
 # that are not the calendar write authority.
 mutation-client = ["dep:reqwest"]
-# Internal batch invitation resolution through the calendar owner.
-invitation-client = ["dep:reqwest"]
 inbound = [
   "dep:axum",
   "dep:macro_authorization",

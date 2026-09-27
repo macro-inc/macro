@@ -283,8 +283,50 @@ it('revalidates capabilities when newer scheduling snapshots arrive in a fresh t
       hasMore: false,
     });
     await vi.waitFor(() =>
-      expect(invalidateInvitations).toHaveBeenCalledOnce()
+      expect(invalidateInvitations).toHaveBeenCalledExactlyOnceWith('thread')
     );
+  } finally {
+    dispose();
+  }
+});
+
+it('does not revalidate when a thread first loads or the view switches threads', async () => {
+  const withInvite = (id: string): ThreadQueryData => ({
+    thread: {
+      ...thread([
+        message('invite', {
+          thread_db_id: id,
+          calendar_invitations: [invitationFixture],
+        }),
+      ]),
+      db_id: id,
+    },
+    hasMore: false,
+  });
+  const { setId, setData, dispose } = createRoot((dispose) => {
+    const [id, setId] = createSignal('thread');
+    const [data, setData] = createSignal<ThreadQueryData | undefined>();
+    createEmailThreadSource(id, {
+      get isSuccess() {
+        return data() !== undefined;
+      },
+      isError: false,
+      get data() {
+        return data();
+      },
+    } as ThreadQueryResult<ThreadQueryData>);
+    return { setId, setData, dispose };
+  });
+  try {
+    invalidateInvitations.mockClear();
+    setData(withInvite('thread'));
+    await Promise.resolve();
+    batch(() => {
+      setId('other');
+      setData(withInvite('other'));
+    });
+    await Promise.resolve();
+    expect(invalidateInvitations).not.toHaveBeenCalled();
   } finally {
     dispose();
   }

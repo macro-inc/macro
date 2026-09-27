@@ -55,7 +55,7 @@ export function CalendarInvitationDay(props: {
           Close
         </Button>
       </div>
-      <p class="my-3 rounded-md bg-accent/10 p-3 text-ink">
+      <p class="my-3 rounded-md bg-accent-bg p-3 text-ink">
         <span class="mr-2 font-medium">This invitation</span>
         {
           invitationSchedule(
@@ -65,8 +65,18 @@ export function CalendarInvitationDay(props: {
           ).when
         }
       </p>
-      <Show when={query.isPending}>
-        <p role="status">Loading calendar…</p>
+      <Show
+        when={range()}
+        fallback={
+          <p role="status">
+            This invitation's time is unresolved, so conflicts could not be
+            checked.
+          </p>
+        }
+      >
+        <Show when={query.isPending}>
+          <p role="status">Loading calendar…</p>
+        </Show>
       </Show>
       <Show when={query.isError}>
         <p role="status">
@@ -87,7 +97,7 @@ export function CalendarInvitationDay(props: {
             <li
               class="rounded-md p-2 [overflow-wrap:anywhere]"
               classList={{
-                'bg-accent/10':
+                'bg-accent-bg':
                   item.event.id === props.eventId &&
                   item.occurrence.occurrenceKey === props.occurrenceKey,
               }}

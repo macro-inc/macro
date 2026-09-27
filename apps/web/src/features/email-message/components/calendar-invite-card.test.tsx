@@ -95,7 +95,6 @@ describe('native invitation card', () => {
       start: {
         kind: 'zoned' as const,
         value: '2026-09-25T17:00:00Z',
-        local: '2026-09-25T10:00:00',
         time_zone: 'America/Los_Angeles',
       },
     };
@@ -142,7 +141,13 @@ describe('native invitation card', () => {
       <CalendarInviteCard
         invitation={invitationFixture}
         actions={{
-          resolution: { ...resolved, isStale: true },
+          // The calendar never grants a response for a stale copy.
+          resolution: {
+            ...resolved,
+            isStale: true,
+            canRespond: false,
+            canJoin: false,
+          },
           respond: vi.fn(),
         }}
       />
@@ -151,5 +156,6 @@ describe('native invitation card', () => {
       screen.getByRole('heading', { name: 'Product review' })
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Yes' })).toBeNull();
+    expect(screen.getByText(/Responses are paused/)).toBeTruthy();
   });
 });

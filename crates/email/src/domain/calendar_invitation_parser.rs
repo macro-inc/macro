@@ -6,6 +6,8 @@ use ical::property::Property;
 use sha2::{Digest, Sha256};
 use std::{collections::HashSet, io::Cursor};
 
+mod windows_zones;
+
 /// Largest decoded part accepted for display extraction.
 pub const MAX_INVITATION_BYTES: usize = 512 * 1024;
 /// Largest number of scheduling components retained for a message.
@@ -137,25 +139,33 @@ fn parse_date(p: &Property) -> Option<InvitationDateTime> {
             });
     }
     let local = NaiveDateTime::parse_from_str(raw.trim_end_matches('Z'), "%Y%m%dT%H%M%S").ok()?;
-    let local_string = local.format("%Y-%m-%dT%H:%M:%S").to_string();
     let zone = parameter(p, "TZID");
+    let tz = zone.and_then(time_zone);
     let instant = if raw.ends_with('Z') {
         Some(Utc.from_utc_datetime(&local))
     } else {
-        zone.and_then(|z| z.parse::<chrono_tz::Tz>().ok())
-            .and_then(|tz| tz.from_local_datetime(&local).single())
+        tz.and_then(|tz| tz.from_local_datetime(&local).single())
             .map(|d| d.with_timezone(&Utc))
     };
     Some(match instant {
         Some(instant) => InvitationDateTime::Zoned {
             value: instant.to_rfc3339(),
-            time_zone: zone.unwrap_or("UTC").to_owned(),
-            local: local_string,
+            time_zone: tz.map(|tz| tz.name()).or(zone).unwrap_or("UTC").to_owned(),
         },
         None => InvitationDateTime::Unresolved {
-            value: local_string,
+            value: local.format("%Y-%m-%dT%H:%M:%S").to_string(),
             time_zone: zone.map(str::to_owned),
         },
+    })
+}
+/// IANA zone for a TZID, accepting the Windows IDs that Outlook writes.
+fn time_zone(tzid: &str) -> Option<chrono_tz::Tz> {
+    tzid.parse().ok().or_else(|| {
+        let zones = windows_zones::WINDOWS_ZONES;
+        let index = zones
+            .binary_search_by(|(windows, _)| (*windows).cmp(tzid))
+            .ok()?;
+        zones[index].1.parse().ok()
     })
 }
 fn raw_property(p: &Property) -> String {
@@ -295,7 +305,6 @@ fn end_from_duration(start: &InvitationDateTime, raw: &str) -> Option<Invitation
             Some(InvitationDateTime::Zoned {
                 value: end.with_timezone(&Utc).to_rfc3339(),
                 time_zone: time_zone.clone(),
-                local: end.naive_local().format("%Y-%m-%dT%H:%M:%S").to_string(),
             })
         }
     }

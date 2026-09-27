@@ -1,4 +1,4 @@
-//! Authorize email reads before deriving calendar identities from saved snapshots.
+//! Derive calendar identities from an authorized thread's saved snapshots.
 use super::models::calendar_invitation::{
     CalendarInvitation, InvitationDateTime, InvitationMethod,
 };
@@ -29,18 +29,9 @@ pub trait InvitationSnapshotRepository: Send + Sync {
         thread_id: Uuid,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<ThreadInvitation>, Report>> + Send;
-    /// Newer scheduling messages for the same UIDs.
-    /// Only the authorized thread and independently owned inboxes may contribute.
-    fn revisions(
-        &self,
-        viewer: &str,
-        thread_id: Uuid,
-        uids: &[String],
-    ) -> impl Future<Output = Result<Vec<(Uuid, CalendarInvitation)>, Report>> + Send;
 }
-fn revision(link_id: Uuid, invite: &CalendarInvitation) -> InvitationRevision {
+fn revision(invite: &CalendarInvitation) -> InvitationRevision {
     InvitationRevision {
-        link_id,
         sequence: invite.sequence,
         last_modified: stamp(invite),
         cancelled: cancelled(invite),
@@ -91,51 +82,48 @@ fn stamp(invite: &CalendarInvitation) -> Option<chrono::DateTime<chrono::Utc>> {
         .and_then(|value| chrono::NaiveDateTime::parse_from_str(value, "%Y%m%dT%H%M%SZ").ok())
         .map(|date| date.and_utc())
 }
+fn newest<'a>(
+    candidates: impl Iterator<Item = &'a CalendarInvitation>,
+) -> Option<InvitationRevision> {
+    candidates
+        .map(revision)
+        .max_by_key(InvitationRevision::ordering_key)
+}
+/// Revisions come only from the same thread, which belongs to one inbox.
 fn invitation_identity(
-    message_id: Uuid,
-    link_id: Uuid,
-    invite: &CalendarInvitation,
-    revisions: &[(Uuid, CalendarInvitation)],
+    saved: &ThreadInvitation,
+    thread: &[ThreadInvitation],
 ) -> InvitationIdentity {
-    let latest = revisions
-        .iter()
-        .filter(|(link, candidate)| *link == link_id && applicable_revision(candidate, invite))
-        .map(|(_, candidate)| candidate)
-        .chain(std::iter::once(invite))
-        .max_by_key(|candidate| revision(link_id, candidate).ordering_key())
-        .unwrap_or(invite);
+    let invite = &saved.invitation;
+    let thread = thread.iter().map(|saved| &saved.invitation);
     let key = occurrence_key(invite.recurrence_id.as_ref());
-    let to_revision = |(link, candidate): &(Uuid, CalendarInvitation)| revision(*link, candidate);
     InvitationIdentity {
-        id: format!("{message_id}:{}", invite.id),
         uid: invite.uid.clone(),
-        preferred_link_id: link_id,
+        preferred_link_id: saved.link_id,
         unresolved_instance: invite.recurrence_id_raw.is_some() && key.is_none(),
         occurrence_key: key,
-        cancelled: cancelled(latest),
-        related_revisions: revisions
-            .iter()
-            .filter(|(link, candidate)| *link != link_id && applicable_revision(candidate, invite))
-            .map(to_revision)
-            .collect(),
+        revision: newest(
+            thread
+                .clone()
+                .filter(|candidate| applicable_revision(candidate, invite))
+                .chain(std::iter::once(invite)),
+        )
+        .expect("includes the invitation itself"),
         // A master's SEQUENCE is independent of each exception's SEQUENCE.
-        // Retain requests too: a newer master request can supersede an old cancellation.
-        series_revisions: revisions
-            .iter()
-            .filter(|(_, candidate)| {
-                invite.recurrence_id_raw.is_some()
-                    && candidate.recurrence_id_raw.is_none()
-                    && candidate.recurrence_id.is_none()
-                    && matching_series(candidate, invite)
+        // Keep requests too: a newer master request can supersede an old cancellation.
+        series_revision: invite
+            .recurrence_id_raw
+            .is_some()
+            .then(|| {
+                newest(thread.filter(|candidate| {
+                    candidate.recurrence_id_raw.is_none() && matching_series(candidate, invite)
+                }))
             })
-            .map(to_revision)
-            .collect(),
+            .flatten(),
         organizer_email: invite
             .organizer
             .as_ref()
             .map(|organizer| organizer.email.clone()),
-        sequence: latest.sequence,
-        last_modified: stamp(latest),
     }
 }
 
@@ -154,7 +142,6 @@ pub async fn resolve<C: CalendarInvitationService, S: InvitationSnapshotReposito
     snapshots: &S,
     receipt: EntityAccessReceipt<ViewAccessLevel>,
 ) -> Result<HashMap<String, InvitationResolution>, Report> {
-    let started = std::time::Instant::now();
     let viewer = receipt
         .get_authenticated_user()
         .map_err(|_| rootcause::report!("authentication required"))?
@@ -164,50 +151,23 @@ pub async fn resolve<C: CalendarInvitationService, S: InvitationSnapshotReposito
     let saved = snapshots
         .thread_invitations(thread_id, MAX_INVITATION_BATCH as i64)
         .await?;
-    let uids = saved
-        .iter()
-        .map(|saved| saved.invitation.uid.clone())
-        .collect::<Vec<_>>();
-    let revisions = snapshots.revisions(&viewer, thread_id, &uids).await?;
     let identities = saved
         .iter()
-        .map(|saved| {
-            invitation_identity(
-                saved.message_id,
-                saved.link_id,
-                &saved.invitation,
-                &revisions,
-            )
-        })
+        .map(|invitation| invitation_identity(invitation, &saved))
         .collect::<Vec<_>>();
     let resolved = calendar.resolve(&viewer, &identities).await?;
-    let mut reasons = HashMap::<&str, usize>::new();
-    let result = identities
-        .into_iter()
+    tracing::info!(count = resolved.len(), "calendar invitations resolved");
+    Ok(saved
+        .iter()
         .zip(resolved)
-        .map(|(identity, resolution)| {
-            let reason = match &resolution {
-                InvitationResolution::Resolved { is_stale: true, .. } => "stale",
-                InvitationResolution::Resolved { .. } => "resolved",
-                InvitationResolution::StillSyncing => "still_syncing",
-                InvitationResolution::Disconnected => "disconnected",
-                InvitationResolution::Cancelled => "cancelled",
-                InvitationResolution::Unavailable => "unavailable",
-                InvitationResolution::NoMatch => "no_match",
-                InvitationResolution::Ambiguous => "ambiguous",
-            };
-            *reasons.entry(reason).or_default() += 1;
-            (identity.id, resolution)
+        .map(|(saved, resolution)| {
+            (
+                format!("{}:{}", saved.message_id, saved.invitation.id),
+                resolution,
+            )
         })
-        .collect::<HashMap<_, _>>();
-    tracing::info!(
-        count = result.len(),
-        elapsed_ms = started.elapsed().as_millis(),
-        ?reasons,
-        "calendar invitations resolved"
-    );
-    Ok(result)
+        .collect())
 }
 
-#[cfg(all(test, feature = "calendar_parser"))]
+#[cfg(all(test, feature = "calendar_invitations"))]
 mod test;

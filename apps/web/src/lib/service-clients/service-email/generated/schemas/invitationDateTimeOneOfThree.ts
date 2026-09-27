@@ -11,9 +11,7 @@ import type { InvitationDateTimeOneOfThreeKind } from './invitationDateTimeOneOf
  */
 export type InvitationDateTimeOneOfThree = {
   kind: InvitationDateTimeOneOfThreeKind;
-  /** Original local wall time. */
-  local: string;
-  /** Original TZID, or UTC. */
+  /** IANA zone of the original TZID, or UTC. */
   time_zone: string;
   /** RFC3339 instant. */
   value: string;

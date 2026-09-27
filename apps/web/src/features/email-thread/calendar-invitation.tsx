@@ -66,30 +66,31 @@ function ConnectedInvitation(
     setShowDay(false);
     dayTrigger?.focus({ preventScroll: true });
   };
+  // A failed refresh keeps the cached result; reading query.data would throw.
+  const wire = () => {
+    const key = `${props.messageId}:${props.invitation.id}`;
+    return query.isSuccess
+      ? query.data[key]
+      : getCachedCalendarInvitations(props.threadId)?.[key];
+  };
   const state = (): InvitationResolution => {
     if (!calendarEnabled()) return { kind: 'unavailable' };
     if (query.isPending) return { kind: 'loading' };
-    const wire = query.isSuccess
-      ? query.data[`${props.messageId}:${props.invitation.id}`]
-      : getCachedCalendarInvitations(props.threadId)?.[
-          `${props.messageId}:${props.invitation.id}`
-        ];
-    if (!wire && query.isError) return { kind: 'unavailable' };
-    const resolution = invitationResolution(props.invitation, wire);
-    return (query.isError || query.isFetching) && resolution.kind === 'resolved'
+    const current = wire();
+    if (!current && query.isError) return { kind: 'unavailable' };
+    const resolution = invitationResolution(props.invitation, current);
+    // Keep last-known details after a failed refresh, but withhold actions.
+    return query.isError && resolution.kind === 'resolved'
       ? { ...resolution, canRespond: false, canJoin: false }
       : resolution;
   };
   const openTarget = (): CalendarInvitationOpenTarget | undefined => {
-    if (!calendarEnabled()) return;
-    const wire = query.isSuccess
-      ? query.data[`${props.messageId}:${props.invitation.id}`]
-      : undefined;
-    return wire?.kind === 'resolved'
+    const current = calendarEnabled() && query.isSuccess ? wire() : undefined;
+    return current?.kind === 'resolved'
       ? {
-          eventId: wire.event.id,
-          occurrenceKey: wire.occurrence.occurrenceKey,
-          time: wire.occurrence.time,
+          eventId: current.event.id,
+          occurrenceKey: current.occurrence.occurrenceKey,
+          time: current.occurrence.time,
         }
       : undefined;
   };
@@ -99,9 +100,7 @@ function ConnectedInvitation(
   };
   const rsvp = createCalendarRsvpController(() => {
     const value = resolved();
-    return value?.canRespond && !value.isStale && !value.isCancelled
-      ? value
-      : undefined;
+    return value?.canRespond ? value : undefined;
   });
   return (
     <>

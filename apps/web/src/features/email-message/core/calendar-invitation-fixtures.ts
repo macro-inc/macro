@@ -11,13 +11,11 @@ export const invitationFixture: CalendarInvitation = {
   start: {
     kind: 'zoned',
     value: '2026-09-24T17:00:00Z',
-    local: '2026-09-24T10:00:00',
     time_zone: 'America/Los_Angeles',
   },
   end: {
     kind: 'zoned',
     value: '2026-09-24T17:30:00Z',
-    local: '2026-09-24T10:30:00',
     time_zone: 'America/Los_Angeles',
   },
   attendees: [

@@ -66,17 +66,7 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       threadTransport={props.threadTransport}
       host={props.host}
       openCalendar={(target) => {
-        void openCalendarEventSplit({
-          ...target,
-          time:
-            target.time.kind === 'timed'
-              ? target.time
-              : {
-                  kind: 'allDay',
-                  startDate: target.time.startDate,
-                  endDate: target.time.endDate,
-                },
-        });
+        void openCalendarEventSplit(target);
       }}
       header={props.topBar?.({ createTask })}
       actions={<ThreadActions title={props.title} onCreateTask={createTask} />}

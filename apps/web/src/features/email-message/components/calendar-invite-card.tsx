@@ -9,6 +9,7 @@ import VideoCamera from '@phosphor/video-camera.svg';
 import X from '@phosphor/x.svg';
 import { Button } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   type CalendarInvitation,
   type CalendarInvitationActions,
@@ -110,41 +111,46 @@ export function CalendarInviteCard(props: {
     };
   };
   const conference = () =>
-    !cancelled() && !notification() && resolved()?.canJoin
+    !cancelled() && resolved()?.canJoin
       ? safeInvitationUrl(invite().conference_url)
       : undefined;
+  // The calendar already withholds responses for stale, cancelled, and read-only events.
   const canRespond = () =>
-    !cancelled() &&
-    !notification() &&
     props.invitation.method === 'request' &&
-    !resolved()?.isStale &&
     resolved()?.canRespond &&
     props.actions?.respond;
-  const fallbackStatus = () => {
-    const kind = props.actions?.resolution?.kind;
-    if (kind === 'disconnected')
-      return 'Connect a calendar to respond from Macro.';
-    if (kind === 'ambiguous')
-      return 'This invitation matches multiple accounts. Open your calendar to choose.';
-    if (kind === 'still_syncing' || kind === 'loading')
-      return 'Checking your connected calendar…';
-    if (kind === 'unavailable')
-      return 'Calendar unavailable. Saved invitation details are shown.';
-    if (kind === 'resolved')
-      return resolved()?.isStale
-        ? 'Waiting for your calendar to catch up. Responses are paused until it does.'
-        : 'Your connected calendar does not allow a response to this event.';
-    return 'Saved invitation. Open the original email or invitation attachment for more options.';
-  };
+  const fallbackStatus = () =>
+    match(props.actions?.resolution?.kind)
+      .with('disconnected', () => 'Connect a calendar to respond from Macro.')
+      .with(
+        'ambiguous',
+        () =>
+          'This invitation matches multiple accounts. Open your calendar to choose.'
+      )
+      .with(
+        'still_syncing',
+        'loading',
+        () => 'Checking your connected calendar…'
+      )
+      .with(
+        'unavailable',
+        () => 'Calendar unavailable. Saved invitation details are shown.'
+      )
+      .with('resolved', () =>
+        resolved()?.isStale
+          ? 'Waiting for your calendar to catch up. Responses are paused until it does.'
+          : 'Your connected calendar does not allow a response to this event.'
+      )
+      .otherwise(
+        () =>
+          'Saved invitation. Open the original email or invitation attachment for more options.'
+      );
   const lastResponse = () => {
     const response = resolved()?.response;
     return RESPONSES.find((option) => option.value === response)?.label;
   };
   const visibleAttendees = () =>
     attendeesExpanded() ? invite().attendees : invite().attendees.slice(0, 3);
-  // Duration and organizer zone repeat the range; keep all-day and zone warnings.
-  const scheduleNote = () =>
-    invite().start?.kind === 'zoned' ? undefined : schedule().secondary;
   const title = () => invitationDisplayTitle(invite().title);
   const scheduleIcon = () =>
     invite().start?.kind === 'date' ? <CalendarBlank /> : <Clock />;
@@ -199,7 +205,7 @@ export function CalendarInviteCard(props: {
             >
               {schedule().when}
             </p>
-            <Show when={scheduleNote() && !cancelled()}>
+            <Show when={schedule().secondary && !cancelled()}>
               <p class="mt-0.5 text-xs text-ink-muted">
                 {schedule().secondary}
               </p>

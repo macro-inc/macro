@@ -33,7 +33,7 @@ pub(crate) async fn load(
     Ok(loaded)
 }
 
-#[cfg(feature = "calendar_parser")]
+#[cfg(feature = "calendar_invitations")]
 impl crate::domain::invitation_extraction::InvitationExtractionRepository
     for InvitationPgRepository
 {
@@ -72,7 +72,7 @@ impl crate::domain::invitation_extraction::InvitationExtractionRepository
     }
 }
 
-#[cfg(feature = "calendar_resolution")]
+#[cfg(feature = "calendar_invitations")]
 impl crate::domain::invitation_resolution::InvitationSnapshotRepository for InvitationPgRepository {
     async fn thread_invitations(
         &self,
@@ -99,33 +99,7 @@ impl crate::domain::invitation_resolution::InvitationSnapshotRepository for Invi
             })
             .collect())
     }
-    async fn revisions(
-        &self,
-        viewer: &str,
-        thread_id: Uuid,
-        uids: &[String],
-    ) -> Result<Vec<(Uuid, CalendarInvitation)>, Report> {
-        let rows = sqlx::query!(
-            r#"SELECT m.link_id, i.snapshot AS "snapshot!: Json<CalendarInvitation>"
-            FROM email_message_calendar_invites i JOIN email_messages m ON m.id = i.message_id
-            JOIN email_links l ON l.id = m.link_id
-            WHERE (m.thread_id = $2 OR l.macro_id = $1) AND i.snapshot->>'uid' = ANY($3)
-              AND i.snapshot->>'method' IN ('request', 'cancel')
-            ORDER BY (i.snapshot->>'sequence')::bigint DESC,
-                COALESCE(i.snapshot->>'last_modified', i.snapshot->>'dtstamp', '') DESC
-            LIMIT 3200"#,
-            viewer,
-            thread_id,
-            uids
-        )
-        .fetch_all(&self.0)
-        .await?;
-        Ok(rows
-            .into_iter()
-            .map(|r| (r.link_id, r.snapshot.0))
-            .collect())
-    }
 }
 
-#[cfg(all(test, feature = "calendar_parser"))]
+#[cfg(all(test, feature = "calendar_invitations"))]
 mod test;

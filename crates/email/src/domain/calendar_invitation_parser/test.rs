@@ -43,7 +43,6 @@ fn typed_dates_dst_and_unresolved_zones() {
         matches!(&parsed[0].start, Some(InvitationDateTime::Zoned { value, .. }) if value == "2026-09-24T17:00:00+00:00")
     );
     for start in [
-        "TZID=Pacific Standard Time:20260924T100000",
         "TZID=Unknown/Zone:20260924T100000",
         "TZID=America/Los_Angeles:20260308T023000",
         "TZID=America/Los_Angeles:20261101T013000",
@@ -123,12 +122,12 @@ fn mixed_case_tokens_and_duration() {
         "REQUEST",
     )[0];
     assert!(
-        matches!(&invite.end, Some(InvitationDateTime::Zoned { local, value, .. }) if local == "2026-03-08T13:00:00" && value == "2026-03-08T20:00:00+00:00")
+        matches!(&invite.end, Some(InvitationDateTime::Zoned { value, .. }) if value == "2026-03-08T20:00:00+00:00")
     );
 }
 
 #[test]
-fn provider_compatibility_resolves_only_unambiguous_zones() {
+fn provider_compatibility_resolves_iana_and_windows_zones() {
     for (bytes, resolved) in [
         (
             include_bytes!("../../../fixtures/calendar/google.ics").as_slice(),
@@ -136,7 +135,7 @@ fn provider_compatibility_resolves_only_unambiguous_zones() {
         ),
         (
             include_bytes!("../../../fixtures/calendar/outlook.ics").as_slice(),
-            false,
+            true,
         ),
         (
             include_bytes!("../../../fixtures/calendar/apple.ics").as_slice(),
@@ -150,4 +149,20 @@ fn provider_compatibility_resolves_only_unambiguous_zones() {
             resolved
         );
     }
+}
+
+#[test]
+fn windows_zone_table_is_sorted_and_known_to_chrono_tz() {
+    let zones = windows_zones::WINDOWS_ZONES;
+    assert!(zones.windows(2).all(|pair| pair[0].0 < pair[1].0));
+    for (windows, iana) in zones {
+        assert!(iana.parse::<chrono_tz::Tz>().is_ok(), "{windows} -> {iana}");
+    }
+    let parsed = parse(
+        "DTSTART;TZID=W. Europe Standard Time:20260924T100000",
+        "REQUEST",
+    );
+    assert!(
+        matches!(&parsed[0].start, Some(InvitationDateTime::Zoned { value, time_zone }) if value == "2026-09-24T08:00:00+00:00" && time_zone == "Europe/Berlin")
+    );
 }

@@ -37,10 +37,8 @@ pub enum InvitationDateTime {
     Zoned {
         /// RFC3339 instant.
         value: String,
-        /// Original TZID, or UTC.
+        /// IANA zone of the original TZID, or UTC.
         time_zone: String,
-        /// Original local wall time.
-        local: String,
     },
     /// Floating, ambiguous, nonexistent, or unknown-zone wall time.
     Unresolved {

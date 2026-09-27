@@ -213,27 +213,23 @@ function readAnsweredResponses(
   args: RsvpCalendarEventArgs
 ): Map<string, AttendeeResponseStatus> {
   const previous = new Map<string, AttendeeResponseStatus>();
-  for (const [, data] of queryClient.getQueriesData<CalendarOccurrencesData>({
-    queryKey: calendarKeys.occurrences._def,
-  })) {
-    for (const item of data?.items ?? []) {
-      if (!answeredByRsvp(item, args)) continue;
-      const key = rsvpWriterKey(item, args);
-      const response = respondingAttendee(item, args)?.responseStatus;
-      if (response !== undefined && !previous.has(key))
-        previous.set(key, response);
-    }
-  }
-  for (const [, data] of queryClient.getQueriesData<CalendarInvitationsData>({
-    queryKey: calendarKeys.invitations._def,
-  })) {
-    for (const item of Object.values(data ?? {})) {
-      if (item.kind !== 'resolved' || !answeredByRsvp(item, args)) continue;
-      const key = rsvpWriterKey(item, args);
-      const response = respondingAttendee(item, args)?.responseStatus;
-      if (response !== undefined && !previous.has(key))
-        previous.set(key, response);
-    }
+  const occurrences = queryClient
+    .getQueriesData<CalendarOccurrencesData>({
+      queryKey: calendarKeys.occurrences._def,
+    })
+    .flatMap(([, data]) => data?.items ?? []);
+  const invitations = queryClient
+    .getQueriesData<CalendarInvitationsData>({
+      queryKey: calendarKeys.invitations._def,
+    })
+    .flatMap(([, data]) => Object.values(data ?? {}))
+    .filter((item) => item.kind === 'resolved');
+  for (const item of [...occurrences, ...invitations]) {
+    if (!answeredByRsvp(item, args)) continue;
+    const key = rsvpWriterKey(item, args);
+    const response = respondingAttendee(item, args)?.responseStatus;
+    if (response !== undefined && !previous.has(key))
+      previous.set(key, response);
   }
   return previous;
 }

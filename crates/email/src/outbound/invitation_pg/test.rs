@@ -54,7 +54,6 @@ async fn saving_is_idempotent_and_flags_the_thread(pool: PgPool) -> Result<(), R
     Ok(())
 }
 
-#[cfg(feature = "calendar_resolution")]
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("email_thread"))

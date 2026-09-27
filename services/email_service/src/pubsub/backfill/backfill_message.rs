@@ -45,22 +45,26 @@ pub async fn backfill_message(
     .await
     .map_err(|e| map_db_error(e, "Failed to insert final message into database"))?;
 
-    let (message_id, _) = email_db_client::messages::get::get_message_and_thread_id_by_provider_id(
-        &ctx.db,
-        link.id,
-        &p.message_provider_id,
-    )
-    .await
-    .map_err(|e| map_db_error(e, "Failed to find invitation message"))?;
-    if !message.is_draft {
-        crate::pubsub::invitation_extraction::save_discovered(
-            ctx,
+    if !message.is_draft && !fetched.calendar_parts.is_empty() {
+        match email_db_client::messages::get::get_message_and_thread_id_by_provider_id(
+            &ctx.db,
             link.id,
             &p.message_provider_id,
-            message_id,
-            &fetched.calendar_parts,
         )
-        .await;
+        .await
+        {
+            Ok((message_id, _)) => {
+                crate::pubsub::invitation_extraction::save_discovered(
+                    ctx,
+                    link.id,
+                    &p.message_provider_id,
+                    message_id,
+                    &fetched.calendar_parts,
+                )
+                .await;
+            }
+            Err(error) => tracing::warn!(error = ?error, "invitation extraction skipped"),
+        }
     }
 
     // Fan out a PopulateCrmContact job per address involved in the

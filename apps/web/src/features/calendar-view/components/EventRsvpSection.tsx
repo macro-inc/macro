@@ -2,8 +2,8 @@ import type { CalendarEvent } from '@app/features/calendar/types';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import { Button } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
+import { EventRsvpScopeDialog } from '../../calendar/components/EventRsvpScopeDialog';
 import { createCalendarRsvpController } from '../../calendar/hooks/create-calendar-rsvp-controller';
-import { EventRsvpScopeDialog } from './EventRsvpScopeDialog';
 
 type RsvpResponse = Exclude<AttendeeResponseStatus, 'needs_action'>;
 

@@ -99,21 +99,32 @@ export function createEmailThreadSource(
     return data?.db_id === threadId() ? toEmailThread(data) : undefined;
   });
   // Memo equality prevents ordinary email refreshes from revalidating calendar state.
-  const scheduling = createMemo(() =>
-    JSON.stringify(
-      (thread()?.messages ?? [])
-        .filter((message) => message.calendar_invitations?.length)
-        .map((message) => [message.db_id, message.calendar_invitations])
-    )
+  const scheduling = createMemo(
+    () => {
+      const current = thread();
+      return (
+        current && {
+          threadId: current.db_id,
+          invitations: JSON.stringify(
+            current.messages
+              .filter((message) => message.calendar_invitations?.length)
+              .map((message) => [message.db_id, message.calendar_invitations])
+          ),
+        }
+      );
+    },
+    undefined,
+    {
+      equals: (a, b) =>
+        a?.threadId === b?.threadId && a?.invitations === b?.invitations,
+    }
   );
+  // Only a change inside an already-loaded thread, never its first load or a switch.
   createEffect(
-    on(
-      scheduling,
-      () => {
-        void invalidateInvitationScheduling();
-      },
-      { defer: true }
-    )
+    on(scheduling, (next, previous) => {
+      if (next && next.threadId === previous?.threadId)
+        invalidateInvitationScheduling(next.threadId);
+    })
   );
   return {
     id: threadId,

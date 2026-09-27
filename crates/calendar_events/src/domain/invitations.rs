@@ -1,41 +1,31 @@
 //! Authorized lookup of email scheduling identities; never creates calendar data.
 use super::models::{CalendarEvent, CalendarOccurrence, EventStatus};
 use rootcause::Report;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::future::Future;
 use uuid::Uuid;
 
 /// Identity derived from an already-authorized saved invitation.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct InvitationIdentity {
-    /// Stable snapshot component key.
-    pub id: String,
     /// iCalendar UID, not a provider event ID.
     pub uid: String,
-    /// Prefer this inbox only if the viewer independently owns it.
+    /// Prefer the copy synced from the inbox the email arrived in.
     pub preferred_link_id: Uuid,
     /// Original occurrence key, never the moved start.
     pub occurrence_key: Option<String>,
     /// An instance with an unresolved original timezone must never select a different occurrence.
     pub unresolved_instance: bool,
-    /// The newest authorized scheduling message cancels this target.
-    pub cancelled: bool,
-    /// Revisions from other independently authorized inboxes, reconciled only after account selection.
-    pub related_revisions: Vec<InvitationRevision>,
-    /// Independent master revisions that may cancel the entire series.
-    pub series_revisions: Vec<InvitationRevision>,
+    /// Newest saved scheduling revision of this target.
+    pub revision: InvitationRevision,
+    /// Newest saved revision of the series master, for an instance. It may cancel the series.
+    pub series_revision: Option<InvitationRevision>,
     /// Organizer consistency check before exposing actions.
     pub organizer_email: Option<String>,
-    /// Snapshot last-modified time, when supplied by the scheduler.
-    pub last_modified: Option<chrono::DateTime<chrono::Utc>>,
-    /// Snapshot scheduling revision.
-    pub sequence: u32,
 }
-/// An email-authorized scheduling revision from a particular inbox.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// A saved scheduling revision.
+#[derive(Clone, Debug)]
 pub struct InvitationRevision {
-    /// Independently authorized message inbox.
-    pub link_id: Uuid,
     /// Scheduler revision.
     pub sequence: u32,
     /// Scheduler last-modified or stamp.
@@ -54,39 +44,23 @@ impl InvitationRevision {
             self.cancelled,
         )
     }
+
+    /// Whether the email is ahead of a synced copy at this revision.
+    fn is_newer_than(&self, sequence: u32, updated_at: chrono::DateTime<chrono::Utc>) -> bool {
+        self.sequence > sequence
+            || (self.sequence == sequence
+                && self
+                    .last_modified
+                    .is_some_and(|modified| modified > updated_at))
+    }
 }
 impl InvitationIdentity {
-    fn series_revision(&self, link_id: Option<Uuid>) -> Option<&InvitationRevision> {
-        self.series_revisions
-            .iter()
-            .filter(|revision| {
-                link_id.is_none_or(|link| {
-                    revision.link_id == link || revision.link_id == self.preferred_link_id
-                })
-            })
-            .max_by_key(|revision| revision.ordering_key())
-    }
-
-    fn is_cancelled(&self, link_id: Option<Uuid>) -> bool {
-        self.effective_revision(link_id).cancelled
+    fn is_cancelled(&self) -> bool {
+        self.revision.cancelled
             || self
-                .series_revision(link_id)
+                .series_revision
+                .as_ref()
                 .is_some_and(|revision| revision.cancelled)
-    }
-
-    fn effective_revision(&self, link_id: Option<Uuid>) -> InvitationRevision {
-        self.related_revisions
-            .iter()
-            .filter(|revision| link_id.is_none_or(|link| revision.link_id == link))
-            .cloned()
-            .chain(std::iter::once(InvitationRevision {
-                link_id: self.preferred_link_id,
-                sequence: self.sequence,
-                last_modified: self.last_modified,
-                cancelled: self.cancelled,
-            }))
-            .max_by_key(InvitationRevision::ordering_key)
-            .expect("includes snapshot revision")
     }
 }
 
@@ -129,7 +103,7 @@ pub struct InvitationAvailability {
     pub syncing: bool,
 }
 /// Refreshable result, distinct from the immutable email contents.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum InvitationResolution {
@@ -177,16 +151,12 @@ pub trait CalendarInvitationService: Send + Sync + 'static {
 /// Calendar-domain authorization, ambiguity, and response capability policy.
 pub struct CalendarInvitationResolver<R> {
     repository: R,
-    responses_enabled: bool,
 }
 
 impl<R> CalendarInvitationResolver<R> {
-    /// Configure responses using the calendar owner's sync/mutation gate.
-    pub fn new(repository: R, responses_enabled: bool) -> Self {
-        Self {
-            repository,
-            responses_enabled,
-        }
+    /// Resolve against the viewer's synced calendar copies.
+    pub fn new(repository: R) -> Self {
+        Self { repository }
     }
 }
 
@@ -209,7 +179,7 @@ impl<R: CalendarInvitationRepository + 'static> CalendarInvitationService
             return Ok(items
                 .iter()
                 .map(|identity| {
-                    if identity.is_cancelled(None) {
+                    if identity.is_cancelled() {
                         InvitationResolution::Cancelled
                     } else {
                         InvitationResolution::Disconnected
@@ -221,100 +191,83 @@ impl<R: CalendarInvitationRepository + 'static> CalendarInvitationService
         Ok(items
             .iter()
             .zip(candidates)
-            .map(|(identity, mut copies)| {
-                if identity.unresolved_instance {
-                    return if identity.is_cancelled(None) {
-                        InvitationResolution::Cancelled
-                    } else {
-                        InvitationResolution::Unavailable
-                    };
-                }
-                if copies
-                    .iter()
-                    .any(|copy| copy.link_id == identity.preferred_link_id)
-                {
-                    copies.retain(|copy| copy.link_id == identity.preferred_link_id);
-                }
-                if copies.len() > 1 {
-                    return if identity.is_cancelled(None) {
-                        InvitationResolution::Cancelled
-                    } else {
-                        InvitationResolution::Ambiguous
-                    };
-                }
-                let Some(mut copy) = copies.pop() else {
-                    return if identity.is_cancelled(None) {
-                        InvitationResolution::Cancelled
-                    } else if availability.syncing {
-                        InvitationResolution::StillSyncing
-                    } else {
-                        InvitationResolution::NoMatch
-                    };
-                };
-                if copy.series_cancelled
-                    || identity
-                        .series_revision(Some(copy.link_id))
-                        .is_some_and(|revision| {
-                            revision.cancelled && revision.sequence >= copy.series_sequence
-                        })
-                {
-                    return InvitationResolution::Cancelled;
-                }
-                for attendee in &mut copy.event.attendees {
-                    attendee.is_self = attendee.email.eq_ignore_ascii_case(&copy.email);
-                }
-                let revision = identity.effective_revision(Some(copy.link_id));
-                let organizer_matches = identity
-                    .organizer_email
-                    .as_ref()
-                    .zip(copy.event.organizer_email.as_ref())
-                    .is_some_and(|(a, b)| a.eq_ignore_ascii_case(b));
-                let series_stale =
-                    identity
-                        .series_revision(Some(copy.link_id))
-                        .is_some_and(|revision| {
-                            revision.sequence > copy.series_sequence
-                                || (revision.sequence == copy.series_sequence
-                                    && revision
-                                        .last_modified
-                                        .is_some_and(|modified| modified > copy.series_updated_at))
-                        });
-                let (target_sequence, target_updated_at) = if identity.occurrence_key.is_none() {
-                    (copy.series_sequence, copy.series_updated_at)
-                } else {
-                    (copy.event.sequence, copy.event.updated_at)
-                };
-                let is_stale = series_stale
-                    || (revision.cancelled
-                        && revision.sequence >= target_sequence
-                        && copy.event.status != EventStatus::Cancelled
-                        && !copy.occurrence.is_cancelled)
-                    || revision.sequence > target_sequence
-                    || (revision.sequence == target_sequence
-                        && revision
-                            .last_modified
-                            .is_some_and(|modified| modified > target_updated_at));
-                let can_join = organizer_matches
-                    && !is_stale
-                    && copy.event.status != EventStatus::Cancelled
-                    && !copy.occurrence.is_cancelled;
-                let can_respond = self.responses_enabled
-                    && organizer_matches
-                    && !is_stale
-                    && !copy.event.is_read_only
-                    && copy.event.status != EventStatus::Cancelled
-                    && !copy.occurrence.is_cancelled
-                    && copy.event.attendees.iter().any(|a| a.is_self);
-                InvitationResolution::Resolved {
-                    event: Box::new(copy.event),
-                    occurrence: copy.occurrence,
-                    responding_email: copy.email,
-                    can_respond,
-                    can_join,
-                    is_stale,
-                }
-            })
+            .map(|(identity, copies)| decide(identity, copies, availability.syncing))
             .collect())
+    }
+}
+
+/// Match one identity to at most one synced copy and derive its capabilities.
+fn decide(
+    identity: &InvitationIdentity,
+    mut copies: Vec<InvitationCandidate>,
+    syncing: bool,
+) -> InvitationResolution {
+    let cancelled = identity.is_cancelled();
+    if identity.unresolved_instance {
+        return if cancelled {
+            InvitationResolution::Cancelled
+        } else {
+            InvitationResolution::Unavailable
+        };
+    }
+    if copies
+        .iter()
+        .any(|copy| copy.link_id == identity.preferred_link_id)
+    {
+        copies.retain(|copy| copy.link_id == identity.preferred_link_id);
+    }
+    if copies.len() > 1 {
+        return if cancelled {
+            InvitationResolution::Cancelled
+        } else {
+            InvitationResolution::Ambiguous
+        };
+    }
+    let Some(mut copy) = copies.pop() else {
+        return if cancelled {
+            InvitationResolution::Cancelled
+        } else if syncing {
+            InvitationResolution::StillSyncing
+        } else {
+            InvitationResolution::NoMatch
+        };
+    };
+    let series = identity.series_revision.as_ref();
+    if copy.series_cancelled
+        || series
+            .is_some_and(|revision| revision.cancelled && revision.sequence >= copy.series_sequence)
+    {
+        return InvitationResolution::Cancelled;
+    }
+    for attendee in &mut copy.event.attendees {
+        attendee.is_self = attendee.email.eq_ignore_ascii_case(&copy.email);
+    }
+    let revision = &identity.revision;
+    let (target_sequence, target_updated_at) = if identity.occurrence_key.is_none() {
+        (copy.series_sequence, copy.series_updated_at)
+    } else {
+        (copy.event.sequence, copy.event.updated_at)
+    };
+    let copy_live = copy.event.status != EventStatus::Cancelled && !copy.occurrence.is_cancelled;
+    let is_stale = series.is_some_and(|revision| {
+        revision.is_newer_than(copy.series_sequence, copy.series_updated_at)
+    }) || (revision.cancelled && revision.sequence >= target_sequence && copy_live)
+        || revision.is_newer_than(target_sequence, target_updated_at);
+    let organizer_matches = identity
+        .organizer_email
+        .as_ref()
+        .zip(copy.event.organizer_email.as_ref())
+        .is_some_and(|(a, b)| a.eq_ignore_ascii_case(b));
+    let actionable = organizer_matches && !is_stale && copy_live;
+    let can_respond =
+        actionable && !copy.event.is_read_only && copy.event.attendees.iter().any(|a| a.is_self);
+    InvitationResolution::Resolved {
+        event: Box::new(copy.event),
+        occurrence: copy.occurrence,
+        responding_email: copy.email,
+        can_respond,
+        can_join: actionable,
+        is_stale,
     }
 }
 

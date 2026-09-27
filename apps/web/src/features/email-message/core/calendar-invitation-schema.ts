@@ -6,7 +6,6 @@ export const invitationTimeSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('zoned'),
     value: z.string(),
-    local: z.string(),
     time_zone: z.string(),
   }),
   z.object({
@@ -32,8 +31,6 @@ export const invitationSnapshotSchema = z.object({
     'unknown',
   ]),
   sequence: z.number(),
-  dtstamp: text,
-  last_modified: text,
   status: text,
   recurrence_id: invitationTimeSchema.nullish(),
   recurrence_id_raw: text,

@@ -18,7 +18,6 @@ export function invitationResolution(
       ? {
           kind: 'zoned',
           value: time.startsAt,
-          local: time.startsAt,
           time_zone:
             wire.event.time.kind === 'timed'
               ? (wire.event.time.timeZone ?? 'UTC')
@@ -30,7 +29,6 @@ export function invitationResolution(
       ? {
           kind: 'zoned',
           value: time.endsAt,
-          local: time.endsAt,
           time_zone: start.kind === 'zoned' ? start.time_zone : 'UTC',
         }
       : { kind: 'date', value: time.endDate };

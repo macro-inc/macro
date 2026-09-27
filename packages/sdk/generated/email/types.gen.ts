@@ -1120,11 +1120,7 @@ export type InvitationDateTime = {
 } | {
     kind: 'zoned';
     /**
-     * Original local wall time.
-     */
-    local: string;
-    /**
-     * Original TZID, or UTC.
+     * IANA zone of the original TZID, or UTC.
      */
     time_zone: string;
     /**

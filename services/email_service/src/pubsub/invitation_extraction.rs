@@ -1,8 +1,22 @@
 //! Translate provider MIME parts into the email extraction use case.
 use super::context::PubSubContext;
-use email::domain::invitation_extraction::InvitationPart;
+use crate::outbound::{email_api::GmailApi, invitation_extraction::InvitationProvider};
+use email::domain::invitation_extraction::{InvitationExtractionService, InvitationPart};
+use email::outbound::invitation_pg::InvitationPgRepository;
 use email_api_client::domain::models::CalendarPart;
 use uuid::Uuid;
+
+/// Worker composition of the email-owned extraction service.
+pub type EmailInvitationExtractor =
+    InvitationExtractionService<InvitationPgRepository, InvitationProvider>;
+
+/// Compose infrastructure once at worker startup.
+pub fn compose(db: sqlx::PgPool, provider: GmailApi) -> EmailInvitationExtractor {
+    InvitationExtractionService {
+        repository: InvitationPgRepository(db),
+        provider: InvitationProvider(provider),
+    }
+}
 
 /// Save invitation snapshots after the email commit. Failures leave plain mail.
 pub async fn save_discovered(

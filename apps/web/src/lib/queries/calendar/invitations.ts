@@ -28,13 +28,11 @@ export function invalidateCalendarInvitations() {
   });
 }
 
-let stopDeferredSchedulingRefresh: (() => void) | undefined;
-
-/** Scheduling changed: withdraw stale capabilities without overwriting an in-flight RSVP. */
-export async function invalidateInvitationScheduling() {
-  await queryClient.cancelQueries({ queryKey: calendarKeys.invitations._def });
-  queryClient.setQueriesData<CalendarInvitationsData>(
-    { queryKey: calendarKeys.invitations._def },
+/** A thread's saved invitations changed: withdraw its actions, then revalidate. */
+export function invalidateInvitationScheduling(threadId: string) {
+  const { queryKey } = calendarKeys.invitations(threadId);
+  queryClient.setQueryData<CalendarInvitationsData>(
+    queryKey,
     (previous) =>
       previous &&
       Object.fromEntries(
@@ -46,25 +44,9 @@ export async function invalidateInvitationScheduling() {
         ])
       )
   );
-  const responding =
-    queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) > 0;
-  if (responding && !stopDeferredSchedulingRefresh) {
-    // A change can arrive during onSettled, after its revalidation has started.
-    // Drain after the mutation actually completes, including that interval.
-    stopDeferredSchedulingRefresh = queryClient
-      .getMutationCache()
-      .subscribe(() => {
-        if (queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) > 0)
-          return;
-        stopDeferredSchedulingRefresh?.();
-        stopDeferredSchedulingRefresh = undefined;
-        void invalidateCalendarInvitations();
-      });
-  }
-  return queryClient.invalidateQueries({
-    queryKey: calendarKeys.invitations._def,
-    refetchType: responding ? 'none' : 'active',
-  });
+  // An in-flight RSVP revalidates every invitation lookup when it settles.
+  if (queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) > 0) return;
+  void queryClient.invalidateQueries({ queryKey });
 }
 
 /** Non-suspending fallback after a background refresh fails. */
