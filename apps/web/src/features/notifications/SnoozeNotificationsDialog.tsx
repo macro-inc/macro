@@ -2,7 +2,11 @@ import { toast } from '@core/component/Toast/Toast';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { useMuteItemMutation } from '@queries/notification/unsubscribes';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
-import { type ManagedDialogProps, openDialog } from '@ui';
+import {
+  type ManagedDialogProps,
+  type OpenDialogOptions,
+  openDialog,
+} from '@ui';
 import { createSignal } from 'solid-js';
 import { SnoozePicker } from './components/SnoozePicker';
 import {
@@ -68,12 +72,17 @@ function SnoozeNotificationsDialog(
 }
 
 /** Shared entry point for entity commands, context menus, and notification settings. */
-export function openSnoozeNotifications(items: UserUnsubscribe[]) {
+export function openSnoozeNotifications(
+  items: UserUnsubscribe[],
+  options?: OpenDialogOptions
+) {
   const unique = [
     ...new Map(
       items.map((item) => [`${item.item_type}:${item.item_id}`, item])
     ).values(),
   ];
-  // The app dialog host owns this lifetime: context menus unmount on selection.
-  if (unique.length) openDialog(SnoozeNotificationsDialog, { items: unique });
+  // Context menus use the app host's lifetime; persistent hosts can supply
+  // their owner so mobile drawers inherit the parent's dismissal layer.
+  if (unique.length)
+    openDialog(SnoozeNotificationsDialog, { items: unique }, options);
 }

@@ -1,14 +1,21 @@
 import { useQuickAccess } from '@core/context/quickAccess';
 import { debouncedDependent } from '@core/util/debounce';
 import { muteItemForEntity } from '@entity/utils/notification';
-import { type ManagedDialogProps, openDialog } from '@ui';
+import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
+import {
+  type ManagedDialogProps,
+  type OpenDialogOptions,
+  openDialog,
+} from '@ui';
 import { createSignal, Suspense } from 'solid-js';
 import { SnoozeEntityPicker } from './components/SnoozeEntityPicker';
 import { mutedEntityTypeLabel } from './notification-event-catalog';
 import { useSnoozeEmails } from './queries/snooze-emails';
 import { openSnoozeNotifications } from './SnoozeNotificationsDialog';
 
-function SnoozeEntityDialog(props: ManagedDialogProps) {
+function SnoozeEntityDialog(
+  props: ManagedDialogProps & { onSelectItem: (item: UserUnsubscribe) => void }
+) {
   const [query, setQuery] = createSignal('');
   const searchTerm = debouncedDependent(query, 100);
   const list = useQuickAccess().useList({
@@ -61,13 +68,21 @@ function SnoozeEntityDialog(props: ManagedDialogProps) {
           const item = entity && muteItemForEntity(entity);
           if (!item) return;
           props.onOpenChange(false);
-          openSnoozeNotifications([item]);
+          props.onSelectItem(item);
         }}
       />
     </Suspense>
   );
 }
 
-export function openSnoozeEntityPicker() {
-  openDialog(SnoozeEntityDialog, {});
+export function openSnoozeEntityPicker(options?: OpenDialogOptions) {
+  openDialog(
+    SnoozeEntityDialog,
+    {
+      // Keep the next picker under the original host, since selecting an item
+      // disposes this entity picker's owner before the time picker opens.
+      onSelectItem: (item) => openSnoozeNotifications([item], options),
+    },
+    options
+  );
 }

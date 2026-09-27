@@ -1296,6 +1296,14 @@ the picker open for retry; a successful save appears in notification settings.
 If only some selected items save, the picker shows the saved count and retries
 only the remaining items. Closing it keeps any snoozes already saved.
 
+On phones, long-press opens the entity actions drawer. The snooze time and item
+pickers use the same responsive `Dialog` and `CommandMenuShell` as Cmd/Ctrl+K,
+with larger touch targets and tap instructions. Swipe the preset list when the
+viewport is short. In **More views → Settings → Notifications**, item names and
+deadlines sit above **Change time** and **Resume**. Saving or cancelling a picker
+returns to the settings sheet; choosing an item keeps that sheet open through
+the transition to its time picker.
+
 Design references: [Slack notification pause/resume](https://slack.com/help/articles/214908388-Pause-your-Slack-notifications)
 and [Superhuman's keyboard-driven Remind Me picker](https://new.superhuman.com/remind-me-29124).
 Macro applies the temporary pause per entity and keeps the entity visible.

@@ -74,7 +74,7 @@ export function SnoozeEntityPicker(
             Choose an item, then choose when notifications resume.
           </Dialog.Description>
         </CommandMenuShell.Toolbar>
-        <CommandMenuShell.Body>
+        <CommandMenuShell.Body class="flex flex-col">
           <CommandMenuList
             id={`${id}-items`}
             items={props.items}
@@ -83,7 +83,7 @@ export function SnoozeEntityPicker(
             itemId={(_, index) => `${id}-${index}`}
             onItemMouseMove={list.setSelectedIndexFromPointer}
             onSelect={props.onSelect}
-            class="max-h-80"
+            class="min-h-0 max-h-80 mobile:[&_[role=option]]:min-h-11"
           >
             {(item) => (
               <>
@@ -104,7 +104,7 @@ export function SnoozeEntityPicker(
           <Show when={props.hasMore}>
             <button
               type="button"
-              class="px-4 py-2 text-sm text-ink-muted"
+              class="shrink-0 px-4 py-2 text-sm text-ink-muted mobile:min-h-11"
               disabled={props.loading}
               onClick={props.onLoadMore}
             >
@@ -113,10 +113,11 @@ export function SnoozeEntityPicker(
           </Show>
         </CommandMenuShell.Body>
         <CommandMenuShell.Footer>
-          <span>↑ ↓ to choose · Enter to continue</span>
+          <span class="mobile:hidden">↑ ↓ to choose · Enter to continue</span>
+          <span class="hidden mobile:inline">Tap an item to continue</span>
           <button
             type="button"
-            class="ml-auto text-ink-muted hover:text-ink"
+            class="ml-auto shrink-0 text-ink-muted hover:text-ink mobile:min-h-11 mobile:px-2"
             onClick={() => props.onOpenChange(false)}
           >
             Cancel

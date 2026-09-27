@@ -104,7 +104,7 @@ function MutedItemLayout(props: {
   const dmRecipientId = useMutedChannelDmRecipientId(() => props.item);
 
   return (
-    <div class="flex items-center gap-3 px-6 py-3.5 min-h-[60px]">
+    <div class="flex items-center gap-3 px-6 py-3.5 min-h-[60px] mobile:grid mobile:grid-cols-[1.25rem_minmax(0,1fr)] mobile:gap-y-1 mobile:px-4">
       <div class="size-5 shrink-0 flex items-center justify-center">
         <Show
           when={dmRecipientId()}
@@ -134,24 +134,26 @@ function MutedItemLayout(props: {
           )}
         </Show>
       </div>
-      <Show when={props.onSnooze}>
+      <div class="flex shrink-0 items-center gap-3 mobile:col-start-2 mobile:gap-2">
+        <Show when={props.onSnooze}>
+          <button
+            type="button"
+            class="shrink-0 text-sm text-ink-muted hover:text-ink disabled:opacity-50 mobile:min-h-11 mobile:rounded-full mobile:bg-ink/5 mobile:px-3"
+            disabled={props.pending}
+            onClick={props.onSnooze}
+          >
+            {props.item.snoozed_until ? 'Change time' : 'Snooze instead'}
+          </button>
+        </Show>
         <button
           type="button"
-          class="shrink-0 text-sm text-ink-muted hover:text-ink disabled:opacity-50"
+          class="shrink-0 text-sm text-ink-muted hover:text-ink disabled:opacity-50 mobile:min-h-11 mobile:rounded-full mobile:bg-ink/5 mobile:px-3"
+          onClick={props.onUnmute}
           disabled={props.pending}
-          onClick={props.onSnooze}
         >
-          {props.item.snoozed_until ? 'Change time' : 'Snooze instead'}
+          {props.item.snoozed_until ? 'Resume' : 'Unmute'}
         </button>
-      </Show>
-      <button
-        type="button"
-        class="shrink-0 text-sm text-ink-muted hover:text-ink"
-        onClick={props.onUnmute}
-        disabled={props.pending}
-      >
-        {props.item.snoozed_until ? 'Resume' : 'Unmute'}
-      </button>
+      </div>
     </div>
   );
 }

@@ -18,7 +18,7 @@ import {
   useUnmuteItemMutation,
 } from '@queries/notification/unsubscribes';
 import { ToggleSwitch } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, getOwner, Show } from 'solid-js';
 import { MutedItemRow } from './MutedItemRow';
 import {
   SettingsCard,
@@ -28,6 +28,7 @@ import {
 } from './primitives';
 
 export function Notifications() {
+  const dialogOwner = getOwner();
   const analytics = useAnalytics();
   const platformSettings = useNotificationSettings();
   const preferencesQuery = useNotificationTypePreferencesQuery();
@@ -192,7 +193,9 @@ export function Notifications() {
                   <MutedItemRow
                     item={item}
                     onUnmute={() => void unmuteEntity(item)}
-                    onSnooze={() => openSnoozeNotifications([item])}
+                    onSnooze={() =>
+                      openSnoozeNotifications([item], { owner: dialogOwner })
+                    }
                     pending={unmuteItem.isPending}
                   />
                 )}
@@ -205,8 +208,8 @@ export function Notifications() {
           >
             <button
               type="button"
-              class="text-sm text-ink-muted hover:text-ink"
-              onClick={openSnoozeEntityPicker}
+              class="text-sm text-ink-muted hover:text-ink mobile:min-h-11"
+              onClick={() => openSnoozeEntityPicker({ owner: dialogOwner })}
             >
               Choose item…
             </button>
@@ -233,7 +236,9 @@ export function Notifications() {
                 <MutedItemRow
                   item={item}
                   onUnmute={() => void unmuteEntity(item)}
-                  onSnooze={() => openSnoozeNotifications([item])}
+                  onSnooze={() =>
+                    openSnoozeNotifications([item], { owner: dialogOwner })
+                  }
                   pending={unmuteItem.isPending}
                 />
               )}

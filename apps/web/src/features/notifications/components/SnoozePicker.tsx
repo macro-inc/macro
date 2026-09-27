@@ -79,7 +79,7 @@ export function SnoozePicker(
             zone.
           </Dialog.Description>
         </CommandMenuShell.Toolbar>
-        <CommandMenuShell.Body>
+        <CommandMenuShell.Body class="flex flex-col">
           <CommandMenuList
             id={`${id}-options`}
             items={props.options}
@@ -89,15 +89,17 @@ export function SnoozePicker(
             itemDisabled={() => props.pending}
             onItemMouseMove={list.setSelectedIndexFromPointer}
             onSelect={select}
-            class="max-h-80"
+            class="min-h-0 max-h-80 mobile:[&_[role=option]]:h-auto mobile:[&_[role=option]]:min-h-12 mobile:[&_[role=option]]:py-2"
           >
             {(option) => (
-              <>
-                <span class="flex-1 font-medium">{option.label}</span>
+              <div class="flex min-w-0 flex-1 items-center gap-2 mobile:flex-col mobile:items-start mobile:gap-0.5">
+                <span class="flex-1 font-medium mobile:flex-none">
+                  {option.label}
+                </span>
                 <span class="text-xs font-normal text-ink-muted">
                   {formatSnoozeDeadline(option.until)}
                 </span>
-              </>
+              </div>
             )}
           </CommandMenuList>
           <Show when={!props.options.length}>
@@ -113,13 +115,16 @@ export function SnoozePicker(
         </CommandMenuShell.Body>
         <CommandMenuShell.Footer>
           <span role="status">
-            {props.pending
-              ? 'Snoozing…'
-              : '↑ ↓ to choose · Enter to snooze · Esc to cancel'}
+            <Show when={!props.pending} fallback="Snoozing…">
+              <span class="mobile:hidden">
+                ↑ ↓ to choose · Enter to snooze · Esc to cancel
+              </span>
+              <span class="hidden mobile:inline">Tap a time to snooze</span>
+            </Show>
           </span>
           <button
             type="button"
-            class="ml-auto text-ink-muted hover:text-ink"
+            class="ml-auto shrink-0 text-ink-muted hover:text-ink mobile:min-h-11 mobile:px-2"
             onClick={() => props.onOpenChange(false)}
           >
             Cancel
