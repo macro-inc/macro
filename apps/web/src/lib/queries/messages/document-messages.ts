@@ -15,6 +15,7 @@ import {
   usePatchThreadMutation,
   useSendMessageMutation,
 } from './mutations';
+import { fetchMessageThread } from './thread-replies';
 import { useMessageTimelineQuery } from './timeline';
 
 /** Positioning annotations needs every root, but never fetches every root's replies. */
@@ -61,7 +62,7 @@ export async function fetchDocumentThreads(
       cursor: cursor ?? undefined,
     });
     for (const root of page.items) {
-      threads.push(await entityMessagesClient.thread(parent, root.id));
+      threads.push(await fetchMessageThread(parent, root.id));
     }
     cursor = page.next_cursor;
   } while (cursor);

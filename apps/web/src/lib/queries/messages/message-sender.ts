@@ -3,6 +3,7 @@ import type { Bot } from '@service-storage/generated/schemas/bot';
 import type {
   Message as EntityMessage,
   MessageListItem,
+  MessageThread,
   MessageTimelinePage,
 } from '@service-storage/messages';
 import { firstPartyBotName } from '../bots/first-party-bot-name';
@@ -110,5 +111,20 @@ export function normalizeMessageTimelinePageSenders(
   return {
     ...page,
     items: page.items.map(normalizeChannelMessageSender),
+  };
+}
+
+/**
+ * A thread fetched on its own carries the same `bot_profile` / `triggered_by`
+ * as a timeline row, and its root and replies render through the same
+ * components, so they need the same derived `sender`.
+ */
+export function normalizeMessageThreadSenders(
+  thread: MessageThread
+): MessageThread {
+  return {
+    ...thread,
+    root: normalizeMessageSender(thread.root),
+    replies: thread.replies.map(normalizeMessageSender),
   };
 }
