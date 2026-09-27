@@ -3,6 +3,8 @@
 mod claude_code;
 mod codex;
 mod hermes;
+#[cfg(unix)]
+mod herdr_claude;
 mod npm_adapter;
 mod open_claw;
 mod open_code;
@@ -27,6 +29,8 @@ mod environment {
 }
 
 static PRESETS: &[&dyn AgentPreset] = &[
+    #[cfg(unix)]
+    &herdr_claude::HerdrClaude,
     &hermes::Hermes,
     &claude_code::ClaudeCode,
     &codex::Codex,
@@ -90,6 +94,7 @@ impl DetectedAgent {
 pub enum AgentKind {
     Hermes,
     ClaudeCode,
+    HerdrClaude,
     Codex,
     OpenClaw,
     OpenCode,
@@ -132,6 +137,7 @@ impl PathCommands {
             "hermes-acp",
             "claude",
             "codex",
+            "herdr",
             "npm",
             "openclaw",
             "opencode",
