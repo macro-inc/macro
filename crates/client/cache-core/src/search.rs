@@ -72,7 +72,7 @@ pub struct SearchDocument {
     pub bucket: String,
     /// Lower-cased, whitespace-normalized text used by fuzzy matching.
     pub search_text: String,
-    /// Best available viewed/interacted/updated/created timestamp.
+    /// Viewed-first recency for Soup entities; activity recency for other rows.
     pub timestamp_ms: i64,
     /// Compact hash of the fully merged source record.
     pub source_hash: String,
@@ -121,6 +121,23 @@ pub enum SearchError {
     #[error("search query is too long")]
     QueryTooLong,
 }
+
+/// Revision of the derived Quick Access rows. Storage adapters rebuild existing
+/// rows when this changes; normalized records and pending writes remain valid.
+pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 2;
+
+/// Normalized entity types used by the Quick Access projection. Storage rebuilds
+/// restrict decoding to this set so unrelated payloads do not delay readiness.
+pub const QUICK_ACCESS_TYPENAMES: &[&str] = &[
+    "GraphqlSoupDocument",
+    "GraphqlSoupChat",
+    "GraphqlSoupProject",
+    "GraphqlSoupEmailThread",
+    "GraphqlSoupChannel",
+    "GraphqlSoupCrmCompany",
+    "GraphqlUser",
+    "User",
+];
 
 /// Maximum number of compact documents returned by one RPC.
 pub const MAX_SEARCH_LIMIT: usize = 500;
@@ -205,7 +222,7 @@ fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<Sea
         record_key: key.clone(),
         bucket: bucket.to_owned(),
         search_text,
-        timestamp_ms: best_timestamp(record),
+        timestamp_ms: quick_access_timestamp(typename, record),
         source_hash: source_hash(record),
     })
 }
@@ -279,7 +296,24 @@ fn normalize_search_text(value: &str) -> String {
         .to_lowercase()
 }
 
-fn best_timestamp(record: &Record) -> i64 {
+fn quick_access_timestamp(typename: &str, record: &Record) -> i64 {
+    // Match VIEWED_UPDATED and the menu before applying a browse limit. Using
+    // max(viewedAt, updatedAt) would let newly updated, long-unopened records
+    // displace recently viewed records into later pages.
+    if matches!(
+        typename,
+        "GraphqlSoupDocument"
+            | "GraphqlSoupChat"
+            | "GraphqlSoupProject"
+            | "GraphqlSoupChannel"
+            | "GraphqlSoupCrmCompany"
+    ) {
+        return ["viewedAt", "updatedAt", "createdAt"]
+            .into_iter()
+            .find_map(|field| record.fields.get(field).and_then(value_timestamp))
+            .unwrap_or(0);
+    }
+
     [
         "viewedAt",
         "interactedAt",

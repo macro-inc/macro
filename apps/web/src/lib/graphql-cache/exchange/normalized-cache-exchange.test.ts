@@ -277,6 +277,9 @@ function makeFakeHost(): FakeHost {
     async currentRevision() {
       return INITIAL_CACHE_REVISION;
     },
+    async currentStorageGeneration() {
+      return '00000000-0000-4000-8000-000000000001';
+    },
     async readQuery(args) {
       host.reads.push({
         opKey: args.opKey,

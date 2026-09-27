@@ -39,6 +39,15 @@ make retries incorrectly look unchanged. With no optimistic layers, the changed
 record keys also identify visible changes without duplicate before/after snapshots.
 Pending layers still use full effective-view comparison and rebasing.
 
+Soup hydration checkpoints carry the cache's durable storage-generation UUID.
+The engine stores this marker alongside normalized records, so clearing or
+replacing the database invalidates its cursors and update watermarks even when
+localStorage survives. Backfill waits for the current generation before resuming
+and checks it again after each hydrated page. A mismatch starts a full scan;
+ordinary engine handoff preserves the marker and continues the saved scan.
+Reset notifications restart active backfills promptly, but checkpoint validity
+does not depend on observing a notification.
+
 ## Browser OPFS writes
 
 The OPFS adapter coalesces each Turso vectored write into batches of at most
@@ -53,6 +62,13 @@ Hydration folds authoritative index mutations in order and writes only final
 states that differ from stored state. An updated normalized record does not force
 unchanged index facts to be deleted and reinserted. Pending optimistic projections
 are still rebased for every affected key, even when authority is unchanged.
+
+Quick Access browse timestamps prefer `viewedAt`, then `updatedAt`, for Soup
+documents, chats, projects, channels, and CRM companies. This matches their
+frontend and server ordering before pagination. A versioned derived-search
+projection rebuild upgrades existing indexes once on open, preserving normalized
+records, storage generation, and queued mutations. Routine opens with the current
+projection version do not scan the corpus.
 
 ## Local filter execution
 

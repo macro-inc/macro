@@ -102,6 +102,9 @@ export interface CacheHost {
 
   /** Returns the current revision of the active cache-engine generation. */
   currentRevision(): Promise<CacheRevision>;
+  /** Durable database identity, preserved across engine restarts and replaced
+   * whenever the stored cache is cleared or recreated. */
+  currentStorageGeneration(): Promise<string>;
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
   /** Projects a bounded explicit set of normalized entity keys. */
   readRecordsByKeys(
@@ -177,8 +180,9 @@ export interface CacheHost {
     options?: CacheChangeOptions
   ): () => void;
 
-  /** Invalidates in-memory revisions/dependencies on every engine replacement.
-   * Durable checkpoints survive replacements that preserve stored records. */
+  /** Reports engine replacements and live storage resets. Durable checkpoints
+   * must also validate currentStorageGeneration on startup: notifications are
+   * not replayed and may precede a subscriber. */
   onCacheGenerationChanged(
     cb: (change: CacheGenerationChange) => void
   ): () => void;
