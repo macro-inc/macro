@@ -44,8 +44,8 @@ pub trait EntityPropertyReader: Send + Sync + 'static {
     fn get_options(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        property_definition_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<PropertyOption>, rootcause::Report>> + Send;
+        property_definition_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, Vec<PropertyOption>>, rootcause::Report>> + Send;
 
     /// Load properties for the requested entity keys on behalf of the given
     /// user. Entities the user cannot view yield an empty property list.
@@ -78,8 +78,8 @@ impl EntityPropertyReader for NoOpEntityPropertyReader {
     async fn get_options(
         &self,
         _user_id: &MacroUserIdStr<'static>,
-        _property_definition_id: Uuid,
-    ) -> Result<Vec<PropertyOption>, rootcause::Report> {
+        _property_definition_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<PropertyOption>>, rootcause::Report> {
         Err(rootcause::report!("property reader is not configured"))
     }
 
@@ -175,12 +175,12 @@ where
     async fn get_options(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        property_definition_id: Uuid,
-    ) -> Result<Vec<PropertyOption>, rootcause::Report> {
+        property_definition_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<PropertyOption>>, rootcause::Report> {
         let team = self.caller_team_receipt(user_id).await?;
         Ok(self
             .properties_service
-            .get_property_options(property_definition_id, user_id, team.as_ref())
+            .get_property_options_batch(property_definition_ids, user_id, team.as_ref())
             .await
             .map_err(|err| rootcause::report!(err))?)
     }
@@ -282,13 +282,17 @@ impl<R: EntityPropertyReader> EntityPropertiesLoader<R> {
             .get_definitions(&self.user_id, scope, for_entity_type)
             .await
     }
+}
 
-    /// Load options using the same authenticated identity as property edges.
-    pub(crate) async fn options(
-        &self,
-        definition_id: Uuid,
-    ) -> Result<Vec<PropertyOption>, rootcause::Report> {
-        self.reader.get_options(&self.user_id, definition_id).await
+impl<R: EntityPropertyReader> Loader<Uuid> for EntityPropertiesLoader<R> {
+    type Value = Vec<PropertyOption>;
+    type Error = rootcause::Report<Dynamic, Cloneable>;
+
+    async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Self::Value>, Self::Error> {
+        self.reader
+            .get_options(&self.user_id, keys)
+            .await
+            .map_err(|error| error.into_cloneable())
     }
 }
 

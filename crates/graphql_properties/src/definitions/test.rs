@@ -50,23 +50,30 @@ impl EntityPropertyReader for TestReader {
     async fn get_options(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        property_definition_id: Uuid,
-    ) -> Result<Vec<PropertyOption>, rootcause::Report> {
+        property_definition_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<PropertyOption>>, rootcause::Report> {
         assert_eq!(user_id.as_ref(), "macro|viewer@macro.com");
         self.0.fetch_add(1, Ordering::Relaxed);
-        if property_definition_id != Uuid::from_u128(1) {
-            return Err(rootcause::report!("definition is not visible"));
-        }
         let now = chrono::Utc::now();
-        Ok(vec![PropertyOption {
-            id: Uuid::from_u128(2),
-            property_definition_id,
-            display_order: 3,
-            value: PropertyOptionValue::String("In Progress".to_owned()),
-            color: None,
-            created_at: now,
-            updated_at: now,
-        }])
+        Ok(property_definition_ids
+            .iter()
+            .filter_map(|id| match id.as_u128() {
+                1 => Some((
+                    *id,
+                    vec![PropertyOption {
+                        id: Uuid::from_u128(2),
+                        property_definition_id: *id,
+                        display_order: 3,
+                        value: PropertyOptionValue::String("In Progress".to_owned()),
+                        color: None,
+                        created_at: now,
+                        updated_at: now,
+                    }],
+                )),
+                4 => Some((*id, Vec::new())),
+                _ => None,
+            })
+            .collect())
     }
 
     async fn get_properties(
@@ -188,8 +195,22 @@ async fn schema_only_reader_fails_closed_if_executed() {
     );
     assert!(
         NoOpEntityPropertyReader
-            .get_options(&user, Uuid::from_u128(1))
+            .get_options(&user, &[Uuid::from_u128(1)])
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn concurrent_option_edges_share_one_batch_and_keep_empty_lists() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let response = schema(calls.clone()).execute(format!(
+        "{{ first: options(definitionId: \"{}\") {{ id }} empty: options(definitionId: \"{}\") {{ id }} }}",
+        Uuid::from_u128(1), Uuid::from_u128(4),
+    )).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["first"][0]["id"], Uuid::from_u128(2).to_string());
+    assert!(data["empty"].as_array().unwrap().is_empty());
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
 }

@@ -1262,6 +1262,24 @@ where
             .map_err(anyhow::Error::from)?)
     }
 
+    #[tracing::instrument(skip(self, team), err)]
+    async fn get_property_options_batch(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+    ) -> Result<HashMap<Uuid, Vec<PropertyOption>>, PropertiesErr> {
+        Ok(self
+            .repository
+            .get_visible_property_options_batch(
+                property_definition_ids,
+                user_id,
+                team_id_from_receipt(team),
+            )
+            .await
+            .map_err(anyhow::Error::from)?)
+    }
+
     #[tracing::instrument(skip(self, team, request), fields(request = ?request), err)]
     async fn add_property_option(
         &self,

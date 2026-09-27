@@ -113,6 +113,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Vec<PropertyOption>, Self::Err>> + Send;
 
+    /// Read options for requested system, caller-owned, or caller-team definitions.
+    /// Missing or inaccessible definitions are omitted; visible definitions with no options remain.
+    fn get_visible_property_options_batch<'a>(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &MacroUserIdStr<'a>,
+        team_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, Vec<PropertyOption>>, Self::Err>> + Send;
+
     /// Create a new property option.
     fn create_property_option(
         &self,

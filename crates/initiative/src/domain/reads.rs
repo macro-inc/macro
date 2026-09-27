@@ -5,7 +5,21 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::models::{InitiativeId, InitiativeSummary};
+use super::models::{InitiativeDetail, InitiativeError, InitiativeId, InitiativeSummary};
+
+const DEFAULT_PAGE_SIZE: u16 = 50;
+const MAX_PAGE_SIZE: u16 = 100;
+pub(super) const MAX_CURSOR_LENGTH: usize = 2048;
+
+pub(super) fn page_size(limit: Option<u16>) -> Result<usize, InitiativeError> {
+    let size = limit.unwrap_or(DEFAULT_PAGE_SIZE);
+    if !(1..=MAX_PAGE_SIZE).contains(&size) {
+        return Err(InitiativeError::BadRequest(
+            "limit must be between 1 and 100".into(),
+        ));
+    }
+    Ok(usize::from(size))
+}
 
 /// Snapshot of canonical property values, never a second writable store.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,6 +131,44 @@ pub struct InitiativeTasksPage {
     pub next_cursor: Option<String>,
     /// Total associated tasks visible to the caller.
     pub total: u32,
+}
+
+impl InitiativeTasksRequest {
+    pub(crate) fn validate(&self) -> Result<usize, InitiativeError> {
+        let size = page_size(self.limit)?;
+        if self
+            .cursor
+            .as_ref()
+            .is_some_and(|cursor| cursor.len() > MAX_CURSOR_LENGTH)
+        {
+            return Err(InitiativeError::BadRequest("invalid cursor".into()));
+        }
+        Ok(size)
+    }
+}
+
+impl InitiativeDetail {
+    /// Page task IDs already filtered by `InitiativeService::get`, without another access scan.
+    pub fn task_page(
+        &self,
+        request: InitiativeTasksRequest,
+    ) -> Result<InitiativeTasksPage, InitiativeError> {
+        let size = request.validate()?;
+        let total = u32::try_from(self.task_ids.len()).unwrap_or(u32::MAX);
+        let mut ids = self.task_ids.clone();
+        ids.sort();
+        if let Some(cursor) = request.cursor {
+            ids.retain(|id| id > &cursor);
+        }
+        let has_more = ids.len() > size;
+        ids.truncate(size);
+        let next_cursor = has_more.then(|| ids.last().cloned()).flatten();
+        Ok(InitiativeTasksPage {
+            task_ids: ids,
+            next_cursor,
+            total,
+        })
+    }
 }
 
 /// Bounded batch of task ids to resolve.

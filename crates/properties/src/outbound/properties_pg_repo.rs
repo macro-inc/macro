@@ -171,6 +171,22 @@ impl PropertiesRepo for PropertiesPgRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_visible_property_options_batch(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &MacroUserIdStr<'_>,
+        team_id: Option<Uuid>,
+    ) -> Result<HashMap<Uuid, Vec<PropertyOption>>, Self::Err> {
+        property_definition_queries::get_visible_property_options_batch(
+            &self.pool,
+            property_definition_ids,
+            user_id,
+            team_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn create_property_option(
         &self,
         property_definition_id: Uuid,

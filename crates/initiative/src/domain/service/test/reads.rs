@@ -349,3 +349,116 @@ async fn task_references_distinguish_unassigned_from_inaccessible_without_metada
             .contains(&hidden_project.to_string())
     );
 }
+
+#[tokio::test]
+async fn cursors_remain_bounded_and_preserve_full_unicode_name_ordering() {
+    let prefix = format!("A{}", "\u{301}".repeat(1500));
+    let names = [
+        format!("{prefix}a"),
+        format!("{prefix}a"),
+        format!("{prefix}b"),
+    ];
+    for name in &names {
+        super::super::normalize_name(name).expect("valid short grapheme count");
+        assert!(name.len() > 2048);
+    }
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_list_accessible().returning(move |_| {
+        let initiatives = names
+            .iter()
+            .enumerate()
+            .rev()
+            .map(|(i, name)| summary(i as u128 + 1, name))
+            .collect();
+        Box::pin(async move { Ok(InitiativeList { initiatives }) })
+    });
+    repo.expect_get_detail().returning(|id| {
+        Box::pin(async move {
+            let mut value = detail(Vec::new());
+            value.id = id;
+            Ok(Some(value))
+        })
+    });
+    let svc = service_with_resources(repo, FakeResources::default());
+    for sort in [
+        InitiativeSort::Name,
+        InitiativeSort::Updated,
+        InitiativeSort::Due,
+    ] {
+        for descending in [false, true] {
+            let mut request = InitiativePageRequest {
+                limit: Some(1),
+                sort,
+                descending: Some(descending),
+                ..Default::default()
+            };
+            let mut ids = Vec::new();
+            loop {
+                let page = svc.page(&user(OWNER), request.clone()).await.unwrap();
+                ids.extend(
+                    page.initiatives
+                        .into_iter()
+                        .map(|row| row.initiative.id.as_uuid().as_u128()),
+                );
+                request.cursor = page.next_cursor;
+                let Some(cursor) = &request.cursor else {
+                    break;
+                };
+                assert!(cursor.len() <= 2048);
+                assert!(ids.len() < 3, "cursor must advance");
+            }
+            assert_eq!(
+                ids,
+                if descending {
+                    vec![3, 2, 1]
+                } else {
+                    vec![1, 2, 3]
+                }
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn removed_name_cursor_anchor_requires_restarting_instead_of_silently_skipping_rows() {
+    let mut repo = MockInitiativeRepo::new();
+    let mut sequence = Sequence::new();
+    repo.expect_list_accessible()
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_| {
+            Box::pin(async {
+                Ok(InitiativeList {
+                    initiatives: vec![summary(1, "Alpha"), summary(2, "Beta")],
+                })
+            })
+        });
+    repo.expect_list_accessible()
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_| {
+            Box::pin(async {
+                Ok(InitiativeList {
+                    initiatives: vec![summary(2, "Beta")],
+                })
+            })
+        });
+    repo.expect_get_detail()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
+    let svc = service_with_resources(repo, FakeResources::default());
+    let mut request = InitiativePageRequest {
+        limit: Some(1),
+        sort: InitiativeSort::Name,
+        ..Default::default()
+    };
+    request.cursor = svc
+        .page(&user(OWNER), request.clone())
+        .await
+        .unwrap()
+        .next_cursor;
+    let error = svc.page(&user(OWNER), request).await.unwrap_err();
+    assert!(
+        matches!(error, InitiativeError::BadRequest(message) if message.contains("restart pagination"))
+    );
+}

@@ -15,16 +15,12 @@ use crate::domain::{
     ports::{InitiativeDescriptionDocuments, InitiativeRepo, InitiativeService},
     reads::{
         InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeReference,
-        InitiativeSort, InitiativeTasksPage, InitiativeTasksRequest, TaskInitiativeReference,
-        TaskInitiativeReferences, TaskInitiativeReferencesRequest,
+        InitiativeSort, InitiativeTasksPage, InitiativeTasksRequest, MAX_CURSOR_LENGTH,
+        TaskInitiativeReference, TaskInitiativeReferences, TaskInitiativeReferencesRequest,
+        page_size as limit,
     },
 };
 
-const DEFAULT_PAGE_SIZE: u16 = 50;
-const MAX_PAGE_SIZE: u16 = 100;
-const MAX_CURSOR_LENGTH: usize = 2048;
-
-#[derive(Serialize, Deserialize)]
 struct Position {
     id: InitiativeId,
     name: String,
@@ -47,17 +43,74 @@ impl From<&InitiativePageRow> for Position {
 struct Cursor {
     sort: InitiativeSort,
     descending: bool,
-    position: Position,
+    position: CursorPosition,
 }
 
-fn limit(limit: Option<u16>) -> Result<usize, InitiativeError> {
-    let limit = limit.unwrap_or(DEFAULT_PAGE_SIZE);
-    if !(1..=MAX_PAGE_SIZE).contains(&limit) {
-        return Err(InitiativeError::BadRequest(
-            "limit must be between 1 and 100".into(),
-        ));
+/// Keep continuation tokens bounded independently of Unicode name byte length.
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "key", rename_all = "camelCase")]
+enum CursorPosition {
+    Updated {
+        id: InitiativeId,
+        updated_at: DateTime<Utc>,
+    },
+    Name {
+        id: InitiativeId,
+    },
+    Due {
+        id: InitiativeId,
+        due_date: Option<DateTime<Utc>>,
+    },
+}
+
+impl CursorPosition {
+    fn from_row(row: &InitiativePageRow, sort: InitiativeSort) -> Self {
+        let id = row.initiative.id;
+        match sort {
+            InitiativeSort::Updated => Self::Updated {
+                id,
+                updated_at: row.initiative.updated_at,
+            },
+            InitiativeSort::Name => Self::Name { id },
+            InitiativeSort::Due => Self::Due {
+                id,
+                due_date: row.properties.due_date,
+            },
+        }
     }
-    Ok(usize::from(limit))
+
+    fn resolve(
+        self,
+        sort: InitiativeSort,
+        rows: &[InitiativePageRow],
+    ) -> Result<Position, InitiativeError> {
+        match (self, sort) {
+            (Self::Updated { id, updated_at }, InitiativeSort::Updated) => Ok(Position {
+                id,
+                name: String::new(),
+                updated_at,
+                due_date: None,
+            }),
+            (Self::Due { id, due_date }, InitiativeSort::Due) => Ok(Position {
+                id,
+                name: String::new(),
+                updated_at: DateTime::UNIX_EPOCH,
+                due_date,
+            }),
+            (Self::Name { id }, InitiativeSort::Name) => rows
+                .iter()
+                .find(|row| row.initiative.id == id)
+                .map(Into::into)
+                .ok_or_else(|| {
+                    InitiativeError::BadRequest(
+                        "cursor anchor is unavailable; restart pagination".into(),
+                    )
+                }),
+            _ => Err(InitiativeError::BadRequest(
+                "cursor ordering differs from request".into(),
+            )),
+        }
+    }
 }
 
 fn order(left: &Position, right: &Position, sort: InitiativeSort, descending: bool) -> Ordering {
@@ -261,8 +314,9 @@ impl<R: InitiativeRepo, D: InitiativeDescriptionDocuments> InitiativeServiceImpl
         }
         rows.sort_by(|left, right| order(&left.into(), &right.into(), request.sort, descending));
         if let Some(cursor) = cursor {
+            let position = cursor.position.resolve(request.sort, &rows)?;
             rows.retain(|row| {
-                order(&row.into(), &cursor.position, request.sort, descending) == Ordering::Greater
+                order(&row.into(), &position, request.sort, descending) == Ordering::Greater
             });
         }
         let has_more = rows.len() > size;
@@ -273,7 +327,7 @@ impl<R: InitiativeRepo, D: InitiativeDescriptionDocuments> InitiativeServiceImpl
                     serde_json::to_string(&Cursor {
                         sort: request.sort,
                         descending,
-                        position: last.into(),
+                        position: CursorPosition::from_row(last, request.sort),
                     })
                     .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))
                 })
@@ -339,28 +393,8 @@ impl<R: InitiativeRepo, D: InitiativeDescriptionDocuments> InitiativeServiceImpl
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         request: InitiativeTasksRequest,
     ) -> Result<InitiativeTasksPage, InitiativeError> {
-        let size = limit(request.limit)?;
-        if request
-            .cursor
-            .as_ref()
-            .is_some_and(|cursor| cursor.len() > MAX_CURSOR_LENGTH)
-        {
-            return Err(InitiativeError::BadRequest("invalid cursor".into()));
-        }
-        let mut ids = self.get(receipt).await?.task_ids;
-        ids.sort();
-        let total = u32::try_from(ids.len()).unwrap_or(u32::MAX);
-        if let Some(cursor) = request.cursor {
-            ids.retain(|id| id > &cursor);
-        }
-        let has_more = ids.len() > size;
-        ids.truncate(size);
-        let next_cursor = has_more.then(|| ids.last().cloned()).flatten();
-        Ok(InitiativeTasksPage {
-            task_ids: ids,
-            next_cursor,
-            total,
-        })
+        request.validate()?;
+        self.get(receipt).await?.task_page(request)
     }
 
     pub(super) async fn read_task_references(

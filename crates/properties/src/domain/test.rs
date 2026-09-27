@@ -1,6 +1,7 @@
 //! Unit tests for PropertiesServiceImpl using mockall-generated repo.
 
 mod initiatives;
+mod options_batch;
 
 use super::service_impl::PropertiesServiceImpl;
 use crate::domain::error::PropertiesErr;

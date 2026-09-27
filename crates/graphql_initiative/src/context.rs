@@ -9,6 +9,7 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
+use futures::{StreamExt, TryStreamExt, stream};
 use initiative::domain::{
     models::{
         AssignTasksResponse, CreateInitiativeRequest, InitiativeDetail, InitiativeError,
@@ -22,6 +23,8 @@ use initiative::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
+
+const MAX_CONCURRENT_TASK_AUTHORIZATIONS: usize = 16;
 
 /// Object-safe forwarding future for the request's concrete domain services.
 pub(crate) type ApiFuture<'a, T> =
@@ -207,14 +210,19 @@ impl<S: InitiativeService, A: InitiativeAuthorizer> InitiativeApi for Initiative
                 .access
                 .authorize::<EditAccessLevel>(&user, &id.to_string(), EntityType::Initiative)
                 .await?;
-            let mut tasks = Vec::new();
-            for task_id in batch.into_task_ids() {
-                let access = self
-                    .access
-                    .authorize::<EditAccessLevel>(&user, &task_id, EntityType::Document)
-                    .await;
-                tasks.push(TaskAssignment::from_access(task_id, access)?);
-            }
+            let tasks = stream::iter(batch.into_task_ids().into_iter().map(|task_id| {
+                let user = &user;
+                async move {
+                    let access = self
+                        .access
+                        .authorize::<EditAccessLevel>(user, &task_id, EntityType::Document)
+                        .await;
+                    TaskAssignment::from_access(task_id, access)
+                }
+            }))
+            .buffered(MAX_CONCURRENT_TASK_AUTHORIZATIONS)
+            .try_collect()
+            .await?;
             self.service.assign_tasks(receipt, tasks).await
         })
     }

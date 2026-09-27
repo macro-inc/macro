@@ -232,10 +232,10 @@ pub async fn load_property_options<R: EntityPropertyReader>(
     let definition_id = parse_id(property_definition_id, "propertyDefinitionId")?;
     let loader = ctx.data::<DataLoader<EntityPropertiesLoader<R>>>()?;
     let options = loader
-        .loader()
-        .options(definition_id)
+        .load_one(definition_id)
         .await
-        .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+        .map_err(|err| async_graphql::Error::new(err.to_string()))?
+        .ok_or_else(|| async_graphql::Error::new("property definition is not visible"))?;
     Ok(options.into_iter().map(Into::into).collect())
 }
 
