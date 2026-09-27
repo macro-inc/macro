@@ -545,6 +545,9 @@ async fn task_references_use_the_canonical_soup_entity_and_hide_inaccessible_pro
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     let references = &data["user"]["taskInitiativeReferences"];
+    assert_eq!(references[0]["state"], "VISIBLE");
+    assert_eq!(references[1]["state"], "UNAVAILABLE");
+    assert_eq!(references[2]["state"], "NONE");
     assert_eq!(
         references[0]["initiative"]["__typename"],
         "GraphqlSoupInitiative"
@@ -632,7 +635,8 @@ async fn newly_created_project_uses_primary_hydration_before_replica_catches_up(
 async fn missing_or_revoked_project_is_not_exposed_by_detail_or_reference() {
     let api = Arc::new(RecordingApi::default());
     let replica = RecordingSoupService::replica();
-    let schema = schema_with_readers(api.clone(), replica.clone(), RecordingSoupService::empty());
+    let primary = RecordingSoupService::empty();
+    let schema = schema_with_readers(api.clone(), replica.clone(), primary.clone());
     let response = schema
         .execute(
             Request::new(format!(
@@ -643,18 +647,32 @@ async fn missing_or_revoked_project_is_not_exposed_by_detail_or_reference() {
         .await;
     assert_eq!(response.errors[0].message, "initiative not found");
     assert!(api.calls.lock().unwrap().is_empty());
+    primary.calls.lock().unwrap().clear();
 
     let response = schema.execute(Request::new(
-        "{ user { taskInitiativeReferences(taskIds: [\"visible\"]) { initiative { id displayName } } } }"
+        "{ user { taskInitiativeReferences(taskIds: [\"visible\"]) { state initiative { id displayName } } } }"
     ).data(user())).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
-    assert!(
-        response.data.into_json().unwrap()["user"]["taskInitiativeReferences"][0]["initiative"]
-            .is_null()
-    );
+    let data = response.data.into_json().unwrap();
+    let reference = &data["user"]["taskInitiativeReferences"][0];
+    assert!(reference["initiative"].is_null());
+    assert_eq!(reference["state"], "UNAVAILABLE");
+    assert_eq!(primary.calls.lock().unwrap().len(), 1);
     assert!(
         replica.calls.lock().unwrap().is_empty(),
         "revoked primary access must not fall back to stale replica data"
+    );
+
+    let response = schema
+        .execute(
+            Request::new("{ user { taskInitiativeReferences(taskIds: [\"visible\"]) { state } } }")
+                .data(user()),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["user"]["taskInitiativeReferences"][0]["state"],
+        "UNAVAILABLE"
     );
 }
 

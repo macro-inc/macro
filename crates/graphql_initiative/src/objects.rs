@@ -1,7 +1,5 @@
 //! Initiative sharing values and task relationships.
 
-use std::marker::PhantomData;
-
 use async_graphql::{Context, Enum, ID, Object, SimpleObject};
 use graphql_permission::GraphqlEntityAccessLevel;
 use graphql_soup::{GraphqlSoupInitiative, SoupEntityEdges};
@@ -10,6 +8,7 @@ use initiative::domain::{
     reads::{InitiativeTasksPage, TaskInitiativeReference},
 };
 use models_permissions::share_permission::SharePermissionV2;
+use tokio::sync::OnceCell;
 
 use crate::{inputs::GraphqlInitiativeLinkShare, query::load_initiative};
 
@@ -105,7 +104,7 @@ pub struct GraphqlTaskInitiativeReference<E: SoupEntityEdges> {
     task_id: String,
     state: GraphqlTaskInitiativeReferenceState,
     initiative_id: Option<InitiativeId>,
-    _edges: PhantomData<E>,
+    initiative: OnceCell<Option<GraphqlSoupInitiative<E>>>,
 }
 
 impl<E: SoupEntityEdges> From<TaskInitiativeReference> for GraphqlTaskInitiativeReference<E> {
@@ -132,8 +131,24 @@ impl<E: SoupEntityEdges> From<TaskInitiativeReference> for GraphqlTaskInitiative
             task_id,
             state,
             initiative_id: initiative,
-            _edges: PhantomData,
+            initiative: OnceCell::new(),
         }
+    }
+}
+
+impl<E: SoupEntityEdges> GraphqlTaskInitiativeReference<E> {
+    async fn hydrated_initiative(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<&Option<GraphqlSoupInitiative<E>>> {
+        self.initiative
+            .get_or_try_init(|| async {
+                match self.initiative_id {
+                    Some(id) => load_initiative(ctx, id.as_uuid()).await,
+                    None => Ok(None),
+                }
+            })
+            .await
     }
 }
 
@@ -145,18 +160,23 @@ impl<E: SoupEntityEdges> GraphqlTaskInitiativeReference<E> {
         ID(self.task_id.clone())
     }
     /// Permission-filtered relationship state.
-    async fn state(&self) -> GraphqlTaskInitiativeReferenceState {
-        self.state
+    async fn state(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<GraphqlTaskInitiativeReferenceState> {
+        if self.state == GraphqlTaskInitiativeReferenceState::Visible
+            && self.hydrated_initiative(ctx).await?.is_none()
+        {
+            return Ok(GraphqlTaskInitiativeReferenceState::Unavailable);
+        }
+        Ok(self.state)
     }
     /// The same initiative entity used by collection/detail queries.
     async fn initiative(
         &self,
         ctx: &Context<'_>,
-    ) -> async_graphql::Result<Option<GraphqlSoupInitiative<E>>> {
-        let Some(id) = self.initiative_id else {
-            return Ok(None);
-        };
-        load_initiative(ctx, id.as_uuid()).await
+    ) -> async_graphql::Result<Option<&GraphqlSoupInitiative<E>>> {
+        Ok(self.hydrated_initiative(ctx).await?.as_ref())
     }
 }
 

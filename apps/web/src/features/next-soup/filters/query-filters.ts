@@ -174,7 +174,10 @@ export function filterSoupItemByRequestBody(
       const optedIn =
         filters?.include === true ||
         Boolean(filters?.initiative_ids?.length) ||
-        Boolean(filters?.owners?.length);
+        Boolean(filters?.owners?.length) ||
+        (filters?.name !== undefined && filters.name !== null) ||
+        (filters?.due_after !== undefined && filters.due_after !== null) ||
+        (filters?.due_before !== undefined && filters.due_before !== null);
       return (
         optedIn &&
         !isIdFilteredOut(filters?.initiative_ids, data.id) &&

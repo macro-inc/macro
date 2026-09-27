@@ -230,6 +230,52 @@ describe('initiative cache membership', () => {
       })
     ).toBe(false);
   });
+
+  it.each([
+    { name: 'launch' },
+    { name: '' },
+    { due_after: '2026-09-01T00:00:00Z' },
+    { due_before: '2026-09-30T00:00:00Z' },
+  ])('retains initiatives requested by %j', (filters) => {
+    // Each present value expands to a positive server literal. An empty name
+    // is still a literal, and include:false does not negate the other filters.
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: filters,
+      })
+    ).toBe(true);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { include: false, ...filters },
+      })
+    ).toBe(true);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { ...filters, initiative_ids: ['another'] },
+      })
+    ).toBe(false);
+    expect(
+      filterSoupItemByRequestBody(initiative, {
+        initiative_filters: { ...filters, owners: ['another'] },
+      })
+    ).toBe(false);
+  });
+
+  it.each([
+    {},
+    { include: false },
+    { initiative_ids: [], owners: [] },
+    { name: null, due_after: null, due_before: null },
+  ])(
+    'keeps initiatives excluded when filters have no literals: %j',
+    (filters) => {
+      expect(
+        filterSoupItemByRequestBody(initiative, {
+          initiative_filters: filters,
+        })
+      ).toBe(false);
+    }
+  );
 });
 
 describe('soupItemMatchesProjectMembership', () => {
