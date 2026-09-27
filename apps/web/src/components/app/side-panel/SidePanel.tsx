@@ -83,9 +83,12 @@ function Root(
   // Independent open state per mode so wide and narrow can have different
   // defaults (and the user's preference in one mode doesn't bleed into the
   // other after a resize).
+  // Default closed: the RHS panel pushes reading content off-center and has
+  // become a catch-all for low-frequency info. Surfaces that still need it
+  // open can pass `defaultOpen` or use the `]` toggle / header control.
   const [isWideOpen, setIsWideOpen] = createWideOpenState(
     persistKey,
-    props.defaultOpen ?? true
+    props.defaultOpen ?? false
   );
   const [isNarrowOpen, setIsNarrowOpen] = createSignal(false);
   const [isNarrow, setIsNarrow] = createSignal(isMobile());

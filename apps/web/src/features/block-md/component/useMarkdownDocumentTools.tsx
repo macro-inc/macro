@@ -1,25 +1,33 @@
 import {
-  ChatWithAgentButton,
+  AskMacroButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { Permissions } from '@core/component/SharePermissions';
+import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import {
+  enableHistoryComponent,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
+import ClockCounterClockwise from '@phosphor/clock-counter-clockwise.svg';
 import Download from '@phosphor/download.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
+import TextAa from '@phosphor/text-aa.svg';
 import { queryReadyGate } from '@queries/gate';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { useHistory } from '../history/HistoryContext';
 import {
   DispatchAgentButton,
   useDispatchAgentSplitFileActions,
@@ -55,11 +63,12 @@ function useMarkdownShareModal() {
 }
 
 export function useMarkdownDocumentTools() {
-  const { documentId, kind } = useMarkdownDocument();
+  const { documentId, kind, state } = useMarkdownDocument();
   const { displayName } = useMarkdownName();
   const downloadAsMarkdownText = useDownloadDocumentAsMarkdownText();
   const openShare = useMarkdownShareModal();
   const dispatchAgentActions = useDispatchAgentSplitFileActions();
+  const history = useHistory();
   const isTask = kind() === 'task';
 
   const chatEntity = () => ({
@@ -69,6 +78,17 @@ export function useMarkdownDocumentTools() {
     fileType: 'md' as const,
   });
   const copyBranchName = () => copyBranchNameToClipboard(documentId());
+
+  const showWordCount = () => {
+    const stats = state.editor.md.wordcountStats;
+    if (!stats) {
+      toast.alert('Word count unavailable');
+      return;
+    }
+    toast.alert(
+      `${stats.totalWords.toLocaleString()} words · ${stats.totalCharacters.toLocaleString()} characters`
+    );
+  };
 
   const fileOperations: FileOperation[] = [
     { op: 'copy' },
@@ -81,6 +101,26 @@ export function useMarkdownDocumentTools() {
             label: 'Copy Branch Name',
             icon: GitBranch,
             action: copyBranchName,
+          },
+        ] satisfies FileOperation[])
+      : []),
+    ...(isFeatureEnabled(enableHistoryComponent)
+      ? ([
+          {
+            group: 'file' as const,
+            label: 'Version history',
+            icon: ClockCounterClockwise,
+            action: () => history.enter(),
+          },
+        ] satisfies FileOperation[])
+      : []),
+    ...(!isTask
+      ? ([
+          {
+            group: 'file' as const,
+            label: 'Word count',
+            icon: TextAa,
+            action: showWordCount,
           },
         ] satisfies FileOperation[])
       : []),
@@ -102,10 +142,10 @@ export function useMarkdownDocumentTools() {
       buttonComponent: () => <DispatchAgentButton />,
     },
     {
-      label: 'Chat',
+      label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent(chatEntity()),
-      buttonComponent: () => <ChatWithAgentButton entity={chatEntity()} />,
+      buttonComponent: () => <AskMacroButton entity={chatEntity()} />,
     },
     {
       group: 'sharing',

@@ -1,5 +1,5 @@
 import {
-  ChatWithAgentButton,
+  AskMacroButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
@@ -134,7 +134,7 @@ export function TopBar() {
 
   const tools: BlockTool[] = [
     {
-      label: 'Chat',
+      label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () =>
         openChatWithAgent({
@@ -144,7 +144,7 @@ export function TopBar() {
           fileType,
         }),
       buttonComponent: () => (
-        <ChatWithAgentButton
+        <AskMacroButton
           entity={{
             type: 'document',
             id: documentId,

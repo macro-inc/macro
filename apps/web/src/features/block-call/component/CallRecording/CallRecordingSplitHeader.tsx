@@ -1,5 +1,5 @@
 import {
-  ChatWithAgentButton,
+  AskMacroButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
@@ -86,20 +86,8 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
           name: callName(),
           fileType: 'call',
         }),
-      condition: isMobile,
-    },
-    {
-      label: 'Chat',
-      icon: ChatWithAgentIcon,
-      action: () =>
-        openChatWithAgent({
-          type: 'document',
-          id: blockId,
-          name: callName(),
-          fileType: 'call',
-        }),
       buttonComponent: () => (
-        <ChatWithAgentButton
+        <AskMacroButton
           entity={{
             type: 'document',
             id: blockId,

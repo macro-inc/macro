@@ -1,5 +1,3 @@
-import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
-import { SidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -143,23 +141,6 @@ export function CallRecordingBody(props: {
 
   return (
     <div class="relative flex-1 min-h-0 overflow-hidden">
-      <SidePanel.Section
-        id="call-ai-actions"
-        title="Actions"
-        defaultOpen
-        order={0}
-      >
-        <div class="m-px flex items-center justify-start gap-2">
-          <AskMacroButton
-            entity={{
-              type: 'document',
-              id: props.callId,
-              name: callTitle(),
-              fileType: 'call',
-            }}
-          />
-        </div>
-      </SidePanel.Section>
       <div
         class="h-full min-h-0 overflow-y-auto scrollbar-hidden"
         ref={setScrollRef}

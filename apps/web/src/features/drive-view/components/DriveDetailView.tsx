@@ -10,6 +10,7 @@ import {
   entityDetailTarget,
 } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import type { MarkdownDocumentKind } from '@block-md/types';
 import { SidePanel } from '@components/app/side-panel';
@@ -83,13 +84,24 @@ function DriveDetailTopBar() {
       <div class="ml-auto flex shrink-0 items-center gap-2">
         <Show when={activeDetail()}>
           {(detail) => (
-            <ShareTrigger
-              onClick={openShare}
-              id={detail().target.id}
-              blockType={detail().blockType}
-              hotkeyScope={panel.splitHotkeyScope}
-              copyLink={copyLink}
-            />
+            <>
+              <AskMacroButton
+                entity={{
+                  type: 'document',
+                  id: detail().target.id,
+                  name: detail().target.fallbackName ?? '',
+                  fileType:
+                    detail().blockType === 'md' ? 'md' : detail().blockType,
+                }}
+              />
+              <ShareTrigger
+                onClick={openShare}
+                id={detail().target.id}
+                blockType={detail().blockType}
+                hotkeyScope={panel.splitHotkeyScope}
+                copyLink={copyLink}
+              />
+            </>
           )}
         </Show>
         <SidePanel.Toggle />

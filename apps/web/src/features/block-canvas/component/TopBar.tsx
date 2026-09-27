@@ -1,4 +1,5 @@
 import {
+  AskMacroButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
@@ -112,6 +113,16 @@ export function TopBar() {
           name: fileName(),
           fileType: 'canvas',
         }),
+      buttonComponent: () => (
+        <AskMacroButton
+          entity={{
+            type: 'document',
+            id: documentId,
+            name: fileName(),
+            fileType: 'canvas',
+          }}
+        />
+      ),
     },
     {
       group: 'sharing',

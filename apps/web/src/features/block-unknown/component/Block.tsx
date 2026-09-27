@@ -61,7 +61,7 @@ function BlockUnknownContent() {
   });
 
   return (
-    <SidePanel.Layout defaultOpen={!spreadsheet()}>
+    <SidePanel.Layout defaultOpen={false}>
       <FileSidePanelSections />
       <div class="flex size-full min-w-0 flex-col overflow-hidden">
         <div class="relative">

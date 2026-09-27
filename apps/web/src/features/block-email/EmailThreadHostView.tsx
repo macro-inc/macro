@@ -1,9 +1,7 @@
-import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import type {
   EmailThreadHost,
   EmailThreadSource,
 } from '@app/features/email-thread/context/email-thread-context';
-import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
 import {
   EmailThread,
   type EmailThreadProps,
@@ -12,8 +10,6 @@ import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { buildMentionMarkdownString } from '@macro-inc/lexical-core';
 import type { Accessor, JSX } from 'solid-js';
-import { Show } from 'solid-js';
-import { EmailTaskButton } from './component/EmailTaskButton';
 import { EmailSidePanelSections } from './component/sidepanel/EmailSidePanelSections';
 
 export type EmailThreadHostViewContext = {
@@ -65,7 +61,6 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       threadTransport={props.threadTransport}
       host={props.host}
       header={props.topBar?.({ createTask })}
-      actions={<ThreadActions title={props.title} onCreateTask={createTask} />}
       frame={(content) => (
         <>
           {props.chrome?.({ createTask })}
@@ -82,30 +77,5 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
         </>
       )}
     />
-  );
-}
-
-function ThreadActions(props: { title: string; onCreateTask: () => void }) {
-  const context = useEmailThreadState();
-  return (
-    <SidePanel.Section
-      id="email-ai-actions"
-      title="Actions"
-      defaultOpen
-      order={0}
-    >
-      <div class="m-px flex items-center justify-start gap-2">
-        <Show when={context.thread()?.db_id}>
-          {(id) => (
-            <AskMacroButton
-              entity={{ type: 'email', id: id(), name: props.title }}
-            />
-          )}
-        </Show>
-        <Show when={context.thread()?.db_id}>
-          <EmailTaskButton onClick={props.onCreateTask} />
-        </Show>
-      </div>
-    </SidePanel.Section>
   );
 }

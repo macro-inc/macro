@@ -132,7 +132,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
       >
         <ModalsProvider>
           <OldOverlay />
-          <SidePanel.Layout>
+          <SidePanel.Layout defaultOpen={false}>
             <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructions()}>
               <MarkdownSidePanelSections />
             </Show>

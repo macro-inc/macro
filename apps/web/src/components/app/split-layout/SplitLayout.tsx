@@ -9,7 +9,6 @@ import {
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { Resize } from '@core/component/Resize';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
@@ -77,7 +76,6 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const panelRefs = new Map<SplitId, HTMLDivElement>();
 
   const splits = createMemo(splitManager.splits);
-  const useBentoLayout = () => !isTouchDevice() && splits().length > 1;
 
   // Drop refs for departed splits by reconciling against the live list:
   // batched mutations can remove several splits in one flush (e.g. closing
@@ -110,18 +108,15 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
       middleware={props.middleware}
     >
       <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-        <div
-          class="size-full"
-          classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}
-        >
+        <div class="size-full">
           <Show
             when={isNativeMobilePlatform() && mobileSwipeLayout}
             fallback={
               // Desktop: side-by-side resizable splits.
               <Resize.Zone
                 direction="horizontal"
-                gutter={useBentoLayout() ? 6 : 1}
-                showDividers={!useBentoLayout()}
+                gutter={1}
+                showDividers={true}
                 captureResizeCtx={splitManager.setResizeContext}
               >
                 <For each={ids()}>

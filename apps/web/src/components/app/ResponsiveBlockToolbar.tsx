@@ -110,28 +110,35 @@ interface BlockToolbarProps {
  * Handles the standard arrangement of file ops and block tools on desktop and mobile. On mobile, they are condensed together into a dropdown menu in the SplitHeader.
  */
 export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
-  const isShareTool = (tool: BlockTool) => getToolLabel(tool) === 'Share';
-  const isHiddenTool = (tool: BlockTool) => {
+  // Keep high-frequency actions (Ask Macro, Create task, Share) in the split
+  // header so they stay reachable when the RHS side panel is closed.
+  const isHeaderTool = (tool: BlockTool) => {
     const label = getToolLabel(tool);
     return (
+      label === 'Share' ||
       label === 'Chat' ||
-      label === 'Dispatch to Agent' ||
-      label === 'References'
+      label === 'Ask Macro' ||
+      label === 'Create task'
     );
   };
+  const isHiddenTool = (tool: BlockTool) => {
+    const label = getToolLabel(tool);
+    return label === 'Dispatch to Agent' || label === 'References';
+  };
   const visibleTools = () => props.tools.filter((tool) => !isHiddenTool(tool));
-  const headerTools = () => visibleTools().filter(isShareTool);
+  const headerTools = () => visibleTools().filter(isHeaderTool);
   const toolbarTools = () =>
-    visibleTools().filter((tool) => !isShareTool(tool));
+    visibleTools().filter((tool) => !isHeaderTool(tool));
   const activeToolbarTools = () =>
     toolbarTools().filter((tool) => !tool.condition || tool.condition());
   const fileMenuTools = () => {
     if (!props.menuTools) return visibleTools();
 
     const menuToolLabels = new Set(props.menuTools.map(getToolLabel));
-    const missingShareTools = visibleTools().filter(
-      (tool) => isShareTool(tool) && !menuToolLabels.has(getToolLabel(tool))
-    );
+    const missingShareTools = visibleTools().filter((tool) => {
+      const label = getToolLabel(tool);
+      return label === 'Share' && !menuToolLabels.has(label);
+    });
 
     return [...props.menuTools, ...missingShareTools];
   };

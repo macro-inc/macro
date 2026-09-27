@@ -1,5 +1,5 @@
 import {
-  ChatWithAgentButton,
+  AskMacroButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
@@ -36,6 +36,7 @@ import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-so
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
+import { EmailTaskButton } from './EmailTaskButton';
 
 export type EmailThreadToolsOptions = {
   id: string;
@@ -268,7 +269,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
 
   const tools: BlockTool[] = [
     {
-      label: 'Chat',
+      label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => {
         const threadId = emailCtx.thread()?.db_id;
@@ -279,11 +280,18 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       buttonComponent: () => {
         const id = emailCtx.thread()?.db_id;
         return id ? (
-          <ChatWithAgentButton
-            entity={{ type: 'email', id, name: props.title }}
-          />
+          <AskMacroButton entity={{ type: 'email', id, name: props.title }} />
         ) : null;
       },
+    },
+    {
+      label: 'Create task',
+      icon: TaskIcon,
+      action: () => props.onCreateTask?.(),
+      condition: () => !!props.onCreateTask && !!emailCtx.thread()?.db_id,
+      buttonComponent: () => (
+        <EmailTaskButton onClick={() => props.onCreateTask?.()} />
+      ),
     },
     shareTool,
   ];

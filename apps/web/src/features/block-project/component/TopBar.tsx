@@ -1,5 +1,5 @@
 import {
-  ChatWithAgentButton,
+  AskMacroButton,
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
@@ -22,10 +22,7 @@ import {
   BlockItemSplitLabel,
   SplitTitleFileMenu,
 } from '@components/app/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@components/app/split-layout/components/SplitToolbar';
+import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
 import {
   getShareDrawerRecipientInput,
@@ -88,12 +85,12 @@ export function TopBar() {
 
   const tools: BlockTool[] = [
     {
-      label: 'Chat',
+      label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent({ type: 'project', id, name: name() }),
       condition: () => !isSpecialProject,
       buttonComponent: () => (
-        <ChatWithAgentButton entity={{ type: 'project', id, name: name() }} />
+        <AskMacroButton entity={{ type: 'project', id, name: name() }} />
       ),
     },
     {
@@ -108,8 +105,10 @@ export function TopBar() {
       focusTarget: getShareDrawerRecipientInput,
     },
   ];
-  const toolbarTools = () => tools.filter((tool) => tool.label !== 'Share');
-  const showShare = () => ENABLE_PROJECT_SHARING && !isSpecialProject;
+  const headerTools = () =>
+    tools.filter(
+      (tool) => tool.label === 'Share' || tool.label === 'Ask Macro'
+    );
 
   return (
     <>
@@ -118,9 +117,17 @@ export function TopBar() {
       </SplitHeaderLeft>
       <SplitHeaderRight>
         <div class="order-[1000] flex items-center gap-1">
-          <Show when={showShare()}>
-            <ShareTrigger onClick={openShare} copyLink={handleCopyLink} />
-          </Show>
+          <For each={headerTools()}>
+            {(tool) => (
+              <Show when={!tool.condition || tool.condition()}>
+                {tool.buttonComponent ? (
+                  <tool.buttonComponent />
+                ) : (
+                  <ToolButton tool={tool} />
+                )}
+              </Show>
+            )}
+          </For>
         </div>
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
@@ -130,7 +137,7 @@ export function TopBar() {
           itemType="project"
           name={name()}
           ops={ops()}
-          tools={isMobile() ? [...toolbarTools(), ...createTools] : undefined}
+          tools={isMobile() ? [...headerTools(), ...createTools] : undefined}
         />
       </SplitTitleFileMenu>
       <Show when={!isMobile()}>
@@ -143,19 +150,6 @@ export function TopBar() {
             </Show>
           </div>
         </SplitToolbarLeft>
-        <SplitToolbarRight>
-          <For each={toolbarTools()}>
-            {(tool) => (
-              <Show when={!tool.condition || tool.condition()}>
-                {tool.buttonComponent ? (
-                  <tool.buttonComponent />
-                ) : (
-                  <ToolButton tool={tool} />
-                )}
-              </Show>
-            )}
-          </For>
-        </SplitToolbarRight>
       </Show>
       <CreateDialog />
     </>

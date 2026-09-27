@@ -117,7 +117,7 @@ function MarkdownDetailContent(props: {
           documentMetadata: props.data.metadata,
           userAccessLevel: props.data.userAccessLevel,
         })}
-        <SidePanel.Layout headerToggle={false}>
+        <SidePanel.Layout defaultOpen={false} headerToggle={false}>
           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
             <MarkdownSidePanelSections />
           </Show>

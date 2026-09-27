@@ -1,5 +1,4 @@
 import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
-import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
@@ -8,13 +7,10 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   GithubPullRequestDetailsRows,
   SidePanel,
-  useSidePanel,
 } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import { ProgressMeter } from '@core/component/LexicalMarkdown/component/status/Progress';
-import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
@@ -23,20 +19,14 @@ import {
 import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  enableHistoryComponent,
-  isFeatureEnabled,
-  USE_MACRO_PR_SUMMARY_BLOCK,
-} from '@core/constant/featureFlags';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
 import type { Entity } from '@core/types';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { useNotificationsForEntity } from '@notifications';
-import CaretRightIcon from '@phosphor/caret-right.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import {
   getDefaultPinnedProperties,
@@ -65,18 +55,14 @@ import {
   Show,
 } from 'solid-js';
 import { useMarkdownDocument } from '../../context/markdown-document-context';
-import { useHistory } from '../../history/HistoryContext';
-import { HistoryScrubber } from '../../history/HistoryScrubber';
-import { HistorySessionList } from '../../history/HistorySessionList';
-import { DispatchAgentButton } from '../DispatchAgentMenu';
 import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
 /**
- * Renders all three SidePanel sections for the markdown block:
- * - Properties (always shown)
- * - Details (always shown)
- * - Stats (hidden for tasks)
+ * Remaining SidePanel sections for the markdown block.
+ *
+ * Actions / Ask Macro live in the top bar; History and Stats live in the
+ * `...` file menu. Activity is still here until it merges into Discussion.
  */
 export function MarkdownSidePanelSections() {
   const { documentId, kind, permissions } = useMarkdownDocument();
@@ -93,26 +79,6 @@ export function MarkdownSidePanelSections() {
 
   return (
     <>
-      <SidePanel.Section
-        id="document-ai-actions"
-        title="Actions"
-        defaultOpen
-        order={0}
-      >
-        <div class="m-px flex items-center justify-start gap-2">
-          <AskMacroButton
-            entity={{
-              type: 'document',
-              id: documentId(),
-              name: displayName() ?? '',
-              fileType: 'md',
-            }}
-          />
-          <Show when={isTask() && !isMobile()}>
-            <DispatchAgentButton showPrimaryLabel />
-          </Show>
-        </div>
-      </SidePanel.Section>
       <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
         <DetailsSectionContent documentId={documentId()} />
       </SidePanel.Section>
@@ -138,16 +104,6 @@ export function MarkdownSidePanelSections() {
           documentName={displayName() ?? ''}
         />
       </SidePanel.Section>
-      <Show when={!isTask()}>
-        <SidePanel.Section id="stats" title="Stats" order={30}>
-          <StatsSectionContent />
-        </SidePanel.Section>
-      </Show>
-      <Show when={isFeatureEnabled(enableHistoryComponent)}>
-        <SidePanel.Section id="history" title="History" order={35}>
-          <HistorySectionContent />
-        </SidePanel.Section>
-      </Show>
       <EntityActivitySectionConditional
         entityId={documentId()}
         entityType={propertiesEntityType()}
@@ -160,106 +116,6 @@ export function MarkdownSidePanelSections() {
         <TaskDuplicateMatchesSidePanelSection />
       </Show>
     </>
-  );
-}
-
-function HistorySectionContent() {
-  const history = useHistory();
-  const sidePanel = useSidePanel();
-  const [showSessions, setShowSessions] = createSignal(false);
-
-  createEffect(() => {
-    if (history.isOpen()) {
-      sidePanel?.setOpenSectionIds(['history']);
-    }
-  });
-
-  // Discover whether history exists (to choose between the empty state and
-  // the scrubber) once the user actually expands this accordion section —
-  // nothing inside the section can trigger the load itself, since the
-  // scrubber and "Show activity" toggle only render once sessions exist.
-  createEffect(() => {
-    if (sidePanel?.openSectionIds().includes('history')) {
-      history.requestLoad();
-    }
-  });
-  const isShowingSessions = () => history.isOpen() || showSessions();
-
-  const totalEdits = createMemo(() => {
-    const sessions = history.sessions();
-    if (!sessions) return 0;
-    return sessions.reduce((sum, s) => sum + s.count, 0);
-  });
-
-  return (
-    <Show when={!history.loading.sessions()} fallback={<HistorySkeleton />}>
-      <Show
-        when={totalEdits() > 1 && history.sessions()}
-        fallback={
-          // Don't claim the document has no edits when we couldn't load them.
-          <p
-            class="text-xs text-ink-muted"
-            title={history.error() ?? undefined}
-          >
-            {history.error() ? "Couldn't load history" : 'No history yet'}
-          </p>
-        }
-      >
-        {(sessions) => (
-          <div class="hidden min-w-0 overflow-hidden md:block">
-            <HistoryScrubber compact />
-            <Show when={sessions().length > 0}>
-              <div class="mt-3 min-w-0 border-edge-muted border-t pt-2">
-                <button
-                  type="button"
-                  aria-expanded={isShowingSessions()}
-                  class="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                  onClick={() => {
-                    history.enter();
-                    setShowSessions(true);
-                  }}
-                >
-                  <CaretRightIcon
-                    class={cn(
-                      'size-3 shrink-0 transition-transform duration-90',
-                      isShowingSessions() && 'rotate-90'
-                    )}
-                  />
-                  <span>
-                    {isShowingSessions() ? 'Activity' : 'Show activity'}
-                  </span>
-                </button>
-                <Show when={isShowingSessions()}>
-                  <HistorySessionList
-                    sessions={sessions()}
-                    selectedAt={history.selectedAt}
-                    onSelect={history.enter}
-                    onViewSessionDiff={(session) => {
-                      if (history.diff.session()?.startMs === session.startMs) {
-                        history.diff.clear();
-                      } else {
-                        history.diff.view(session);
-                      }
-                    }}
-                  />
-                </Show>
-              </div>
-            </Show>
-          </div>
-        )}
-      </Show>
-    </Show>
-  );
-}
-
-function HistorySkeleton() {
-  return (
-    <div
-      aria-hidden="true"
-      class="hidden min-w-0 flex-col gap-2.5 overflow-hidden md:flex"
-    >
-      <div class="skeleton-shimmer h-12 w-full rounded-md bg-skeleton" />
-    </div>
   );
 }
 
@@ -521,46 +377,6 @@ const PINNED_ORDER: readonly string[] = [
   SYSTEM_PROPERTY_IDS.PRIORITY,
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
 ];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Stats Section
-// ─────────────────────────────────────────────────────────────────────────────
-
-function StatsSectionContent() {
-  const { state } = useMarkdownDocument();
-  const md = state.editor.md;
-
-  return (
-    <Show
-      when={md.wordcountStats}
-      fallback={
-        <div class="text-ink-muted text-xs py-2">No stats available</div>
-      }
-    >
-      {(stats) => (
-        <Wordcount.Root stats={stats()}>
-          <SidePanel.Grid>
-            <SidePanel.Row label="Words">
-              <Wordcount.Words />
-            </SidePanel.Row>
-            <SidePanel.Row label="Characters">
-              <Wordcount.Characters />
-            </SidePanel.Row>
-            <Show when={md.progressStats}>
-              {(progressStats) => (
-                <Show when={progressStats().total > 0}>
-                  <SidePanel.Row label="Progress">
-                    <ProgressMeter stats={progressStats()} />
-                  </SidePanel.Row>
-                </Show>
-              )}
-            </Show>
-          </SidePanel.Grid>
-        </Wordcount.Root>
-      )}
-    </Show>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Notifications Section (conditional)
