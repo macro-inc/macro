@@ -1,4 +1,7 @@
-import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
+import {
+  cellDateMention,
+  cellPlainText,
+} from '@macro-inc/spreadsheet/cell-mentions';
 import {
   parseWorkbookMetadata,
   type WorkbookSheetMetadata,
@@ -511,10 +514,23 @@ export async function decodeXlsx(bytes: Uint8Array): Promise<WorkbookFileData> {
     warnings: [...warnings],
   };
 }
+/** A cell holding one date pill exports as the calculated date serial. */
+function exportedDateMention(
+  cell: SpreadsheetCell,
+  calculated?: CalculatedCell
+) {
+  return cell.format !== 'text' &&
+    calculated?.number !== undefined &&
+    cellDateMention(cell.value)
+    ? calculated.number
+    : undefined;
+}
 function exportValue(
   cell: SpreadsheetCell,
   calculated?: CalculatedCell
 ): CellValue {
+  const dateSerial = exportedDateMention(cell, calculated);
+  if (dateSerial !== undefined) return dateSerial;
   if (cellPlainText(cell.value) !== cell.value)
     return cellPlainText(cell.value);
   if (cell.format === 'text') return cell.value;
@@ -647,12 +663,18 @@ export async function encodeXlsx(
           `Cell ${source.name}!${address} exceeds 10,000 characters.`
         );
       const target = sheet.getCell(address);
-      target.value = exportValue(cell, source.values?.[address]);
-      if (cellPlainText(cell.value) !== cell.value)
+      const calculated = source.values?.[address];
+      target.value = exportValue(cell, calculated);
+      const exportsDate = exportedDateMention(cell, calculated) !== undefined;
+      if (!exportsDate && cellPlainText(cell.value) !== cell.value)
         warnings.add(
           'Macro mentions are exported as their display text; interactive pills remain in Macro.'
         );
-      target.style = writeXlsxStyle(cell);
+      target.style = writeXlsxStyle(
+        exportsDate && (!cell.format || cell.format === 'general')
+          ? { ...cell, format: 'date' }
+          : cell
+      );
     }
     for (const [column, pixels] of Object.entries(source.columnWidths)) {
       const index = Number(column);
