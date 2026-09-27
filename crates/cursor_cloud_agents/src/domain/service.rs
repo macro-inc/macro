@@ -163,6 +163,18 @@ const STREAM_RECONNECT_ATTEMPTS: usize = 5;
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
 const BUSY_ATTEMPTS: usize = 450;
 
+/// How long a prompt waits for the turn gate while a background mirror is
+/// following a run started elsewhere, before giving up.
+///
+/// The same budget as [`BUSY_ATTEMPTS`], because it is the same wait seen
+/// from one step earlier: the mirror follows exactly the run that Cursor
+/// would answer `agent_busy` for. Observed live (prod, 2026-09-27): a mirror
+/// following a run Cursor never ended held the gate for hours, the prompt
+/// behind it never started, and everything queued after it never sent. The
+/// wait has to end somewhere the person can see.
+const GATE_WAIT_BUDGET: std::time::Duration =
+    std::time::Duration::from_secs(BUSY_ATTEMPTS as u64 * POLL_INTERVAL.as_secs());
+
 /// How long a turn that saw no new artifacts waits before listing once more.
 ///
 /// Cursor uploads a run's artifacts as the run finishes, so the listing can
@@ -404,6 +416,17 @@ struct SessionState {
     /// whenever Cursor happens to end the stream. Replaced per turn, so a
     /// cancel can never carry into the next one.
     cancel: tokio_util::sync::CancellationToken,
+    /// Fired by cancel; awaited by the background mirror of a run started
+    /// elsewhere ([`CursorSessionService::sync_foreign_runs`]).
+    ///
+    /// Separate from `cancel`, which belongs to the turn: a mirror holds the
+    /// turn gate while a prompt may already be waiting behind it with its own
+    /// token installed, and a stop has to reach both. Replaced per mirror
+    /// sweep, so a stop can never carry into the next one. A stop is the only
+    /// thing that fires it — a prompt arriving behind the mirror waits for
+    /// it instead, because giving up on a run started from cursor.com would
+    /// leave that conversation's run marked abandoned and cancel it.
+    mirror_cancel: tokio_util::sync::CancellationToken,
     /// The model this session's next run will use.
     ///
     /// `None` means "whatever this user's own Cursor settings resolve to" —
@@ -791,19 +814,56 @@ where
         // this turn's never interleave — but never behind another turn: ACP
         // makes a concurrent prompt the client's error, not a queue. The
         // holder is told apart by active_run, which only turns set.
-        let _turn = match session.turn_gate.try_lock() {
-            Ok(guard) => guard,
-            Err(_) => {
-                if session
-                    .state
-                    .lock()
-                    .expect("session state poisoned")
-                    .active_run
-                    .is_some()
-                {
-                    return Err(SessionError::TurnAlreadyActive(session_id.clone()));
+        let gate = session.turn_gate.try_lock().ok();
+        if gate.is_none()
+            && session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .active_run
+                .is_some()
+        {
+            return Err(SessionError::TurnAlreadyActive(session_id.clone()));
+        }
+        // This pending prompt owns cancellation before any wait it can be
+        // parked in — the gate, the model lookup, historical recovery. A stop
+        // has to land while the prompt is waiting behind a mirror, and the
+        // mirror can hold the gate for as long as the run it follows lives;
+        // installing the token after the gate would have that stop fire an
+        // old token and then be erased by the reset here. Only after the
+        // active-turn check, which must never clobber a live turn's token.
+        let cancel = {
+            let mut state = session.state.lock().expect("session state poisoned");
+            state.cancelled = false;
+            state.cancel = tokio_util::sync::CancellationToken::new();
+            state.cancel.clone()
+        };
+        let _turn = match gate {
+            Some(guard) => guard,
+            None => {
+                tracing::info!("waiting for the turn gate behind a mirror of a run started elsewhere");
+                tokio::select! {
+                    biased;
+                    () = cancel.cancelled() => {
+                        // Nothing to journal: the prompt never reached the
+                        // gate, so it never became part of this session's
+                        // record. The client's own transcript has it.
+                        tracing::info!("stopped while waiting for the turn gate");
+                        return Ok(StopReason::Cancelled);
+                    }
+                    guard = session.turn_gate.lock() => guard,
+                    () = tokio::time::sleep(GATE_WAIT_BUDGET) => {
+                        tracing::warn!(
+                            waited_secs = GATE_WAIT_BUDGET.as_secs(),
+                            "gave up waiting for the turn gate; a mirror is still following a run started elsewhere"
+                        );
+                        return Err(SessionError::Rejected(PromptRefusal::plain(
+                            "Cursor is still busy with a run started outside Macro, and Macro \
+                             stopped waiting for it. Send another message once that run has \
+                             finished, or stop the session to interrupt it.",
+                        )));
+                    }
                 }
-                session.turn_gate.lock().await
             }
         };
 
@@ -817,14 +877,6 @@ where
                 "Cursor session must load successfully before prompting"
             )));
         }
-        // This pending prompt owns cancellation before any model lookup or
-        // historical recovery can wait. Recovery cannot clear a received stop.
-        let cancel = {
-            let mut state = session.state.lock().expect("session state poisoned");
-            state.cancelled = false;
-            state.cancel = tokio_util::sync::CancellationToken::new();
-            state.cancel.clone()
-        };
         // A failed model lookup proves no prompt was executed. Do it before
         // reserving the durable intent, so load does not see false ambiguity.
         let model = self.effective_model(session_id).await?;
@@ -836,7 +888,7 @@ where
             .agent
             .clone();
         if let Some(agent) = &prior_agent {
-            self.backfill_foreign_runs(session_id, &session, agent, None)
+            self.backfill_foreign_runs(session_id, &session, agent, None, &cancel)
                 .await?;
         }
         // Preserve original content before the provider creates remote work.
@@ -995,7 +1047,7 @@ where
         }
         // Acceptance is durable even if recovery of an older run fails. Do
         // not observe/project the new run until every older run is reconciled.
-        self.backfill_foreign_runs(session_id, &session, &agent, Some(&run))
+        self.backfill_foreign_runs(session_id, &session, &agent, Some(&run), &cancel)
             .await?;
         // The turn span is the only place all three identities meet, and it
         // is what makes a Macro session joinable to the cursor.com run that
@@ -1124,6 +1176,11 @@ where
             // the turn. The POST below is the notification that asks for that
             // frame.
             state.cancel.cancel();
+            // And the background mirror, if one is following a run started
+            // elsewhere: that run is cancelled below like any other, and a
+            // mirror left waiting for a `result` Cursor never sends would
+            // hold the turn gate — and every prompt behind it — for good.
+            state.mirror_cancel.cancel();
             (state.agent.clone(), state.active_run.clone())
         };
         // No agent yet: the session's first prompt is still creating one, so
@@ -1923,12 +1980,22 @@ where
     }
 
     /// Catch up foreign runs through the same journal path as local prompts.
+    ///
+    /// `cancel` is the stop that ends a run still going: the turn's own token
+    /// when a prompt is catching up before it runs, the mirror's when the
+    /// host's sweep is. A run already finished is read to its end regardless
+    /// — the stream loop consults the token only where it waits — so a stop
+    /// never costs the recovery of history that is there to be had, only the
+    /// following of a run that has not ended. That run is left as a turn
+    /// leaves one it gave up on: interrupted, to be mirrored in once it does
+    /// end, and never blocking the prompt behind it again.
     async fn backfill_foreign_runs(
         &self,
         session_id: &SessionId,
         session: &Session,
         agent: &CursorAgentId,
         current_run: Option<&CursorRunId>,
+        cancel: &tokio_util::sync::CancellationToken,
     ) -> Result<bool, SessionError> {
         self.ensure_journal(session_id, session).await?;
         let last = session
@@ -1996,13 +2063,12 @@ where
         let mirrored = !runs.is_empty();
         for run in &runs {
             if !reconciled.contains(run) {
-                // A cancelled prior prompt must not cancel its recovery.
                 self.ingest_run(
                     session_id,
                     session,
                     agent,
                     run,
-                    &tokio_util::sync::CancellationToken::new(),
+                    cancel,
                     IngestMode {
                         emit: false,
                         ..IngestMode::LIVE
@@ -2018,6 +2084,13 @@ where
                 .iter()
                 .any(|e| e.run.as_ref() == Some(run) && e.input == JournalInput::Reconciled);
             if !complete {
+                // A stop ended the following, not a failure: what was
+                // captured is still shown, and the prompt behind this (if
+                // any) answers Cancelled rather than failing.
+                if cancel.is_cancelled() {
+                    tracing::info!(%agent, %run, "stopped following a run started elsewhere");
+                    break;
+                }
                 return Err(rootcause::report!("Cursor run {run} remains unreconciled").into());
             }
         }
@@ -2618,8 +2691,15 @@ where
             let Some(agent) = agent else {
                 continue;
             };
+            // Fresh per sweep: a stop that landed between sweeps has nothing
+            // left to end, and must not end the next one.
+            let cancel = {
+                let mut state = session.state.lock().expect("session state poisoned");
+                state.mirror_cancel = tokio_util::sync::CancellationToken::new();
+                state.mirror_cancel.clone()
+            };
             if let Err(error) = self
-                .backfill_foreign_runs(&session_id, &session, &agent, None)
+                .backfill_foreign_runs(&session_id, &session, &agent, None, &cancel)
                 .await
             {
                 tracing::warn!(%session_id, %agent, %error, "could not mirror cursor.com runs");
