@@ -42,7 +42,7 @@ pub const SOUP_FLAT_V3: &str = "soup-flat-v3";
 /// Browser-composed profile with complete active-notification membership.
 pub const SOUP_FLAT_V4: &str = "soup-flat-v4";
 /// Host-composed profile with complete selectable property snapshots.
-pub const SOUP_FLAT_V5: &str = "soup-flat-v5";
+pub const SOUP_FLAT_V6: &str = "soup-flat-v6";
 
 // Keep this lightweight crate wasm-compatible instead of depending on the
 // native `system_properties` crate. A native test locks this stable UUID to
@@ -79,9 +79,9 @@ pub mod vocabulary {
         Profile::new(token(super::SOUP_FLAT_V4))
     }
 
-    /// Host-composed property-aware Soup profile.
-    pub fn profile_v5() -> Profile {
-        Profile::new(token(super::SOUP_FLAT_V5))
+    /// Host-composed property and favorite-aware Soup profile.
+    pub fn profile_v6() -> Profile {
+        Profile::new(token(super::SOUP_FLAT_V6))
     }
 
     /// IDs of unseen notifications for the viewer and primary entity.
@@ -274,6 +274,9 @@ fn check_soup_flat(
 ) -> Eligibility {
     if ast.initiative_filter.is_some() {
         return Eligibility::Unsupported(UnsupportedReason::Partition("initiative"));
+    }
+    if ast.favorites_only == Some(true) {
+        return Eligibility::Unsupported(UnsupportedReason::Literal("favorites"));
     }
     if request.has_cursor {
         return Eligibility::Unsupported(UnsupportedReason::Cursor);

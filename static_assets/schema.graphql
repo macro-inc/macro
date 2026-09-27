@@ -2175,6 +2175,10 @@ GraphQL input mirroring `item_filters::ast::EntityFilterAst`.
 """
 input GraphqlEntityFilterAst {
 	"""
+	Restrict results to the authenticated viewer's favorites when true.
+	"""
+	favoritesOnly: Boolean
+	"""
 	The calendar event filter to apply.
 	"""
 	calendarEventFilter: GraphqlCalendarEventExpr

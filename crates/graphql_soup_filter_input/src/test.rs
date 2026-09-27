@@ -9,6 +9,15 @@ fn generated_filter_fixture() -> Value {
 }
 
 #[test]
+fn favorites_filter_materializes_without_changing_entity_scope() {
+    let mut input = generated_filter_fixture();
+    input["favoritesOnly"] = json!(true);
+    let ast = materialize_graphql_filter(input).unwrap();
+    assert_eq!(ast.favorites_only, Some(true));
+    assert!(ast.email_filter.tree.is_some());
+}
+
+#[test]
 fn generated_typescript_variables_materialize_authoritative_ast() {
     let ast = materialize_graphql_filter(generated_filter_fixture()).unwrap();
 

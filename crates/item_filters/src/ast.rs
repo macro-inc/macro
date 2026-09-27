@@ -191,6 +191,9 @@ impl IsEmpty for EmailFilterAst {
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct EntityFilterAst {
+    /// Restrict to the authenticated viewer's favorites before pagination when true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favorites_only: Option<bool>,
     /// filters applied to canonical calendar events
     #[serde(default, rename = "calf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -266,6 +269,7 @@ impl EntityFilterAst {
         .map(|(_, scope)| scope);
         let email_tree = EmailFilters::expand_ast(entity_filter.email_filters)?.map(Arc::new);
         Ok(Some(EntityFilterAst {
+            favorites_only: entity_filter.favorites_only,
             calendar_event_filter: CalendarEventFilters::expand_ast(
                 entity_filter.calendar_event_filters,
             )?
@@ -327,6 +331,7 @@ impl EntityFilterAst {
     #[cfg(feature = "mock")]
     pub fn mock_empty() -> Self {
         Self {
+            favorites_only: None,
             calendar_event_filter: None,
             document_filter: None,
             project_filter: None,
@@ -363,6 +368,7 @@ fn crm_company_requests_admin(expr: &Expr<CrmCompanyLiteral>) -> bool {
 impl IsEmpty for EntityFilterAst {
     fn is_empty(&self) -> bool {
         let EntityFilterAst {
+            favorites_only,
             calendar_event_filter,
             document_filter,
             project_filter,
@@ -378,7 +384,8 @@ impl IsEmpty for EntityFilterAst {
             initiative_filter,
             properties_filter,
         } = self;
-        calendar_event_filter.is_none()
+        favorites_only != &Some(true)
+            && calendar_event_filter.is_none()
             && document_filter.is_none()
             && project_filter.is_none()
             && chat_filter.is_none()

@@ -14933,6 +14933,12 @@ export const postItemsSoupBody = zod
       .describe(
         'The email filters used to filter down what emails you search over.'
       ),
+    favorites_only: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Restrict results to the authenticated viewer's favorites when true."
+      ),
     foreign_entity_filters: zod
       .object({
         foreign_entity_ids: zod
@@ -18892,6 +18898,12 @@ export const postItemsSoupAstBody = zod
       .describe(
         'the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` \/ `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors.'
       ),
+    favorites_only: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Restrict to the authenticated viewer's favorites before pagination when true."
+      ),
     fef: zod
       .unknown()
       .optional()
@@ -22673,6 +22685,12 @@ export const postItemsSoupAstGroupedBody = zod
           .describe(
             'the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` \/ `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors.'
           ),
+        favorites_only: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Restrict to the authenticated viewer's favorites before pagination when true."
+          ),
         fef: zod
           .unknown()
           .optional()
@@ -22840,6 +22858,12 @@ export const postItemsSoupAstGroupedBody = zod
           .optional()
           .describe(
             'the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` \/ `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors.'
+          ),
+        favorites_only: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Restrict to the authenticated viewer's favorites before pagination when true."
           ),
         fef: zod
           .unknown()

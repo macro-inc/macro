@@ -390,6 +390,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
 
     let nil = Uuid::nil();
     Ok(EntityFilterAst {
+        favorites_only: None,
         calendar_event_filter: Some(literal_tree(calendar_events, CalendarEventLiteral::Id(nil))),
         document_filter: Some(literal_tree(documents, DocumentLiteral::Id(nil))),
         project_filter: Some(literal_tree(projects, ProjectLiteral::ProjectIdSelf(nil))),

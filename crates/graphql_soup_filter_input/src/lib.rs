@@ -339,6 +339,8 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GraphqlEntityFilterAst {
+    /// Restrict results to the authenticated viewer's favorites when true.
+    favorites_only: Option<bool>,
     /// The calendar event filter to apply.
     calendar_event_filter: Option<GraphqlCalendarEventExpr>,
     /// The document filter to apply.
@@ -382,6 +384,7 @@ impl GraphqlEntityFilterAst {
     /// Convert an input whose serialized representation already passed ingress bounds.
     fn into_ast_unchecked(self) -> InputResult<EntityFilterAst> {
         Ok(EntityFilterAst {
+            favorites_only: self.favorites_only,
             calendar_event_filter: optional_tree(self.calendar_event_filter)?,
             document_filter: optional_tree(self.document_filter)?,
             project_filter: optional_tree(self.project_filter)?,

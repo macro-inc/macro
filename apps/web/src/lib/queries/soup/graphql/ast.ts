@@ -617,6 +617,8 @@ function assertGraphqlCompatibleBody(body: AstBody): void {
 function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
   assertGraphqlCompatibleBody(body);
   const filters: GraphqlEntityFilterAstInput = {};
+  if (body.favorites_only !== undefined)
+    filters.favoritesOnly = body.favorites_only;
 
   if (body.calf) {
     filters.calendarEventFilter = compileExpr(

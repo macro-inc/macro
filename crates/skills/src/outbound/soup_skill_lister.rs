@@ -50,6 +50,7 @@ impl<S> Clone for SoupSkillLister<S> {
 /// entity type is force-filtered to the nil id so soup skips it entirely.
 fn skill_only_filter() -> EntityFilterAst {
     EntityFilterAst {
+        favorites_only: None,
         document_filter: Some(Arc::new(Expr::val(DocumentLiteral::SubType(
             DocumentSubType::Skill,
         )))),

@@ -65,6 +65,31 @@ describe('favorites GraphQL mutations', () => {
     });
   });
 
+  it('updates the normalized email favorite field without changing a Soup query', async () => {
+    await executeGraphqlSetFavoriteMutation(
+      client,
+      { entityType: 'email_thread', entityId: 'thread-1' },
+      false,
+      0
+    );
+    expect(
+      mutationMock.mock.calls[0][2].normalizedCacheOptimistic.optimisticResponse
+        .setFavorite.result.effects
+    ).toEqual([
+      {
+        __typename: 'SoupUpdated',
+        item: {
+          __typename: 'GraphqlSoupEmailThread',
+          id: 'thread-1',
+          isFavorited: false,
+        },
+      },
+    ]);
+    expect(
+      mutationMock.mock.calls[0][2].normalizedCacheOptimistic.revalidations
+    ).toEqual(revalidations);
+  });
+
   it.each([
     { favorite: true, patchKind: 'prependUnique' },
     { favorite: false, patchKind: 'remove' },
@@ -81,7 +106,19 @@ describe('favorites GraphQL mutations', () => {
             optimisticResponse: {
               setFavorite: {
                 __typename: 'SetFavoritePayload',
-                result: { __typename: 'GraphqlMutationSuccess' },
+                result: {
+                  __typename: 'GraphqlMutationSuccess',
+                  effects: [
+                    {
+                      __typename: 'SoupUpdated',
+                      item: {
+                        __typename: 'GraphqlSoupDocument',
+                        id: 'document-1',
+                        isFavorited: favorite,
+                      },
+                    },
+                  ],
+                },
                 favorite: favorite
                   ? expect.objectContaining({
                       __typename: 'GraphqlFavorite',
