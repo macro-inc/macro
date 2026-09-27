@@ -655,6 +655,8 @@ The URL's `diff` query parameter stores each session's pane state and diff
 layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
 `split` for side-by-side diffs). Copying the URL preserves that view; reload
 and Back/Forward restore it. A plain session URL starts with Changes closed.
+Leaving the session, switching to another one, or closing its split drops its
+entry, so opening that session again later starts with Changes closed.
 Divider width, collapsed files, and review notes stay local.
 The pane header shows a `head → base` branch pill, a **Unified / Split**
 segmented control (`aria-label="Diff layout"`), a refresh button, the

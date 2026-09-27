@@ -23,3 +23,4 @@ service; `block-pr/component/PrChanges.tsx` mounts it read-only under
 Layout and diff style are controlled accessor/setter pairs. Hosts using the app
 router can use `url-diff-state.ts`; embedded viewers can provide local signals.
 The URL codec supports namespaced ids and preserves neighboring viewer entries.
+A host drops its own entry, in place, once no mounted host shows its scope.

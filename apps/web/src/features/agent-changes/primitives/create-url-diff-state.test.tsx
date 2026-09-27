@@ -1,6 +1,6 @@
 import { createMemoryHistory, MemoryRouter, Route } from '@solidjs/router';
 import { render, waitFor } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { type Accessor, createSignal, Show } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import { readDiffUrlState } from '../core/url-state';
 import { createMemoryStorage } from '../tests/memory-storage';
@@ -40,6 +40,15 @@ function setup(url: string) {
     layout: () => layout,
     setSessionId,
   };
+}
+
+function Host(props: { scope: Accessor<string> }) {
+  createUrlDiffState(props.scope);
+  return null;
+}
+
+function diffParam(history: ReturnType<typeof createMemoryHistory>) {
+  return new URL(history.get(), 'http://local').searchParams.get('diff');
 }
 
 describe('URL diff state', () => {
@@ -111,5 +120,53 @@ describe('URL diff state', () => {
     expect(
       new URL(history.get(), 'http://local').searchParams.get('diff')
     ).toBe('s1:split:unified');
+  });
+
+  it('drops a scope once its last host leaves, in place and without touching neighbours', async () => {
+    const history = createMemoryHistory();
+    history.set({
+      value: '/session?diff=pr%3A1:split:unified,s9:changes-only:split',
+      replace: true,
+    });
+    const [first, setFirst] = createSignal(true);
+    const [second, setSecond] = createSignal(true);
+    render(() => (
+      <MemoryRouter history={history}>
+        <Route
+          path="/session"
+          component={() => (
+            <>
+              <Show when={first()}>
+                <Host scope={() => 'pr:1'} />
+              </Show>
+              <Show when={second()}>
+                <Host scope={() => 'pr:1'} />
+              </Show>
+            </>
+          )}
+        />
+      </MemoryRouter>
+    ));
+
+    setFirst(false);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(readDiffUrlState(diffParam(history), 'pr:1').layout).toBe('split');
+
+    setSecond(false);
+    await waitFor(() =>
+      expect(diffParam(history)).toBe('s9:changes-only:split')
+    );
+    history.back();
+    expect(diffParam(history)).toBe('s9:changes-only:split');
+  });
+
+  it('drops the entry a host leaves when it moves to another scope', async () => {
+    const { history, setSessionId } = setup(
+      '/session?diff=s1:split:unified,s2:changes-only:split'
+    );
+    setSessionId('s2');
+    await waitFor(() =>
+      expect(diffParam(history)).toBe('s2:changes-only:split')
+    );
   });
 });

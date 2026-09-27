@@ -49,6 +49,17 @@ export function readDiffUrlState(
   );
 }
 
+function serialize(next: Map<string, DiffUrlState>): string | undefined {
+  return (
+    [...next]
+      .map(
+        ([id, state]) =>
+          `${encodeURIComponent(id)}:${state.layout}:${state.diffStyle}`
+      )
+      .join(',') || undefined
+  );
+}
+
 export function writeDiffUrlState(
   value: unknown,
   scopeKey: string,
@@ -60,12 +71,17 @@ export function writeDiffUrlState(
   } else {
     next.set(scopeKey, state);
   }
-  return (
-    [...next]
-      .map(
-        ([id, state]) =>
-          `${encodeURIComponent(id)}:${state.layout}:${state.diffStyle}`
-      )
-      .join(',') || undefined
-  );
+  return serialize(next);
+}
+
+/** `value` without `scopeKey`'s entry; unchanged when it has none. */
+export function removeDiffUrlState(
+  value: unknown,
+  scopeKey: string
+): string | undefined {
+  const next = entries(value);
+  if (!next.delete(scopeKey)) {
+    return typeof value === 'string' ? value : undefined;
+  }
+  return serialize(next);
 }

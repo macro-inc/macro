@@ -73,7 +73,7 @@ at the PR's current base and head. It opens the same resizable Changes pane as
 an agent session (see "Reviewing a linked GitHub pull request" in
 [AI chat](ai-chat.md)) beside the PR, read-only: there is no review-note gutter,
 notes chip, or hand-off card. The URL's `diff` parameter stores the pane under
-`pr:<foreignEntityId>`. The first view of a base and head reads GitHub; later
+`pr:<foreignEntityId>` until you leave the PR or close its split. The first view of a base and head reads GitHub; later
 views, and agent sessions linked to the same PR, reuse the stored diff. An
 unavailable or oversized PR is explained in the pane.
 
