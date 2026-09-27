@@ -52,8 +52,8 @@ export type ChangesHost = {
   /**
    * Whether the source can ever hold changes. Omit for hosts that always
    * can (a PR entity); a session host reports false for a chat-only
-   * harness, which hides every Changes control instead of showing an
-   * empty pane.
+   * harness or a session with no linked pull request, which hides every
+   * Changes control instead of showing an empty pane.
    */
   canHaveChanges?: Accessor<boolean>;
   /** GitHub API totals; undefined while unavailable, with no estimated fallback. */
