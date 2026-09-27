@@ -10,7 +10,12 @@
 //!
 //! The harness still runs under macrod and every session still belongs to
 //! Macro: windows steer through the same control API the web app uses.
+//!
+//! With `macrod herdr-acp` as the harness, the window instead hosts the real
+//! Claude Code TUI, driven over ACP by that adapter (see [`acp_agent`]).
 
+pub(crate) mod acp_agent;
+mod claude_log;
 mod cli;
 mod hub;
 mod tap;
@@ -19,6 +24,14 @@ pub(crate) mod wire;
 use std::path::PathBuf;
 
 pub(crate) use hub::Hub;
+
+use crate::config::Harness;
+
+/// Whether the harness is `macrod herdr-acp`, which opens its own herdr
+/// windows for real agent TUIs, so no session needs a viewer window.
+pub(crate) fn drives_herdr(harness: &Harness) -> bool {
+    harness.args.first().map(String::as_str) == Some(acp_agent::SUBCOMMAND)
+}
 
 mod environment {
     macro_env_var::maybe_env_var! {

@@ -134,6 +134,10 @@ fn start_herdr(
         Ok(cwd) => config.workspace.path = cwd,
         Err(error) => tracing::warn!(error = %error, "could not read the working directory"),
     }
+    if crate::herdr::drives_herdr(&config.harness) {
+        tracing::info!("herdr detected; the harness opens a herdr window per session");
+        return None;
+    }
     let api = HarnessApi::new(&config.macro_api, credentials);
     match crate::herdr::Hub::start(
         &herdr,

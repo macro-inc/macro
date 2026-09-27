@@ -5,6 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
+use serde_json::Value;
 
 use super::wire::AgentState;
 
@@ -141,6 +142,61 @@ impl HerdrCli {
         if let Some(title) = title {
             args.extend(["--title", title]);
         }
+        self.run(&args).await.map(drop)
+    }
+
+    /// Start a recognized agent CLI in an idle shell pane under a unique
+    /// name, returning once herdr sees it ready for input.
+    pub(crate) async fn start_agent(
+        &self,
+        name: &str,
+        kind: &str,
+        pane_id: &str,
+        agent_args: &[String],
+    ) -> Result<(), HerdrError> {
+        let mut args: Vec<&str> = vec![
+            "agent",
+            "start",
+            name,
+            "--kind",
+            kind,
+            "--pane",
+            pane_id,
+            "--timeout",
+            "60000",
+            "--",
+        ];
+        args.extend(agent_args.iter().map(String::as_str));
+        self.run(&args).await.map(drop)
+    }
+
+    /// Submit a prompt to a named agent's TUI, returning once it is typed.
+    pub(crate) async fn prompt_agent(&self, name: &str, text: &str) -> Result<(), HerdrError> {
+        self.run(&["agent", "prompt", name, text])
+            .await
+            .map(drop)
+    }
+
+    /// The agent's lifecycle state: `idle`, `working`, `blocked`, `done`,
+    /// or `unknown`.
+    pub(crate) async fn agent_status(&self, name: &str) -> Result<String, HerdrError> {
+        let output = self.run(&["agent", "get", name]).await?;
+        let answer: Value =
+            serde_json::from_str(output.trim()).map_err(|source| HerdrError::Unparsable {
+                command: "agent get".to_owned(),
+                source,
+            })?;
+        Ok(answer
+            .pointer("/result/agent/agent_status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_owned())
+    }
+
+    /// Press logical keys (`enter`, `esc`, `ctrl+c`) in a named agent's TUI.
+    pub(crate) async fn send_keys(&self, name: &str, keys: &[&str]) -> Result<(), HerdrError> {
+        let mut args = vec!["agent", "send-keys", name];
+        args.extend(keys);
         self.run(&args).await.map(drop)
     }
 
