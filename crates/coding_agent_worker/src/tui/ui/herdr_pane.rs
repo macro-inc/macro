@@ -15,7 +15,7 @@ pub(crate) fn render_herdr_pane(frame: &mut Frame, view: &PaneView) {
     let permission_height = view
         .permission
         .as_ref()
-        .map_or(0, |permission| permission.options.len().max(1) as u16 + 4);
+        .map_or(0, |permission| permission.options.len() as u16 + 5);
     let [header, body, permission, input, footer] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -238,40 +238,26 @@ fn render_permission(frame: &mut Frame, pending: &PendingPermission, area: Rect)
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(ERR));
     let mut lines = vec![Line::from(Span::styled(title, Style::new().bold()))];
-    if pending.options.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "No options offered; Esc dismisses.",
-            Style::new().fg(DIM),
-        )));
-    }
-    for (index, option) in pending.options.iter().enumerate() {
-        let selected = index == pending.selected;
+    for option in &pending.options {
         let color = if option.kind.starts_with("allow") {
             OK
         } else {
             ERR
         };
         lines.push(Line::from(vec![
-            Span::styled(
-                if selected { "▸ " } else { "  " },
-                Style::new().fg(ACCENT).bold(),
-            ),
-            Span::styled(format!("{} ", index + 1), Style::new().fg(DIM)),
-            Span::styled(
-                option.name.clone(),
-                if selected {
-                    Style::new().fg(color).bold()
-                } else {
-                    Style::new().fg(color)
-                },
-            ),
+            Span::raw("  · "),
+            Span::styled(option.name.clone(), Style::new().fg(color)),
         ]));
     }
+    lines.push(Line::from(Span::styled(
+        "Approve or deny it in Macro; a runtime cannot answer its own request.",
+        Style::new().fg(DIM),
+    )));
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
 fn render_input(frame: &mut Frame, view: &PaneView, area: Rect) {
-    let focused = view.connected && view.permission.is_none();
+    let focused = view.connected;
     let border = if focused { ACCENT } else { THEME.border };
     let block = Block::default()
         .style(Style::new().fg(THEME.text).bg(THEME.surface))
@@ -309,7 +295,7 @@ fn render_input(frame: &mut Frame, view: &PaneView, area: Rect) {
 
 fn render_footer(frame: &mut Frame, view: &PaneView, area: Rect) {
     let hints = if view.permission.is_some() {
-        "↑↓ choose · enter/1-9 answer · esc dismiss"
+        "waiting for approval in Macro · esc interrupt"
     } else if view.state == AgentState::Idle {
         "enter send · pgup/pgdn scroll · ctrl+c close"
     } else {

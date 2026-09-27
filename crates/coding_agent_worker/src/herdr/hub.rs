@@ -11,10 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use agent_client_protocol::LineDirection;
-use agent_client_protocol::schema::v1::RequestId;
-use agent_runtime_protocol::domain::action::{
-    AgentAction, AgentPermissionAction, PermissionAnswer,
-};
+use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::model::AgentSessionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value;
@@ -531,17 +528,6 @@ async fn steer(inner: &Inner, session: &str, request: FromPane) -> Result<(), St
         FromPane::Attach { .. } => return Ok(()),
         FromPane::Prompt { text } => AgentAction::prompt(text),
         FromPane::Stop => AgentAction::Stop,
-        FromPane::Answer {
-            request_id,
-            option_id,
-        } => AgentAction::RespondToPermission(AgentPermissionAction {
-            request_id: serde_json::from_value::<RequestId>(request_id)
-                .map_err(|_| "the permission request id is malformed".to_owned())?,
-            answer: match option_id {
-                Some(option_id) => PermissionAnswer::Selected { option_id },
-                None => PermissionAnswer::Cancelled,
-            },
-        }),
     };
     let target = inner.lock().control_target(session);
     let Some((macro_session, owner)) = target else {
