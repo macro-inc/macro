@@ -72,8 +72,9 @@ The PR header has a **Changes** toggle (`aria-pressed`) with the diff's `+N −M
 at the PR's current base and head. It opens the same resizable Changes pane as
 an agent session (see "Reviewing a linked GitHub pull request" in
 [AI chat](ai-chat.md)) beside the PR, read-only: there is no review-note gutter,
-notes chip, or hand-off card. The URL's `diff` parameter stores the pane under
-`pr:<foreignEntityId>` until you leave the PR or close its split. The first view of a base and head reads GitHub; later
+notes chip, or hand-off card. The PR's split stores the pane in
+`s<N>.changes.pane` and `s<N>.changes.style`, the same as a session, until you
+leave the PR or close its split. The first view of a base and head reads GitHub; later
 views, and agent sessions linked to the same PR, reuse the stored diff. An
 unavailable or oversized PR is explained in the pane.
 
@@ -84,7 +85,7 @@ Open in new split from a PR row's context menu; verify the Reviews list stays in
 the original split and the PR appears beside it. Open a favorite from the global
 sidebar, return through the breadcrumb, and open a copied link in a second split.
 Open a PR's Changes pane; check the file tree, a file's diff, **Unified / Split**,
-refresh, and that reloading with the `diff` parameter restores the pane.
+refresh, and that reloading with `s<N>.changes.pane` in the URL restores the pane.
 Use existing PRs and do not modify hosted data.
 
 ## Create a task

@@ -8,8 +8,8 @@
 import { copyText } from '@app/features/agent-changes/agent-changes';
 import type { ChangesHost } from '@app/features/agent-changes/context/agent-changes-context';
 import { AgentChangesControllerProvider } from '@app/features/agent-changes/context/agent-changes-controller';
+import { createPaneViewState } from '@app/features/agent-changes/pane-view-state';
 import { createAgentChanges } from '@app/features/agent-changes/primitives/create-agent-changes';
-import { createUrlDiffState } from '@app/features/agent-changes/url-diff-state';
 import { toast } from '@core/component/Toast/Toast';
 import { openExternalUrl } from '@core/util/url';
 import { createSignal, type ParentProps } from 'solid-js';
@@ -30,12 +30,11 @@ export function PrChangesProvider(
       else toast.failure(message);
     },
   };
-  const urlState = createUrlDiffState(scopeKey);
+  const view = createPaneViewState();
   const [dismissed, setDismissed] = createSignal<string>();
   const controller = createAgentChanges({
     context: { source, host },
-    paneLayout: [urlState.layout, urlState.setLayout],
-    diffStyle: [urlState.diffStyle, urlState.setDiffStyle],
+    view,
     dismissed: [dismissed, (id) => setDismissed(id)],
   });
   return (

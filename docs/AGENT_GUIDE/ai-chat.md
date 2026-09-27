@@ -651,12 +651,13 @@ toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it o
 Chat sessions on Macro's in-memory harness have no repository, so they show
 none of this: no **Changes** toggle, pane, hand-off card, or review-notes chip,
 and the title menu offers **Open repository** only when the session has one.
-The URL's `diff` query parameter stores each session's pane state and diff
-layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
-`split` for side-by-side diffs). Copying the URL preserves that view; reload
-and Back/Forward restore it. A plain session URL starts with Changes closed.
-Leaving the session, switching to another one, or closing its split drops its
-entry, so opening that session again later starts with Changes closed.
+The session's split stores the pane in its own search params:
+`s<N>.changes.pane` (`split`, or `full` when spotlit) and `s<N>.changes.style=split`
+for side-by-side diffs, where `<N>` is the split's index; defaults are left out.
+Copying the URL preserves that view, and reload restores it. Opening and closing
+the pane are Back/Forward steps; switching the diff layout is not. A plain
+session URL starts with Changes closed, and leaving the session or closing its
+split drops the state.
 Divider width, collapsed files, and review notes stay local.
 The pane header shows a `head → base` branch pill, a **Unified / Split**
 segmented control (`aria-label="Diff layout"`), a refresh button, the

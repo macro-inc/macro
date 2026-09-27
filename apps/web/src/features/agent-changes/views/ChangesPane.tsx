@@ -126,7 +126,7 @@ export function ChangesPane() {
       aria-label="Changes"
     >
       <ChangesHeader
-        spotlit={layout.layout() === 'changes-only'}
+        spotlit={layout.layout() === 'full'}
         range={range()}
         diffStyle={diffStyle()}
         onDiffStyle={setDiffStyle}

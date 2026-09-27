@@ -1,3 +1,4 @@
+import { changesSearch } from '@app/features/agent-changes/changes-search';
 import { defineRoute } from '@app/lib/split-router';
 import {
   usePageViewTracking,
@@ -32,6 +33,7 @@ export const reviewsPrRoute = defineRoute({
     namespace: 'block',
     id: `pr:${foreignEntityId}`,
   }),
+  search: [changesSearch.namespace],
 });
 
 export const reviewsSplitRoute = defineRoute({

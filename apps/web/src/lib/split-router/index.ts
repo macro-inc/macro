@@ -60,6 +60,7 @@ export {
   type SplitRouterScopeProps,
   useCanGo,
   useNavigate,
+  useOwnsSearchNamespace,
   useParams,
   useRouteParams,
   useRouteState,

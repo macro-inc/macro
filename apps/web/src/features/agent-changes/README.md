@@ -20,7 +20,8 @@ changeset types. The PR page's adapter is `block-pr/data/pr-changes.ts`, over
 service; `block-pr/component/PrChanges.tsx` mounts it read-only under
 `pr:<foreign-entity-id>` without an agent session.
 
-Layout and diff style are controlled accessor/setter pairs. Hosts using the app
-router can use `url-diff-state.ts`; embedded viewers can provide local signals.
-The URL codec supports namespaced ids and preserves neighboring viewer entries.
-A host drops its own entry, in place, once no mounted host shows its scope.
+Layout and diff style come from `createPaneViewState()` (`pane-view-state.ts`).
+Where the host's route lists `changesSearch.namespace` in its `search`, they live
+in that split's search params (`s0.changes.pane`, `s0.changes.style`), so the
+split router drops them when the split closes or navigates away; anywhere else,
+such as a preview, they are local signals.

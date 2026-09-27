@@ -1,3 +1,4 @@
+import { changesSearch } from '@app/features/agent-changes/changes-search';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { defineRoute, useParams } from '@app/lib/split-router';
 import { withAuth } from '@components/app/split-layout/split-router/app-route-shell';
@@ -31,4 +32,5 @@ export const prDetailRoute = defineRoute({
     namespace: 'block',
     id: `pr:${foreignEntityId}`,
   }),
+  search: [changesSearch.namespace],
 });

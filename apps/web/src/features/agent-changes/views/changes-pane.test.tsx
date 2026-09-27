@@ -3,10 +3,10 @@ import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentChangesContext } from '../context/agent-changes-context';
 import { AgentChangesControllerProvider } from '../context/agent-changes-controller';
+import { createLocalPaneViewState } from '../pane-view-state';
 import {
   type AgentChangesController,
   createAgentChanges,
-  type DiffStyle,
 } from '../primitives/create-agent-changes';
 import { createMemoryStorage } from '../tests/memory-storage';
 import {
@@ -56,14 +56,13 @@ function mount(
   context: AgentChangesContext,
   ui: () => ReturnType<typeof ChangesPane>
 ) {
-  const [diffStyle, setDiffStyle] = createSignal<DiffStyle>('unified');
   const [dismissed, setDismissed] = createSignal<string>();
   let controller!: AgentChangesController;
   const result = render(() => {
     controller = createAgentChanges({
       context,
       storage: createMemoryStorage(),
-      diffStyle: [diffStyle, setDiffStyle],
+      view: createLocalPaneViewState(),
       dismissed: [dismissed, setDismissed],
     });
     return (
@@ -210,7 +209,7 @@ describe('ChangesPane', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Expand changes to the full width' })
     );
-    expect(controller().layout.layout()).toBe('changes-only');
+    expect(controller().layout.layout()).toBe('full');
     fireEvent.click(
       screen.getByRole('button', { name: 'Bring the session back' })
     );
@@ -218,7 +217,7 @@ describe('ChangesPane', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Close the changes pane' })
     );
-    expect(controller().layout.layout()).toBe('agent-only');
+    expect(controller().layout.layout()).toBe('closed');
   });
 });
 

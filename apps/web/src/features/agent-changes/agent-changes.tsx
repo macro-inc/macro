@@ -15,10 +15,10 @@ import { createSignal, type ParentProps } from 'solid-js';
 import { useAgentSession } from '../block-agent/context/AgentSessionContext';
 import type { ChangesHost } from './context/agent-changes-context';
 import { AgentChangesControllerProvider } from './context/agent-changes-controller';
+import { createPaneViewState } from './pane-view-state';
 import { createAgentChanges } from './primitives/create-agent-changes';
 import { createPullRequestStatsSource } from './queries/pull-request-stats';
 import { createSessionChangesSource } from './queries/session-changes';
-import { createUrlDiffState } from './url-diff-state';
 
 export { AgentChangesSplit } from './views/AgentChangesSplit';
 export {
@@ -80,12 +80,11 @@ export function AgentChangesProvider(props: ParentProps) {
       else toast.failure(message);
     },
   };
-  const urlState = createUrlDiffState(session.sessionId);
+  const view = createPaneViewState();
   const [dismissed, setDismissed] = createSignal<string>();
   const controller = createAgentChanges({
     context: { source, host },
-    paneLayout: [urlState.layout, urlState.setLayout],
-    diffStyle: [urlState.diffStyle, urlState.setDiffStyle],
+    view,
     dismissed: [dismissed, (id) => setDismissed(id)],
   });
   return (

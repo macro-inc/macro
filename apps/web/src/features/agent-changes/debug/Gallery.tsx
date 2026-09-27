@@ -8,9 +8,9 @@
 import { Button } from '@ui';
 import { createSignal, For } from 'solid-js';
 import { AgentChangesControllerProvider } from '../context/agent-changes-controller';
+import { createPaneViewState } from '../pane-view-state';
 import { createAgentChanges } from '../primitives/create-agent-changes';
 import { createMockAgentChangesContext } from '../tests/mock-context';
-import { createUrlDiffState } from '../url-diff-state';
 import { AgentChangesSplit } from '../views/AgentChangesSplit';
 import {
   ChangesHandoff,
@@ -25,12 +25,11 @@ export default function AgentChangesGallery() {
     patch: GALLERY_PATCH,
     sessionId: 'gallery-session',
   });
-  const urlState = createUrlDiffState(context.host.scopeKey);
+  const view = createPaneViewState();
   const [dismissed, setDismissed] = createSignal<string>();
   const controller = createAgentChanges({
     context,
-    paneLayout: [urlState.layout, urlState.setLayout],
-    diffStyle: [urlState.diffStyle, urlState.setDiffStyle],
+    view,
     dismissed: [dismissed, setDismissed],
   });
   if (controller.review.queued().length === 0) {
