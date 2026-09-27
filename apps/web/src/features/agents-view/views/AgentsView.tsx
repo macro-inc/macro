@@ -258,8 +258,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                 max: 380,
                 preserveDuringResize: false,
               }}
-              breakpoints={{ collapsed: 0 }}
-              layoutBreakpoint="collapsed"
               main={{ min: 280, preferredWidth: 640 }}
             >
               <ViewShell.Aside>
