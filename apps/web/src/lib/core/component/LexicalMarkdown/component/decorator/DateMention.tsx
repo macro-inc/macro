@@ -1,9 +1,8 @@
 import { DatePicker } from '@core/component/DatePicker';
-import { formatRelativeDay } from '@core/util/dateParser';
+import { formatRelativeDay, formatTooltipDate } from '@core/util/dateParser';
 import type { DateMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { $isDateMentionNode } from '@macro-inc/lexical-core';
 import ClockIcon from '@phosphor/clock.svg';
-import { differenceInCalendarDays } from 'date-fns';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
@@ -17,22 +16,6 @@ import { autoRegister } from '../../plugins';
 import { MentionTooltip } from './MentionTooltip';
 
 false && floatWithElement;
-
-function formatTooltipDate(date: Date): string {
-  const diff = Math.abs(differenceInCalendarDays(date, new Date()));
-  const options: Intl.DateTimeFormatOptions = {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  };
-  if (diff <= 5) {
-    options.hour = 'numeric';
-    options.minute = '2-digit';
-    options.hour12 = true;
-  }
-  return date.toLocaleDateString('en-US', options);
-}
 
 export function DateMention(props: DateMentionDecoratorProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
