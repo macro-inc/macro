@@ -284,6 +284,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "url",
+ "uuid",
  "workspace-hack",
 ]
 
