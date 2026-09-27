@@ -19,6 +19,8 @@ mod config;
 mod daemon;
 mod dispatch;
 mod harness;
+#[cfg(unix)]
+mod herdr;
 mod outbound;
 mod runtime;
 mod trigger;
@@ -36,6 +38,24 @@ struct Args {
     /// Internal browser helper, isolated so terminal browsers cannot claim the TUI's stdin.
     #[arg(long, hide = true)]
     open_url: Option<String>,
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(clap::Subcommand)]
+enum Command {
+    /// Show one agent session live inside a herdr window. macrod opens these
+    /// itself when it runs inside herdr.
+    #[cfg(unix)]
+    #[command(hide = true)]
+    HerdrPane {
+        /// The running macrod's window socket.
+        #[arg(long)]
+        socket: std::path::PathBuf,
+        /// The ACP session to follow.
+        #[arg(long)]
+        session: String,
+    },
 }
 
 #[tokio::main]
@@ -51,6 +71,16 @@ async fn main() -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 eprintln!("could not open browser: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    #[cfg(unix)]
+    if let Some(Command::HerdrPane { socket, session }) = args.command {
+        return match tui::run_herdr_pane(&socket, &session).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("macrod herdr-pane: {error:?}");
                 ExitCode::FAILURE
             }
         };
