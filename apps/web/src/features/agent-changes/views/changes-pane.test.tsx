@@ -100,7 +100,7 @@ describe('ChangesPane', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: /^Hide / })[0]!);
     expect(screen.getAllByTestId('diff')).toHaveLength(1);
-    expect(screen.getByText('Show diff')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /^Show / })).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
     expect(screen.queryAllByTestId('diff')).toHaveLength(0);
