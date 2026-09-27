@@ -9,8 +9,31 @@ const fixture = vi.hoisted(() => ({
   previewMounts: 0,
   previewDisposals: 0,
   channelMounts: 0,
+  projectsEnabled: undefined as (() => boolean) | undefined,
+  projectMounts: 0,
+  projectDisposals: 0,
 }));
 
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({
+    enabled: fixture.projectsEnabled?.() ?? false,
+  }),
+}));
+vi.mock('@core/constant/featureFlags', () => ({
+  enableProjects: { key: 'enable-projects' },
+}));
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+vi.mock('../../projects/queries/project-identity', () => ({
+  useProjectIdentityQuery: () => {
+    fixture.projectMounts++;
+    onCleanup(() => fixture.projectDisposals++);
+    return {
+      isError: false,
+      isPending: false,
+      data: { id: 'entity-1', name: 'Launch' },
+    };
+  },
+}));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@core/constant/allBlocks', () => ({
@@ -52,9 +75,12 @@ afterEach(() => {
   fixture.previewMounts = 0;
   fixture.previewDisposals = 0;
   fixture.channelMounts = 0;
+  fixture.projectsEnabled = undefined;
+  fixture.projectMounts = 0;
+  fixture.projectDisposals = 0;
 });
 
-function setup(type: 'DOCUMENT' | 'CHANNEL') {
+function setup(type: 'DOCUMENT' | 'CHANNEL' | 'INITIATIVE') {
   return createRoot((dispose) => {
     disposals.push(dispose);
     return usePropertyEntityDisplay(
@@ -65,6 +91,24 @@ function setup(type: 'DOCUMENT' | 'CHANNEL') {
 }
 
 describe('usePropertyEntityDisplay subscription ownership', () => {
+  it('only owns project identity queries and links while the rollout is enabled', () => {
+    const [enabled, setEnabled] = createSignal(false);
+    fixture.projectsEnabled = enabled;
+    const display = setup('INITIATIVE');
+    expect(fixture.projectMounts).toBe(0);
+    expect(display.nativeProjectId()).toBeUndefined();
+
+    setEnabled(true);
+    expect(fixture.projectMounts).toBe(1);
+    expect(display.nativeProjectId()).toBe('entity-1');
+    expect(display.name()).toBe('Launch');
+
+    setEnabled(false);
+    expect(fixture.projectDisposals).toBe(1);
+    expect(display.nativeProjectId()).toBeUndefined();
+    expect(display.blockOrFileType()).toBeNull();
+  });
+
   it('settles a live GraphQL preview batch without reacquiring itself', () => {
     vi.useFakeTimers();
     let starts = 0;

@@ -16,7 +16,11 @@ import {
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject, onEnd, pipe } from 'wonka';
-import { EntityPropertiesDocument } from '../../service-clients/service-storage/graphql/generated/graphql';
+import {
+  DeleteEntityPropertyDocument,
+  EntityPropertiesDocument,
+  InitiativePropertiesDocument,
+} from '../../service-clients/service-storage/graphql/generated/graphql';
 import { createUrqlQuery } from '../../urql-solid';
 
 const useFeatureFlagMock = vi.hoisted(() => vi.fn());
@@ -29,6 +33,29 @@ const buildEntityPropertiesInputMock = vi.hoisted(() => vi.fn());
 const mapGraphqlEntityPropertiesMock = vi.hoisted(() => vi.fn());
 const createGraphqlEntityPropertiesQueryMock = vi.hoisted(() => vi.fn());
 const graphqlQueryMock = vi.hoisted(() => vi.fn());
+const initiativePropertyQueryMock = vi.hoisted(() =>
+  vi.fn((..._args: unknown[]) => ({ toPromise: async () => ({ data: {} }) }))
+);
+const initiativePropertyDeleteMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    toPromise: async () => ({
+      data: {
+        deleteEntityProperty: {
+          __typename: 'GraphqlCacheDeletion',
+          graphqlTypeName: 'GraphqlProperty',
+          entityId: 'assignment-1',
+        },
+      },
+    }),
+  }))
+);
+
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: () => ({
+    query: initiativePropertyQueryMock,
+    mutation: initiativePropertyDeleteMock,
+  }),
+}));
 const getRestEntityPropertiesMock = vi.hoisted(() => vi.fn());
 const deleteEntityPropertyMock = vi.hoisted(() => vi.fn());
 const addEntityPropertyOptionMock = vi.hoisted(() => vi.fn());
@@ -86,6 +113,13 @@ vi.mock('../../service-clients/service-properties/client', () => ({
 }));
 
 vi.mock('./graphql/entity', () => ({
+  refetchGraphqlInitiativeProperties: async (initiativeId: string) => {
+    await initiativePropertyQueryMock(
+      InitiativePropertiesDocument,
+      { initiativeId },
+      { requestPolicy: 'network-only' }
+    ).toPromise();
+  },
   createGraphqlEntityPropertiesQuery: createGraphqlEntityPropertiesQueryMock,
   createGraphqlAddEntityPropertyMutation:
     createGraphqlAddEntityPropertyMutationMock,
@@ -742,6 +776,29 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     });
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
     expect(toastFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('removes a native project property through GraphQL even when the Soup flag is off', async () => {
+    graphqlSoupEnabledMock.mockReturnValue(false);
+    await deleteMutation.mutateAsync({
+      entityPropertyId: 'assignment-1',
+      entityType: 'INITIATIVE',
+      entityId: 'initiative-1',
+    });
+    expect(deleteEntityPropertyMock).not.toHaveBeenCalled();
+    expect(initiativePropertyDeleteMock).toHaveBeenCalledWith(
+      DeleteEntityPropertyDocument,
+      {
+        entityPropertyId: 'assignment-1',
+        entityType: 'INITIATIVE',
+        entityId: 'initiative-1',
+      }
+    );
+    expect(initiativePropertyQueryMock).toHaveBeenCalledWith(
+      InitiativePropertiesDocument,
+      { initiativeId: 'initiative-1' },
+      { requestPolicy: 'network-only' }
+    );
   });
 
   it('invalidates REST projections after delete and option writes', async () => {

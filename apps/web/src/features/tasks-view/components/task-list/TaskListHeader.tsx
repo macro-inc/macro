@@ -58,11 +58,13 @@ function SortableHeader(props: {
 }
 
 export function TaskListHeader() {
+  const { projectsEnabled } = useTasksView();
   return (
     <div
       role="row"
       class="task-grid-row grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
       style={{
+        '--task-col-initiative': projectsEnabled() ? undefined : '0rem',
         'grid-template-columns': TASK_GRID_TEMPLATE_COLUMNS_WIDE,
         'grid-template-areas': TASK_GRID_TEMPLATE_AREAS_WIDE,
       }}
@@ -78,6 +80,9 @@ export function TaskListHeader() {
       <SortableHeader label="Status" area="status" />
       <SortableHeader label="Priority" area="priority" />
       <SortableHeader label="Assignees" area="assignees" />
+      <Show when={projectsEnabled()}>
+        <SortableHeader label="Project" area="initiative" />
+      </Show>
       <SortableHeader
         label="Created By"
         area="createdBy"

@@ -26,6 +26,7 @@ export function PropertyChangeText(props: {
   action: PropertyChangedAction;
   definition: PropertyDefinitionDomain | undefined;
   capitalize?: boolean;
+  valueLabel?: (raw: unknown) => string | undefined;
 }) {
   const definition = () => props.definition;
   const name = () => definition()?.displayName ?? 'a property';
@@ -54,11 +55,16 @@ export function PropertyChangeText(props: {
         <PropertyValueDisplay
           raw={props.action.from}
           definition={definition()}
+          valueLabel={props.valueLabel}
         />
       </Show>
       <Show when={hasTo()}>
         <span class="shrink-0">to</span>
-        <PropertyValueDisplay raw={props.action.to} definition={definition()} />
+        <PropertyValueDisplay
+          raw={props.action.to}
+          definition={definition()}
+          valueLabel={props.valueLabel}
+        />
       </Show>
     </span>
   );
@@ -71,6 +77,7 @@ export function PropertyChangeText(props: {
 function PropertyValueDisplay(props: {
   raw: unknown;
   definition: PropertyDefinitionDomain | undefined;
+  valueLabel?: (raw: unknown) => string | undefined;
 }) {
   const options = () => selectOptionEntries(props.raw, props.definition);
 
@@ -79,7 +86,8 @@ function PropertyValueDisplay(props: {
       when={options()}
       fallback={
         <span class="min-w-0 truncate font-medium text-ink">
-          {propertyValueLabel(props.raw, props.definition)}
+          {props.valueLabel?.(props.raw) ??
+            propertyValueLabel(props.raw, props.definition)}
         </span>
       }
     >

@@ -25,7 +25,6 @@ import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { mergeRegister } from '@lexical/utils';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
@@ -40,7 +39,7 @@ import type { PropertyApiValues } from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn, Hotkey, Scroll, ToggleSwitch } from '@ui';
+import { Button, EntityComposer, Scroll, ToggleSwitch } from '@ui';
 import {
   $getRoot,
   $getSelection,
@@ -339,6 +338,8 @@ export interface ComposeTaskProps {
   initialContent?: string;
   placeholder?: string;
   initialAssigneeIds?: string[];
+  /** Runs after every successful creation, including Continue in split. */
+  onTaskCreated?: (result: ComposeTaskSuccess) => Promise<void> | void;
   /**
    * When provided, replaces the default success behavior (auto-copy link +
    * toast) so the caller can handle the created task however it needs.
@@ -592,11 +593,20 @@ export function ComposeTask(props: ComposeTaskProps) {
         props.onCreateFailure?.();
         // Restore the draft and re-open so the user can retry
         saveTaskComposerDraft(draftSnapshot);
-        popoverSplit({ type: 'component', id: 'task-compose' });
+        popoverSplit({
+          type: 'component',
+          id: 'task-compose',
+          params: { ...props },
+        });
         return;
       }
 
       const { documentId, initialSnapshot } = createdTask;
+      await props.onTaskCreated?.({
+        documentId,
+        title: taskTitle,
+        content: taskContent,
+      });
       if (props.onSuccess) {
         props.onSuccess({ documentId, title: taskTitle, content: taskContent });
       } else {
@@ -624,6 +634,11 @@ export function ComposeTask(props: ComposeTaskProps) {
     // Success: clear draft and notify
     clearTaskComposerDraft();
     const { documentId, initialSnapshot } = createdTask;
+    await props.onTaskCreated?.({
+      documentId,
+      title: taskTitle,
+      content: taskContent,
+    });
     if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
@@ -670,11 +685,20 @@ export function ComposeTask(props: ComposeTaskProps) {
     if (!createdTask) {
       split?.goBack();
       saveTaskComposerDraft(draftSnapshot);
-      popoverSplit({ type: 'component', id: 'task-compose' });
+      popoverSplit({
+        type: 'component',
+        id: 'task-compose',
+        params: { ...props },
+      });
       return;
     }
 
     const { documentId, initialSnapshot } = createdTask;
+    await props.onTaskCreated?.({
+      documentId,
+      title: taskTitle,
+      content: taskContent,
+    });
     const snapshotParams = initialSnapshot
       ? {
           params: { optimisticSnapshot: initialSnapshot },
@@ -807,12 +831,8 @@ export function ComposeTask(props: ComposeTaskProps) {
     splitPanel.handle.isPopover() ? 'local' : 'block';
 
   return (
-    <div
-      class="portal-scope flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4"
-      tabIndex={-1}
-      ref={setContainerRef}
-    >
-      <div class="flex items-center gap-1">
+    <EntityComposer.Root tabIndex={-1} ref={setContainerRef}>
+      <EntityComposer.Header>
         <div class="flex-1 flex items-center">
           <Show when={splitPanel?.handle.isPopover()}>
             <Button
@@ -849,9 +869,9 @@ export function ComposeTask(props: ComposeTaskProps) {
             <XIcon />
           </Button>
         </Show>
-      </div>
-      <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div class="shrink-0 flex gap-2 items-start px-2 mb-4">
+      </EntityComposer.Header>
+      <EntityComposer.Main>
+        <EntityComposer.Title>
           <Show when={tagLayoutMode() === 'title'}>
             <div class={COMPOSER_TITLE_LINE_CLASS}>
               <InlineTagsPill
@@ -883,9 +903,9 @@ export function ComposeTask(props: ComposeTaskProps) {
               titleEditorRoot = el;
             }}
           />
-        </div>
+        </EntityComposer.Title>
 
-        <div class="overflow-auto scrollbar-hidden mb-6 min-h-24 grow px-2">
+        <EntityComposer.Body>
           <Scroll>
             <MarkdownShell
               config={editorConfig}
@@ -899,7 +919,7 @@ export function ComposeTask(props: ComposeTaskProps) {
               portalScope={portalScope()}
             />
           </Scroll>
-        </div>
+        </EntityComposer.Body>
 
         <Suspense fallback={<div class="h-7" />}>
           <PropertiesProvider
@@ -911,8 +931,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             onPropertyDeleted={() => {}}
             saveHandler={saveHandler}
           >
-            <div
-              class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm m-px"
+            <EntityComposer.Properties
               on:keydown={(e) => {
                 const target = e.target as HTMLElement;
                 const container = e.currentTarget;
@@ -955,11 +974,11 @@ export function ComposeTask(props: ComposeTaskProps) {
               <Show when={tagLayoutMode() === 'bottom'}>
                 <InlineTagsPill docTags={composerTags} showPlaceholder />
               </Show>
-            </div>
+            </EntityComposer.Properties>
             <Modals />
           </PropertiesProvider>
         </Suspense>
-      </div>
+      </EntityComposer.Main>
 
       <Show when={errorMessage()}>
         <div class="w-full border-b border-edge-muted" />
@@ -970,7 +989,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         </div>
       </Show>
 
-      <div class="shrink-0 flex justify-between items-end gap-2">
+      <EntityComposer.Footer>
         <input
           ref={(el) => {
             attachInputRef = el;
@@ -996,27 +1015,21 @@ export function ComposeTask(props: ComposeTaskProps) {
             checked={createMore()}
             label="Create More"
           />
-          <Button
+          <EntityComposer.Submit
             onClick={handleCreateTask}
             disabled={title().trim().length === 0 || isCreating()}
-            variant={title().trim().length === 0 ? 'ghost' : 'accent'}
-            depth={3}
-            class={cn(
-              'gap-3 rounded-lg border-0',
-              !isTouchDevice() && 'rounded-full h-[33.75px] px-[15px]'
-            )}
+            hasContent={title().trim().length > 0}
           >
             Create Task
-            <Hotkey shortcut="cmd+enter" theme="current" />
-          </Button>
+          </EntityComposer.Submit>
         </div>
-      </div>
+      </EntityComposer.Footer>
 
       <SimilarTasksSection
         title={title}
         content={content}
         onOpenTask={handleOpenSimilarTask}
       />
-    </div>
+    </EntityComposer.Root>
   );
 }

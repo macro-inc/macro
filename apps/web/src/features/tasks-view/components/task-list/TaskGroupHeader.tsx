@@ -58,7 +58,7 @@ export function TaskGroupHeader(props: {
 
   return (
     <div id={props.row.id} role="row">
-      <div role="gridcell" aria-colspan={7}>
+      <div role="gridcell" aria-colspan={8}>
         <Surface
           depth={3}
           hideBorder

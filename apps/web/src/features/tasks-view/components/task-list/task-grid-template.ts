@@ -42,19 +42,23 @@ export type TaskGridColumn = (typeof TASK_GRID_COLUMNS)[number];
 /** Grid template for wide containers (includes Created By column) */
 export const TASK_GRID_TEMPLATE_COLUMNS_WIDE = `1rem minmax(0, 100%) ${TASK_GRID_COLUMNS.map(
   (c) => c.width
-).join(' ')} ${CREATED_BY_COLUMN_WIDTH} var(--task-col-timestamp, 5rem)`;
+).join(
+  ' '
+)} var(--task-col-initiative, 8rem) ${CREATED_BY_COLUMN_WIDTH} var(--task-col-timestamp, 5rem)`;
 
 /** Wide template without the leading indicator (checkbox) column. */
 export const TASK_GRID_TEMPLATE_COLUMNS_WIDE_NO_INDICATOR = `minmax(0, 100%) ${TASK_GRID_COLUMNS.map(
   (c) => c.width
-).join(' ')} ${CREATED_BY_COLUMN_WIDTH} var(--task-col-timestamp, 5rem)`;
+).join(
+  ' '
+)} var(--task-col-initiative, 8rem) ${CREATED_BY_COLUMN_WIDTH} var(--task-col-timestamp, 5rem)`;
 
 /** Grid template areas for wide containers (includes Created By column) */
 export const TASK_GRID_TEMPLATE_AREAS_WIDE = `"indicator content ${TASK_GRID_COLUMNS.map(
   (c) => c.id
-).join(' ')} createdBy timestamp"`;
+).join(' ')} initiative createdBy timestamp"`;
 
 /** Wide template areas without the leading indicator (checkbox) column. */
 export const TASK_GRID_TEMPLATE_AREAS_WIDE_NO_INDICATOR = `"content ${TASK_GRID_COLUMNS.map(
   (c) => c.id
-).join(' ')} createdBy timestamp"`;
+).join(' ')} initiative createdBy timestamp"`;

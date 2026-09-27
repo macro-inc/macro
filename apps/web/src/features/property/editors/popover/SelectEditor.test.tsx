@@ -1,6 +1,18 @@
+import { projectDefinitionProperties } from '@app/features/projects/queries/project-properties';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@property/identifiers';
+import type { PropertyOption } from '@property/types';
+import { withProjectStatusOptions } from '@property/utils/select-options';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { type ComponentProps, createSignal, type ParentProps } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  type ComponentProps,
+  createSignal,
+  For,
+  type ParentProps,
+} from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PropertyRootContext,
   type PropertyRootContextValue,
@@ -9,8 +21,10 @@ import type { SelectProperty } from '../../types';
 import type { PropertyOptionSelector } from '../selectors/PropertyOptionSelector';
 import { SelectEditor } from './SelectEditor';
 
+const catalog = vi.hoisted(() => ({ options: [] as PropertyOption[] }));
+
 vi.mock('@queries/properties/options', () => ({
-  usePropertyOptionsQuery: () => ({ data: [], isLoading: false }),
+  usePropertyOptionsQuery: () => ({ data: catalog.options, isLoading: false }),
   useAddPropertyOptionMutation: () => ({
     mutateAsync: vi.fn(),
     isPending: false,
@@ -38,6 +52,9 @@ vi.mock('../selectors/PropertyOptionSelector', () => ({
     props: ComponentProps<typeof PropertyOptionSelector>
   ) => (
     <>
+      <ul aria-label="Available options">
+        <For each={props.options}>{(option) => <li>{option.label}</li>}</For>
+      </ul>
       <button
         onClick={() => {
           props.onToggleOption('doing');
@@ -93,6 +110,81 @@ function setup(value = property) {
 }
 
 afterEach(cleanup);
+beforeEach(() => {
+  catalog.options = [];
+});
+
+it('offers only the three project statuses even when the shared catalog contains task statuses', () => {
+  catalog.options = Object.entries(PROPERTY_OPTION_IDS.STATUS).map(
+    ([name, id], display_order) => ({
+      id,
+      property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
+      value: { type: 'string', value: name },
+      display_order,
+      created_at: '',
+      updated_at: '',
+    })
+  );
+  const [projectStatus] = projectDefinitionProperties([
+    {
+      definition: {
+        id: SYSTEM_PROPERTY_IDS.STATUS,
+        display_name: 'Status',
+        data_type: 'SELECT_STRING',
+        is_system: true,
+        is_metadata: false,
+        is_multi_select: false,
+        owner: { scope: 'system' },
+        created_at: '',
+        updated_at: '',
+      },
+      property_options: catalog.options,
+    },
+  ]);
+  if (projectStatus.valueType !== 'SELECT_STRING')
+    throw new Error('Expected status');
+  setup(projectStatus);
+  expect(
+    screen.getAllByRole('listitem').map((item) => item.textContent)
+  ).toEqual(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED']);
+});
+
+it('keeps all task statuses available', () => {
+  catalog.options = Object.entries(PROPERTY_OPTION_IDS.STATUS).map(
+    ([name, id], display_order) => ({
+      id,
+      property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
+      value: { type: 'string', value: name },
+      display_order,
+      created_at: '',
+      updated_at: '',
+    })
+  );
+  setup({ ...property, propertyDefinitionId: SYSTEM_PROPERTY_IDS.STATUS });
+  expect(
+    screen.getAllByRole('listitem').map((item) => item.textContent)
+  ).toEqual([
+    'NOT_STARTED',
+    'IN_PROGRESS',
+    'IN_REVIEW',
+    'COMPLETED',
+    'CANCELED',
+  ]);
+});
+
+it('does not rewrite an existing project status when its picker is dismissed', () => {
+  const historicalStatus = {
+    ...property,
+    propertyDefinitionId: SYSTEM_PROPERTY_IDS.STATUS,
+    value: [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW],
+  };
+  const scoped = withProjectStatusOptions(historicalStatus);
+  if (scoped.valueType !== 'SELECT_STRING') throw new Error('Expected status');
+  const { onSave } = setup(scoped);
+  fireEvent.click(screen.getByText('Dismiss'));
+  expect(onSave).not.toHaveBeenCalled();
+  expect(scoped.value).toEqual(historicalStatus.value);
+});
 
 describe('SelectEditor save dismissal', () => {
   it('closes immediately while saving the selected status', async () => {

@@ -4,7 +4,10 @@ import {
   type Query,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
+import { ProjectAttachment } from '@app/features/projects/project-attachment';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { enableProjects } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import {
   type ChannelAttachmentsData,
@@ -14,12 +17,13 @@ import {
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { stringToItemType } from '@service-storage/client';
 import type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
-import { createMemo } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import {
   AttachmentEntityList,
   type AttachmentEntityListRow,
 } from './AttachmentEntityList';
 import { getEntityClickContent } from './attachment-utils';
+import { AttachmentSection, LoadMoreButton } from './SectionHeader';
 
 /**
  * Scope a soup query to exactly the attachment entities. `defineQueryFilters`
@@ -69,22 +73,36 @@ function attachmentSoupAst(attachments: ApiChannelAttachment[]) {
 }
 
 export function ChannelAttachmentEntitySection(props: { channelId: string }) {
+  const projectsFlag = useFeatureFlag(enableProjects);
   const attachmentsQuery = useChannelDocumentAttachmentsQuery(
     () => props.channelId
   );
 
   const documentAttachments = createMemo(() =>
     flattenAttachments(
-      attachmentsQuery.data as ChannelAttachmentsData | undefined
+      attachmentsQuery.isSuccess
+        ? (attachmentsQuery.data as ChannelAttachmentsData)
+        : undefined
     )
   );
 
+  const projectAttachments = createMemo(() => [
+    ...new Set(
+      documentAttachments()
+        .filter((item) => item.entity_type === 'initiative')
+        .map((item) => item.entity_id)
+    ),
+  ]);
   const soupQuery = useSoupAstItemsQuery(
     () => ({
       params: { limit: 500 },
       body: attachmentSoupAst(documentAttachments()),
     }),
-    () => ({ enabled: documentAttachments().length > 0 })
+    () => ({
+      enabled: documentAttachments().some(
+        (item) => item.entity_type !== 'initiative'
+      ),
+    })
   );
 
   const attachmentByEntityId = createMemo(() => {
@@ -103,7 +121,9 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
     });
 
   const rows = createMemo<AttachmentEntityListRow[]>(() => {
-    const entities = soupQuery.data?.entities ?? [];
+    const entities = soupQuery.isLoading
+      ? []
+      : (soupQuery.data?.entities ?? []);
     const lookup = attachmentByEntityId();
 
     return [...entities]
@@ -124,11 +144,28 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
   });
 
   return (
-    <AttachmentEntityList
-      rows={rows()}
-      hasNextPage={!!attachmentsQuery.hasNextPage}
-      isFetchingNextPage={attachmentsQuery.isFetchingNextPage}
-      onLoadMore={() => attachmentsQuery.fetchNextPage()}
-    />
+    <>
+      <Show when={projectsFlag().enabled && projectAttachments().length > 0}>
+        <AttachmentSection label="Projects">
+          <div class="flex flex-wrap gap-2 p-4">
+            <For each={projectAttachments()}>
+              {(id) => <ProjectAttachment id={id} />}
+            </For>
+          </div>
+          <Show when={rows().length === 0 && attachmentsQuery.hasNextPage}>
+            <LoadMoreButton
+              onLoadMore={() => attachmentsQuery.fetchNextPage()}
+              isFetching={() => attachmentsQuery.isFetchingNextPage}
+            />
+          </Show>
+        </AttachmentSection>
+      </Show>
+      <AttachmentEntityList
+        rows={rows()}
+        hasNextPage={!!attachmentsQuery.hasNextPage}
+        isFetchingNextPage={attachmentsQuery.isFetchingNextPage}
+        onLoadMore={() => attachmentsQuery.fetchNextPage()}
+      />
+    </>
   );
 }

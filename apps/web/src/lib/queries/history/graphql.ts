@@ -65,6 +65,8 @@ function historyItemFromSearchDocument(
   switch (typename) {
     case 'GraphqlSoupDocument': {
       if (record.__typename !== 'GraphqlSoupDocument') return undefined;
+      if (record.subType?.__typename === 'GraphqlInitiativeDescriptionSubType')
+        return undefined;
       const markdown = document.bucket !== 'document';
       const subType =
         document.bucket === 'task' ||

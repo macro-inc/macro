@@ -100,6 +100,24 @@ export type BuildTaskQueryOptions = {
   facetContext?: TaskFacetContext;
   groupBy: TaskGroupBy;
   sort: SortSelection<TaskSortId>[];
+  /** Authorized membership scope; an empty set deliberately matches no tasks. */
+  taskIds?: readonly string[];
+};
+
+const membershipScope = (ids: readonly string[]): TaskAst => {
+  if (!ids.length) return literal('id', NIL_UUID);
+  // A project may contain thousands of tasks. Balance the binary AST to stay
+  // below the JSON parser's recursion limit while keeping every membership ID.
+  let level = ids.map((id) => literal('id', id));
+  while (level.length > 1) {
+    const next: TaskAst[] = [];
+    for (let index = 0; index < level.length; index += 2) {
+      const right = level[index + 1];
+      next.push(right ? { '|': [level[index], right] } : level[index]);
+    }
+    level = next;
+  }
+  return level[0];
 };
 
 /** Builds the concrete Soup AST used only by the production Tasks view. */
@@ -127,9 +145,12 @@ export function buildTaskQuery(
 
   const taskDocuments = documentScope(options.tab, options.userId);
 
-  const documents = compiledFacets.df
+  let documents: TaskAst = compiledFacets.df
     ? { '&': [taskDocuments, compiledFacets.df] }
     : taskDocuments;
+  if (options.taskIds !== undefined) {
+    documents = { '&': [documents, membershipScope(options.taskIds)] };
+  }
 
   const body: SoupAstBody = {
     ...nonTaskTargets,

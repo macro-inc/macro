@@ -1,3 +1,4 @@
+import { SharePermissionOptionsContext } from '@app/features/sharing/components/share-options';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { useIsAuthenticated } from '@core/auth';
@@ -26,6 +27,7 @@ import {
   itemTypeToReferenceEntityType,
 } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { Button, cn, Hotkey } from '@ui';
 import {
@@ -35,6 +37,7 @@ import {
   createSignal,
   onMount,
   Show,
+  useContext,
 } from 'solid-js';
 import { Permissions } from './SharePermissions';
 import { toast } from './Toast/Toast';
@@ -190,6 +193,13 @@ interface ForwardToChannelProps {
   }) => void;
   hideAccessLevelSelector?: boolean;
   initialAccessLevel?: AccessLevel | null;
+  /** Native entity identity, independent of an enclosing block. */
+  entity?: NewAttachment;
+  /** Complete an owner-authorized grant before forwarding into the destination. */
+  prepareChannel?: (
+    channelId: string,
+    accessLevel: AccessLevel | null
+  ) => Promise<void>;
   blockId?: string;
   blockName?: BlockName | BlockAlias;
 }
@@ -197,6 +207,7 @@ interface ForwardToChannelProps {
 export function ForwardToChannel(props: ForwardToChannelProps) {
   const isAuthenticated = useIsAuthenticated();
   const analytics = useAnalytics();
+  const permissionOptions = useContext(SharePermissionOptionsContext);
 
   const [selectedOptions, setSelectedOptions] = createSignal<
     WithCustomUserInput<'user' | 'contact' | 'channel'>[]
@@ -242,9 +253,11 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
   const contextBlockBaseName = useMaybeBlockName();
-  const blockBaseName = props.blockName
-    ? resolveBlockAlias(props.blockName)
-    : contextBlockBaseName;
+  const blockBaseName = props.entity
+    ? undefined
+    : props.blockName
+      ? resolveBlockAlias(props.blockName)
+      : contextBlockBaseName;
   const [submitAccessLevel, setSubmitAccessLevel] =
     createSignal<AccessLevel | null>(
       props.initialAccessLevel ?? (blockBaseName === 'md' ? 'edit' : 'view')
@@ -260,7 +273,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     channelId: string,
     accessLevel: AccessLevel | null
   ) => {
-    if (!props.submitPermissionInfo) {
+    if (!props.submitPermissionInfo && !props.prepareChannel) {
       return true;
     }
 
@@ -270,7 +283,11 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     }
 
     try {
-      const result = await props.submitPermissionInfo.setChannelPermissions(
+      if (props.prepareChannel) {
+        await props.prepareChannel(channelId, accessLevel);
+        return true;
+      }
+      const result = await props.submitPermissionInfo?.setChannelPermissions(
         channelId,
         accessLevel
       );
@@ -298,19 +315,24 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     return true;
   });
 
-  const contextBlockName = useMaybeBlockAliasedName();
-  const contextBlockId = useMaybeBlockId();
+  const contextBlockName = props.entity
+    ? undefined
+    : useMaybeBlockAliasedName();
+  const contextBlockId = props.entity ? undefined : useMaybeBlockId();
   // Explicit identity can differ from the enclosing block (e.g. a newly
   // persisted agent session still mounted in its launcher placeholder).
   const blockName = () => props.blockName ?? contextBlockName;
   const blockId = () => props.blockId ?? contextBlockId;
   const itemType = () => {
+    if (props.entity) return props.entity.entity_type;
     const name = blockName();
     return name != null ? blockNameToItemType(name) : undefined;
   };
 
-  const asAttachment = () => {
-    const type = itemType();
+  const asAttachment = (): NewAttachment => {
+    if (props.entity) return props.entity;
+    const name = blockName();
+    const type = name ? blockNameToItemType(name) : undefined;
     return {
       entity_type: type ? itemTypeToReferenceEntityType(type) : 'unknown',
       entity_id: blockId() ?? '',
@@ -342,10 +364,14 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     target: NonNullable<ReturnType<typeof destination>>,
     accessLevel: AccessLevel | null
   ) {
+    const prepare = props.prepareChannel;
     const message = {
       attachments: [asAttachment()],
       content: markdown(),
       mentions: [],
+      beforeSend: prepare
+        ? (channelId: string) => prepare(channelId, accessLevel)
+        : undefined,
     };
     const deliveryKey = JSON.stringify([
       message,
@@ -368,12 +394,18 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         toast.failure('Message failed to send');
         return;
       }
-      delivery = { result };
+      // Native entities authorize their destination before sending. Remember
+      // that grant along with the delivery so retries cannot send duplicates.
+      delivery = prepare ? { result, accessLevel } : { result };
       deliveries.set(deliveryKey, delivery);
+      if (prepare) {
+        trackForwardShare(target.type === 'channel' ? 'channel' : 'user');
+      }
     }
 
-    // Sending an attachment can automatically grant access. Apply the selected
-    // level afterward so that auto-grant cannot overwrite the user's choice.
+    // Block attachments can automatically grant access when sent, so apply
+    // their selected level afterward. A retried native delivery only needs a
+    // new grant when the selected access level changed.
     if (delivery.accessLevel !== accessLevel) {
       if (
         !(await submitChannelPermissions(
@@ -481,175 +513,185 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   return (
     // Hosts the hotkey scope. `contents` keeps it out of the layout while it
     // still sees the focusin events that activate the scope.
-    <div class="contents" ref={setContainerRef}>
-      <Show
-        when={!isMobile()}
-        fallback={
-          <MobileForwardToChannelLayout
-            editPermissionEnabled={props.editPermissionEnabled}
-            isAuthenticated={isAuthenticated}
-            selectedOptions={selectedOptions}
-            setSelectedOptions={(v) => setSelectedOptions(v)}
-            triedToSubmit={triedToSubmit}
-            destinationOptions={destinationOptions}
-            submitPermissionInfo={props.submitPermissionInfo}
-            hideAccessLevelSelector={props.hideAccessLevelSelector}
-            submitAccessLevel={submitAccessLevel}
-            setSubmitAccessLevel={setSubmitAccessLevel}
-            mdScrollRef={mdScrollRef}
-            setMdScrollRef={setMdScrollRef}
-            markdownEditor={markdownEditor}
-            handleSubmit={handleSubmit}
-            canSendAsGroup={canSendAsGroup}
-            sendAsGroupMessage={sendAsGroupMessage}
-            setSendAsGroupMessage={setSendAsGroupMessage}
-          />
-        }
-      >
-        <Show when={isAuthenticated()}>
-          {/* Row 1: Recipient input + ShareOptions */}
-          <div class="flex items-center bg-surface pr-2">
-            <div class="min-w-0 flex-1 min-h-11">
-              <RecipientSelector<'user' | 'contact' | 'channel'>
-                placeholder="To: Email or group"
-                setSelectedOptions={setSelectedOptions}
-                selectedOptions={selectedOptions()}
-                triedToSubmit={triedToSubmit}
-                options={destinationOptions}
-                triggerMode="input"
-                focusOnMount
-                horizontalScroll
-                hideBorder
-              />
-            </div>
-            <Show
-              when={
-                props.submitPermissionInfo?.userPermissions ===
-                  Permissions.OWNER && !props.hideAccessLevelSelector
-              }
-            >
-              <div class="shrink-0 pr-2 flex items-center gap-2">
-                <Show when={selectedOptions().length > 0}>
-                  <span class="text-sm text-ink-extra-muted">can</span>
-                </Show>
-                <ShareOptions
-                  editPermissionEnabled={props.editPermissionEnabled}
-                  setPermissions={(accessLevel) =>
-                    setSubmitAccessLevel(accessLevel)
-                  }
-                  permissions={submitAccessLevel()}
-                  label="Permission"
-                  hideNoAccess
-                  noBorder
+    <SharePermissionOptionsContext.Provider
+      value={
+        props.entity
+          ? { editEnabled: true, commentEnabled: true }
+          : permissionOptions
+      }
+    >
+      <div class="contents" ref={setContainerRef}>
+        <Show
+          when={!isMobile()}
+          fallback={
+            <MobileForwardToChannelLayout
+              editPermissionEnabled={props.editPermissionEnabled}
+              isAuthenticated={isAuthenticated}
+              selectedOptions={selectedOptions}
+              setSelectedOptions={(v) => setSelectedOptions(v)}
+              triedToSubmit={triedToSubmit}
+              destinationOptions={destinationOptions}
+              submitPermissionInfo={props.submitPermissionInfo}
+              hideAccessLevelSelector={props.hideAccessLevelSelector}
+              submitAccessLevel={submitAccessLevel}
+              setSubmitAccessLevel={setSubmitAccessLevel}
+              mdScrollRef={mdScrollRef}
+              setMdScrollRef={setMdScrollRef}
+              markdownEditor={markdownEditor}
+              handleSubmit={handleSubmit}
+              canSendAsGroup={canSendAsGroup}
+              sendAsGroupMessage={sendAsGroupMessage}
+              setSendAsGroupMessage={setSendAsGroupMessage}
+            />
+          }
+        >
+          <Show when={isAuthenticated()}>
+            {/* Row 1: Recipient input + ShareOptions */}
+            <div class="flex items-center bg-surface pr-2">
+              <div class="min-w-0 flex-1 min-h-11">
+                <RecipientSelector<'user' | 'contact' | 'channel'>
+                  placeholder="To: Email or group"
+                  setSelectedOptions={setSelectedOptions}
+                  selectedOptions={selectedOptions()}
+                  triedToSubmit={triedToSubmit}
+                  options={destinationOptions}
+                  triggerMode="input"
+                  focusOnMount
+                  horizontalScroll
+                  hideBorder
                 />
               </div>
-            </Show>
-          </div>
-
-          {/* Row 2: Optional message */}
-          <div class="grow shrink min-h-0 flex flex-col w-full border-t border-edge-muted">
-            <div class="relative grow shrink min-h-0 flex flex-col">
-              <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
-              <CustomScrollbar scrollContainer={mdScrollRef} />
-              <div
-                class="grow shrink min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-4 py-1.5 w-full text-sm"
-                onClick={() => markdownEditor.controls.focus()}
-                ref={setMdScrollRef}
+              <Show
+                when={
+                  props.submitPermissionInfo?.userPermissions ===
+                    Permissions.OWNER && !props.hideAccessLevelSelector
+                }
               >
-                <MarkdownShell
-                  config={markdownEditor}
-                  placeholder="Optional message"
-                  portalScope="local"
-                  class="text-sm"
-                />
-              </div>
+                <div class="shrink-0 pr-2 flex items-center gap-2">
+                  <Show when={selectedOptions().length > 0}>
+                    <span class="text-sm text-ink-extra-muted">can</span>
+                  </Show>
+                  <ShareOptions
+                    editPermissionEnabled={props.editPermissionEnabled}
+                    setPermissions={(accessLevel) =>
+                      setSubmitAccessLevel(accessLevel)
+                    }
+                    permissions={submitAccessLevel()}
+                    label="Permission"
+                    hideNoAccess
+                    noBorder
+                  />
+                </div>
+              </Show>
             </div>
 
-            {/* Row 3: Send As Group (optional) + Cancel + Send */}
-            <div class="shrink-0 flex w-full items-center px-4 py-4 gap-3 flex-wrap">
-              <Show when={canSendAsGroup()}>
-                <label
-                  class={cn(
-                    'flex items-start gap-2',
-                    !canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-default'
-                  )}
+            {/* Row 2: Optional message */}
+            <div class="grow shrink min-h-0 flex flex-col w-full border-t border-edge-muted">
+              <div class="relative grow shrink min-h-0 flex flex-col">
+                <ScrollIndicators scrollRef={mdScrollRef} noBorderStart />
+                <CustomScrollbar scrollContainer={mdScrollRef} />
+                <div
+                  class="grow shrink min-h-20 max-h-40 overflow-y-auto scrollbar-hidden px-4 py-1.5 w-full text-sm"
+                  onClick={() => markdownEditor.controls.focus()}
+                  ref={setMdScrollRef}
                 >
-                  <div class="relative mt-0.5">
-                    <input
-                      onChange={(e) =>
-                        setSendAsGroupMessage(e.currentTarget.checked)
-                      }
-                      checked={sendAsGroupMessage() && canSendAsGroup()}
-                      disabled={!canSendAsGroup()}
-                      class="peer sr-only"
-                      type="checkbox"
-                    />
-                    <div
-                      class={cn(
-                        'size-4 border',
-                        !canSendAsGroup()
-                          ? 'border-edge peer-checked:bg-surface/20'
-                          : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
-                      )}
-                    >
-                      <Show when={sendAsGroupMessage() && canSendAsGroup()}>
-                        <CheckIcon class="size-full text-accent p-0.5" />
-                      </Show>
-                    </div>
-                  </div>
-                  <div
+                  <MarkdownShell
+                    config={markdownEditor}
+                    placeholder="Optional message"
+                    portalScope="local"
+                    class="text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Send As Group (optional) + Cancel + Send */}
+              <div class="shrink-0 flex w-full items-center px-4 py-4 gap-3 flex-wrap">
+                <Show when={canSendAsGroup()}>
+                  <label
                     class={cn(
-                      'flex flex-col text-sm',
-                      !canSendAsGroup() && 'text-ink-disabled/50'
+                      'flex items-start gap-2',
+                      !canSendAsGroup()
+                        ? 'cursor-not-allowed'
+                        : 'cursor-default'
                     )}
                   >
-                    <span class="font-medium">Send As Group Message</span>
-                    <span
+                    <div class="relative mt-0.5">
+                      <input
+                        onChange={(e) =>
+                          setSendAsGroupMessage(e.currentTarget.checked)
+                        }
+                        checked={sendAsGroupMessage() && canSendAsGroup()}
+                        disabled={!canSendAsGroup()}
+                        class="peer sr-only"
+                        type="checkbox"
+                      />
+                      <div
+                        class={cn(
+                          'size-4 border',
+                          !canSendAsGroup()
+                            ? 'border-edge peer-checked:bg-surface/20'
+                            : 'border-edge hover:border-accent/30 peer-checked:bg-accent/10 peer-checked:border-accent/30'
+                        )}
+                      >
+                        <Show when={sendAsGroupMessage() && canSendAsGroup()}>
+                          <CheckIcon class="size-full text-accent p-0.5" />
+                        </Show>
+                      </div>
+                    </div>
+                    <div
                       class={cn(
-                        'text-xs mt-0.5',
-                        !canSendAsGroup()
-                          ? 'text-ink-disabled/50'
-                          : 'text-ink-muted'
+                        'flex flex-col text-sm',
+                        !canSendAsGroup() && 'text-ink-disabled/50'
                       )}
                     >
-                      {sendAsGroupMessage() && canSendAsGroup()
-                        ? 'Creates a new group message with all recipients'
-                        : 'Send a message to each recipient'}
-                    </span>
-                  </div>
-                </label>
-              </Show>
+                      <span class="font-medium">Send As Group Message</span>
+                      <span
+                        class={cn(
+                          'text-xs mt-0.5',
+                          !canSendAsGroup()
+                            ? 'text-ink-disabled/50'
+                            : 'text-ink-muted'
+                        )}
+                      >
+                        {sendAsGroupMessage() && canSendAsGroup()
+                          ? 'Creates a new group message with all recipients'
+                          : 'Send a message to each recipient'}
+                      </span>
+                    </div>
+                  </label>
+                </Show>
 
-              <div class="flex flex-auto items-center justify-end gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  class="text-ink-extra-muted"
-                  onClick={() => props.onCancel?.()}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant={selectedOptions().length > 0 ? 'accent' : 'ghost'}
-                  depth={3}
-                  class="rounded-lg border-0"
-                  disabled={selectedOptions().length === 0 || isSubmitting()}
-                  onClick={() => {
-                    const options = selectedOptions();
-                    if (options && options.length > 0) {
-                      void handleSubmit();
-                    }
-                  }}
-                >
-                  <PaperPlaneTilt class="size-4" />
-                  Share
-                  <Hotkey shortcut="cmd+enter" theme="current" />
-                </Button>
+                <div class="flex flex-auto items-center justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="text-ink-extra-muted"
+                    onClick={() => props.onCancel?.()}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant={selectedOptions().length > 0 ? 'accent' : 'ghost'}
+                    depth={3}
+                    class="rounded-lg border-0"
+                    disabled={selectedOptions().length === 0 || isSubmitting()}
+                    onClick={() => {
+                      const options = selectedOptions();
+                      if (options && options.length > 0) {
+                        void handleSubmit();
+                      }
+                    }}
+                  >
+                    <PaperPlaneTilt class="size-4" />
+                    Share
+                    <Hotkey shortcut="cmd+enter" theme="current" />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          </Show>
         </Show>
-      </Show>
-    </div>
+      </div>
+    </SharePermissionOptionsContext.Provider>
   );
 }

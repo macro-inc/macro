@@ -28,6 +28,8 @@ export function taskMatchesTab(
       return task.ownerId === userId;
     case 'team-tasks':
       return true;
+    case 'projects':
+      return false;
   }
 }
 

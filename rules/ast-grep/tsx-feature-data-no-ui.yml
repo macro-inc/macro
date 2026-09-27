@@ -13,6 +13,8 @@ note: |-
 files:
   - apps/web/src/features/channel/queries/channel-invite*
   - apps/web/src/features/channel/primitives/create-channel-invites*
+  - apps/web/src/features/projects/queries/**
+  - apps/web/src/features/projects/primitives/**
   - apps/web/src/features/block-agent/queries/**
   - apps/web/src/features/block-agent/primitives/**
   - apps/web/src/features/meetings/queries/**
