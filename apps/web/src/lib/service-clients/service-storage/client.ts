@@ -156,6 +156,7 @@ import type { SetContactNameRequest } from './generated/schemas/setContactNameRe
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
+import type { StoredGithubPullRequest } from './generated/schemas/storedGithubPullRequest';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
 import type { ThreadResponse } from './generated/schemas/threadResponse';
@@ -1659,6 +1660,20 @@ export const storageServiceClient = {
   > {
     return await dssFetch<GithubPullRequestFacets>(
       '/github_pull_requests/facets',
+      { method: 'GET' }
+    );
+  },
+
+  /** The pull request behind a foreign entity record the caller can view. */
+  async getGithubPullRequest({
+    id,
+  }: {
+    id: string;
+  }): Promise<
+    Result<StoredGithubPullRequest, ResultError<FetchWithTokenErrorCode>[]>
+  > {
+    return await dssFetch<StoredGithubPullRequest>(
+      `/github_pull_requests/${id}`,
       { method: 'GET' }
     );
   },
