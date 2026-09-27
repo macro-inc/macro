@@ -16,8 +16,8 @@ use initiative::domain::{
     },
     ports::InitiativeService,
     reads::{
-        InitiativePage, InitiativePageRequest, InitiativePageRow, InitiativeTasksPage,
-        InitiativeTasksRequest, TaskInitiativeReferences, TaskInitiativeReferencesRequest,
+        InitiativePageRow, InitiativeTasksPage, InitiativeTasksRequest, TaskInitiativeReferences,
+        TaskInitiativeReferencesRequest,
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -29,11 +29,6 @@ pub(crate) type ApiFuture<'a, T> =
 
 /// Transport-facing service bundle; implementations mint receipts and delegate policy.
 pub(crate) trait InitiativeApi: Send + Sync {
-    fn page(
-        &self,
-        user: MacroUserIdStr<'static>,
-        input: InitiativePageRequest,
-    ) -> ApiFuture<'_, InitiativePage>;
     fn summary(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativePageRow>;
     fn get(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeDetail>;
     fn tasks(
@@ -120,14 +115,6 @@ struct InitiativeApiAdapter<S, A> {
 }
 
 impl<S: InitiativeService, A: InitiativeAuthorizer> InitiativeApi for InitiativeApiAdapter<S, A> {
-    fn page(
-        &self,
-        user: MacroUserIdStr<'static>,
-        input: InitiativePageRequest,
-    ) -> ApiFuture<'_, InitiativePage> {
-        Box::pin(async move { self.service.page(&user, input).await })
-    }
-
     fn summary(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativePageRow> {
         Box::pin(async move {
             let receipt = self

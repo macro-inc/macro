@@ -101,6 +101,12 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
         email_thread_id: Uuid,
     ) -> impl Future<Output = async_graphql::Result<Option<String>>> + Send;
 
+    /// Additional fields attached only to initiative entities.
+    type InitiativeEdges: ObjectType + Clone + Send + Sync + 'static;
+
+    /// Construct initiative-specific detail fields without loading them.
+    fn initiative_edges(initiative_id: Uuid) -> Self::InitiativeEdges;
+
     /// Additional fields attached only to agent-session entities.
     type AgentSessionEdges: ObjectType + Clone + Send + Sync + 'static;
 
@@ -1015,6 +1021,12 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
     #[graphql(flatten)]
     async fn edges(&self) -> E {
         self.1.clone()
+    }
+
+    /// Initiative-specific details supplied by the composition crate.
+    #[graphql(flatten)]
+    async fn initiative_edges(&self) -> E::InitiativeEdges {
+        E::initiative_edges(self.0.id)
     }
 
     /// The viewer's frecency score for this entity, when loaded.

@@ -1,83 +1,15 @@
 //! Typed input objects and lossless transport-to-domain conversion.
 
 use async_graphql::{Enum, ID, InputObject, MaybeUndefined};
-use chrono::{DateTime, Utc};
-use graphql_common::parse_id;
 use graphql_permission::GraphqlEntityAccessLevel;
 use initiative::domain::{
     models::{CreateInitiativeRequest, UpdateInitiativeRequest},
-    reads::{InitiativePageRequest, InitiativeSort, InitiativeTasksRequest},
+    reads::InitiativeTasksRequest,
 };
 use models_permissions::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
 };
-
-/// Order for the viewer's initiative collection.
-#[derive(Clone, Copy, Default, Enum, Eq, PartialEq)]
-#[graphql(name = "InitiativeSort")]
-pub enum GraphqlInitiativeSort {
-    /// Most recently updated first by default.
-    #[default]
-    Updated,
-    /// Display name, case insensitive.
-    Name,
-    /// Due date, with unset values last.
-    Due,
-}
-
-/// Filters and cursor for a project collection page.
-#[derive(Default, InputObject)]
-pub struct InitiativePageInput {
-    /// Page size, one through one hundred.
-    pub limit: Option<u16>,
-    /// Opaque continuation from the previous page.
-    pub cursor: Option<String>,
-    /// Case-insensitive name search.
-    pub query: Option<String>,
-    /// Status option identifier.
-    pub status: Option<ID>,
-    /// Priority option identifier.
-    pub priority: Option<ID>,
-    /// Assigned user identifier.
-    pub assignee: Option<String>,
-    /// Inclusive earliest due date.
-    pub due_after: Option<DateTime<Utc>>,
-    /// Inclusive latest due date.
-    pub due_before: Option<DateTime<Utc>>,
-    /// Ordering, defaulting to updated time.
-    #[graphql(default)]
-    pub sort: GraphqlInitiativeSort,
-    /// Reverse the chosen order.
-    pub descending: Option<bool>,
-}
-
-impl InitiativePageInput {
-    pub(crate) fn into_model(self) -> async_graphql::Result<InitiativePageRequest> {
-        Ok(InitiativePageRequest {
-            limit: self.limit,
-            cursor: self.cursor,
-            query: self.query,
-            status: self
-                .status
-                .map(|value| parse_id(value, "status"))
-                .transpose()?,
-            priority: self
-                .priority
-                .map(|value| parse_id(value, "priority"))
-                .transpose()?,
-            assignee: self.assignee,
-            due_after: self.due_after,
-            due_before: self.due_before,
-            sort: match self.sort {
-                GraphqlInitiativeSort::Updated => InitiativeSort::Updated,
-                GraphqlInitiativeSort::Name => InitiativeSort::Name,
-                GraphqlInitiativeSort::Due => InitiativeSort::Due,
-            },
-            descending: self.descending,
-        })
-    }
-}
 
 /// Cursor pagination for visible initiative tasks.
 #[derive(Default, InputObject)]

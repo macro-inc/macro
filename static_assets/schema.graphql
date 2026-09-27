@@ -157,11 +157,11 @@ type CompleteMutationRoot {
 	"""
 	Create an initiative owned by the authenticated user.
 	"""
-	createInitiative(input: CreateInitiativeInput!): GraphqlInitiative!
+	createInitiative(input: CreateInitiativeInput!): GraphqlSoupInitiative!
 	"""
 	Update project fields; owner-only sharing and membership policy remains in the domain.
 	"""
-	updateInitiative(initiativeId: ID!, input: UpdateInitiativeInput!): GraphqlInitiative!
+	updateInitiative(initiativeId: ID!, input: UpdateInitiativeInput!): GraphqlSoupInitiative!
 	"""
 	Delete an initiative after its owner capability has been verified.
 	"""
@@ -220,13 +220,6 @@ input CreateInitiativeInput {
 	"""
 	shareWithTeam: Boolean
 }
-
-"""
-Implement the DateTime<Utc> scalar
-
-The input/output is a string in RFC3339 format.
-"""
-scalar DateTime
 
 """
 Input for deleting an email draft.
@@ -3142,68 +3135,6 @@ type GraphqlInboxReauthRequiredMetadata {
 }
 
 """
-A project entity shared by list, detail, relationship, and mutation reads.
-"""
-type GraphqlInitiative {
-	"""
-	Stable global initiative identifier.
-	"""
-	id: ID!
-	"""
-	Display name.
-	"""
-	name: String!
-	"""
-	Backing Markdown document identifier.
-	"""
-	descriptionDocumentId: ID!
-	"""
-	Last initiative update.
-	"""
-	updatedAt: DateTime!
-	"""
-	Effective access held by this request's viewer.
-	"""
-	userAccessLevel: GraphqlEntityAccessLevel!
-	"""
-	Owner of the initiative.
-	"""
-	ownerId: String!
-	"""
-	Collaborators, independent of assignees.
-	"""
-	memberIds: [String!]!
-	"""
-	Associated task identifiers visible to this viewer.
-	"""
-	taskIds: [ID!]!
-	"""
-	Creation time.
-	"""
-	createdAt: DateTime!
-	"""
-	Current sharing state.
-	"""
-	sharePermission: InitiativeSharePermission!
-	"""
-	Canonical typed property assignments, batched by the shared request loader.
-	"""
-	properties: [GraphqlProperty!]!
-	"""
-	Canonical system property snapshot used by collection filtering and progress.
-	"""
-	propertySnapshot: InitiativePropertySnapshot!
-	"""
-	Associated tasks this viewer can see.
-	"""
-	taskCount: Int!
-	"""
-	Completed associated tasks this viewer can see.
-	"""
-	completedTaskCount: Int!
-}
-
-"""
 The two operands of a recursive `InitiativeFilterExpr` binary expression.
 """
 input GraphqlInitiativeBinaryExpr {
@@ -6071,6 +6002,26 @@ type GraphqlSoupInitiative implements GraphqlSoupEntity {
 	"""
 	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
+	Collaborators, independent of assignees.
+	"""
+	memberIds: [String!]!
+	"""
+	Associated task identifiers visible to this viewer.
+	"""
+	taskIds: [ID!]!
+	"""
+	Current sharing state.
+	"""
+	sharePermission: InitiativeSharePermission!
+	"""
+	Number of associated tasks this viewer can see.
+	"""
+	taskCount: Int!
+	"""
+	Number of completed associated tasks this viewer can see.
+	"""
+	completedTaskCount: Int!
+	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
@@ -6394,11 +6345,7 @@ type GraphqlUser {
 	"""
 	One initiative accessible to the authenticated viewer.
 	"""
-	initiative(initiativeId: ID!): GraphqlInitiative!
-	"""
-	Filtered and paginated initiatives visible to the authenticated viewer.
-	"""
-	initiatives(input: InitiativePageInput): InitiativePage!
+	initiative(initiativeId: ID!): GraphqlSoupInitiative!
 	"""
 	A permission-filtered page of task identifiers within an initiative.
 	"""
@@ -6581,92 +6528,6 @@ enum InitiativeLinkShare {
 }
 
 """
-A collection page; membership and cursor belong to this request, not a cache entity.
-"""
-type InitiativePage {
-	"""
-	Initiatives in the requested order.
-	"""
-	initiatives: [GraphqlInitiative!]!
-	"""
-	Continuation when another page exists.
-	"""
-	nextCursor: String
-}
-
-"""
-Filters and cursor for a project collection page.
-"""
-input InitiativePageInput {
-	"""
-	Page size, one through one hundred.
-	"""
-	limit: Int
-	"""
-	Opaque continuation from the previous page.
-	"""
-	cursor: String
-	"""
-	Case-insensitive name search.
-	"""
-	query: String
-	"""
-	Status option identifier.
-	"""
-	status: ID
-	"""
-	Priority option identifier.
-	"""
-	priority: ID
-	"""
-	Assigned user identifier.
-	"""
-	assignee: String
-	"""
-	Inclusive earliest due date.
-	"""
-	dueAfter: DateTime
-	"""
-	Inclusive latest due date.
-	"""
-	dueBefore: DateTime
-	"""
-	Ordering, defaulting to updated time.
-	"""
-	sort: InitiativeSort! = UPDATED
-	"""
-	Reverse the chosen order.
-	"""
-	descending: Boolean
-}
-
-"""
-Snapshot of canonical system property values.
-"""
-type InitiativePropertySnapshot {
-	"""
-	Selected status option identifier.
-	"""
-	status: ID
-	"""
-	Selected priority option identifier.
-	"""
-	priority: ID
-	"""
-	Assigned user identifiers.
-	"""
-	assignees: [String!]!
-	"""
-	Optional due timestamp.
-	"""
-	dueDate: DateTime
-	"""
-	Whether the canonical status represents completion.
-	"""
-	completed: Boolean!
-}
-
-"""
 Typed sharing state for an initiative.
 """
 type InitiativeSharePermission {
@@ -6716,24 +6577,6 @@ input InitiativeSharePermissionInput {
 	Changes to channel grants.
 	"""
 	channelSharePermissions: [InitiativeChannelShareInput!]
-}
-
-"""
-Order for the viewer's initiative collection.
-"""
-enum InitiativeSort {
-	"""
-	Most recently updated first by default.
-	"""
-	UPDATED
-	"""
-	Display name, case insensitive.
-	"""
-	NAME
-	"""
-	Due date, with unset values last.
-	"""
-	DUE
 }
 
 """
@@ -7232,7 +7075,7 @@ type TaskInitiativeReference {
 	"""
 	The same initiative entity used by collection/detail queries.
 	"""
-	initiative: GraphqlInitiative
+	initiative: GraphqlSoupInitiative
 }
 
 """
@@ -7361,10 +7204,6 @@ directive @oneOf on INPUT_OBJECT
 Directs the executor to skip this field or fragment when the `if` argument is true.
 """
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
-"""
-Provides a scalar specification URL for specifying the behavior of custom scalar types.
-"""
-directive @specifiedBy(url: String!) on SCALAR
 schema {
 	query: SoupQueryRoot
 	mutation: CompleteMutationRoot

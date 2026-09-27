@@ -399,40 +399,71 @@ fn property_values_are_a_typed_union_without_soup_names() {
 }
 
 #[test]
-fn initiative_reads_are_viewer_scoped_and_share_one_normalized_entity() {
+fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
     let sdl = crate::build_schema().sdl();
     let object = |name: &str| {
-        sdl.split_once(&format!("type {name} {{"))
+        let declaration = format!("type {name}");
+        sdl.split_once(&declaration)
             .expect("GraphQL object exists")
             .1
-            .split_once('\n')
+            .split_once('{')
             .unwrap()
             .1
             .split_once("\n}")
             .unwrap()
             .0
     };
-    let viewer = object("GraphqlUser");
-    assert_sdl_line(viewer, "initiative(initiativeId: ID!): GraphqlInitiative!");
     assert_sdl_line(
-        viewer,
-        "initiatives(input: InitiativePageInput): InitiativePage!",
+        object("GraphqlUser"),
+        "initiative(initiativeId: ID!): GraphqlSoupInitiative!",
     );
     assert!(!object("SoupQueryRoot").contains("initiative"));
-    assert_sdl_line(object("GraphqlInitiative"), "id: ID!");
-    assert_sdl_line(
-        object("GraphqlInitiative"),
+    for field in [
+        "id: ID!",
         "properties: [GraphqlProperty!]!",
-    );
-    assert_sdl_line(
-        object("InitiativePage"),
-        "initiatives: [GraphqlInitiative!]!",
-    );
+        "memberIds: [String!]!",
+        "taskIds: [ID!]!",
+        "sharePermission: InitiativeSharePermission!",
+        "taskCount: Int!",
+        "completedTaskCount: Int!",
+    ] {
+        assert_sdl_line(object("GraphqlSoupInitiative"), field);
+    }
     assert_sdl_line(
         object("TaskInitiativeReference"),
-        "initiative: GraphqlInitiative",
+        "initiative: GraphqlSoupInitiative",
     );
-    assert!(!sdl.contains("GraphqlInitiativePageRow"));
+    assert_sdl_line(
+        &sdl,
+        "createInitiative(input: CreateInitiativeInput!): GraphqlSoupInitiative!",
+    );
+    assert_sdl_line(
+        &sdl,
+        "updateInitiative(initiativeId: ID!, input: UpdateInitiativeInput!): GraphqlSoupInitiative!",
+    );
+    for obsolete in [
+        "type GraphqlInitiative {",
+        "type InitiativePage {",
+        "input InitiativePageInput {",
+        "enum InitiativeSort {",
+        "type InitiativePropertySnapshot {",
+        "initiatives(input:",
+    ] {
+        assert!(!sdl.contains(obsolete), "obsolete API remains: {obsolete}");
+    }
+    for duplicate in [
+        "name:",
+        "ownerId:",
+        "createdAt:",
+        "updatedAt:",
+        "userAccessLevel:",
+        "propertySnapshot:",
+    ] {
+        assert!(
+            !object("GraphqlSoupInitiative").contains(duplicate),
+            "duplicate initiative field remains: {duplicate}"
+        );
+    }
 }
 
 /// The exported SDL is a frontend contract: `schema.graphql` feeds the client

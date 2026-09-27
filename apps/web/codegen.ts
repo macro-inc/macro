@@ -23,7 +23,6 @@ const config: CodegenConfig = {
         enumsAsTypes: true,
         preResolveTypes: false,
         scalars: {
-          DateTime: 'string',
           JSON: 'unknown',
           SoupCacheProjection: 'string',
         },

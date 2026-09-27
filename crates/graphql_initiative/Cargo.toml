@@ -5,9 +5,9 @@ edition = "2024"
 publish = false
 
 [dependencies]
-async-graphql = { workspace = true, features = ["chrono"] }
-chrono = { workspace = true }
+async-graphql = { workspace = true, features = ["dataloader"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+futures = { workspace = true }
 graphql_common = { path = "../graphql_common" }
 graphql_permission = { path = "../graphql_permission" }
 graphql_soup = { path = "../graphql_soup" }
@@ -21,5 +21,12 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+soup = { path = "../soup", default-features = false, features = ["ports"] }
+models_soup = { path = "../models_soup" }
+models_pagination = { path = "../models_pagination" }
+models_properties = { path = "../models_properties" }
+model_owner = { path = "../model_owner" }
+serde = { workspace = true }
+chrono = { workspace = true }
 rootcause = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }

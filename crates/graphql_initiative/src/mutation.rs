@@ -4,13 +4,19 @@ use std::marker::PhantomData;
 
 use async_graphql::{Context, ID, Object};
 use graphql_common::{parse_id, require_authenticated_user};
-use graphql_soup::SoupEntityEdges;
+use graphql_soup::{GraphqlSoupInitiative, SoupEntityEdges, SoupItemDataLoader};
 
 use crate::{
-    GraphqlInitiative, InitiativeGraphqlContext, graphql_error,
+    InitiativeGraphqlContext, graphql_error,
     inputs::{CreateInitiativeInput, UpdateInitiativeInput},
     objects::GraphqlInitiativeTaskAssignment,
+    query::load_from_soup,
 };
+
+/// Primary-backed canonical Soup reader for initiative detail, references, and mutation replies.
+/// List queries and subscriptions retain their replica-backed Soup reader.
+#[derive(Clone)]
+pub struct InitiativeEntityLoader(pub SoupItemDataLoader);
 
 /// Root initiative mutations composed into the complete schema.
 pub struct InitiativeMutationRoot<E: SoupEntityEdges>(PhantomData<E>);
@@ -29,15 +35,21 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
         &self,
         ctx: &Context<'_>,
         input: CreateInitiativeInput,
-    ) -> async_graphql::Result<GraphqlInitiative<E>> {
+    ) -> async_graphql::Result<GraphqlSoupInitiative<E>> {
         let user = require_authenticated_user(ctx)?;
         let detail = ctx
             .data::<InitiativeGraphqlContext>()?
             .0
-            .create(user, input.into())
+            .create(user.clone(), input.into())
             .await
             .map_err(graphql_error)?;
-        Ok(GraphqlInitiative::from_detail(detail))
+        load_from_soup(
+            &ctx.data::<InitiativeEntityLoader>()?.0,
+            user,
+            detail.id.as_uuid(),
+        )
+        .await?
+        .ok_or_else(|| graphql_error(initiative::domain::models::InitiativeError::NotFound))
     }
 
     /// Update project fields; owner-only sharing and membership policy remains in the domain.
@@ -46,16 +58,22 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
         ctx: &Context<'_>,
         initiative_id: ID,
         input: UpdateInitiativeInput,
-    ) -> async_graphql::Result<GraphqlInitiative<E>> {
+    ) -> async_graphql::Result<GraphqlSoupInitiative<E>> {
         let user = require_authenticated_user(ctx)?;
         let id = parse_id(initiative_id, "initiativeId")?;
         let detail = ctx
             .data::<InitiativeGraphqlContext>()?
             .0
-            .update(user, id, input.into())
+            .update(user.clone(), id, input.into())
             .await
             .map_err(graphql_error)?;
-        Ok(GraphqlInitiative::from_detail(detail))
+        load_from_soup(
+            &ctx.data::<InitiativeEntityLoader>()?.0,
+            user,
+            detail.id.as_uuid(),
+        )
+        .await?
+        .ok_or_else(|| graphql_error(initiative::domain::models::InitiativeError::NotFound))
     }
 
     /// Delete an initiative after its owner capability has been verified.

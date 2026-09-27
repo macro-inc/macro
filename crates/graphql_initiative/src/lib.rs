@@ -3,6 +3,7 @@
 
 mod context;
 mod inputs;
+mod loaders;
 mod mutation;
 mod objects;
 mod query;
@@ -11,16 +12,16 @@ mod query;
 mod test;
 
 pub use context::{InitiativeAuthorizer, InitiativeGraphqlContext};
-pub use inputs::{InitiativePageInput, InitiativeTasksInput};
-pub use mutation::InitiativeMutationRoot;
+pub use inputs::InitiativeTasksInput;
+pub use loaders::{
+    InitiativeDetailLoader, InitiativeSummaryLoader, initiative_detail_loader,
+    initiative_summary_loader, load_initiative_detail, load_initiative_summary,
+};
+pub use mutation::{InitiativeEntityLoader, InitiativeMutationRoot};
 pub use objects::{
-    GraphqlInitiative, GraphqlInitiativePage, GraphqlInitiativeTasksPage,
-    GraphqlTaskInitiativeReference,
+    GraphqlInitiativeSharePermission, GraphqlInitiativeTasksPage, GraphqlTaskInitiativeReference,
 };
-pub use query::{
-    resolve_initiative, resolve_initiative_tasks, resolve_initiatives,
-    resolve_task_initiative_references,
-};
+pub use query::{resolve_initiative, resolve_initiative_tasks, resolve_task_initiative_references};
 
 use async_graphql::ErrorExtensions;
 use initiative::domain::models::InitiativeError;

@@ -1,45 +1,57 @@
 //! Viewer-scoped initiative query resolvers.
 
 use async_graphql::{Context, ID};
-use graphql_common::parse_id;
-use graphql_soup::SoupEntityEdges;
+use graphql_common::{parse_id, require_authenticated_user};
+use graphql_soup::{GraphqlSoupEntity, GraphqlSoupInitiative, SoupEntityEdges, SoupItemDataLoader};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType;
+use uuid::Uuid;
 
 use crate::{
-    GraphqlInitiative, GraphqlInitiativePage, GraphqlInitiativeTasksPage,
-    GraphqlTaskInitiativeReference, InitiativeGraphqlContext, InitiativePageInput,
-    InitiativeTasksInput, graphql_error,
+    GraphqlInitiativeTasksPage, GraphqlTaskInitiativeReference, InitiativeEntityLoader,
+    InitiativeGraphqlContext, InitiativeTasksInput, graphql_error,
 };
 
-/// Resolve a project visible to the authenticated viewer.
-pub async fn resolve_initiative<E: SoupEntityEdges>(
+/// Hydrate the canonical Soup object from the primary for read-after-write consistency.
+pub(crate) async fn load_initiative<E: SoupEntityEdges>(
     ctx: &Context<'_>,
-    user: MacroUserIdStr<'static>,
-    initiative_id: ID,
-) -> async_graphql::Result<GraphqlInitiative<E>> {
-    let id = parse_id(initiative_id, "initiativeId")?;
-    let detail = ctx
-        .data::<InitiativeGraphqlContext>()?
-        .0
-        .get(user, id)
-        .await
-        .map_err(graphql_error)?;
-    Ok(GraphqlInitiative::from_detail(detail))
+    id: Uuid,
+) -> async_graphql::Result<Option<GraphqlSoupInitiative<E>>> {
+    load_from_soup(
+        &ctx.data::<InitiativeEntityLoader>()?.0,
+        require_authenticated_user(ctx)?,
+        id,
+    )
+    .await
 }
 
-/// Resolve the viewer's filtered, paginated initiative collection.
-pub async fn resolve_initiatives<E: SoupEntityEdges>(
-    ctx: &Context<'_>,
+/// Resolve a canonical initiative from a permission-filtered Soup reader.
+pub(crate) async fn load_from_soup<E: SoupEntityEdges>(
+    loader: &SoupItemDataLoader,
     user: MacroUserIdStr<'static>,
-    input: InitiativePageInput,
-) -> async_graphql::Result<GraphqlInitiativePage<E>> {
-    let page = ctx
-        .data::<InitiativeGraphqlContext>()?
-        .0
-        .page(user, input.into_model()?)
-        .await
-        .map_err(graphql_error)?;
-    Ok(page.into())
+    id: Uuid,
+) -> async_graphql::Result<Option<GraphqlSoupInitiative<E>>> {
+    let entity = EntityType::Initiative.with_entity_string(id.to_string());
+    let Some(item) = loader.load_one((user, entity)).await? else {
+        return Ok(None);
+    };
+    match GraphqlSoupEntity::<E>::new_with_projection(item) {
+        GraphqlSoupEntity::Initiative(initiative) => Ok(Some(initiative)),
+        _ => Err(async_graphql::Error::new(
+            "Soup returned a non-initiative entity for an initiative request",
+        )),
+    }
+}
+
+/// Resolve a project visible to the authenticated viewer without loading its details.
+pub async fn resolve_initiative<E: SoupEntityEdges>(
+    ctx: &Context<'_>,
+    initiative_id: ID,
+) -> async_graphql::Result<GraphqlSoupInitiative<E>> {
+    let id = parse_id(initiative_id, "initiativeId")?;
+    load_initiative(ctx, id)
+        .await?
+        .ok_or_else(|| graphql_error(initiative::domain::models::InitiativeError::NotFound))
 }
 
 /// Resolve visible tasks from an authorized initiative.

@@ -31,9 +31,8 @@ use graphql_favorite::{
     GraphqlFavorite, NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,
 };
 use graphql_initiative::{
-    GraphqlInitiative, GraphqlInitiativePage, GraphqlInitiativeTasksPage,
-    GraphqlTaskInitiativeReference, InitiativeMutationRoot, InitiativePageInput,
-    InitiativeTasksInput, resolve_initiative, resolve_initiative_tasks, resolve_initiatives,
+    GraphqlInitiativeTasksPage, GraphqlTaskInitiativeReference, InitiativeMutationRoot,
+    InitiativeTasksInput, resolve_initiative, resolve_initiative_tasks,
     resolve_task_initiative_references,
 };
 use graphql_notification::{
@@ -48,9 +47,9 @@ use graphql_properties::{
     load_property_options,
 };
 use graphql_soup::{
-    GraphqlSoupEmailThread, GroupedSoup, GroupedSoupInput, SoupEmailThreadMutationOutput,
-    SoupEntityEdges, SoupInput, SoupPage, SoupPatch, resolve_grouped_soup, resolve_soup,
-    resolve_soup_email_thread, resolve_soup_updates,
+    GraphqlSoupEmailThread, GraphqlSoupInitiative, GroupedSoup, GroupedSoupInput,
+    SoupEmailThreadMutationOutput, SoupEntityEdges, SoupInput, SoupPage, SoupPatch,
+    resolve_grouped_soup, resolve_soup, resolve_soup_email_thread, resolve_soup_updates,
 };
 use macro_authorization::{
     InternalAuthConfig, MacroAuthorizationService, MacroAuthorizationServiceImpl,
@@ -637,17 +636,8 @@ where
         &self,
         ctx: &Context<'_>,
         initiative_id: ID,
-    ) -> async_graphql::Result<GraphqlInitiative<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
-        resolve_initiative(ctx, self.user_id.clone(), initiative_id).await
-    }
-
-    /// Filtered and paginated initiatives visible to the authenticated viewer.
-    async fn initiatives(
-        &self,
-        ctx: &Context<'_>,
-        input: Option<InitiativePageInput>,
-    ) -> async_graphql::Result<GraphqlInitiativePage<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
-        resolve_initiatives(ctx, self.user_id.clone(), input.unwrap_or_default()).await
+    ) -> async_graphql::Result<GraphqlSoupInitiative<SoupEdges<NR, PR, ER, FR, AR, AcR>>> {
+        resolve_initiative(ctx, initiative_id).await
     }
 
     /// A permission-filtered page of task identifiers within an initiative.

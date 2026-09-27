@@ -282,7 +282,7 @@ pub struct SoupItemDataLoader {
 
 impl SoupItemDataLoader {
     /// Construct a type-erased DataLoader from a concrete loader implementation.
-    fn new<S, I>(loader: SoupItemLoader<S, I>) -> Self
+    pub fn new<S, I>(loader: SoupItemLoader<S, I>) -> Self
     where
         S: SoupService,
         I: SoupInboxReader,

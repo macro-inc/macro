@@ -1326,7 +1326,6 @@ dependencies = [
  "asynk-strim",
  "base64 0.22.1",
  "bytes",
- "chrono",
  "fast_chemail",
  "fnv",
  "futures-channel",
@@ -3157,7 +3156,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.20"
+version = "0.6.24"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -7747,14 +7746,21 @@ dependencies = [
  "async-graphql",
  "chrono",
  "entity_access",
+ "futures",
  "graphql_common",
  "graphql_permission",
  "graphql_soup",
  "initiative",
  "macro_user_id",
  "model-entity",
+ "model_owner",
+ "models_pagination",
  "models_permissions",
+ "models_properties",
+ "models_soup",
  "rootcause",
+ "serde",
+ "soup",
  "tokio",
  "tracing",
  "uuid",
@@ -19591,7 +19597,6 @@ dependencies = [
  "ahash",
  "aho-corasick",
  "anyhow",
- "async-graphql",
  "async-openai",
  "aws-config",
  "aws-credential-types",

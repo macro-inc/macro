@@ -1,255 +1,17 @@
-//! Normalized initiative entities and embedded value objects.
+//! Initiative sharing values and task relationships.
+
+use std::marker::PhantomData;
 
 use async_graphql::{Context, Enum, ID, Object, SimpleObject};
-use chrono::{DateTime, Utc};
-use graphql_common::require_authenticated_user;
 use graphql_permission::GraphqlEntityAccessLevel;
-use graphql_soup::SoupEntityEdges;
+use graphql_soup::{GraphqlSoupInitiative, SoupEntityEdges};
 use initiative::domain::{
-    models::{
-        AssignTaskStatus, AssignTasksResult, InitiativeDetail, InitiativeId, InitiativeSummary,
-    },
-    reads::{
-        InitiativePage, InitiativePageRow, InitiativePropertySnapshot, InitiativeReference,
-        InitiativeTasksPage, TaskInitiativeReference,
-    },
+    models::{AssignTaskStatus, AssignTasksResult, InitiativeId},
+    reads::{InitiativeTasksPage, TaskInitiativeReference},
 };
 use models_permissions::share_permission::SharePermissionV2;
-use tokio::sync::OnceCell;
 
-use crate::{InitiativeGraphqlContext, graphql_error, inputs::GraphqlInitiativeLinkShare};
-
-/// One globally identified initiative, shared across collection/detail/mutation results.
-pub struct GraphqlInitiative<E: SoupEntityEdges> {
-    id: InitiativeId,
-    name: String,
-    identity: Option<InitiativeSummary>,
-    access: Option<GraphqlEntityAccessLevel>,
-    detail: OnceCell<InitiativeDetail>,
-    summary: OnceCell<InitiativePageRow>,
-    edges: E,
-}
-
-impl<E: SoupEntityEdges> GraphqlInitiative<E> {
-    pub(crate) fn from_detail(detail: InitiativeDetail) -> Self {
-        let identity = InitiativeSummary {
-            id: detail.id,
-            name: detail.name.clone(),
-            description_document_id: detail.description_document_id,
-            updated_at: detail.updated_at,
-        };
-        Self {
-            id: detail.id,
-            name: detail.name.clone(),
-            edges: E::from_entity(
-                model_entity::EntityType::Initiative.with_entity_string(detail.id.to_string()),
-            ),
-            access: Some(GraphqlEntityAccessLevel::new(detail.user_access_level)),
-            identity: Some(identity),
-            detail: OnceCell::new_with(Some(detail)),
-            summary: OnceCell::new(),
-        }
-    }
-
-    fn from_row(row: InitiativePageRow) -> Self {
-        Self {
-            id: row.initiative.id,
-            name: row.initiative.name.clone(),
-            identity: Some(row.initiative.clone()),
-            access: Some(GraphqlEntityAccessLevel::new(row.user_access_level)),
-            edges: E::from_entity(
-                model_entity::EntityType::Initiative
-                    .with_entity_string(row.initiative.id.to_string()),
-            ),
-            detail: OnceCell::new(),
-            summary: OnceCell::new_with(Some(row)),
-        }
-    }
-
-    fn from_reference(reference: InitiativeReference) -> Self {
-        Self {
-            id: reference.id,
-            name: reference.name,
-            identity: None,
-            access: None,
-            detail: OnceCell::new(),
-            summary: OnceCell::new(),
-            edges: E::from_entity(
-                model_entity::EntityType::Initiative.with_entity_string(reference.id.to_string()),
-            ),
-        }
-    }
-
-    async fn load_detail(&self, ctx: &Context<'_>) -> async_graphql::Result<&InitiativeDetail> {
-        self.detail
-            .get_or_try_init(|| async {
-                let user = require_authenticated_user(ctx)?;
-                ctx.data::<InitiativeGraphqlContext>()?
-                    .0
-                    .get(user, self.id.as_uuid())
-                    .await
-                    .map_err(graphql_error)
-            })
-            .await
-    }
-
-    async fn load_summary(&self, ctx: &Context<'_>) -> async_graphql::Result<&InitiativePageRow> {
-        self.summary
-            .get_or_try_init(|| async {
-                let user = require_authenticated_user(ctx)?;
-                ctx.data::<InitiativeGraphqlContext>()?
-                    .0
-                    .summary(user, self.id.as_uuid())
-                    .await
-                    .map_err(graphql_error)
-            })
-            .await
-    }
-}
-
-/// A project entity shared by list, detail, relationship, and mutation reads.
-#[Object(name = "GraphqlInitiative")]
-impl<E: SoupEntityEdges> GraphqlInitiative<E> {
-    /// Stable global initiative identifier.
-    async fn id(&self) -> ID {
-        ID(self.id.to_string())
-    }
-    /// Display name.
-    async fn name(&self) -> &str {
-        &self.name
-    }
-    /// Backing Markdown document identifier.
-    async fn description_document_id(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
-        let id = match &self.identity {
-            Some(identity) => identity.description_document_id,
-            None => self.load_detail(ctx).await?.description_document_id,
-        };
-        Ok(ID(id.to_string()))
-    }
-    /// Last initiative update.
-    async fn updated_at(&self, ctx: &Context<'_>) -> async_graphql::Result<DateTime<Utc>> {
-        Ok(match &self.identity {
-            Some(identity) => identity.updated_at,
-            None => self.load_detail(ctx).await?.updated_at,
-        })
-    }
-    /// Effective access held by this request's viewer.
-    async fn user_access_level(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<GraphqlEntityAccessLevel> {
-        Ok(match self.access {
-            Some(access) => access,
-            None => GraphqlEntityAccessLevel::new(self.load_detail(ctx).await?.user_access_level),
-        })
-    }
-    /// Owner of the initiative.
-    async fn owner_id(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
-        Ok(self.load_detail(ctx).await?.owner_id.to_string())
-    }
-    /// Collaborators, independent of assignees.
-    async fn member_ids(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<String>> {
-        Ok(self
-            .load_detail(ctx)
-            .await?
-            .member_ids
-            .iter()
-            .map(ToString::to_string)
-            .collect())
-    }
-    /// Associated task identifiers visible to this viewer.
-    async fn task_ids(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ID>> {
-        Ok(self
-            .load_detail(ctx)
-            .await?
-            .task_ids
-            .iter()
-            .cloned()
-            .map(ID)
-            .collect())
-    }
-    /// Creation time.
-    async fn created_at(&self, ctx: &Context<'_>) -> async_graphql::Result<DateTime<Utc>> {
-        Ok(self.load_detail(ctx).await?.created_at)
-    }
-    /// Current sharing state.
-    async fn share_permission(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<GraphqlInitiativeSharePermission> {
-        Ok(self.load_detail(ctx).await?.share_permission.clone().into())
-    }
-    /// Canonical typed property assignments, batched by the shared request loader.
-    async fn properties(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<E::Property>> {
-        self.edges.resolve_properties(ctx).await
-    }
-    /// Canonical system property snapshot used by collection filtering and progress.
-    async fn property_snapshot(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<GraphqlInitiativePropertySnapshot> {
-        Ok(self.load_summary(ctx).await?.properties.clone().into())
-    }
-    /// Associated tasks this viewer can see.
-    async fn task_count(&self, ctx: &Context<'_>) -> async_graphql::Result<u32> {
-        Ok(self.load_summary(ctx).await?.task_count)
-    }
-    /// Completed associated tasks this viewer can see.
-    async fn completed_task_count(&self, ctx: &Context<'_>) -> async_graphql::Result<u32> {
-        Ok(self.load_summary(ctx).await?.completed_task_count)
-    }
-}
-
-/// A collection page; membership and cursor belong to this request, not a cache entity.
-#[derive(SimpleObject)]
-#[graphql(name = "InitiativePage")]
-pub struct GraphqlInitiativePage<E: SoupEntityEdges> {
-    /// Initiatives in the requested order.
-    pub initiatives: Vec<GraphqlInitiative<E>>,
-    /// Continuation when another page exists.
-    pub next_cursor: Option<String>,
-}
-
-impl<E: SoupEntityEdges> From<InitiativePage> for GraphqlInitiativePage<E> {
-    fn from(value: InitiativePage) -> Self {
-        Self {
-            initiatives: value
-                .initiatives
-                .into_iter()
-                .map(GraphqlInitiative::from_row)
-                .collect(),
-            next_cursor: value.next_cursor,
-        }
-    }
-}
-
-/// Snapshot of canonical system property values.
-#[derive(SimpleObject)]
-#[graphql(name = "InitiativePropertySnapshot")]
-pub struct GraphqlInitiativePropertySnapshot {
-    /// Selected status option identifier.
-    status: Option<ID>,
-    /// Selected priority option identifier.
-    priority: Option<ID>,
-    /// Assigned user identifiers.
-    assignees: Vec<String>,
-    /// Optional due timestamp.
-    due_date: Option<DateTime<Utc>>,
-    /// Whether the canonical status represents completion.
-    completed: bool,
-}
-
-impl From<InitiativePropertySnapshot> for GraphqlInitiativePropertySnapshot {
-    fn from(value: InitiativePropertySnapshot) -> Self {
-        Self {
-            status: value.status.map(|id| ID(id.to_string())),
-            priority: value.priority.map(|id| ID(id.to_string())),
-            assignees: value.assignees,
-            due_date: value.due_date,
-            completed: value.completed,
-        }
-    }
-}
+use crate::{inputs::GraphqlInitiativeLinkShare, query::load_initiative};
 
 /// Typed sharing state for an initiative.
 #[derive(SimpleObject)]
@@ -342,7 +104,8 @@ pub enum GraphqlTaskInitiativeReferenceState {
 pub struct GraphqlTaskInitiativeReference<E: SoupEntityEdges> {
     task_id: String,
     state: GraphqlTaskInitiativeReferenceState,
-    initiative: Option<GraphqlInitiative<E>>,
+    initiative_id: Option<InitiativeId>,
+    _edges: PhantomData<E>,
 }
 
 impl<E: SoupEntityEdges> From<TaskInitiativeReference> for GraphqlTaskInitiativeReference<E> {
@@ -362,13 +125,14 @@ impl<E: SoupEntityEdges> From<TaskInitiativeReference> for GraphqlTaskInitiative
             } => (
                 task_id,
                 GraphqlTaskInitiativeReferenceState::Visible,
-                Some(GraphqlInitiative::from_reference(initiative)),
+                Some(initiative.id),
             ),
         };
         Self {
             task_id,
             state,
-            initiative,
+            initiative_id: initiative,
+            _edges: PhantomData,
         }
     }
 }
@@ -385,8 +149,14 @@ impl<E: SoupEntityEdges> GraphqlTaskInitiativeReference<E> {
         self.state
     }
     /// The same initiative entity used by collection/detail queries.
-    async fn initiative(&self) -> Option<&GraphqlInitiative<E>> {
-        self.initiative.as_ref()
+    async fn initiative(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<GraphqlSoupInitiative<E>>> {
+        let Some(id) = self.initiative_id else {
+            return Ok(None);
+        };
+        load_initiative(ctx, id.as_uuid()).await
     }
 }
 
