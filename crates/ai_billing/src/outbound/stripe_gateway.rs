@@ -60,7 +60,7 @@ impl StripePaymentGateway {
         &self,
         customer_id: &CustomerId,
         scope: SubscriptionScope,
-    ) -> Result<ChargeMethod> {
+    ) -> Result<Option<ChargeMethod>> {
         let customer = Customer::retrieve(&self.client, customer_id, &[])
             .await
             .map_err(payment)?;
@@ -109,6 +109,12 @@ fn payment(e: stripe::StripeError) -> BillingError {
     BillingError::Payment(e.into())
 }
 
+fn no_matching_subscription() -> BillingError {
+    BillingError::Payment(anyhow::anyhow!(
+        "no active or trialing subscription matches the billing scope"
+    ))
+}
+
 fn parse_customer(id: &str) -> Result<CustomerId> {
     id.parse::<CustomerId>()
         .map_err(|e| BillingError::Payment(anyhow::anyhow!("invalid stripe customer id: {e}")))
@@ -128,13 +134,6 @@ impl ChargeMethod {
         match self {
             Self::Subscription(method) => Some(method),
             Self::CustomerFallback(method) => method.as_ref(),
-        }
-    }
-
-    fn subscription_method(&self) -> Option<&PaymentMethodId> {
-        match self {
-            Self::Subscription(method) => Some(method),
-            Self::CustomerFallback(_) => None,
         }
     }
 }
@@ -166,7 +165,8 @@ fn charge_method(
     fallback: Option<PaymentMethodId>,
     subscriptions: &[Subscription],
     scope: SubscriptionScope,
-) -> Result<ChargeMethod> {
+) -> Result<Option<ChargeMethod>> {
+    let mut matched = false;
     let mut agreed = None;
     let mut explicit = None;
     for subscription in subscriptions {
@@ -177,6 +177,7 @@ fn charge_method(
         {
             continue;
         }
+        matched = true;
         let explicit_default = payment_method_id(&subscription.default_payment_method);
         let effective = explicit_default.clone().or_else(|| fallback.clone());
         if let Some(previous) = &agreed {
@@ -192,10 +193,13 @@ fn charge_method(
             explicit = explicit_default;
         }
     }
-    Ok(match explicit {
+    if !matched {
+        return Ok(None);
+    }
+    Ok(Some(match explicit {
         Some(method) => ChargeMethod::Subscription(method),
         None => ChargeMethod::CustomerFallback(fallback),
-    })
+    }))
 }
 
 fn scope_stamp(scope: SubscriptionScope) -> String {
@@ -225,8 +229,19 @@ fn stamped_scope(invoice: &Invoice) -> Result<Option<SubscriptionScope>> {
 }
 
 #[derive(Serialize)]
-struct InvoiceDefaultPaymentMethod<'a> {
-    default_payment_method: &'a PaymentMethodId,
+struct UpdateInvoice<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    default_payment_method: Option<&'a PaymentMethodId>,
+    metadata: HashMap<String, String>,
+}
+
+impl<'a> UpdateInvoice<'a> {
+    fn new(scope: SubscriptionScope, default_payment_method: Option<&'a PaymentMethodId>) -> Self {
+        Self {
+            default_payment_method,
+            metadata: HashMap::from([(BILLING_SCOPE_METADATA_KEY.to_string(), scope_stamp(scope))]),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -290,7 +305,10 @@ impl PaymentGateway for StripePaymentGateway {
     #[tracing::instrument(skip(self, request), fields(charge = %request.charge_id, cents = request.amount_cents), err)]
     async fn open_overage_invoice(&self, request: OverageChargeRequest) -> Result<String> {
         let customer = parse_customer(&request.customer_id)?;
-        let resolved = self.resolve_charge_method(&customer, request.scope).await?;
+        let live_method = self
+            .resolve_charge_method(&customer, request.scope)
+            .await?
+            .ok_or_else(no_matching_subscription)?;
         let key = format!("ai_overage:{}", request.charge_id);
         let metadata: HashMap<String, String> = HashMap::from([
             (
@@ -300,10 +318,6 @@ impl PaymentGateway for StripePaymentGateway {
             (
                 CHARGE_METADATA_KEY.to_string(),
                 request.charge_id.to_string(),
-            ),
-            (
-                BILLING_SCOPE_METADATA_KEY.to_string(),
-                scope_stamp(request.scope),
             ),
         ]);
 
@@ -318,10 +332,35 @@ impl PaymentGateway for StripePaymentGateway {
         invoice.pending_invoice_items_behavior = Some(InvoicePendingInvoiceItemsBehavior::Exclude);
         invoice.description = Some("Macro AI usage beyond plan");
         invoice.metadata = Some(metadata.clone());
-        if let Some(method) = resolved.subscription_method() {
-            invoice.default_payment_method = Some(method.as_str());
-        }
         let invoice = Invoice::create(&self.idempotent(format!("{key}:invoice")), invoice)
+            .await
+            .map_err(payment)?;
+        // Stripe replays the original create response. Read the invoice again
+        // to observe routing written by an earlier attempt.
+        let invoice = Invoice::retrieve(&self.client, &invoice.id, &[])
+            .await
+            .map_err(payment)?;
+        let invoice_scope = stamped_scope(&invoice)?;
+        let scope = invoice_scope.unwrap_or(request.scope);
+        let resolved = if invoice_scope.is_some() {
+            self.resolve_charge_method(&customer, scope).await?
+        } else {
+            Some(live_method)
+        };
+        let stored_method = payment_method_id(&invoice.default_payment_method);
+        if resolved.is_none() && stored_method.is_none() {
+            return Err(no_matching_subscription());
+        }
+        let method = resolved
+            .as_ref()
+            .and_then(ChargeMethod::payment_method)
+            .cloned()
+            .or(stored_method);
+        self.client
+            .post_form::<Invoice, _>(
+                &format!("/invoices/{}", invoice.id),
+                &UpdateInvoice::new(scope, method.as_ref()),
+            )
             .await
             .map_err(payment)?;
 
@@ -377,7 +416,8 @@ impl PaymentGateway for StripePaymentGateway {
         if invoice.status == Some(InvoiceStatus::Paid) {
             return Ok(true);
         }
-        let scope = stamped_scope(&invoice)?.unwrap_or(scope);
+        let invoice_scope = stamped_scope(&invoice)?;
+        let scope = invoice_scope.unwrap_or(scope);
         let customer_id = invoice
             .customer
             .as_ref()
@@ -386,23 +426,32 @@ impl PaymentGateway for StripePaymentGateway {
                 BillingError::Payment(anyhow::anyhow!("overage invoice has no customer"))
             })?;
         let resolved = self.resolve_charge_method(&customer_id, scope).await?;
-        let method = resolved.payment_method().cloned();
+        let stored_method = payment_method_id(&invoice.default_payment_method);
+        if resolved.is_none() && stored_method.is_none() {
+            return Err(no_matching_subscription());
+        }
+        let matched_method = resolved
+            .as_ref()
+            .and_then(ChargeMethod::payment_method)
+            .cloned();
         if invoice.status == Some(InvoiceStatus::Open)
-            && let Some(method) = &method
-            && payment_method_id(&invoice.default_payment_method).as_ref() != Some(method)
+            && resolved.is_some()
+            && (invoice_scope.is_none()
+                || matched_method
+                    .as_ref()
+                    .is_some_and(|method| stored_method.as_ref() != Some(method)))
         {
             // A repeated set converges. An idempotency key would replay the
             // previous card after the payer switches away and back.
             self.client
                 .post_form::<Invoice, _>(
                     &format!("/invoices/{invoice_id}"),
-                    &InvoiceDefaultPaymentMethod {
-                        default_payment_method: method,
-                    },
+                    &UpdateInvoice::new(scope, matched_method.as_ref()),
                 )
                 .await
                 .map_err(payment)?;
         }
+        let method = matched_method.or(stored_method);
         // Every attempt is its own request: replaying the first attempt's key
         // would replay its decline instead of trying the payer's (new) card.
         let key = format!(

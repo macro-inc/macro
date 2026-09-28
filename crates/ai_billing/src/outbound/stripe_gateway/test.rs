@@ -15,7 +15,7 @@ const INVOICE_ID: &str = "in_overage";
 const TEAM_ID: Uuid = Uuid::from_u128(7);
 
 #[tokio::test]
-async fn open_overage_invoice_posts_the_active_subscription_default_payment_method() {
+async fn open_overage_invoice_keeps_create_stable_and_updates_current_routing() {
     let invoice = stripe_response(&draft_invoice());
     let invoice_item = stripe_response(&draft_invoice_item());
     let server = MockServer::start().await;
@@ -34,6 +34,16 @@ async fn open_overage_invoice_posts_the_active_subscription_default_payment_meth
     .await;
     Mock::given(method("POST"))
         .and(path("/v1/invoices"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&invoice))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&invoice))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
         .respond_with(ResponseTemplate::new(200).set_body_json(&invoice))
         .mount(&server)
         .await;
@@ -61,23 +71,87 @@ async fn open_overage_invoice_posts_the_active_subscription_default_payment_meth
 
     let requests = server.received_requests().await.expect("recorded requests");
 
-    let body = post_body(&requests, "/v1/invoices");
+    let create = post_request(&requests, "/v1/invoices");
+    let create_body = body_str(create);
+    assert_eq!(form_value(create_body, "default_payment_method"), None);
+    assert_eq!(form_value(create_body, "subscription"), None);
     assert_eq!(
-        form_value(body, "default_payment_method"),
-        Some(CURRENT_PAYMENT_METHOD),
-        "{body}"
+        form_value(
+            create_body,
+            &format!("metadata[{BILLING_SCOPE_METADATA_KEY}]")
+        ),
+        None
     );
-    assert_eq!(form_value(body, "subscription"), None, "{body}");
     assert_eq!(
-        form_value(body, &format!("metadata[{BILLING_SCOPE_METADATA_KEY}]")),
-        Some(PERSONAL_SCOPE_STAMP),
-        "{body}"
+        form_value(create_body, &format!("metadata[{PURPOSE_METADATA_KEY}]")),
+        Some(PURPOSE_AI_OVERAGE)
     );
+    assert_eq!(
+        form_value(create_body, &format!("metadata[{CHARGE_METADATA_KEY}]")),
+        Some("00000000-0000-0000-0000-000000000001")
+    );
+    assert_eq!(
+        idempotency_key(create),
+        Some("ai_overage:00000000-0000-0000-0000-000000000001:invoice")
+    );
+
+    let update = post_request(&requests, &format!("/v1/invoices/{INVOICE_ID}"));
+    let update_body = body_str(update);
+    assert_eq!(
+        form_value(update_body, "default_payment_method"),
+        Some(CURRENT_PAYMENT_METHOD)
+    );
+    assert_eq!(
+        form_value(
+            update_body,
+            &format!("metadata[{BILLING_SCOPE_METADATA_KEY}]")
+        ),
+        Some(PERSONAL_SCOPE_STAMP)
+    );
+    assert_eq!(idempotency_key(update), None);
+
+    let item = post_request(&requests, "/v1/invoiceitems");
+    let item_body = body_str(item);
+    assert_eq!(
+        form_value(
+            item_body,
+            &format!("metadata[{BILLING_SCOPE_METADATA_KEY}]")
+        ),
+        None
+    );
+    assert_eq!(form_value(item_body, "default_payment_method"), None);
+    assert_eq!(form_value(item_body, "subscription"), None);
+    assert_eq!(
+        form_value(item_body, &format!("metadata[{PURPOSE_METADATA_KEY}]")),
+        Some(PURPOSE_AI_OVERAGE)
+    );
+    assert_eq!(
+        form_value(item_body, &format!("metadata[{CHARGE_METADATA_KEY}]")),
+        Some("00000000-0000-0000-0000-000000000001")
+    );
+    assert_eq!(
+        idempotency_key(item),
+        Some("ai_overage:00000000-0000-0000-0000-000000000001:item")
+    );
+
+    let create_at = request_position(&requests, "POST", "/v1/invoices");
+    let retrieve_at = request_position(&requests, "GET", &format!("/v1/invoices/{INVOICE_ID}"));
+    let update_at = request_position(&requests, "POST", &format!("/v1/invoices/{INVOICE_ID}"));
+    let item_at = request_position(&requests, "POST", "/v1/invoiceitems");
+    let finalize_at = request_position(
+        &requests,
+        "POST",
+        &format!("/v1/invoices/{INVOICE_ID}/finalize"),
+    );
+    assert!(create_at < retrieve_at, "{requests:?}");
+    assert!(retrieve_at < update_at, "{requests:?}");
+    assert!(update_at < item_at, "{requests:?}");
+    assert!(item_at < finalize_at, "{requests:?}");
 }
 
 #[tokio::test]
 async fn pay_overage_invoice_updates_a_stale_open_invoice_before_paying() {
-    let invoice = stripe_response(&open_invoice(STALE_PAYMENT_METHOD, None));
+    let invoice = stripe_response(&open_invoice(Some(STALE_PAYMENT_METHOD), None));
     let paid = stripe_response(&paid_invoice(TEAM_PAYMENT_METHOD, None));
     let server = MockServer::start().await;
     mount_customer_and_subscriptions(&server, both_subscriptions()).await;
@@ -105,34 +179,27 @@ async fn pay_overage_invoice_updates_a_stale_open_invoice_before_paying() {
         )
         .await
         .expect("pay overage invoice");
-    assert!(paid_now);
+    assert_eq!(paid_now, true);
 
     let requests = server.received_requests().await.expect("recorded requests");
-    let update_at = requests.iter().position(|request| {
-        request.method.as_str() == "POST"
-            && request.url.path() == format!("/v1/invoices/{INVOICE_ID}")
-    });
-    let pay_at = requests.iter().position(|request| {
-        request.method.as_str() == "POST"
-            && request.url.path() == format!("/v1/invoices/{INVOICE_ID}/pay")
-    });
-    let (Some(update_at), Some(pay_at)) = (update_at, pay_at) else {
-        panic!("missing update or pay: {requests:?}");
-    };
+    let update_at = request_position(&requests, "POST", &format!("/v1/invoices/{INVOICE_ID}"));
+    let pay_at = request_position(&requests, "POST", &format!("/v1/invoices/{INVOICE_ID}/pay"));
     assert!(update_at < pay_at);
     let update = &requests[update_at];
     let pay = &requests[pay_at];
-    assert!(update.headers.get("idempotency-key").is_none());
+    assert_eq!(idempotency_key(update), None);
     assert_eq!(
         form_value(body_str(update), "default_payment_method"),
         Some(TEAM_PAYMENT_METHOD)
     );
-    assert!(
-        pay.headers
-            .get("idempotency-key")
-            .and_then(|value| value.to_str().ok())
-            .is_some_and(|key| key.starts_with("ai_overage:"))
+    assert_eq!(
+        form_value(
+            body_str(update),
+            &format!("metadata[{BILLING_SCOPE_METADATA_KEY}]")
+        ),
+        Some("00000000-0000-0000-0000-000000000007")
     );
+    assert!(idempotency_key(pay).is_some_and(|key| key.starts_with("ai_overage:")));
     assert_eq!(
         form_value(body_str(pay), "payment_method"),
         Some(TEAM_PAYMENT_METHOD)
@@ -202,7 +269,10 @@ async fn open_overage_invoice_rejects_distinct_subscription_methods_without_post
 
 #[tokio::test]
 async fn pay_overage_invoice_skips_the_update_when_the_open_invoice_already_matches() {
-    let invoice = stripe_response(&open_invoice(CURRENT_PAYMENT_METHOD, None));
+    let invoice = stripe_response(&open_invoice(
+        Some(CURRENT_PAYMENT_METHOD),
+        Some(PERSONAL_SCOPE_STAMP),
+    ));
     let paid = stripe_response(&paid_invoice(CURRENT_PAYMENT_METHOD, None));
     let server = MockServer::start().await;
     mount_customer_and_subscriptions(
@@ -233,7 +303,7 @@ async fn pay_overage_invoice_skips_the_update_when_the_open_invoice_already_matc
         .pay_overage_invoice(Uuid::from_u128(3), INVOICE_ID, SubscriptionScope::Personal)
         .await
         .expect("pay overage invoice");
-    assert!(paid_now);
+    assert_eq!(paid_now, true);
 
     let requests = server.received_requests().await.expect("recorded requests");
     assert!(requests.iter().all(|request| {
@@ -257,6 +327,16 @@ async fn open_overage_invoice_selects_the_subscription_for_the_requested_scope()
     mount_customer_and_subscriptions(&server, both_subscriptions()).await;
     Mock::given(method("POST"))
         .and(path("/v1/invoices"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&invoice))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&invoice))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
         .respond_with(ResponseTemplate::new(200).set_body_json(&invoice))
         .mount(&server)
         .await;
@@ -287,14 +367,32 @@ async fn open_overage_invoice_selects_the_subscription_for_the_requested_scope()
         .filter(|request| request.method.as_str() == "POST" && request.url.path() == "/v1/invoices")
         .collect();
     assert_eq!(creates.len(), 2);
-    let personal = body_str(creates[0]);
-    let team = body_str(creates[1]);
+    for create in creates {
+        let body = body_str(create);
+        assert_eq!(form_value(body, "default_payment_method"), None, "{body}");
+        assert_eq!(form_value(body, "subscription"), None, "{body}");
+        assert_eq!(
+            form_value(body, &format!("metadata[{BILLING_SCOPE_METADATA_KEY}]")),
+            None,
+            "{body}"
+        );
+    }
+
+    let updates: Vec<_> = requests
+        .iter()
+        .filter(|request| {
+            request.method.as_str() == "POST"
+                && request.url.path() == format!("/v1/invoices/{INVOICE_ID}")
+        })
+        .collect();
+    assert_eq!(updates.len(), 2);
+    let personal = body_str(updates[0]);
+    let team = body_str(updates[1]);
     assert_eq!(
         form_value(personal, "default_payment_method"),
         Some(PERSONAL_PAYMENT_METHOD),
         "{personal}"
     );
-    assert_eq!(form_value(personal, "subscription"), None, "{personal}");
     assert_eq!(
         form_value(personal, &format!("metadata[{BILLING_SCOPE_METADATA_KEY}]")),
         Some(PERSONAL_SCOPE_STAMP),
@@ -305,19 +403,101 @@ async fn open_overage_invoice_selects_the_subscription_for_the_requested_scope()
         Some(TEAM_PAYMENT_METHOD),
         "{team}"
     );
-    assert_eq!(form_value(team, "subscription"), None, "{team}");
-    let team_scope = TEAM_ID.to_string();
     assert_eq!(
         form_value(team, &format!("metadata[{BILLING_SCOPE_METADATA_KEY}]")),
-        Some(team_scope.as_str()),
+        Some("00000000-0000-0000-0000-000000000007"),
         "{team}"
+    );
+}
+
+#[tokio::test]
+async fn open_overage_invoice_replay_uses_the_retrieved_scope_and_stored_method() {
+    let cached_invoice = stripe_response(&draft_invoice());
+    let mut current_invoice = draft_invoice();
+    current_invoice.default_payment_method = Some(stripe::Expandable::Id(
+        PERSONAL_PAYMENT_METHOD
+            .parse()
+            .expect("personal payment method"),
+    ));
+    current_invoice.metadata = Some(HashMap::from([(
+        BILLING_SCOPE_METADATA_KEY.to_string(),
+        PERSONAL_SCOPE_STAMP.to_string(),
+    )]));
+    let current_invoice = stripe_response(&current_invoice);
+    let invoice_item = stripe_response(&draft_invoice_item());
+    let server = MockServer::start().await;
+    mount_customer_and_subscriptions(&server, team_subscription()).await;
+    Mock::given(method("POST"))
+        .and(path("/v1/invoices"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&cached_invoice))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&current_invoice))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&current_invoice))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/invoiceitems"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&invoice_item))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}/finalize")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&current_invoice))
+        .mount(&server)
+        .await;
+
+    gateway(&server)
+        .open_overage_invoice(charge(SubscriptionScope::Team { team_id: TEAM_ID }, 7))
+        .await
+        .expect("replay overage invoice");
+
+    let requests = server.received_requests().await.expect("recorded requests");
+    let update = post_request(&requests, &format!("/v1/invoices/{INVOICE_ID}"));
+    assert_eq!(
+        form_value(body_str(update), "default_payment_method"),
+        Some(PERSONAL_PAYMENT_METHOD)
+    );
+    assert_eq!(
+        form_value(
+            body_str(update),
+            &format!("metadata[{BILLING_SCOPE_METADATA_KEY}]")
+        ),
+        Some(PERSONAL_SCOPE_STAMP)
+    );
+    assert_eq!(idempotency_key(update), None);
+}
+
+#[tokio::test]
+async fn open_overage_invoice_rejects_a_scope_without_a_matching_subscription() {
+    let server = MockServer::start().await;
+    mount_customer_and_subscriptions(&server, team_subscription()).await;
+
+    let error = gateway(&server)
+        .open_overage_invoice(charge(SubscriptionScope::Personal, 9))
+        .await
+        .expect_err("missing personal subscription");
+    assert!(matches!(error, BillingError::Payment(_)));
+
+    let requests = server.received_requests().await.expect("recorded requests");
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.method.as_str() != "POST"),
+        "{requests:?}"
     );
 }
 
 #[tokio::test]
 async fn pay_overage_invoice_keeps_a_stamped_scope_when_the_live_scope_differs() {
     let invoice = stripe_response(&open_invoice(
-        STALE_PAYMENT_METHOD,
+        Some(STALE_PAYMENT_METHOD),
         Some(PERSONAL_SCOPE_STAMP),
     ));
     let paid = stripe_response(&paid_invoice(
@@ -350,15 +530,20 @@ async fn pay_overage_invoice_keeps_a_stamped_scope_when_the_live_scope_differs()
         )
         .await
         .expect("pay stamped invoice");
-    assert!(paid_now);
+    assert_eq!(paid_now, true);
 
     let requests = server.received_requests().await.expect("recorded requests");
+    let update = post_request(&requests, &format!("/v1/invoices/{INVOICE_ID}"));
+    assert_eq!(
+        form_value(body_str(update), "default_payment_method"),
+        Some(PERSONAL_PAYMENT_METHOD)
+    );
     assert_eq!(
         form_value(
-            post_body(&requests, &format!("/v1/invoices/{INVOICE_ID}")),
-            "default_payment_method"
+            body_str(update),
+            &format!("metadata[{BILLING_SCOPE_METADATA_KEY}]")
         ),
-        Some(PERSONAL_PAYMENT_METHOD)
+        Some(PERSONAL_SCOPE_STAMP)
     );
     assert_eq!(
         form_value(
@@ -366,6 +551,78 @@ async fn pay_overage_invoice_keeps_a_stamped_scope_when_the_live_scope_differs()
             "payment_method"
         ),
         Some(PERSONAL_PAYMENT_METHOD)
+    );
+}
+
+#[tokio::test]
+async fn pay_overage_invoice_preserves_a_stamped_personal_method_after_team_conversion() {
+    let invoice = stripe_response(&open_invoice(
+        Some(PERSONAL_PAYMENT_METHOD),
+        Some(PERSONAL_SCOPE_STAMP),
+    ));
+    let paid = stripe_response(&paid_invoice(
+        PERSONAL_PAYMENT_METHOD,
+        Some(PERSONAL_SCOPE_STAMP),
+    ));
+    let server = MockServer::start().await;
+    mount_customer_and_subscriptions(&server, team_subscription()).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&invoice))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}/pay")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&paid))
+        .mount(&server)
+        .await;
+
+    let paid_now = gateway(&server)
+        .pay_overage_invoice(
+            Uuid::from_u128(10),
+            INVOICE_ID,
+            SubscriptionScope::Team { team_id: TEAM_ID },
+        )
+        .await
+        .expect("pay converted personal invoice");
+    assert_eq!(paid_now, true);
+
+    let requests = server.received_requests().await.expect("recorded requests");
+    assert!(requests.iter().all(|request| {
+        !(request.method.as_str() == "POST"
+            && request.url.path() == format!("/v1/invoices/{INVOICE_ID}"))
+    }));
+    let pay_body = post_body(&requests, &format!("/v1/invoices/{INVOICE_ID}/pay"));
+    assert_eq!(
+        form_value(pay_body, "payment_method"),
+        Some(PERSONAL_PAYMENT_METHOD)
+    );
+    assert!(!pay_body.contains(STALE_PAYMENT_METHOD), "{pay_body}");
+}
+
+#[tokio::test]
+async fn pay_overage_invoice_rejects_no_match_without_a_stored_method() {
+    let invoice = stripe_response(&open_invoice(None, None));
+    let server = MockServer::start().await;
+    mount_customer_and_subscriptions(&server, team_subscription()).await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&invoice))
+        .mount(&server)
+        .await;
+
+    let error = gateway(&server)
+        .pay_overage_invoice(Uuid::from_u128(11), INVOICE_ID, SubscriptionScope::Personal)
+        .await
+        .expect_err("missing personal subscription and stored method");
+    assert!(matches!(error, BillingError::Payment(_)));
+
+    let requests = server.received_requests().await.expect("recorded requests");
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.method.as_str() != "POST"),
+        "{requests:?}"
     );
 }
 
@@ -383,7 +640,7 @@ async fn pay_overage_invoice_returns_when_the_invoice_is_already_paid() {
         .pay_overage_invoice(Uuid::from_u128(8), INVOICE_ID, SubscriptionScope::Personal)
         .await
         .expect("already paid invoice");
-    assert!(paid_now);
+    assert_eq!(paid_now, true);
 
     let requests = server.received_requests().await.expect("recorded requests");
     assert!(requests.iter().all(|request| {
@@ -437,10 +694,9 @@ fn subscription(
     }
 }
 
-fn open_invoice(default_payment_method: &str, scope: Option<&str>) -> stripe::Invoice {
-    let method: stripe::PaymentMethodId = default_payment_method
-        .parse()
-        .expect("invoice payment method");
+fn open_invoice(default_payment_method: Option<&str>, scope: Option<&str>) -> stripe::Invoice {
+    let method = default_payment_method
+        .map(|method| stripe::Expandable::Id(method.parse().expect("invoice payment method")));
     let metadata = scope.map(|scope| {
         let mut metadata = HashMap::new();
         metadata.insert(BILLING_SCOPE_METADATA_KEY.to_string(), scope.to_string());
@@ -451,7 +707,7 @@ fn open_invoice(default_payment_method: &str, scope: Option<&str>) -> stripe::In
         customer: Some(stripe::Expandable::Id(
             CUSTOMER_ID.parse().expect("customer id"),
         )),
-        default_payment_method: Some(stripe::Expandable::Id(method)),
+        default_payment_method: method,
         status: Some(stripe::InvoiceStatus::Open),
         metadata,
         ..Default::default()
@@ -459,7 +715,7 @@ fn open_invoice(default_payment_method: &str, scope: Option<&str>) -> stripe::In
 }
 
 fn paid_invoice(default_payment_method: &str, scope: Option<&str>) -> stripe::Invoice {
-    let mut invoice = open_invoice(default_payment_method, scope);
+    let mut invoice = open_invoice(Some(default_payment_method), scope);
     invoice.status = Some(stripe::InvoiceStatus::Paid);
     invoice
 }
@@ -537,6 +793,19 @@ fn both_subscriptions() -> Value {
     )
 }
 
+fn team_subscription() -> Value {
+    let team_id = TEAM_ID.to_string();
+    subscription_page(
+        vec![stripe_response(&subscription(
+            "sub_team",
+            stripe::SubscriptionStatus::Active,
+            Some(TEAM_PAYMENT_METHOD),
+            Some(&team_id),
+        ))],
+        false,
+    )
+}
+
 fn charge(scope: SubscriptionScope, charge_id: u128) -> OverageChargeRequest {
     OverageChargeRequest {
         customer_id: CUSTOMER_ID.to_string(),
@@ -547,13 +816,29 @@ fn charge(scope: SubscriptionScope, charge_id: u128) -> OverageChargeRequest {
     }
 }
 
+fn post_request<'a>(requests: &'a [wiremock::Request], path: &str) -> &'a wiremock::Request {
+    requests
+        .iter()
+        .find(|request| request.method.as_str() == "POST" && request.url.path() == path)
+        .unwrap_or_else(|| panic!("POST {path}"))
+}
+
 fn post_body<'a>(requests: &'a [wiremock::Request], path: &str) -> &'a str {
-    body_str(
-        requests
-            .iter()
-            .find(|request| request.method.as_str() == "POST" && request.url.path() == path)
-            .unwrap_or_else(|| panic!("POST {path}")),
-    )
+    body_str(post_request(requests, path))
+}
+
+fn request_position(requests: &[wiremock::Request], method: &str, path: &str) -> usize {
+    requests
+        .iter()
+        .position(|request| request.method.as_str() == method && request.url.path() == path)
+        .unwrap_or_else(|| panic!("{method} {path}"))
+}
+
+fn idempotency_key(request: &wiremock::Request) -> Option<&str> {
+    request
+        .headers
+        .get("idempotency-key")
+        .and_then(|value| value.to_str().ok())
 }
 
 fn body_str(request: &wiremock::Request) -> &str {
