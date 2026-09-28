@@ -154,44 +154,34 @@ async fn session_allowlist_matches_grants_and_respects_requested_ids(pool: PgPoo
         vec!["owner".into(), "channel".into()],
     ] {
         assert_eq!(
-            accessible_session_ids(&pool, &SourceIds(sources), &[], "owner")
+            accessible_session_ids(&pool, &SourceIds(sources), &[])
                 .await
                 .unwrap(),
             vec![session]
         );
     }
     assert!(
-        accessible_session_ids(&pool, &SourceIds(vec!["outsider".into()]), &[], "outsider")
+        accessible_session_ids(&pool, &SourceIds(vec!["outsider".into()]), &[])
             .await
             .unwrap()
             .is_empty()
     );
     assert!(
-        accessible_session_ids(&pool, &SourceIds(vec![]), &[], "owner")
+        accessible_session_ids(&pool, &SourceIds(vec![]), &[])
             .await
             .unwrap()
             .is_empty()
     );
     assert!(
-        accessible_session_ids(
-            &pool,
-            &SourceIds(vec!["channel".into()]),
-            &[unrelated],
-            "channel"
-        )
-        .await
-        .unwrap()
-        .is_empty()
+        accessible_session_ids(&pool, &SourceIds(vec!["channel".into()]), &[unrelated])
+            .await
+            .unwrap()
+            .is_empty()
     );
     assert_eq!(
-        accessible_session_ids(
-            &pool,
-            &SourceIds(vec!["channel".into()]),
-            &[session],
-            "channel"
-        )
-        .await
-        .unwrap(),
+        accessible_session_ids(&pool, &SourceIds(vec!["channel".into()]), &[session])
+            .await
+            .unwrap(),
         vec![session]
     );
     // Revocation must be reflected by the next allowlist query.
@@ -203,16 +193,16 @@ async fn session_allowlist_matches_grants_and_respects_requested_ids(pool: PgPoo
     .await
     .unwrap();
     assert!(
-        accessible_session_ids(&pool, &SourceIds(vec!["channel".into()]), &[], "channel")
+        accessible_session_ids(&pool, &SourceIds(vec!["channel".into()]), &[])
             .await
             .unwrap()
             .is_empty()
     );
 }
 
-/// Search's allowlist drops an inline session until the viewer has opened it.
+/// Search's allowlist drops an inline session unless the caller names its id.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn hidden_sessions_leave_the_allowlist_until_pinned(pool: PgPool) {
+async fn hidden_sessions_leave_the_allowlist_unless_named(pool: PgPool) {
     let session = uuid::Uuid::now_v7();
     let viewer = "macro|agent-session-list-viewer@example.com";
     let macro_user_id = uuid::Uuid::now_v7();
@@ -258,23 +248,13 @@ async fn hidden_sessions_leave_the_allowlist_until_pinned(pool: PgPool) {
     .unwrap();
 
     assert!(
-        accessible_session_ids(&pool, &SourceIds(vec![viewer.into()]), &[], viewer)
+        accessible_session_ids(&pool, &SourceIds(vec![viewer.into()]), &[])
             .await
             .unwrap()
             .is_empty()
     );
-
-    sqlx::query!(
-        "INSERT INTO agent_session_list_pin (user_id, agent_session_id) VALUES ($1, $2)",
-        viewer,
-        session,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
     assert_eq!(
-        accessible_session_ids(&pool, &SourceIds(vec![viewer.into()]), &[], viewer)
+        accessible_session_ids(&pool, &SourceIds(vec![viewer.into()]), &[session])
             .await
             .unwrap(),
         vec![session]

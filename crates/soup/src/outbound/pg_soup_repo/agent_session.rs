@@ -107,15 +107,12 @@ pub(super) async fn cursor_soup(
     query.push(" AND (");
     push_filter(&mut query, filter);
     query.push(")");
-    // Inline @macro sessions (`list_hidden`) are absent from broad lists until
-    // this viewer opens one. A query that names the session still returns it,
-    // so favorites and direct id lookups keep working, and `$1` is the same
-    // user id bound for access above.
+    // Inline @macro sessions (`list_hidden`) are absent from broad lists. A
+    // query that names the session still returns it, so favorites and direct
+    // id lookups keep working.
     query.push(" AND (s.list_hidden = FALSE OR s.id = ANY(");
     query.push_bind(explicitly_named_ids(filter));
-    query.push(
-        ") OR EXISTS (SELECT 1 FROM agent_session_list_pin pin WHERE pin.user_id = $1 AND pin.agent_session_id = s.id))",
-    );
+    query.push("))");
     if let (Some(timestamp), Some(id)) = (parts.timestamp, parts.id) {
         query.push(format!(" AND ({sort}, s.id) < ("));
         query.push_bind(timestamp);

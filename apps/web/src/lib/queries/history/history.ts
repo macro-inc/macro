@@ -209,15 +209,10 @@ export function useUpsertToHistoryMutation(
               setHistoryData(context.previousData);
             }
           },
-          onSettled: (_data, _error, params) => {
+          onSettled: () => {
             queryClient.invalidateQueries({
               queryKey: historyQueryOptions.queryKey,
             });
-            // Opening a session pins it server-side. Refresh the agents list
-            // and Cmd-K, which both read Soup, so the new row shows up.
-            if (params.itemType === 'agent_session') {
-              queryClient.invalidateQueries({ queryKey: ['soup'] });
-            }
           },
         },
         callbacks

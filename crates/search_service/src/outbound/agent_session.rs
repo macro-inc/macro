@@ -27,7 +27,7 @@ impl AgentSessionSearchSource for AgentSessionSearchMetadataSource {
         let sources = get_user_source_ids(&self.db, Some(user))
             .await
             .map_err(|error| rootcause::report!("{error:#}"))?;
-        let ids = accessible_session_ids(&self.db, &sources, requested, user.as_ref()).await?;
+        let ids = accessible_session_ids(&self.db, &sources, requested).await?;
         self.service
             .search_metadata(ids)
             .await

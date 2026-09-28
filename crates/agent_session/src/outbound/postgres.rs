@@ -317,9 +317,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
 
         let (status, status_event_name) = status_columns(&SessionStatus::NoMessages);
         // An inline @macro mention is a one-shot on the message. It stays out
-        // of the agents list and search until the viewer opens the session.
-        // Every other session — the agents composer, coding agents — is a
-        // list row from the start.
+        // of the agents list and search. Every other session — the agents
+        // composer, coding agents — is a list row.
         let list_hidden = bot_id == MACRO_NEW_BOT_ID && thread_id.is_some();
         let row = sqlx::query_as!(
             AgentSessionRow,

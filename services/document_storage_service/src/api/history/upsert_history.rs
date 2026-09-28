@@ -98,24 +98,6 @@ pub async fn upsert_history_handler(
             .send(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
-    // Opening an agent session is what promotes an inline @macro reply into
-    // this user's agents list and search. The pin is permanent.
-    if item_type == "agent_session"
-        && let Ok(session_id) = uuid::Uuid::parse_str(&item_id)
-        && let Err(e) = macro_db_client::history::pin_agent_session_in_list(
-            &mut transaction,
-            user.authorization.user.macro_user_id.as_ref(),
-            session_id,
-        )
-        .await
-    {
-        tracing::error!(error=?e, "unable to pin agent session in the list");
-        return GenericResponse::builder()
-            .message("unable to pin agent session in the list")
-            .is_error(true)
-            .send(StatusCode::INTERNAL_SERVER_ERROR);
-    }
-
     // If the item is a document, track the document view
     if item_type == "document"
         && let Err(e) = macro_db_client::document::track_document::track_document(

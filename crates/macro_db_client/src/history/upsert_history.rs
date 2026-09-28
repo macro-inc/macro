@@ -75,36 +75,6 @@ pub async fn upsert_user_history_timestamp(
     Ok(())
 }
 
-/// Pin an agent session into this user's agents list and search.
-///
-/// Opening a session records history through the storage service; that is the
-/// signal the viewer wants the session as a list row. Creation writes history
-/// itself and does not call this, so an inline `@macro` reply stays hidden
-/// until someone opens it. A missing session is a no-op so a stale history
-/// write cannot fail the request. Repeat opens leave the existing pin.
-#[tracing::instrument(skip(transaction))]
-pub async fn pin_agent_session_in_list(
-    transaction: &mut Transaction<'_, Postgres>,
-    user_id: &str,
-    agent_session_id: uuid::Uuid,
-) -> anyhow::Result<()> {
-    sqlx::query!(
-        r#"
-        INSERT INTO agent_session_list_pin (user_id, agent_session_id)
-        SELECT $1, s.id
-        FROM agent_session s
-        WHERE s.id = $2
-        ON CONFLICT (user_id, agent_session_id) DO NOTHING
-        "#,
-        user_id,
-        agent_session_id,
-    )
-    .execute(transaction.as_mut())
-    .await?;
-
-    Ok(())
-}
-
 /// Batch upserts item(s) into the user's history
 #[tracing::instrument(skip(transaction))]
 async fn insert_user_history_batch(

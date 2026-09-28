@@ -1083,9 +1083,9 @@ async fn create_records_the_session_in_the_owners_history(pool: PgPool) {
 
 /// Inline `@macro` (the agent-session Macro bot, born on a thread) starts
 /// hidden from lists. The same bot started with no thread, and any other
-/// bot, is listed immediately. Creation does not pin the owner.
+/// bot, is listed immediately.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn inline_macro_sessions_start_hidden_and_unpinned(pool: PgPool) {
+async fn inline_macro_sessions_start_hidden(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     create_test_bot(&pool).await;
     let (_channel_id, thread_id, originating_message_id) =
@@ -1112,15 +1112,6 @@ async fn inline_macro_sessions_start_hidden_and_unpinned(pool: PgPool) {
     assert!(hidden[0].list_hidden, "the thread session starts hidden");
     assert_eq!(hidden[0].id, inline.id.as_uuid());
     assert!(!hidden[1].list_hidden, "a composer session is listed");
-
-    let pins = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM agent_session_list_pin WHERE agent_session_id = ANY($1)"#,
-        &[inline.id.as_uuid(), composer.id.as_uuid()] as &[Uuid],
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("count pins");
-    assert_eq!(pins, 0, "creating a session does not promote it");
 }
 
 /// A preview reports every existing id with whether the viewer holds a grant:

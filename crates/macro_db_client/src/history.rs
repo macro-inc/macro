@@ -9,7 +9,7 @@ use model::item::{
 };
 use system_properties::{StatusOption, SystemPropertyKey};
 pub use upsert_history::{
-    add_user_history_for_project_tree, pin_agent_session_in_list, upsert_item_last_accessed,
+    add_user_history_for_project_tree, upsert_item_last_accessed,
     upsert_item_last_accessed_timestamp, upsert_user_history, upsert_user_history_timestamp,
 };
 

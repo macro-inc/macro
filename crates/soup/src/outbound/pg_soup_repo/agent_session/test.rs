@@ -401,13 +401,10 @@ async fn by_ids_respects_access(pool: PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// An inline `@macro` session (`list_hidden`) is missing from broad lists
-/// until the viewer opens it. The pin is per user, a named id still finds it,
-/// and hydrating by id does not require the pin.
+/// An inline `@macro` session (`list_hidden`) is missing from broad lists for
+/// everyone, but a named id still finds it and hydrating by id still works.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn hidden_sessions_appear_only_after_that_viewer_opens_them(
-    pool: PgPool,
-) -> anyhow::Result<()> {
+async fn hidden_sessions_stay_out_of_broad_lists(pool: PgPool) -> anyhow::Result<()> {
     let fixture = seed(&pool).await?;
     sqlx::query!(
         "UPDATE agent_session SET list_hidden = TRUE WHERE id = $1",
@@ -457,29 +454,5 @@ async fn hidden_sessions_appear_only_after_that_viewer_opens_them(
     .await?;
     assert_eq!(ids(&hydrated), vec![fixture.shared]);
 
-    sqlx::query!(
-        "INSERT INTO agent_session_list_pin (user_id, agent_session_id) VALUES ($1, $2)",
-        MEMBER,
-        fixture.shared,
-    )
-    .execute(&pool)
-    .await?;
-
-    let member_after = cursor_soup(
-        &pool,
-        request(MEMBER, Some(Expr::val(AgentSessionLiteral::Include))),
-    )
-    .await?;
-    assert_eq!(ids(&member_after), vec![fixture.shared]);
-    let owner_after = cursor_soup(
-        &pool,
-        request(OWNER, Some(Expr::val(AgentSessionLiteral::Include))),
-    )
-    .await?;
-    assert_eq!(
-        ids(&owner_after),
-        vec![fixture.private],
-        "opening it for one person does not list it for the owner"
-    );
     Ok(())
 }
