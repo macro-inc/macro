@@ -24,6 +24,8 @@ fn routed_models_have_house_names() {
     );
     assert_eq!(display_name("fireworks/muse-glimmer-30b"), "Muse Glimmer");
     assert_eq!(display_name("google/gemini-3.8-flash"), "Gemini 3.8 Flash");
+    assert_eq!(display_name("xai/grok-4.7"), "Grok 4.7");
+    assert_eq!(display_name("xai/grok-4.7-fast"), "Grok 4.7 Fast");
     assert_eq!(
         display_name("anthropic/claude-sonnet-5"),
         "anthropic/claude-sonnet-5"
@@ -37,7 +39,7 @@ fn routed_models_use_known_providers() {
     for (model, _) in ROUTED_MODELS {
         let provider = model.split('/').next().expect("a provider segment");
         assert!(
-            matches!(provider, "fireworks" | "google"),
+            matches!(provider, "fireworks" | "google" | "xai"),
             "unregistered provider in {model}"
         );
     }

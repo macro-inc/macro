@@ -86,6 +86,7 @@ fn emits_required_keys() {
         "OPENAI_API_KEY",
         "FIREWORK_API_KEY",
         "GOOGLE_GENERATIVE_AI_API_KEY",
+        "CURSOR_API_KEY",
         "COHERE_API_KEY",
         "CAL_WEBHOOK_SECRET_KEY",
         "CAL_EVENT_TYPE_CONTENT_NAMES_KEY",
@@ -334,9 +335,12 @@ fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
     // No `GITHUB_TOKEN`: the sandbox clones through the egress proxy, which
     // holds the credential on its behalf.
     assert!(!env.contains_key("GITHUB_TOKEN"));
-    // No `CURSOR_API_KEY`: `@cursor` sessions run on the key each user
-    // registers in settings, so there is no deployment-wide one to stub.
-    assert!(!env.contains_key("CURSOR_API_KEY"));
+    // Deployment-wide `CURSOR_API_KEY` is only the in-memory Grok provider.
+    // `@cursor` sessions still run on the key each user registers in settings.
+    assert_eq!(
+        env.get("CURSOR_API_KEY").map(String::as_str),
+        Some("local-cursor-key")
+    );
     assert_eq!(
         env.get("CODEX_OAUTH_KMS_KEY_ID").map(String::as_str),
         Some(resources::CODEX_OAUTH_KMS_ALIAS)

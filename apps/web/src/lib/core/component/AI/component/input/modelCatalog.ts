@@ -35,6 +35,7 @@ const RECOMMENDED_PREFIXES = [
   'Gemini 3.8 Flash',
   'Codex',
   'Kimi K3',
+  'Grok 4.7',
 ] as const;
 
 /** First-screen shortlist size; the rest goes behind More models. */

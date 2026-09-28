@@ -50,7 +50,10 @@ env_var! {
         CerebrasApiKey,
         /// Doppler name is `FIREWORK_API_KEY` (singular), from `shared_ai`.
         FireworkApiKey,
-        GoogleGenerativeAiApiKey
+        GoogleGenerativeAiApiKey,
+        /// Doppler name is `CURSOR_API_KEY`. Authenticates Grok on xAI's
+        /// OpenAI-compatible API. The secret is added in Doppler separately.
+        CursorApiKey,
     }
 }
 
@@ -70,6 +73,11 @@ const FIREWORKS_PROVIDER: &str = "fireworks";
 const FIREWORKS_BASE_URL: &str = "https://api.fireworks.ai/inference/v1";
 /// Provider segment Google Gemini is registered under (native GenerateContent).
 const GOOGLE_PROVIDER: &str = "google";
+/// Provider segment xAI's Grok models are registered under (OpenAI-compatible
+/// Chat Completions). The in-memory Macro agent offers Grok and Grok Fast here.
+const XAI_PROVIDER: &str = "xai";
+/// xAI inference endpoint (OpenAI-compatible Chat Completions API).
+const XAI_BASE_URL: &str = "https://api.x.ai/v1";
 
 /// A routed model id bound to the provider client that serves it.
 pub(crate) enum RoutedModel<'a> {
@@ -314,8 +322,8 @@ impl ModelRouter {
     /// Build a router with the built-in providers from the environment.
     ///
     /// Requires `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CEREBRAS_API_KEY`,
-    /// `FIREWORK_API_KEY`, and `GOOGLE_GENERATIVE_AI_API_KEY`. Chain
-    /// [`with_openai_provider`](Self::with_openai_provider) to add more.
+    /// `FIREWORK_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, and `CURSOR_API_KEY`.
+    /// Chain [`with_openai_provider`](Self::with_openai_provider) to add more.
     pub fn try_from_env() -> Result<Self, AgentError> {
         let env = ApiKeys::new()?;
         let anthropic = anthropic::Client::builder()
@@ -340,7 +348,8 @@ impl ModelRouter {
                 FIREWORKS_PROVIDER,
                 FIREWORKS_BASE_URL,
                 &env.firework_api_key,
-            )
+            )?
+            .with_openai_provider(XAI_PROVIDER, XAI_BASE_URL, &env.cursor_api_key)
     }
 
     /// The process-wide full router, built from the environment on first use.

@@ -23,6 +23,8 @@ const HARNESS_PRETTYNAME: Record<string, string> = {
   'deepseek-v4-pro-0813': 'DeepSeek V4 Pro',
   'muse-glimmer-30b': 'Muse Glimmer',
   'gemini-3.8-flash': 'Gemini 3.8 Flash',
+  'grok-4.7': 'Grok 4.7',
+  'grok-4.7-fast': 'Grok 4.7 Fast',
 };
 
 /** Vendor acronyms that read as shouting only when they are not shouted. */
@@ -85,7 +87,7 @@ export function modelLabel(id: string | undefined, name?: string): string {
   const reported = name?.trim();
   if (reported && reported !== id.trim())
     return reported
-      .replace(/^(anthropic|openai|google|fireworks)\//, '')
+      .replace(/^(anthropic|openai|google|fireworks|xai)\//, '')
       .replace(/^Claude /, '');
   return humanizeModelId(id);
 }

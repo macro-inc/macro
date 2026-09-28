@@ -724,6 +724,9 @@ impl BootStubEnv {
             "GOOGLE_GENERATIVE_AI_API_KEY".into(),
             "local-google-generative-ai-key".into(),
         );
+        // In-memory Grok routes through xAI with this key. `@cursor` sessions
+        // still use each user's own key, not this deployment-wide stub.
+        env.insert("CURSOR_API_KEY".into(), "local-cursor-key".into());
         env.insert("COHERE_API_KEY".into(), "local-cohere-key".into());
         env.insert(
             "CAL_WEBHOOK_SECRET_KEY".into(),

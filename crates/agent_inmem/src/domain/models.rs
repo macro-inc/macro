@@ -16,6 +16,9 @@ pub const ROUTED_MODELS: &[(&str, &str)] = &[
     ("fireworks/deepseek-v4-pro-0813", "DeepSeek V4 Pro"),
     ("fireworks/muse-glimmer-30b", "Muse Glimmer"),
     ("google/gemini-3.8-flash", "Gemini 3.8 Flash"),
+    // xAI Chat Completions, authenticated with `CURSOR_API_KEY`.
+    ("xai/grok-4.7", "Grok 4.7"),
+    ("xai/grok-4.7-fast", "Grok 4.7 Fast"),
 ];
 
 /// House name for an advertised id, or the id itself when the catalog has

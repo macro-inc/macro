@@ -110,3 +110,25 @@ fn google_provider_routes_to_native_gemini() {
 fn google_provider_without_a_client_is_unroutable() {
     assert!(test_router().route("google/gemini-3.8-flash").is_err());
 }
+
+#[test]
+fn xai_provider_routes_grok_to_chat_completions() {
+    let router = test_router().with_openai_client(
+        "xai",
+        openai::CompletionsClient::builder()
+            .api_key("test-cursor-key")
+            .base_url("https://api.x.ai/v1")
+            .build()
+            .unwrap(),
+    );
+
+    for (id, wire_name) in [
+        ("xai/grok-4.7", "grok-4.7"),
+        ("xai/grok-4.7-fast", "grok-4.7-fast"),
+    ] {
+        let routed = router.route(id).unwrap();
+        assert!(matches!(routed, RoutedModel::OpenAiChatCompletions(_)));
+        assert_eq!(routed.provider(), "xai");
+        assert_eq!(routed.model_name(), wire_name);
+    }
+}
