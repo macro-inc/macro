@@ -7,13 +7,19 @@
 /** Which side of the diff a line belongs to, in Pierre's vocabulary. */
 export type DiffSide = 'additions' | 'deletions';
 
-/** A run of lines on one side of a file's diff. */
+/**
+ * A run of lines in a file's diff. It ends on `side`, where content hangs. In
+ * the unified view a range can start on the other side, dragged from deleted
+ * lines into added ones, like GitHub's `start_side`.
+ */
 export type LineRange = {
   path: string;
   side: DiffSide;
-  /** First line of the range, in that side's numbering. */
+  /** Set only when the first line is on the other side from the last. */
+  startSide?: DiffSide;
+  /** First line, in `startSide`'s numbering (or `side`'s when unset). */
   lineNumber: number;
-  /** Last line, equal to `lineNumber` for a single line. */
+  /** Last line, in `side`'s numbering; equal to `lineNumber` for one line. */
   endLineNumber: number;
 };
 

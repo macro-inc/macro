@@ -90,13 +90,27 @@ export function PierreFileDiff(props: {
     return element;
   };
 
+  // A unified drag can run from deleted lines into added ones; its ends are
+  // then in different numberings, so they are kept as given, not reordered.
   const onGutterUtilityClick = (range: SelectedLineRange) => {
-    props.onSelectLines?.({
-      path: props.path,
-      side: range.side ?? 'additions',
-      lineNumber: Math.min(range.start, range.end),
-      endLineNumber: Math.max(range.start, range.end),
-    });
+    const side = range.endSide ?? range.side ?? 'additions';
+    const startSide = range.side ?? side;
+    props.onSelectLines?.(
+      startSide === side
+        ? {
+            path: props.path,
+            side,
+            lineNumber: Math.min(range.start, range.end),
+            endLineNumber: Math.max(range.start, range.end),
+          }
+        : {
+            path: props.path,
+            side,
+            startSide,
+            lineNumber: range.start,
+            endLineNumber: range.end,
+          }
+    );
   };
 
   const currentOptions = (): FileDiffOptions<string> => ({
@@ -146,8 +160,9 @@ export function PierreFileDiff(props: {
           selection
             ? {
                 start: selection.lineNumber,
+                side: selection.startSide ?? selection.side,
                 end: selection.endLineNumber,
-                side: selection.side,
+                endSide: selection.side,
               }
             : null,
           { notify: false }

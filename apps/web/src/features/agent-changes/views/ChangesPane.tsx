@@ -6,12 +6,12 @@
  */
 
 import {
+  createDiffComments,
   type DiffCollapse,
   DiffCounts,
   DiffView,
   StatusLetter,
 } from '@app/components/diff-view';
-import { FileTree } from '@ui/components/FileTree';
 import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
 import CircleNotchIcon from '@phosphor/circle-notch.svg';
 import CopyIcon from '@phosphor/copy.svg';
@@ -20,6 +20,7 @@ import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import WarningCircleIcon from '@phosphor/warning-circle.svg';
 import { Button, cn, Panel } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
+import { FileTree } from '@ui/components/FileTree';
 import { Match, Show, Switch } from 'solid-js';
 import { ChangesHeader } from '../components/ChangesHeader';
 import { CaptureBanner, ChangesNotice } from '../components/ChangesNotice';
@@ -30,7 +31,6 @@ import {
   describeFileCount,
   describeRange,
 } from '../core/changeset';
-import { composingAtLine, noteLines, notesAtLine } from '../core/review-notes';
 
 /** The state narrowed to one kind, for `<Match>` to hand its fields down. */
 function stateOf<K extends ChangesState['kind']>(state: ChangesState, kind: K) {
@@ -84,6 +84,22 @@ function ChangesBody() {
   };
   const refreshing = () =>
     model.refreshing() || model.state().kind === 'capturing';
+  const notes = createDiffComments({
+    items: review.notes,
+    rangeOf: (note) => note,
+    draft: [review.draft, review.setDraft],
+    canComment: () => context.host.agent !== undefined,
+    render: (spot) => (
+      <NoteAnnotation
+        notes={spot.items}
+        draft={spot.draft}
+        onDraft={notes.editDraft}
+        onAdd={review.addNote}
+        onCancel={review.cancelNote}
+        onRemove={review.removeNote}
+      />
+    ),
+  });
   return (
     <DiffView.Root
       files={model.files()}
@@ -187,24 +203,10 @@ function ChangesBody() {
                     </Button>
                   </>
                 )}
-                annotations={(entry) =>
-                  noteLines(review.notes(), review.composing(), entry.file.path)
-                }
-                renderAnnotation={(entry, key) => (
-                  <NoteAnnotation
-                    notes={notesAtLine(review.notes(), entry.file.path, key)}
-                    composing={composingAtLine(
-                      review.composing(),
-                      entry.file.path,
-                      key
-                    )}
-                    onAdd={review.addNote}
-                    onCancel={review.cancelNote}
-                    onRemove={review.removeNote}
-                  />
-                )}
-                selection={review.composing}
-                onSelectLines={context.host.agent ? review.openNote : undefined}
+                annotations={notes.annotations}
+                renderAnnotation={notes.renderAnnotation}
+                selection={notes.selection}
+                onSelectLines={notes.onSelectLines}
               />
             </Match>
             <Match when={true}>

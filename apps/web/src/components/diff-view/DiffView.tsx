@@ -101,8 +101,6 @@ type DiffListProps = {
   selection?: Accessor<LineRange | undefined>;
   /** Turns on the gutter "+" for picking lines; omit for a read-only diff. */
   onSelectLines?: (range: LineRange) => void;
-  /** A column beside a file's diff, such as margin comments. */
-  aside?: (entry: DiffEntry) => JSX.Element;
   /**
    * CSS injected into Pierre's shadow root, e.g. to restyle annotation rows.
    * It targets Pierre's internal markup, so it can break on an upgrade.
@@ -192,33 +190,28 @@ function Stack(props: DiffListProps) {
                     {props.header ? props.header(entry) : <DefaultHeader />}
                   </header>
                   <Show when={!collapsed()}>
-                    <div class="flex min-w-0">
-                      <div class="min-w-0 flex-1">
-                        <Show
-                          when={!entry.note}
-                          fallback={<DiffNote>{entry.note}</DiffNote>}
-                        >
-                          <Show when={entry.diff}>
-                            {(diff) => (
-                              <PierreFileDiff
-                                path={path()}
-                                diff={diff()}
-                                diffStyle={view.diffStyle()}
-                                themeType={view.themeType()}
-                                annotations={props.annotations?.(entry) ?? []}
-                                renderAnnotation={(key) =>
-                                  props.renderAnnotation?.(entry, key)
-                                }
-                                selection={selection()}
-                                onSelectLines={props.onSelectLines}
-                                unsafeCSS={props.unsafeCSS}
-                              />
-                            )}
-                          </Show>
-                        </Show>
-                      </div>
-                      {props.aside?.(entry)}
-                    </div>
+                    <Show
+                      when={!entry.note}
+                      fallback={<DiffNote>{entry.note}</DiffNote>}
+                    >
+                      <Show when={entry.diff}>
+                        {(diff) => (
+                          <PierreFileDiff
+                            path={path()}
+                            diff={diff()}
+                            diffStyle={view.diffStyle()}
+                            themeType={view.themeType()}
+                            annotations={props.annotations?.(entry) ?? []}
+                            renderAnnotation={(key) =>
+                              props.renderAnnotation?.(entry, key)
+                            }
+                            selection={selection()}
+                            onSelectLines={props.onSelectLines}
+                            unsafeCSS={props.unsafeCSS}
+                          />
+                        )}
+                      </Show>
+                    </Show>
                   </Show>
                 </Card>
               </FileContext.Provider>

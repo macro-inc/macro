@@ -10,85 +10,36 @@
 /** Which side of the diff a line belongs to, in Pierre's vocabulary. */
 export type DiffSide = 'additions' | 'deletions';
 
-export type ReviewNote = {
-  id: string;
+/**
+ * Where a note goes: the lines the reviewer picked. It ends on `side`; a
+ * unified range dragged from deleted lines into added ones starts on the
+ * other side, in `startSide`'s numbering.
+ */
+export type NoteAnchor = {
   /** The file the note is on, by its current path. */
   path: string;
   side: DiffSide;
-  /** First line of the annotated range, in that side's numbering. */
+  startSide?: DiffSide;
+  /** First line of the range. */
   lineNumber: number;
   /** Last line, equal to `lineNumber` for a single line. */
   endLineNumber: number;
+};
+
+export type ReviewNote = NoteAnchor & {
+  id: string;
   text: string;
   /** Set once the note has been posted to the agent. */
   sentAt?: string;
   createdAt: string;
 };
 
-/** Where a new note goes: the line the reviewer picked. */
-export type NoteAnchor = {
-  path: string;
-  side: DiffSide;
-  lineNumber: number;
-  endLineNumber: number;
-};
+/** The note being written: where it goes, and its text so far. */
+export type NoteDraft = { range: NoteAnchor; text: string };
 
 export function noteAnchorKey(anchor: NoteAnchor): string {
-  return `${anchor.path}:${anchor.side}:${anchor.lineNumber}-${anchor.endLineNumber}`;
-}
-
-/** A line that notes hang under, in the diff view's annotation shape. */
-export type NoteLine = { key: string; side: DiffSide; lineNumber: number };
-
-/**
- * Notes hang from the last line of their range, like GitHub's review
- * comments; the editor for a new note does the same. One line holds every
- * note that ends there.
- */
-function lineKey(anchor: Pick<NoteAnchor, 'side' | 'endLineNumber'>): string {
-  return `${anchor.side}:${anchor.endLineNumber}`;
-}
-
-/** The lines one file's notes, and the editor for a new one, hang under. */
-export function noteLines(
-  notes: readonly ReviewNote[],
-  composing: NoteAnchor | undefined,
-  path: string
-): NoteLine[] {
-  const lines = new Map<string, NoteLine>();
-  const add = (anchor: NoteAnchor) => {
-    const key = lineKey(anchor);
-    if (!lines.has(key)) {
-      lines.set(key, {
-        key,
-        side: anchor.side,
-        lineNumber: anchor.endLineNumber,
-      });
-    }
-  };
-  for (const note of notes) if (note.path === path) add(note);
-  if (composing?.path === path) add(composing);
-  return [...lines.values()];
-}
-
-/** The notes under one of `noteLines`, in line order. */
-export function notesAtLine(
-  notes: readonly ReviewNote[],
-  path: string,
-  key: string
-): ReviewNote[] {
-  return notesForFile(notes, path).filter((note) => lineKey(note) === key);
-}
-
-/** The new note being written under one of `noteLines`, if it is there. */
-export function composingAtLine(
-  composing: NoteAnchor | undefined,
-  path: string,
-  key: string
-): NoteAnchor | undefined {
-  return composing?.path === path && lineKey(composing) === key
-    ? composing
-    : undefined;
+  const start = anchor.startSide ? `${anchor.startSide}@` : '';
+  return `${anchor.path}:${anchor.side}:${start}${anchor.lineNumber}-${anchor.endLineNumber}`;
 }
 
 export function queuedNotes(notes: readonly ReviewNote[]): ReviewNote[] {
@@ -109,24 +60,18 @@ export function orderNotes(notes: readonly ReviewNote[]): ReviewNote[] {
   );
 }
 
-/** Notes on one file, in line order, queued first. */
-export function notesForFile(
-  notes: readonly ReviewNote[],
-  path: string
-): ReviewNote[] {
-  return notes
-    .filter((note) => note.path === path)
-    .sort((a, b) => a.lineNumber - b.lineNumber);
-}
+const version = (side: DiffSide) => (side === 'additions' ? 'new' : 'old');
 
 export function describeNoteLines(
-  note: Pick<ReviewNote, 'side' | 'lineNumber' | 'endLineNumber'>
+  note: Pick<ReviewNote, 'side' | 'startSide' | 'lineNumber' | 'endLineNumber'>
 ): string {
-  const version = note.side === 'additions' ? 'new' : 'old';
-  if (note.endLineNumber > note.lineNumber) {
-    return `lines ${note.lineNumber}–${note.endLineNumber} (${version})`;
+  if (note.startSide && note.startSide !== note.side) {
+    return `line ${note.lineNumber} (${version(note.startSide)}) to line ${note.endLineNumber} (${version(note.side)})`;
   }
-  return `line ${note.lineNumber} (${version})`;
+  if (note.endLineNumber > note.lineNumber) {
+    return `lines ${note.lineNumber}–${note.endLineNumber} (${version(note.side)})`;
+  }
+  return `line ${note.lineNumber} (${version(note.side)})`;
 }
 
 /**

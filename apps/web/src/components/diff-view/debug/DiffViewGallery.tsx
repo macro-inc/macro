@@ -3,16 +3,16 @@
  * them, over example changes. Registered as the `diff-view-ui` component.
  */
 
-import { FileTree } from '@ui/components/FileTree';
 import CopyIcon from '@phosphor/copy.svg';
 import FileIcon from '@phosphor/file.svg';
 import { Button, SegmentedControl } from '@ui';
+import { FileTree } from '@ui/components/FileTree';
 import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 import { DiffCounts } from '../DiffCounts';
 import { DiffView } from '../DiffView';
 import type { DiffFile, DiffStyle } from '../model/diff-file';
 import { StatusLetter } from '../StatusLetter';
-import { InlineThreadsDemo, MarginCommentsDemo } from './CommentPrototypes';
+import { CommentsDemo } from './CommentsDemo';
 import { generatedChanges, SAMPLE_FILES, SAMPLE_PATCH } from './fixtures';
 
 function Item(props: { label: string; children: JSX.Element }) {
@@ -162,11 +162,8 @@ export default function DiffViewGallery() {
         <Item label="Custom header (split style)">
           <CustomHeaderDemo />
         </Item>
-        <Item label="Comments inline: threads in Pierre's annotation rows">
-          <InlineThreadsDemo />
-        </Item>
-        <Item label="Comments in the margin: our own placement beside each file">
-          <MarginCommentsDemo />
+        <Item label="Review threads under their lines">
+          <CommentsDemo />
         </Item>
         <Item label="Files without diff text">
           <Frame>

@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  composingAtLine,
   describeNoteLines,
   formatNotesForAgent,
-  noteLines,
-  notesAtLine,
-  notesForFile,
   queuedNotes,
   type ReviewNote,
   sendableNotes,
@@ -54,43 +50,13 @@ describe('describeNoteLines', () => {
       )
     ).toBe('lines 3–6 (old)');
   });
-});
 
-describe('notesForFile', () => {
-  it('filters by path and sorts by line', () => {
-    const list = [
-      note({ id: 'a', lineNumber: 20, endLineNumber: 20 }),
-      note({ id: 'b', path: 'b.ts' }),
-      note({ id: 'c', lineNumber: 5, endLineNumber: 5 }),
-    ];
-    expect(notesForFile(list, 'a.ts').map((n) => n.id)).toEqual(['c', 'a']);
-  });
-});
-
-describe('noteLines', () => {
-  it("hangs a file's notes and the new-note editor under the last line of each range", () => {
-    const list = [
-      note({ id: 'a', lineNumber: 8, endLineNumber: 10 }),
-      note({ id: 'b' }),
-      note({ id: 'other', path: 'b.ts' }),
-    ];
-    const composing = {
-      path: 'a.ts',
-      side: 'deletions' as const,
-      lineNumber: 4,
-      endLineNumber: 4,
-    };
-    expect(noteLines(list, composing, 'a.ts')).toEqual([
-      { key: 'additions:10', side: 'additions', lineNumber: 10 },
-      { key: 'deletions:4', side: 'deletions', lineNumber: 4 },
-    ]);
-    expect(notesAtLine(list, 'a.ts', 'additions:10').map((n) => n.id)).toEqual([
-      'a',
-      'b',
-    ]);
-    expect(composingAtLine(composing, 'a.ts', 'deletions:4')).toBe(composing);
-    expect(composingAtLine(composing, 'a.ts', 'additions:10')).toBeUndefined();
-    expect(noteLines(list, composing, 'c.ts')).toEqual([]);
+  it('names both sides of a range dragged from deleted lines into added ones', () => {
+    expect(
+      describeNoteLines(
+        note({ startSide: 'deletions', lineNumber: 87, endLineNumber: 91 })
+      )
+    ).toBe('line 87 (old) to line 91 (new)');
   });
 });
 
