@@ -862,9 +862,18 @@ describe('layoutManager', () => {
       });
     }
 
-    it.each([undefined, 'thread-1'])(
-      'preserves an in-app channel message target through the Chat redirect (thread %s)',
-      async (threadId) => {
+    it.each([
+      { name: 'top-level message' },
+      { name: 'thread reply', threadId: 'thread-1' },
+      { name: 'saved tab', threadId: 'thread-1', saved: { tab: ['recents'] } },
+      {
+        name: 'explicit saved target',
+        threadId: 'thread-1',
+        saved: { messageId: ['saved-message'], threadId: ['saved-thread'] },
+      },
+    ])(
+      'preserves an in-app channel target through the Chat redirect: $name',
+      async ({ threadId, saved }) => {
         const { manager, location, router, dispose } = ingressRouter('/search');
         await router.settled();
 
@@ -876,6 +885,9 @@ describe('layoutManager', () => {
               channel_message_id: 'message-1',
               ...(threadId ? { channel_thread_id: threadId } : {}),
             },
+            ...(saved
+              ? { entryMetadata: { search: { channels: saved } } }
+              : {}),
           },
           { activate: true }
         );
@@ -883,13 +895,18 @@ describe('layoutManager', () => {
 
         expect(location.read().pathname).toBe('/channels/channel-1');
         const search = new URLSearchParams(location.read().search);
-        expect(search.get('s0.channels.messageId')).toBe('message-1');
-        expect(search.get('s0.channels.threadId')).toBe(threadId ?? null);
+        expect(search.get('s0.channels.messageId')).toBe(
+          saved?.messageId?.[0] ?? 'message-1'
+        );
+        expect(search.get('s0.channels.threadId')).toBe(
+          saved?.threadId?.[0] ?? threadId ?? null
+        );
         expect(manager.splits()[0]?.content.entryMetadata).toMatchObject({
           search: {
             channels: {
               messageId: ['message-1'],
               ...(threadId ? { threadId: [threadId] } : {}),
+              ...saved,
             },
           },
         });

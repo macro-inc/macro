@@ -316,17 +316,15 @@ export function resolveContentLocation(
   const channelSearch =
     typeof messageId === 'string'
       ? {
+          ...savedSearch,
           [channelsSearch.namespace]: {
             messageId: [messageId],
             ...(typeof threadId === 'string' ? { threadId: [threadId] } : {}),
+            ...savedSearch?.[channelsSearch.namespace],
           },
         }
       : undefined;
-  const search = filterRouteSearch(
-    routes,
-    route,
-    channelSearch ? { ...channelSearch, ...savedSearch } : savedSearch
-  );
+  const search = filterRouteSearch(routes, route, channelSearch ?? savedSearch);
   const location: SplitLocation = { route };
   if (search) location.search = search;
   return location;
