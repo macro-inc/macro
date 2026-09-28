@@ -60,7 +60,7 @@ export const AgentsRouteView = withAuth(() => {
   };
   usePageViewTracking('agents');
   const flag = useFeatureFlag(enableChatV3Agents);
-  const enabled = () => flag().enabled && !isTouchDevice();
+  const enabled = () => flag().enabled;
   createRenderEffect(() => {
     if (flag().loading) return;
     panel.handle.updateMeta?.({
@@ -101,7 +101,22 @@ export const AgentsRouteView = withAuth(() => {
           </Show>
         }
       >
-        <AgentsView initialRoute={route()} />
+        <Show
+          when={isTouchDevice() && route()}
+          fallback={<AgentsView initialRoute={route()} />}
+        >
+          {(current) => (
+            <RedirectSplit
+              to={{
+                type:
+                  current().conversation.type === 'agent_session'
+                    ? 'agent'
+                    : 'chat',
+                id: current().conversation.id,
+              }}
+            />
+          )}
+        </Show>
       </Show>
     </Show>
   );

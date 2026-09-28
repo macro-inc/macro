@@ -23,9 +23,10 @@ import {
 } from '../core/roster';
 import { createComposerModels } from '../queries/composer-models';
 import { AGENTS_TOUR } from '../tour';
+import { MobileAgentPicker } from './MobileAgentPicker';
 
 /** Agent selection with a per-message model catalog in each submenu. */
-export function AgentPicker(props: {
+export type AgentPickerProps = {
   agents: RosterAgent[];
   selected?: RosterAgent;
   modelOverride?: string;
@@ -41,7 +42,17 @@ export function AgentPicker(props: {
   ) => void;
   onConnect: (agent: RosterAgent) => void;
   onCreate: () => void;
-}) {
+};
+
+export function AgentPicker(props: AgentPickerProps) {
+  return (
+    <Show when={isTouchDevice()} fallback={<DesktopAgentPicker {...props} />}>
+      <MobileAgentPicker {...props} />
+    </Show>
+  );
+}
+
+function DesktopAgentPicker(props: AgentPickerProps) {
   const [open, setOpen] = createSignal(false);
   const catalog = createComposerModels(() => props.selected);
   const macro = () =>

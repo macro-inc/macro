@@ -19,6 +19,7 @@ import {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem } from '@core/component/ContextMenu';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { unreadFilterFn } from '@entity/utils/filter';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
@@ -218,23 +219,28 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <ViewSidebar.Root aria-label="Agents navigation">
-        <ViewSidebar.Header>
-          <div class="flex min-w-0 items-center gap-1">
-            <ViewSidebar.CloseButton />
-            <ViewSidebar.Title>Agents</ViewSidebar.Title>
-          </div>
-        </ViewSidebar.Header>
+        <Show when={!isTouchDevice()}>
+          <ViewSidebar.Header>
+            <div class="flex min-w-0 items-center gap-1">
+              <ViewSidebar.CloseButton />
+              <ViewSidebar.Title>Agents</ViewSidebar.Title>
+            </div>
+          </ViewSidebar.Header>
+        </Show>
 
-        <ViewSidebar.Primary>
+        <div class="px-(--sidebar-gutter) pt-2">
           <SidebarCreateButton
             label="New conversation"
             onCreate={props.onNewConversation}
             ref={tourTarget(AGENTS_TOUR.newChat)}
           />
-        </ViewSidebar.Primary>
+        </div>
 
         <ViewSidebar.Content class="gap-2 overflow-hidden pt-2">
-          <ViewSidebar.Nav aria-label="Agent tools">
+          <ViewSidebar.Nav
+            aria-label="Agent tools"
+            class="touch:flex-row touch:[&>button]:flex-1"
+          >
             <ViewSidebar.Item
               active={props.activePage === 'agents'}
               onClick={() => props.onOpenPage('agents')}
