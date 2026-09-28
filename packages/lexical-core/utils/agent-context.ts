@@ -45,7 +45,7 @@ export type AgentContextReplyTarget =
 
 /** The authorized conversation a prompt was posted in. */
 export type AgentContextParent = {
-  type: 'channel' | 'document';
+  type: 'channel' | 'document' | 'initiative' | 'crm_company' | 'crm_contact';
   id: string;
 };
 
@@ -159,6 +159,9 @@ function describeOrigin(parent: AgentContextParent): string {
   const surface = match(parent.type)
     .with('channel', () => 'a channel thread')
     .with('document', () => 'a document comment thread')
+    .with('initiative', () => 'a project comment thread')
+    .with('crm_company', () => 'a CRM company comment thread')
+    .with('crm_contact', () => 'a CRM contact comment thread')
     .exhaustive();
   return `This prompt was posted in ${surface}, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.`;
 }

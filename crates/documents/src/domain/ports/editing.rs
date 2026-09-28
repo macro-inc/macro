@@ -25,6 +25,25 @@ pub struct EditUsage {
     pub output_tokens: u32,
 }
 
+/// The name readers see on an edit as it happens: the agent or persona the
+/// edit runs as, labelling every cursor the worker draws. Never blank - a
+/// blank name is no name, and the worker then chooses its own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorName(String);
+
+impl EditorName {
+    /// A trimmed, non-blank name; `None` when `name` is blank.
+    pub fn new(name: &str) -> Option<Self> {
+        let name = name.trim();
+        (!name.is_empty()).then(|| Self(name.to_owned()))
+    }
+
+    /// The name as readers see it.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Which pipeline the editing worker runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditMode {
@@ -84,12 +103,17 @@ pub trait EditingWorkerService: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Apply AI-driven edits to `document_id` using a pre-minted `document_token`.
+    ///
+    /// `editor` names the agent or persona the edit runs as; the worker labels
+    /// every cursor it draws with it, so readers watching the document see
+    /// who is editing. `None` leaves the worker to its own names.
     fn edit(
         &self,
         document_id: &str,
         document_token: &DocumentPermissionToken,
         instructions: &str,
         mode: EditMode,
+        editor: Option<EditorName>,
     ) -> impl Future<Output = anyhow::Result<EditResult>> + Send;
 
     /// Delete all AI edit trace records for `document_id`. Called during

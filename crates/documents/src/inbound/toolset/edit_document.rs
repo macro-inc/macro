@@ -144,6 +144,11 @@ where
             internal_error: e.into(),
         })?;
 
+        // The edit is presented as the bot this tool acts as: readers watching
+        // the document see its name on the cursor, the same name the activity
+        // feed attributes the edit to.
+        let editor = ctx.actor_editor_name();
+
         // Honor user cancellation: if the request is cancelled mid-edit, drop the
         // in-flight worker call (closing the HTTP connection so the worker aborts
         // its own LLM work) and surface a `cancelled` tool error -- matching how
@@ -155,7 +160,7 @@ where
                     internal_error: anyhow::anyhow!("edit cancelled by user. document might be left in a partially edited state."),
                 });
             }
-            r = ctx.editing.edit(&self.document_id, &document_token, &self.instructions, self.mode()) => r,
+            r = ctx.editing.edit(&self.document_id, &document_token, &self.instructions, self.mode(), editor) => r,
         }
         .map_err(|e| ToolCallError {
             description: e.to_string(),

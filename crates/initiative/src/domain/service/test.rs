@@ -1,4 +1,8 @@
 use chrono::{TimeZone, Utc};
+
+mod access;
+mod events;
+mod reads;
 use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType,
     OwnerAccessLevel, ViewAccessLevel,
@@ -83,6 +87,26 @@ fn receipt<T: entity_access::domain::models::RequiredPermission>(
     .expect("permission satisfies the receipt")
 }
 
+fn task_receipt(user_id: &str, task_id: &str) -> EntityAccessReceipt<EditAccessLevel> {
+    EntityAccessReceipt::try_new_authenticated_user(
+        user(user_id),
+        Entity {
+            entity_id: task_id.to_string(),
+            entity_type: EntityType::Document,
+        },
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit,
+        },
+    )
+    .expect("task edit capability")
+}
+
+fn assignment(task_id: &str) -> TaskAssignment {
+    TaskAssignment::Authorized {
+        receipt: task_receipt(OWNER, task_id),
+    }
+}
+
 fn edit_receipt() -> EntityAccessReceipt<EditAccessLevel> {
     receipt(OWNER, EntityType::Initiative, AccessLevel::Edit)
 }
@@ -109,7 +133,11 @@ fn service_with_documents(
     repo: MockInitiativeRepo,
     documents: MockInitiativeDescriptionDocuments,
 ) -> InitiativeServiceImpl<MockInitiativeRepo, MockInitiativeDescriptionDocuments> {
-    InitiativeServiceImpl::new(repo, documents)
+    InitiativeServiceImpl::new(
+        repo,
+        documents,
+        std::sync::Arc::new(reads::FakeResources::default()),
+    )
 }
 
 fn share_update() -> UpdateSharePermissionRequestV2 {
@@ -376,7 +404,7 @@ async fn edit_receipt_cannot_change_share_permission() {
 }
 
 #[tokio::test]
-async fn edit_receipt_renames_and_replaces_members() {
+async fn owner_receipt_renames_and_replaces_members() {
     let mut repo = MockInitiativeRepo::new();
     repo.expect_get_detail()
         .return_once(|_| Box::pin(async { Ok(Some(detail(vec![user(MEMBER)]))) }));
@@ -390,7 +418,7 @@ async fn edit_receipt_renames_and_replaces_members() {
 
     let updated = service(repo)
         .update(
-            edit_receipt(),
+            owner_edit_receipt(),
             UpdateInitiativeRequest {
                 name: Some("Renamed".into()),
                 member_ids: Some(vec![OTHER.into()]),
@@ -432,7 +460,7 @@ async fn update_rejects_bad_member_id() {
         .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
     let result = service(repo)
         .update(
-            edit_receipt(),
+            owner_edit_receipt(),
             UpdateInitiativeRequest {
                 member_ids: Some(vec!["nope".into()]),
                 ..Default::default()
@@ -498,12 +526,7 @@ async fn assign_rejects_non_initiative_receipts() {
     let document_receipt: EntityAccessReceipt<EditAccessLevel> =
         receipt(OWNER, EntityType::Document, AccessLevel::Edit);
     let result = service(repo)
-        .assign_tasks(
-            document_receipt,
-            vec![TaskAssignment::Candidate {
-                task_id: "task-1".into(),
-            }],
-        )
+        .assign_tasks(document_receipt, vec![assignment("task-1")])
         .await;
     assert!(matches!(result, Err(InitiativeError::BadRequest(_))));
 }
@@ -515,16 +538,19 @@ async fn assign_dedupes_enforces_cap_and_preserves_order() {
         .withf(|_, task_ids| task_ids == &["t1".to_string(), "t2".to_string()])
         .return_once(|_, _| {
             Box::pin(async {
-                Ok(vec![
-                    AssignTasksResult {
-                        task_id: "t1".into(),
-                        status: AssignTaskStatus::Assigned,
-                    },
-                    AssignTasksResult {
-                        task_id: "t2".into(),
-                        status: AssignTaskStatus::Moved,
-                    },
-                ])
+                Ok(crate::domain::events::AssignedTasks {
+                    results: vec![
+                        AssignTasksResult {
+                            task_id: "t1".into(),
+                            status: AssignTaskStatus::Assigned,
+                        },
+                        AssignTasksResult {
+                            task_id: "t2".into(),
+                            status: AssignTaskStatus::Moved,
+                        },
+                    ],
+                    changes: Vec::new(),
+                })
             })
         });
 
@@ -532,21 +558,15 @@ async fn assign_dedupes_enforces_cap_and_preserves_order() {
         .assign_tasks(
             edit_receipt(),
             vec![
-                TaskAssignment::Candidate {
-                    task_id: "t1".into(),
-                },
+                assignment("t1"),
                 TaskAssignment::SkippedNoPermission {
                     task_id: "skip".into(),
                 },
-                TaskAssignment::Candidate {
-                    task_id: "t1".into(),
-                },
+                assignment("t1"),
                 TaskAssignment::NotFound {
                     task_id: "missing".into(),
                 },
-                TaskAssignment::Candidate {
-                    task_id: "t2".into(),
-                },
+                assignment("t2"),
             ],
         )
         .await
@@ -575,9 +595,7 @@ async fn assign_dedupes_enforces_cap_and_preserves_order() {
     );
 
     let over_cap: Vec<TaskAssignment> = (0..=MAX_TASKS_PER_ASSIGN)
-        .map(|i| TaskAssignment::Candidate {
-            task_id: format!("task-{i}"),
-        })
+        .map(|i| assignment(&format!("task-{i}")))
         .collect();
     let capped = service(MockInitiativeRepo::new())
         .assign_tasks(edit_receipt(), over_cap)
@@ -612,7 +630,7 @@ async fn get_list_and_unassign_call_the_repo() {
         })
     });
     repo.expect_unassign_task()
-        .return_once(|_, _| Box::pin(async { Ok(()) }));
+        .return_once(|_, _| Box::pin(async { Ok(None) }));
 
     let svc = service(repo);
     svc.internal_get_basic(initiative_id())
@@ -620,7 +638,7 @@ async fn get_list_and_unassign_call_the_repo() {
         .expect("basic");
     svc.get(view_receipt()).await.expect("detail");
     svc.list(&user(OWNER)).await.expect("list");
-    svc.unassign_task(edit_receipt(), "task-1")
+    svc.unassign_task(edit_receipt(), task_receipt(OWNER, "task-1"))
         .await
         .expect("unassign");
 }

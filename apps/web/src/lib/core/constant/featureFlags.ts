@@ -388,6 +388,7 @@ export const ENABLE_CALLS = true;
 export const enableQuickCalls = defineFlag({
   key: 'enable-quick-calls',
   env: 'ENABLE_QUICK_CALLS',
+  default: true,
 });
 
 // Email signatures: the settings editor, the compose / reply / AI-chat signature
@@ -414,6 +415,15 @@ export const enableCrmLists = defineFlag({
   key: 'enable-crm-lists',
   env: 'ENABLE_CRM_LISTS',
   default: false,
+});
+
+// Native Projects frontend: navigation, creation, task assignment and project
+// views. Enabled in development; PostHog controls production rollout. Override
+// with VITE_ENABLE_PROJECTS; legacy Files folders are unaffected.
+export const enableProjects = defineFlag({
+  key: 'enable-projects',
+  env: 'ENABLE_PROJECTS',
+  default: onInDev,
 });
 
 // Reminders: the "Remind me" entry in the command menu, the soup

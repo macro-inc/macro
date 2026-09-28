@@ -925,6 +925,10 @@ export type ApiEntityFilterAst = {
      */
     ef?: unknown;
     /**
+     * Restrict to the authenticated viewer's favorites before pagination when true.
+     */
+    favorites_only?: boolean | null;
+    /**
      * the filters that should be applied to foreign entity records
      */
     fef?: unknown;
@@ -3466,7 +3470,7 @@ export type CreateCommentResponse = CommentThread & {
  */
 export type CreateCrmCommentRequest = {
     /**
-     * Arbitrary client metadata for the comment.
+     * Ignored: messages keep no client metadata.
      */
     metadata?: unknown;
     /**
@@ -3479,8 +3483,7 @@ export type CreateCrmCommentRequest = {
      */
     threadId?: string | null;
     /**
-     * Metadata to set on a newly created thread (ignored when replying
-     * without a value).
+     * Ignored: discussions keep no thread metadata.
      */
     threadMetadata?: unknown;
 };
@@ -3667,7 +3670,8 @@ export type CreateInitiativeRequest = {
      */
     name: string;
     /**
-     * When true, share with the owner's team at create time.
+     * Share with the owner's team at create time. Defaults to true; users without
+     * a team create an unshared initiative. Explicit false skips the team grant.
      */
     shareWithTeam?: boolean | null;
 };
@@ -4478,8 +4482,8 @@ export type DeleteCommentResponse = {
 };
 
 /**
- * Outcome of soft-deleting a CRM comment: reports whether the parent thread
- * was soft-deleted too (it is when the deleted comment was its last live one).
+ * Outcome of deleting a CRM comment: reports whether its discussion went with
+ * it (it does when the deleted comment was the discussion's first).
  */
 export type DeleteCrmCommentResult = {
     /**
@@ -4487,8 +4491,8 @@ export type DeleteCrmCommentResult = {
      */
     commentId: string;
     /**
-     * Whether the thread itself was soft-deleted because no live comments
-     * remained.
+     * Whether the whole discussion was deleted because the comment was its
+     * first.
      */
     threadDeleted: boolean;
     /**
@@ -4607,6 +4611,10 @@ export type DocumentContentUploadedMetadata = {
  */
 export type DocumentCopiedMetadata = {
     /**
+     * Who mechanically created the copy.
+     */
+    actor?: string | null;
+    /**
      * The id of the newly created copy.
      */
     document_id: string;
@@ -4615,6 +4623,7 @@ export type DocumentCopiedMetadata = {
      */
     document_name: string;
     file_type?: null | FileType;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * The principal who owns the new copy.
      */
@@ -5471,9 +5480,17 @@ export type EntityFilters = {
      */
     email_filters?: EmailFilters;
     /**
+     * Restrict results to the authenticated viewer's favorites when true.
+     */
+    favorites_only?: boolean | null;
+    /**
      * the bundled [ForeignEntityFilters]
      */
     foreign_entity_filters?: ForeignEntityFilters;
+    /**
+     * Initiative filters. Initiatives are opt-in.
+     */
+    initiative_filters?: InitiativeFilters;
     /**
      * the bundled [ProjectFilters]
      */
@@ -5553,7 +5570,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.
@@ -6726,6 +6743,40 @@ export type InitiativeDetail = {
 };
 
 /**
+ * Filters for initiatives.
+ */
+export type InitiativeFilters = {
+    /**
+     * Inclusive lower due-date bound.
+     */
+    due_after?: string | null;
+    /**
+     * Inclusive upper due-date bound.
+     */
+    due_before?: string | null;
+    /**
+     * Opt this query into initiatives at all. Initiatives are off by
+     * default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
+     * Asking for specific `initiative_ids` or `owners` also opts in.
+     */
+    include?: boolean;
+    /**
+     * Initiative ids to filter by. Empty to include all accessible initiatives.
+     */
+    initiative_ids?: Array<string>;
+    /**
+     * Case-insensitive name substring.
+     */
+    name?: string | null;
+    /**
+     * Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+     * owner.
+     */
+    owners?: Array<string>;
+};
+
+/**
  * Opaque identifier for an initiative. Minted as UUIDv7 in application code.
  */
 export type InitiativeId = string;
@@ -7211,6 +7262,24 @@ export type MessageParent = {
      */
     id: DocumentId;
     type: 'document';
+} | {
+    /**
+     * An initiative, presented as a project in the application.
+     */
+    id: string;
+    type: 'initiative';
+} | {
+    /**
+     * A CRM company.
+     */
+    id: string;
+    type: 'crm_company';
+} | {
+    /**
+     * A CRM contact.
+     */
+    id: string;
+    type: 'crm_contact';
 };
 
 /**
@@ -8525,6 +8594,12 @@ export type SessionMentionedMetadata = {
      */
     mentioned: Array<MacroUserIdStr>;
     mentioned_by?: null | MacroUserIdStr;
+    /**
+     * The channel or document message the prompt was posted as, when it
+     * arrived from a thread rather than the session view. That message
+     * already notified the users it named when it was posted.
+     */
+    origin_message_id?: string | null;
 };
 
 /**
@@ -9651,6 +9726,45 @@ export type SoupForeignEntity = {
 };
 
 /**
+ * An initiative (called a project in the frontend) in the Soup feed.
+ */
+export type SoupInitiativeSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * Creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Document holding the initiative description.
+     */
+    descriptionDocumentId?: string | null;
+    /**
+     * Initiative identifier.
+     */
+    id: string;
+    /**
+     * Initiative display name.
+     */
+    name: string;
+    /**
+     * Initiative owner.
+     */
+    ownerId: string;
+    /**
+     * Last modification timestamp.
+     */
+    updatedAt: string;
+    /**
+     * Last time the requesting user viewed the initiative.
+     */
+    viewedAt?: string | null;
+};
+
+/**
  * A single item in the Soup feed.
  */
 export type SoupItem = {
@@ -9671,6 +9785,12 @@ export type SoupItem = {
      */
     data: SoupProjectSoupPropertiesField;
     tag: 'project';
+} | {
+    /**
+     * Initiative entity.
+     */
+    data: SoupInitiativeSoupPropertiesField;
+    tag: 'initiative';
 } | {
     /**
      * Email thread item.
@@ -10260,7 +10380,7 @@ export type ThreadOrigin = {
 };
 
 /**
- * Partial changes to the lifecycle and placement of a document discussion.
+ * Partial changes to discussion lifecycle or document anchor placement.
  */
 export type ThreadPatch = {
     /**
@@ -10628,7 +10748,7 @@ export type UpdateCrmTeamSettingsRequest = {
  */
 export type UpdateInitiativeRequest = {
     /**
-     * Full replacement member list when present.
+     * Full replacement collaborator list when present. Only the owner may send this field.
      */
     memberIds?: Array<string> | null;
     /**

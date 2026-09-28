@@ -11,11 +11,11 @@ import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import SpinnerIcon from '@phosphor/spinner.svg';
 import { createEffect, onMount, Show } from 'solid-js';
 import { HomeChatStart } from './components/HomeChatStart';
 import { HomeList } from './components/HomeList';
 import { HomeListLayout } from './components/HomeListLayout';
+import { HomeListSkeleton } from './components/HomeListSkeleton';
 import { HomeReturnBreadcrumb } from './components/HomeReturnBreadcrumb';
 import { HomeTabs } from './components/HomeTabs';
 import { HomeViewProvider, useHomeView } from './home-view-context';
@@ -28,9 +28,12 @@ export type HomeViewProps = {
 };
 
 function HomeFallback() {
+  const { state } = useHomeView();
   return (
-    <div class="grid min-h-0 min-w-0 flex-1 place-items-center text-ink-muted">
-      <SpinnerIcon aria-label="Loading Home" class="size-5 animate-spin" />
+    <div class="mt-3 min-h-0 min-w-0 flex-1 overflow-hidden touch:mt-0 touch:pt-(--mobile-content-inset-top)">
+      <HomeListSkeleton
+        grouped={state.groupBy === 'date' && !state.search.trim()}
+      />
     </div>
   );
 }

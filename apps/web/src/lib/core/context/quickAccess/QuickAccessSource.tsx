@@ -191,10 +191,15 @@ function toTimestamp(value: DateValue | null | undefined): number {
   return toDate(value).getTime();
 }
 
+function latestDate<T extends DateValue>(
+  a: T | null | undefined,
+  b: T | null | undefined
+): T | undefined {
+  return (toTimestamp(a) > toTimestamp(b) ? a : b) ?? undefined;
+}
+
 function channelToQuickAccessItem(
-  channel: CachedGraphqlChannel,
-  sortTimestamp = toTimestamp(channel.viewedAt) ||
-    toTimestamp(channel.updatedAt)
+  channel: CachedGraphqlChannel
 ): QuickAccessItem {
   const bucket: Bucket =
     channel.channelType === 'direct_message' ? 'dm' : 'channel';
@@ -203,7 +208,8 @@ function channelToQuickAccessItem(
     id: channel.id,
     bucket,
     searchText: channel.name,
-    sortTimestamp,
+    sortTimestamp:
+      toTimestamp(channel.viewedAt) || toTimestamp(channel.updatedAt),
     timestamps: {
       viewedAt: channel.viewedAt,
       updatedAt: channel.updatedAt,
@@ -225,7 +231,10 @@ function equalActivityMaps(
   return true;
 }
 
-function getHistoryItemVersion(item: HistoryItem, viewedAt?: string): string {
+function getHistoryItemVersion(
+  item: HistoryItem,
+  viewedAt?: DateValue | null
+): string {
   return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}`;
 }
 
@@ -273,7 +282,7 @@ function mergeSortedIndices(a: IndexEntry[], b: IndexEntry[]): IndexEntry[] {
   let j = 0;
 
   while (i < a.length && j < b.length) {
-    if (a[i].sortTimestamp >= b[j].sortTimestamp) {
+    if (compareRecency(a[i], b[j]) <= 0) {
       result.push(a[i]);
       i++;
     } else {
@@ -303,8 +312,36 @@ function mergeMultipleSortedIndices(arrays: IndexEntry[][]): IndexEntry[] {
   return arrays.reduce((acc, arr) => mergeSortedIndices(acc, arr));
 }
 
+// Match the cache browse cursor's typename/id tie-break, including document
+// subtypes that share one normalized record type. This keeps later pages from
+// moving ahead of already loaded rows when their timestamps are equal.
+const RECORD_TYPE_BY_BUCKET: Record<Bucket, string> = {
+  channel: 'GraphqlSoupChannel',
+  dm: 'GraphqlSoupChannel',
+  chat: 'GraphqlSoupChat',
+  crm_company: 'GraphqlSoupCrmCompany',
+  document: 'GraphqlSoupDocument',
+  task: 'GraphqlSoupDocument',
+  snippet: 'GraphqlSoupDocument',
+  skill: 'GraphqlSoupDocument',
+  note: 'GraphqlSoupDocument',
+  email: 'GraphqlSoupEmailThread',
+  project: 'GraphqlSoupProject',
+  person: 'GraphqlUser',
+  agent_session: 'AgentSession',
+};
+
+function compareRecency(a: IndexEntry, b: IndexEntry): number {
+  const timestampOrder = b.sortTimestamp - a.sortTimestamp;
+  if (timestampOrder) return timestampOrder;
+  const aType = RECORD_TYPE_BY_BUCKET[a.bucket];
+  const bType = RECORD_TYPE_BY_BUCKET[b.bucket];
+  if (aType !== bType) return aType < bType ? -1 : 1;
+  return a.id === b.id ? 0 : a.id < b.id ? -1 : 1;
+}
+
 function sortIndexEntries(entries: IndexEntry[]): IndexEntry[] {
-  entries.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
+  entries.sort(compareRecency);
   return entries;
 }
 
@@ -390,10 +427,15 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const hidden = hiddenIds();
     for (const item of historyData) {
       if (item.deletedAt) continue;
+      if (
+        item.type === 'document' &&
+        item.subType?.type === 'initiative_description'
+      )
+        continue;
       if (hidden.has(item.id)) continue;
       seenIds.add(item.id);
 
-      const viewedAt = viewedAtMap.get(item.id);
+      const viewedAt = latestDate(viewedAtMap.get(item.id), item.viewedAt);
 
       const version = getHistoryItemVersion(item, viewedAt);
       const cached = itemCache.get(item.id);
@@ -451,9 +493,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         : []
       : channels().map(apiChannelToQuickAccessChannel);
     for (const sourceChannel of channelData) {
-      const viewedAt = cacheHost
-        ? sourceChannel.viewedAt
-        : (viewedAtMap.get(sourceChannel.id) ?? sourceChannel.viewedAt);
+      const recentlyViewedAt = viewedAtMap.get(sourceChannel.id);
+      const viewedAt = latestDate(recentlyViewedAt, sourceChannel.viewedAt);
       const channel = { ...sourceChannel, viewedAt };
       const version = getChannelVersion(channel, viewedAt);
       const cached = itemCache.get(channel.id);
@@ -942,15 +983,25 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                 if (cached) return [cached];
                 const historyItem = historyById.get(id);
                 if (historyItem) {
-                  const entity = historyItemToEntity(historyItem);
+                  const viewedAt = latestDate(
+                    soupViewedAtMap().get(id),
+                    historyItem.viewedAt
+                  );
+                  const entity = {
+                    ...historyItemToEntity(historyItem),
+                    viewedAt,
+                  };
                   return [
                     {
                       kind: 'entity',
                       id,
                       bucket: getBucketForHistoryItem(historyItem),
                       searchText: getEntitySearchText(entity),
-                      sortTimestamp: document.timestampMs,
+                      sortTimestamp:
+                        toTimestamp(viewedAt) ||
+                        toTimestamp(historyItem.updatedAt),
                       timestamps: {
+                        viewedAt,
                         updatedAt: historyItem.updatedAt,
                         createdAt: historyItem.createdAt,
                       },
@@ -966,7 +1017,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                       id,
                       bucket: 'crm_company',
                       searchText: getCrmCompanySearchText(company),
-                      sortTimestamp: document.timestampMs,
+                      sortTimestamp:
+                        toTimestamp(company.viewedAt) ||
+                        toTimestamp(company.updatedAt),
                       timestamps: {
                         viewedAt: company.viewedAt,
                         updatedAt: company.updatedAt,
@@ -977,9 +1030,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                   ];
                 }
                 const channel = channelsById.get(id);
-                return channel
-                  ? [channelToQuickAccessItem(channel, document.timestampMs)]
-                  : [];
+                return channel ? [channelToQuickAccessItem(channel)] : [];
               });
             },
           })
@@ -989,13 +1040,18 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       const local = localItems();
       if (!projected || options?.enabled?.() === false) return local;
 
-      // Search describes cached contents, not corpus completeness. Preserve
-      // projection rank, then append candidates from the existing local sources.
+      // Search describes cached contents, not corpus completeness. Merge known
+      // rows before sorting recency so hydration cannot promote older items.
       const ranked = projected
         .items()
         .map((item) => itemCache.get(item.id)?.item ?? item);
       const seen = new Set(ranked.map((item) => item.id));
-      return ranked.concat(local.filter((item) => !seen.has(item.id)));
+      const combined = ranked.concat(
+        local.filter((item) => !seen.has(item.id))
+      );
+      return options?.searchTerm?.().trim()
+        ? combined
+        : combined.sort(compareRecency);
     });
     return {
       items: list,

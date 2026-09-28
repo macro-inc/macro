@@ -6,6 +6,7 @@ import { driveLocationLabel } from '@app/features/drive-view/core/location-label
 import type { DriveState } from '@app/features/drive-view/core/types';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { projectRouteId } from '@app/features/projects/core/route';
 import { useSplitRouter } from '@app/lib/split-router';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { type BlockName, NonDocumentBlockTypes } from '@core/block';
@@ -68,6 +69,10 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   return (
     match(data)
       .returnType<{ type: SplitContent['type']; id: string } | undefined>()
+      .with({ type: 'initiative' }, (entity) => ({
+        type: 'component' as const,
+        id: projectRouteId({ id: entity.id, section: 'overview' }),
+      }))
       .with({ type: 'document' }, (entity) => ({
         type: fileTypeToBlockName(entity.subType?.type ?? entity.fileType) as
           | BlockName

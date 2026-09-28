@@ -5,6 +5,7 @@ import {
   MODEL_PROVIDER_ICON,
   Model,
   modelUsageHint,
+  PAID_MODELS,
 } from '@core/component/AI/constant';
 import type { TModel } from '@core/component/AI/types';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
@@ -32,9 +33,10 @@ type ModelSelectorProps = {
   compact?: boolean;
 };
 
-const ALL_AVAILABLE: ModelOption[] = (Object.values(Model) as TModel[]).map(
-  (id) => ({ id, available: true })
-);
+const ALL_AVAILABLE: ModelOption[] = PAID_MODELS.map((id) => ({
+  id,
+  available: true,
+}));
 
 const MODEL_DESCRIPTION: Record<TModel, string> = {
   [Model.sonnet5]: 'Everyday writing, coding, and questions',

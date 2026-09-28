@@ -1,9 +1,11 @@
+import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { getChannelEntityTarget } from '@app/features/next-soup/utils';
 import {
   ChannelDetail,
   ChannelDetailTopBar,
 } from '@channel/Channel/ChannelDetail';
 import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { ChannelEntity } from '@entity';
 import { createMemo } from 'solid-js';
 
@@ -15,6 +17,13 @@ import { createMemo } from 'solid-js';
  * applied the same rule via its stringified navigation key).
  */
 export function ChannelDetailView(props: { channel: ChannelEntity }) {
+  const panel = useSplitPanelOrThrow();
+  useBlockEntityCommands({
+    id: props.channel.id,
+    scopeId: panel.splitHotkeyScope,
+    resolveEntity: () => props.channel,
+  });
+
   let lastTargetKey: string | undefined;
   const target = createMemo<ChannelTargetRequest | undefined>((previous) => {
     const key = `${props.channel.id}:${props.channel.target?.messageId ?? ''}:${
@@ -22,7 +31,9 @@ export function ChannelDetailView(props: { channel: ChannelEntity }) {
     }`;
     if (lastTargetKey !== undefined && key === lastTargetKey) return previous;
     lastTargetKey = key;
-    const clickTarget = getChannelEntityTarget(props.channel);
+    const clickTarget = getChannelEntityTarget(props.channel, {
+      scopeChannelThreads: false,
+    });
     if (!clickTarget) return undefined;
     return clickTarget.kind === 'latest'
       ? { kind: 'latest' }

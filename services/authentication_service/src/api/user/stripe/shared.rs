@@ -27,6 +27,9 @@ pub struct StripePrices {
 impl StripePrices {
     /// The price to sell `plan` at.
     pub fn price_id(&self, plan: PaidPlan) -> Result<&str, StripeOperationError> {
+        if !PaidPlan::PURCHASABLE.contains(&plan) {
+            return Err(StripeOperationError::PlanUnavailable);
+        }
         match plan {
             PaidPlan::Premium => Ok(&self.premium),
             PaidPlan::Max => self
@@ -146,3 +149,6 @@ pub struct StripeSessionResponse {
     /// The URL to redirect the user to
     pub url: String,
 }
+
+#[cfg(test)]
+mod test;

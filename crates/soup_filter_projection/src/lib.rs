@@ -367,7 +367,8 @@ pub fn project_soup_item<T>(
         | SoupItem::CrmCompany(_)
         | SoupItem::ForeignEntity(_)
         | SoupItem::Reminder(_)
-        | SoupItem::AgentSession(_) => Ok(None),
+        | SoupItem::AgentSession(_)
+        | SoupItem::Initiative(_) => Ok(None),
     }
 }
 

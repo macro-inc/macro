@@ -91,29 +91,32 @@ describe('buildEmailQuery', () => {
     );
     expect(args.transport).toBeUndefined();
     expect(args.body.emailView).toBe('all');
-    expect(serialize(args.body.ef)).toContain(
-      serialize({ l: { ThreadId: 'starred-a' } })
-    );
+    expect(args.body.favorites_only).toBe(true);
+    expect(serialize(args.body)).not.toContain('starred-a');
     const input = makeGraphqlSoupInput(args);
     expect(input.initial?.emailView).toBe('ALL');
     const filter = serialize(input.initial?.filters?.emailFilter);
-    expect(filter).toContain(serialize({ literal: { threadId: 'starred-a' } }));
-    expect(filter).toContain(serialize({ literal: { threadId: 'starred-b' } }));
+    expect(input.initial?.filters?.favoritesOnly).toBe(true);
     expect(filter).toContain(serialize({ literal: { owner: 'inbox-a' } }));
     expect(filter).toContain(serialize({ literal: { read: false } }));
     expect(filter).not.toContain('inboxVisible');
   });
 
-  it('matches no email when favorites are empty or unresolved', () => {
-    for (const favoriteThreadIds of [undefined, []]) {
-      const args = buildEmailQuery(
-        contextFor({ tab: 'favorites', favoriteThreadIds })
-      );
-      expect(args.body.ef).toEqual({ l: { ThreadId: NIL } });
-      expect(makeGraphqlSoupInput(args).initial?.filters?.emailFilter).toEqual({
-        tree: { literal: { threadId: NIL } },
-      });
+  it('keeps the Soup query identical as favorite membership changes', () => {
+    const args = buildEmailQuery(contextFor({ tab: 'favorites' }));
+    for (const favoriteThreadIds of [[], ['a'], ['a', 'b']]) {
+      expect(
+        buildEmailQuery(contextFor({ tab: 'favorites', favoriteThreadIds }))
+      ).toEqual(args);
     }
+    expect(args.body.favorites_only).toBe(true);
+    const admitted = buildEmailQuery(
+      contextFor({ tab: 'favorites', facets: { read: ['unread'] } }),
+      ['a']
+    );
+    expect(admitted.body.favorites_only).toBe(true);
+    expect(serialize(admitted.body.ef)).toContain('a');
+    expect(serialize(admitted.body.ef)).not.toContain('Read');
   });
 
   it('keeps a full admission batch below REST and GraphQL ingress recursion limits', () => {

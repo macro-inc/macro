@@ -1,5 +1,7 @@
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { clause, compileClause, confine } from '@app/features/soup/filters';
-import { type GithubPullRequestEntity, isGithubPrEntity } from '@entity';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { isGithubPrEntity } from '@entity';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { Accessor } from 'solid-js';
 import type { ReviewsScope, ReviewsSortId } from '../reviews-types';
@@ -24,6 +26,7 @@ export function useReviewsQuery(
   scope: Accessor<ReviewsScope>,
   enabled: Accessor<boolean>
 ) {
+  const notificationSource = useGlobalNotificationSource();
   const query = useSoupAstItemsQuery(
     () => ({
       params: {
@@ -37,9 +40,11 @@ export function useReviewsQuery(
     () => ({ enabled: enabled(), showSupportedForeignEntities: true })
   );
 
-  const reviews = (): GithubPullRequestEntity[] => {
+  const reviews = () => {
     if (!query.isEnabled || query.isLoading) return [];
-    return (query.data?.entities ?? []).filter(isGithubPrEntity);
+    return (query.data?.entities ?? [])
+      .filter(isGithubPrEntity)
+      .map((entity) => withEntityNotifications(entity, notificationSource));
   };
   return {
     reviews,

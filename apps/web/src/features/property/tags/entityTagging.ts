@@ -28,6 +28,7 @@ export function tagEntityType(
   return match(entity.type)
     .with('document', () => EntityType.DOCUMENT)
     .with('email', () => EntityType.THREAD)
+    .with('initiative', () => EntityType.INITIATIVE)
     .with('project', () => EntityType.PROJECT)
     .with('chat', () => EntityType.CHAT)
     .with('call', () => EntityType.CALL_RECORD)

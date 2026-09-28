@@ -4,10 +4,13 @@ use async_recursion::async_recursion;
 use entity_access_db_utils::{
     AccessLevel, EntityAccessSourceType, EntityType, insert_entity_access_row,
 };
+use entity_registry::BotFacts;
+use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentMetadata, FileType, FileTypeExt};
 use model::folder::{FileSystemNode, FileSystemNodeWithIds, UploadFolderWithIdsResponse};
 use model::project::Project;
+use model_owner::Owner;
 use models_permissions::share_permission::SharePermissionV2;
 use sqlx::{Postgres, Transaction};
 
@@ -15,8 +18,9 @@ use crate::domain::models::{MarkedUploadedTree, UploadFolderRepoArgs};
 
 use super::share;
 
-pub(super) async fn upload_folder(
+pub(super) async fn upload_folder<B: BotFacts>(
     transaction: &mut Transaction<'_, Postgres>,
+    registrar: &OwnedEntityRegistrar<B>,
     args: UploadFolderRepoArgs,
 ) -> Result<UploadFolderWithIdsResponse, sqlx::Error> {
     let root_project = create_pending_project(
@@ -41,6 +45,7 @@ pub(super) async fn upload_folder(
     for (name, node) in root_content {
         let extended_node = traverse_with_ids(
             transaction,
+            registrar,
             node,
             args.user_id.clone(),
             &args.share_permission,
@@ -68,8 +73,9 @@ pub(super) async fn upload_folder(
 
 #[async_recursion]
 #[expect(clippy::too_many_arguments, reason = "recursive tree traversal state")]
-async fn traverse_with_ids(
+async fn traverse_with_ids<B>(
     transaction: &mut Transaction<'_, Postgres>,
+    registrar: &OwnedEntityRegistrar<B>,
     node: &FileSystemNode,
     user_id: MacroUserIdStr<'static>,
     share_permission: &SharePermissionV2,
@@ -78,12 +84,21 @@ async fn traverse_with_ids(
     upload_request_id: &str,
     project_ids: &mut Vec<String>,
     documents: &mut Vec<DocumentMetadata>,
-) -> Result<FileSystemNodeWithIds, sqlx::Error> {
+) -> Result<FileSystemNodeWithIds, sqlx::Error>
+where
+    B: BotFacts,
+{
     match node {
         FileSystemNode::File(item) => {
-            let document =
-                create_empty_document(transaction, user_id, share_permission, item, parent_project)
-                    .await?;
+            let document = create_empty_document(
+                transaction,
+                registrar,
+                user_id,
+                share_permission,
+                item,
+                parent_project,
+            )
+            .await?;
             let document_id = document.document_id.clone();
             documents.push(document);
             Ok(FileSystemNodeWithIds::File {
@@ -107,6 +122,7 @@ async fn traverse_with_ids(
             for (child_name, child) in content {
                 let extended_node = traverse_with_ids(
                     transaction,
+                    registrar,
                     child,
                     user_id.clone(),
                     share_permission,
@@ -182,10 +198,10 @@ async fn create_pending_project(
     .await?;
     entity_registry_db_utils::insert_entity(
         transaction,
-        entity_registry_db_utils::NewEntityRecord::new(
+        NewEntityRecord::new(
             entity_id,
-            entity_registry_db_utils::RegisteredEntityType::Project,
-            model_owner::Owner::User(user_id.clone()),
+            RegisteredEntityType::Project,
+            Owner::User(user_id),
         ),
     )
     .await
@@ -193,8 +209,28 @@ async fn create_pending_project(
     Ok(project)
 }
 
-async fn create_empty_document(
+async fn register_user_owned_document<B: BotFacts>(
     transaction: &mut Transaction<'_, Postgres>,
+    registrar: &OwnedEntityRegistrar<B>,
+    id: &str,
+    user_id: MacroUserIdStr<'static>,
+) -> Result<(), sqlx::Error> {
+    let id = id
+        .parse()
+        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+    registrar
+        .register_owned_entity(
+            transaction,
+            NewEntityRecord::new(id, RegisteredEntityType::Document, Owner::User(user_id)),
+        )
+        .await
+        .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+    Ok(())
+}
+
+async fn create_empty_document<B: BotFacts>(
+    transaction: &mut Transaction<'_, Postgres>,
+    registrar: &OwnedEntityRegistrar<B>,
     user_id: MacroUserIdStr<'static>,
     share_permission: &SharePermissionV2,
     item: &model::folder::FolderItem,
@@ -245,34 +281,12 @@ async fn create_empty_document(
     };
 
     create_document_share_permission(transaction, &document.id, share_permission).await?;
-    let entity_id = document
-        .id
-        .parse()
-        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
-    insert_entity_access_row(
-        transaction,
-        &entity_id,
-        EntityType::Document,
-        user_id.as_ref(),
-        EntityAccessSourceType::User,
-        AccessLevel::Owner,
-    )
-    .await?;
-    entity_registry_db_utils::insert_entity(
-        transaction,
-        entity_registry_db_utils::NewEntityRecord::new(
-            entity_id,
-            entity_registry_db_utils::RegisteredEntityType::Document,
-            model_owner::Owner::User(user_id.clone()),
-        ),
-    )
-    .await
-    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+    register_user_owned_document(transaction, registrar, &document.id, user_id.clone()).await?;
 
     Ok(DocumentMetadata::new_document(
         &document.id,
         version_id,
-        model_owner::Owner::User(user_id),
+        Owner::User(user_id),
         &document_name,
         item.file_type,
         &item.sha,

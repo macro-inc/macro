@@ -229,8 +229,12 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
 >;
 
 /// GraphQL activity reader over the Postgres activity log (readonly pool).
-pub(crate) type DssActivityReader =
-    complete_graph::ActivityPortReader<activity::outbound::pg_activity_repo::PgActivityRepo>;
+pub(crate) type DssActivityReader = complete_graph::ActivityPortReader<
+    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+        activity::outbound::pg_activity_repo::PgActivityRepo,
+        EntityAccessService,
+    >,
+>;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -281,22 +285,16 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
 
     async fn set_entity_property(
         &self,
-        user_id: &str,
+        principal: &model_owner::CreationPrincipal,
         entity_id: &str,
         property_definition_id: uuid::Uuid,
         value: Option<models_properties::api::requests::SetPropertyValue>,
-        attribution: &activity::Attribution,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
-        let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
-        let entity_access_receipt = task_property_edit_receipt(
-            self.entity_access_service.as_ref(),
-            &user_id,
-            attribution,
-            entity_id,
-        )
-        .await?;
+        let entity_access_receipt =
+            task_property_edit_receipt(self.entity_access_service.as_ref(), principal, entity_id)
+                .await?;
         self.properties
             .set_entity_property(&entity_access_receipt, property_definition_id, value)
             .await
@@ -324,7 +322,7 @@ pub(crate) type EntityAccessManagementService =
     >;
 
 pub(crate) type DocumentService = DocumentServiceImpl<
-    PgDocumentRepo,
+    PgDocumentRepo<PgBotsRepo>,
     S3UploadUrlAdapter,
     TaskPropertiesAdapter,
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
@@ -343,7 +341,7 @@ pub(crate) type DocumentsState =
 
 /// Concrete project service wired into DSS.
 pub(crate) type ProjectService = ProjectServiceImpl<
-    PgProjectRepo,
+    PgProjectRepo<PgBotsRepo>,
     S3ProjectUploadAdapter,
     DynamoBulkUploadAdapter,
     ShaCountAdapter,
@@ -498,12 +496,16 @@ pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
 
 pub(crate) type InitiativeDescriptionDocumentsType =
-    crate::outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter<
+    initiative_documents::InitiativeDescriptionDocumentsAdapter<
         Arc<DocumentService>,
         documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer,
         documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
         documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker,
-        DssEventBroker,
+        documents_hex::domain::purge::DocumentPurger<
+            documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository,
+            documents_hex::outbound::document_purge::SqsDocumentPurgeQueue,
+            DssEventBroker,
+        >,
     >;
 
 /// Type alias for the initiative service.
@@ -597,6 +599,8 @@ pub(crate) struct ApiContext {
     pub user_api_key_state: DssUserApiKeyState,
     pub reminders_state: DssRemindersState,
     pub initiative_state: DssInitiativeState,
+    pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
+    pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,

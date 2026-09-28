@@ -1,146 +1,50 @@
 /**
- * The Changes pane: header, review bar, file tree, the stack of file cards,
- * and their inline notes. Reads the controller and hands
- * resolved values to the components.
+ * The Changes pane: a title row with the pane's own controls, a toolbar for
+ * the diffs, the capture notices, and the file tree beside the diff stack
+ * with review notes hung under their lines. Reads the controller and
+ * composes the generic tree and diff view from it.
  */
 
-import CircleNotchIcon from '@phosphor/circle-notch.svg';
-import WarningCircleIcon from '@phosphor/warning-circle.svg';
-import { Button } from '@ui';
 import {
-  createEffect,
-  createSignal,
-  For,
-  Match,
-  on,
-  onCleanup,
-  Show,
-  Switch,
-} from 'solid-js';
+  createDiffComments,
+  type DiffCollapse,
+  DiffCounts,
+  DiffView,
+  StatusLetter,
+} from '@app/components/diff-view';
+import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
+import CircleNotchIcon from '@phosphor/circle-notch.svg';
+import CopyIcon from '@phosphor/copy.svg';
+import FileIcon from '@phosphor/file.svg';
+import SidebarIcon from '@phosphor/sidebar-simple.svg';
+import WarningCircleIcon from '@phosphor/warning-circle.svg';
+import { Button, cn, Panel } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
+import { FileTree } from '@ui/components/FileTree';
+import { Match, Show, Switch } from 'solid-js';
 import { ChangesHeader } from '../components/ChangesHeader';
 import { CaptureBanner, ChangesNotice } from '../components/ChangesNotice';
-import { FileCard } from '../components/FileCard';
-import { FileTree } from '../components/FileTree';
-import { PierreFileDiff } from '../components/PierreFileDiff';
-import { ReviewBar } from '../components/ReviewBar';
+import { NoteAnnotation } from '../components/NoteAnnotation';
 import { useAgentChanges } from '../context/agent-changes-controller';
-import { type ChangesState, describeRange } from '../core/changeset';
-import type { FileDiffEntry } from '../core/patch';
-import { notesForFile } from '../core/review-notes';
-import { createThemeType } from '../primitives/create-theme-type';
+import {
+  type ChangesState,
+  describeFileCount,
+  describeRange,
+} from '../core/changeset';
 
-const FLASH_MS = 900;
-
-function DiffStack(props: { entries: FileDiffEntry[] }) {
-  const { review, diffStyle, copyPath, context } = useAgentChanges();
-  const themeType = createThemeType();
-  const cards = new Map<string, HTMLElement>();
-  const [flashing, setFlashing] = createSignal<string>();
-
-  // Jumping from the tree is a DOM concern: scroll the card in and flash it.
-  createEffect(
-    on(
-      review.active,
-      (path) => {
-        if (!path) return;
-        cards.get(path)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-        setFlashing(path);
-        const timer = setTimeout(() => setFlashing(undefined), FLASH_MS);
-        onCleanup(() => clearTimeout(timer));
-      },
-      { defer: true }
-    )
-  );
-
-  return (
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto scroll-smooth px-3.5 pt-3 pb-24 motion-reduce:scroll-auto">
-      <For each={props.entries}>
-        {(entry) => {
-          const path = () => entry.file.path;
-          const composing = () => {
-            const anchor = review.composing();
-            return anchor?.path === path() ? anchor : undefined;
-          };
-          return (
-            <FileCard
-              entry={entry}
-              collapsed={review.isCollapsed(path())}
-              flash={flashing() === path()}
-              onToggleCollapsed={() => review.toggleCollapsed(path())}
-              onCopyPath={() => copyPath(path())}
-              ref={(element) => {
-                cards.set(path(), element);
-                onCleanup(() => cards.delete(path()));
-              }}
-              body={
-                <Show when={entry.diff}>
-                  {(diff) => (
-                    <PierreFileDiff
-                      path={path()}
-                      diff={diff()}
-                      diffStyle={diffStyle()}
-                      themeType={themeType()}
-                      notes={notesForFile(review.notes(), path())}
-                      composing={composing()}
-                      onOpenNote={
-                        context.host.agent ? review.openNote : undefined
-                      }
-                      onCancelNote={review.cancelNote}
-                      onAddNote={review.addNote}
-                      onRemoveNote={review.removeNote}
-                    />
-                  )}
-                </Show>
-              }
-            />
-          );
-        }}
-      </For>
-    </div>
-  );
+/** The state narrowed to one kind, for `<Match>` to hand its fields down. */
+function stateOf<K extends ChangesState['kind']>(state: ChangesState, kind: K) {
+  return state.kind === kind
+    ? (state as Extract<ChangesState, { kind: K }>)
+    : undefined;
 }
 
-export function ChangesPane() {
-  const controller = useAgentChanges();
-  const { layout, model, review, context, diffStyle, setDiffStyle } =
-    controller;
-  const state = model.state;
-  const changeset = model.changeset;
-  /** The state narrowed to one kind, for `<Match>` to hand its fields down. */
-  const stateOf = <K extends ChangesState['kind']>(kind: K) => {
-    const current = state();
-    return current.kind === kind
-      ? (current as Extract<ChangesState, { kind: K }>)
-      : undefined;
-  };
-  const range = () => {
-    const current = changeset();
-    return current ? describeRange(current) : undefined;
-  };
-  const hasFiles = () => model.files().length > 0;
-  const showsChangeset = () => changeset() !== undefined;
-
+/** Strips over the body: a failed refresh, and a capture over the changeset on screen. */
+function CaptureBanners() {
+  const { model } = useAgentChanges();
+  const showsChangeset = () => model.changeset() !== undefined;
   return (
-    <section
-      class="relative flex h-full min-w-0 flex-col bg-panel"
-      aria-label="Changes"
-    >
-      <ChangesHeader
-        spotlit={layout.layout() === 'changes-only'}
-        range={range()}
-        diffStyle={diffStyle()}
-        onDiffStyle={setDiffStyle}
-        pullRequestUrl={context.host.pullRequestUrl()}
-        onViewPullRequest={() => {
-          const url = context.host.pullRequestUrl();
-          if (url) context.host.openExternal(url);
-        }}
-        refreshing={model.refreshing() || state().kind === 'capturing'}
-        onRefresh={() => void model.refresh()}
-        onBack={layout.backToSplit}
-        onSpotlight={layout.spotlight}
-        onClose={layout.close}
-      />
+    <>
       <Show when={model.refreshError()}>
         {(message) => (
           <CaptureBanner
@@ -151,6 +55,185 @@ export function ChangesPane() {
           />
         )}
       </Show>
+      <Show when={showsChangeset() && model.state().kind === 'capturing'}>
+        <CaptureBanner tone="progress" text="Capturing the changes again…" />
+      </Show>
+      <Show when={showsChangeset() && stateOf(model.state(), 'failed')}>
+        {(current) => (
+          <CaptureBanner
+            tone="failure"
+            text={`The last capture failed: ${current().message}`}
+            onRefresh={() => void model.refresh()}
+            refreshing={model.refreshing()}
+          />
+        )}
+      </Show>
+    </>
+  );
+}
+
+/** The toolbar and the tree beside the stack, both over the changeset's files. */
+function ChangesBody() {
+  const { model, review, layout, diffStyle, setDiffStyle, copyPath, context } =
+    useAgentChanges();
+  const collapse: DiffCollapse = {
+    isCollapsed: review.isCollapsed,
+    toggle: review.toggleCollapsed,
+    toggleAll: review.toggleAllCollapsed,
+    anyExpanded: review.anyExpanded,
+  };
+  const refreshing = () =>
+    model.refreshing() || model.state().kind === 'capturing';
+  const notes = createDiffComments({
+    items: review.notes,
+    rangeOf: (note) => note,
+    draft: [review.draft, review.setDraft],
+    canComment: () => context.host.agent !== undefined,
+    render: (spot) => (
+      <NoteAnnotation
+        notes={spot.items}
+        draft={spot.draft}
+        onDraft={notes.editDraft}
+        onAdd={review.addNote}
+        onCancel={review.cancelNote}
+        onRemove={review.removeNote}
+      />
+    ),
+  });
+  return (
+    <DiffView.Root
+      files={model.files()}
+      patch={model.patch() ?? ''}
+      diffStyle={diffStyle()}
+      collapse={collapse}
+      active={review.active()}
+    >
+      <Panel.Toolbar class="gap-1">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          label={layout.treeOpen() ? 'Hide file tree' : 'Show file tree'}
+          aria-expanded={layout.treeOpen()}
+          onClick={layout.toggleTree}
+        >
+          <SidebarIcon />
+        </Button>
+        <span class="truncate px-1 text-xs text-ink-subtle">
+          {describeFileCount(model.files().length)}
+        </span>
+        <span class="flex-1" />
+        <DiffView.StyleToggle
+          value={diffStyle()}
+          onChange={setDiffStyle}
+          class="max-md:hidden"
+        />
+        <DiffView.CollapseAll />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          label="Refresh pull request changes"
+          disabled={refreshing()}
+          onClick={() => void model.refresh()}
+        >
+          <ArrowsClockwiseIcon class={cn(refreshing() && 'animate-spin')} />
+        </Button>
+      </Panel.Toolbar>
+      <Panel.Body class="flex flex-col">
+        <CaptureBanners />
+        <Show when={model.changeset()?.truncated}>
+          <CaptureBanner
+            tone="failure"
+            text="Some diffs were left out to fit the size budget; the file list is complete."
+          />
+        </Show>
+        <div class="flex min-h-0 flex-1">
+          <CollapseTransition open={layout.treeOpen()} axis="width">
+            <div class="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-edge-muted p-2 max-md:w-48">
+              <FileTree.Root
+                aria-label="Changed files"
+                items={model.files()}
+                path={(file) => file.path}
+                selected={review.active()}
+                onSelect={(file) => review.activate(file.path)}
+              >
+                {(node) => (
+                  <>
+                    <FileTree.Icon>
+                      <FileIcon />
+                    </FileTree.Icon>
+                    <FileTree.Name />
+                    <span class="shrink-0 text-xs">
+                      <DiffCounts
+                        additions={node.item.additions}
+                        deletions={node.item.deletions}
+                      />
+                    </span>
+                    <StatusLetter kind={node.item.kind} />
+                  </>
+                )}
+              </FileTree.Root>
+            </div>
+          </CollapseTransition>
+          <Switch>
+            <Match when={model.patchStatus() === 'error'}>
+              <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+                <WarningCircleIcon class="size-6 text-ink-placeholder" />
+                <p class="text-sm font-medium text-ink">
+                  The diff could not be loaded
+                </p>
+                <Button variant="outline" size="sm" onClick={model.retryPatch}>
+                  Try again
+                </Button>
+              </div>
+            </Match>
+            <Match when={model.patch() !== undefined}>
+              <DiffView.Stack
+                header={(entry) => (
+                  <>
+                    <DiffView.CollapseButton />
+                    <DiffView.FilePath />
+                    <DiffView.FileCounts />
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      tooltip="Copy path"
+                      onClick={() => copyPath(entry.file.path)}
+                    >
+                      <CopyIcon />
+                    </Button>
+                  </>
+                )}
+                annotations={notes.annotations}
+                renderAnnotation={notes.renderAnnotation}
+                selection={notes.selection}
+                onSelectLines={notes.onSelectLines}
+              />
+            </Match>
+            <Match when={true}>
+              <div class="flex flex-1 items-center justify-center gap-2 text-xs text-ink-placeholder">
+                <CircleNotchIcon class="size-4 animate-spin" />
+                Loading the diff…
+              </div>
+            </Match>
+          </Switch>
+        </div>
+      </Panel.Body>
+    </DiffView.Root>
+  );
+}
+
+/** Every state without files to show, each explained in the body. */
+function ChangesNotices() {
+  const { model } = useAgentChanges();
+  const state = model.state;
+  const showsChangeset = () => model.changeset() !== undefined;
+  const range = () => {
+    const current = model.changeset();
+    return current ? describeRange(current) : undefined;
+  };
+  return (
+    <Panel.Body class="flex flex-col">
+      <CaptureBanners />
       <Switch>
         <Match when={state().kind === 'loading'}>
           <ChangesNotice
@@ -167,7 +250,7 @@ export function ChangesPane() {
             refreshing={model.refreshing()}
           />
         </Match>
-        <Match when={stateOf('not_ready')}>
+        <Match when={stateOf(state(), 'not_ready')}>
           {(current) => (
             <ChangesNotice
               title="Pull request changes unavailable"
@@ -185,7 +268,7 @@ export function ChangesPane() {
             refreshing={model.refreshing()}
           />
         </Match>
-        <Match when={showsChangeset() ? undefined : stateOf('failed')}>
+        <Match when={showsChangeset() ? undefined : stateOf(state(), 'failed')}>
           {(current) => (
             <ChangesNotice
               icon={<WarningCircleIcon />}
@@ -204,84 +287,49 @@ export function ChangesPane() {
           />
         </Match>
         <Match when={showsChangeset()}>
-          <Show when={state().kind === 'capturing'}>
-            <CaptureBanner
-              tone="progress"
-              text="Capturing the changes again…"
-            />
-          </Show>
-          <Show when={stateOf('failed')}>
-            {(current) => (
-              <CaptureBanner
-                tone="failure"
-                text={`The last capture failed: ${current().message}`}
-                onRefresh={() => void model.refresh()}
-                refreshing={model.refreshing()}
-              />
-            )}
-          </Show>
-          <Show
-            when={hasFiles()}
-            fallback={
-              <ChangesNotice
-                title="No changes"
-                detail={
-                  range()
-                    ? `Nothing differs between ${range()}.`
-                    : 'The pull request has no changed files.'
-                }
-                onRefresh={() => void model.refresh()}
-                refreshing={model.refreshing()}
-              />
+          <ChangesNotice
+            title="No changes"
+            detail={
+              range()
+                ? `Nothing differs between ${range()}.`
+                : 'The pull request has no changed files.'
             }
-          >
-            <ReviewBar
-              anyExpanded={review.anyExpanded()}
-              onToggleCollapsed={review.toggleAllCollapsed}
-            />
-            <Show when={changeset()?.truncated}>
-              <CaptureBanner
-                tone="failure"
-                text="Some diffs were left out to fit the size budget; the file list is complete."
-              />
-            </Show>
-            <div class="flex min-h-0 flex-1">
-              <FileTree
-                nodes={model.tree()}
-                fileCount={model.files().length}
-                active={review.active()}
-                onSelect={review.activate}
-              />
-              <Switch>
-                <Match when={model.patchStatus() === 'error'}>
-                  <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-                    <WarningCircleIcon class="size-6 text-ink-placeholder" />
-                    <p class="text-sm font-medium text-ink">
-                      The diff could not be loaded
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={model.retryPatch}
-                    >
-                      Try again
-                    </Button>
-                  </div>
-                </Match>
-                <Match when={model.entries()}>
-                  {(entries) => <DiffStack entries={entries()} />}
-                </Match>
-                <Match when={true}>
-                  <div class="flex flex-1 items-center justify-center gap-2 text-xs text-ink-placeholder">
-                    <CircleNotchIcon class="size-4 animate-spin" />
-                    Loading the diff…
-                  </div>
-                </Match>
-              </Switch>
-            </div>
-          </Show>
+            onRefresh={() => void model.refresh()}
+            refreshing={model.refreshing()}
+          />
         </Match>
       </Switch>
-    </section>
+    </Panel.Body>
+  );
+}
+
+export function ChangesPane() {
+  const { layout, model, context } = useAgentChanges();
+  const range = () => {
+    const current = model.changeset();
+    return current ? describeRange(current) : undefined;
+  };
+  const showsFiles = () =>
+    model.changeset() !== undefined && model.files().length > 0;
+
+  return (
+    <Panel class="rounded-none" role="region" aria-label="Changes">
+      <Panel.Header class="gap-1.5">
+        <ChangesHeader
+          spotlit={layout.layout() === 'full'}
+          range={range()}
+          pullRequestUrl={context.host.pullRequestUrl()}
+          onViewPullRequest={() => {
+            const url = context.host.pullRequestUrl();
+            if (url) context.host.openExternal(url);
+          }}
+          onSpotlight={layout.spotlight}
+          onClose={layout.close}
+        />
+      </Panel.Header>
+      <Show when={showsFiles()} fallback={<ChangesNotices />}>
+        <ChangesBody />
+      </Show>
+    </Panel>
   );
 }

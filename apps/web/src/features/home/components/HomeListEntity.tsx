@@ -1,10 +1,13 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { AgentSessionListItem } from '@app/features/agents-view/views/AgentSessionListItem';
+import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { Entity, MaybeEntityRow } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
 import { unreadFilterFn } from '@entity/utils/filter';
+import { entityIsMuted } from '@entity/utils/notification';
 import { getDocumentCommentNotification } from '@notifications/document-comment-notification';
 import { getNotificationAgentSender } from '@notifications/notification-sender';
 import type { UnifiedNotification } from '@notifications/types';
@@ -30,6 +33,9 @@ export function HomeListEntity(props: HomeListEntityProps) {
   const commentNotification = () =>
     getDocumentCommentNotification(props.entity);
   const unread = () => unreadFilterFn(props.entity);
+  const notificationSource = useGlobalNotificationSource();
+  const muted = () =>
+    entityIsMuted(notificationSource.mutedEntities(), props.entity);
 
   return (
     <div class="soup-list-entity relative mx-(--sidebar-gutter) my-(--sidebar-row-gap)">
@@ -96,6 +102,7 @@ export function HomeListEntity(props: HomeListEntityProps) {
                   </Match>
                 </Switch>
               </span>
+              <ChannelMutedIndicator muted={muted()} class="size-3.5" />
               <span
                 data-home-timestamp
                 class="hidden shrink-0 text-xs font-normal text-ink-extra-muted group-hover/home-item:block"

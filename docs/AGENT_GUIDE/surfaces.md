@@ -1,10 +1,17 @@
 # Other Surfaces
 
+## Home list loading
+
+Home shows compact row skeletons during initial loading, with taller notification
+placeholders on touch devices. Date grouping includes a placeholder heading.
+Pagination appends three placeholders without replacing existing items; refresh
+keeps loaded items visible. Wait for real rows before navigating or selecting.
+
 ## Top bars
 
-Right-aligned split-header actions (including Calendar's New event and Channel's
-Call and Ask Macro) are borderless with a rounded-xl background on hover. Channel
-header tabs use fully rounded tracks and selected pills.
+Right-aligned split-header actions (including Calendar's touch/preview New event
+and Channel's Call and Ask Macro) are borderless with a rounded-xl background on
+hover. Channel header tabs use fully rounded tracks and selected pills.
 
 ## User cards
 
@@ -25,6 +32,13 @@ changing the swatch. The rectangle should have a light neutral fill and a dark
 outline; the text should be dark and visible. Also check the neutral swatch after
 selecting another color. Neutral colors use an OKLCH `none` hue, which must render
 as gray rather than transparent.
+
+## Canvas link paste
+
+Pasting a supported routed Macro app link onto the canvas creates a text
+node with an entity mention, as legacy links do. Routed links retain compatible
+block targets, but not workspace paths or pane-local search state; unsupported
+links remain text.
 
 ## Live updates in flat Soup lists
 
@@ -308,9 +322,10 @@ connected account. Search is `Ctrl+F` within the surface.
 Noise, and archived mail. It respects the selected inboxes and filters; search
 within the tab is also restricted to favorites. Removing a star removes the row
 from this view. The tab persists across reloads. With `enable-graphql-soup` on,
-favorite membership comes from the filtered GraphQL favorites query, then thread
-IDs scope the paginated GraphQL Soup query. With the flag off, the same scope
-uses the REST queries. An empty favorites list shows `No favorite emails`.
+the paginated GraphQL Soup query uses `favoritesOnly: true`. With the flag off,
+REST Soup uses `favorites_only: true`. Starring changes membership without
+changing the list query. Text search still resolves favorite IDs for the search
+service. An empty favorites list shows `No favorite emails`.
 
 On desktop, a favorited email keeps a filled, muted star just before its
 timestamp. Other rows reserve only that small star slot. Hovering reveals
@@ -791,19 +806,85 @@ footer. Answering a recurring invitation opens a rounded glass sheet: choose
 `This event` or `All events`, then `Save response`. Cancel or Close returns to
 the event details without sending a response.
 
-The calendar header has matching `New event` and `New Call` buttons. Both stay
-available in narrow splits and on phones, where compact icons have accessible
-labels. `New Call` opens call setup; it is no longer in the right side panel.
-Week view also has a `Choose calendar view` menu, prev/next week,
-`Search events`, `Calendar settings`, and a mini month picker in the right side panel.
-The mini calendar's month label opens a month picker; arrows also change months.
-The right side panel has a collapsible `Upcoming events` box.
+The standalone Calendar view has a left navigation sidebar. The `New` menu
+above the mini calendar offers `Event`, feature-gated `Call`, and feature-gated
+`Reminder`. An icon-only shortcut in the `Upcoming events` header opens the
+availability dialog. Start/end time selectors and a weekend switch sit above
+copy ranges that wrap on narrow screens. The dialog checks all ranges using one
+calendar-occurrence query; ranges without free time are disabled, show an X
+instead of the copy icon, and retain a reason tooltip that can receive keyboard
+focus.
+Copying rechecks the occurrences and current time, so changes since opening do
+not enter the copied text. The option keeps its width while a left spinner and
+`Copying…` crossfade to `Copied` with a green check icon; the button keeps its
+neutral styling. Reduced-motion preferences skip the crossfade and spin.
+Collapsible `Upcoming events` and `Calendars` sections follow; calendar
+account rows use Drive-style trailing disclosure buttons and animated nested
+branches. Their 14px visibility checkboxes precede the swatch and label, with
+separate account and individual-calendar visibility controls. `Team out of office`
+is feature-gated and lists teammates with 24px avatars; its section switch
+toggles the entire grid overlay. Clicking a teammate's row navigates to that
+date, opens read-only event details, and marks the row active. The icon-only
+`Calendar settings` control fills the sidebar footer.
+An account checkbox toggles its calendars together in one update. The checkbox
+responds immediately; the upcoming list and each grid page refresh on deferred
+tasks rather than re-rendering all pages during the click.
+The sidebar can be resized or collapsed on desktop; in narrow desktop panes
+it opens over the grid. Phones do not show the sidebar or its navigation drawer.
+The mobile split header places a month selector and Today in its left island;
+selecting the month opens the date-selection drawer. The right island keeps
+full-sized Availability, Search, and Settings actions. The New menu
+beside the bottom AI input offers Event, feature-gated Call, and feature-gated
+Reminder. Inline Calendar previews retain their host's chrome without adding
+another sidebar; their left header island has a compact New menu because the
+bottom New action follows the foreground host view.
+
+The in-view desktop Calendar header follows Drive's two-level layout: the slim
+top bar shows the viewed month and year and, when the sidebar is closed, a
+compact `New` menu. At wide widths, the row beneath puts `Search events` on
+the left and a labeled `Today` button followed by the rounded period selector
+and previous/next arrows on the right. The idle search field places its hotkey
+beside the placeholder. A query reveals the icon-only Exact-match toggle at
+wide widths; in narrow splits, Exact and Filters appear after focusing search.
+The filter button stays before Clear. The filter menu opens below the button,
+aligned to its right edge: Search in is single-select, while Status, Organizer,
+and Attendee allow multiple values. Organizer and Attendee virtualize their
+contact lists; selected contacts stay in place, while custom email addresses
+appear first. Adding a valid email clears the contact search. Filter selections
+apply immediately, and only these filters mark the filter button, not Exact
+mode. Clicking search opens a calendar-search hint until at least three
+characters are entered; searches show skeleton rows while loading. Empty
+results show an illustrated empty state. Result titles show a calendar-color
+swatch when the event is loaded in the visible range, falling back to the
+default calendar color otherwise. A result shows its location after the
+date/time when available. Each result offers at most one rounded Join action:
+matching occurrence content takes precedence over series metadata. Macro links
+use a neutral button, Google Meet uses a solid blue button in light mode and a
+subtle blue button in dark mode, and other conference links use a neutral button.
+All Join buttons use a camera icon. Generated Macro invitation paragraphs are
+hidden from event descriptions. Google Meet URLs in an event's location or
+description also supply Join actions. Recurring results wait for matching
+occurrence details before showing Join. Selecting a result preserves the search
+text. Availability lives in the desktop sidebar's Upcoming events section and
+in the mobile header.
+
+Resizing the split keeps the same search field mounted in the fixed-height
+header row. At narrow widths the row hides `Today` and the period selector,
+then the navigation arrows when space becomes scarce; focusing search also
+hides the remaining controls to give the field room. Its clear button remains
+available when a query is present. The `New` menu stays in the desktop top
+bar. Touch devices keep the month selector and header controls without separate
+create or call buttons in the right island. The desktop sidebar's mini
+calendar remains navigable by date and month.
+
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.
-The active area is hidden when no calls are active. Event rows show the name and
-time; click one to open its details. An event with a call link shows `Join` while
-it is in progress. Upcoming events follow today's date even when you browse another week;
-hidden calendars, cancelled events, and invitations you declined are omitted.
+The active area is hidden when no calls are active. Upcoming event rows show a
+calendar color swatch, the name, and the time; click one to open its details and
+highlight the active row.
+An event with a call link shows `Join` while it is in progress. Upcoming events
+follow today's date even when you browse another week; hidden calendars,
+cancelled events, and invitations you declined are omitted.
 `New Call` opens `/app/meet/new` without creating a meeting. The `Invite Teammates`
 button above `Start call` opens the task assignee picker with name search, profile
 pictures and multiple selections, without bots or external contacts. The closed
@@ -848,7 +929,7 @@ Selecting `Macro call` on an owned editable event without one adds a call on sav
 choosing another option removes its generated Macro link from the invitation.
 Removing the link or deleting the calendar event does not revoke the reusable call.
 
-The side panel's `Calendars` section folds each connected account into a collapsible
+The sidebar's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
 name, per-calendar checkbox). Accounts start collapsed. Subscribed system calendars
@@ -887,7 +968,7 @@ guest but you — in a split beside the calendar on desktop, as the full-screen 
 touch devices — and is hidden when you are the only guest.
 
 With the `enable-calendar-team-ooo` flag on, teammates' Google Calendar out-of-office events
-overlay the grid as read-only chips titled `<name>: <event title>`. The side panel's
+overlay the grid as read-only chips titled `<name>: <event title>`. The sidebar's
 `Team out of office` section (shown only when the user belongs to a team with other members)
 has a checkbox in its header row toggling the whole overlay on or off — all teammates or
 none — and lists the next 90 days of teammate absences; clicking a row navigates the grid to
@@ -976,6 +1057,9 @@ Guests enter `Your name`, choose their microphone and camera preferences, and
 press `Join call`. Setup requests device
 permissions and previews video locally; sharing starts only after joining.
 Permission denial leaves the affected device off and still allows joining.
+The preview and full-width join button retain their size while joining.
+Copying the meeting URL is available after joining, in the in-call header.
+
 The creator presses `Start call`; invitees press `Join call`. Loading the page or
 completing authentication never joins automatically, including old `?join=true`
 URLs. `Back to Macro` exits setup.
@@ -998,12 +1082,32 @@ call without gaining access to the channel.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
-The join screen uses small switches for Microphone and Camera. Join and
-`Copy Meeting Url` use gray buttons; the copy action includes a copy icon.
-The in-call header uses the same copy button and shows the current local time
-before the call name. Owners can click the name to rename it, then Save or press
-Enter; Cancel or Escape discards the edit. Guests and other participants see a
+The join screen has microphone, camera, and background effects buttons over the
+preview, with pill selectors below for microphone, speaker, camera, and
+backgrounds. The background button over the preview toggles the selected effect
+off and back on; when no effect has been selected, it enables Strong blur.
+Backgrounds use a simple menu with None, Light blur, Strong blur, and image upload
+(JPG, PNG, or WebP, up to 10 MB). Dot icons distinguish the two blur strengths.
+Selected devices and backgrounds carry into the call; unsupported browsers use
+the system speaker. If a background cannot be applied, the camera stays off
+until the user retries or chooses None. The screen uses a gray join
+button. The in-call header has a gray `Copy Meeting Url` button with a copy icon
+and shows the current local time before the call name. Owners can click the name
+to rename it, then Save or press Enter; Cancel or Escape discards the edit. Guests and other participants see a
 read-only name.
+
+Join-preview and in-call controls use the standard Macro icon buttons. Pause
+over the microphone, camera, or background group to reveal an animated settings popover
+above the call toolbar; click its caret to keep it open. Brief pointer passes
+do not open settings, and moving into the popover keeps it open. Settings
+respect reduced-motion preferences.
+Audio settings include microphone, speaker, and noise suppression. Camera
+settings include the camera selector. Clicking the background icon toggles the
+selected effect off/on, restoring the last blur strength or image (Strong blur
+by default). Its hover panel contains the same None, Light blur, Strong blur,
+and image-upload menu as the join screen; the caret pins this panel for keyboard
+and touch access. Click outside or press Escape to close the settings.
+The controls also work by keyboard and touch.
 
 ### Sharing a call
 
@@ -1065,6 +1169,13 @@ use the standalone contact page.
 Company and contact headers have `Copy link` beside the side-panel toggle.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
+
+Company and contact pages have a **Discussion** section built from the same
+message conversation as a document's Discussion: threaded replies, reactions,
+attachments, and edit/delete from the message menu. `@` suggests the team's
+members and agents. A message's copied link is the standalone record URL
+with `comment_id`; opening it, or a CRM discussion notification, scrolls to and
+highlights that message. Deleting a thread's first comment deletes the thread.
 
 Company selection actions **Set owner** and **Set revenue** remain available
 while team deal-stage definitions are loading. **Set stage** waits for the active
@@ -1183,6 +1294,12 @@ use a glass sheet with a title, description, Close confirmation button, and
 side-by-side cancel and confirm actions. Pending actions disable both buttons
 and prevent dismissal; canceling leaves the underlying data unchanged.
 
+## Setup plan step — `/app/onboarding`
+
+The plan step shows two cards: Free and Premium. Premium starts Stripe Checkout.
+The step has no Max card or Max checkout path. A returning account that already
+has Max still sees Max named as its active plan.
+
 ## Settings — `/app/settings/<section>`
 
 ### Email signatures
@@ -1195,6 +1312,46 @@ to **Edit signature**. Unsaved edits remain when reopened; closing does not save
 or remove the signature.
 The inbox row's trash icon removes the inbox through the existing confirmation;
 it is separate from the signature editor's close control.
+
+### Notification snoozes
+
+Open **Settings → Notifications** to see **Snoozed items** and their local resume
+times. **Change time** opens the same searchable time picker used by entity
+actions; **Resume** cancels a snooze immediately. Permanent mutes appear separately
+under **Muted items**, with **Snooze instead** to replace one with a timed pause.
+
+The Chat detail pane also supplies these commands for its current channel or DM;
+focus the conversation before opening the command menu.
+
+To snooze an entity, right-click its row (long-press on mobile) and choose
+**Snooze notifications…**, or select/open the entity and search for that command
+in Cmd/Ctrl+K. Multi-selection applies the chosen deadline to all selected items.
+Use arrow keys and Enter, click a preset, or type a future date/time such as
+`2h` or `tomorrow 10am`. The next morning means the next local 9 AM; the weekend
+preset resumes on Monday at 9 AM. The picker displays the exact local date and
+time before saving. Escape closes the picker; before choosing a time, it makes
+no changes.
+
+Snoozing pauses notifications only: it does not hide, archive, mark read, or mark
+done. Channel message/thread rows target their parent channel, matching mute.
+The server enforces expiration even when no client is open. Displayed snooze
+state refreshes when the window regains focus or a mute/snooze changes; the
+client does not poll. A failed save keeps the picker open for retry; a successful
+save appears in notification settings.
+If only some selected items save, the picker shows the saved count and retries
+only the remaining items. Closing it keeps any snoozes already saved.
+
+On phones, long-press opens the entity actions drawer. The snooze time picker
+uses the same responsive `Dialog`, width, and `CommandMenuShell` as Cmd/Ctrl+K,
+with larger touch targets and tap instructions. Swipe the preset list when the
+viewport is short. In **More views → Settings → Notifications**, item names and
+deadlines sit above **Change time** and **Resume**. Saving or cancelling a picker
+returns to the settings sheet. Start new snoozes from an entity's actions or
+Cmd/Ctrl+K; Settings manages existing snoozes and mutes.
+
+Design references: [Slack notification pause/resume](https://slack.com/help/articles/214908388-Pause-your-Slack-notifications)
+and [Superhuman's keyboard-driven Remind Me picker](https://new.superhuman.com/remind-me-29124).
+Macro applies the temporary pause per entity and keeps the entity visible.
 
 ### Team membership
 
@@ -1239,13 +1396,14 @@ list / delete personal keys; the secret is shown only once and is sent as
 backend), paid plans show an **AI usage** card with the period meter, credit
 balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that redirect to Stripe
 Checkout, and a `Usage billing` toggle with per-period limit pills; these
-controls and usage-billing promotional copy are hidden outside dev; an
-`Upgrade`/`Upgrade to Max` card, or a `Switch to Premium` link on Max; on a team
-the plan change moves only the viewer's own seat),
+controls and usage-billing promotional copy are hidden outside dev; an `Upgrade`
+card for Free users to buy Premium, no Max purchase or upgrade control, and a
+`Switch to Premium` link on Max; on a team the downgrade moves only the viewer's
+own seat),
 `Appearance`, `Agents`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
 Workspace → `Team` (members list; on a paid team each row shows the seat's plan,
-and admins/owners change it with the `Seat plan` menu: `Premium` or `Max`,
-prorated at once), `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
+and admins/owners can move an existing Max seat to Premium with the `Seat plan`
+menu; Premium seats have no Max option; moves are prorated at once), `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`),
@@ -1386,3 +1544,32 @@ default root size. Supporting `text-sm` text is 14px and `text-xs` is 12px.
 Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
+
+### Calendar invitations in email
+
+In `/app/component/mail`, open an invitation message; the same card appears in
+`/app/email/:threadId`. Saved details appear below the sender without waiting for calendar
+sync. Expand guests and descriptions with their explicit controls. `View original email`
+is an accessible disclosure that starts closed; attachments remain below it.
+Related recurring components are grouped behind their own disclosure. Only mail synced
+after the feature shipped gets a card; older invitations render as plain email.
+A newly arrived scheduling update shows RSVP and Join only once its calendar state has
+been checked. A series invitation shows its current or next live occurrence.
+
+A connected, resolved invitation shows the responding address and Yes / Maybe / No.
+Local verification requires both email and calendar services: email supplies saved
+snapshots and resolves them against the synced calendar, while calendar service handles
+the RSVP write. With calendar service's `CALENDAR_SYNC_ENABLED` off, its RSVP route is
+not mounted, so a response fails with an error. Seeded local accounts have no Google
+token, so an RSVP there fails at the provider write and rolls back.
+The selected response remains pressed while a save is pending. Recurring invitations ask
+for `This event` or `All events`. Failures keep the card in place and report a retryable
+error; offline responses are not sent. Cancellation and response/proposal notifications
+do not offer RSVP or Join. Disconnected, ambiguous, and syncing states explain why an
+action is unavailable.
+
+`Open in calendar` focuses the current occurrence, even if its date changed.
+`View your day` opens a compact agenda without changing the active split; Close returns
+focus to its trigger. Busy overlapping events are labeled, while cancelled, declined,
+and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
+already-open invitation cards as well as the calendar view.

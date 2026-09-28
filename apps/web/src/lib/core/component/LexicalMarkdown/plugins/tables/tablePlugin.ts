@@ -6,7 +6,7 @@ import {
   TableCellNode,
 } from '@lexical/table';
 import { mergeRegister } from '@lexical/utils';
-import type { LexicalEditor } from 'lexical';
+import { $createParagraphNode, type LexicalEditor } from 'lexical';
 import { registerTableListTab } from './tableListTab';
 import { registerTableSelectAll } from './tableSelectAll';
 import { registerTableTabInsertRow } from './tableTabInsertRow';
@@ -68,7 +68,7 @@ function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
     })(),
 
     // Restrict table cells to block content that renders sanely inside them
-    // (notably: no nested tables).
+    // (notably: no nested tables). Preserve stray text/inlines in a paragraph.
     (() => {
       const allowedNodesInTableCellNode = [
         'paragraph',
@@ -86,7 +86,13 @@ function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
         for (let i = 0; i < children.length; i++) {
           const child = children[i];
           if (!allowedNodesInTableCellNode.includes(child.__type)) {
-            child.remove();
+            if (child.isInline()) {
+              const paragraph = $createParagraphNode();
+              child.replace(paragraph);
+              paragraph.append(child);
+            } else {
+              child.remove();
+            }
           }
         }
       });

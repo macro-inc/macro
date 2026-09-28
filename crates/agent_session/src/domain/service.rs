@@ -749,7 +749,7 @@ where
                 previews.push(AgentSessionPreview::DoesNotExist(id));
                 continue;
             };
-            // Links and originating documents can grant access without a
+            // Links and originating discussions can grant access without a
             // materialized row. Resolve those through the same view port as
             // the session's read routes.
             let visible = candidate.has_grant || self.view_access.can_view(viewer, id).await?;

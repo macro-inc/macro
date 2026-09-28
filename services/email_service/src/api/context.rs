@@ -60,6 +60,12 @@ pub(crate) type EmailSvc = EmailServiceImpl<
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository,
+    pub invitation_resolver: Arc<
+        calendar_events::domain::invitations::CalendarInvitationResolver<
+            calendar_events::outbound::pg::PgCalendarRepository,
+        >,
+    >,
     pub db: sqlx::Pool<sqlx::Postgres>,
     pub auth_service_client: Arc<authentication_service_client::AuthServiceClient>,
     // The raw client is retained only for Gmail webhook JWKS/JWT authentication.

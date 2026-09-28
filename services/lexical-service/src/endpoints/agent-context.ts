@@ -6,7 +6,13 @@ import { handleEndpointError } from '../lib/error-handler';
 import { standardErrorResponses } from '../lib/schemas';
 
 const messageParent = z.object({
-  type: z.enum(['channel', 'document']),
+  type: z.enum([
+    'channel',
+    'document',
+    'initiative',
+    'crm_company',
+    'crm_contact',
+  ]),
   id: z.string().min(1),
 });
 

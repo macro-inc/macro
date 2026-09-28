@@ -18,7 +18,7 @@ export function CallControls(props: CallControlsProps) {
   const nativeCall = useMaybeNativeCallState();
 
   return (
-    <Show when={() => readWhen(props.when) && !nativeCall?.snapshot()}>
+    <Show when={readWhen(props.when) && !nativeCall?.snapshot()}>
       <CallControlsDefaultAndPanelRow onLeave={props.onLeave} />
     </Show>
   );

@@ -206,7 +206,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     });
 
     let notification_reader_queue = SqsQueue::new(
-        aws_sdk_sqs::Client::from_conf(sqs_config),
+        aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
         "test-notification-queue".to_string(),
     );
     let notification_reader_service = NotificationReaderService {
@@ -233,7 +233,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         "test-bucket",
         "test-docx-bucket",
     );
-    let document_repo = documents::outbound::pg_document_repo::PgDocumentRepo::new(pool.clone());
+    let document_repo = documents::outbound::pg_document_repo::PgDocumentRepo::new(
+        pool.clone(),
+        entity_registry_db_utils::OwnedEntityRegistrar::new(
+            entity_registry::OwnerGrantPolicy::new(bots::outbound::pg_bots_repo::PgBotsRepo::new(
+                pool.clone(),
+            )),
+        ),
+    );
     let cloudfront_config = documents::domain::models::CloudFrontConfig {
         distribution_url: "https://test.cloudfront.net".to_string(),
         signer_public_key_id: "test-key-id".to_string(),
@@ -358,6 +365,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         user_email_service,
     );
 
+    let initiative_tool_context = ai_tools::build_initiative_tool_context(
+        pool.clone(),
+        &document_tool_context,
+        properties_service.clone(),
+        entity_access_service.clone(),
+        aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
+        macro_event_broker.clone(),
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -395,6 +411,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             "http://localhost:8086".to_string(),
         ),
         project_tool_context,
+        initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         skill_tool_context: ai_tools::build_skill_tool_context(

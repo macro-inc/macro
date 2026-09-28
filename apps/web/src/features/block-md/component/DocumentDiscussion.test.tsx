@@ -12,8 +12,8 @@ vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => undefined,
 }));
-vi.mock('@core/messages/DocumentConversation', () => ({
-  DocumentConversation: () => null,
+vi.mock('@core/messages/EntityConversation', () => ({
+  EntityConversation: () => null,
 }));
 vi.mock('@core/signal/permissions', () => ({
   useCanComment: () => () => true,

@@ -39,8 +39,8 @@ vi.mock('../context/markdown-document-context', () => ({
     },
   }),
 }));
-vi.mock('@core/messages/DocumentConversation', () => ({
-  DocumentConversation: (props: {
+vi.mock('@core/messages/EntityConversation', () => ({
+  EntityConversation: (props: {
     parent: { type: string; id: string };
     canWrite: boolean;
     buildLink: (message: { id: string }) => string;
@@ -56,7 +56,7 @@ vi.mock('@core/messages/DocumentConversation', () => ({
       </For>
     );
   },
-  DocumentConversationComposer: () => {
+  EntityConversationComposer: () => {
     mocks.mount();
     onCleanup(mocks.unmount);
     return <textarea aria-label="Comment draft" />;

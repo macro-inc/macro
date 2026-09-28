@@ -10,6 +10,7 @@ import {
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { Show } from 'solid-js';
 import { z } from 'zod';
 import { channelsSearch } from './channels-route';
@@ -59,6 +60,7 @@ export const channelDetailRoute = defineRoute({
     namespace: 'block',
     id: `channel:${channelId}`,
   }),
+  toReference: ({ channelId }) => uuidRouteReference(channelId, 'channel'),
 });
 
 export const channelsSplitRoute = defineRoute({

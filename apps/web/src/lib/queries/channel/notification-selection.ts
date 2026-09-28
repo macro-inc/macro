@@ -31,6 +31,7 @@ async function fetchChannelNotificationSelection(
   const name = channel.name;
   const ownerId = channel.ownerId;
   const channelType = channel.channelType;
+  const isParticipant = channel.isParticipant;
   const target = channel.target;
   const input = buildGraphqlEntitySoupInput('CHANNEL', channelId);
   if (!input) throw new Error('Invalid channel notification selection');
@@ -41,6 +42,7 @@ async function fetchChannelNotificationSelection(
     name,
     ownerId,
     channelType,
+    isParticipant,
     ...(target ? { target } : {}),
     unreadNotifications: undefined,
     notifications: () =>

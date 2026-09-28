@@ -24,6 +24,7 @@ import {
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { Show } from 'solid-js';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '../email-thread/core/location';
 import { HomeEntityDetailRouteView } from './components/HomeEntityDetailRouteView';
@@ -161,6 +162,10 @@ export const homePreviewRoute = defineRoute({
     namespace: 'block',
     id: `${homeBaseBlockType(blockType)}:${previewId}`,
   }),
+  toReference: ({ previewId, blockType }) =>
+    blockType === 'pr'
+      ? { type: 'pr', id: previewId }
+      : uuidRouteReference(previewId, blockType),
 });
 
 export const homeSplitRoute = defineRoute({

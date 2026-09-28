@@ -18,7 +18,7 @@ import type {
   SearchCachePage,
   WriteResult,
 } from '../protocol';
-import { parseCacheRevision } from '../protocol';
+import { parseCacheRevision, parseStorageGeneration } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
   classifyCacheError,
@@ -75,6 +75,7 @@ const CACHE_WRITE_PRIORITY = 2;
 function isOrderingBarrier(request: CacheRequest): boolean {
   return (
     request.kind === 'init' ||
+    request.kind === 'current-storage-generation' ||
     request.kind === 'teardown' ||
     request.kind === 'clear'
   );
@@ -428,6 +429,11 @@ export class CacheWorkerCore {
       .with({ kind: 'current-revision' }, async () => {
         return parseCacheRevision(await this.requireEngine().currentRevision());
       })
+      .with({ kind: 'current-storage-generation' }, async () => {
+        return parseStorageGeneration(
+          await this.requireEngine().currentStorageGeneration()
+        );
+      })
       .with({ kind: 'read' }, async (request) => {
         const engine = this.requireEngine();
         const result: ReadResult = await engine.readQuery(
@@ -686,7 +692,7 @@ export class CacheWorkerCore {
       .with({ kind: 'clear' }, async () => {
         const result: CacheRevisionResult = await this.requireEngine().clear();
         const revision = parseCacheRevision(result.revision);
-        this.push({ kind: 'cache-changed', revision });
+        this.push({ kind: 'cache-changed', revision, reset: true });
         return revision;
       })
       .exhaustive();
@@ -937,7 +943,11 @@ export class CacheWorkerCore {
       });
     }
     if (cacheChanged && result.revisionAdvanced) {
-      this.push({ kind: 'cache-changed', revision: result.revision });
+      this.push({
+        kind: 'cache-changed',
+        revision: result.revision,
+        ...(result.reset ? { reset: true } : {}),
+      });
     }
   }
 

@@ -84,7 +84,9 @@ pub struct RoutedContainers<Sessions> {
 #[derive(Debug)]
 enum Route {
     Sandbox,
-    InMem(SessionFacts),
+    /// Boxed: the facts dwarf the dataless `Sandbox` variant, and a route is
+    /// resolved once per container operation, not on a hot path.
+    InMem(Box<SessionFacts>),
 }
 
 impl<Sessions> RoutedContainers<Sessions>
@@ -126,17 +128,18 @@ where
                 .session_bot(row.bot_id)
                 .await
                 .map_err(HarnessError::Session)?;
-            return Ok(Route::InMem(SessionFacts {
+            return Ok(Route::InMem(Box::new(SessionFacts {
                 id: session,
                 owner: row.owner_id,
                 model: row.model,
                 identity: Some(AgentIdentity {
+                    bot: row.bot_id,
                     name: bot.name,
                     handle: bot.handle,
                 }),
                 instructions: row.instructions,
                 acp_session_id: row.acp_session_id,
-            }));
+            })));
         }
         if AgentKind::for_session(row.bot_id, &row.harness) == AgentKind::InMemory {
             return Err(HarnessError::Container(format!(
@@ -168,7 +171,7 @@ where
                 RoutedTransport::InMem(
                     self.inmem()
                         .manager
-                        .attach(facts, Some(command.egress.session_token))
+                        .attach(*facts, Some(command.egress.session_token))
                         .await,
                 ),
             )),
@@ -203,7 +206,7 @@ where
     ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         match self.route(session).await? {
             Route::InMem(facts) => Ok(agent_session::domain::connection::RuntimeAttachment::solo(
-                RoutedTransport::InMem(self.inmem().manager.attach(facts, None).await),
+                RoutedTransport::InMem(self.inmem().manager.attach(*facts, None).await),
             )),
             Route::Sandbox => self
                 .sandbox

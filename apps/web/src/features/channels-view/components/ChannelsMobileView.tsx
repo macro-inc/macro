@@ -10,17 +10,20 @@ import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHe
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import type { ChannelEntity } from '@entity';
 import { isMutedItem } from '@entity/utils/notification';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button } from '@ui';
+import { Button, EmptyStatePanel } from '@ui';
 import {
+  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
   Match,
+  on,
   onCleanup,
   Show,
   Switch,
@@ -53,6 +56,7 @@ export function ChannelsMobileView(props: {
   source: ChannelsDataSource;
   tab: ChannelsQueryScope;
   onTabChange: (tab: ChannelsQueryScope) => void;
+  searchText?: string;
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -82,6 +86,13 @@ export function ChannelsMobileView(props: {
     props.onTabChange(tab);
     viewport()?.scrollTo({ top: 0 });
   };
+
+  createEffect(
+    on(
+      () => props.searchText,
+      () => viewport()?.scrollTo({ top: 0 })
+    )
+  );
 
   const topInset = () => topSpacerSize.height ?? 0;
 
@@ -124,6 +135,7 @@ export function ChannelsMobileView(props: {
         splitHandle: panel.handle,
         referredFrom: 'channels',
         notificationSource,
+        scopeChannelThreads: false,
       });
     } catch (error) {
       if (request !== opening) return;
@@ -194,7 +206,24 @@ export function ChannelsMobileView(props: {
               </div>
             </Match>
             <Match when={forceEmptyState() || visibleChannels().length === 0}>
-              <ChannelsEmptyState scope={props.tab} />
+              <Show
+                when={props.searchText}
+                fallback={<ChannelsEmptyState scope={props.tab} />}
+              >
+                <EmptyStatePanel
+                  centered
+                  graphic={EmptyStateNoSearchMatchGraphic}
+                  title="No results"
+                  description={
+                    <span>
+                      No conversations match{' '}
+                      <span class="[overflow-wrap:anywhere]">
+                        “{props.searchText}”
+                      </span>
+                    </span>
+                  }
+                />
+              </Show>
             </Match>
             <Match when={true}>
               <Virtualizer

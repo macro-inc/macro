@@ -790,9 +790,11 @@ html[data-theme-light='false'] {
   --color-composer: var(--color-surface-4);
 }
 
-/* Right-side header actions share a quiet, hover-only background. */
+/* Right-side header actions share a quiet, hover-only background. Touch header
+   islands own their controls' chrome (the compose island's filled send button,
+   say), so the flattening stops at an island boundary. */
 @utility header-actions {
-  & [data-button] {
+  & [data-button]:not([data-header-island] *) {
     @apply rounded-xl border-0 bg-transparent;
 
     &:not(:hover):not(:active) {
@@ -1288,6 +1290,12 @@ html[data-touch-device='true'] :is(
     transparent
   );
   animation: skeleton-shimmer 1.4s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer::after {
+    animation: none;
+  }
 }
 
 @keyframes slideIn {

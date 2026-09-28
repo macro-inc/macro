@@ -35,6 +35,7 @@ pub struct EgressServiceImpl<Sessions, Credentials, Tokens, Forward> {
     credentials: Credentials,
     tokens: Tokens,
     forward: Forward,
+    preview_mcp: Option<(url::Url, bool)>,
 }
 
 impl<Sessions, Credentials, Tokens, Forward>
@@ -45,6 +46,22 @@ where
     Tokens: GithubTokens,
     Forward: Forwarder,
 {
+    /// Configure the fixed internal preview MCP destination. Cleartext is local-only.
+    pub fn with_preview_mcp(
+        mut self,
+        url: url::Url,
+        local_cleartext: bool,
+    ) -> Result<Self, EgressError> {
+        if !local_cleartext {
+            crate::domain::model::UpstreamCall::bearer(
+                url.clone(),
+                crate::domain::model::BearerToken::new("validation"),
+            )?;
+        }
+        self.preview_mcp = Some((url, local_cleartext));
+        Ok(self)
+    }
+
     /// Build the service over its adapters.
     pub fn new(
         sessions: Sessions,
@@ -57,6 +74,7 @@ where
             credentials,
             tokens,
             forward,
+            preview_mcp: None,
         }
     }
 }
@@ -92,11 +110,11 @@ where
         span.record("session", tracing::field::display(&grant.session));
         span.record("owner", tracing::field::display(&grant.owner));
 
-        // Staff-only for now, checked here so every target - git, connected
-        // MCP servers, Macro's own - passes one gate. The refusal names
-        // itself ("not Macro staff") so the sandbox can report an actionable
-        // reason; the reason is our own static wording, never the request's.
-        if !is_macro_staff(&grant.owner) {
+        // Workspace and Git egress remain staff-only. Session-scoped preview tools
+        // are available to every session owner, like the internal MCP tools.
+        if !matches!(&target, EgressTarget::McpServer(McpDestination::Preview))
+            && !is_macro_staff(&grant.owner)
+        {
             tracing::warn!(owner = %grant.owner, "refusing egress for a session owned outside macro.com");
             return Err(EgressError::Unauthenticated(
                 "the session owner is not Macro staff",
@@ -104,6 +122,23 @@ where
         }
 
         let call = match &target {
+            EgressTarget::McpServer(McpDestination::Preview) => {
+                let (url, local) = self.preview_mcp.as_ref().ok_or_else(|| {
+                    EgressError::Unroutable("preview service is not configured".into())
+                })?;
+                // Unlike user tools, this tool must retain the authenticated session identity.
+                // The destination is deployment configuration, never supplied by an agent.
+                let bearer = crate::domain::model::BearerToken::new(token.as_str());
+                if *local {
+                    crate::domain::model::UpstreamCall::bearer_over_local_cleartext(
+                        url.clone(),
+                        bearer,
+                    )
+                } else {
+                    crate::domain::model::UpstreamCall::bearer(url.clone(), bearer)?
+                }
+            }
+
             EgressTarget::McpServer(destination @ McpDestination::Macro) => {
                 match self.credentials.resolve(&grant.owner, destination).await? {
                     McpResolution::Connected(call) | McpResolution::Unconnected(call) => call,

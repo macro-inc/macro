@@ -32,6 +32,9 @@ vi.mock('@entity', () => ({
   MaybeEntityRow: (props: { children: JSX.Element }) => props.children,
 }));
 vi.mock('@entity/utils/filter', () => ({ unreadFilterFn: unreadFilter }));
+vi.mock('@components/app/GlobalAppState', () => ({
+  useGlobalNotificationSource: () => ({ mutedEntities: () => [] }),
+}));
 vi.mock('@app/features/home/components/HomeEntityIcon', () => ({
   HomeEntityIcon: () => null,
 }));

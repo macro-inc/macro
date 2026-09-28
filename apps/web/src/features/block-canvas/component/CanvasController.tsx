@@ -860,7 +860,12 @@ export function CanvasController(props: ParentProps) {
       return;
     }
     // Automation and foreign entities aren't yet renderable as canvas mentions.
-    if (entityType === 'automation' || entityType === 'foreign') return;
+    if (
+      entityType === 'automation' ||
+      entityType === 'foreign' ||
+      entityType === 'initiative'
+    )
+      return;
     // CRM companies/contacts aren't renderable as canvas mentions.
     if (entityType === 'crm_company') return;
     if (entityType === 'crm_contact') return;

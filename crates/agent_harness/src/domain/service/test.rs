@@ -2756,7 +2756,12 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     let ClientRequest::NewSessionRequest(open) = &requests[1] else {
         panic!("expected session/new")
     };
-    assert_eq!(open.mcp_servers.len(), 1);
+    assert_eq!(open.mcp_servers.len(), 2);
+    let agent_client_protocol::schema::v1::McpServer::Http(preview) = &open.mcp_servers[1] else {
+        panic!("expected preview HTTP MCP");
+    };
+    assert_eq!(preview.name, "macro-preview");
+    assert!(preview.url.ends_with("/mcp-preview"));
     let agent_client_protocol::schema::v1::McpServer::Http(server) = &open.mcp_servers[0] else {
         panic!("expected HTTP MCP")
     };
@@ -3562,6 +3567,8 @@ mod lifecycle_events {
     use agent_runtime_protocol::domain::action::{ElicitationAnswer, ElicitationRequestId};
     use agent_session::domain::events::AgentSessionLifecycleEvent as Lifecycle;
 
+    use crate::domain::notifications::PlannedNotification;
+
     /// Open a session from a mention and let its first turn settle: `Opened`,
     /// `TurnStarted`, `TurnEnded`, `Settled`.
     async fn settled_session() -> (TestBench, TurnSignals, AgentSessionId, ContainerMock) {
@@ -3646,7 +3653,7 @@ mod lifecycle_events {
         assert!(
             matches!(
                 notified.as_slice(),
-                [crate::domain::notifications::PlannedNotification::Settled(notify)]
+                [PlannedNotification::Settled(notify)]
                     if notify.recipients == vec![sender()]
                         && notify.metadata.session.session_id == id.as_uuid()
             ),
@@ -3679,6 +3686,9 @@ mod lifecycle_events {
         turns.lifecycle_published(6).await;
 
         let events = turns.lifecycle();
+        let origin = forward_message("")
+            .announce
+            .expect("a channel prompt announces");
         assert!(
             matches!(
                 &events[4..6],
@@ -3686,12 +3696,80 @@ mod lifecycle_events {
                     if mentioned.identity.session_id == id
                         && mentioned.mentioned_by == Some(staff_sender())
                         && mentioned.mentioned == vec![reviewer.clone()]
+                        && mentioned.origin_message_id == Some(origin.message_id)
             ),
             "mentioned is published on accept, before the turn starts: {events:#?}"
         );
         assert_eq!(
             mentions.prompts().last(),
             Some(&"@reviewer look".to_owned())
+        );
+        // The channel message that carried the prompt already notified the
+        // reviewer of the mention; the session does not tell them twice.
+        let notified = turns.notifier.notified();
+        assert!(
+            !notified
+                .iter()
+                .any(|notification| matches!(notification, PlannedNotification::Mentioned(_))),
+            "no mention notification for a prompt posted as a message: {notified:#?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_prompt_from_the_session_view_notifies_the_people_it_names() {
+        let mentions = PromptMentionsMock::new();
+        let reviewer = MacroUserIdStr::try_from_email("reviewer@macro.com").unwrap();
+        let ((service, _, containers, _, _), turns) = harness_with_mentions(
+            PromptContextMock::default(),
+            PromptComposerMock::default(),
+            mentions.clone(),
+        );
+        let id = AgentSessionId::new();
+        let _container = live_session(&service, &containers, id).await;
+        turns.lifecycle_published(4).await;
+        mentions.mentions(vec![reviewer.clone()]);
+
+        // Typed into the session view: no message spoke for it anywhere.
+        service
+            .execute(
+                id,
+                HarnessCommand::Deliver(DeliverAction::prompt(
+                    AgentAction::prompt("@reviewer look"),
+                    Some(staff_sender()),
+                    None,
+                )),
+            )
+            .await
+            .expect("the prompt is accepted");
+        turns.lifecycle_published(6).await;
+
+        let events = turns.lifecycle();
+        assert!(
+            matches!(
+                &events[4..6],
+                [Lifecycle::Mentioned(mentioned), Lifecycle::TurnStarted(_)]
+                    if mentioned.mentioned == vec![reviewer.clone()]
+                        && mentioned.origin_message_id.is_none()
+            ),
+            "mentioned is published without an origin message: {events:#?}"
+        );
+        // Beside whatever the first turn settled with: exactly one mention.
+        let notified = turns.notifier.notified();
+        let mentions_sent: Vec<_> = notified
+            .iter()
+            .filter_map(|notification| match notification {
+                PlannedNotification::Mentioned(notify) => Some(notify),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            matches!(
+                mentions_sent.as_slice(),
+                [notify]
+                    if notify.recipients == vec![reviewer.clone()]
+                        && notify.metadata.session.session_id == id.as_uuid()
+            ),
+            "one mention notification for the reviewer: {notified:#?}"
         );
     }
 
