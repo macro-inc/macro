@@ -71,11 +71,11 @@ async fn typing_only_reaches_the_parent_transport() {
 }
 
 #[tokio::test]
-async fn call_chat_does_not_invoke_agents() {
+async fn call_chat_reaches_both_agent_targets_and_the_parent_transport() {
     let log = Arc::new(Mutex::new(Vec::new()));
     let target = |id| Target {
         id,
-        fail: id != 2,
+        fail: false,
         log: log.clone(),
     };
     let mut event = event(MessageChange::ThreadUpdated {
@@ -94,5 +94,5 @@ async fn call_chat_does_not_invoke_agents() {
         .publish(event)
         .await
         .unwrap();
-    assert_eq!(*log.lock().unwrap(), vec![2]);
+    assert_eq!(*log.lock().unwrap(), vec![0, 1, 2]);
 }

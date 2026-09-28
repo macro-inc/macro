@@ -489,6 +489,30 @@ describe('Input slots', () => {
     );
   });
 
+  it.each([false, true])(
+    'offers one Macro entry in call chat with agents rollout %s',
+    (enabled) => {
+      editorMocks.agentsEnabled = enabled;
+      render(() => (
+        <ChannelInput
+          input={baseInput}
+          parent={{ type: 'call', id: 'call-1' }}
+          bots={() => [
+            { id: 'bot|owned', name: 'Owned agent', email: 'Owned agent' },
+            { id: 'bot|team', name: 'Team agent', email: 'Team agent' },
+          ]}
+        />
+      ));
+      const users = editorMocks.mentionUsers?.() ?? [];
+      expect(
+        users.filter((user) => user.name === 'Macro').map((user) => user.id)
+      ).toEqual([enabled ? MACRO_NEW_PRINCIPAL_ID : MACRO_AGENT_PRINCIPAL_ID]);
+      expect(users.map((user) => user.id)).toEqual(
+        expect.arrayContaining(['bot|owned', 'bot|team'])
+      );
+    }
+  );
+
   it('offers a single Macro mention, aimed by the agents rollout', () => {
     render(() => <ChannelInput input={baseInput} />);
     expect(

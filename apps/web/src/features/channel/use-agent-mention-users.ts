@@ -30,14 +30,12 @@ import { useChatV3AgentsFlag } from './use-chat-v3-agents-flag';
  * carries.
  */
 export function useAgentMentionUsers(
-  users: Accessor<IUser[]>,
-  enabled: Accessor<boolean> = () => true
+  users: Accessor<IUser[]>
 ): Accessor<IUser[]> {
   const canUseCursor = useCursorAgentsAccess();
   const canUseAgents = useChatV3AgentsFlag();
 
   return () => {
-    if (!enabled()) return users();
     const base = users().filter(
       (user) =>
         (canUseCursor() || !isCursorBotId(user.id)) &&

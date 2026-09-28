@@ -267,14 +267,11 @@ export function ChannelInput(props: ChannelInputProps) {
       ? useMessageParticipants(() => props.parent!)
       : () => [];
   // Connection-prompt behavior for the built-in agents lives in
-  // useAgentMentionUsers; participants and channel/document bots feed it here.
-  const mentionUsers = useAgentMentionUsers(
-    () => [
-      ...(props.participants?.() ?? parentParticipants()),
-      ...(props.bots?.() ?? parentBots()),
-    ],
-    () => props.parent?.type !== 'call'
-  );
+  // useAgentMentionUsers; participants and parent agents feed it here.
+  const mentionUsers = useAgentMentionUsers(() => [
+    ...(props.participants?.() ?? parentParticipants()),
+    ...(props.bots?.() ?? parentBots()),
+  ]);
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     groupMentions: !props.parent || props.parent.type === 'channel',
@@ -400,6 +397,7 @@ export function ChannelInput(props: ChannelInputProps) {
   };
 
   props.onReady?.({
+    snapshot: inputState.snapshot,
     clear: () => markdownEditor.controls.clear(),
     focus: () => {
       // A collapsed pill hides the editor; programmatic focus implies intent

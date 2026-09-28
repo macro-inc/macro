@@ -250,14 +250,18 @@ where
             if !agent.bot.has_agent {
                 return Ok(false);
             }
-            // Channel selection restricts channel placement. Discussion invocation
-            // requires ownership or team membership and is independently bounded
-            // by the invoking user's parent access at execution time.
-            if parent.is_discussion() {
-                return self.owner_allows(caller, agent.bot.owner.as_ref()).await;
-            }
-            let MessageParent::Channel(channel_id) = parent else {
-                unreachable!()
+            // Channel selection restricts channel placement. Other conversations,
+            // including call chat, require ownership or team membership and are
+            // bounded by the invoking user's parent access at execution time.
+            let channel_id = match parent {
+                MessageParent::Channel(channel_id) => channel_id,
+                MessageParent::Document(_)
+                | MessageParent::Initiative(_)
+                | MessageParent::CrmCompany(_)
+                | MessageParent::CrmContact(_)
+                | MessageParent::Call(_) => {
+                    return self.owner_allows(caller, agent.bot.owner.as_ref()).await;
+                }
             };
             return match agent.channel_scope {
                 AgentChannelScope::All => match agent.bot.owner {
@@ -292,10 +296,10 @@ where
                 MessageParent::Document(_)
                 | MessageParent::Initiative(_)
                 | MessageParent::CrmCompany(_)
-                | MessageParent::CrmContact(_) => {
+                | MessageParent::CrmContact(_)
+                | MessageParent::Call(_) => {
                     self.owner_allows(caller, bot.owner.as_ref()).await
                 }
-                MessageParent::Call(_) => Ok(false),
             },
         }
     }

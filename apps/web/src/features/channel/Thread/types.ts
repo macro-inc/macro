@@ -75,4 +75,6 @@ export type ThreadProps = {
    * the root on one straight rail instead of indenting and branching them.
    */
   monorail?: boolean;
+  /** Flat chat surfaces do not draw thread connector rails. */
+  hideRail?: boolean;
 } & ThreadState;

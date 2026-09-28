@@ -25,5 +25,6 @@
  * Version 4.3 - Sep 2026. ReplyTargetNode references a message parent (channel or document) instead of a channel id.
  * Version 4.4 - Sep 2026. Expanded agent session mentions are block decorators with node selection.
  * Version 5.0 - Sep 2026. Added CursorSystemNotificationNode (Cursor `<system_notification>` event cards).
+ * Version 5.1 - Oct 2026. ReplyTargetNode accepts call, initiative, and CRM message parents.
  */
-export const MARKDOWN_VERSION_COUNTER = 5.0;
+export const MARKDOWN_VERSION_COUNTER = 5.1;

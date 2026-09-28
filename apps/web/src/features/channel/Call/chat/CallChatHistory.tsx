@@ -59,6 +59,7 @@ function CallChatHistoryContent(props: CallChatHistoryProps) {
               expanded
               hideReplyInput
               monorail
+              hideRail
               targetId={props.targetId}
               onClearTarget={props.onClearTarget}
               buildLink={(message) =>

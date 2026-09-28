@@ -212,14 +212,13 @@ describe('availableBotMentionUsers', () => {
     }
   );
 
-  it('does not suggest agents in call chat', () => {
+  it('offers owned and team agents in calls regardless of channel scope', () => {
+    const owned = agent('owned-agent', 'Owned agent', 'selected');
+    const team = agent('team-agent', 'Team agent', 'all');
     expect(
-      availableBotMentionUsers(
-        [bot('installed', 'Installed')],
-        [agent('global', 'Global', 'all')],
-        true,
-        'call'
+      availableBotMentionUsers([], [owned, team], true, 'call').map(
+        (user) => user.id
       )
-    ).toEqual([]);
+    ).toEqual(['bot|owned-agent', 'bot|team-agent']);
   });
 });

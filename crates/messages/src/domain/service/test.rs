@@ -970,6 +970,7 @@ async fn human_can_post_canonical_agent_mentions_on_documents_and_channels() {
         MessageParent::Initiative(Uuid::from_u128(21)),
         MessageParent::CrmCompany(Uuid::from_u128(22)),
         MessageParent::CrmContact(Uuid::from_u128(23)),
+        MessageParent::Call(Uuid::from_u128(24)),
     ] {
         let repo = fixture();
         let events = Events::default();
@@ -1054,72 +1055,89 @@ impl MessageMentionExtractor for RawBotMentions {
 
 #[tokio::test]
 async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_and_policy() {
-    use entity_access::domain::models::BotReceiptScope;
-    let receipt = || {
-        EntityAccessReceipt::try_new_bot(
-            bot_id::MACRO_AI_BOT_ID.into_storage_id(),
-            BotReceiptScope::User {
-                acting_user: "macro|author@example.com".to_string().try_into().unwrap(),
-            },
-            access("macro|author@example.com", "doc", AccessLevel::Comment)
-                .entity()
-                .clone(),
-            EntityPermission::AccessLevel {
-                access_level: AccessLevel::Comment,
-            },
-        )
-        .unwrap()
-    };
-    let mut repo = fixture();
-    repo.message.sender_id = ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
-    let events = Events::default();
-    let service =
-        MessageService::new(repo.clone(), events.clone()).with_mention_extractor(RawBotMentions);
-    let mut input = post_input();
-    input.notification_policy = PostMessageNotificationPolicy::Silent;
-    let posted = service.post(receipt(), input.clone()).await.unwrap();
-    assert_eq!(
-        posted.triggered_by.as_deref(),
-        Some("macro|author@example.com")
-    );
-    assert_eq!(posted.mentions.len(), 1);
-    input.attribution = MessageAttribution::Unprompted;
-    assert!(
-        service
-            .post(receipt(), input)
-            .await
+    use entity_access::domain::models::{BotReceiptScope, Entity};
+    for parent in [
+        MessageParent::parse("document", "doc").unwrap(),
+        MessageParent::Call(Uuid::from_u128(1)),
+    ] {
+        let receipt = || {
+            EntityAccessReceipt::try_new_bot(
+                bot_id::MACRO_AI_BOT_ID.into_storage_id(),
+                BotReceiptScope::User {
+                    acting_user: "macro|author@example.com".to_string().try_into().unwrap(),
+                },
+                Entity {
+                    entity_type: parent.access_entity_type(),
+                    entity_id: parent.entity_id(),
+                },
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::Comment,
+                },
+            )
             .unwrap()
-            .triggered_by
-            .is_none()
-    );
-    service
-        .patch(
-            receipt(),
-            posted.id,
-            MessagePatch {
+        };
+        let mut repo = fixture();
+        repo.message.sender_id = ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+        repo.message.parent = parent.clone();
+        let events = Events::default();
+        let service = MessageService::new(repo.clone(), events.clone())
+            .with_mention_extractor(RawBotMentions);
+        let mut input = post_input();
+        input.notification_policy = PostMessageNotificationPolicy::Silent;
+        let posted = service.post(receipt(), input.clone()).await.unwrap();
+        assert_eq!(
+            posted.triggered_by.as_deref(),
+            Some("macro|author@example.com")
+        );
+        assert_eq!(posted.mentions.len(), 1);
+        assert_eq!(posted.parent, parent);
+        let canonical_root_id = match parent {
+            MessageParent::Call(id) => Some(id),
+            _ => None,
+        };
+        assert_eq!(
+            repo.creates.lock().unwrap()[0].canonical_root_id,
+            canonical_root_id
+        );
+        input.attribution = MessageAttribution::Unprompted;
+        assert!(
+            service
+                .post(receipt(), input)
+                .await
+                .unwrap()
+                .triggered_by
+                .is_none()
+        );
+        service
+            .patch(
+                receipt(),
+                posted.id,
+                MessagePatch {
+                    notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                    content: Some("final @mention".into()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(repo.edits.lock().unwrap()[0].mentions.len(), 1);
+        let events = events.0.lock().unwrap();
+        assert!(events.iter().all(|event| event.parent == parent));
+        assert!(matches!(
+            events[0].change,
+            MessageChange::Posted {
+                notification_policy: PostMessageNotificationPolicy::Silent,
+                ..
+            }
+        ));
+        assert!(matches!(
+            events[2].change,
+            MessageChange::Edited {
                 notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
-                content: Some("final @mention".into()),
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-    assert_eq!(repo.edits.lock().unwrap()[0].mentions.len(), 1);
-    let events = events.0.lock().unwrap();
-    assert!(matches!(
-        events[0].change,
-        MessageChange::Posted {
-            notification_policy: PostMessageNotificationPolicy::Silent,
-            ..
-        }
-    ));
-    assert!(matches!(
-        events[2].change,
-        MessageChange::Edited {
-            notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
-            ..
-        }
-    ));
+                ..
+            }
+        ));
+    }
 }
 
 #[derive(Clone)]

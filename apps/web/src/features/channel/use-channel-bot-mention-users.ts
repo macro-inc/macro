@@ -30,7 +30,6 @@ export function availableBotMentionUsers(
   cursorEnabled: boolean,
   surface: MessageParent['type'] = 'channel'
 ): IUser[] {
-  if (surface === 'call') return [];
   const globalAgents = agents.filter(
     (agent) =>
       (surface !== 'channel' || agent.channel_scope === 'all') &&

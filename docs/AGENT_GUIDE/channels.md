@@ -765,9 +765,13 @@ position. The call continues while chat is open or closed.
 Signed-in participants in channel, quick, and scheduled calls use the same chat
 panel. Guest meeting participants do not see chat because shared messages require
 a Macro account. Each call session has one persistent message thread, using the
-shared message composer, attachments, reactions, and message actions. Bot and
-agent mentions are not offered in call chat. Enter sends; subsequent messages
-join the same thread. Participants see new messages without reopening the panel.
+shared message composer, attachments, reactions, and message actions. The `@`
+menu offers Macro and available owned and team agents. Mention an agent and send
+to invoke it in the call thread; follow-up mentions use the same thread. Reply
+on your own or another participant’s message inserts a quote into the bottom
+composer while preserving its draft and attachments. Enter sends; subsequent
+messages and quoted replies join the same thread. Clicking a quote highlights its
+message in the live chat; Shift-click opens its durable saved-call link. Participants see new messages without reopening the panel.
 Check simultaneous first sends from two participants, edit/delete/reaction
 updates, a retained unsent draft after toggling chat, and a new incoming message
 while scrolled into history.

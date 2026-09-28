@@ -28,7 +28,7 @@ export function CallChatPanel(props: {
       id={props.id}
       aria-label="Call chat"
       hidden={!props.open}
-      class="absolute inset-y-0 right-0 z-20 w-full max-w-90 min-h-0 flex-col border-l border-edge-muted bg-surface @min-[800px]/call:static @min-[800px]/call:w-90 @min-[800px]/call:shrink-0"
+      class="absolute inset-y-0 right-0 z-20 w-full max-w-90 min-h-0 flex-col bg-surface @min-[800px]/call:static @min-[800px]/call:w-90 @min-[800px]/call:shrink-0"
       classList={{ flex: props.open }}
       onKeyDown={(event) => {
         if (event.key !== 'Escape' || event.defaultPrevented) return;

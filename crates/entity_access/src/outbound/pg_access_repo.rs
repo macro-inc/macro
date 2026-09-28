@@ -10,8 +10,8 @@ mod test;
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, BotId, CallChannelInfo, ChannelRoleResult, CrmEntityAccess,
-        EntityType, UserTeamInfo,
+        AccessError, AccessLevel, AgentSessionParent, BotId, CallChannelInfo, ChannelRoleResult,
+        CrmEntityAccess, EntityType, UserTeamInfo,
     },
     ports::AccessRepository,
 };
@@ -234,22 +234,35 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
     }
 
-    async fn get_agent_session_document(
+    async fn get_agent_session_parent(
         &self,
         agent_session_id: &str,
-    ) -> Result<Option<String>, AccessError> {
+    ) -> Result<Option<AgentSessionParent>, AccessError> {
         let session = agent_session_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
-        Ok(sqlx::query_scalar!(
-            r#"SELECT m.parent_entity_id FROM agent_session s
+        sqlx::query!(
+            r#"SELECT m.parent_entity_type, m.parent_entity_id FROM agent_session s
                JOIN comms_messages m ON m.id = s.thread_id
                JOIN comms_message_threads t ON t.root_id = m.id
-               WHERE s.id = $1 AND m.parent_entity_type = 'document' AND t.deleted_at IS NULL"#,
+               WHERE s.id = $1 AND m.parent_entity_type IN ('document', 'call')
+               AND t.deleted_at IS NULL"#,
             session,
         )
         .fetch_optional(&self.pool)
-        .await?)
+        .await?
+        .map(|parent| match parent.parent_entity_type.as_str() {
+            "document" => Ok(AgentSessionParent::Document(parent.parent_entity_id)),
+            "call" => parent
+                .parent_entity_id
+                .parse()
+                .map(AgentSessionParent::Call)
+                .map_err(|_| AccessError::internal("Agent session has an invalid call parent")),
+            _ => Err(AccessError::internal(
+                "Agent session has an unsupported parent",
+            )),
+        })
+        .transpose()
     }
 
     async fn get_agent_session_access(

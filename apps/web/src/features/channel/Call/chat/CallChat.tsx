@@ -4,9 +4,11 @@ import {
   type InputSnapshot,
 } from '@channel/Input';
 import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
+import { buildReplyTargetValue } from '@channel/Thread/utils/message-actions';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useUserId } from '@core/context/user';
 import { MessageThread, threadListItem } from '@core/messages/MessageThread';
+import { MessageReferenceNavigation } from '@core/messages/message-reference-navigation';
 import {
   newMessageId,
   useSendMessageMutation,
@@ -56,6 +58,7 @@ function CallChatContent(props: {
   const userId = useUserId();
   const [sendFailed, setSendFailed] = createSignal(false);
   const [input, setInput] = createSignal<InputHandle>();
+  const [targetId, setTargetId] = createSignal<string>();
   const canSend = createMemo(() => !!chat.thread() || chat.empty());
 
   createEffect(
@@ -88,68 +91,99 @@ function CallChatContent(props: {
   }
 
   return (
-    <StaticMarkdownContext>
-      <CallChatPanel
-        id={props.id}
-        open={props.open}
-        onClose={props.onClose}
-        composer={
-          <div inert={!canSend()} classList={{ 'opacity-50': !canSend() }}>
-            <Show when={sendFailed()}>
-              <p role="alert" class="mb-2 text-xs text-failure">
-                Message could not be sent. Try again.
-              </p>
-            </Show>
-            <ChannelInput
-              parent={chat.parent()}
-              input={{ mode: 'channel', placeholder: 'Message this call…' }}
-              persistenceKey={`call-chat-${userId()}-${props.callId}-persist-v1`}
-              autofocus={false}
-              onReady={setInput}
-              onSend={sendMessage}
-              onSendError={() => setSendFailed(true)}
-              onEscape={props.onClose}
-            />
-          </div>
-        }
-      >
-        <Show when={chat.loading()}>
-          <p role="status" class="text-sm text-ink-muted">
-            Loading chat…
-          </p>
-        </Show>
-        <Show when={chat.empty()}>
-          <p class="px-1 text-sm text-ink-muted">
-            Start the conversation. Messages stay with this call.
-          </p>
-        </Show>
-        <Show when={chat.failed()}>
-          <p role="alert" class="text-sm text-ink-muted">
-            Could not load chat.
-          </p>
-          <button
-            type="button"
-            class="mt-2 text-sm text-accent"
-            onClick={() => void chat.refresh()}
-          >
-            Retry
-          </button>
-        </Show>
-        <Show when={chat.thread()}>
-          {(thread) => (
-            <MessageThread
-              data={threadListItem(thread())}
-              canWrite
-              expanded
-              hideReplyInput
-              monorail
-              buildLink={(message) =>
-                buildCallMessageLink(props.callId, message.id)
-              }
-            />
-          )}
-        </Show>
-      </CallChatPanel>
-    </StaticMarkdownContext>
+    <MessageReferenceNavigation.Provider
+      value={(target) => {
+        if (target.parent.type !== 'call' || target.parent.id !== props.callId)
+          return false;
+        setTargetId(target.targetMessageId);
+        return true;
+      }}
+    >
+      <StaticMarkdownContext>
+        <CallChatPanel
+          id={props.id}
+          open={props.open}
+          onClose={props.onClose}
+          composer={
+            <div inert={!canSend()} classList={{ 'opacity-50': !canSend() }}>
+              <Show when={sendFailed()}>
+                <p role="alert" class="mb-2 text-xs text-failure">
+                  Message could not be sent. Try again.
+                </p>
+              </Show>
+              <ChannelInput
+                parent={chat.parent()}
+                input={{ mode: 'channel', placeholder: 'Message this call…' }}
+                persistenceKey={`call-chat-${userId()}-${props.callId}-persist-v1`}
+                autofocus={false}
+                onReady={setInput}
+                onSend={sendMessage}
+                onSendError={() => setSendFailed(true)}
+                onEscape={props.onClose}
+              />
+            </div>
+          }
+        >
+          <Show when={chat.loading()}>
+            <p role="status" class="text-sm text-ink-muted">
+              Loading chat…
+            </p>
+          </Show>
+          <Show when={chat.empty()}>
+            <p class="px-1 text-sm text-ink-muted">
+              Start the conversation. Messages stay with this call.
+            </p>
+          </Show>
+          <Show when={chat.failed()}>
+            <p role="alert" class="text-sm text-ink-muted">
+              Could not load chat.
+            </p>
+            <button
+              type="button"
+              class="mt-2 text-sm text-accent"
+              onClick={() => void chat.refresh()}
+            >
+              Retry
+            </button>
+          </Show>
+          <Show when={chat.thread()}>
+            {(thread) => (
+              <MessageThread
+                data={threadListItem(thread())}
+                canWrite
+                expanded
+                hideReplyInput
+                monorail
+                hideRail
+                targetId={targetId()}
+                onClearTarget={() => setTargetId(undefined)}
+                onReply={({ message, selectedText, renderedText }) => {
+                  const handle = input();
+                  if (!handle) return;
+                  const current = handle.snapshot();
+                  handle.restoreSnapshot(
+                    {
+                      value: buildReplyTargetValue({
+                        parent: chat.parent(),
+                        message,
+                        selectedText,
+                        renderedText,
+                        existingValue: current.value,
+                      }),
+                      mentions: current.mentions,
+                      attachments: current.attachments,
+                    },
+                    { cursor: 'trailing-paragraph' }
+                  );
+                }}
+                buildLink={(message) =>
+                  buildCallMessageLink(props.callId, message.id)
+                }
+              />
+            )}
+          </Show>
+        </CallChatPanel>
+      </StaticMarkdownContext>
+    </MessageReferenceNavigation.Provider>
   );
 }
