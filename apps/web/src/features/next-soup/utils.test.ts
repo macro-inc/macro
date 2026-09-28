@@ -16,6 +16,13 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 }));
 
 const toastAlert = vi.hoisted(() => vi.fn());
+const fetchChannelNotifications = vi.hoisted(() => vi.fn());
+vi.mock('@service-storage/graphql-notifications', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@service-storage/graphql-notifications')
+  >()),
+  fetchGraphqlEntityNotifications: fetchChannelNotifications,
+}));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: toastAlert },
 }));
@@ -123,6 +130,7 @@ import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { type ChannelEntityTarget, type EntityData, queryKeys } from '@entity';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
+import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import {
   type CalendarPreviewSelection,
   type ChannelPreviewSelection,
@@ -332,6 +340,72 @@ describe('channel unread clicks', () => {
     ...sendNotification('send', 'older'),
     created_at: '2026-09-23T12:00:00Z',
   };
+
+  it('targets the newest unread reply even when the rail has an empty cached witness', async () => {
+    fetchChannelNotifications.mockResolvedValue([
+      older,
+      newer,
+      asRead({
+        ...newer,
+        id: 'already-read',
+        created_at: '2026-09-25T12:00:00Z',
+      }),
+    ]);
+    const channel = await hydrateChannelNotificationSelection({
+      type: 'channel',
+      id: 'channel-1',
+      name: 'Channel',
+      ownerId: 'owner',
+      channelType: 'private',
+      unreadNotifications: [],
+    });
+    const selection = channelPreviewSelection(channel.id, {
+      target: getChannelEntityTarget(channel, { scopeChannelThreads: false }),
+    });
+
+    expect(selection.target).toEqual({
+      messageId: 'newer',
+      threadId: 'thread',
+    });
+  });
+
+  it('honors local reads while refreshing a stale empty rail row on every click', async () => {
+    fetchChannelNotifications.mockResolvedValue([older, newer]);
+    const row = {
+      type: 'channel' as const,
+      id: 'channel-1',
+      name: 'Channel',
+      ownerId: 'owner',
+      channelType: 'private' as const,
+      unreadNotifications: [],
+    };
+    const readIds = new Set([newer.id]);
+    const click = async () => {
+      const channel = await hydrateChannelNotificationSelection(row, (n) =>
+        readIds.has(n.id) ? asRead(n) : n
+      );
+      return getChannelEntityTarget(channel, { scopeChannelThreads: false });
+    };
+
+    expect(await click()).toMatchObject({
+      kind: 'message',
+      messageId: 'older',
+    });
+    readIds.add(older.id);
+    expect(await click()).toEqual({ kind: 'latest' });
+
+    fetchChannelNotifications.mockResolvedValue([
+      older,
+      newer,
+      replyNotification('incoming', 'new-arrival', 'thread'),
+    ]);
+    expect(await click()).toMatchObject({
+      kind: 'message',
+      messageId: 'new-arrival',
+      threadId: 'thread',
+    });
+    expect(fetchChannelNotifications).toHaveBeenCalledTimes(3);
+  });
 
   it('builds a route selection with a plain id and ChannelEntityTarget', () => {
     expect(
