@@ -490,6 +490,10 @@ async fn main() -> anyhow::Result<()> {
             config.environment,
         ));
 
+    // Keep existing analytics/legacy settlement unchanged. Per-attempt observations
+    // use a separate journal and never feed this settlement trigger.
+    let recorder = ai_usage::with_tracking(recorder, ai_usage::pg_tracking(db.clone()));
+
     // The import pipeline: staged/imported external items, gather jobs over
     // the user's connectors, and the Haiku import job. Built before the tool
     // service context so the chat toolset gets a wired import context.

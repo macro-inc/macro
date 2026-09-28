@@ -24,8 +24,9 @@ const ONE_SHOT_MAX_TOKENS: u64 = 16_000;
 /// summarization. `model` is anything stringifiable to an api id — an
 /// [`AgentModel`](crate::AgentModel) or a raw string from the frontend.
 ///
-/// Aggregate analytics are recorded against `ctx` on success. Activated traffic
-/// must run inside a [`MeteringContext::scope`]; each HTTP attempt is authorized
+/// Aggregate analytics are recorded against `ctx` on success. A recorder's optional
+/// tracking capability binds observational HTTP-attempt recording automatically.
+/// Activated traffic must run inside a [`MeteringContext::scope`]; each attempt is authorized
 /// and its evidence persisted before SDK or structured-output parsing.
 #[tracing::instrument(skip(model, system_prompt, user_message, recorder, ctx), err)]
 pub async fn complete<M: ToString>(
@@ -36,49 +37,53 @@ pub async fn complete<M: ToString>(
     ctx: UsageContext,
 ) -> anyhow::Result<String> {
     MeteringContext::require_usage(&ctx)?;
-    let model = model.to_string();
-    let routed = ModelRouter::shared()?.route_or_default(&model);
-    let telemetry = telemetry_for(&ctx, &routed);
-    let response = match routed {
-        RoutedModel::Anthropic(m) => {
-            prompt_once(
-                TracedModel::new(m.completion(), telemetry.clone()),
-                system_prompt,
-                user_message,
-                telemetry,
-            )
-            .await?
-        }
-        RoutedModel::Gemini(m) => {
-            prompt_once(
-                TracedModel::new(m.completion(), telemetry.clone()),
-                system_prompt,
-                user_message,
-                telemetry,
-            )
-            .await?
-        }
-        RoutedModel::OpenAiChatCompletions(m) => {
-            prompt_once(
-                TracedModel::new(m.completion(), telemetry.clone()),
-                system_prompt,
-                user_message,
-                telemetry,
-            )
-            .await?
-        }
-        RoutedModel::OpenAiResponses(m) => {
-            prompt_once(
-                TracedModel::new(m.completion(), telemetry.clone()),
-                system_prompt,
-                user_message,
-                telemetry,
-            )
-            .await?
-        }
-    };
-    record(recorder, ctx, model, &response);
-    Ok(response.output)
+    let metering = MeteringContext::for_operation(recorder, &ctx);
+    MeteringContext::carry(metering, async {
+        let model = model.to_string();
+        let routed = ModelRouter::shared()?.route_or_default(&model);
+        let telemetry = telemetry_for(&ctx, &routed);
+        let response = match routed {
+            RoutedModel::Anthropic(m) => {
+                prompt_once(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    user_message,
+                    telemetry,
+                )
+                .await?
+            }
+            RoutedModel::Gemini(m) => {
+                prompt_once(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    user_message,
+                    telemetry,
+                )
+                .await?
+            }
+            RoutedModel::OpenAiChatCompletions(m) => {
+                prompt_once(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    user_message,
+                    telemetry,
+                )
+                .await?
+            }
+            RoutedModel::OpenAiResponses(m) => {
+                prompt_once(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    user_message,
+                    telemetry,
+                )
+                .await?
+            }
+        };
+        record(recorder, ctx, model, &response);
+        Ok(response.output)
+    })
+    .await
 }
 
 /// Send a system prompt + conversation history and return the model's text
@@ -94,49 +99,53 @@ pub async fn complete_with_history<M: ToString>(
     ctx: UsageContext,
 ) -> anyhow::Result<String> {
     MeteringContext::require_usage(&ctx)?;
-    let model = model.to_string();
-    let routed = ModelRouter::shared()?.route_or_default(&model);
-    let telemetry = telemetry_for(&ctx, &routed);
-    let response = match routed {
-        RoutedModel::Anthropic(m) => {
-            prompt_with_history(
-                TracedModel::new(m.completion(), telemetry.clone()),
-                system_prompt,
-                messages,
-                telemetry,
-            )
-            .await?
-        }
-        RoutedModel::Gemini(m) => {
-            prompt_with_history(
-                TracedModel::new(m.completion(), telemetry.clone()),
-                system_prompt,
-                messages,
-                telemetry,
-            )
-            .await?
-        }
-        RoutedModel::OpenAiChatCompletions(m) => {
-            prompt_with_history(
-                TracedModel::new(m.completion(), telemetry.clone()),
-                system_prompt,
-                messages,
-                telemetry,
-            )
-            .await?
-        }
-        RoutedModel::OpenAiResponses(m) => {
-            prompt_with_history(
-                TracedModel::new(m.completion(), telemetry.clone()),
-                system_prompt,
-                messages,
-                telemetry,
-            )
-            .await?
-        }
-    };
-    record(recorder, ctx, model, &response);
-    Ok(response.output)
+    let metering = MeteringContext::for_operation(recorder, &ctx);
+    MeteringContext::carry(metering, async {
+        let model = model.to_string();
+        let routed = ModelRouter::shared()?.route_or_default(&model);
+        let telemetry = telemetry_for(&ctx, &routed);
+        let response = match routed {
+            RoutedModel::Anthropic(m) => {
+                prompt_with_history(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    messages,
+                    telemetry,
+                )
+                .await?
+            }
+            RoutedModel::Gemini(m) => {
+                prompt_with_history(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    messages,
+                    telemetry,
+                )
+                .await?
+            }
+            RoutedModel::OpenAiChatCompletions(m) => {
+                prompt_with_history(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    messages,
+                    telemetry,
+                )
+                .await?
+            }
+            RoutedModel::OpenAiResponses(m) => {
+                prompt_with_history(
+                    TracedModel::new(m.completion(), telemetry.clone()),
+                    system_prompt,
+                    messages,
+                    telemetry,
+                )
+                .await?
+            }
+        };
+        record(recorder, ctx, model, &response);
+        Ok(response.output)
+    })
+    .await
 }
 
 /// Ask `model` to answer `instruction` about one image and return its text.

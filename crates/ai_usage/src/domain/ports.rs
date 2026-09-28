@@ -365,6 +365,12 @@ pub trait UsageRepo: Send + Sync + 'static {
 /// infallible and fire-and-forget. This is NOT financial admission or evidence;
 /// activated traffic also requires the separate [`FinancialUsage`] capability.
 pub trait UsageRecorder: Send + Sync {
+    /// Optional observational capability. Producers must explicitly scope each
+    /// operation and await per-attempt evidence; aggregate `record` is not coverage.
+    fn tracking(&self) -> Option<std::sync::Arc<dyn super::tracking::UsageTracking>> {
+        None
+    }
+
     /// Record one completion round-trip.
     fn record(&self, event: UsageEvent);
 }

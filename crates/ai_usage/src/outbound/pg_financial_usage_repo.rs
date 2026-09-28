@@ -529,9 +529,9 @@ impl FundingData {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct EvidenceData {
+pub(super) struct EvidenceData {
     invocation_id: Uuid,
     occurred_at: DateTime<Utc>,
     provider_request_id: Option<String>,
@@ -539,28 +539,28 @@ struct EvidenceData {
     usage: UsageData,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 enum OutcomeData {
     Succeeded,
     Failed,
     Cancelled,
     Unknown,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 enum UsageData {
     Reported([u64; 5]),
     UsageNotReported,
     Interrupted,
     UnsupportedDimensions,
 }
-#[derive(Serialize, Deserialize)]
-enum ExclusionData {
+#[derive(Debug, Serialize, Deserialize)]
+pub(super) enum ExclusionData {
     LegacyPolicy,
     ExemptFeature,
     InternalWork,
 }
-#[derive(Serialize, Deserialize)]
-enum UnpricedData {
+#[derive(Debug, Serialize, Deserialize)]
+pub(super) enum UnpricedData {
     MissingRate,
     ArithmeticOverflow,
 }
@@ -623,8 +623,8 @@ impl EvidenceData {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-enum StateData {
+#[derive(Debug, Serialize, Deserialize)]
+pub(super) enum StateData {
     Priced {
         evidence: EvidenceData,
         public_usage: u64,
@@ -643,7 +643,7 @@ enum StateData {
 }
 
 impl StateData {
-    fn from_state(state: &InvocationState) -> FinancialResult<Self> {
+    pub(super) fn from_state(state: &InvocationState) -> FinancialResult<Self> {
         Ok(match state {
             InvocationState::Pending => return Err(FinancialError::InvalidTokenUsage),
             InvocationState::Priced {
@@ -674,7 +674,7 @@ impl StateData {
         })
     }
 
-    fn decode(self) -> FinancialResult<InvocationState> {
+    pub(super) fn decode(self) -> FinancialResult<InvocationState> {
         Ok(match self {
             Self::Priced {
                 evidence,

@@ -48,8 +48,9 @@ impl AgentLoop {
     /// Create an `AgentLoop` with provider clients from `APP_SECRETS_JSON` or the environment and
     /// the default model (Opus 4.7).
     ///
-    /// `recorder` is the [`UsageRecorder`] every session created from this loop
-    /// logs token usage to — it is required so that no AI call goes unrecorded.
+    /// Sessions log legacy aggregates through `recorder`. When its separate
+    /// tracking capability is present, they also bind observational per-attempt
+    /// scopes; analytics injection alone is not proof of attempt coverage.
     ///
     /// `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are required.
     pub fn new(recorder: Arc<dyn UsageRecorder>) -> Self {
@@ -312,6 +313,7 @@ impl AgentLoop {
             telemetry.clone(),
         );
 
+        let financial_context = MeteringContext::for_operation(self.recorder.as_ref(), &usage_ctx);
         Session {
             agent,
             history: Vec::new(),
@@ -327,7 +329,7 @@ impl AgentLoop {
             model: self.model.clone(),
             request_context,
             telemetry,
-            financial_context: MeteringContext::current(),
+            financial_context,
         }
     }
 
@@ -426,8 +428,11 @@ impl Session {
         let telemetry = self.telemetry.clone();
         // An explicit per-turn scope wins over the construction-time scope
         // (for example, a session crossing usage-policy activation at renewal).
-        let financial_context =
-            MeteringContext::current().or_else(|| self.financial_context.clone());
+        let financial_context = if MeteringContext::current().is_some() {
+            MeteringContext::for_operation(self.recorder.as_ref(), &self.usage_ctx)
+        } else {
+            self.financial_context.clone()
+        };
         let result = MeteringContext::carry(financial_context, self.send_message_in(messages))
             .instrument(span.clone())
             .await;

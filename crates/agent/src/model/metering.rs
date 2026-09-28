@@ -1,9 +1,9 @@
-//! Per-request financial context, separate from GenAI telemetry and analytics.
+//! Per-operation tracking/financial context, separate from GenAI telemetry and analytics.
 //!
-//! Hosts select the mode from trusted policy facts and scope the entire operation
-//! (including structured-output parsing). Unscoped calls retain legacy behavior;
-//! they are NOT covered producers and must not be activated by a host. Spawned
-//! tasks must explicitly carry the scope; the agent stream driver does so.
+//! Public completion/session entry points bridge observational recorder injection
+//! into a scope. Activated financial mode must instead be selected explicitly from
+//! trusted policy facts. Raw unscoped HTTP calls retain legacy behavior and are NOT
+//! covered producers. Spawned tasks must explicitly carry the scope.
 
 use std::future::Future;
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use ai_usage::financial::{
     InvocationId, ProviderModel, ProviderOutcome, ProviderRequestId, RunId, TrustedTokenUsage,
     UnresolvedReason, UsageEvidence, WriteDisposition,
 };
-use ai_usage::{FinancialUsage, UsageContext};
+use ai_usage::{FinancialUsage, TrackedInvocation, UsageContext, UsageRecorder, UsageTracking};
 use chrono::Utc;
 use serde_json::Value;
 
@@ -200,6 +200,7 @@ pub struct MeteringContext {
     run_id: RunId,
     mode: FinancialMode,
     capability: FinancialCapability,
+    tracking: Option<Arc<dyn UsageTracking>>,
     usage: UsageContext,
     support: Arc<Vec<ProviderSupport>>,
     stopped: Arc<AtomicBool>,
@@ -217,10 +218,47 @@ impl MeteringContext {
             run_id: RunId::new(),
             mode,
             capability,
+            tracking: None,
             usage,
             support: Arc::new(support),
             stopped: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Bind observational recording to immutable, trusted operation attribution.
+    /// No funding service or provider budget/profile is required or consulted.
+    pub fn tracking_only(tracking: Arc<dyn UsageTracking>, usage: UsageContext) -> Self {
+        let mut context = Self::new(
+            FinancialMode::TrackingOnly,
+            FinancialCapability::Unavailable,
+            usage,
+            vec![],
+        );
+        context.tracking = Some(tracking);
+        context
+    }
+
+    /// Bridge analytics injection to per-attempt tracking. Financial scopes remain
+    /// strict; observational child operations bind their own user/feature/entity.
+    pub fn for_operation(recorder: &dyn UsageRecorder, usage: &UsageContext) -> Option<Self> {
+        if let Some(current) = Self::current() {
+            if current.activated() {
+                return Some(current);
+            }
+            if let Some(tracking) = &current.tracking {
+                if current.usage.user == usage.user
+                    && current.usage.feature == usage.feature
+                    && current.usage.entity == usage.entity
+                {
+                    return Some(current);
+                }
+                let tracking = recorder.tracking().unwrap_or_else(|| tracking.clone());
+                return Some(Self::tracking_only(tracking, usage.clone()));
+            }
+        }
+        recorder
+            .tracking()
+            .map(|tracking| Self::tracking_only(tracking, usage.clone()))
     }
 
     /// Run a completion, structured generation or session operation in this scope.
@@ -242,11 +280,14 @@ impl MeteringContext {
         Ok(())
     }
 
-    pub(crate) fn current() -> Option<Self> {
+    /// Capture an immutable scope before spawning a task.
+    pub fn current() -> Option<Self> {
         REQUEST.try_with(Clone::clone).ok()
     }
 
-    pub(crate) async fn carry<F: Future>(context: Option<Self>, future: F) -> F::Output {
+    /// Explicitly carry a captured scope across task boundaries. Construct transport
+    /// calls inside the scoped async block: they can capture context at creation.
+    pub async fn carry<F: Future>(context: Option<Self>, future: F) -> F::Output {
         match context {
             Some(context) => context.scope(future).await,
             None => future.await,
@@ -257,12 +298,41 @@ impl MeteringContext {
         self.mode == FinancialMode::Activated
     }
 
+    pub(crate) fn enabled(&self) -> bool {
+        self.activated() || self.tracking.is_some()
+    }
+
     pub(crate) async fn begin(
         &self,
         model: ProviderModel,
         protocol: WireProtocol,
         body: &mut Value,
     ) -> Result<Attempt, MeteringError> {
+        if let Some(service) = &self.tracking {
+            let request = TrackedInvocation {
+                run_id: self.run_id,
+                invocation_id: InvocationId::new(),
+                user: self.usage.user.clone(),
+                feature: self.usage.feature,
+                entity: self.usage.entity,
+                model,
+                occurred_at: Utc::now(),
+            };
+            let _ = service.begin(request.clone()).await.inspect_err(|error| {
+                tracing::error!(invocation_id = ?request.invocation_id, error = ?error, "observation begin failed; provider execution continues");
+            });
+            return Ok(Attempt {
+                id: request.invocation_id,
+                service: AttemptRecorder::Tracking {
+                    service: service.clone(),
+                    request,
+                },
+                context: self.clone(),
+                protocol,
+                // Unreviewed compatible endpoints may return zero sentinels.
+                zero_usage_is_missing: protocol == WireProtocol::ChatCompletions,
+            });
+        }
         if self.stopped.load(Ordering::Acquire) {
             return Err(MeteringError::Stopped);
         }
@@ -304,21 +374,35 @@ impl MeteringContext {
         }
         Ok(Attempt {
             id: request.invocation_id,
-            service: service.clone(),
+            service: AttemptRecorder::Financial(service.clone()),
             context: self.clone(),
-            support,
+            protocol: support.protocol,
+            zero_usage_is_missing: support.zero_usage_is_missing,
         })
     }
 }
 
+enum AttemptRecorder {
+    Financial(Arc<dyn FinancialUsage>),
+    Tracking {
+        service: Arc<dyn UsageTracking>,
+        request: TrackedInvocation,
+    },
+}
+
 pub(crate) struct Attempt {
     pub(crate) id: InvocationId,
-    service: Arc<dyn FinancialUsage>,
+    service: AttemptRecorder,
     context: MeteringContext,
-    pub(crate) support: ProviderSupport,
+    pub(crate) protocol: WireProtocol,
+    pub(crate) zero_usage_is_missing: bool,
 }
 
 impl Attempt {
+    pub(crate) fn activated(&self) -> bool {
+        self.context.activated()
+    }
+
     /// Spawn before awaiting so cancellation of the consumer cannot cancel delivery
     /// of evidence already observed. Delivery retries reuse the entire immutable
     /// value; HTTP executions always obtain a fresh invocation ID instead.
@@ -328,12 +412,14 @@ impl Attempt {
         usage: UsageEvidence,
         provider_request_id: Option<ProviderRequestId>,
     ) -> Result<(), MeteringError> {
-        if matches!(
-            usage,
-            UsageEvidence::Missing(
-                UnresolvedReason::UnsupportedDimensions | UnresolvedReason::UsageNotReported
+        if self.context.activated()
+            && matches!(
+                usage,
+                UsageEvidence::Missing(
+                    UnresolvedReason::UnsupportedDimensions | UnresolvedReason::UsageNotReported
+                )
             )
-        ) {
+        {
             self.context.stopped.store(true, Ordering::Release);
         }
         let evidence = FinalizeInvocation {
@@ -343,13 +429,30 @@ impl Attempt {
             outcome,
             usage,
         };
-        tokio::spawn(async move {
+        let activated = self.context.activated();
+        let delivered = tokio::spawn(async move {
             for retry in 0..3 {
-                match self.service.finalize(evidence.clone()).await {
-                    Ok(_) => return Ok(()),
+                let result = match &self.service {
+                    AttemptRecorder::Financial(service) => service.finalize(evidence.clone()).await.map(|_| ()),
+                    AttemptRecorder::Tracking { service, request } => {
+                        // Retry begin as well: a lost acknowledgement must not lose
+                        // the subsequent evidence or generate another execution ID.
+                        match service.begin(request.clone()).await {
+                            Ok(_) => service.finalize(evidence.clone()).await.map(|_| ()),
+                            Err(error) => Err(error),
+                        }
+                    }
+                };
+                match result {
+                    Ok(()) => return Ok(()),
                     Err(error) => {
-                        tracing::error!(invocation_id = ?self.id, error = ?error, "financial evidence delivery failed");
+                        tracing::error!(invocation_id = ?self.id, error = ?error, "provider evidence delivery failed");
                         if retry == 2 {
+                            if !self.context.activated() {
+                                // Error logs above explicitly report failed persistence.
+                                // Observations must never become a provider denial.
+                                return Ok(());
+                            }
                             self.context.stopped.store(true, Ordering::Release);
                             return Err(MeteringError::Financial(error));
                         }
@@ -357,7 +460,15 @@ impl Attempt {
                 }
             }
             unreachable!("bounded delivery loop always returns")
-        }).await.map_err(|_| MeteringError::Stopped)?
+        }).await;
+        match delivered {
+            Ok(result) => result,
+            Err(error) if !activated => {
+                tracing::error!(error = ?error, "observation delivery task failed; persistence not acknowledged");
+                Ok(())
+            }
+            Err(_) => Err(MeteringError::Stopped),
+        }
     }
 }
 

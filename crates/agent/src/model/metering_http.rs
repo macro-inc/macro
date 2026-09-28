@@ -58,27 +58,41 @@ impl<H> MeteredHttpClient<H> {
         &self,
         request: Request<Bytes>,
     ) -> http_client::Result<(Request<Bytes>, Option<Attempt>)> {
-        let Some(context) = MeteringContext::current().filter(MeteringContext::activated) else {
+        let Some(context) = MeteringContext::current().filter(MeteringContext::enabled) else {
             return Ok((request, None));
         };
-        let mut body: Value = serde_json::from_slice(request.body())
-            .map_err(|_| http_error(MeteringError::Unsupported))?;
-        let model = if self.protocol == WireProtocol::Gemini {
-            request
-                .uri()
-                .path()
-                .split_once("/models/")
-                .and_then(|(_, model)| model.split_once(':').map(|(model, _)| model))
-        } else {
-            body.get("model").and_then(Value::as_str)
-        }
-        .ok_or_else(|| http_error(MeteringError::Unsupported))?;
-        let model =
-            ProviderModel::new(self.provider.clone(), model).map_err(|e| http_error(e.into()))?;
+        let parsed = (|| {
+            let body: Value =
+                serde_json::from_slice(request.body()).map_err(|_| MeteringError::Unsupported)?;
+            let model = if self.protocol == WireProtocol::Gemini {
+                request
+                    .uri()
+                    .path()
+                    .split_once("/models/")
+                    .and_then(|(_, model)| model.split_once(':').map(|(model, _)| model))
+            } else {
+                body.get("model").and_then(Value::as_str)
+            }
+            .ok_or(MeteringError::Unsupported)?;
+            let model = ProviderModel::new(self.provider.clone(), model)?;
+            Ok::<_, MeteringError>((body, model))
+        })();
+        let (mut body, model) = match parsed {
+            Ok(parsed) => parsed,
+            Err(error) if !context.activated() => {
+                tracing::error!(error = ?error, "cannot identify provider attempt; observation not persisted");
+                return Ok((request, None));
+            }
+            Err(error) => return Err(http_error(error)),
+        };
         let attempt = context
             .begin(model, self.protocol, &mut body)
             .await
             .map_err(http_error)?;
+        if !context.activated() {
+            // Preserve the exact body and headers, including all request budgets.
+            return Ok((request, Some(attempt)));
+        }
         let (parts, _) = request.into_parts();
         let mut request = Request::from_parts(
             parts,
@@ -137,8 +151,8 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
                     match result {
                         Ok(Ok((parts, bytes))) => {
                             let mut facts = Facts::new(
-                                attempt.support.protocol,
-                                attempt.support.zero_usage_is_missing,
+                                attempt.protocol,
+                                attempt.zero_usage_is_missing,
                                 request_id(&parts.headers),
                             );
                             facts.response(&bytes);
@@ -173,7 +187,11 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
     where
         U: From<Bytes> + Send + 'static,
     {
-        let activated = MeteringContext::current().is_some_and(|c| c.activated());
+        let context = MeteringContext::current();
+        let activated = context.as_ref().is_some_and(MeteringContext::activated);
+        if context.as_ref().is_some_and(MeteringContext::enabled) && !activated {
+            tracing::warn!("multipart provider attempt is not covered by observational metering");
+        }
         let inner = self.inner.clone();
         async move {
             if activated {
@@ -210,8 +228,8 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
             };
             let (parts, mut body) = response.into_parts();
             let mut facts = Facts::new(
-                attempt.support.protocol,
-                attempt.support.zero_usage_is_missing,
+                attempt.protocol,
+                attempt.zero_usage_is_missing,
                 request_id(&parts.headers),
             );
             let (tx, mut rx) = tokio::sync::mpsc::channel(8);
@@ -249,6 +267,7 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
                 };
                 let _ = tokio::time::timeout(EXECUTION_TIMEOUT, drain).await;
                 if let Some(attempt) = attempt {
+                    let activated = attempt.activated();
                     let result = attempt
                         .finish(
                             ProviderOutcome::Unknown,
@@ -258,7 +277,7 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
                         .await;
                     if let Err(error) = result {
                         let _ = tx.send(Err(http_error(error))).await;
-                    } else {
+                    } else if activated {
                         let _ = tx.send(Err(http_error(MeteringError::Stopped))).await;
                     }
                 }
@@ -279,11 +298,7 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
 /// Rig exposes non-success response bodies through this public error variant.
 /// Retain reported usage even when HTTP status prevents SDK response parsing.
 async fn finish_failure(attempt: Attempt, error: &http_client::Error) -> http_client::Result<()> {
-    let mut facts = Facts::new(
-        attempt.support.protocol,
-        attempt.support.zero_usage_is_missing,
-        None,
-    );
+    let mut facts = Facts::new(attempt.protocol, attempt.zero_usage_is_missing, None);
     let mut outcome = ProviderOutcome::Unknown;
     let mut evidence = UsageEvidence::Missing(UnresolvedReason::Interrupted);
     if let http_client::Error::InvalidStatusCodeWithMessage(_, body) = error {

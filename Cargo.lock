@@ -1009,6 +1009,7 @@ name = "anthropic"
 version = "0.2.0"
 dependencies = [
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "async-openai",
  "async-stream",

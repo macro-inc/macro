@@ -610,6 +610,9 @@ pub struct PendingInvocations {
 /// purchasable plan names. Legacy analytics must not also enter new-policy settlement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FinancialMode {
+    /// Observe attempts without authorization, reservations, allocation or collection.
+    /// This is not a financial exemption and cannot later authorize historical debt.
+    TrackingOnly,
     /// Requires awaited financial authorization before every provider execution.
     Activated,
     /// Preserve existing analytics/legacy accounting without reconstructing debt.
@@ -633,7 +636,12 @@ impl FinancialCapability {
     /// authorization. `None` is possible only for an explicitly nonfinancial/legacy mode.
     pub fn for_mode(&self, mode: FinancialMode) -> FinancialResult<Option<&dyn FinancialUsage>> {
         match (mode, self) {
-            (FinancialMode::Legacy | FinancialMode::NonFinancial(_), _) => Ok(None),
+            (
+                FinancialMode::TrackingOnly
+                | FinancialMode::Legacy
+                | FinancialMode::NonFinancial(_),
+                _,
+            ) => Ok(None),
             (FinancialMode::Activated, Self::Unavailable) => {
                 Err(FinancialError::CapabilityUnavailable)
             }

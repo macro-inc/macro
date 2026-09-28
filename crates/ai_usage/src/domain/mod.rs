@@ -4,6 +4,7 @@ pub mod financial;
 pub mod financial_service;
 pub mod ports;
 pub mod service;
+pub mod tracking;
 
 pub use ports::{
     AiFeature, CompletionUsage, FeatureUsage, FinancialFuture, FinancialRateResolver,
