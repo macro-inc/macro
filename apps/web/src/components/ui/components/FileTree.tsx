@@ -14,8 +14,6 @@
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import FolderIcon from '@phosphor/folder.svg';
 import FolderOpenIcon from '@phosphor/folder-open.svg';
-import { Button, cn } from '@ui';
-import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {
   createContext,
   createMemo,
@@ -25,13 +23,16 @@ import {
   splitProps,
   useContext,
 } from 'solid-js';
+import { cn } from '../utils/classname';
 import {
   buildFileTree,
   type FileTreeDirectory,
   type FileTreeFile,
   type FileTreeNode,
   visibleNodes,
-} from './build-file-tree';
+} from '../utils/file-tree';
+import { Button } from './Button';
+import { CollapseTransition } from './CollapseTransition';
 
 const NodeContext = createContext<FileTreeNode<unknown>>();
 
@@ -246,4 +247,17 @@ function Root<T>(props: FileTreeRootProps<T>) {
   );
 }
 
+/**
+ * A tree of any items by path, for changed files, attachments, or a repository.
+ * @do Give `Root` the items and a `path` accessor; it builds the tree and
+ *   compresses single-child directories itself.
+ * @do Lead each file row with `FileTree.Icon`, then `FileTree.Name`, so names
+ *   line up with directory rows.
+ * @do Put trailing content (counts, badges, status) after `FileTree.Name`; the
+ *   name takes the remaining width and truncates.
+ * @do Pass `directory` to change what a directory row shows after its folder.
+ * @dont Do not put buttons inside a row; the row is already a button.
+ * @dont Do not restyle row heights or insets at the call site; rows share the
+ *   workspace sidebar's tree geometry so trees look alike across panes.
+ */
 export const FileTree = { Root, Icon, Name };

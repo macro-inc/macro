@@ -387,11 +387,6 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'file-tree-ui',
-    lazy(() => import('@app/components/file-tree/debug/FileTreeGallery'))
-  );
-
-  registerComponent(
     'diff-view-ui',
     lazy(() => import('@app/components/diff-view/debug/DiffViewGallery'))
   );

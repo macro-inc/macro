@@ -4,14 +4,24 @@ import { Transition } from 'solid-transition-group';
 
 const COLLAPSE_DURATION = 140;
 
-/** Animate a disclosure body, or its containing section when flex owns its size. */
-export function CollapseTransition(props: {
+export type CollapseTransitionProps = {
   open: boolean;
+  /** Animate this element's size instead of the body's, when flex owns it. */
   container?: () => HTMLElement | undefined;
   axis?: 'height' | 'width';
   collapsedSize?: number;
   children: JSX.Element;
-}) {
+};
+
+/**
+ * Animate a disclosure body, or its containing section when flex owns its size.
+ * @do Wrap the body that opens and closes; it mounts only while `open`.
+ * @do Use `axis="width"` for a side column such as a file tree beside content.
+ * @do Keep state the body needs across closing outside it; closing unmounts it.
+ * @dont Do not add your own height or opacity transition to the body; the
+ *   animation measures it and would fight a second one.
+ */
+export function CollapseTransition(props: CollapseTransitionProps) {
   const content = children(() => (
     <Show when={props.open}>{props.children}</Show>
   ));

@@ -11,7 +11,7 @@ import {
   DiffView,
   StatusLetter,
 } from '@app/components/diff-view';
-import { FileTree } from '@app/components/file-tree';
+import { FileTree } from '@ui/components/FileTree';
 import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
 import CircleNotchIcon from '@phosphor/circle-notch.svg';
 import CopyIcon from '@phosphor/copy.svg';

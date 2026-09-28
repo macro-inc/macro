@@ -3,7 +3,7 @@
  * them, over example changes. Registered as the `diff-view-ui` component.
  */
 
-import { FileTree } from '@app/components/file-tree';
+import { FileTree } from '@ui/components/FileTree';
 import CopyIcon from '@phosphor/copy.svg';
 import FileIcon from '@phosphor/file.svg';
 import { Button, SegmentedControl } from '@ui';

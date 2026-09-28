@@ -16,7 +16,7 @@ without a pull request yet shows no GitHub chrome. Clipboard, external navigatio
 and notifications are host callbacks.
 
 `views/ChangesPane.tsx` composes the generic `FileTree`
-(`src/components/file-tree`) and `DiffView` (`src/components/diff-view`) from the
+(`@ui/components/FileTree`) and `DiffView` (`src/components/diff-view`) from the
 controller: tree rows show status letters and counts, file headers add **Copy
 path**, and review notes hang under their lines through `DiffView.Stack`'s
 annotation slot. Another host composes the same components its own way.

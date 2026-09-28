@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFileTree, visibleNodes } from './build-file-tree';
+import { buildFileTree, visibleNodes } from './file-tree';
 
 const tree = (paths: string[]) => buildFileTree(paths, (path) => path);
 
