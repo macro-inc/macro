@@ -16,6 +16,14 @@ const mocks = vi.hoisted(() => ({
   storeModel: vi.fn(),
   sendBackground: vi.fn(),
   background: false,
+  agentsEnabled: false,
+}));
+
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: mocks.agentsEnabled }),
+}));
+vi.mock('../agents-view/mobile-agent-composer', () => ({
+  MobileAgentComposer: () => <div data-testid="agent-composer" />,
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
@@ -100,10 +108,18 @@ import { SoupChatInput } from './SoupChatInput';
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.background = false;
+  mocks.agentsEnabled = false;
 });
 afterEach(cleanup);
 
 describe('SoupChatInput', () => {
+  it('uses the new composer when agents are enabled', () => {
+    mocks.agentsEnabled = true;
+    render(() => <SoupChatInput />);
+    expect(screen.getByTestId('agent-composer')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+    expect(mocks.createChat).not.toHaveBeenCalled();
+  });
   it('renders the compact chat input inline without page actions', () => {
     const { container } = render(() => <SoupChatInput />);
     const send = screen.getByRole('button', { name: 'Send' });
