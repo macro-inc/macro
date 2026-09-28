@@ -46,6 +46,10 @@ pub enum SystemEvent {
     Disconnected,
     /// The hosted provider recovered history; the client must reload when idle.
     ReloadRequired,
+    /// The session just loaded with its last turn still running at the
+    /// provider, which streams the rest and ends it with
+    /// `_session/turn_complete`. Prompting before then would land inside it.
+    TurnContinuing,
     /// An application-defined event name with no protocol-level meaning yet.
     Unknown(String),
 }
@@ -58,6 +62,7 @@ impl SystemEvent {
             Self::AcpReady => "acp_ready",
             Self::Disconnected => "disconnected",
             Self::ReloadRequired => "reload_required",
+            Self::TurnContinuing => "turn_continuing",
             Self::Unknown(name) => name,
         }
     }
@@ -81,6 +86,7 @@ impl<'de> Deserialize<'de> for SystemEvent {
             "acp_ready" => Self::AcpReady,
             "disconnected" => Self::Disconnected,
             "reload_required" => Self::ReloadRequired,
+            "turn_continuing" => Self::TurnContinuing,
             name => Self::Unknown(name.to_owned()),
         })
     }

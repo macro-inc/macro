@@ -1778,6 +1778,94 @@ async fn a_quiet_stream_closes_the_turn_from_the_run_record() {
     assert_eq!(text_updates, 1);
 }
 
+/// A replica that takes over a session mid-turn continues the run the old
+/// process was streaming: the load keeps the turn open and tells the host to
+/// hold its next prompt, and the next sync streams the rest into that turn and
+/// ends it. Nothing waits for a stop or a reload to show the tail.
+#[tokio::test]
+async fn a_load_continues_the_run_a_dead_process_left_open() {
+    use crate::outbound::memory_journal::MemoryJournal;
+    use agent_runtime_protocol::domain::turn::TurnOutcome;
+    let journal = Arc::new(MemoryJournal::default());
+    let cursor = FakeCursor::new();
+    let old = RecordingNotifier::new();
+    let service = Arc::new(CursorSessionService::new(
+        cursor.clone(),
+        old.clone(),
+        FixedChooser(None, false),
+        journal.clone(),
+        NoArtifactStore,
+    ));
+    let id = service.new_session(Path::new(""), vec![]);
+    let stream = cursor.script_stream();
+    stream
+        .send(CursorEvent::Assistant {
+            text: "first half".into(),
+        })
+        .unwrap();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let id = id.clone();
+        async move { service.prompt(&id, "long job").await }
+    });
+    old.wait_for_updates(1).await;
+    // The process streaming the run dies with it still going.
+    turn.abort();
+    let _ = turn.await;
+    drop(stream);
+
+    let notifier = RecordingNotifier::new();
+    let restored = Arc::new(CursorSessionService::new(
+        cursor.clone(),
+        notifier.clone(),
+        FixedChooser(None, false),
+        journal.clone(),
+        NoArtifactStore,
+    ));
+    restored.restore_session(id.clone(), Some(CursorAgentId::new("bc-fake")), None);
+    let history = load(&restored, &id, &notifier).await;
+    assert_eq!(agent_texts(&history), ["first half"]);
+    assert_eq!(notifier.continuations(), std::slice::from_ref(&id));
+    assert!(
+        notifier.turn_outcomes().is_empty(),
+        "the load leaves the cut-off turn open"
+    );
+
+    let rest = cursor.script_stream();
+    for event in [
+        CursorEvent::Assistant {
+            text: "first half".into(),
+        },
+        CursorEvent::Assistant {
+            text: "second half".into(),
+        },
+        finished("run-fake-1"),
+        CursorEvent::Done,
+    ] {
+        rest.send(event).unwrap();
+    }
+    restored.sync_foreign_runs().await;
+
+    assert_eq!(
+        agent_texts(&notifier.updates()[history.len()..]),
+        ["second half"],
+        "only the part the old process never saw is appended, live"
+    );
+    assert_eq!(notifier.turn_outcomes(), [TurnOutcome::Finished]);
+    assert!(notifier.reloads().is_empty(), "no reload replaces the turn");
+    assert_eq!(
+        last_run(&restored, &id),
+        Some(CursorRunId::new("run-fake-1"))
+    );
+
+    load(&restored, &id, &notifier).await;
+    assert_eq!(
+        notifier.continuations().len(),
+        1,
+        "a finished run is history, not a turn to continue"
+    );
+}
+
 /// The same durable inputs restore every turn without any provider execution.
 #[tokio::test]
 async fn durable_multiturn_load_replays_full_history_and_supports_continuation() {

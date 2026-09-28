@@ -28,6 +28,12 @@ pub enum AgentSessionError {
     /// there.
     #[error("this replica is draining; retry agent session {0} on another")]
     Draining(AgentSessionId),
+    /// A turn-occupying action reached a session whose runtime is still
+    /// finishing the turn it was running before this connection loaded it.
+    /// Nothing was sent; the action belongs in the queue until that turn
+    /// ends.
+    #[error("agent session {0} is still finishing an earlier turn")]
+    TurnContinuing(AgentSessionId),
     #[error("agent session {0} write was fenced out: another replica claimed the session")]
     FencedOut(AgentSessionId),
     #[error("acp handshake failed: {0}")]

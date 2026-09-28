@@ -390,8 +390,8 @@ where
             session_id,
             sessions: self.sessions.clone(),
         };
-        let (reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel();
-        let mut notifier = AcpNotifier::new().with_reload(reload_tx);
+        let (host_events_tx, host_events_rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut notifier = AcpNotifier::new().with_host_events(host_events_tx);
         if let Some(service) = &self.pull_requests {
             notifier = notifier.with_pull_requests(Arc::new(
                 super::pull_request::CursorPullRequestReporter {
@@ -544,7 +544,7 @@ where
                     tokio::time::Instant::now();
             },
             shutdown,
-            Some(reload_rx),
+            Some(host_events_rx),
         );
         Ok(
             agent_session::domain::connection::RuntimeAttachment::solo(transport)

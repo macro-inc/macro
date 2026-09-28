@@ -4,7 +4,9 @@ use crate::inbound::acp::{AcpNotifier, serve_transport};
 use agent_client_protocol::{Channel, RawJsonRpcMessage, TransportFrame};
 use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use agent_fold::domain::model::FoldedMessage;
-use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage, ToServerMessage};
+use agent_runtime_protocol::domain::schema::v0::{
+    AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
+};
 
 pub(super) async fn replay(journal: Arc<dyn CursorJournal>, id: SessionId) -> Vec<FoldedMessage> {
     replay_with_tail(journal, id, None).await
@@ -29,7 +31,7 @@ pub(super) async fn replay_with_runs(
     runs: Option<Vec<(CursorRunId, Vec<CursorEvent>)>>,
 ) -> Vec<FoldedMessage> {
     let (reload_tx, mut reload_rx) = tokio::sync::mpsc::unbounded_channel();
-    let notifier = AcpNotifier::new().with_reload(reload_tx);
+    let notifier = AcpNotifier::new().with_host_events(reload_tx);
     let cursor = FakeCursor::new();
     let service = Arc::new(CursorSessionService::new(
         cursor.clone(),
@@ -76,7 +78,7 @@ pub(super) async fn replay_with_runs(
         service.sync_foreign_runs().await;
         // Recovery is host-local: one reload requirement for this session and
         // no frame on the wire until the client's own standard load.
-        assert_eq!(reload_rx.try_recv().ok(), Some(id.clone()));
+        assert_eq!(reload_rx.try_recv().ok(), Some(SystemEvent::ReloadRequired));
         assert!(reload_rx.try_recv().is_err());
         assert_no_frame(&mut client).await;
         load(&mut client, &mut log, &id, 93).await;
@@ -205,7 +207,7 @@ async fn actual_live_backfill_keeps_older_answer_out_of_pending_or_cancelled_pro
     for (cancel, late) in [(false, false), (true, false), (false, true)] {
         let cursor = FakeCursor::new();
         let (reload_tx, mut reload_rx) = tokio::sync::mpsc::unbounded_channel();
-        let notifier = AcpNotifier::new().with_reload(reload_tx);
+        let notifier = AcpNotifier::new().with_host_events(reload_tx);
         let journal = Arc::new(crate::outbound::memory_journal::MemoryJournal::default());
         let service = Arc::new(CursorSessionService::new(
             cursor.clone(),
@@ -335,7 +337,7 @@ async fn actual_live_backfill_keeps_older_answer_out_of_pending_or_cancelled_pro
         );
         assert_eq!(
             reload_rx.try_recv().ok(),
-            Some(id.clone()),
+            Some(SystemEvent::ReloadRequired),
             "recovery requires a host-local reload"
         );
         assert!(
@@ -532,11 +534,131 @@ async fn accepted_newer_run_survives_partial_crash_load_then_actual_sync_without
     );
 }
 
+/// A takeover mid-turn, as the host sees it on the wire. The load replays the
+/// cut-off turn and leaves it open; the continuation signal is already queued
+/// when the load answers, so the host holds its next prompt; and the sync that
+/// follows streams only the missing tail and closes that same turn. One turn,
+/// both halves, and no reload.
+#[tokio::test]
+async fn a_takeover_load_streams_the_rest_of_the_open_turn() {
+    let (seed, _, _) = service(None);
+    let id = seed.new_session(Path::new(""), vec![]);
+    let session = seed.session(&id).unwrap();
+    seed.ensure_journal(&id, &session).await.unwrap();
+    seed.capture(
+        &id,
+        &session,
+        None,
+        JournalInput::Prompt(vec![ContentBlock::Text(TextContent::new("long job"))]),
+        false,
+    )
+    .await
+    .unwrap();
+    let run = CursorRunId::new("run");
+    seed.capture(
+        &id,
+        &session,
+        Some(&run),
+        JournalInput::PromptAccepted(2),
+        false,
+    )
+    .await
+    .unwrap();
+    let first_half = CursorEvent::Assistant {
+        text: "first half, ".into(),
+    };
+    seed.capture(
+        &id,
+        &session,
+        Some(&run),
+        JournalInput::Sse(crate::testing::raw_record(first_half.clone())),
+        false,
+    )
+    .await
+    .unwrap();
+
+    let (host_tx, mut host_rx) = tokio::sync::mpsc::unbounded_channel();
+    let notifier = AcpNotifier::new().with_host_events(host_tx);
+    let cursor = FakeCursor::new();
+    let service = Arc::new(CursorSessionService::new(
+        cursor.clone(),
+        notifier.clone(),
+        FixedChooser(None, false),
+        seed.journal.clone(),
+        crate::domain::ports::NoArtifactStore,
+    ));
+    service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None);
+    let (agent, mut client) = Channel::duplex();
+    let task = tokio::spawn(serve_transport(service.clone(), notifier, agent));
+    let mut log = Vec::new();
+    load(&mut client, &mut log, &id, 91).await;
+    assert_eq!(
+        host_rx.try_recv().ok(),
+        Some(SystemEvent::TurnContinuing),
+        "queued before the load answered"
+    );
+    let loaded = agent_fold::domain::fold::fold(log.clone());
+    assert_eq!(loaded.last().and_then(|m| m.stop.clone()), None);
+
+    let rest = cursor.script_stream();
+    for event in [
+        first_half,
+        CursorEvent::Assistant {
+            text: "second half".into(),
+        },
+        finished("run"),
+        CursorEvent::Done,
+    ] {
+        rest.send(event).unwrap();
+    }
+    service.sync_foreign_runs().await;
+    loop {
+        let frame = tokio::time::timeout(std::time::Duration::from_secs(5), client.rx.next())
+            .await
+            .expect("the continued turn streams")
+            .expect("the connection stays open");
+        let TransportFrame::Single(frame) = frame else {
+            panic!("single frame")
+        };
+        let done = serde_json::to_value(&frame).unwrap()["method"] == "_session/turn_complete";
+        log.push(entry(Message::ToServer(ToServerMessage::Acp(AcpMessage(
+            frame,
+        )))));
+        if done {
+            break;
+        }
+    }
+    assert!(host_rx.try_recv().is_err(), "no reload replaces the turn");
+    task.abort();
+
+    assert_incremental_matches_batch(&log);
+    let messages = agent_fold::domain::fold::fold(log);
+    let reply = messages.last().expect("the continued turn");
+    let text: String = reply
+        .parts
+        .iter()
+        .filter_map(|p| match p {
+            agent_fold::domain::model::MessagePart::Text { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(text, "first half, second half");
+    assert_eq!(
+        reply.stop,
+        Some(agent_fold::domain::model::StopReason::EndTurn)
+    );
+    assert_eq!(
+        messages.len(),
+        loaded.len(),
+        "the tail joined the open turn"
+    );
+}
+
 #[tokio::test]
 async fn load_waiting_for_an_active_backfill_replays_one_copy_through_fold() {
     let cursor = FakeCursor::new();
     let (reload_tx, mut reload_rx) = tokio::sync::mpsc::unbounded_channel();
-    let notifier = AcpNotifier::new().with_reload(reload_tx);
+    let notifier = AcpNotifier::new().with_host_events(reload_tx);
     let journal = Arc::new(crate::outbound::memory_journal::MemoryJournal::default());
     let service = Arc::new(CursorSessionService::new(
         cursor.clone(),
@@ -599,13 +721,13 @@ async fn load_waiting_for_an_active_backfill_replays_one_copy_through_fold() {
     let mut log = Vec::new();
     let loading = tokio::spawn(async move {
         load(&mut client, &mut log, &id, 91).await;
-        (client, log, id)
+        (client, log)
     });
     older.send(finished("R1")).unwrap();
     older.send(CursorEvent::Done).unwrap();
     producer.await.unwrap();
-    let (mut client, log, id) = loading.await.unwrap();
-    assert_eq!(reload_rx.try_recv().ok(), Some(id.clone()));
+    let (mut client, log) = loading.await.unwrap();
+    assert_eq!(reload_rx.try_recv().ok(), Some(SystemEvent::ReloadRequired));
     assert!(reload_rx.try_recv().is_err());
     assert_no_frame(&mut client).await;
     task.abort();

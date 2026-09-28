@@ -790,6 +790,8 @@ type RecordedUpdates = Vec<(SessionId, SessionUpdate)>;
 pub struct RecordingNotifier {
     updates: Arc<Mutex<RecordedUpdates>>,
     reloads: Arc<Mutex<Vec<SessionId>>>,
+    continuations: Arc<Mutex<Vec<SessionId>>>,
+    turn_outcomes: Arc<Mutex<Vec<agent_runtime_protocol::domain::turn::TurnOutcome>>>,
     pull_requests: Arc<Mutex<Vec<String>>>,
     working_branches: Arc<Mutex<Vec<(String, String)>>>,
     delivered: Arc<tokio::sync::Notify>,
@@ -827,6 +829,22 @@ impl RecordingNotifier {
     /// Sessions whose recovered history needs a client load.
     pub fn reloads(&self) -> Vec<SessionId> {
         self.reloads.lock().expect("notifier poisoned").clone()
+    }
+
+    /// Sessions a load reported as still finishing their last turn.
+    pub fn continuations(&self) -> Vec<SessionId> {
+        self.continuations
+            .lock()
+            .expect("notifier poisoned")
+            .clone()
+    }
+
+    /// `turn_complete` outcomes, in order.
+    pub fn turn_outcomes(&self) -> Vec<agent_runtime_protocol::domain::turn::TurnOutcome> {
+        self.turn_outcomes
+            .lock()
+            .expect("notifier poisoned")
+            .clone()
     }
 
     /// Resolve once `at_least` updates have been delivered.
@@ -895,11 +913,23 @@ impl SessionNotifier for RecordingNotifier {
         Ok(())
     }
 
+    async fn continue_turn(&self, session: &SessionId) -> Result<(), rootcause::Report> {
+        self.continuations
+            .lock()
+            .expect("notifier poisoned")
+            .push(session.clone());
+        Ok(())
+    }
+
     async fn turn_complete(
         &self,
         _session: &SessionId,
-        _outcome: agent_runtime_protocol::domain::turn::TurnOutcome,
+        outcome: agent_runtime_protocol::domain::turn::TurnOutcome,
     ) -> Result<(), rootcause::Report> {
+        self.turn_outcomes
+            .lock()
+            .expect("notifier poisoned")
+            .push(outcome);
         Ok(())
     }
 

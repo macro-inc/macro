@@ -19,6 +19,7 @@ use agent_runtime_protocol::domain::action::{
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
+use agent_runtime_protocol::domain::turn::TurnCompleteNotification;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::PROTOCOL_VERSION;
@@ -53,6 +54,11 @@ pub struct SessionMachine<Token> {
     in_flight_turn: Option<(RequestId, AgentActionId)>,
     resume_session_id: Option<SessionId>,
     reload_required: bool,
+    /// The runtime reported, while this connection loaded, that the turn it
+    /// was running before is still going. Until that turn's
+    /// `_session/turn_complete`, a prompt sent now would be folded into it,
+    /// so turn-occupying actions are refused back to the caller's queue.
+    turn_continuing: bool,
     /// Directory the agent works in, snapshotted on the session row at
     /// creation; `session/new`, `session/resume`, and `session/load` all
     /// carry it, so a reconnect re-enters the directory the session
@@ -89,6 +95,7 @@ impl<Token> SessionMachine<Token> {
             in_flight_turn: None,
             resume_session_id: None,
             reload_required: false,
+            turn_continuing: false,
             workspace,
             mcp_servers,
             permission_policy,
@@ -115,6 +122,7 @@ impl<Token> SessionMachine<Token> {
             in_flight_turn: None,
             resume_session_id: Some(session_id),
             reload_required: false,
+            turn_continuing: false,
             workspace,
             mcp_servers,
             permission_policy,
@@ -316,11 +324,22 @@ impl<Token> SessionMachine<Token> {
             let mut effects = Vec::new();
             if !matches!(self.phase, SessionPhase::Dead) {
                 self.reload_required = true;
-                if self.in_flight_turn.is_none() {
+                if self.in_flight_turn.is_none() && !self.turn_continuing {
                     self.begin_reload(&mut effects);
                 }
             }
             return effects;
+        }
+        if matches!(
+            message,
+            ToServerMessage::Event {
+                event: SystemEvent::TurnContinuing
+            }
+        ) {
+            if !matches!(self.phase, SessionPhase::Dead) {
+                self.turn_continuing = true;
+            }
+            return Vec::new();
         }
         // Every inbound message is logged, before anything reacts to it: the
         // log stream is the session's history, not a digest of it.
@@ -367,6 +386,8 @@ impl<Token> SessionMachine<Token> {
         // Request ids restart with the connection, so nothing recorded before
         // it could be answered now. Empty in practice; cleared on principle.
         self.outstanding_permissions.clear();
+        // The load this handshake ends in reports a still-running turn afresh.
+        self.turn_continuing = false;
 
         match self.build_initialize_request() {
             Ok((initialize, request_id)) => {
@@ -395,6 +416,16 @@ impl<Token> SessionMachine<Token> {
                 self.in_flight_turn = None;
                 self.cancel_outstanding_permissions(effects);
                 if self.reload_required {
+                    self.begin_reload(effects);
+                }
+                return;
+            }
+            if self.turn_continuing
+                && let RawJsonRpcMessage::Notification(notification) = &frame
+                && TurnCompleteNotification::matches_method(&notification.method)
+            {
+                self.turn_continuing = false;
+                if self.reload_required && self.in_flight_turn.is_none() {
                     self.begin_reload(effects);
                 }
                 return;
@@ -943,8 +974,19 @@ impl<Token> SessionMachine<Token> {
     /// directly follows its [`Effect::Send`], so the shell aborting a batch
     /// mid-way strands no false completions - and an action that cannot be
     /// expressed as ACP fails alone, without taking the connection down.
+    ///
+    /// While the runtime is still finishing a turn from before this load,
+    /// turn-occupying actions are refused rather than sent: a prompt would be
+    /// folded into that turn. Everything else still goes, so a stop can end it.
     fn flush(&mut self, session_id: &SessionId, effects: &mut Vec<Effect<Token>>) {
         while let Some(queued) = self.pending.pop_front() {
+            if self.turn_continuing && queued.action.occupies_turn() {
+                effects.push(Effect::Complete {
+                    token: queued.token,
+                    result: Err(AgentSessionError::TurnContinuing(self.id)),
+                });
+                continue;
+            }
             let request_id = queued.action_id.to_request_id();
             match queued.action.to_runtime(session_id, request_id.clone()) {
                 Ok(message) => {

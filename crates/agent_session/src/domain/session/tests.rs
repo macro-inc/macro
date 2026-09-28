@@ -1887,3 +1887,85 @@ mod elicitation {
         assert_eq!(machine.status(), RuntimeStatus::Dead);
     }
 }
+
+fn turn_continuing() -> Input<u32> {
+    Input::Inbound(ToServerMessage::Event {
+        event: SystemEvent::TurnContinuing,
+    })
+}
+
+fn turn_complete() -> Input<u32> {
+    frame(
+        serde_json::from_value(serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "_session/turn_complete",
+            "params": {"sessionId": "acp-42", "outcome": {"kind": "finished"}},
+        }))
+        .expect("a turn_complete notification"),
+    )
+}
+
+/// The tokens the effects refused as a continuing turn.
+fn refused_as_continuing(effects: &[Effect<u32>]) -> Vec<u32> {
+    effects
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::Complete {
+                token,
+                result: Err(AgentSessionError::TurnContinuing(_)),
+            } => Some(*token),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A connection that loaded mid-turn must not fold the next prompt into the
+/// turn the runtime is still streaming: prompts go back to the caller until
+/// that turn completes, while a stop still reaches the runtime.
+#[test]
+fn a_continuing_turn_refuses_prompts_until_its_turn_complete() {
+    let mut machine = machine();
+    begin_opening(&mut machine);
+    assert!(
+        machine
+            .handle(command("queued behind the load", 1))
+            .is_empty()
+    );
+    assert!(machine.handle(turn_continuing()).is_empty());
+
+    let opened = machine.handle(session_opened("acp-42"));
+    assert!(sent_methods(&opened).is_empty(), "{opened:?}");
+    assert_eq!(refused_as_continuing(&opened), [1]);
+
+    let live = machine.handle(command("sent while it streams", 2));
+    assert!(sent_methods(&live).is_empty());
+    assert_eq!(refused_as_continuing(&live), [2]);
+
+    assert_eq!(sent_methods(&machine.handle(stop(3))), ["session/cancel"]);
+
+    let completed = machine.handle(turn_complete());
+    assert!(
+        matches!(completed.as_slice(), [Effect::Log { .. }]),
+        "the fold reads the turn's end from the log: {completed:?}"
+    );
+    assert_eq!(
+        sent_methods(&machine.handle(command("after it ended", 4))),
+        ["session/prompt"]
+    );
+}
+
+#[test]
+fn a_reload_waits_for_the_continuing_turn() {
+    let mut machine = live_machine_under(PermissionPolicy::AutoAccept);
+    machine.handle(turn_continuing());
+
+    let deferred = machine.handle(Input::Inbound(ToServerMessage::Event {
+        event: SystemEvent::ReloadRequired,
+    }));
+    assert!(sent_methods(&deferred).is_empty(), "{deferred:?}");
+
+    assert_eq!(
+        sent_methods(&machine.handle(turn_complete())),
+        ["initialize"]
+    );
+}
