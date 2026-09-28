@@ -59,7 +59,8 @@ pub fn resolve(
     let spec = mode.spec();
     let local = spec
         .overlay_local_env
-        .then(|| local_env::LocalEnv::for_instance(mode, instance, static_frontend, tunnels));
+        .then(|| local_env::LocalEnv::for_instance(mode, instance, static_frontend, tunnels))
+        .transpose()?;
     let mut env = BTreeMap::new();
     // Boot stubs go in FIRST so Doppler overrides them: they only exist to keep
     // a `--no-doppler` stack's config loaders satisfied, never to replace a

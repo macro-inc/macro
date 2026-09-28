@@ -124,6 +124,11 @@ upload attempts `localhost:4566` on a named instance, rebuild the service and
 reload its generated environment; named instances publish storage on their own
 port.
 
+If LocalStack loses its temporary resources after a restart, restore missing
+buckets, queues, tables, and keys without resetting Postgres or volumes:
+`cargo x localstack-provision --instance <name>`. Include `--port-base` if the
+instance uses an explicit port base. This restores resources, not lost objects.
+
 The stack does not create accounts in advance. Passwordless login creates a user
 on demand. Register with any email address. FusionAuth sends you a one-time code
 by email. That email lands in **Mailpit** at http://localhost:8025, not in a real
@@ -257,6 +262,8 @@ name to Vite's allowed hosts, and issue a certificate for it using the stable
 CA in `infra/local/certs`. Startup prints `https://<hostname>:<proxy-port>/app/`.
 Caddy serves backend routes directly and forwards frontend assets and HMR to
 Vite, so the browser only needs the HTTPS proxy port.
+Login fallback redirects, Pipedream origins, MCP callbacks, and file permalinks
+use that same HTTPS origin for attached local stacks.
 If your host firewall blocks Docker-to-host traffic, allow the instance's
 Docker network to reach the Vite port through `host.docker.internal`.
 

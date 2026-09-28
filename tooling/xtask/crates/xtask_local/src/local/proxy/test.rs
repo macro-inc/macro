@@ -127,7 +127,11 @@ fn document_content_services_are_available_through_the_proxy() {
 /// fan-out locally, the dev-pointed service in dev.
 #[test]
 fn static_file_block_is_mode_specific() {
-    assert!(caddyfile(Mode::Local, false).contains("/static-file-storage"));
+    let local = caddyfile(Mode::Local, false);
+    assert!(local.contains("/static-file-storage"));
+    // A route at site scope sorts after the Vite catch-all handle and loops.
+    assert!(local.contains("handle_path /static-file/*"));
+    assert!(!local.contains("route /static-file/*"));
     assert!(caddyfile(Mode::Dev, false).contains("handle_path /static-file/*"));
     assert!(!caddyfile(Mode::Dev, false).contains("/static-file-storage"));
 }

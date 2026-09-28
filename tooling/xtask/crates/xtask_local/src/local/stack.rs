@@ -104,6 +104,11 @@ fn write_state(instance: &Instance, state: &StackState) -> Result<()> {
         .with_context(|| format!("writing {}", path.display()))
 }
 
+/// Whether the recorded stack serves a headless bundle from the proxy.
+pub(super) fn frontend_is_static(instance: &Instance) -> bool {
+    read_state(instance).is_some_and(|state| state.frontend == "static")
+}
+
 fn read_state(instance: &Instance) -> Option<StackState> {
     let raw = std::fs::read_to_string(state_path(instance)).ok()?;
     serde_json::from_str(&raw).ok()

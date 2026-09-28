@@ -23,13 +23,18 @@ pub fn url(instance: &Instance) -> String {
     format!("http://localhost:{}/app", instance.port(Port::Frontend))
 }
 
-/// Browser-facing development URL, using the machine certificate and proxy.
-pub fn https_url(instance: &Instance) -> Result<String> {
+/// Browser-facing origin for development redirects and integration callbacks.
+pub fn https_origin(instance: &Instance) -> Result<String> {
     Ok(format!(
-        "https://{}:{}/app/",
+        "https://{}:{}",
         super::tls::hostname()?,
         instance.port(Port::Proxy)
     ))
+}
+
+/// Browser-facing development URL, using the machine certificate and proxy.
+pub fn https_url(instance: &Instance) -> Result<String> {
+    Ok(format!("{}/app/", https_origin(instance)?))
 }
 
 /// Frontend URL when the proxy serves the static bundle (headless stacks): the

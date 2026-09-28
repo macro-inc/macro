@@ -276,12 +276,14 @@ const MAILPIT_ROUTE: &str = r#"    # Mailpit serves itself under /mailpit (MP_WE
 
 /// Local: /api and /internal go to the service, everything else to the S3 bucket
 /// via LocalStack (mirrors infra/local/nginx/static-file-cdn.conf).
-const STATIC_FILE_LOCAL: &str = r#"    route /static-file/* {
-        uri strip_prefix /static-file
-        @svc path /api/* /internal/*
-        reverse_proxy @svc static-file-service:8080
-        rewrite * /static-file-storage{uri}
-        reverse_proxy localstack:4566
+const STATIC_FILE_LOCAL: &str = r#"    handle_path /static-file/* {
+        # Keep service dispatch before the S3 rewrite inside this exclusive handle.
+        route {
+            @svc path /api/* /internal/*
+            reverse_proxy @svc static-file-service:8080
+            rewrite * /static-file-storage{uri}
+            reverse_proxy localstack:4566
+        }
     }
 "#;
 

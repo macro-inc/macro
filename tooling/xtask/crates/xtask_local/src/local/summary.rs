@@ -12,8 +12,11 @@ use super::{Mode, frontend, mailpit, proxy, sdk_webhook};
 /// Shared by the startup summary and `status-local`.
 pub fn endpoint_rows(instance: &Instance) -> Vec<(&'static str, String, u16)> {
     // Both attached and headless stacks expose the app through HTTPS.
-    let frontend_url =
-        frontend::https_url(instance).unwrap_or_else(|_| frontend::static_url(instance));
+    let frontend_url = if super::stack::frontend_is_static(instance) {
+        frontend::static_url(instance)
+    } else {
+        frontend::https_url(instance).unwrap_or_else(|_| frontend::static_url(instance))
+    };
     let frontend_port = instance.port(Port::Proxy);
     vec![
         ("frontend", frontend_url, frontend_port),

@@ -241,7 +241,7 @@ fn local_env_flavor(
                 }
             }
             // The post-login redirect must point at where this flavor
-            // actually serves the app (proxy for static, dev server port
+            // actually serves the app (localhost for static, machine hostname
             // otherwise) — the exact drift this per-flavor pass exists to
             // catch.
             let expected_frontend_port = if static_frontend {
@@ -259,7 +259,7 @@ fn local_env_flavor(
             let expected_frontend_origin = if static_frontend {
                 proxy::url(instance)
             } else {
-                format!("http://localhost:{expected_frontend_port}")
+                super::frontend::https_origin(instance)?
             };
             if env.get("FRONTEND_ORIGIN") != Some(&expected_frontend_origin) {
                 failures.push(format!(
