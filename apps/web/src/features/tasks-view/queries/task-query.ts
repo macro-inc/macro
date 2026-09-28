@@ -17,6 +17,8 @@ import {
 } from '../filters/task-facets';
 import type { TaskGroupBy, TaskSortId, TaskTab } from '../types';
 
+import { taskMembershipScope } from './task-membership';
+
 type TaskAst = BackendAstNode;
 
 const entityPropertyLiteral = (
@@ -100,6 +102,8 @@ export type BuildTaskQueryOptions = {
   facetContext?: TaskFacetContext;
   groupBy: TaskGroupBy;
   sort: SortSelection<TaskSortId>[];
+  /** Authorized membership scope; an empty set deliberately matches no tasks. */
+  taskIds?: readonly string[];
 };
 
 /** Builds the concrete Soup AST used only by the production Tasks view. */
@@ -127,9 +131,12 @@ export function buildTaskQuery(
 
   const taskDocuments = documentScope(options.tab, options.userId);
 
-  const documents = compiledFacets.df
+  let documents: TaskAst = compiledFacets.df
     ? { '&': [taskDocuments, compiledFacets.df] }
     : taskDocuments;
+  if (options.taskIds !== undefined) {
+    documents = { '&': [documents, taskMembershipScope(options.taskIds)] };
+  }
 
   const body: SoupAstBody = {
     ...nonTaskTargets,

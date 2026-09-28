@@ -181,7 +181,9 @@ export function HomeList(props: HomeListProps) {
   }
 
   function showPreview(entity: WithNotification<EntityData>) {
-    props.onPreviewEntityChange(entity);
+    props.onPreviewEntityChange(
+      entity?.type === 'initiative' ? undefined : entity
+    );
   }
 
   const previewAfterNavigation = debounce(showPreview, 150);
@@ -281,7 +283,9 @@ export function HomeList(props: HomeListProps) {
 
     return ({ entity }) => {
       previewAfterNavigation.clear();
-      props.onPreviewEntityChange(entity);
+      props.onPreviewEntityChange(
+        entity?.type === 'initiative' ? undefined : entity
+      );
     };
   };
 

@@ -12,6 +12,7 @@ import type {
   PropertyApiValues,
   PropertyDefinitionDomain,
 } from '@property/types';
+import { withProjectStatusOptions } from '@property/utils/select-options';
 import { isInstantiatedProperty } from '@property/utils/typeGuards';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -88,7 +89,13 @@ export function createGraphqlEntityPropertiesQuery(
           (property) => {
             try {
               const mapped = soupPropertyToProperty(property);
-              return mapped.isMetadata === true ? [] : [mapped];
+              return mapped.isMetadata === true
+                ? []
+                : [
+                    options.entityType() === 'INITIATIVE'
+                      ? withProjectStatusOptions(mapped)
+                      : mapped,
+                  ];
             } catch (error) {
               console.warn(
                 'Skipping GraphQL property with unsupported type',
@@ -106,6 +113,19 @@ export function createGraphqlEntityPropertiesQuery(
     isEnabled: () => input() !== undefined,
     refetch: () => result.refetch({ requestPolicy: 'network-only' }),
   };
+}
+
+/** Re-read the native property relation, including newly attached values. */
+export async function refetchGraphqlInitiativeProperties(
+  initiativeId: string
+): Promise<void> {
+  await getGraphqlSoupClient()
+    .query(
+      EntityPropertiesDocument,
+      { input: buildEntityPropertiesInput('INITIATIVE', initiativeId)! },
+      { requestPolicy: 'network-only' }
+    )
+    .toPromise();
 }
 
 export type GraphqlEntityPropertyMutationInput =

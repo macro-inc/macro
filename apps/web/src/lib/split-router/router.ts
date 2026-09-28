@@ -10,12 +10,18 @@ import {
   assertRouteEntry,
   assertSearchNamespacesAllowed,
   createRoutesManifest,
+  filterRouteSearch,
   getRouteClaim,
+  getRouteSearchNamespaces,
   parseRouteEntryState,
   type SplitRouteNode,
   type SplitRoutesManifest,
 } from './routes';
-import { assertSafeSearchName, updateSearchState } from './search';
+import {
+  assertSafeSearchName,
+  parseSplitSearch,
+  updateSearchState,
+} from './search';
 import { createTransitionManager, type Transition } from './transitions';
 import type {
   BrowserHistoryIntent,
@@ -29,8 +35,13 @@ import type {
   SplitRouterLayoutSnapshot,
   SplitRouterOptions,
   SplitRouterStateUpdate,
+  SplitSearchUpdate,
 } from './types';
-import { decodeSplitRouterLocation, serializeSplitRouterLocation } from './url';
+import {
+  decodeSplitRouterLocation,
+  parseExternalLocation,
+  serializeSplitRouterLocation,
+} from './url';
 import { isPromise, throwIfAborted } from './utils';
 
 type CommitOptions = {
@@ -64,6 +75,7 @@ type EntryTransition<TSplitId> = {
   cause: 'navigate' | 'history' | 'search';
   allowDuplicate?: boolean;
   apply: (entry: SplitRouterEntry) => boolean;
+  onReuse?: (splitId: TSplitId, entry: SplitRouterEntry) => boolean;
 };
 
 const GLOBAL_TRANSITION = Symbol('split-router-global-transition');
@@ -583,8 +595,9 @@ export function createSplitRouter<TSplitId>(
       // an in-flight departure to replace it immediately after activation.
       const hadPending = transitions.pending(owner.splitId) !== undefined;
       cancelTargetTransition(owner.splitId);
+      const updated = config.onReuse?.(owner.splitId, entry) ?? false;
       layout.activate(owner.splitId);
-      if (hadPending) notify(owner.splitId);
+      if (hadPending || updated) notify(owner.splitId);
     };
     const waitForClaim = async (
       turn: Promise<void>,
@@ -781,6 +794,14 @@ export function createSplitRouter<TSplitId>(
         Object.keys(navigateOptions.search ?? {})
       );
 
+      const explicitSearch =
+        typeof to === 'string'
+          ? filterRouteSearch(
+              routes,
+              decoded.location.route,
+              parseSplitSearch(parseExternalLocation(to).search).get(0)
+            )
+          : undefined;
       let history: BrowserHistoryIntent = 'push';
       if (navigateOptions.replace) history = 'replace';
 
@@ -812,6 +833,43 @@ export function createSplitRouter<TSplitId>(
         from: targetEntry,
         cause: 'navigate',
         allowDuplicate: navigateOptions.allowDuplicate,
+        onReuse(ownerId, entry) {
+          const owner = acceptedById().get(ownerId);
+          if (!owner) return false;
+          const redirected = !deepEqual(
+            entry.location.search,
+            next.location.search
+          );
+          const search = redirected
+            ? filterRouteSearch(
+                routes,
+                entry.location.route,
+                entry.location.search
+              )
+            : explicitSearch;
+          const patches = redirected ? undefined : navigateOptions.search;
+          if (!search && !patches) return false;
+          const owned = getRouteSearchNamespaces(routes, owner.location.route);
+          const compatible = (values?: Record<string, SplitSearchUpdate>) =>
+            Object.fromEntries(
+              Object.entries(values ?? {}).filter(
+                ([name]) => owned.has('*') || owned.has(name)
+              )
+            ) as Record<string, SplitSearchUpdate>;
+          const location = updateSearchState(
+            updateSearchState(owner.location, compatible(search)),
+            compatible(patches)
+          );
+          if (deepEqual(owner.location, location)) return false;
+          return applyEntry({
+            entry: { ...owner, key: createEntryKey(), location },
+            target: ownerId,
+            replace: navigateOptions.replace ?? false,
+            history,
+            preserveHash: false,
+            requireTarget: true,
+          });
+        },
         apply: (entry) =>
           applyEntry({
             entry,

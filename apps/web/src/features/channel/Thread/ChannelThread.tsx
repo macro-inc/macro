@@ -2,6 +2,7 @@ import { DebugSuspense } from '@channel/DebugSuspense';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { queryReadyGate } from '@queries/gate';
 import { useThreadRepliesQuery } from '@queries/messages/thread-replies';
@@ -12,6 +13,7 @@ import {
   createSignal,
   on,
   onCleanup,
+  type ParentProps,
   Show,
   untrack,
 } from 'solid-js';
@@ -67,8 +69,16 @@ export function ChannelThread(props: ThreadProps) {
     () => props.data().id,
     fetchRepliesEnabled
   );
+  // A project's cached root must not outlive an explicit denial from its
+  // thread read while the surrounding project is revalidating access.
+  const projectUnavailable = () =>
+    props.parent().type === 'initiative' &&
+    ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'].some((code) =>
+      thrownResultErrorHasCode(repliesQuery.error, code)
+    );
 
   const queryReplies = (): Array<EntityMessage> | undefined => {
+    if (projectUnavailable()) return [];
     return queryReadyGate(repliesQuery) ? repliesQuery.data : undefined;
   };
 
@@ -279,7 +289,7 @@ export function ChannelThread(props: ThreadProps) {
   onCleanup(targetReplyNavigation.dispose);
 
   return (
-    <DebugSuspense name="ChannelThread.root">
+    <ThreadReadBoundary available={!projectUnavailable()}>
       <Thread.Row
         ref={setThreadRowElement}
         channelId={
@@ -461,6 +471,14 @@ export function ChannelThread(props: ThreadProps) {
           </Show>
         </div>
       </Thread.Row>
+    </ThreadReadBoundary>
+  );
+}
+
+function ThreadReadBoundary(props: ParentProps<{ available: boolean }>) {
+  return (
+    <DebugSuspense name="ChannelThread.root">
+      <Show when={props.available}>{props.children}</Show>
     </DebugSuspense>
   );
 }

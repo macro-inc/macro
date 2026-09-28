@@ -45,6 +45,18 @@ function command(id: string, name: string, viewedAt: number): CommandMenuItem {
   };
 }
 
+function project(id: string, name: string, updatedAt = NOW): CommandMenuItem {
+  return {
+    id,
+    kind: 'initiative',
+    bucket: 'initiative',
+    name,
+    searchText: name,
+    sortTimestamp: updatedAt,
+    timestamps: { updatedAt: new Date(updatedAt).toISOString() },
+  };
+}
+
 function ids(items: CommandMenuItem[], query: string, cacheEnabled = true) {
   return rankCommandSearchItems(items, query, {
     preserveAdditionalEntityMatches: cacheEnabled,
@@ -113,5 +125,13 @@ describe('command menu search ranking', () => {
       'a',
       'b',
     ]);
+  });
+
+  it('keeps server-matched projects reachable like other server matches', () => {
+    const items = [
+      project('project', 'Quarterly plan'),
+      channel('direct-match', 'Qtr plan', NOW - DAY),
+    ];
+    expect(ids(items, 'qtr')).toEqual(['direct-match', 'project']);
   });
 });

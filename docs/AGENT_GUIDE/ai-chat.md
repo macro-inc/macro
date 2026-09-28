@@ -5,6 +5,20 @@ User-sent messages in chat and agent transcripts use an ink-colored bubble with
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
+## Working with projects
+
+Project tools can list, read, create, update, delete, and share projects; set or
+clear task associations; and read project activity. Backend tool names use
+`Initiative`. These operate on the native Projects views in Tasks.
+
+Each completed tool row has an expandable result toggle, including empty results
+and per-task failures. Project chips open the native project. Shift-click opens
+another split. **Result data** reveals the complete returned response. Successful
+mutations refresh the project views.
+Deleting a project shows its result without a link to the deleted project.
+Failed project deletions show `Not deleted`. Clearing projects from several tasks
+reports each task's outcome, including partial failures.
+
 ## Uploading files with AI
 
 `UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
