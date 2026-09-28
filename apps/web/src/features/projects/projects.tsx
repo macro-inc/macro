@@ -9,7 +9,10 @@ import { enableProjects } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import { queryClient } from '@queries/client';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupCacheHost,
+  getGraphqlSoupClient,
+} from '@service-storage/graphql-soup';
 import { initiativeClient } from '@service-storage/initiative';
 import { Button } from '@ui';
 import type { Accessor } from 'solid-js';
@@ -49,6 +52,7 @@ function createProjectsContext() {
   );
   return createProjectSources(
     initiativeClient,
+    { client: getGraphqlSoupClient, cacheHost: getGraphqlSoupCacheHost },
     queryClient,
     userId,
     createProjectReadGate

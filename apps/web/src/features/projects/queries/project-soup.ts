@@ -14,10 +14,8 @@ import {
   type SoupQuery,
   type SoupQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
-import {
-  getGraphqlSoupClient,
-  mapGraphqlProperties,
-} from '@service-storage/graphql-soup';
+import { mapGraphqlProperties } from '@service-storage/graphql-soup';
+import type { Client } from '@urql/core';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import type { ProjectRow, ProjectsSource } from '../context/projects-context';
 import type { ProjectFilters } from '../core/project';
@@ -115,11 +113,12 @@ export function projectSoupRows(
 }
 
 export function createProjectSoupSource(
+  soupClient: () => Client,
   filters: Accessor<ProjectFilters>,
   enabled: Accessor<boolean>
 ): ProjectsSource {
   const input = createMemo(() => projectSoupInput(filters()));
-  const client = createMemo(getGraphqlSoupClient);
+  const client = createMemo(soupClient);
   const query = createUrqlInfiniteQuery<
     SoupQuery,
     SoupQueryVariables,

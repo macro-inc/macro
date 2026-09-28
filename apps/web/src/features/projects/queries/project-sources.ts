@@ -1,4 +1,5 @@
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
+import type { CacheHost } from '@graphql-cache/host/types';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import {
   createGraphqlBulkSaveEntityPropertiesMutation,
@@ -14,6 +15,7 @@ import {
   useMutation,
   useQuery,
 } from '@tanstack/solid-query';
+import type { Client } from '@urql/core';
 import type { Accessor } from 'solid-js';
 import type { ProjectsContext } from '../context/projects-context';
 import { assignProjectTasks } from '../core/assignment';
@@ -30,9 +32,16 @@ const accessLost = (error: unknown) =>
     thrownResultErrorHasCode(error, code)
   );
 
+/** GraphQL Soup lists projects and holds the optimistic rows of their tasks. */
+export type ProjectSoupTransport = {
+  client(): Client;
+  cacheHost(): CacheHost | undefined;
+};
+
 /** Transport and cache mechanics stay outside the feature's reactive consumers. */
 export function createProjectSources(
   client: typeof initiativeClient,
+  soup: ProjectSoupTransport,
   cache: QueryClient,
   userId: Accessor<string | undefined>,
   createReadGate: () => Accessor<boolean> = () => () => true
@@ -62,6 +71,7 @@ export function createProjectSources(
     createCollectionSource(filters = () => ({}), enabled = () => true) {
       const readEnabled = createReadGate();
       return createProjectSoupSource(
+        soup.client,
         filters,
         () => Boolean(userId()) && readEnabled() && enabled()
       );
@@ -178,6 +188,7 @@ export function createProjectSources(
     createCommands() {
       const createTask = createProjectTaskMutation(
         client,
+        soup.cacheHost,
         cache,
         userId,
         async () => {

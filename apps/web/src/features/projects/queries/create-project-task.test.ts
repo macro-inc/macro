@@ -14,10 +14,6 @@ vi.mock('@block-md/util/taskComposerProperties', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mock.failure },
 }));
-vi.mock('@service-storage/graphql-soup', async (original) => ({
-  ...(await original<object>()),
-  getGraphqlSoupCacheHost: () => undefined,
-}));
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
   createWebSocketJob: vi.fn(),
@@ -77,6 +73,7 @@ it.each(['saved', 'failed', 'assignment-failed'] as const)(
       dispose = d;
       return createProjectTaskMutation(
         { assignTasks },
+        () => undefined,
         cache,
         () => 'viewer',
         refresh

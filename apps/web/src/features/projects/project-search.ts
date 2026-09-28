@@ -1,5 +1,6 @@
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Accessor } from 'solid-js';
-import { createProjectSoupSource } from './project-soup';
+import { createProjectSoupSource } from './queries/project-soup';
 
 /** The command menu searches the same authorized Soup collection as Tasks. */
 export function useProjectSearchQuery(
@@ -8,6 +9,7 @@ export function useProjectSearchQuery(
   userId: Accessor<string | undefined>
 ) {
   return createProjectSoupSource(
+    getGraphqlSoupClient,
     () => ({ query: search().trim() || undefined }),
     () => Boolean(userId()) && enabled()
   );

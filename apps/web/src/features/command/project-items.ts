@@ -3,7 +3,7 @@ import { enableProjects } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import type { TimestampedItem } from '@core/util/freshSort';
 import type { Accessor } from 'solid-js';
-import { useProjectSearchQuery } from '../projects/queries/project-search';
+import { useProjectSearchQuery } from '../projects/project-search';
 
 export type ProjectCommandItem = {
   id: string;

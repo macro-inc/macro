@@ -5,9 +5,7 @@ import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromPromise, mergeMap, pipe } from 'wonka';
 
-const mocks = vi.hoisted(() => ({ client: undefined as unknown }));
 vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlSoupClient: () => mocks.client,
   mapGraphqlProperties: () => [],
 }));
 vi.mock('@queries/activity/push-registry', () => ({
@@ -162,7 +160,7 @@ describe('project Soup source', () => {
         operations,
         mergeMap((operation) => fromPromise(requests(operation)))
       );
-    mocks.client = createClient({
+    const client = createClient({
       url: 'http://test.invalid/graphql',
       exchanges: [exchange],
     });
@@ -170,7 +168,11 @@ describe('project Soup source', () => {
     const [search, setSearch] = createSignal('');
     const source = createRoot((cleanup) => {
       dispose = cleanup;
-      return createProjectSoupSource(() => ({ query: search() }), enabled);
+      return createProjectSoupSource(
+        () => client,
+        () => ({ query: search() }),
+        enabled
+      );
     });
     expect(requests).not.toHaveBeenCalled();
     setEnabled(true);

@@ -1,7 +1,7 @@
 import { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
-import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
+import type { CacheHost } from '@graphql-cache/host/types';
 import type { initiativeClient } from '@service-storage/initiative';
 import { type QueryClient, useMutation } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -15,6 +15,7 @@ import {
 /** Owns task creation and membership as one optimistic mutation. */
 export function createProjectTaskMutation(
   client: Pick<typeof initiativeClient, 'assignTasks'>,
+  cacheHost: () => CacheHost | undefined,
   cache: QueryClient,
   userId: Accessor<string | undefined>,
   refresh: () => Promise<void>
@@ -43,7 +44,7 @@ export function createProjectTaskMutation(
         try {
           await update(
             cache,
-            getGraphqlSoupCacheHost(),
+            cacheHost(),
             input.ownerId,
             input.projectId,
             undefined,
@@ -93,7 +94,7 @@ export function createProjectTaskMutation(
       onSuccess: async ({ result, assigned }, input, context) => {
         await update(
           cache,
-          getGraphqlSoupCacheHost(),
+          cacheHost(),
           input.ownerId,
           input.projectId,
           input.id,
@@ -105,7 +106,7 @@ export function createProjectTaskMutation(
       onError: async (_error, input) => {
         await update(
           cache,
-          getGraphqlSoupCacheHost(),
+          cacheHost(),
           input.ownerId,
           input.projectId,
           input.id

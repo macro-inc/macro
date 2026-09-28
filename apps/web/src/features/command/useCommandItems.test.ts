@@ -20,7 +20,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'owner',
 }));
-vi.mock('../projects/queries/project-search', () => ({
+vi.mock('../projects/project-search', () => ({
   useProjectSearchQuery: () => ({
     rows: () => undefined,
     error: () => undefined,

@@ -65,6 +65,7 @@ vi.mock('@queries/properties/graphql/entity', () => ({}));
 vi.mock('@queries/soup/transform-utils', () => ({}));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => mocks.graphql,
+  getGraphqlSoupCacheHost: () => undefined,
   mapGraphqlProperties: () => [],
 }));
 
@@ -221,6 +222,7 @@ it('keeps standalone source adapters enabled when no rollout gate is injected', 
     disposeSource = dispose;
     return createProjectSources(
       initiativeClient,
+      { client: () => mocks.graphql!, cacheHost: () => undefined },
       cache,
       () => 'viewer'
     ).createProjectSource(() => 'launch');
