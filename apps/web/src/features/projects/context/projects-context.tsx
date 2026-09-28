@@ -7,7 +7,6 @@ import type {
   Project,
   ProjectDetail,
   ProjectFilters,
-  ProjectSharingPatch,
   TaskProjectReference,
 } from '../core/project';
 
@@ -60,9 +59,6 @@ export type ProjectsContext = {
     enabled?: Accessor<boolean>
   ): ProjectsSource;
   createProjectSource(id: Accessor<string>): ProjectSource;
-  createChannelNamesSource(
-    ids: Accessor<readonly string[]>
-  ): Accessor<ReadonlyMap<string, string>>;
   createPropertyDefinitionsSource(): {
     properties: Accessor<readonly Property[]>;
     loading: Accessor<boolean>;
@@ -85,7 +81,6 @@ export type ProjectsContext = {
       shareWithTeam: boolean;
     }): Promise<ProjectDetail>;
     rename(id: string, name: string): Promise<void>;
-    share(id: string, sharing: ProjectSharingPatch): Promise<void>;
     setMembers(id: string, memberIds: string[]): Promise<void>;
     assignTasks(
       projectId: string | undefined,

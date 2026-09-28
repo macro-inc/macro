@@ -39,7 +39,6 @@ it('uses complete current membership and disables the shared source immediately 
         access: 'view',
         createdAt: '',
         updatedAt: '',
-        sharing: {},
       });
       const refresh = vi.fn(async () => {});
       const source = createProjectTasksDataSource(

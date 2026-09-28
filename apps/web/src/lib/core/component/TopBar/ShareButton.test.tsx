@@ -1,20 +1,7 @@
-import type {
-  ProjectDetail,
-  ProjectSharingPatch,
-} from '@app/features/projects/core/project';
-import { ProjectShareHost } from '@app/features/projects/project-share-host';
 import { ForwardToChannel } from '@core/component/ForwardToChannel';
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@solidjs/testing-library';
-import { ImperativeDialogHost } from '@ui';
-import { ok } from 'neverthrow';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { err, ok } from 'neverthrow';
+import { createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Permissions } from '../SharePermissions';
 import { ShareModal, ShareOptions, ShareTrigger } from './ShareButton';
@@ -26,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   hasTeam: false,
   getAgentPermissions: vi.fn(),
   updateAgentPermissions: vi.fn(),
+  getInitiativePermissions: vi.fn(),
+  updateInitiativePermissions: vi.fn(),
   getDocumentPermissions: vi.fn(),
   getChatPermissions: vi.fn(),
   updateChatPermissions: vi.fn(),
@@ -123,12 +112,17 @@ vi.mock('@queries/agent-session/share-permissions', () => ({
   updateAgentSessionSharePermissions: (...args: unknown[]) =>
     mocks.updateAgentPermissions(...args),
 }));
+vi.mock('@queries/initiative/share-permissions', () => ({
+  fetchInitiativeSharePermissions: (...args: unknown[]) =>
+    mocks.getInitiativePermissions(...args),
+  updateInitiativeSharePermissions: (...args: unknown[]) =>
+    mocks.updateInitiativePermissions(...args),
+}));
 vi.mock('@core/component/SharePermissions', () => ({
   Permissions: { OWNER: 'owner', CAN_VIEW: 'view' },
-  getPermissions: (access: string) => access,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { success: vi.fn(), failure: vi.fn() },
+  toast: { success: vi.fn(), failure: vi.fn(), alert: vi.fn() },
 }));
 vi.mock('@core/component/VerticalScrollIndicators', () => ({
   ScrollIndicators: () => null,
@@ -231,9 +225,7 @@ vi.mock('@kobalte/core/dialog', () => {
     Dialog: Object.assign(Container, {
       Portal: Container,
       Overlay: () => null,
-      Content: (props: { children?: JSX.Element }) => (
-        <div role="dialog">{props.children}</div>
-      ),
+      Content: Container,
       Title: Container,
     }),
   };
@@ -249,9 +241,6 @@ vi.mock('@components/app/mobile/MobileDrawer', () => {
   };
 });
 vi.mock('@ui', async () => {
-  const managedDialogs = await import(
-    '@app/components/ui/components/ImperativeDialog'
-  );
   const { createContext, useContext } = await import('solid-js');
   const RadioContext = createContext<{
     label: string;
@@ -259,7 +248,6 @@ vi.mock('@ui', async () => {
   }>();
   const Container = (props: { children?: JSX.Element }) => props.children;
   return {
-    ...managedDialogs,
     Button: (props: {
       children?: JSX.Element;
       disabled?: boolean;
@@ -346,6 +334,10 @@ beforeEach(() => {
     })
   );
   mocks.updateAgentPermissions.mockResolvedValue(ok({}));
+  mocks.getInitiativePermissions.mockResolvedValue(
+    ok({ id: 'project-permissions', owner: 'owner' })
+  );
+  mocks.updateInitiativePermissions.mockResolvedValue(ok({}));
   mocks.updateChatPermissions.mockResolvedValue({ isErr: () => false });
   mocks.updateCallTeamShare.mockResolvedValue({ isErr: () => false });
   mocks.editProject.mockResolvedValue({ isErr: () => false });
@@ -401,9 +393,7 @@ describe('agent session sharing', () => {
       );
       mountShare(true);
       const editOptions = () =>
-        screen.getAllByRole('button', {
-          name: /^Set (Permission|Access for .+|option) edit$/,
-        });
+        screen.getAllByRole('button', { name: 'Set option edit' });
       await vi.waitFor(() =>
         expect(editOptions()).toHaveLength(mobile ? 1 : 3)
       );
@@ -1040,194 +1030,172 @@ describe('project team sharing', () => {
   });
 });
 
-vi.mock('@app/features/projects/queries/project-channel-names', () => ({
-  createProjectChannelPreviewsSource: () => () =>
-    new Map([
-      ['channel-1', { name: 'Engineering', type: 'private' }],
-      ['channel-2', { name: 'Design', type: 'public' }],
-    ]),
-}));
-vi.mock('@property/editors/selectors/PropertyEntitySelector', () => ({
-  PropertyEntitySelector: () => null,
-}));
+describe('native project sharing', () => {
+  function mountProject(
+    options: {
+      owner?: string;
+      people?: () => JSX.Element;
+      hasDirectShares?: boolean;
+    } = {}
+  ) {
+    mocks.inBlock = false;
+    const owner = options.owner ?? 'owner';
+    render(() => (
+      <ShareModal
+        id="initiative-1"
+        name="Launch"
+        owner={owner}
+        itemType="initiative"
+        blockAlias="initiative"
+        userPermissions={
+          owner === 'owner' ? Permissions.OWNER : Permissions.CAN_VIEW
+        }
+        people={options.people}
+        hasDirectShares={options.hasDirectShares}
+        open
+        onOpenChange={vi.fn()}
+      />
+    ));
+  }
 
-const nativeProject: ProjectDetail = {
-  id: 'initiative-1',
-  name: 'Launch',
-  descriptionDocumentId: 'description-never-share',
-  ownerId: 'owner',
-  memberIds: ['collaborator'],
-  taskIds: [],
-  access: 'owner',
-  createdAt: '',
-  updatedAt: '',
-  sharing: {
-    teamShareAccessLevel: 'view',
-    channelSharePermissions: [
-      { channel_id: 'channel-1', access_level: 'edit' },
-      { channel_id: 'channel-2', access_level: 'comment' },
-    ],
-  },
-};
-
-function mountProject(access: ProjectDetail['access'] = 'owner') {
-  mocks.hasTeam = true;
-  const share = vi.fn(async (_patch: ProjectSharingPatch) => {});
-  const members = vi.fn(async (_ids: string[]) => {});
-  const [project, setProject] = createSignal({ ...nativeProject, access });
-  const [visible, setVisible] = createSignal(true);
-  render(() => (
-    <>
-      <ImperativeDialogHost />
-      <Show when={visible()}>
-        <ProjectShareHost
-          project={project()}
-          url="https://macro.com/app/component/initiative-view~initiative-1"
-          pending={false}
-          onShare={share}
-          onMembers={members}
-          getUserName={(id) => id}
-        />
-      </Show>
-    </>
-  ));
-  fireEvent.click(screen.getByRole('button', { name: 'Share' }));
-  return { share, members, setProject, setVisible };
-}
-
-describe('native projects use the shared Share menu', () => {
-  it('keeps permissions reactive in the managed dialog and closes with its project host', () => {
-    const { setProject, setVisible } = mountProject();
-    expect(
-      screen.getByRole('group', { name: 'Link sharing scope' })
-    ).toBeTruthy();
-    setProject((project) => ({ ...project, access: 'edit' }));
-    expect(
-      screen.queryByRole('group', { name: 'Link sharing scope' })
-    ).toBeNull();
-    expect(screen.getByText('Share:')).toBeTruthy();
-    setVisible(false);
-    expect(screen.queryByText('Share:')).toBeNull();
-  });
-
-  it('updates team/link/channel grants through the initiative adapter and keeps unrelated grants', async () => {
-    const { share } = mountProject();
-    expect(screen.getByText('People with access to this project')).toBeTruthy();
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Set Team access level edit' })
-    );
-    await waitFor(() =>
-      expect(share).toHaveBeenLastCalledWith({ teamShareAccessLevel: 'edit' })
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Set link PUBLIC' }));
-    await waitFor(() =>
-      expect(share).toHaveBeenLastCalledWith({
-        linkShare: 'PUBLIC',
-        linkShareAccessLevel: 'view',
-      })
-    );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Set Access for Engineering none' })
-    );
-    await waitFor(() =>
-      expect(share).toHaveBeenLastCalledWith({
-        channelSharePermissions: [
-          { channelId: 'channel-1', operation: 'remove' },
-        ],
-      })
-    );
-    expect(screen.getByText('Design')).toBeTruthy();
-    expect(mocks.editDocument).not.toHaveBeenCalled();
-    expect(mocks.editProject).not.toHaveBeenCalled();
-    expect(mocks.blockPermissionsRead).not.toHaveBeenCalled();
-  });
-
-  it('removes collaborators through membership without touching assignees or sharing grants', async () => {
-    const { members, share } = mountProject();
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Set Access for collaborator none' })
-    );
-    await waitFor(() => expect(members).toHaveBeenCalledWith([]));
-    expect(share).not.toHaveBeenCalled();
-  });
-
-  it('does not let an editor alter project sharing or collaborators', async () => {
-    const { share, members } = mountProject('edit');
-    expect(
-      screen.queryByRole('group', { name: 'Link sharing scope' })
-    ).toBeNull();
-    expect(screen.queryByText('Manage collaborators')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Select channel' })).toBeNull();
-    // Even a stale UI callback after an owner loses access is guarded.
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Set Access for Engineering none' })
-    );
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Set Access for collaborator none' })
-    );
-    await Promise.resolve();
-    expect(share).not.toHaveBeenCalled();
-    expect(members).not.toHaveBeenCalled();
-  });
-
-  it('forwards initiative identity only after its owner grant succeeds', async () => {
-    const { share } = mountProject();
+  it('grants the destination before forwarding the project itself', async () => {
     const order: string[] = [];
-    share.mockImplementation(async () => {
+    mocks.updateInitiativePermissions.mockImplementation(async () => {
       order.push('grant');
+      return ok({});
     });
     mocks.sendToChannel.mockImplementation(async (input) => {
-      await input.beforeSend(input.channelId);
+      await input.beforeSend?.(input.channelId);
       order.push('message');
-      return { navigateToChannel: vi.fn() };
+      return { channelId: input.channelId, navigateToChannel: vi.fn() };
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Select channel' }));
-    fireEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Share' })
-    );
-    await waitFor(() => expect(order).toEqual(['grant', 'message']));
+    mountProject();
+    selectChannel();
+    share();
+    await vi.waitFor(() => expect(order).toEqual(['grant', 'message']));
     expect(mocks.sendToChannel.mock.calls[0][0].attachments).toEqual([
       { entity_type: 'initiative', entity_id: 'initiative-1' },
     ]);
-    expect(share).toHaveBeenCalledWith({
-      channelSharePermissions: [
-        { channelId: 'channel-1', operation: 'replace', accessLevel: 'edit' },
-      ],
-    });
+    expect(mocks.updateInitiativePermissions).toHaveBeenCalledOnce();
+    expect(mocks.updateInitiativePermissions).toHaveBeenCalledWith(
+      'initiative-1',
+      {
+        channelSharePermissions: [
+          { operation: 'replace', accessLevel: 'view', channelId: 'channel-1' },
+        ],
+      }
+    );
     expect(mocks.getDocumentPermissions).not.toHaveBeenCalled();
+    expect(mocks.blockPermissionsRead).not.toHaveBeenCalled();
   });
 
-  it('retains the dialog and reports an unsuccessful grant without posting', async () => {
-    const { share } = mountProject();
-    share.mockRejectedValue(new Error('Sharing failed'));
+  it('does not post the project when its grant fails', async () => {
+    mocks.updateInitiativePermissions.mockResolvedValue(
+      err([{ code: 'FORBIDDEN', message: 'Not the owner' }])
+    );
     const posted = vi.fn();
     mocks.sendToChannel.mockImplementation(async (input) => {
-      await input.beforeSend(input.channelId);
+      await input.beforeSend?.(input.channelId);
       posted();
-      return { navigateToChannel: vi.fn() };
+      return { channelId: input.channelId, navigateToChannel: vi.fn() };
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Select channel' }));
-    fireEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', { name: 'Share' })
+    mountProject();
+    selectChannel();
+    share();
+    const { toast } = await import('@core/component/Toast/Toast');
+    await vi.waitFor(() =>
+      expect(toast.failure).toHaveBeenCalledWith('Message failed to send')
     );
-    await screen.findByRole('alert');
     expect(posted).not.toHaveBeenCalled();
-    expect(screen.getByText('Share:')).toBeTruthy();
   });
 
-  it('uses the same mobile tabs and copies the native project link', async () => {
-    mocks.mobile = true;
-    mountProject();
-    expect(screen.getByRole('tab', { name: 'People' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: 'Link' }));
+  it('lets only the owner forward a project', () => {
+    mountProject({ owner: 'someone-else' });
     expect(
-      screen.getByRole('group', { name: 'Link sharing scope' })
-    ).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
-    await waitFor(() =>
-      expect(mocks.copyLink).toHaveBeenCalledWith(
-        'https://macro.com/app/component/initiative-view~initiative-1'
+      screen.getByText(
+        'Only the owner can share access to this project. You can copy a link for people who already have access.'
       )
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Select channel' })).toBeNull();
+  });
+
+  it('changes team, link and channel grants through the project', async () => {
+    mocks.hasTeam = true;
+    mocks.getInitiativePermissions.mockResolvedValue(
+      ok({
+        id: 'project-permissions',
+        owner: 'owner',
+        teamShareAccessLevel: 'view',
+        channelSharePermissions: [
+          { channel_id: 'channel-1', access_level: 'edit' },
+        ],
+      })
+    );
+    mountProject();
+    // The recipient row appears once the project's grants have loaded.
+    await screen.findByRole('button', { name: 'Set option none' });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Set Team access level edit' })
+    );
+    await vi.waitFor(() =>
+      expect(mocks.updateInitiativePermissions).toHaveBeenCalledWith(
+        'initiative-1',
+        { teamShareAccessLevel: 'edit' }
+      )
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Set link PUBLIC' }));
+    await vi.waitFor(() =>
+      expect(mocks.updateInitiativePermissions).toHaveBeenCalledWith(
+        'initiative-1',
+        { linkShare: 'PUBLIC', linkShareAccessLevel: 'view' }
+      )
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Set option none' }));
+    await vi.waitFor(() =>
+      expect(mocks.updateInitiativePermissions).toHaveBeenCalledWith(
+        'initiative-1',
+        {
+          channelSharePermissions: [
+            { operation: 'remove', channelId: 'channel-1' },
+          ],
+        }
+      )
+    );
+    expect(mocks.editDocument).not.toHaveBeenCalled();
+    expect(mocks.editProject).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    'lists direct collaborators among the people with access (mobile: %s)',
+    (mobile) => {
+      mocks.mobile = mobile;
+      mountProject({
+        people: () => <div>Collaborator row</div>,
+        hasDirectShares: true,
+      });
+      if (mobile) fireEvent.click(screen.getByRole('tab', { name: 'People' }));
+      else
+        expect(
+          screen.getByText('People with access to this project')
+        ).toBeTruthy();
+      expect(screen.getByText('Collaborator row')).toBeTruthy();
+      if (mobile) fireEvent.click(screen.getByRole('tab', { name: 'Link' }));
+      expect(screen.getByText('Shared')).toBeTruthy();
+    }
+  );
+
+  it('copies the project route instead of a block URL', () => {
+    mocks.inBlock = false;
+    render(() => (
+      <ShareTrigger
+        onClick={vi.fn()}
+        id="initiative-1"
+        blockType="initiative"
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
+    expect(mocks.copyLink).toHaveBeenCalledWith(
+      'https://macro.com/app/component/initiative-view~initiative-1~overview'
     );
   });
 });

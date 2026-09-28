@@ -68,9 +68,6 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => mocks.graphql,
   mapGraphqlProperties: () => [],
 }));
-vi.mock('./queries/project-channel-names', () => ({
-  createProjectChannelNamesSource: () => () => new Map(),
-}));
 
 import { queryClient } from '@queries/client';
 import {

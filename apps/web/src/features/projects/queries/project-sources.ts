@@ -22,14 +22,9 @@ import {
 import type { Accessor } from 'solid-js';
 import type { ProjectsContext } from '../context/projects-context';
 import { assignProjectTasks } from '../core/assignment';
-import type {
-  ProjectDetail,
-  ProjectSharingPatch,
-  TaskProjectReference,
-} from '../core/project';
+import type { ProjectDetail, TaskProjectReference } from '../core/project';
 import { createProjectTaskMutation } from './create-project-task';
 import { projectKeys } from './keys';
-import { createProjectChannelNamesSource } from './project-channel-names';
 import { toProjectDetail } from './project-model';
 import {
   PROJECT_PROPERTY_IDS,
@@ -74,7 +69,6 @@ export function createProjectSources(
   };
   const context: ProjectsContext = {
     userId,
-    createChannelNamesSource: createProjectChannelNamesSource,
     createPropertyDefinitionsSource() {
       const definitions = useListPropertiesQuery(() => ({
         scope: 'system',
@@ -299,7 +293,6 @@ export function createProjectSources(
           }: {
             id: string;
             name?: string;
-            sharePermission?: ProjectSharingPatch;
             memberIds?: string[];
           }) => throwOnErr(() => client.update(id, body)),
           onSuccess: refresh,
@@ -386,9 +379,6 @@ export function createProjectSources(
         create: (input) => create.mutateAsync(input),
         rename: async (id, name) => {
           await update.mutateAsync({ id, name });
-        },
-        share: async (id, sharePermission) => {
-          await update.mutateAsync({ id, sharePermission });
         },
         setMembers: async (id, memberIds) => {
           await update.mutateAsync({ id, memberIds });

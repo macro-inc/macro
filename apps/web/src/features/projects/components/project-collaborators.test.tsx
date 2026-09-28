@@ -8,7 +8,7 @@ vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@property/editors/selectors/PropertyEntitySelector', () => ({
   PropertyEntitySelector: () => null,
 }));
-vi.mock('@app/features/sharing/components/share-options', () => ({
+vi.mock('@core/component/TopBar/ShareButton', () => ({
   ShareOptions: (props: {
     label: string;
     setPermissions(level: null): void;
@@ -44,7 +44,6 @@ const project: ProjectDetail = {
   memberIds: ['owner', 'alice', 'bob'],
   taskIds: [],
   access: 'owner',
-  sharing: {},
 };
 it('omits the owner consistently for individual removals and picker saves', async () => {
   const onMembers = vi.fn(async () => {});

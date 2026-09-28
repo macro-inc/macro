@@ -17,31 +17,6 @@ export type ProjectDetail = Project & {
   taskIds: readonly string[];
   access: ProjectAccess;
   createdAt: string;
-  sharing: ProjectSharing;
-};
-
-export type ProjectSharing = {
-  linkShare?: 'PUBLIC' | 'TEAM' | null;
-  linkShareAccessLevel?: ProjectAccess | null;
-  teamShareAccessLevel?: ProjectAccess | null;
-  channelSharePermissions?:
-    | readonly {
-        channel_id: string;
-        access_level: ProjectAccess;
-      }[]
-    | null;
-};
-
-/** Channel changes are operations so editing one grant preserves the others. */
-export type ProjectSharingPatch = Pick<
-  ProjectSharing,
-  'linkShare' | 'linkShareAccessLevel' | 'teamShareAccessLevel'
-> & {
-  channelSharePermissions?: {
-    channelId: string;
-    operation: 'add' | 'remove' | 'replace';
-    accessLevel?: Exclude<ProjectAccess, 'owner'>;
-  }[];
 };
 
 export type ProjectFilters = {

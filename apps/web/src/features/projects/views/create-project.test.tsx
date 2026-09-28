@@ -75,7 +75,6 @@ const project: ProjectDetail = {
   memberIds: [],
   taskIds: [],
   access: 'owner',
-  sharing: {},
   createdAt: '',
   updatedAt: '',
 };
@@ -86,7 +85,6 @@ function commands() {
     create: vi.fn(async () => project),
     saveProperty: vi.fn(async () => {}),
     rename: vi.fn(async () => {}),
-    share: vi.fn(async () => {}),
     setMembers: vi.fn(async () => {}),
     assignTasks: vi.fn(async () => []),
     delete: vi.fn(async () => {}),
@@ -104,7 +102,6 @@ function setup(
     userId: () => 'owner',
     createCollectionSource: unused,
     createProjectSource: unused,
-    createChannelNamesSource: unused,
     createTasksSource: unused,
     createReferencesSource: unused,
     createPropertyDefinitionsSource: () => ({

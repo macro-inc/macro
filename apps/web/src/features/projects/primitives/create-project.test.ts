@@ -14,7 +14,6 @@ const project: ProjectDetail = {
   memberIds: [],
   taskIds: [],
   access: 'owner',
-  sharing: {},
 };
 function commands() {
   return {
@@ -22,7 +21,6 @@ function commands() {
     pending: () => false,
     create: vi.fn(async () => project),
     rename: vi.fn(async () => {}),
-    share: vi.fn(async () => {}),
     setMembers: vi.fn(async () => {}),
     assignTasks: vi.fn(async () => []),
     delete: vi.fn(async () => {}),

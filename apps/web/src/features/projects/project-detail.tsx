@@ -8,23 +8,31 @@ import {
 import { useNavigate } from '@app/lib/split-router';
 import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { getPermissions } from '@core/component/SharePermissions';
 import { TabsInset } from '@core/component/TabsInset';
+import { toast } from '@core/component/Toast/Toast';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
-import { buildSimpleEntityUrl } from '@core/util/url';
 import StackIcon from '@phosphor/stack.svg';
 import { Button } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
-import { useProjectsContext } from './context/projects-context';
+import { ProjectCollaborators } from './components/project-collaborators';
+import {
+  type ProjectsContext,
+  useProjectsContext,
+} from './context/projects-context';
 import {
   canDiscussProject,
   canEditProject,
+  type ProjectDetail as ProjectDetailData,
   type ProjectSection,
 } from './core/project';
-import { type ProjectRoute, projectRouteId } from './core/route';
+import type { ProjectRoute } from './core/route';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
-import { ProjectShareHost } from './project-share-host';
 import { Projects } from './projects';
 import { ProjectWorkspace } from './views/project-workspace';
 
@@ -77,6 +85,55 @@ type ProjectDetailProps = {
   onDelete?(): void;
 };
 
+const userName = (id: string) => getDisplayName(tryMacroId(id));
+
+/** The standard Share menu; collaborators are the project's direct grants. */
+function ProjectShareTrigger(props: {
+  project: ProjectDetailData;
+  commands: ReturnType<ProjectsContext['createCommands']>;
+}) {
+  const panel = useSplitPanelOrThrow();
+  const setMembers = async (ids: string[]) => {
+    try {
+      await props.commands.setMembers(props.project.id, ids);
+    } catch (error) {
+      toast.failure('Could not update collaborators', {
+        subtext: 'Please try again',
+      });
+      throw error;
+    }
+  };
+  // Stable, so the open dialog keeps the picker's draft across refreshes.
+  const Collaborators = () => (
+    <ProjectCollaborators
+      project={props.project}
+      getUserName={userName}
+      pending={props.commands.pending()}
+      onMembers={setMembers}
+    />
+  );
+  const openShare = useShareModal(() => ({
+    id: props.project.id,
+    blockAlias: 'initiative',
+    itemType: 'initiative',
+    name: props.project.name,
+    owner: props.project.ownerId,
+    userPermissions: getPermissions(props.project.access),
+    people: Collaborators,
+    hasDirectShares: props.project.memberIds.some(
+      (id) => id !== props.project.ownerId
+    ),
+  }));
+  return (
+    <ShareTrigger
+      onClick={openShare}
+      id={props.project.id}
+      blockType="initiative"
+      hotkeyScope={panel.splitHotkeyScope}
+    />
+  );
+}
+
 function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
@@ -124,17 +181,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       >
         <Show when={source.project()}>
           {(project) => (
-            <ProjectShareHost
-              project={project()}
-              url={buildSimpleEntityUrl({
-                type: 'component',
-                id: projectRouteId(props.route),
-              })}
-              pending={commands.pending()}
-              getUserName={(id) => getDisplayName(tryMacroId(id))}
-              onShare={(patch) => commands.share(props.route.id, patch)}
-              onMembers={(ids) => commands.setMembers(props.route.id, ids)}
-            />
+            <ProjectShareTrigger project={project()} commands={commands} />
           )}
         </Show>
       </EntityDetailTopBar>

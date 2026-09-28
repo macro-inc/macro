@@ -1,4 +1,4 @@
-import { ShareOptions } from '@app/features/sharing/components/share-options';
+import { ShareOptions } from '@core/component/TopBar/ShareButton';
 import { UserIcon } from '@core/component/UserIcon';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { Button, Dropdown } from '@ui';
@@ -21,7 +21,7 @@ export function ProjectCollaborators(props: {
       await props.onMembers(ids.filter((id) => id !== props.project.ownerId));
       setPicking(false);
     } catch {
-      // The sharing host renders the mutation error and retains the draft.
+      // The caller reports the failure; keep the draft for a retry.
     }
   };
   return (

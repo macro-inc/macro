@@ -14,6 +14,5 @@ export function toProjectDetail(
     taskIds: project.taskIds,
     access: project.userAccessLevel,
     createdAt: project.createdAt,
-    sharing: project.sharePermission,
   };
 }
