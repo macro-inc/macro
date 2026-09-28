@@ -2240,6 +2240,100 @@ export type CallTokenResponse = {
 };
 
 /**
+ * One changed file.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type ChangedFileDto = {
+    /**
+     * Lines added.
+     */
+    additions: number;
+    /**
+     * The diff carries no text for this file.
+     */
+    binary: boolean;
+    /**
+     * Lines removed.
+     */
+    deletions: number;
+    /**
+     * What happened to the file.
+     */
+    kind: FileChangeKindDto;
+    /**
+     * The file's hunks were left out of the patch to fit the size budget.
+     */
+    patchOmitted: boolean;
+    /**
+     * The file's path after the change, or before it for a deletion.
+     */
+    path: string;
+    /**
+     * Where a renamed file came from.
+     */
+    previousPath?: string | null;
+};
+
+/**
+ * One changeset: the files a patch touches and what happened to each.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type ChangesetDto = {
+    /**
+     * Lines added across all files.
+     */
+    additions: number;
+    /**
+     * The side the work started from.
+     */
+    base: GitRefDto;
+    /**
+     * When the diff was taken.
+     */
+    capturedAt: string;
+    /**
+     * Lines removed across all files.
+     */
+    deletions: number;
+    /**
+     * Every changed file, in patch order.
+     */
+    files: Array<ChangedFileDto>;
+    /**
+     * The side carrying the work.
+     */
+    head: GitRefDto;
+    /**
+     * The changeset's id; a different id means different changes.
+     */
+    id: string;
+    /**
+     * Size of the patch the matching patch route serves; zero when nothing
+     * changed.
+     */
+    patchBytes: number;
+    /**
+     * `https://github.com/owner/name`, when known.
+     */
+    repository?: string | null;
+    /**
+     * Where the diff was read from.
+     */
+    source: ChangesetSourceDto;
+    /**
+     * Some files' hunks were left out of the patch.
+     */
+    truncated: boolean;
+};
+
+/**
+ * The source of a changeset's diff, on the wire.
+ */
+export type ChangesetSourceDto = 'github_pull_request';
+
+/**
  * Channel metadata in soup payloads.
  */
 export type Channel = {
@@ -5749,6 +5843,11 @@ export type FavoritesList = {
     favorites: Array<Favorite>;
 };
 
+/**
+ * What happened to a file, on the wire.
+ */
+export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
+
 export type FileSystemNodeWithIds = {
     document_id: string;
     item: FolderItem;
@@ -6243,6 +6342,20 @@ export type GetUserHistoryResponse = {
 };
 
 /**
+ * One end of the compared range.
+ */
+export type GitRefDto = {
+    /**
+     * The branch name, when known.
+     */
+    name?: string | null;
+    /**
+     * The commit, when known.
+     */
+    sha?: string | null;
+};
+
+/**
  * A label among the visible GitHub pull requests. Labels with the same name in different
  * repositories count together.
  */
@@ -6317,6 +6430,31 @@ export type GithubPullRequest = {
      * The public GitHub URL for the pull request.
      */
     url: string;
+};
+
+/**
+ * Response body for `GET /github_pull_requests/{id}/changes/patch`.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type GithubPullRequestChangesPatchResponse = {
+    /**
+     * The git-style unified diff of the changeset.
+     */
+    patch: string;
+};
+
+/**
+ * Response body for `GET /github_pull_requests/{id}/changes`.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type GithubPullRequestChangesResponse = {
+    changeset?: null | ChangesetDto;
+    /**
+     * Why there are no changes, in a sentence the user can act on.
+     */
+    error?: string | null;
 };
 
 /**
@@ -10251,6 +10389,7 @@ export type StoredGithubPullRequest = {
      * The author's GitHub login when the pull request was last synced.
      */
     authorLogin?: string | null;
+    base?: null | GitRefDto;
     /**
      * The latest check runs on the pull request's head commit.
      */
@@ -10279,6 +10418,7 @@ export type StoredGithubPullRequest = {
      * When GitHub last updated the pull request.
      */
     githubUpdatedAt?: string | null;
+    head?: null | GitRefDto;
     /**
      * The caller's record for the pull request.
      */
@@ -15553,6 +15693,64 @@ export type GetGithubPullRequestResponses = {
 };
 
 export type GetGithubPullRequestResponse = GetGithubPullRequestResponses[keyof GetGithubPullRequestResponses];
+
+export type GetGithubPullRequestChangesData = {
+    body?: never;
+    path: {
+        /**
+         * The caller's foreign entity record for the pull request
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/github_pull_requests/{id}/changes';
+};
+
+export type GetGithubPullRequestChangesErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestChangesError = GetGithubPullRequestChangesErrors[keyof GetGithubPullRequestChangesErrors];
+
+export type GetGithubPullRequestChangesResponses = {
+    200: GithubPullRequestChangesResponse;
+};
+
+export type GetGithubPullRequestChangesResponse = GetGithubPullRequestChangesResponses[keyof GetGithubPullRequestChangesResponses];
+
+export type GetGithubPullRequestChangesPatchData = {
+    body?: never;
+    path: {
+        /**
+         * The caller's foreign entity record for the pull request
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * The changeset whose patch to read
+         */
+        changeset: string;
+    };
+    url: '/github_pull_requests/{id}/changes/patch';
+};
+
+export type GetGithubPullRequestChangesPatchErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestChangesPatchError = GetGithubPullRequestChangesPatchErrors[keyof GetGithubPullRequestChangesPatchErrors];
+
+export type GetGithubPullRequestChangesPatchResponses = {
+    200: GithubPullRequestChangesPatchResponse;
+};
+
+export type GetGithubPullRequestChangesPatchResponse = GetGithubPullRequestChangesPatchResponses[keyof GetGithubPullRequestChangesPatchResponses];
 
 export type CreateHarnessPairingData = {
     body: CreatePairingRequest;

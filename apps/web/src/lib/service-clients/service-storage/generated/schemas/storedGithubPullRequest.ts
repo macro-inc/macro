@@ -13,9 +13,11 @@ import type { GithubPullRequestUser } from './githubPullRequestUser';
 import type { StoredGithubPullRequestAdditions } from './storedGithubPullRequestAdditions';
 import type { StoredGithubPullRequestAuthorGithubUserId } from './storedGithubPullRequestAuthorGithubUserId';
 import type { StoredGithubPullRequestAuthorLogin } from './storedGithubPullRequestAuthorLogin';
+import type { StoredGithubPullRequestBase } from './storedGithubPullRequestBase';
 import type { StoredGithubPullRequestDeletions } from './storedGithubPullRequestDeletions';
 import type { StoredGithubPullRequestDescription } from './storedGithubPullRequestDescription';
 import type { StoredGithubPullRequestGithubUpdatedAt } from './storedGithubPullRequestGithubUpdatedAt';
+import type { StoredGithubPullRequestHead } from './storedGithubPullRequestHead';
 import type { StoredGithubPullRequestReviewDecision } from './storedGithubPullRequestReviewDecision';
 import type { StoredGithubPullRequestStatus } from './storedGithubPullRequestStatus';
 import type { StoredGithubPullRequestTitle } from './storedGithubPullRequestTitle';
@@ -35,6 +37,7 @@ export interface StoredGithubPullRequest {
   authorGithubUserId?: StoredGithubPullRequestAuthorGithubUserId;
   /** The author's GitHub login when the pull request was last synced. */
   authorLogin?: StoredGithubPullRequestAuthorLogin;
+  base?: StoredGithubPullRequestBase;
   /** The latest check runs on the pull request's head commit. */
   checks: GithubPullRequestCheckRun[];
   /** Comments from the pull request's conversation, reviews, and review threads. */
@@ -52,6 +55,7 @@ export interface StoredGithubPullRequest {
   githubKey: string;
   /** When GitHub last updated the pull request. */
   githubUpdatedAt?: StoredGithubPullRequestGithubUpdatedAt;
+  head?: StoredGithubPullRequestHead;
   /** The caller's record for the pull request. */
   id: string;
   /** The pull request's labels. */

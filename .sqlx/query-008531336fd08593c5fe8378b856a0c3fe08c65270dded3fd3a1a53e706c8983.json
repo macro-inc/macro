@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                github_key,\n                repository_id,\n                number,\n                owner,\n                repo,\n                title,\n                status,\n                draft,\n                author_github_user_id,\n                author_login,\n                requested_reviewer_github_user_ids,\n                participant_github_user_ids,\n                github_updated_at,\n                assignees,\n                labels,\n                reviews,\n                review_decision\n            FROM github_pull_request\n            WHERE github_key = $1\n            ",
+  "query": "\n            SELECT\n                github_key,\n                repository_id,\n                number,\n                owner,\n                repo,\n                title,\n                status,\n                draft,\n                author_github_user_id,\n                author_login,\n                requested_reviewer_github_user_ids,\n                participant_github_user_ids,\n                github_updated_at,\n                assignees,\n                labels,\n                reviews,\n                review_decision,\n                base_ref,\n                base_sha,\n                head_ref,\n                head_sha\n            FROM github_pull_request\n            WHERE github_key = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -87,6 +87,26 @@
         "ordinal": 16,
         "name": "review_decision",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "base_ref",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "base_sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "head_ref",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "head_sha",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -111,8 +131,12 @@
       false,
       false,
       false,
+      true,
+      true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "21f4995934d45c58fd61fca238288734e89c3da223e731e8164f59596066d4f8"
+  "hash": "008531336fd08593c5fe8378b856a0c3fe08c65270dded3fd3a1a53e706c8983"
 }

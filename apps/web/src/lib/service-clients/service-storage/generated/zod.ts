@@ -9977,6 +9977,20 @@ export const getGithubPullRequestResponse = zod
       .describe(
         "The author's GitHub login when the pull request was last synced."
       ),
+    base: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .nullish()
+              .describe('The branch name, when known.'),
+            sha: zod.string().nullish().describe('The commit, when known.'),
+          })
+          .describe('One end of the compared range.'),
+      ])
+      .optional(),
     checks: zod
       .array(
         zod
@@ -10121,6 +10135,20 @@ export const getGithubPullRequestResponse = zod
       .datetime({})
       .nullish()
       .describe('When GitHub last updated the pull request.'),
+    head: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .nullish()
+              .describe('The branch name, when known.'),
+            sha: zod.string().nullish().describe('The commit, when known.'),
+          })
+          .describe('One end of the compared range.'),
+      ])
+      .optional(),
     id: zod.uuid().describe("The caller's record for the pull request."),
     labels: zod
       .array(
@@ -10205,6 +10233,163 @@ export const getGithubPullRequestResponse = zod
   })
   .describe(
     "A GitHub pull request as Macro stores it, read through one of the caller's records."
+  );
+
+/**
+ * @summary Get the changes of the pull request behind a foreign entity record the caller can view.
+ */
+export const getGithubPullRequestChangesParams = zod.object({
+  id: zod
+    .uuid()
+    .describe("The caller's foreign entity record for the pull request"),
+});
+
+export const getGithubPullRequestChangesResponseChangesetAdditionsMin = 0;
+
+export const getGithubPullRequestChangesResponseChangesetDeletionsMin = 0;
+
+export const getGithubPullRequestChangesResponseChangesetFilesItemAdditionsMin = 0;
+
+export const getGithubPullRequestChangesResponseChangesetFilesItemDeletionsMin = 0;
+
+export const getGithubPullRequestChangesResponseChangesetPatchBytesMin = 0;
+
+export const getGithubPullRequestChangesResponse = zod
+  .object({
+    changeset: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            additions: zod
+              .number()
+              .min(getGithubPullRequestChangesResponseChangesetAdditionsMin)
+              .describe('Lines added across all files.'),
+            base: zod
+              .object({
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('The branch name, when known.'),
+                sha: zod.string().nullish().describe('The commit, when known.'),
+              })
+              .describe('One end of the compared range.'),
+            capturedAt: zod.iso
+              .datetime({})
+              .describe('When the diff was taken.'),
+            deletions: zod
+              .number()
+              .min(getGithubPullRequestChangesResponseChangesetDeletionsMin)
+              .describe('Lines removed across all files.'),
+            files: zod
+              .array(
+                zod
+                  .object({
+                    additions: zod
+                      .number()
+                      .min(
+                        getGithubPullRequestChangesResponseChangesetFilesItemAdditionsMin
+                      )
+                      .describe('Lines added.'),
+                    binary: zod
+                      .boolean()
+                      .describe('The diff carries no text for this file.'),
+                    deletions: zod
+                      .number()
+                      .min(
+                        getGithubPullRequestChangesResponseChangesetFilesItemDeletionsMin
+                      )
+                      .describe('Lines removed.'),
+                    kind: zod
+                      .enum(['added', 'modified', 'deleted', 'renamed'])
+                      .describe('What happened to a file, on the wire.'),
+                    patchOmitted: zod
+                      .boolean()
+                      .describe(
+                        "The file's hunks were left out of the patch to fit the size budget."
+                      ),
+                    path: zod
+                      .string()
+                      .describe(
+                        "The file's path after the change, or before it for a deletion."
+                      ),
+                    previousPath: zod
+                      .string()
+                      .nullish()
+                      .describe('Where a renamed file came from.'),
+                  })
+                  .describe(
+                    'One changed file.\n\nClients deserialize this, so both derives are used.'
+                  )
+              )
+              .describe('Every changed file, in patch order.'),
+            head: zod
+              .object({
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('The branch name, when known.'),
+                sha: zod.string().nullish().describe('The commit, when known.'),
+              })
+              .describe('One end of the compared range.'),
+            id: zod
+              .uuid()
+              .describe(
+                "The changeset's id; a different id means different changes."
+              ),
+            patchBytes: zod
+              .number()
+              .min(getGithubPullRequestChangesResponseChangesetPatchBytesMin)
+              .describe(
+                'Size of the patch the matching patch route serves; zero when nothing\nchanged.'
+              ),
+            repository: zod
+              .string()
+              .nullish()
+              .describe('`https:\/\/github.com\/owner\/name`, when known.'),
+            source: zod
+              .enum(['github_pull_request'])
+              .describe("The source of a changeset's diff, on the wire."),
+            truncated: zod
+              .boolean()
+              .describe("Some files' hunks were left out of the patch."),
+          })
+          .describe(
+            'One changeset: the files a patch touches and what happened to each.\n\nClients deserialize this, so both derives are used.'
+          ),
+      ])
+      .optional(),
+    error: zod
+      .string()
+      .nullish()
+      .describe('Why there are no changes, in a sentence the user can act on.'),
+  })
+  .describe(
+    'Response body for `GET \/github_pull_requests\/{id}\/changes`.\n\nClients deserialize this, so both derives are used.'
+  );
+
+/**
+ * @summary Get the patch of changes of the pull request behind a foreign entity record the caller can
+view.
+ */
+export const getGithubPullRequestChangesPatchParams = zod.object({
+  id: zod
+    .uuid()
+    .describe("The caller's foreign entity record for the pull request"),
+});
+
+export const getGithubPullRequestChangesPatchQueryParams = zod.object({
+  changeset: zod.uuid().describe('The changeset whose patch to read'),
+});
+
+export const getGithubPullRequestChangesPatchResponse = zod
+  .object({
+    patch: zod
+      .string()
+      .describe('The git-style unified diff of the changeset.'),
+  })
+  .describe(
+    'Response body for `GET \/github_pull_requests\/{id}\/changes\/patch`.\n\nClients deserialize this, so both derives are used.'
   );
 
 /**

@@ -10687,6 +10687,148 @@
         }
       }
     },
+    "/github_pull_requests/{id}/changes": {
+      "get": {
+        "tags": ["github_pull_requests"],
+        "summary": "Get the changes of the pull request behind a foreign entity record the caller can view.",
+        "operationId": "get_github_pull_request_changes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The caller's foreign entity record for the pull request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubPullRequestChangesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/github_pull_requests/{id}/changes/patch": {
+      "get": {
+        "tags": ["github_pull_requests"],
+        "summary": "Get the patch of changes of the pull request behind a foreign entity record the caller can\nview.",
+        "operationId": "get_github_pull_request_changes_patch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The caller's foreign entity record for the pull request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "changeset",
+            "in": "query",
+            "description": "The changeset whose patch to read",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubPullRequestChangesPatchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/harness-pairings": {
       "post": {
         "tags": ["harnesses"],
@@ -18792,6 +18934,130 @@
           }
         }
       },
+      "ChangedFileDto": {
+        "type": "object",
+        "description": "One changed file.\n\nClients deserialize this, so both derives are used.",
+        "required": [
+          "path",
+          "kind",
+          "additions",
+          "deletions",
+          "binary",
+          "patchOmitted"
+        ],
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lines added.",
+            "minimum": 0
+          },
+          "binary": {
+            "type": "boolean",
+            "description": "The diff carries no text for this file."
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lines removed.",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FileChangeKindDto",
+            "description": "What happened to the file."
+          },
+          "patchOmitted": {
+            "type": "boolean",
+            "description": "The file's hunks were left out of the patch to fit the size budget."
+          },
+          "path": {
+            "type": "string",
+            "description": "The file's path after the change, or before it for a deletion."
+          },
+          "previousPath": {
+            "type": ["string", "null"],
+            "description": "Where a renamed file came from."
+          }
+        }
+      },
+      "ChangesetDto": {
+        "type": "object",
+        "description": "One changeset: the files a patch touches and what happened to each.\n\nClients deserialize this, so both derives are used.",
+        "required": [
+          "id",
+          "source",
+          "base",
+          "head",
+          "files",
+          "additions",
+          "deletions",
+          "patchBytes",
+          "truncated",
+          "capturedAt"
+        ],
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lines added across all files.",
+            "minimum": 0
+          },
+          "base": {
+            "$ref": "#/components/schemas/GitRefDto",
+            "description": "The side the work started from."
+          },
+          "capturedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the diff was taken."
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lines removed across all files.",
+            "minimum": 0
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChangedFileDto"
+            },
+            "description": "Every changed file, in patch order."
+          },
+          "head": {
+            "$ref": "#/components/schemas/GitRefDto",
+            "description": "The side carrying the work."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The changeset's id; a different id means different changes."
+          },
+          "patchBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Size of the patch the matching patch route serves; zero when nothing\nchanged.",
+            "minimum": 0
+          },
+          "repository": {
+            "type": ["string", "null"],
+            "description": "`https://github.com/owner/name`, when known."
+          },
+          "source": {
+            "$ref": "#/components/schemas/ChangesetSourceDto",
+            "description": "Where the diff was read from."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Some files' hunks were left out of the patch."
+          }
+        }
+      },
+      "ChangesetSourceDto": {
+        "type": "string",
+        "description": "The source of a changeset's diff, on the wire.",
+        "enum": ["github_pull_request"]
+      },
       "Channel": {
         "type": "object",
         "description": "Channel metadata in soup payloads.",
@@ -24019,6 +24285,11 @@
           }
         }
       },
+      "FileChangeKindDto": {
+        "type": "string",
+        "description": "What happened to a file, on the wire.",
+        "enum": ["added", "modified", "deleted", "renamed"]
+      },
       "FileSystemNodeWithIds": {
         "oneOf": [
           {
@@ -25174,6 +25445,20 @@
           }
         }
       },
+      "GitRefDto": {
+        "type": "object",
+        "description": "One end of the compared range.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "The branch name, when known."
+          },
+          "sha": {
+            "type": ["string", "null"],
+            "description": "The commit, when known."
+          }
+        }
+      },
       "GithubLabelFacet": {
         "type": "object",
         "description": "A label among the visible GitHub pull requests. Labels with the same name in different\nrepositories count together.",
@@ -25270,6 +25555,38 @@
           "url": {
             "type": "string",
             "description": "The public GitHub URL for the pull request."
+          }
+        }
+      },
+      "GithubPullRequestChangesPatchResponse": {
+        "type": "object",
+        "description": "Response body for `GET /github_pull_requests/{id}/changes/patch`.\n\nClients deserialize this, so both derives are used.",
+        "required": ["patch"],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "The git-style unified diff of the changeset."
+          }
+        }
+      },
+      "GithubPullRequestChangesResponse": {
+        "type": "object",
+        "description": "Response body for `GET /github_pull_requests/{id}/changes`.\n\nClients deserialize this, so both derives are used.",
+        "properties": {
+          "changeset": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChangesetDto",
+                "description": "The changes at the pull request's current base and head; absent when GitHub could not\nprovide them."
+              }
+            ]
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Why there are no changes, in a sentence the user can act on."
           }
         }
       },
@@ -31568,6 +31885,17 @@
             "type": ["string", "null"],
             "description": "The author's GitHub login when the pull request was last synced."
           },
+          "base": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GitRefDto",
+                "description": "The branch and commit the pull request merges into, when known."
+              }
+            ]
+          },
           "checks": {
             "type": "array",
             "items": {
@@ -31604,6 +31932,17 @@
             "type": ["string", "null"],
             "format": "date-time",
             "description": "When GitHub last updated the pull request."
+          },
+          "head": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GitRefDto",
+                "description": "The branch and commit carrying the pull request's changes, when known."
+              }
+            ]
           },
           "id": {
             "type": "string",
