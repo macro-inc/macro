@@ -12,7 +12,7 @@ import { worldToScreen } from '../../core/camera';
 import type { GraphicsEditor } from '../../core/editor';
 import type { Point, ShapeItem } from '../../core/model';
 import { nodeCorners, roots, worldBounds } from '../../core/scene';
-import { isShape } from '../../core/shapes/registry';
+import { isShape, shapePayload } from '../../core/shapes/registry';
 import { createGraphicsProjection, GraphicsSurface } from '../../solid';
 import { defaultRenderers, ShapeView } from '../../solid/shape-renderers';
 import type { GraphicsPresence } from '../presence';
@@ -31,11 +31,19 @@ function GhostShape(props: {
 }) {
   const item = (): ShapeItem => ({
     id: props.shape.id,
-    type: props.shape.kind,
+    ...shapePayload(
+      props.shape.kind,
+      props.shape.kind === 'pencil'
+        ? props.shape.pencil
+        : { width: props.shape.width, height: props.shape.height }
+    ),
     placement: { parentId: 'presence-root', sortKey: 'a0' },
     transform: props.shape.world,
-    geometry: { width: props.shape.width, height: props.shape.height },
-    appearance: { fill: 'transparent', stroke: props.color },
+    appearance: {
+      fill: 'transparent',
+      stroke: props.color,
+      strokeWidth: props.shape.strokeWidth,
+    },
   });
   return (
     <div

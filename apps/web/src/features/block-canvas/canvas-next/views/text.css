@@ -1,0 +1,12 @@
+/* The shared editor and static renderer use identical canvas typography. */
+.canvas-lexical-text, .canvas-lexical-text .md, .canvas-lexical-text [data-markdown-editable] {
+  font-size: inherit; font-family: inherit; line-height: 1.35; color: inherit;
+  outline: none; min-height: 1.35em;
+}
+.canvas-lexical-text p, .canvas-lexical-text blockquote,
+.canvas-lexical-text h1, .canvas-lexical-text h2, .canvas-lexical-text h3,
+.canvas-lexical-text ul, .canvas-lexical-text ol { margin-block: 0; }
+.canvas-lexical-text [data-markdown-editable] { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.canvas-lexical-text[data-canvas-text-editor] { min-width: 8px !important; }
+.canvas-lexical-text > .canvas-text-shell { font-size: inherit; height: auto; min-height: 0; overflow: visible; }

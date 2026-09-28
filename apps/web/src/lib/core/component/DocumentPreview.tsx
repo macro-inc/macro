@@ -70,51 +70,15 @@ import { Dynamic } from 'solid-js/web';
 import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
+import {
+  DocumentPreviewIconSkeleton,
+  DocumentPreviewSkeleton,
+} from './DocumentPreviewSkeleton';
 import { useItemPreviewData } from './ItemPreview';
 import {
   TaskPropertiesPreview,
   TaskPropertiesPreviewProvider,
 } from './TaskPropertiesPreview';
-
-/**
- * Container for displaying mentions with optional collapsing
- */
-function MentionContainer(props: {
-  icon: JSX.Element;
-  text: JSX.Element;
-  collapsed?: boolean;
-}) {
-  return (
-    <span class="pointer-events-auto">
-      <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
-        {props.icon}
-      </span>
-      <Show when={!props.collapsed}>
-        <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 mr-1">
-          {props.text}
-        </span>
-      </Show>
-    </span>
-  );
-}
-
-/**
- * Simple spinner component for loading states
- */
-function Spinner() {
-  return (
-    <div class="animate-spin">
-      <LoadingSpinner />
-    </div>
-  );
-}
-
-/**
- * Loading indicator for mentions
- */
-function Loading() {
-  return <MentionContainer icon={<Spinner />} text="Loading" />;
-}
 
 /**
  * Returns the appropriate icon component based on the icon name
@@ -780,9 +744,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     <Switch>
       {/* Loading state */}
       <Match when={item().loading}>
-        <div class="p-3 flex items-center justify-center">
-          <Loading />
-        </div>
+        <DocumentPreviewSkeleton />
       </Match>
 
       {/* Accessible preview */}
@@ -815,7 +777,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                       >
                         <Suspense
                           fallback={
-                            <LoadingSpinner class="size-4 animate-spin text-ink-muted" />
+                            <DocumentPreviewIconSkeleton label="Loading task status" />
                           }
                         >
                           <TaskPropertiesPreview
@@ -1027,14 +989,16 @@ export function PopupPreview(
         depth={2}
         class="rounded-xl shadow-lg shadow-drop-shadow"
       >
-        <DocumentPreviewContent
-          delete={props.delete}
-          collapseInfo={props.collapseInfo}
-          documentInfo={props.documentInfo}
-          previewInfo={props.previewInfo}
-          snapshotInfo={props.snapshotInfo}
-          useFallbackData={props.useFallbackData}
-        />
+        <Suspense fallback={<DocumentPreviewSkeleton />}>
+          <DocumentPreviewContent
+            delete={props.delete}
+            collapseInfo={props.collapseInfo}
+            documentInfo={props.documentInfo}
+            previewInfo={props.previewInfo}
+            snapshotInfo={props.snapshotInfo}
+            useFallbackData={props.useFallbackData}
+          />
+        </Suspense>
       </Card>
     </div>
   );

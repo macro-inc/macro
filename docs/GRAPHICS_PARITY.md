@@ -1,6 +1,6 @@
 # Graphics and Canvas parity plan
 
-Source audit: 2026-09-24. This compares the current working tree, including the
+Source audit: 2026-09-24; connector checkpoint updated 2026-09-25. This compares the current working tree, including the
 uncommitted graphics prototypes, with legacy `block-canvas` and upstream open-source
 Excalidraw. It is a planning inventory, not a fresh runtime certification of every
 legacy feature. Excalidraw master may lead the deployed app; Plus-only product
@@ -29,17 +29,17 @@ in the legacy schema alone does not count as a working user feature.
 | Rotation and nested transforms | No equivalent transform-tree/rotation model found | Present; preserve this foundation | Graphics core |
 | Undo/redo | Snapshot history | Present locally; Loro native local undo in the peer demo | Core history boundary; optional Loro adapter |
 | Rectangle and ellipse | Rectangle creation; ellipse schema/renderer support | Both creation tools present | Graphics shape modules and Solid renderers |
-| Fill/stroke and richer appearance | Style model and floating controls: colors, line weight, corner rounding, text size; opacity rendering | Fill/stroke, stroke width, opacity and rectangle radius present; text styling awaits text | Typed graphics style capabilities; Canvas inspector |
-| Freehand drawing | Pencil operation, stored points and renderer | Missing | Graphics path feature; browser sampling; Canvas tool |
-| Lines/arrows/connectors | Free or node-bound endpoints, straight/stepped/smooth paths, endpoint styles | Missing | Graphics connector/reference feature; Canvas controls |
-| Text and shape labels | Lexical-backed text boxes; editable shape labels | Missing | Graphics text contract; browser/Solid editing; Canvas integration |
-| Clipboard | Copy/cut/paste nodes, edges, group remapping, text/images and Macro links | Shape/group fragments present; text/images/Macro links still missing | Core fragment/remapping operations; browser clipboard; Canvas MIME policy |
+| Fill/stroke and richer appearance | Style model and floating controls: colors, line weight, corner rounding, text size; opacity rendering | Fill/stroke, stroke width, opacity and rectangle radius present; text font family/size and rich formatting present | Typed graphics style capabilities; Canvas inspector |
+| Freehand drawing | Pencil operation, stored points and renderer | Pencil present: smoothed ink, mouse pressure simulation and pen pressure | Graphics path feature; browser sampling; Canvas tool |
+| Lines/arrows/connectors | Free or node-bound endpoints, straight/stepped/smooth paths, endpoint styles | Present in Canvas Next: free/center/edge endpoints, legacy routes and heads, reconnect, reference lifecycle | Graphics connector/reference feature; Canvas controls |
+| Text and shape labels | Lexical-backed text boxes; editable shape labels | Shared Markdown builder; serialized Lexical text/labels; whole-string LWW mapping present | Graphics text contract; browser/Solid editing; Canvas integration |
+| Clipboard | Copy/cut/paste nodes, edges, group remapping, text/images and Macro links | Shape/group/Lexical fragments, plain/HTML text, images and Macro document links present | Core fragment/remapping operations; browser clipboard; Canvas MIME policy |
 | Select all and keyboard nudge | CanvasController and nudge module | Present; focus-scoped hotkeys, 1/10 world-unit nudges | Core selection/translate commands; browser shortcuts |
 | Alignment | Six align actions for nodes/groups/free edges | Six align actions and equal-gap distribution present | Core geometry commands; Canvas inspector |
 | General duplication | Copy/paste exists; no separate duplicate command found | Duplicate command and cancellable Option-drag present | Core clone/fragment command; Canvas action |
-| Images as movable items | Image loading/upload/drop and DSSMedia | Only a background image in the markup demo; no image node | Graphics asset/image feature; host asset adapter |
-| Video | Video node, media selection and rendering behind enabled-by-default flag | Missing | Optional media feature and Macro adapter |
-| Macro entity cards and mentions | Documents, chats, projects and other entity references; Lexical mentions | Missing | Canvas/Macro feature; generic graphics item/focus contract |
+| Images as movable items | Image loading/upload/drop and DSSMedia | Movable image items with stable sources, upload/drop/paste and workspace picker | Graphics asset/image feature; host asset adapter |
+| Video | Video node, media selection and rendering behind enabled-by-default flag | Present with workspace/upload sources and local playback | Optional media feature and Macro adapter |
+| Macro entity cards and mentions | Documents, chats, projects and other entity references; Lexical mentions | DocumentPreview cards present; other entity types/mentions pending | Canvas/Macro feature; generic graphics item/focus contract |
 | Import and download | JSON load/save/download; SVG import path | Missing; disposable seeds only | Import/export adapters and Canvas menus |
 | Saving and reopening | Whole-document JSON saves to DSS; camera saved separately | Missing by design in prototypes | Persistence adapter and Canvas document host |
 | Permissions, sharing and document shell | canEdit, sharing, file actions, location links, Ask Macro, block/drive hosts | Registry demos only | Canvas/Macro host |
@@ -79,16 +79,16 @@ The table distinguishes priority from evidence of availability.
 
 | Additional capability | Current graphics gap | Recommendation / owner |
 | --- | --- | --- |
-| Diamond, editable lines and arrows | Missing | Early graphics feature modules; Canvas tools |
-| Arrow binding and arrow labels | Missing | Early graphics reference/attachment semantics; text UI in adapters |
-| Pressure-aware freehand and erasing | Missing | Basic pencil early, pressure/eraser later; geometry in graphics |
-| Text layout, wrapping and container-bound text | Missing | Early text feature; measurement/editing outside pure core |
+| Diamond, editable lines and arrows | Lines/arrows present with endpoint editing; diamond missing | Early graphics feature modules; Canvas tools |
+| Arrow binding and arrow labels | Center/edge bindings present; connector labels missing | Early graphics reference/attachment semantics; text UI in adapters |
+| Pressure-aware freehand and erasing | Pencil/pressure present; eraser missing | Eraser and point editing later; geometry in graphics |
+| Text layout, wrapping and container-bound text | Auto-width/wrapped text, font scaling, and rectangle/ellipse labels present | Early text feature; measurement/editing outside pure core |
 | Stroke variants, fill patterns, roundness, opacity | Width, roundness and opacity present; variants/patterns missing | Basic styles early; optional painter for sketch/pattern styles |
 | Duplicate/Alt-drag, flip, style copying | Duplicate/Alt-drag present; flip/style copying missing | Core commands; Canvas gestures/menus |
 | Align/distribute and object/grid snapping | Align/distribute and angular snapping present; object/grid snapping missing | Shared geometry/session features; Canvas policy and guides |
 | Lock/unlock and view mode | No item locks; limited browser editing toggle | Explicit edit eligibility in graphics; permission policy in host |
 | Frames, clipping and frame membership | Groups exist but do not clip | Add after mixed content; useful to slides/design too |
-| Image crop and flip | No image items yet | Image geometry module after asset-backed images |
+| Image crop and flip | Flip through resize-zero is present; crop pending | Image geometry crop extension |
 | Export PNG/SVG/clipboard and editable files | Missing | Separate exporters; Canvas download/share UX |
 | Reusable libraries | Missing | Core fragment insertion; Canvas library UI/storage |
 | Links and web embeds | Missing | Typed optional items/references; host navigation and embed security |
@@ -124,11 +124,12 @@ permission to put browser or service dependencies in the root export.
 | Later | Spatial anchors | Item-local/world anchors for comments and annotations; thread content remains external. Numbered callouts are an optional annotation feature. |
 | Measured | Incremental queries and projection | Benchmarks for mixed scenes, affected-item subscriptions, spatial queries/culling when needed. Pin active text/media; never derive saved membership from mounted content. |
 
-The extension boundary is not finished today. `ShapeDefinition` handles geometry,
-but creation is a two-point bounding-box gesture; `ShapeGeometryMap` is centrally
-compiled. Loro `NodeData.pose.geometry` and presence ghosts also assume width/height.
-Introduce typed contributions for non-box features as those features arrive,
-including their optional collaboration mapping and preview rendering. Avoid a
+The extension boundary remains explicit and centrally compiled. `ShapeDefinition`
+handles geometry/validation/deep freezing; `core/drawing.ts` owns typed box and
+sampled pencil gestures. Loro pose geometry accepts typed shape payloads, and
+presence can carry pencil samples. Brush settings remain internal. Introduce
+further typed contributions as non-box features arrive, including their optional
+collaboration mapping and preview rendering. Avoid a
 generic untyped properties bag or a runtime plugin marketplace.
 
 Preserve layering as an acceptance gate for every new renderer: one document paint
@@ -152,8 +153,9 @@ content order. Verify both visual stacking and DOM identity, not screenshots alo
 | Product-specific | Comments and image markup | Comment threads, resolution, permissions and notifications in Macro; spatial anchors in graphics. Centered image navigation and markup tool presets remain a separate app composition. |
 | Later | Presentation/design workflows | Slides UI, frame navigation, DOM layout, reusable components and constraints when those products are started. Reserve interfaces without implementing them all now. |
 
-Text needs an explicit collaboration/undo decision before production. Do not use a
-last-writer-wins serialized editor blob as a substitute for concurrent text editing.
+The chosen text policy is a serialized Lexical string with whole-content
+last-write-wins. Text content is separate from pose. Character-level merging and
+remote carets are not part of this checkpoint.
 Test the chosen text adapter in the two-peer lab, including scene versus text undo
 and focus restoration. Keep awareness/spring animation receiver-local and optional.
 
@@ -172,15 +174,19 @@ not authorization to implement all features at once.
 | --- | --- | --- | --- |
 | A1: everyday editing (implemented) | Minimal command contribution pattern, select all, nudge, duplicate, fragment copy/paste | Shortcut/context-menu wiring | Copy a nested group, move it, reorder it and undo; correct IDs/pose/order in memory and Loro. |
 | A2: styling and arranging (implemented) | Stroke width, opacity, radius, align/distribute, explicit group style policy | Inspector controls and defaults | Mixed selection styling and arrangement form predictable undo steps; picking matches visible strokes. |
-| B: text | Typed text data, sizing/measurement/editing contracts | Text tool, inline editor, shape labels | Text keeps focus through unrelated updates/reorder; two-peer text/scene undo behavior is specified and tested. Start with a small text feature, then restore Macro formatting/mentions. |
-| C1: lines | Path geometry, free endpoints, arrowheads, point editing | Line/arrow tools | Paths select, transform, layer, copy and undo alongside text/shapes. |
-| C2: connected diagrams | Bindings, target geometry, deletion/reference rules | Connect/reconnect UX and labels; routing styles incrementally | Nested target move/rotate/reparent and concurrent target deletion converge with valid endpoints. |
+| Pencil (implemented ahead of text) | Raw local samples, private perfect-freehand brush, ink picking/bounds, regeneration on resize | P tool, repeated strokes, pen input, single-stroke undo | Stroke transforms, copies and syncs; empty ink gaps click through; brush stays outside document schema. |
+| B: text (standalone and shape labels local; collaboration pending) | Typed text data, sizing/measurement/editing contracts | Text tool, inline editor, shape labels | Text keeps focus through unrelated updates/reorder; two-peer text/scene undo behavior is specified and tested. Start with a small text feature, then restore Macro formatting/mentions. |
+| C1: lines (implemented) | Path geometry, free endpoints, arrowheads, point editing | Line/arrow tools | Paths select, transform, layer, copy and undo alongside text/shapes. |
+| C2: connected diagrams (bindings/routing implemented; labels and remote endpoint previews pending) | Bindings, target geometry, deletion/reference rules | Connect/reconnect UX and labels; routing styles incrementally | Nested target move/rotate/reparent and concurrent target deletion converge with valid endpoints. |
 | D1: images | Asset reference and image node | Paste/drop/load, resolve/upload adapter | Multiple image items layer correctly; no object URLs in documents; undo during upload cannot resurrect a deleted image. |
 | D2: markup and drawing | Freehand path input; annotation anchors/export contracts | Pencil and image-markup composition; comments when ready | Same graphics features work in both whiteboard and centered image host. |
 | E: whiteboard polish | Snap constraints, edit eligibility, frames/clipping incrementally | Guides, locks, frames, touch, crop, eraser, libraries and exports | A useful Excalidraw-style board; mixed-content layering and responsiveness remain stable. Split this into individual feature checkpoints. |
 | Production gate | Finalize feature mappings/conflict behavior and import validation | Durable document host, existing sync infrastructure, permissions, recovery and legacy import | Reopen, offline/reconnect, duplicate delivery, asset failure and read-only tests pass before replacing old Canvas. Can proceed alongside later polish. |
 
-Recommended next step after hands-on A1/A2 iteration: **B: text**. This tests the
+Pencil was pulled forward after A1/A2 for hands-on drawing iteration.
+Standalone text and shape labels from **B: text** now run locally in Canvas Next.
+Remaining B work is Macro-specific rich content and a character/mark collaboration
+adapter with text-versus-scene undo tests. This tests the
 feature boundary with a different kind of content before broadening the toolbox. Keep the existing shape,
 nested-scene, image and peer demos as focused regression fixtures.
 
@@ -191,3 +197,16 @@ nested-scene, image and peer demos as focused regression fixtures.
 - [Browser input](../packages/graphics/src/browser/index.ts), [Solid rendering](../packages/graphics/src/solid/index.tsx)
 - [Loro mapping](../packages/graphics/src/loro/scene-mapping.ts), [collaboration limits](../packages/graphics/src/loro/README.md)
 - [Original architecture](CANVAS_ARCHITECTURE.md), [scene foundation](GRAPHICS_SCENE_FOUNDATION.md)
+
+### Text storage and embedded-items checkpoint (2026-09-25)
+
+Canvas Next now uses the shared Markdown builder and stringified Lexical states
+for text and labels. Loro treats each completed content value as one LWW string.
+Image/video items support upload, existing workspace sources, drop/paste,
+transforms, styling, clipboard and undo. Document items render the shared
+DocumentPreviewContent as raised, interactive cards with fixed base text sizing.
+Markdown documents and existing canvases also support full embeds with explicit
+Interact/Done input ownership. Embedded editors use their existing permissions and
+sync; only a stable reference and presentation mode are stored in graphics.
+SVG is inserted as an image; editable SVG import/export and production sync remain
+future work. No document-version migrations or local storage were added.

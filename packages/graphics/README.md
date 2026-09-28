@@ -11,7 +11,8 @@ Experimental graphics editor with a framework-independent scene tree.
 
 Documents have one surface root and a normalized node map. Shapes
 and groups have one authoritative `placement: { parentId, sortKey }` and a local
-affine `transform: [a,b,c,d,e,f]`. Rectangles own local width/height and appearance.
+affine `transform: [a,b,c,d,e,f]`. Rectangles and ellipses own local width/height and appearance. Pencil owns raw
+local `[x, y, pressure]` samples and `simulatePressure`; ink is derived.
 Groups own no intrinsic geometry; their bounds come from descendants. Child lists
 and paint order are derived from case-sensitive fractional string keys allocated
 by [fractional-indexing](https://github.com/rocicorp/fractional-indexing).
@@ -60,6 +61,14 @@ empty space and unfilled interiors. Shift and deep-select modifiers still pick
 individual shapes. This does not change hit testing for unselected shapes.
 
 Hold Shift during rotation to snap a single shape/group's world angle to 30° increments.
+Hold Shift during movement to constrain the world-space delta to its dominant
+horizontal or vertical axis, including nested selections and Option-drag duplicates.
+Rectangle/ellipse drawing accepts `DrawingModifiers.proportional` to create a square
+or circle; the browser maps Shift to it. The original pointer endpoint is retained,
+so pressing/releasing Shift updates the preview immediately. Image-surface drawing
+reduces both dimensions together when a constrained shape reaches the image edge.
+Shift-click still toggles selection on release; crossing 3 screen pixels begins
+a move instead. Shift-drag on empty canvas remains additive marquee selection.
 Multiple selections snap the rotation delta while preserving relative angles.
 The rotation circle sits 16 screen pixels outside a single shape's oriented top
 edge, or above the world-aligned bounds for groups and multiple selections, with
@@ -94,6 +103,8 @@ geometry, retaining group frames and placements. Crossing the opposite edge
 reflects the leaf axes as well as their positions, so the contents truly flip.
 Uniform resizing transforms selected roots once. Stroke width/radius stay local
 dimensions during geometry resizing and scale with uniform root transforms.
+Shapes opting into `regenerateOnScale` (pencil) instead absorb the added scale
+into samples and compensate in their local pose, preserving nominal brush width.
 Single and shared resizing continue through zero and invert each crossed axis.
 Only a tiny minimum magnitude (1e-6 of the starting extent) keeps transforms
 invertible at the exact crossing. Shift proportions and Alt/Option center anchors
@@ -130,7 +141,18 @@ reserved for explicitly coordinated editor UI. Selection polygons,
 a solid oriented box for a single shape, a dashed axis-aligned box for groups and
 multiple selections, corner handles, invisible edge targets and rotation handles are drawn in a viewport overlay, so their
 size is independent of ancestor scale/rotation. The shared box and handles hide
-during transform previews; individual outlines remain visible. The scene tree does not require
+during transform previews; individual outlines remain visible. Selected shapes (including
+selected groups' leaves) also get a one-screen-pixel selection-color trace along their
+geometry: the pencil's streamlined centerline, rounded rectangle perimeter, or ellipse.
+In groups or multiple selections, rounded rectangles and ellipses show only that
+geometry trace inside the shared selection box, without individual rectangular boxes.
+These non-interactive SVG traces use non-scaling strokes in the viewport overlay.
+The Select tool previews the same trace on hover, using the exact pointer-down
+target policy (3 screen px tolerance, click-through, group/deep selection, and
+selected box interiors). Hover stays local to the browser/Solid adapter, repicks
+after camera/document/modifier changes, and hides while dragging, panning or drawing.
+It never enters core session state, history, persistence or collaboration awareness.
+The scene tree does not require
 a matching DOM tree.
 
 ## Local demos
@@ -158,7 +180,7 @@ history reset on reload. Each mounted demo owns an independent editor.
 
 ## Boundaries and verification
 
-One surface per document, static typed rectangle/ellipse/group kinds, linear scene queries,
+One surface per document, static typed rectangle/ellipse/pencil/group kinds, linear scene queries,
 and local snapshot history are deliberate prototype limits. Frames/clipping,
 layout, text, multi-surface documents and runtime plugin loading are not implemented.
 Affine reflection/shear compose correctly, but have no dedicated UI controls.
@@ -172,21 +194,50 @@ transform math, document reset, pose preservation, nested editing, history, sele
 input routing and stable Solid mounts. The no-DOM compilation/import checks
 enforce the pure TypeScript core boundary.
 
+## Pencil
+
+`shapes/pencil.ts` wraps `perfect-freehand` with private brush settings. Documents
+store the raw local centerline and normalized pressure values, not SVG paths,
+brush presets, timestamps, or generated bounds. Mouse strokes use spacing-based
+pressure simulation; pen strokes retain hardware pressure. Resize scales samples
+and regenerates the ink, including simulated pressure, without changing nominal
+stroke width. Reflections and nested placement remain scene transforms.
+
+Rendering, hit testing and selection bounds share the generated ink polygon.
+The selected pencil's centerline highlight comes from the same brush calculation;
+it does not trace the raw samples or the outer ink polygon.
+Click tolerance is measured in world space after ancestor transforms; marquee
+uses polygon/box intersection, so empty loops and unused bounds do not hit.
+Immutable core geometries cache derived ink. The Solid projection exposes both
+a reconciled store for fine-grained UI reads and a reactive immutable snapshot
+for rendering and geometry queries. Pan, hover, selection, move and rotation
+previews reuse cached ink; geometry or stroke-width changes regenerate it.
+The keyed renderer emits one filled SVG path. Fill/radius have no pencil
+meaning; stroke color, width and opacity control its ink.
+
+Browser coalesced pointer samples are processed as a batch. Preview and commit
+use the same brush endpoint policy to avoid a release-time change in shape.
+One stroke creates one history entry; cancellation creates none. A tap creates
+a dot. Samples are deeply frozen and limited to 16,384 per stroke; further samples
+are ignored at this prototype limit. Point editing, erasing, straight segments,
+compact point encoding and spatial indexing remain later work.
+
 ## Adding a shape
 
 Shape registration is explicit and compile-time. There is no mutable global
-registry or runtime plugin loading. Rectangle and ellipse follow the same path:
+registry or runtime plugin loading. Rectangle, ellipse and pencil follow the same path:
 
 1. Add a pure module under `src/core/shapes/` exporting its geometry type and
    `ShapeDefinition<'kind'>`. Add the geometry type to `ShapeGeometryMap` in
    `model.ts`, then add the definition to the mapped registry in
    `shapes/registry.ts`. TypeScript checks the kind/definition pairing.
-2. Implement geometry validation, creation, local bounds, point hit testing,
-   box intersection, resize and geometry equality. Bounds currently use a local
-   origin of `(0, 0)`; drawing is a two-point bounding-box gesture. `resize`
-   returns updated geometry without changing identity/placement/transform;
-   the selection feature anchors the opposite corner and applies the transform.
-   Geometry is immutable; current payloads are flat value objects.
+2. Implement geometry validation, deep freezing, local bounds, point hit testing,
+   box intersection, resize and geometry equality. Bounds may have a nonzero local
+   origin (pencil ink extends around its samples). `resize` scales geometry about
+   the local origin without changing identity/placement/transform; the selection
+   feature applies translation and reflection. A brush may regenerate its outline
+   rather than making painted bounds fit the target box exactly. Opt into
+   `regenerateOnScale` when uniform group scaling must also rebuild geometry.
 3. Point picking receives a **local point**, the complete **world transform**,
    and a tolerance in **world units** (`3 / camera.scale`). Measure outline
    distance in world space to preserve screen tolerance through nested affine
@@ -196,10 +247,14 @@ registry or runtime plugin loading. Rectangle and ellipse follow the same path:
    `solid/shape-renderers.tsx`. It receives a reactive item, effective scale and
    optional preview state. Hosts can supply typed overrides via `renderers`;
    image markup retains its rectangle renderer. The core never imports these.
-5. The playground toolbar reads registered kinds and labels; shared browser input
-   calls `beginShape(kind, point)`, `updateShape`, `commitShape`, `cancelShape`.
-   Rectangle aliases remain for the image host. No kind checks belong in the
-   selection engine, traversal, browser input or surface renderer.
+   Register the geometry-only selection indicator in the typed `outlines` map in
+   `solid/selection-outline.tsx`; it must use `non-scaling-stroke` and local geometry.
+5. Add a typed acquisition gesture to `core/drawing.ts`, separate from the shape
+   definition. Boxes collect two corners; pencil collects samples. Browser input
+   calls `beginShape`, batched `updateDrawing`, `commitShape`, `cancelShape`;
+   `getDrawingPreview(appearance)` produces the typed temporary shape.
+   Rectangle aliases remain for the image host. Selection and rendering consume
+   definitions and typed previews without shape-specific gesture branches.
 6. Cover curve/interior picking, zoom tolerance, box intersection, invalid geometry,
    transforms and history, and verify the actual component and controls in-browser.
 
@@ -209,8 +264,8 @@ uses the ellipse's bounding rectangle as its hit area. Selection handles still
 use the local bounding rectangle, as they do for other bounded shapes.
 
 This checkpoint proves typed shape modules, not a general-purpose extension API:
-text editing, connectors, layout, custom gesture tools, per-host core registry
-composition and dynamic plugins need their own contracts. Schema versioning and
+text and connector gestures now have explicit feature contracts; layout, per-host
+core registry composition and dynamic plugins remain future work. Schema versioning and
 import/export boundaries can be introduced when real persistence is needed.
 
 ## Typed commands and everyday editing
@@ -255,3 +310,95 @@ selection outlines and ghosts of pending drawing/move/resize/rotation gestures.
 Awareness uses a separate ephemeral channel: it never enters the document, local
 selection, hit testing or undo. Disconnect clears remote overlays; reconnect sends
 fresh presence. The core and ordinary browser/Solid surfaces do not depend on it.
+
+### Rich text
+
+`text` is an explicit shape kind. `TextGeometry.content` is a stringified Lexical
+editor tree; geometry also stores measured width/height, typography and auto-width.
+Core validates a bounded JSON tree envelope without importing Lexical. It preserves
+the string verbatim. The host owns the editor's node vocabulary and rendering.
+`plainRichText` creates a seed Lexical string; `richTextPlainText` is a fallback.
+`setTextCommand` applies a completed edit as one history entry and removes empty
+text. Existing transforms, picking, ordering and clipboard work unchanged.
+
+Pass `{measureText}` to the editor for actual font metrics. The default browser
+measurer and Solid TextView provide plain-text fallbacks. A rich host supplies a
+`contentView` to TextView/RectangleView/EllipseView and a matching TextMeasurer.
+Canvas Next uses the shared Markdown builder and StaticLexical renderer for both
+visible content and measurement. Only the active item mounts an editable editor.
+Core never measures the DOM or depends on an editor framework.
+
+Single-text side edges change wrapping width; other grips scale font and box
+proportionally. Completed content is one LWW string in the optional Loro adapter,
+independent of pose. This is the chosen collaboration granularity, not a character
+CRDT. GraphicsSurface accepts overlays, hidden selection and suspended input so
+host editing stays separate from geometric tools.
+
+Mixed selections containing text scale uniformly to preserve letter proportions;
+use a single text shape’s side edges to change wrapping width. Shape definitions
+express this through the `canDeform` capability used by selection-frame math.
+
+Rectangles and ellipses accept `geometry.label?: ShapeLabel`, containing the same
+portable rich content, font family/size, and measured height. Width is derived from
+the padded shape interior. `setShapeLabelCommand` edits/clears only the label;
+`shapeLabelLayout` supplies a shared local transform for rendering, editing, and
+picking. The label wraps and fits uniformly inside its owner. Shape resizing uses
+the injected measurer to update label height; headless hosts without one retain the
+stored height and should remeasure before displaying changed wrapping. Labels are
+part of shape geometry in the core; fragments preserve their serialized strings.
+The Loro adapter stores label content and layout separately from pose, allowing
+label creation or editing to merge with moving its owner.
+`textTargetAt` is a text-gesture query that includes unfilled shape interiors;
+ordinary shape picking adds only the label's visible layout box.
+
+## Connectors and references
+
+`ShapeItem<'connector'>` stores two local endpoints, route (`straight`, `stepped`,
+`smooth`), and start/end heads (`none`, `arrow`, `arrow-filled`, `circle`,
+`circle-small`). Each endpoint has a fallback `point`, optional outgoing `direction`,
+and an optional `{ targetId, anchor }` reference. Anchors are `center`, `top`,
+`right`, `bottom`, `left`. References are independent of scene containment;
+connectors remain ordinary keyed shape components in document paint order.
+
+`core/connectors.ts` resolves references through the target's current world matrix
+and geometry, including uncommitted transform overrides. Side ports stay at edge
+midpoints. A center port automatically intersects the target outline toward the
+other endpoint (exact ellipse and rounded rectangle outlines; bounds for other
+shapes). Groups are not attachment targets; their shape children are. Connectors
+cannot target other connectors or themselves. Missing targets use stored fallback
+coordinates. No route cache or Solid state is persisted in geometry.
+
+`connector-routing.ts` ports the original Canvas route math: straight segments,
+36-unit rectilinear leads with rounded 10-unit corners, cubic smooth curves and the
+same arrow/dot styles. Rotated target normals preserve an outward lead. Picking
+follows the sampled rendered path and head geometry, with screen tolerance supplied
+by the host. It does not select the empty path bounding box.
+
+`createConnectorInteraction` owns a disposable draft and preview scene. The browser
+endpoint adapter captures the gesture; `GraphicsSurface.attachControls` owns that
+adapter's viewport lifecycle. The app owns tools, defaults, inspector and hover-only
+screen-sized endpoint circles. `connectorTargetAt` is the shared hover/start/drop
+policy: only the frontmost hovered shape exposes ports; nearby edge points win,
+and the interior core activates the center. Only the active port gets a larger
+blue halo. Releasing submits `setConnectorCommand` as one history
+entry. Escape cancels; Shift snaps free endpoints to 45 degrees. Both endpoints can
+be reattached independently. Moving a connector body moves free endpoints while
+bound endpoints remain on their targets, matching legacy Canvas.
+
+Copy/paste and duplicate remap references when the targets are copied too. External
+references detach at their current visible endpoints. Deleting a target detaches
+surviving connectors in the same history transaction; undo restores the references.
+Reparenting keeps world positions through the existing tree math. The existing Loro
+adapter transports connector geometry and references without core dependencies on
+collaboration. Endpoint drafts are local only; connector-specific remote gesture
+awareness and connector labels are follow-up work.
+
+### Embedded items
+
+`image` and `video` store box dimensions, a name, and a stable `MediaSource`
+(document ID, static-file ID, or safe HTTP(S)/root-relative URL). `document` stores
+box dimensions, document ID, file type and a fallback name. Definitions participate
+in the same transform, selection, connector, clipboard, grouping and Loro paths as
+other shapes. `insertShapesCommand` inserts an ordered batch in one undo step.
+Default Solid renderers show placeholders; hosts provide asset and preview views.
+No upload, storage-service, player or application preview dependency enters core.

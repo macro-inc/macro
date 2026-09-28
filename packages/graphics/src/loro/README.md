@@ -126,3 +126,25 @@ References: [Loro ordered trees](https://www.loro.dev/docs/tutorial/tree),
 [Loro undo](https://www.loro.dev/docs/advanced/undo),
 [Loro ephemeral state](https://www.loro.dev/docs/tutorial/ephemeral). See tests for the actual behavior
 of the pinned workspace version rather than treating these docs as test evidence.
+
+### Pencil mapping
+
+Pencil geometry travels as one immutable sample-array value in the existing pose
+merge unit; transform and geometry still win together. Live drawing is ephemeral
+awareness only, with the finalized stroke committed once. The adapter validates
+kind/geometry pairs through the core shape registry. As with other poses, moving
+a stroke currently resends its geometry; compact encoding and reducing those
+payloads are future transport optimizations, not core document requirements.
+
+### Text and embedded items
+
+Text items and shape labels store the exact serialized Lexical JSON as one
+`textContent` LoroMap value. Concurrent edits select one complete string through
+last-write-wins; no LoroText, per-node CRDT, or character merging is involved.
+The text register is separate from pose and appearance; label layout is also
+separate, so a move cannot discard a new label. Typing drafts remain local and
+finished edits become one backend transaction. Tests cover conflicting strings,
+text-versus-move, new labels versus moves, and local undo preserving remote moves.
+
+Image, video and document references use the existing shape geometry mapping.
+Their source bytes, resolved URLs, loading state and playback are host concerns.

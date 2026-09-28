@@ -7,16 +7,18 @@ import {
 } from '../affine';
 import { resolveAppearance } from '../appearance';
 import type { Point } from '../model';
-import {
-  type BoxGeometry,
-  boxGeometry,
-  sameBoxGeometry,
-  segmentDistance,
-  validBoxGeometry,
-} from './box-geometry';
+import { segmentDistance } from './box-geometry';
 import type { ShapeDefinition } from './definition';
+import {
+  freezeLabeledGeometry,
+  hitShapeLabel,
+  type LabeledGeometry,
+  resizeLabeledShape,
+  sameLabeledGeometry,
+  validLabeledGeometry,
+} from './label';
 
-export type EllipseGeometry = BoxGeometry;
+export type EllipseGeometry = LabeledGeometry;
 const normalized = (g: EllipseGeometry, p: Point): Point => ({
   x: p.x / (g.width / 2) - 1,
   y: p.y / (g.height / 2) - 1,
@@ -71,14 +73,21 @@ function outlineDistance(
 export const ellipseDefinition: ShapeDefinition<'ellipse'> = {
   type: 'ellipse',
   label: 'Ellipse',
-  validateGeometry: validBoxGeometry,
-  createGeometry: boxGeometry,
-  bounds: (item) => ({ x: 0, y: 0, ...item.geometry }),
-  resize: (item, size) => ({ ...item, geometry: boxGeometry(size) }),
-  sameGeometry: (a, b) => sameBoxGeometry(a.geometry, b.geometry),
+  validateGeometry: validLabeledGeometry,
+  freezeGeometry: freezeLabeledGeometry,
+  bounds: (item) => ({
+    x: 0,
+    y: 0,
+    width: item.geometry.width,
+    height: item.geometry.height,
+  }),
+  resize: (item, size, context) =>
+    resizeLabeledShape(item, size, context?.measureText),
+  sameGeometry: (a, b) => sameLabeledGeometry(a.geometry, b.geometry),
   hitTest: (item, p, context) => {
     const style = resolveAppearance(item.appearance);
     if (style.opacity === 0) return false;
+    if (hitShapeLabel(item, p)) return true;
     const unit = normalized(item.geometry, p);
     if (
       item.appearance.fill !== 'transparent' &&

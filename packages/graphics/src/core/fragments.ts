@@ -1,4 +1,5 @@
 import { inverse, multiply, translation } from './affine';
+import { retainConnectorBindings } from './connectors';
 import type { GraphicsDocument, GraphicsItem, Point } from './model';
 import { keysAt, sortKeysBetween } from './ordering';
 import {
@@ -8,6 +9,7 @@ import {
   roots,
   worldMatrix,
 } from './scene';
+import type { ConnectorEndpoint } from './shapes/connector';
 
 /** A standalone scene whose selected roots have world-space transforms. */
 export type GraphicsFragment = Readonly<{
@@ -46,6 +48,16 @@ export function copyFragment(
     children(document, id).forEach((child) => visit(child));
   };
   ordered.forEach(visit);
+  const retained = new Set(Object.keys(items));
+  for (const id of retained) {
+    const source = document.items[id];
+    const copied = items[id];
+    if (source?.type === 'connector' && copied?.type === 'connector')
+      items[id] = {
+        ...copied,
+        geometry: retainConnectorBindings(document, source, retained).geometry,
+      };
+  }
   return {
     kind: 'macro-graphics-fragment',
     scene: freezeDocument({ ...scene, items }),
@@ -107,8 +119,19 @@ export function pasteFragment(
     if (node.type === 'surface') continue;
     const index = top.indexOf(id);
     const newId = remap.get(id)!;
+    const mapped =
+      node.type === 'connector'
+        ? {
+            ...node,
+            geometry: {
+              ...node.geometry,
+              start: remapEndpoint(node.geometry.start, remap),
+              end: remapEndpoint(node.geometry.end, remap),
+            },
+          }
+        : node;
     items[newId] = {
-      ...node,
+      ...mapped,
       id: newId,
       placement: {
         parentId: index < 0 ? remap.get(node.placement.parentId)! : parentId,
@@ -126,9 +149,24 @@ export function pasteFragment(
   return {
     document: freezeDocument({ ...document, items }),
     selection: top.map((id) => remap.get(id)!),
+    idMap: remap,
   };
 }
 
+function remapEndpoint(
+  end: ConnectorEndpoint,
+  ids: ReadonlyMap<string, string>
+): ConnectorEndpoint {
+  return end.binding && ids.has(end.binding.targetId)
+    ? {
+        ...end,
+        binding: { ...end.binding, targetId: ids.get(end.binding.targetId)! },
+      }
+    : {
+        point: end.point,
+        ...(end.direction ? { direction: end.direction } : {}),
+      };
+}
 /** Duplicate each selected subtree in its existing parent, above its siblings. */
 export function duplicateNodes(
   document: GraphicsDocument,
@@ -146,11 +184,29 @@ export function duplicateNodes(
   }
   let next = document;
   const selected: string[] = [];
+  const remapped = new Map<string, string>();
   for (const [parentId, ids] of parents) {
     const fragment = copyFragment(document, ids)!;
     const result = pasteFragment(next, fragment, createId, offset, parentId);
     next = result.document;
+    for (const [source, copy] of result.idMap) remapped.set(source, copy);
     selected.push(...result.selection);
   }
-  return { document: next, selection: selected };
+  const items = { ...next.items },
+    retained = new Set(remapped.keys());
+  for (const [sourceId, copyId] of remapped) {
+    const source = document.items[sourceId],
+      copy = items[copyId];
+    if (source?.type !== 'connector' || copy?.type !== 'connector') continue;
+    const g = retainConnectorBindings(document, source, retained).geometry;
+    items[copyId] = {
+      ...copy,
+      geometry: {
+        ...g,
+        start: remapEndpoint(g.start, remapped),
+        end: remapEndpoint(g.end, remapped),
+      },
+    };
+  }
+  return { document: freezeDocument({ ...next, items }), selection: selected };
 }

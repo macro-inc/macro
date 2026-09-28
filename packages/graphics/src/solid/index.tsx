@@ -1,7 +1,9 @@
 import {
+  batch,
   createMemo,
   createSignal,
   For,
+  type JSX,
   onCleanup,
   onMount,
   Show,
@@ -9,16 +11,26 @@ import {
 import { createStore, reconcile } from 'solid-js/store';
 import {
   attachCameraControls,
+  type GraphicsHover,
   type GraphicsInputOptions,
   resizeCursor,
 } from '../browser';
-import { corners, cssMatrix, enclosing, translation } from '../core/affine';
-import { worldToScreen } from '../core/camera';
+import { selectionTarget } from '../browser/selection-target';
+import {
+  corners,
+  cssMatrix,
+  enclosing,
+  multiply,
+  transformPoint,
+} from '../core/affine';
+import { screenToWorld, worldToScreen } from '../core/camera';
 import type { GraphicsEditor } from '../core/editor';
-import type { Point, ShapeItem } from '../core/model';
+import type { GraphicsDocument, Point, ShapeItem } from '../core/model';
 import { isResizeEdge, resizeHandles } from '../core/resize';
 import { selectionFrame } from '../core/selection-frame';
 import { isShape, isShapeKind, shapeDefinition } from '../core/shapes/registry';
+import { selectedShapeIds } from '../core/style-selection';
+import { ShapeSelectionOutline } from './selection-outline';
 import {
   defaultRenderers,
   type ItemRenderers,
@@ -32,19 +44,30 @@ export {
 } from './shape-renderers';
 export { EllipseView } from './shapes/ellipse';
 export { RectangleView } from './shapes/rectangle';
+export { TextView } from './shapes/text';
 
-import { drawableIds, roots, worldMatrix } from '../core/scene';
+import { drawableIds, resolvedShape, roots, worldMatrix } from '../core/scene';
 
 export function createGraphicsProjection(editor: GraphicsEditor) {
   const [camera, setCamera] = createSignal(editor.getCamera());
   const [document, setDocument] = createStore(editor.document);
+  // Core geometry caches rely on immutable identities. The store is still useful
+  // for fine-grained UI reads, but unwraps frozen geometries into mutable proxies.
+  const [snapshot, setSnapshot] = createSignal(editor.document);
   const [session, setSession] = createSignal(editor.getSession());
   const [preview, setPreview] = createSignal(editor.getPreview());
   onCleanup(editor.subscribeCamera(setCamera));
-  onCleanup(editor.subscribeDocument((next) => setDocument(reconcile(next))));
+  onCleanup(
+    editor.subscribeDocument((next) =>
+      batch(() => {
+        setDocument(reconcile(next));
+        setSnapshot(next);
+      })
+    )
+  );
   onCleanup(editor.subscribeSession(setSession));
   onCleanup(editor.subscribePreview(setPreview));
-  return { camera, document, session, preview };
+  return { camera, document, snapshot, session, preview };
 }
 /** Scene paint order is independent of DOM containment; nodes retain keyed mounts. */
 export function GraphicsSurface(props: {
@@ -54,16 +77,68 @@ export function GraphicsSurface(props: {
   class?: string;
   input?: GraphicsInputOptions;
   image?: { src: string; alt: string };
+  children?: JSX.Element;
+  hideSelection?: boolean;
+  /** Allow interactive shape content to receive clicks through the selection box. */
+  selectionHitArea?: 'bounds' | 'shapes';
+  /** Optional browser feature controls, disposed with the actual viewport. */
+  attachControls?: (element: HTMLElement) => () => void;
+  /** A feature-owned draft scene. It never replaces the editor document/history. */
+  documentPreview?: GraphicsDocument;
 }) {
   const projection = createGraphicsProjection(props.editor);
+  const [hover, setHover] = createSignal<GraphicsHover>();
   let viewport!: HTMLDivElement;
-  onMount(() =>
-    onCleanup(attachCameraControls(viewport, props.editor, props.input))
+  onMount(() => {
+    onCleanup(
+      attachCameraControls(viewport, props.editor, {
+        ...props.input,
+        onHover: (next) => {
+          setHover(next);
+          props.input?.onHover?.(next);
+        },
+      })
+    );
+    if (props.attachControls) onCleanup(props.attachControls(viewport));
+  });
+  const scene = createMemo(
+    () =>
+      props.documentPreview ??
+      projection.session().transform?.document ??
+      projection.snapshot()
   );
-  const scene = () =>
-    projection.session().transform?.document ?? projection.document;
   const overrides = () => projection.session().transform?.nodes ?? {};
   const selected = () => roots(scene(), projection.session().selectedIds);
+  const selectedShapes = createMemo(() =>
+    selectedShapeIds(scene(), selected())
+  );
+  const hoveredShapes = createMemo(() => {
+    const pointer = hover();
+    if (
+      !pointer ||
+      props.input?.tool?.() !== 'select' ||
+      projection.session().transform ||
+      projection.session().box ||
+      projection.preview()
+    )
+      return [];
+    const camera = projection.camera();
+    const id = selectionTarget(
+      projection.snapshot(),
+      projection.session().selectedIds,
+      screenToWorld(camera, pointer.point),
+      { ...pointer, tolerance: 3 / camera.scale }
+    );
+    return id ? selectedShapeIds(projection.snapshot(), [id]) : [];
+  });
+  const indicatedShapes = createMemo(() => [
+    ...new Set([...selectedShapes(), ...hoveredShapes()]),
+  ]);
+  const singleConnector = () => {
+    if (selected().length !== 1) return;
+    const item = resolvedShape(scene(), selected()[0]!, overrides());
+    return item?.type === 'connector' ? item : undefined;
+  };
   const frame = createMemo(() =>
     selectionFrame(scene(), selected(), overrides())
   );
@@ -106,20 +181,13 @@ export function GraphicsSurface(props: {
   };
   const renderers = { ...defaultRenderers, ...props.renderers };
   const previewItem = (): ShapeItem | undefined => {
-    const bounds = projection.preview();
-    if (!bounds || bounds.width <= 0 || bounds.height <= 0) return undefined;
-    const kind = props.editor.getDrawingKind();
-    return {
-      id: 'preview',
-      type: kind,
-      placement: { parentId: scene().rootId, sortKey: 'a0' },
-      transform: translation(bounds.x, bounds.y),
-      geometry: shapeDefinition(kind).createGeometry(bounds),
-      appearance: props.input?.appearance?.() ?? {
+    if (!projection.preview()) return undefined;
+    return props.editor.getDrawingPreview(
+      props.input?.appearance?.() ?? {
         fill: 'transparent',
         stroke: '#e53935',
-      },
-    };
+      }
+    );
   };
   return (
     <div
@@ -184,10 +252,9 @@ export function GraphicsSurface(props: {
           {(id) => {
             const initial = scene().items[id];
             if (!isShape(initial)) return null;
-            const item = () => {
-              const node = overrides()[id] ?? scene().items[id];
-              return isShape(node) ? node : initial;
-            };
+            const item = createMemo(
+              () => resolvedShape(scene(), id, overrides()) ?? initial
+            );
             const world = () => worldMatrix(scene(), id, overrides());
             return (
               <div
@@ -222,10 +289,12 @@ export function GraphicsSurface(props: {
               data-graphics-preview
               style={{
                 position: 'absolute',
-                left: `${projection.preview()?.x ?? 0}px`,
-                top: `${projection.preview()?.y ?? 0}px`,
-                width: `${projection.preview()?.width ?? 0}px`,
-                height: `${projection.preview()?.height ?? 0}px`,
+                left: '0',
+                top: '0',
+                transform: cssMatrix(item().transform),
+                'transform-origin': '0 0',
+                width: `${shapeDefinition(item().type).bounds(item()).width}px`,
+                height: `${shapeDefinition(item().type).bounds(item()).height}px`,
                 'pointer-events': 'none',
               }}
             >
@@ -251,13 +320,73 @@ export function GraphicsSurface(props: {
           overflow: 'visible',
         }}
       >
-        <Show when={props.input?.tool?.() === 'select'}>
-          <For
-            each={selected().filter(
-              (id) =>
-                isShape(scene().items[id]) &&
-                (selected().length > 1 || projection.session().transform)
+        <Show when={!props.hideSelection && props.input?.tool?.() === 'select'}>
+          <For each={indicatedShapes()}>
+            {(id) => {
+              const initial = scene().items[id];
+              if (!isShape(initial)) return null;
+              const item = createMemo(
+                () => resolvedShape(scene(), id, overrides()) ?? initial
+              );
+              const transform = () => {
+                const { x, y, scale } = projection.camera();
+                return multiply(
+                  [scale, 0, 0, scale, x, y],
+                  worldMatrix(scene(), id, overrides())
+                );
+              };
+              return (
+                <ShapeSelectionOutline
+                  item={item()}
+                  transform={transform()}
+                  color="#5687ff"
+                  hovered={!selectedShapes().includes(id)}
+                />
+              );
+            }}
+          </For>
+          <Show when={!projection.session().transform && singleConnector()}>
+            {(item) => (
+              <For each={['start', 'end'] as const}>
+                {(end) => {
+                  const point = () =>
+                    screen(
+                      transformPoint(
+                        worldMatrix(scene(), item().id, overrides()),
+                        item().geometry[end].point
+                      )
+                    );
+                  return (
+                    <circle
+                      data-graphics-connector-end={end}
+                      data-graphics-connector-id={item().id}
+                      aria-label={`Connector ${end}`}
+                      role="img"
+                      cx={point().x}
+                      cy={point().y}
+                      r="6"
+                      fill="white"
+                      stroke="#5687ff"
+                      style={{ 'pointer-events': 'all', cursor: 'grab' }}
+                    />
+                  );
+                }}
+              </For>
             )}
+          </Show>
+          <For
+            each={selected().filter((id) => {
+              const item = overrides()[id] ?? scene().items[id];
+              if (!isShape(item) || item.type === 'connector') return false;
+              if (selected().length > 1) {
+                // Curved shapes keep their geometry trace inside the shared box.
+                return (
+                  item.type !== 'ellipse' &&
+                  (item.type !== 'rectangle' || !item.appearance.cornerRadius)
+                );
+              }
+              return !!projection.session().transform;
+            })}
           >
             {(id) => (
               <polygon
@@ -268,7 +397,11 @@ export function GraphicsSurface(props: {
               />
             )}
           </For>
-          <Show when={!projection.session().transform && frame()}>
+          <Show
+            when={
+              !projection.session().transform && !singleConnector() && frame()
+            }
+          >
             {(selection) => (
               <polygon
                 data-graphics-selection-bounds
@@ -282,72 +415,78 @@ export function GraphicsSurface(props: {
                 fill="transparent"
                 stroke="#5687ff"
                 stroke-width="1"
-                style={{ 'pointer-events': 'all', cursor: 'move' }}
+                style={{
+                  'pointer-events':
+                    props.selectionHitArea === 'shapes' ? 'none' : 'all',
+                  cursor: 'move',
+                }}
               />
             )}
           </Show>
-          {/* Screen-space hit strips; corners are painted afterward and win overlaps. */}
-          <For each={resizeHandles.filter(isResizeEdge)}>
-            {(handle, index) => (
-              <Show when={edgeSegment(index())}>
-                {(edge) => (
-                  <line
-                    data-graphics-handle={handle}
-                    role="img"
-                    aria-label={`Resize ${handle}`}
-                    x1={edge().start.x}
-                    y1={edge().start.y}
-                    x2={edge().end.x}
-                    y2={edge().end.y}
-                    stroke="transparent"
-                    stroke-width="10"
-                    style={{
-                      'pointer-events': 'stroke',
-                      cursor: resizeCursor(handle, frame()),
-                    }}
-                  />
-                )}
-              </Show>
-            )}
-          </For>
-          <For each={resizeHandles.filter((handle) => !isResizeEdge(handle))}>
-            {(handle, index) => (
-              <Show when={handleCorners()[index()]}>
-                {(point) => (
-                  <rect
-                    data-graphics-handle={handle}
-                    role="img"
-                    aria-label={`Resize ${handle}`}
-                    x={point().x - 5}
-                    y={point().y - 5}
-                    width="10"
-                    height="10"
-                    rx="0"
-                    fill="white"
-                    stroke="#5687ff"
-                    style={{
-                      'pointer-events': 'all',
-                      cursor: resizeCursor(handle, frame()),
-                    }}
-                  />
-                )}
-              </Show>
-            )}
-          </For>
-          <Show when={rotationHandle()}>
-            {(handle) => (
-              <circle
-                data-graphics-handle="rotate"
-                role="img"
-                aria-label="Rotate selection"
-                cx={handle().x}
-                cy={handle().y}
-                r="6"
-                fill="white"
-                stroke="#5687ff"
-                style={{ 'pointer-events': 'all', cursor: 'grab' }}
-              />
-            )}
+          <Show when={!singleConnector()}>
+            {/* Screen-space hit strips; corners are painted afterward and win overlaps. */}
+            <For each={resizeHandles.filter(isResizeEdge)}>
+              {(handle, index) => (
+                <Show when={edgeSegment(index())}>
+                  {(edge) => (
+                    <line
+                      data-graphics-handle={handle}
+                      role="img"
+                      aria-label={`Resize ${handle}`}
+                      x1={edge().start.x}
+                      y1={edge().start.y}
+                      x2={edge().end.x}
+                      y2={edge().end.y}
+                      stroke="transparent"
+                      stroke-width="10"
+                      style={{
+                        'pointer-events': 'stroke',
+                        cursor: resizeCursor(handle, frame()),
+                      }}
+                    />
+                  )}
+                </Show>
+              )}
+            </For>
+            <For each={resizeHandles.filter((handle) => !isResizeEdge(handle))}>
+              {(handle, index) => (
+                <Show when={handleCorners()[index()]}>
+                  {(point) => (
+                    <rect
+                      data-graphics-handle={handle}
+                      role="img"
+                      aria-label={`Resize ${handle}`}
+                      x={point().x - 5}
+                      y={point().y - 5}
+                      width="10"
+                      height="10"
+                      rx="0"
+                      fill="white"
+                      stroke="#5687ff"
+                      style={{
+                        'pointer-events': 'all',
+                        cursor: resizeCursor(handle, frame()),
+                      }}
+                    />
+                  )}
+                </Show>
+              )}
+            </For>
+            <Show when={rotationHandle()}>
+              {(handle) => (
+                <circle
+                  data-graphics-handle="rotate"
+                  role="img"
+                  aria-label="Rotate selection"
+                  cx={handle().x}
+                  cy={handle().y}
+                  r="6"
+                  fill="white"
+                  stroke="#5687ff"
+                  style={{ 'pointer-events': 'all', cursor: 'grab' }}
+                />
+              )}
+            </Show>
           </Show>
         </Show>
         <Show when={projection.session().box}>
@@ -361,6 +500,7 @@ export function GraphicsSurface(props: {
           )}
         </Show>
       </svg>
+      {props.children}
     </div>
   );
 }

@@ -28,6 +28,7 @@ export function registerCanvasNextHotkeys(
         description,
         proxiedHotkey,
         keyDownHandler: () => {
+          if (state.text.draft() || state.embeds.active()) return false;
           action();
           return true;
         },
@@ -46,7 +47,21 @@ export function registerCanvasNextHotkeys(
     () => state.chooseTool('rectangle'),
     TOKENS.canvas.shapeTool
   );
+  register('a', 'Arrow tool', () => state.chooseTool('arrow'));
+  register('c', 'Connector tool', () => state.chooseTool('connector'));
+  register('l', 'Line tool', () => state.chooseTool('line'));
+  register('t', 'Text tool', () => state.chooseTool('text'));
+  register('enter', 'Edit selected text', () => {
+    const id = editor.getSession().selectedId;
+    if (id) state.text.edit(id);
+  });
   register('o', 'Ellipse tool', () => state.chooseTool('ellipse'));
+  register(
+    'p',
+    'Pencil tool',
+    () => state.chooseTool('pencil'),
+    TOKENS.canvas.pencilTool
+  );
   register(
     'h',
     'Hand tool',

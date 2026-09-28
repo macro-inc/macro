@@ -954,12 +954,48 @@ Desktop channel and AI composers use an `Attach files` paperclip that opens the 
 Open `/app/component/canvas-next`. This local-only component is enabled by
 `USE_CANVAS_NEXT` (override with `VITE_USE_CANVAS_NEXT=false`); it lives inside
 `block-canvas/canvas-next` and uses the pure graphics core. It does not replace
-saved Canvas documents. Reset demo or reload restores the disposable seed.
+saved Canvas documents. Reset demo (in the bottom-left Canvas menu) or reload
+restores the disposable seed.
 
-Tools: V select, R rectangle, O ellipse, H hand; Space temporarily pans.
-Drawing selects the new shape and returns to Select. Shift-click/marquee adds
+The top-center drawing toolbar uses icon buttons with tooltips; it also contains
+Add media, Add document, and Add embed. The bottom-left Canvas navigation toolbar
+has Zoom out, the percentage (Reset zoom to 100%), Zoom in, Fit scene, Undo, and Redo.
+Fit scene centers the overall scene geometry in the current canvas viewport,
+independent of selection. It zooms in or out until the width or height fills the
+available space with 100 screen pixels of padding per side, within the camera's
+zoom limits. Padding shrinks for small embedded viewports.
+Adjacent Shape properties and Layers buttons toggle floating panels. Arrange controls
+in the properties panel are icon buttons with tooltips. Right-click the canvas for
+the standard app context menu: cut/copy/paste/duplicate, group/ungroup, the Arrange
+submenu, select all, and delete. Arrow keys navigate this menu; Escape dismisses it
+and returns focus to the canvas. Active embeds and rich-text editing keep their own
+context-menu behavior.
+
+Tools: V select, R rectangle, O ellipse, P pencil, H hand; Space temporarily pans.
+Hold Shift while drawing a rectangle or ellipse for a square or circle. Hold Shift
+while moving a selection to constrain movement horizontally or vertically along
+the dominant world axis, including Option-drag copies. Modifiers update live even
+when the pointer is stationary, and the modifier state on release controls the commit.
+Rectangle/ellipse creation selects the new shape and returns to Select. Pencil
+stays active for repeated strokes; V or Escape returns to selection. A tap creates
+a dot. Mouse movement controls thickness; pens supply pressure. Drawing is one
+undo step and Escape cancels pending ink. Pencil selection boxes enclose the
+smoothed ink; picking and marquee use the actual ink (3 screen px click tolerance),
+so gaps/empty loops remain clickable until the stroke is selected. Resize scales
+its samples and recalculates simulated pressure, retaining nominal brush width. Shift-click/marquee adds
 selection. Cmd/Ctrl-click selects within a group. Option/Alt-drag duplicates
 selected subtrees; Escape cancels without committing the copies.
+
+Single selected shapes retain their bounding boxes and also show a 1 screen px blue trace:
+the smoothed pencil centerline, rounded rectangle perimeter, or ellipse perimeter.
+In groups or multi-selections, rounded rectangles and ellipses show just their
+perimeter traces inside the shared selection box, without individual rectangular boxes.
+These traces include children of selected groups, track transform previews, and stay
+the same thickness through zoom and nested scaling without intercepting pointer input.
+With Select active, hovering shows this trace on the shape/group a click would
+select, without handles or a new box. Empty unfilled interiors still click through.
+Cmd/Ctrl previews a child within a group; Shift previews the additive selection target.
+Hover clears on pointer exit and hides while drawing, panning or transforming.
 
 Use Cmd/Ctrl+A/C/X/V/D for select all/copy/cut/paste/duplicate, arrows to nudge
 1 world unit (Shift: 10), Cmd/Ctrl+G to group and Shift+Cmd/Ctrl+G to ungroup.
@@ -973,7 +1009,9 @@ The grips stay square to the screen; edge cursors stay EW for sides and NS for
 top/bottom. Corners use diagonal arrows based on their world-space position relative
 to the selection center, including after rotation or a flip.
 Click-drag anywhere inside the selection box to move it, including
-gaps and unfilled interiors. Shift still toggles shapes; deep-select still picks children.
+gaps and unfilled interiors. Shift-click toggles on release; moving at least 3 screen
+pixels instead starts a constrained drag. An unselected target is added before moving.
+Shift-drag on empty canvas still adds a marquee; deep-select still picks children.
 Drag a side to change width, or top/bottom to change height; perpendicular pointer
 movement is ignored. A rotated single shape follows its local axes. Groups and
 multiple selections always have dashed, world-axis-aligned boxes; single shapes
@@ -995,7 +1033,8 @@ mixed selections show Mixed values. Group styling applies to descendant shapes.
 Styles also become creation defaults. Arrange offers six alignments, horizontal
 and vertical equal-gap distribution, grouping, and stable layer changes. The
 Layers list selects items; Shift-click toggles selection. Keyboard clipboard
-round-trips only Canvas Next shape/group fragments at this checkpoint.
+round-trips Canvas Next shape/group/rich-text fragments. Plain/HTML text pasted
+onto the canvas creates a text shape.
 
 Smoke test: draw each shape; select/group/copy/paste; verify originals remain and
 new items are selected; nudge by 1/10 units; Option-drag and cancel once, then commit
@@ -1129,3 +1168,107 @@ presence. Document update counts exclude cursor/selection/preview messages.
 Reset both peers recreates the scene and clears histories, selections and queued
 updates. Reload also resets everything. This is a local-only component registry
 demo: no document files, storage, SyncService, or backend data are created.
+
+### Canvas Next rich text (local)
+
+In `/app/component/canvas-next`, choose Text (T), then click empty space for
+auto-width text or drag horizontally for a wrapped box. Type normally. Use the
+Text formatting toolbar for inline marks, headings/quotes, lists, links and
+alignment; the left inspector controls font family/size and auto width.
+Double-click a text shape, or select it and press Enter, to reopen its editor.
+Escape, Cmd/Ctrl+Enter, Done, or clicking elsewhere commits one canvas history
+entry. Inside the editor, Cmd/Ctrl+Z undoes typing without undoing canvas shapes.
+Empty drafts leave no item. Side edges wrap text without changing font size;
+corners scale it proportionally. Text can be copied, duplicated, grouped, layered
+and transformed with other shapes. Only the active editor is contenteditable.
+While editing text or labels, the editing box has no outline; the caret and native
+text selection remain visible. Selection bounds return after finishing the edit.
+To label a rectangle or ellipse, double-click inside it (filled or unfilled), select
+it and press Enter, or choose T and click it. The same rich editor opens inside the
+shape; labels start centered and wrap to its interior. Smaller shapes uniformly fit
+the label. Font controls apply to the active or selected label. Clicking a label
+selects the shape; deleting all label text removes only the label. Copy/duplicate,
+grouping, rotation, and resizing keep it attached. Verify native text paste does not
+create an extra canvas item, and finished label edits undo in one canvas step.
+Text and labels now use the shared Markdown builder and store serialized Lexical
+JSON strings. Select text to expose the shared floating formatting toolbar; alignment
+and Done are above the canvas. The Loro adapter merges completed edits as one LWW
+string, separately from pose. Canvas Next is still local-only; Reload/Reset demo
+discards text and labels along with other shapes.
+
+Type `@` while editing text or a shape label to open the shared mention picker.
+Search and pick a person/document/reference using the mouse or arrows and Enter.
+Escape dismisses the picker without finishing the text edit. Verify the mention
+renders after Done, reopening, and shape copy/paste. Mention-only text is valid
+content. The local demo does not track references or send mention notifications.
+Task mention badges and avatars follow the text's font size. Verify a horizontal
+corner drag shrinks text smoothly, Option/Alt preserves the center, and a side-edge
+drag changes wrapping at a fixed font size. Corner scaling preserves line layout.
+
+### Canvas Next arrows and connectors (local)
+
+In `/app/component/canvas-next`, use A (Arrow), C (Connector), or L (Line), then drag
+between empty points or shapes. Only the hovered shape shows attachment targets:
+small white circles with blue borders at its center and four edge midpoints.
+The active point gets a larger pale-blue halo, before the initial click as well
+as while dragging either endpoint. Nearby edge points win; farther inside the
+shape's core, the center is active even for unfilled shapes. Leaving the shape
+hides its points. Hovering its rim away from a point shows no active halo.
+Center attachments automatically meet the shape outline. Side attachments retain
+that edge midpoint as the target moves, rotates or resizes.
+
+Select a connector to show its start/end circles. Drag either circle to reattach,
+or release over empty canvas to detach. Shift constrains a free end to 45-degree
+increments. Escape cancels without writing history. The Connector inspector offers
+Straight, Elbow and Smooth routes, and None, Arrow, Filled arrow, Dot and Small dot
+for both ends. Each completed endpoint drag is one undo step. Dragging the path
+moves free ends; bound ends stay attached.
+
+Check target movement during its preview, reconnecting either end, undo/redo, and
+copying connected shapes together. Copies should connect to copied targets; copying
+only a connector should detach it at its visible endpoints. Deleting a target
+leaves the connector in place, and undo restores its binding. Reset/reload discards
+all demo data. Connector labels and remote endpoint-drag awareness are not present.
+
+### Canvas Next media and document cards (local)
+
+In `/app/component/canvas-next`, Add media offers an upload input and a searchable
+list of existing workspace images/videos. Selecting an existing file inserts its
+reference without uploading again. File drop and pasted images use the same
+insertion path; uploads go to the existing static-file service. The scene itself
+remains disposable. Select a video and use Play/Pause video in the inspector.
+
+Add document inserts workspace files as compact 340 × 136 preview cards, one
+surface layer above the canvas and at the front of the scene. Select a card and
+use Open document to navigate to its source. Preview text stays at `text-base`
+when resizing; titles and controls are clickable, and dragging its background
+moves the card. While loading, the card keeps its frame and shows a pulsing icon
+dot plus two text skeleton lines in the header positions; shared DocumentPreview
+popups use the same skeleton. Workspace entity drops insert
+images/videos or document cards as appropriate; pasted Macro links create cards.
+
+Verify move/resize/rotate/flip, grouping, layer order, copy/paste and undo work for
+these items; failures show in the status line or the individual preview. Reset demo
+cancels pending insertion. Reload resets the scene and does not delete any uploaded
+file. SVG files render as media, not editable imported shapes.
+
+
+### Canvas Next full embeds (local)
+
+Add embed lists existing Markdown documents and canvases. Insert one, then choose
+Interact (or double-click the inactive editor) to use its full editor inside the
+card. Done, Escape, or clicking elsewhere on the outer canvas exits interaction.
+The inspector switches a supported reference between preview and full embed.
+Verify that embedded clicks, text selection, scrolling, and clipboard shortcuts
+do not move or paste into the outer canvas. Verify resizing reflows the viewport,
+enter/exit preserves the mounted editor, and undo/copy preserve the reference and
+presentation. Preview title and Reference actions should work even with the card
+selected; a transparent selection overlay must not intercept them.
+
+These are real existing editors using their existing permissions and sync. Edits
+inside an embed change the source file; use disposable test files for edit tests.
+The outer Canvas Next scene still resets on reload. Supported full embeds are
+currently Markdown and existing Canvas documents.
+
+Legacy canvas drawing under outer zoom/rotation/flip still needs coordinate-mapping
+work. Do not treat the successful mount/pan checks as transformed drawing coverage.

@@ -2,10 +2,10 @@ import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHe
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import {
   createGraphicsEditor,
+  type DrawingKind,
   drawableIds,
   type GraphicsDocument,
   roots,
-  type ShapeKind,
   shapeDefinitions,
   shapeKinds,
 } from '@macro-inc/graphics';
@@ -27,7 +27,7 @@ export default function GraphicsPlayground(
   const seedScene = props.seedScene ?? createGraphicsTestScene;
   const editor = createGraphicsEditor(seedScene());
   onCleanup(editor.dispose);
-  const [tool, setTool] = createSignal<'select' | ShapeKind>('select');
+  const [tool, setTool] = createSignal<'select' | DrawingKind>('select');
   const { camera, document, session } = createGraphicsProjection(editor);
   const canGroup = () => {
     const nodes = roots(document, session().selectedIds).map(
@@ -85,7 +85,19 @@ export default function GraphicsPlayground(
           <span class="hidden text-xs text-ink-muted @2xl:block">
             Scroll to pan · Space + drag · Circle handle to rotate
           </span>
-          <For each={['select', ...shapeKinds] as const}>
+          <For
+            each={
+              [
+                'select',
+                ...shapeKinds.filter(
+                  (kind) =>
+                    kind === 'rectangle' ||
+                    kind === 'ellipse' ||
+                    kind === 'pencil'
+                ),
+              ] as const
+            }
+          >
             {(value) => (
               <button
                 type="button"

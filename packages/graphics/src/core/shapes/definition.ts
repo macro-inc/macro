@@ -6,6 +6,8 @@ import type {
   ShapeItem,
   ShapeKind,
 } from '../model';
+import type { ResizeHandle } from '../resize';
+import type { TextMeasurer } from './text';
 
 export type HitTestContext = Readonly<{
   worldTransform: Matrix;
@@ -15,8 +17,12 @@ export type HitTestContext = Readonly<{
 export type ShapeDefinition<K extends ShapeKind> = Readonly<{
   type: K;
   label: string;
+  /** False keeps mixed selections uniform, preserving typographic proportions. */
+  canDeform?: boolean;
+  /** Regenerate ink instead of magnifying its brush during group scaling. */
+  regenerateOnScale?: boolean;
   validateGeometry(value: unknown): value is ShapeGeometryMap[K];
-  createGeometry(bounds: Bounds): ShapeGeometryMap[K];
+  freezeGeometry(geometry: ShapeGeometryMap[K]): ShapeGeometryMap[K];
   bounds(item: ShapeItem<K>): Bounds;
   hitTest(
     item: ShapeItem<K>,
@@ -28,7 +34,12 @@ export type ShapeDefinition<K extends ShapeKind> = Readonly<{
     worldTransform: Matrix,
     box: Bounds
   ): boolean;
-  /** Map geometry into the new local bounds; caller moves the local origin. */
-  resize(item: ShapeItem<K>, size: Bounds): ShapeItem<K>;
+  /** Resize about the local origin. The caller supplies positive bounds sizes
+   * and handles translation/reflection. Brush-based shapes regenerate their ink. */
+  resize(
+    item: ShapeItem<K>,
+    size: Bounds,
+    context?: { handle?: ResizeHandle; measureText?: TextMeasurer }
+  ): ShapeItem<K>;
   sameGeometry(a: ShapeItem<K>, b: ShapeItem<K>): boolean;
 }>;

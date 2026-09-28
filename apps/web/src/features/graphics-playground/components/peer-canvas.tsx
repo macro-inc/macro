@@ -1,8 +1,8 @@
 import {
+  type DrawingKind,
   type GraphicsEditor,
   isShape,
   paintOrder,
-  type ShapeKind,
 } from '@macro-inc/graphics';
 import type { GraphicsPresence } from '@macro-inc/graphics/loro';
 import { CollaborativeGraphicsSurface } from '@macro-inc/graphics/loro/solid';
@@ -15,7 +15,7 @@ export function PeerCanvas(props: {
   editor: GraphicsEditor;
   presence: GraphicsPresence;
 }) {
-  const [tool, setTool] = createSignal<'select' | ShapeKind>('select');
+  const [tool, setTool] = createSignal<'select' | DrawingKind>('select');
   const { document, session, camera } = createGraphicsProjection(props.editor);
   let host!: HTMLDivElement;
   const fit = () =>

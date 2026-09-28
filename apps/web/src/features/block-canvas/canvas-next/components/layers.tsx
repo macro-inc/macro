@@ -1,5 +1,28 @@
 import { children, type GraphicsDocument } from '@macro-inc/graphics';
+import ArrowUpRight from '@phosphor/arrow-up-right.svg';
+import BoundingBox from '@phosphor/bounding-box.svg';
+import Circle from '@phosphor/circle.svg';
+import File from '@phosphor/file.svg';
+import Image from '@phosphor/image.svg';
+import Pencil from '@phosphor/pencil-simple.svg';
+import Rectangle from '@phosphor/rectangle.svg';
+import Text from '@phosphor/text-t.svg';
+import Video from '@phosphor/video.svg';
 import { For } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+
+const icons = {
+  surface: BoundingBox,
+  group: BoundingBox,
+  ellipse: Circle,
+  text: Text,
+  pencil: Pencil,
+  connector: ArrowUpRight,
+  rectangle: Rectangle,
+  image: Image,
+  video: Video,
+  document: File,
+};
 
 export function CanvasLayers(props: {
   document: GraphicsDocument;
@@ -33,13 +56,13 @@ export function CanvasLayers(props: {
             data-selected={props.selected.includes(entry.id)}
             style={{ 'padding-left': `${8 + entry.depth * 12}px` }}
           >
-            <span aria-hidden="true">
-              {props.document.items[entry.id]?.type === 'group'
-                ? '▣'
-                : props.document.items[entry.id]?.type === 'ellipse'
-                  ? '○'
-                  : '□'}
-            </span>
+            <Dynamic
+              component={
+                icons[props.document.items[entry.id]?.type ?? 'rectangle']
+              }
+              class="size-4 shrink-0"
+              aria-hidden="true"
+            />
             <span class="capitalize">
               {props.document.items[entry.id]?.type}
             </span>

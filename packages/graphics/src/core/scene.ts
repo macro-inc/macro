@@ -8,6 +8,7 @@ import {
   transformPoint,
 } from './affine';
 import { validAppearance } from './appearance';
+import { resolveConnector, retainConnectorBindings } from './connectors';
 import type { Bounds, GraphicsDocument, GraphicsItem, Point } from './model';
 import {
   children,
@@ -47,6 +48,18 @@ export function worldMatrix(
         node.transform
       );
 }
+/** Geometry projection for scene-dependent features such as bound connectors. */
+export function resolvedShape(
+  doc: GraphicsDocument,
+  id: string,
+  overrides: SceneOverrides = {}
+) {
+  const node = overrides[id] ?? doc.items[id];
+  if (!isShape(node)) return;
+  return node.type === 'connector'
+    ? resolveConnector(doc, node, overrides)
+    : node;
+}
 export function nodeCorners(
   doc: GraphicsDocument,
   id: string,
@@ -55,9 +68,9 @@ export function nodeCorners(
   const node = Object.hasOwn(overrides, id) ? overrides[id] : doc.items[id];
   if (!node) return [];
   if (isShape(node))
-    return corners(shapeDefinition(node.type).bounds(node)).map((p) =>
-      transformPoint(worldMatrix(doc, id, overrides), p)
-    );
+    return corners(
+      shapeDefinition(node.type).bounds(resolvedShape(doc, id, overrides)!)
+    ).map((p) => transformPoint(worldMatrix(doc, id, overrides), p));
   return children(doc, id).flatMap((child) =>
     nodeCorners(doc, child, overrides)
   );
@@ -101,7 +114,7 @@ export function hitTest(
   tolerance = 0
 ): string | undefined {
   for (const id of [...drawableIds(doc)].reverse()) {
-    const node = doc.items[id];
+    const node = resolvedShape(doc, id);
     if (
       isShape(node) &&
       shapeDefinition(node.type).hitTest(
@@ -118,7 +131,7 @@ export function boxHits(doc: GraphicsDocument, box: Bounds): readonly string[] {
     ...new Set(
       drawableIds(doc)
         .filter((id) => {
-          const node = doc.items[id];
+          const node = resolvedShape(doc, id);
           return (
             isShape(node) &&
             shapeDefinition(node.type).intersectsBox(
@@ -140,7 +153,7 @@ export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
   for (const [id, node] of Object.entries(doc.items)) {
     if (
       !node ||
-      !['surface', 'group', 'rectangle', 'ellipse'].includes(node.type)
+      (node.type !== 'surface' && node.type !== 'group' && !isShape(node))
     )
       throw new Error('Invalid node type');
     if (id !== node.id) throw new Error('Node identity mismatch');
@@ -184,13 +197,24 @@ export function freezeDocument(doc: GraphicsDocument): GraphicsDocument {
       !shapeDefinition(node.type).validateGeometry(node.geometry)
     )
       throw new Error(`Invalid ${node.type} geometry`);
+    if (node.type === 'connector') {
+      for (const end of [node.geometry.start, node.geometry.end]) {
+        if (!end.binding) continue;
+        const target = doc.items[end.binding.targetId];
+        if (
+          end.binding.targetId === id ||
+          (target && (!isShape(target) || target.type === 'connector'))
+        )
+          throw new Error('Invalid connector target');
+      }
+    }
     const frozen = Object.freeze({
       ...node,
       placement: Object.freeze({ ...node.placement }),
       transform: Object.freeze([...node.transform]) as Matrix,
       ...(isShape(node)
         ? {
-            geometry: Object.freeze({ ...node.geometry }),
+            geometry: shapeDefinition(node.type).freezeGeometry(node.geometry),
             appearance: Object.freeze({ ...node.appearance }),
           }
         : {}),
@@ -235,10 +259,20 @@ export function deleteSubtrees(
     for (const child of children(doc, id)) visit(child);
   };
   for (const id of roots(doc, ids)) visit(id);
+  const retained = new Set(
+    Object.keys(doc.items).filter((id) => !removed.has(id))
+  );
   return freezeDocument({
     ...doc,
     items: Object.fromEntries(
-      Object.entries(doc.items).filter(([id]) => !removed.has(id))
+      Object.entries(doc.items)
+        .filter(([id]) => retained.has(id))
+        .map(([id, item]) => [
+          id,
+          item.type === 'connector'
+            ? retainConnectorBindings(doc, item, retained)
+            : item,
+        ])
     ),
   });
 }

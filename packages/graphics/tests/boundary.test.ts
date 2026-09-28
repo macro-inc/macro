@@ -24,6 +24,10 @@ it('keeps the transitive core import graph inside the framework-free core', () =
         ts.isStringLiteral(node.moduleSpecifier)
       ) {
         const specifier = node.moduleSpecifier.text;
+        if (specifier === 'perfect-freehand') {
+          expect(file).toBe('shapes/pencil.ts');
+          return;
+        }
         if (specifier === 'fractional-indexing') {
           expect(file).toBe('ordering.ts');
           return;

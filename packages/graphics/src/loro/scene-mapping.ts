@@ -7,7 +7,12 @@ import {
   sameMatrix,
 } from '../core/affine';
 import { resolveAppearance } from '../core/appearance';
-import type { GraphicsDocument, GraphicsItem, ShapeKind } from '../core/model';
+import type {
+  GraphicsDocument,
+  GraphicsItem,
+  ShapeGeometryMap,
+  ShapeKind,
+} from '../core/model';
 import { sortKeysBetween } from '../core/ordering';
 import {
   children,
@@ -16,7 +21,8 @@ import {
   roots,
   worldMatrix,
 } from '../core/scene';
-import { isShape } from '../core/shapes/registry';
+import { canLabel, type ShapeLabel } from '../core/shapes/label';
+import { isShape, shapePayload } from '../core/shapes/registry';
 
 /** Experimental merge unit: geometry and its coordinate frame always win together. */
 export type NodeData = {
@@ -26,8 +32,11 @@ export type NodeData = {
     parentId: string;
     transform: Matrix;
     world: Matrix;
-    geometry: { width: number; height: number } | null;
+    geometry: ShapeGeometryMap[ShapeKind] | null;
   };
+  /** One LWW string, deliberately not a LoroText or nested CRDT tree. */
+  textContent: string | null;
+  labelStyle: Omit<ShapeLabel, 'content'> | null;
   fill: string;
   stroke: string;
   strokeWidth: number;
@@ -71,8 +80,15 @@ export function readScene(tree: LoroTree<NodeData>, rootId: string) {
           throw new Error('Invalid shared shape');
         items[id] = {
           ...spatial,
-          type: kind,
-          geometry: pose.geometry,
+          ...shapePayload(
+            kind,
+            restoreText(
+              kind,
+              pose.geometry,
+              node.data.get('textContent') ?? null,
+              node.data.get('labelStyle') ?? null
+            )
+          ),
           appearance: {
             fill,
             stroke,
@@ -89,6 +105,40 @@ export function readScene(tree: LoroTree<NodeData>, rootId: string) {
   return { document: freezeDocument({ rootId, items }), frameConflicts };
 }
 
+function textContent(node: GraphicsItem | undefined): string | null {
+  if (node?.type === 'text') return node.geometry.content;
+  return canLabel(node) ? (node.geometry.label?.content ?? null) : null;
+}
+/** Pose and text use separate map registers, so a move cannot overwrite typing. */
+function poseGeometry(node: GraphicsItem | undefined) {
+  if (!isShape(node)) return null;
+  if (node.type === 'text') return { ...node.geometry, content: '' };
+  if (canLabel(node)) {
+    const { label: _label, ...box } = node.geometry;
+    return box;
+  }
+  return node.geometry;
+}
+function restoreText(
+  kind: ShapeKind,
+  geometry: ShapeGeometryMap[ShapeKind],
+  content: string | null,
+  labelStyle: NodeData['labelStyle']
+) {
+  if (kind === 'text') return { ...geometry, content };
+  if (kind === 'rectangle' || kind === 'ellipse')
+    return content !== null && labelStyle
+      ? { ...geometry, label: { ...labelStyle, content } }
+      : geometry;
+  return geometry;
+}
+
+function labelStyle(node: GraphicsItem | undefined): NodeData['labelStyle'] {
+  if (!canLabel(node) || !node.geometry.label) return null;
+  const { content: _content, ...style } = node.geometry.label;
+  return style;
+}
+
 function writeNodeData(
   handle: LoroTreeNode<NodeData>,
   node: Exclude<GraphicsItem, { type: 'surface' }>,
@@ -96,8 +146,15 @@ function writeNodeData(
   next: GraphicsDocument,
   parentChanged: boolean
 ) {
-  const geometry = isShape(node) ? node.geometry : null;
-  const oldGeometry = isShape(old) ? old.geometry : null;
+  const geometry = poseGeometry(node);
+  const oldGeometry = poseGeometry(old);
+  if (!old || textContent(node) !== textContent(old))
+    handle.data.set('textContent', textContent(node));
+  if (
+    !old ||
+    JSON.stringify(labelStyle(node)) !== JSON.stringify(labelStyle(old))
+  )
+    handle.data.set('labelStyle', labelStyle(node));
   if (
     !old ||
     old.type === 'surface' ||

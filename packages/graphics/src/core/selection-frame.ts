@@ -11,6 +11,7 @@ import type { Bounds, GraphicsDocument, Point } from './model';
 import {
   children,
   nodeCorners,
+  resolvedShape,
   roots,
   type SceneOverrides,
   worldMatrix,
@@ -49,9 +50,14 @@ export function selectionFrame(
   const points = selected.flatMap((id) => nodeCorners(document, id, overrides));
   if (!points.length) return undefined;
   const bounds = singleShape
-    ? shapeDefinition(first.type).bounds(first)
+    ? shapeDefinition(first.type).bounds(
+        resolvedShape(document, firstId, overrides)!
+      )
     : enclosing(points.map((point) => transformPoint(fromWorld, point)));
   const compatible = (id: string): boolean => {
+    const item = overrides[id] ?? document.items[id];
+    if (isShape(item) && shapeDefinition(item.type).canDeform === false)
+      return false;
     const matrix = multiply(fromWorld, worldMatrix(document, id, overrides));
     const x = Math.hypot(matrix[0], matrix[1]);
     const y = Math.hypot(matrix[2], matrix[3]);

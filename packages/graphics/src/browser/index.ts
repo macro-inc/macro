@@ -1,6 +1,7 @@
 import { screenToWorld } from '../core/camera';
+import type { DrawingKind } from '../core/drawing';
 import type { GraphicsEditor } from '../core/editor';
-import type { Appearance, ShapeKind } from '../core/model';
+import type { Appearance, Point } from '../core/model';
 import {
   isResizeHandle,
   type ResizeHandle,
@@ -12,6 +13,7 @@ import {
   selectionFrame,
 } from '../core/selection-frame';
 import { isShapeKind } from '../core/shapes/registry';
+import { selectionTarget } from './selection-target';
 
 export { type LocalImage, loadLocalImage } from './local-image';
 
@@ -27,14 +29,25 @@ export function resizeCursor(handle: ResizeHandle, frame?: SelectionFrame) {
   return descending ? 'nwse-resize' : 'nesw-resize';
 }
 
+export type GraphicsHover = Readonly<{
+  point: Point;
+  deep: boolean;
+  additive: boolean;
+  handle: boolean;
+}>;
 export type GraphicsInputOptions = {
-  tool?: () => 'pan' | ShapeKind | 'select';
+  tool?: () => 'pan' | DrawingKind | 'select';
   editing?: boolean;
+  suspended?: () => boolean;
+  /** Host-owned controls may keep their pointer events without starting a gesture. */
+  ignoreTarget?: (target: EventTarget | null) => boolean;
   duplicateOnAltDrag?: boolean;
   onShapeCreated?: (id: string) => void;
   navigation?: 'free' | 'centered-image';
   createId?: () => string;
   appearance?: () => Appearance;
+  /** Local viewport position and picking modifiers; never document/awareness state. */
+  onHover?: (hover: GraphicsHover | undefined) => void;
 };
 
 /** Attach camera controls to a focusable viewport. No document-global keyboard shortcuts. */
@@ -49,11 +62,54 @@ export function attachCameraControls(
         id: number;
         x: number;
         y: number;
-        mode: 'pan' | 'shape' | 'transform' | 'box';
+        mode: 'pan' | 'shape' | 'transform' | 'box' | 'select';
         cursor?: string;
       }
     | undefined;
+  let pendingSelection:
+    | {
+        id: string;
+        point: Point;
+        toggle: boolean;
+        duplicate?: () => string;
+      }
+    | undefined;
   const originalCursor = element.style.cursor;
+  let hoverPointer: PointerEvent | undefined;
+  const clearHover = () => {
+    hoverPointer = undefined;
+    options.onHover?.(undefined);
+  };
+  const updateHover = (
+    modifiers: Pick<PointerEvent, 'altKey' | 'metaKey' | 'ctrlKey' | 'shiftKey'>
+  ) => {
+    const event = hoverPointer;
+    if (
+      !event ||
+      drag ||
+      space ||
+      event.buttons ||
+      event.pointerType === 'touch'
+    ) {
+      options.onHover?.(undefined);
+      return;
+    }
+    const rect = element.getBoundingClientRect();
+    options.onHover?.({
+      point: { x: event.clientX - rect.left, y: event.clientY - rect.top },
+      deep: options.duplicateOnAltDrag
+        ? modifiers.metaKey || modifiers.ctrlKey
+        : modifiers.altKey,
+      additive: modifiers.shiftKey,
+      handle:
+        event.target instanceof Element &&
+        !!event.target.closest('[data-graphics-handle]'),
+    });
+  };
+  const pointerHover = (event: PointerEvent) => {
+    hoverPointer = event;
+    updateHover(event);
+  };
 
   const updateCursor = () => {
     element.style.cursor =
@@ -68,8 +124,10 @@ export function attachCameraControls(
               : originalCursor;
   };
   const cancel = () => {
+    clearHover();
     const id = drag?.id;
     drag = undefined;
+    pendingSelection = undefined;
     window.removeEventListener('pointermove', pointerMove, true);
     window.removeEventListener('pointerup', pointerUp, true);
     window.removeEventListener('pointercancel', pointerEnd, true);
@@ -87,26 +145,51 @@ export function attachCameraControls(
       y: event.clientY - rect.top,
     });
   };
+  const sample = (event: PointerEvent) => ({
+    ...worldPoint(event),
+    ...(event.pointerType === 'pen' && Number.isFinite(event.pressure)
+      ? { pressure: event.pressure }
+      : {}),
+  });
+  const updateDrawing = (event: PointerEvent) => {
+    const coalesced = event.getCoalescedEvents?.() ?? [];
+    editor.updateDrawing((coalesced.length ? coalesced : [event]).map(sample), {
+      proportional: event.shiftKey,
+    });
+  };
   const transformModifiers = (
     event: Pick<PointerEvent, 'shiftKey' | 'altKey'>
   ) => ({
     proportional: event.shiftKey,
     fromCenter: event.altKey,
     snapRotation: event.shiftKey,
+    constrainAxis: event.shiftKey,
   });
   const updateModifierPreview = (event: KeyboardEvent) => {
-    if (
-      drag?.mode !== 'transform' ||
-      (event.key !== 'Shift' && event.key !== 'Alt')
-    )
-      return;
-    event.preventDefault();
-    editor.updateTransform(
-      worldPoint({ clientX: drag.x, clientY: drag.y }),
-      transformModifiers(event)
-    );
+    if (!drag || (event.key !== 'Shift' && event.key !== 'Alt')) return;
+    if (drag.mode === 'transform') {
+      event.preventDefault();
+      editor.updateTransform(
+        worldPoint({ clientX: drag.x, clientY: drag.y }),
+        transformModifiers(event)
+      );
+    } else if (
+      drag.mode === 'shape' &&
+      editor.getDrawingKind() !== 'pencil' &&
+      event.key === 'Shift'
+    ) {
+      event.preventDefault();
+      editor.updateDrawing([], { proportional: event.shiftKey });
+    }
   };
   const pointerDown = (event: PointerEvent) => {
+    if (
+      options.suspended?.() ||
+      options.ignoreTarget?.(event.target) ||
+      (event.target instanceof Element &&
+        event.target.closest('[contenteditable="true"]'))
+    )
+      return;
     if (
       event.target !== element &&
       !(
@@ -118,6 +201,7 @@ export function attachCameraControls(
     )
       return;
     element.focus({ preventScroll: true });
+    clearHover();
     if (drag) return;
     const pan =
       options.navigation !== 'centered-image' &&
@@ -145,29 +229,40 @@ export function attachCameraControls(
         editor.document,
         editor.getSession().selectedIds
       );
-      // Shift still toggles/adds to selection, and the deep-select modifier
-      // still picks children. Ordinary clicks anywhere inside move the selection.
-      const insideSelection =
-        !event.shiftKey &&
-        !deep &&
-        frame &&
-        selectionContainsPoint(frame, point);
-      const id =
-        transformHandle || insideSelection
-          ? editor.getSession().selectedIds[0]
-          : editor.hitTest(point, deep);
+      const id = selectionTarget(
+        editor.document,
+        editor.getSession().selectedIds,
+        point,
+        {
+          deep,
+          additive: event.shiftKey,
+          handle: !!transformHandle,
+          tolerance: 3 / editor.getCamera().scale,
+        }
+      );
       cursor =
         transformHandle === 'rotate'
           ? 'grabbing'
           : transformHandle
             ? resizeCursor(transformHandle, frame)
             : 'move';
-      if (id && event.shiftKey && !transformHandle) {
-        event.preventDefault();
-        editor.toggleSelection(id);
-        return;
-      }
-      if (id)
+      const shiftTarget =
+        id ??
+        (!deep && frame && selectionContainsPoint(frame, point)
+          ? editor.getSession().selectedIds[0]
+          : undefined);
+      if (shiftTarget && event.shiftKey && !transformHandle) {
+        // Defer Shift-click toggling until release so Shift-drag can move instead.
+        pendingSelection = {
+          id: shiftTarget,
+          point,
+          toggle: !!id,
+          duplicate:
+            options.duplicateOnAltDrag && event.altKey
+              ? (options.createId ?? (() => crypto.randomUUID()))
+              : undefined,
+        };
+      } else if (id)
         transforming = editor.beginTransform(
           id,
           worldPoint(event),
@@ -178,12 +273,9 @@ export function attachCameraControls(
         );
       else boxing = editor.beginBoxSelection(worldPoint(event), event.shiftKey);
     }
-    if (!pan && !drawing && !transforming && !boxing) return;
-    if (
-      drawing &&
-      isShapeKind(tool) &&
-      !editor.beginShape(tool, worldPoint(event))
-    )
+    if (!pan && !drawing && !transforming && !boxing && !pendingSelection)
+      return;
+    if (drawing && isShapeKind(tool) && !editor.beginShape(tool, sample(event)))
       return;
     event.preventDefault();
     element.setPointerCapture(event.pointerId);
@@ -191,7 +283,15 @@ export function attachCameraControls(
       id: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      mode: pan ? 'pan' : transforming ? 'transform' : boxing ? 'box' : 'shape',
+      mode: pan
+        ? 'pan'
+        : pendingSelection
+          ? 'select'
+          : transforming
+            ? 'transform'
+            : boxing
+              ? 'box'
+              : 'shape',
       cursor,
     };
     // Capture can be lost before pointerup. Keep ownership of this pointer until
@@ -203,7 +303,31 @@ export function attachCameraControls(
   };
   const pointerMove = (event: PointerEvent) => {
     if (!drag || drag.id !== event.pointerId) return;
-    if (drag.mode === 'shape') editor.updateShape(worldPoint(event));
+    if (drag.mode === 'select') {
+      const pending = pendingSelection;
+      if (
+        !pending ||
+        Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 3
+      )
+        return;
+      if (!editor.getSession().selectedIds.includes(pending.id))
+        editor.toggleSelection(pending.id);
+      if (
+        !editor.beginTransform(
+          pending.id,
+          pending.point,
+          undefined,
+          pending.duplicate
+        )
+      ) {
+        cancel();
+        return;
+      }
+      pendingSelection = undefined;
+      drag = { ...drag, mode: 'transform' };
+      updateCursor();
+    }
+    if (drag.mode === 'shape') updateDrawing(event);
     else if (drag.mode === 'box') editor.updateBoxSelection(worldPoint(event));
     else if (drag.mode === 'transform')
       editor.updateTransform(worldPoint(event), transformModifiers(event));
@@ -215,6 +339,10 @@ export function attachCameraControls(
   };
   const pointerUp = (event: PointerEvent) => {
     if (drag?.id !== event.pointerId) return;
+    if (drag.mode === 'select') pointerMove(event);
+    if (!drag) return;
+    if (drag.mode === 'select' && pendingSelection?.toggle)
+      editor.toggleSelection(pendingSelection.id);
     if (drag.mode === 'box') {
       editor.updateBoxSelection(worldPoint(event));
       editor.commitBoxSelection();
@@ -224,7 +352,7 @@ export function attachCameraControls(
       editor.commitTransform();
     }
     if (drag.mode === 'shape') {
-      editor.updateShape(worldPoint(event));
+      updateDrawing(event);
       const id = options.createId?.() ?? crypto.randomUUID();
       const committed = editor.commitShape(
         id,
@@ -236,6 +364,7 @@ export function attachCameraControls(
     cancel();
   };
   const keyDown = (event: KeyboardEvent) => {
+    if (options.suspended?.()) return;
     if (event.target !== element) return;
     updateModifierPreview(event);
     if (event.code === 'Space' && options.navigation !== 'centered-image') {
@@ -270,6 +399,7 @@ export function attachCameraControls(
     }
   };
   const wheel = (event: WheelEvent) => {
+    if (options.suspended?.()) return;
     event.preventDefault();
     if (drag) return;
     const rect = element.getBoundingClientRect();
@@ -296,19 +426,37 @@ export function attachCameraControls(
     }
   };
   element.addEventListener('pointerdown', pointerDown);
+  element.addEventListener('pointermove', pointerHover);
+  element.addEventListener('pointerup', pointerHover);
+  element.addEventListener('pointerleave', clearHover);
   element.addEventListener('keydown', keyDown);
   element.addEventListener('keyup', keyUp);
   element.addEventListener('blur', cancel);
   element.addEventListener('wheel', wheel, { passive: false });
   window.addEventListener('blur', cancel);
+  window.addEventListener('keydown', updateHover);
+  window.addEventListener('keyup', updateHover);
   return () => {
     cancel();
     element.removeEventListener('pointerdown', pointerDown);
+    element.removeEventListener('pointermove', pointerHover);
+    element.removeEventListener('pointerup', pointerHover);
+    element.removeEventListener('pointerleave', clearHover);
     element.removeEventListener('keydown', keyDown);
     element.removeEventListener('keyup', keyUp);
     element.removeEventListener('blur', cancel);
     element.removeEventListener('wheel', wheel);
     window.removeEventListener('blur', cancel);
+    window.removeEventListener('keydown', updateHover);
+    window.removeEventListener('keyup', updateHover);
     element.style.cursor = originalCursor;
   };
 }
+
+export { attachConnectorControls } from './connectors';
+export {
+  createTextMeasurer,
+  richTextHtml,
+  textFonts,
+  textLayoutStyle,
+} from './rich-text';

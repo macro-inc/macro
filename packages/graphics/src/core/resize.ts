@@ -31,7 +31,7 @@ export function resizeBox(
   bounds: Bounds,
   handle: ResizeHandle,
   delta: Point,
-  modifiers: ResizeModifiers
+  modifiers: ResizeModifiers & { proportionalFit?: 'project' }
 ): Readonly<{
   bounds: Bounds;
   transform: Matrix;
@@ -62,7 +62,12 @@ export function resizeBox(
       ? Math.abs(sx)
       : !horizontal
         ? Math.abs(sy)
-        : Math.max(Math.abs(sx), Math.abs(sy));
+        : modifiers.proportionalFit === 'project'
+          ? // Closest point on the aspect-ratio diagonal. Short text boxes must
+            // not amplify a small vertical pointer movement into a huge scale.
+            (Math.abs(sx) * extentX ** 2 + Math.abs(sy) * extentY ** 2) /
+            (extentX ** 2 + extentY ** 2)
+          : Math.max(Math.abs(sx), Math.abs(sy));
     sx = (sx < 0 ? -1 : 1) * factor;
     sy = (sy < 0 ? -1 : 1) * factor;
   }

@@ -16,14 +16,16 @@ import {
   boxHits,
   deleteSubtrees,
   nodeCorners,
+  resolvedShape,
   roots,
   type SceneOverrides,
   worldBounds,
   worldMatrix,
 } from './scene';
 import { type SelectionFrame, selectionFrame } from './selection-frame';
-import { isShape, shapeDefinition } from './shapes/registry';
-import { stretchShapes } from './stretch';
+import { isShape, shapeDefinition, shapePayload } from './shapes/registry';
+import type { TextMeasurer } from './shapes/text';
+import { regenerateScaledShapes, stretchShapes } from './stretch';
 
 export type {
   ResizeCorner,
@@ -33,7 +35,7 @@ export type {
 } from './resize';
 export type TransformHandle = ResizeHandle | 'rotate';
 export type TransformModifiers = ResizeModifiers &
-  Readonly<{ snapRotation?: boolean }>;
+  Readonly<{ snapRotation?: boolean; constrainAxis?: boolean }>;
 export type SelectionState = Readonly<{
   selectedId?: string;
   selectedIds: readonly string[];
@@ -48,6 +50,7 @@ export type SelectionState = Readonly<{
   }>;
 }>;
 export type SelectionHost = Readonly<{
+  measureText?: TextMeasurer;
   getDocument: () => GraphicsDocument;
   commitDocument: (document: GraphicsDocument) => void;
   cancelDrawing: () => void;
@@ -134,7 +137,7 @@ export function createSelection(host: SelectionHost) {
     if (disposed || !gesture || ![point.x, point.y].every(Number.isFinite))
       return;
     const { base, origin, handle, pivot, targets, id, frame } = gesture;
-    const node = base.items[id];
+    const node = resolvedShape(base, id) ?? base.items[id];
     const nodes: Record<string, GraphicsItem> = Object.create(null);
     if (
       handle &&
@@ -163,8 +166,11 @@ export function createSelection(host: SelectionHost) {
         multiply(resized.transform, fromWorld)
       );
       if (!proportional) {
-        Object.assign(nodes, stretchShapes(base, targets, delta));
-      } else
+        Object.assign(
+          nodes,
+          stretchShapes(base, targets, delta, host.measureText)
+        );
+      } else {
         for (const key of targets) {
           const item = base.items[key];
           if (!item || item.type === 'surface') continue;
@@ -176,6 +182,8 @@ export function createSelection(host: SelectionHost) {
             ),
           };
         }
+        regenerateScaledShapes(base, targets, nodes);
+      }
     } else if (handle && handle !== 'rotate') {
       if (!isShape(node)) return;
       const definition = shapeDefinition(node.type);
@@ -194,11 +202,17 @@ export function createSelection(host: SelectionHost) {
         localBounds,
         handle,
         { x: end.x - start.x, y: end.y - start.y },
-        modifiers
+        node.type === 'text' && handle !== 'e' && handle !== 'w'
+          ? { ...modifiers, proportional: true, proportionalFit: 'project' }
+          : modifiers
       );
       const { width, height } = resized.bounds;
       nodes[id] = {
-        ...definition.resize(node, { x: 0, y: 0, width, height }),
+        ...definition.resize(
+          node,
+          { x: 0, y: 0, width, height },
+          { handle, measureText: host.measureText }
+        ),
         transform: multiply(
           node.transform,
           multiply(
@@ -210,6 +224,7 @@ export function createSelection(host: SelectionHost) {
     } else {
       let dx = point.x - origin.x,
         dy = point.y - origin.y;
+      const horizontal = Math.abs(dx) >= Math.abs(dy);
       if (!handle && base.surface) {
         const bounds = enclosing(
           targets.flatMap((key) => nodeCorners(base, key))
@@ -222,6 +237,10 @@ export function createSelection(host: SelectionHost) {
           -bounds.y,
           Math.min(base.surface.height - bounds.y - bounds.height, dy)
         );
+      }
+      if (!handle && modifiers.constrainAxis) {
+        if (horizontal) dy = 0;
+        else dx = 0;
       }
       let delta = translation(dx, dy);
       if (handle === 'rotate') {
@@ -252,13 +271,25 @@ export function createSelection(host: SelectionHost) {
     }
     for (const [id, node] of Object.entries(nodes)) {
       if (node.type === 'surface') continue;
-      nodes[id] = Object.freeze({
-        ...node,
-        transform: Object.freeze([...node.transform]) as typeof node.transform,
-        ...(isShape(node)
-          ? { geometry: Object.freeze({ ...node.geometry }) }
-          : {}),
-      });
+      const original = base.items[id];
+      // Moving and rotating retain the validated, deeply frozen geometry.
+      // Cloning it here would invalidate derived ink on every pointer update.
+      const unchangedGeometry =
+        isShape(node) &&
+        isShape(original) &&
+        node.type === original.type &&
+        node.geometry === original.geometry;
+      const transform = Object.freeze([
+        ...node.transform,
+      ]) as typeof node.transform;
+      nodes[id] =
+        isShape(node) && !unchangedGeometry
+          ? Object.freeze({
+              ...node,
+              ...shapePayload(node.type, node.geometry),
+              transform,
+            })
+          : Object.freeze({ ...node, transform });
     }
     gesture = { ...gesture, nodes: Object.freeze(nodes) };
     emit();

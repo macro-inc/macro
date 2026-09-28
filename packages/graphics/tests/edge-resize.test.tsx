@@ -84,7 +84,12 @@ it.each(edges)(
     );
     const nodes = editor.getSession().transform!.nodes;
     const preview = nodes.a;
-    if (!isShape(preview)) throw new Error('Missing preview');
+    if (
+      !isShape(preview) ||
+      preview.type === 'pencil' ||
+      preview.type === 'connector'
+    )
+      throw new Error('Missing preview');
     expect(preview.geometry.width).toBeCloseTo(horizontal ? 125 : 100, 8);
     expect(preview.geometry.height).toBeCloseTo(horizontal ? 80 : 105, 8);
     const nextFixed = horizontal
@@ -225,9 +230,15 @@ it('locks a group to proportional resizing when a nested child has a different a
       .forEach((value, i) => expect(next[i]).toBeCloseTo(value * 2));
     expect(next[0] * next[2] + next[1] * next[3]).toBeCloseTo(0);
     const item = nodes[id] ?? before.items[id];
-    if (!isShape(item)) throw new Error('Missing preview');
+    if (!isShape(item) || item.type === 'pencil' || item.type === 'connector')
+      throw new Error('Missing preview');
     const original = before.items[id];
-    if (!isShape(original)) throw new Error('Missing source');
+    if (
+      !isShape(original) ||
+      original.type === 'pencil' ||
+      original.type === 'connector'
+    )
+      throw new Error('Missing source');
     const center = transformPoint(old, {
       x: original.geometry.width / 2,
       y: original.geometry.height / 2,

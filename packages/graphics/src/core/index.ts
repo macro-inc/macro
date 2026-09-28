@@ -11,13 +11,22 @@ export {
   zoomAt,
 } from './camera';
 export * from './commands';
+export * from './connector-commands';
+export {
+  type ConnectorGesture,
+  createConnectorInteraction,
+} from './connector-interaction';
+export * from './connectors';
+export type { DrawingKind, DrawingModifiers, DrawingSample } from './drawing';
 export {
   createGraphicsEditor,
   createGraphicsEditorFromBackend,
   type EditingSession,
   type GraphicsEditor,
+  type GraphicsEditorOptions,
 } from './editor';
 export * from './fragments';
+export * from './insert';
 export { type LayerOperation, reorderNodes } from './layering';
 export type {
   Appearance,
@@ -28,6 +37,7 @@ export type {
   GraphicsItem,
   GroupItem,
   ImageSurface,
+  PencilItem,
   Placement,
   Point,
   RectangleItem,
@@ -42,6 +52,7 @@ export {
   type SortKey,
   sortKeysBetween,
 } from './ordering';
+export * from './rich-text';
 export * from './scene';
 export type { TransformHandle, TransformModifiers } from './selection';
 export {
@@ -58,8 +69,36 @@ export {
   selectionContainsPoint,
   selectionFrame,
 } from './selection-frame';
+export {
+  type ConnectorAnchor,
+  type ConnectorBinding,
+  type ConnectorEndpoint,
+  type ConnectorGeometry,
+  connectorAnchors,
+  connectorDefinition,
+} from './shapes/connector';
+export {
+  type ConnectorHead,
+  type ConnectorRoute,
+  connectorHead,
+  connectorPath,
+} from './shapes/connector-routing';
 export type { HitTestContext, ShapeDefinition } from './shapes/definition';
 export { ellipseDefinition } from './shapes/ellipse';
+export * from './shapes/embedded';
+export {
+  canLabel,
+  type LabelShape,
+  measureShapeLabel,
+  type ShapeLabel,
+  shapeLabelLayout,
+  shapeLabelText,
+} from './shapes/label';
+export {
+  type PencilGeometry,
+  type PencilPoint,
+  pencilDefinition,
+} from './shapes/pencil';
 export { rectangleDefinition } from './shapes/rectangle';
 export {
   isShape,
@@ -68,4 +107,12 @@ export {
   shapeDefinitions,
   shapeKinds,
 } from './shapes/registry';
+export {
+  type TextFont,
+  type TextGeometry,
+  type TextMeasurer,
+  textDefinition,
+} from './shapes/text';
 export { selectedShapeIds } from './style-selection';
+export * from './text-commands';
+export { textTargetAt } from './text-target';

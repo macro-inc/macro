@@ -10,7 +10,9 @@ export function createGraphicsPeerLab(seed: GraphicsDocument) {
     createLoroGraphicsBackend(snapshot, '1', seed.rootId),
     createLoroGraphicsBackend(snapshot, '2', seed.rootId),
   ] as const;
-  const editors = backends.map(createGraphicsEditorFromBackend);
+  const editors = backends.map((backend) =>
+    createGraphicsEditorFromBackend(backend)
+  );
   const awareness = editors.map((editor, index) =>
     createGraphicsPresence(
       editor,

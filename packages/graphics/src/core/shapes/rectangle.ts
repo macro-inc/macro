@@ -1,26 +1,35 @@
 import { corners, intersects, transformPoint } from '../affine';
 import { resolveAppearance } from '../appearance';
-import {
-  type BoxGeometry,
-  boxGeometry,
-  sameBoxGeometry,
-  segmentDistance,
-  validBoxGeometry,
-} from './box-geometry';
+import { segmentDistance } from './box-geometry';
 import type { ShapeDefinition } from './definition';
+import {
+  freezeLabeledGeometry,
+  hitShapeLabel,
+  type LabeledGeometry,
+  resizeLabeledShape,
+  sameLabeledGeometry,
+  validLabeledGeometry,
+} from './label';
 
-export type RectangleGeometry = BoxGeometry;
+export type RectangleGeometry = LabeledGeometry;
 export const rectangleDefinition: ShapeDefinition<'rectangle'> = {
   type: 'rectangle',
   label: 'Rectangle',
-  validateGeometry: validBoxGeometry,
-  createGeometry: boxGeometry,
-  bounds: (item) => ({ x: 0, y: 0, ...item.geometry }),
-  resize: (item, size) => ({ ...item, geometry: boxGeometry(size) }),
-  sameGeometry: (a, b) => sameBoxGeometry(a.geometry, b.geometry),
+  validateGeometry: validLabeledGeometry,
+  freezeGeometry: freezeLabeledGeometry,
+  bounds: (item) => ({
+    x: 0,
+    y: 0,
+    width: item.geometry.width,
+    height: item.geometry.height,
+  }),
+  resize: (item, size, context) =>
+    resizeLabeledShape(item, size, context?.measureText),
+  sameGeometry: (a, b) => sameLabeledGeometry(a.geometry, b.geometry),
   hitTest: (item, p, { worldTransform, tolerance }) => {
     const style = resolveAppearance(item.appearance);
     if (style.opacity === 0) return false;
+    if (hitShapeLabel(item, p)) return true;
     const { width, height } = item.geometry;
     const radius = Math.min(style.cornerRadius, width / 2, height / 2);
     const dx = Math.abs(p.x - width / 2) - width / 2 + radius;

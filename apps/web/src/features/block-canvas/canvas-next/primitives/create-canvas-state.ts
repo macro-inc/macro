@@ -7,18 +7,32 @@ import {
   roots,
   type ShapeKind,
   selectedShapeIds,
+  type TextMeasurer,
 } from '@macro-inc/graphics';
 import { createGraphicsProjection } from '@macro-inc/graphics/solid';
 import { createSignal } from 'solid-js';
 import { initialAppearance } from '../core/seed-scene';
+import { createConnectorState } from './create-connector-state';
+import { createEmbedState } from './create-embed-state';
+import { createTextState } from './create-text-state';
 
-export type CanvasTool = 'select' | 'pan' | ShapeKind;
+export type CanvasTool =
+  | 'select'
+  | 'pan'
+  | 'arrow'
+  | 'line'
+  | Exclude<ShapeKind, 'image' | 'video' | 'document'>;
 export type CanvasState = ReturnType<typeof createCanvasState>;
 
-export function createCanvasState(editor: GraphicsEditor) {
+export function createCanvasState(
+  editor: GraphicsEditor,
+  measureText: TextMeasurer
+) {
   const projection = createGraphicsProjection(editor);
   const [tool, setTool] = createSignal<CanvasTool>('select');
   const [defaults, setDefaults] = createSignal(initialAppearance);
+  const text = createTextState(editor, measureText, defaults);
+  const connector = createConnectorState(editor);
   const [notice, setNotice] = createSignal('Ready');
   const selection = () =>
     roots(projection.document, projection.session().selectedIds);
@@ -35,10 +49,18 @@ export function createCanvasState(editor: GraphicsEditor) {
     return values.every((value) => value === values[0]) ? values[0] : undefined;
   }
   const chooseTool = (next: CanvasTool) => {
+    embeds.exit();
+    text.finish();
+    connector.interaction.cancel();
+    if (next === 'arrow' || next === 'line' || next === 'connector')
+      connector.preset(next);
     editor.cancelShape();
     editor.cancelTransform();
     setTool(next);
   };
+  const embeds = createEmbedState(editor, projection.document, () =>
+    chooseTool('select')
+  );
   const canGroup = () => {
     const nodes = selection().map((id) => projection.document.items[id]);
     const first = nodes[0];
@@ -55,6 +77,10 @@ export function createCanvasState(editor: GraphicsEditor) {
   };
   return {
     editor,
+    embeds,
+    text,
+    connector,
+    isConnectorTool: () => ['connector', 'arrow', 'line'].includes(tool()),
     ...projection,
     tool,
     chooseTool,
@@ -79,6 +105,7 @@ export function createCanvasState(editor: GraphicsEditor) {
     },
     ungroup: () => editor.ungroupSelection(),
     shapeCreated(id: string) {
+      if (tool() === 'pencil') return;
       editor.select(id);
       setTool('select');
     },

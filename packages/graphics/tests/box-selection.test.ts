@@ -102,6 +102,7 @@ it('routes Shift-click, Shift-box and Escape through pointer controls at non-def
     target.dispatchEvent(event);
   };
   pointer('pointerdown', 20, 20, true, a);
+  pointer('pointerup', 20, 20, true, a);
   expect(editor.getSession().selectedIds).toEqual(['a']);
   pointer('pointerdown', 190, -10, true);
   pointer('pointermove', 210, 20, true);

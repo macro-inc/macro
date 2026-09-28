@@ -1,8 +1,9 @@
-import { type Matrix, translation } from '../core/affine';
+import type { Matrix } from '../core/affine';
+import { resolveAppearance } from '../core/appearance';
 import type { GraphicsEditor } from '../core/editor';
-import type { Bounds, Point, ShapeKind } from '../core/model';
+import type { Bounds, Point, ShapeItem, ShapeKind } from '../core/model';
 import { drawableIds, roots, worldMatrix } from '../core/scene';
-import { isShape } from '../core/shapes/registry';
+import { isShape, shapeDefinition } from '../core/shapes/registry';
 
 export type PresenceClock = Record<string, number>;
 type WireMatrix = [number, number, number, number, number, number];
@@ -12,6 +13,8 @@ export type PresenceShape = {
   width: number;
   height: number;
   world: WireMatrix;
+  pencil?: { points: [number, number, number][]; simulatePressure: boolean };
+  strokeWidth?: number;
 };
 export type ActionPreview = {
   kind: 'draw' | 'move' | 'resize' | 'scale' | 'rotate' | 'marquee';
@@ -30,6 +33,26 @@ export type PeerPresence = {
 export type PresenceIdentity = Pick<PeerPresence, 'id' | 'name' | 'color'>;
 const wireMatrix = (matrix: Matrix): WireMatrix => [...matrix];
 
+function presenceShape(node: ShapeItem, world: Matrix): PresenceShape {
+  const bounds = shapeDefinition(node.type).bounds(node);
+  return {
+    id: node.id,
+    kind: node.type,
+    width: bounds.width,
+    height: bounds.height,
+    world: wireMatrix(world),
+    ...(node.type === 'pencil'
+      ? {
+          pencil: {
+            points: node.geometry.points.map((p) => [...p]),
+            simulatePressure: node.geometry.simulatePressure,
+          },
+          strokeWidth: resolveAppearance(node.appearance).strokeWidth,
+        }
+      : {}),
+  };
+}
+
 /** Read-only capture: committed data and local gestures never receive remote state. */
 export function capturePresence(
   editor: GraphicsEditor,
@@ -41,7 +64,10 @@ export function capturePresence(
   const session = editor.getSession();
   const selectedIds = [...roots(doc, session.selectedIds)];
   let preview: ActionPreview | null = null;
-  const drawing = editor.getPreview();
+  const drawing = editor.getDrawingPreview({
+    fill: 'transparent',
+    stroke: identity.color,
+  });
   if (session.transform) {
     const overrides = session.transform.nodes;
     const targets = new Set(selectedIds);
@@ -57,30 +83,21 @@ export function capturePresence(
       if (!ancestor || !targets.has(ancestor.id)) continue;
       const node = overrides[id] ?? doc.items[id];
       if (isShape(node))
-        shapes.push({
-          id,
-          kind: node.type,
-          width: node.geometry.width,
-          height: node.geometry.height,
-          world: wireMatrix(worldMatrix(doc, id, overrides)),
-        });
+        shapes.push(presenceShape(node, worldMatrix(doc, id, overrides)));
     }
     preview = {
       kind: session.transform.kind,
       shapes,
       box: null,
     };
-  } else if (drawing && drawing.width > 0 && drawing.height > 0) {
+  } else if (drawing) {
     preview = {
       kind: 'draw',
       shapes: [
-        {
-          id: `draft-${identity.id}`,
-          kind: editor.getDrawingKind(),
-          width: drawing.width,
-          height: drawing.height,
-          world: wireMatrix(translation(drawing.x, drawing.y)),
-        },
+        presenceShape(
+          { ...drawing, id: `draft-${identity.id}` },
+          drawing.transform
+        ),
       ],
       box: null,
     };
