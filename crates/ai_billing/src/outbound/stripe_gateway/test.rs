@@ -487,6 +487,52 @@ async fn open_overage_invoice_replay_uses_the_retrieved_scope_and_stored_method(
 }
 
 #[tokio::test]
+async fn open_overage_invoice_replay_returns_an_already_paid_invoice() {
+    let cached_invoice = stripe_response(&draft_invoice());
+    let paid_invoice = stripe_response(&paid_invoice(
+        CURRENT_PAYMENT_METHOD,
+        Some(PERSONAL_SCOPE_STAMP),
+    ));
+    let server = MockServer::start().await;
+    mount_customer_and_subscriptions(
+        &server,
+        subscription_page(
+            vec![stripe_response(&subscription(
+                "sub_active",
+                stripe::SubscriptionStatus::Active,
+                Some(CURRENT_PAYMENT_METHOD),
+                None,
+            ))],
+            false,
+        ),
+    )
+    .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/invoices"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&cached_invoice))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&paid_invoice))
+        .mount(&server)
+        .await;
+
+    let invoice_id = gateway(&server)
+        .open_overage_invoice(charge(SubscriptionScope::Personal, 12))
+        .await
+        .expect("already paid invoice");
+    assert_eq!(invoice_id, INVOICE_ID);
+
+    let requests = server.received_requests().await.expect("recorded requests");
+    assert_eq!(requests.len(), 2, "{requests:?}");
+    assert_eq!(requests[0].method.as_str(), "POST");
+    assert_eq!(requests[0].url.path(), "/v1/invoices");
+    assert_eq!(requests[1].method.as_str(), "GET");
+    assert_eq!(requests[1].url.path(), format!("/v1/invoices/{INVOICE_ID}"));
+}
+
+#[tokio::test]
 async fn open_overage_invoice_leaves_a_safe_draft_when_scope_has_no_match() {
     let invoice = stripe_response(&draft_invoice());
     let server = MockServer::start().await;
