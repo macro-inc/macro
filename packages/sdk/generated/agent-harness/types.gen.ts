@@ -16,6 +16,8 @@ export type AgentAction = (AgentPromptAction & {
     type: 'prompt';
 }) | (AgentSetModelAction & {
     type: 'setModel';
+}) | (AgentSetConfigOptionAction & {
+    type: 'setConfigOption';
 }) | {
     type: 'compact';
 } | {
@@ -403,6 +405,20 @@ export type AgentSessionResponse = {
      * The directory the session's harness runs in on its runtime.
      */
     workspace: string;
+};
+
+/**
+ * Ask the agent to change one advertised select-style session setting.
+ */
+export type AgentSetConfigOptionAction = {
+    /**
+     * Opaque ACP config id advertised by the agent.
+     */
+    configId: string;
+    /**
+     * Opaque select value advertised for that config option.
+     */
+    value: string;
 };
 
 /**

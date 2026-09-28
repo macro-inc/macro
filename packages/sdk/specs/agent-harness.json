@@ -1571,6 +1571,25 @@
             "description": "Switch the model the agent runs on."
           },
           {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentSetConfigOptionAction",
+                "description": "Change an agent-advertised select-style session setting."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["setConfigOption"]
+                  }
+                }
+              }
+            ],
+            "description": "Change an agent-advertised select-style session setting."
+          },
+          {
             "type": "object",
             "description": "Compact the agent's current context.",
             "required": ["type"],
@@ -2112,6 +2131,21 @@
           "workspace": {
             "type": "string",
             "description": "The directory the session's harness runs in on its runtime."
+          }
+        }
+      },
+      "AgentSetConfigOptionAction": {
+        "type": "object",
+        "description": "Ask the agent to change one advertised select-style session setting.",
+        "required": ["configId", "value"],
+        "properties": {
+          "configId": {
+            "type": "string",
+            "description": "Opaque ACP config id advertised by the agent."
+          },
+          "value": {
+            "type": "string",
+            "description": "Opaque select value advertised for that config option."
           }
         }
       },
