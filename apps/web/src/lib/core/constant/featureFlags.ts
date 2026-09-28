@@ -743,3 +743,14 @@ export const enableUnifiedDocumentDiscussions = defineFlag({
   env: 'ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS',
   default: onInDev,
 });
+
+// The `Invite` button in private / team channel headers (split header and
+// inline channel detail) and the invite-people dialog behind it. The
+// add-participants endpoint ships ungated, so flipping this off only hides the
+// entry point. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_CHANNEL_INVITES.
+export const enableChannelInvites = defineFlag({
+  key: 'enable-channel-invites',
+  env: 'ENABLE_CHANNEL_INVITES',
+  default: onInDev,
+});
