@@ -24,7 +24,7 @@ reports each task's outcome, including partial failures.
 With `enable-chat-v3-agents`, **Agents** opens the new conversation list on phones,
 including GitHub PR state and links. Tap a row to open a full-screen conversation;
 the header back button returns to the previous screen, or Agents for a direct link.
-There is no conversation side panel on phones. **Changes** opens a full-width,
+Portrait and landscape touch layouts have no conversation side panel. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
 **New conversation** opens the phone composer. Returning to the list and reopening
@@ -45,7 +45,9 @@ with a draft it offers **Send**. With no draft or queue, the busy composer offer
 **Stop**. Send-next actions disable during stopping/starting and for read-only
 sessions.
 
-Phone verification: check a narrow viewport with touch emulation, then exercise
+Phone verification: check portrait and landscape with touch emulation. In the
+Home composer, enter multiple lines and tap Send, attach, or the model control;
+blurring the editor during the tap must not collapse or move the controls. Then exercise
 list → new conversation → back → new conversation, a row and direct session link,
 the model sheet and repository controls, queued sends, and Changes → back. Check
 that composers remain above the keyboard and neither Changes nor headers cause

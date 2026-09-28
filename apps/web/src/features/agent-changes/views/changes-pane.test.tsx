@@ -21,10 +21,12 @@ import {
   ReviewNotesDock,
 } from './SessionChangesControls';
 
-const device = vi.hoisted(() => ({ mobile: false }));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => device.mobile }));
+const device = vi.hoisted(() => ({ touch: false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 afterEach(() => {
-  device.mobile = false;
+  device.touch = false;
 });
 
 // Pierre mounts a custom element and highlights with shiki; the pane test
@@ -98,8 +100,8 @@ function readyContext() {
 }
 
 describe('ChangesPane', () => {
-  it('returns to the phone conversation and uses unified diffs without a side tree', async () => {
-    device.mobile = true;
+  it('returns to the touch conversation and uses unified diffs without a side tree', async () => {
+    device.touch = true;
     const { controller } = mount(readyContext(), () => <ChangesPane />);
     controller().layout.open();
     controller().setDiffStyle('split');
@@ -113,6 +115,7 @@ describe('ChangesPane', () => {
       screen.queryByRole('button', { name: 'Expand changes to the full width' })
     ).toBeNull();
     expect(screen.queryByRole('button', { name: /file tree/ })).toBeNull();
+    expect(screen.queryByLabelText('Diff layout')).toBeNull();
     fireEvent.click(
       screen.getByRole('button', { name: 'Back to conversation' })
     );

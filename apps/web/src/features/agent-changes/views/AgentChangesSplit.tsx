@@ -8,7 +8,7 @@ import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { Resize } from '@core/component/Resize';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type ParentProps, Show } from 'solid-js';
 import { useAgentChanges } from '../context/agent-changes-controller';
 import { ChangesPane } from './ChangesPane';
@@ -26,7 +26,7 @@ export function AgentChangesSplit(props: ParentProps) {
 
   return (
     <Show
-      when={isMobile()}
+      when={isTouchDevice()}
       fallback={
         <Resize.Zone
           direction="horizontal"

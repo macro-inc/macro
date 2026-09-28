@@ -17,6 +17,7 @@ import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideTo
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import PlusIcon from '@phosphor/plus.svg';
+import { makeEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import {
@@ -143,6 +144,12 @@ export function ChatComposer(props: {
   });
 
   onMount(() => {
+    if (props.collapseOnBlur) {
+      makeEventListener(document, 'pointerdown', (event) => {
+        if (event.target instanceof Node && !container?.contains(event.target))
+          setFocused(false);
+      });
+    }
     props.registerFocus?.(() => editor.controls.focus());
     props.session?.registerFocus?.(() => editor.controls.focus());
     props.session?.registerQuoteInsert?.((text) => {
@@ -206,8 +213,10 @@ export function ChatComposer(props: {
         class="min-w-0"
         onFocusIn={() => setFocused(true)}
         onFocusOut={(event) => {
+          // iOS control taps can blur with no relatedTarget before click.
+          // Collapse only for a known outside focus or pointer interaction.
           if (
-            !(event.relatedTarget instanceof Node) ||
+            event.relatedTarget instanceof Node &&
             !event.currentTarget.contains(event.relatedTarget)
           )
             setFocused(false);

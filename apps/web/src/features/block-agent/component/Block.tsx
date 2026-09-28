@@ -13,7 +13,7 @@ import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
@@ -53,7 +53,7 @@ function AgentComposerRegion(props: ParentProps) {
 function AgentContentLayout(props: ParentProps) {
   return (
     <Show
-      when={isMobile()}
+      when={isTouchDevice()}
       fallback={
         <SidePanel.Layout defaultOpen={false}>
           <AgentSidePanelSections />

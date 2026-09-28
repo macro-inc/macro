@@ -450,3 +450,35 @@ it('keeps the paperclip visible while the session is unavailable', () => {
       .hasAttribute('disabled')
   ).toBe(true);
 });
+
+it.each(['Send', 'Attach files', 'Model'])(
+  'keeps the expanded Home composer stable through an iOS %s tap',
+  (control) => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const send = vi.fn();
+    render(() => (
+      <ChatComposer
+        collapseOnBlur
+        draft={'First line\nSecond line'}
+        onDraftChange={() => {}}
+        onSend={send}
+        onAttachFiles={() => {}}
+        selector={<button>Model</button>}
+      />
+    ));
+    editor.text = 'First line\nSecond line';
+    const input = screen.getByTestId('editor');
+    const clipped = () => input.parentElement?.classList.contains('max-h-6');
+    fireEvent.focusIn(input);
+    expect(clipped()).toBe(false);
+    const button = screen.getByRole('button', { name: control });
+    fireEvent.pointerDown(button);
+    fireEvent.focusOut(input, { relatedTarget: null });
+    expect(clipped()).toBe(false);
+    fireEvent.click(button);
+    if (control === 'Send')
+      expect(send).toHaveBeenCalledWith('First line\nSecond line', []);
+    fireEvent.pointerDown(document.body);
+    expect(clipped()).toBe(true);
+  }
+);

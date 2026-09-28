@@ -1,4 +1,4 @@
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 /**
  * The Changes pane: a title row with the pane's own controls, a toolbar for
  * the diffs, the capture notices, and the file tree beside the diff stack
@@ -105,12 +105,12 @@ function ChangesBody() {
     <DiffView.Root
       files={model.files()}
       patch={model.patch() ?? ''}
-      diffStyle={isMobile() ? 'unified' : diffStyle()}
+      diffStyle={isTouchDevice() ? 'unified' : diffStyle()}
       collapse={collapse}
       active={review.active()}
     >
       <Panel.Toolbar class="gap-1">
-        <Show when={!isMobile()}>
+        <Show when={!isTouchDevice()}>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -125,11 +125,13 @@ function ChangesBody() {
           {describeFileCount(model.files().length)}
         </span>
         <span class="flex-1" />
-        <DiffView.StyleToggle
-          value={diffStyle()}
-          onChange={setDiffStyle}
-          class="max-md:hidden"
-        />
+        <Show when={!isTouchDevice()}>
+          <DiffView.StyleToggle
+            value={diffStyle()}
+            onChange={setDiffStyle}
+            class="max-md:hidden"
+          />
+        </Show>
         <DiffView.CollapseAll />
         <Button
           variant="ghost"
@@ -151,7 +153,7 @@ function ChangesBody() {
         </Show>
         <div class="flex min-h-0 flex-1">
           <CollapseTransition
-            open={!isMobile() && layout.treeOpen()}
+            open={!isTouchDevice() && layout.treeOpen()}
             axis="width"
           >
             <div class="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-edge-muted p-2 max-md:w-48">
@@ -322,7 +324,7 @@ export function ChangesPane() {
     <Panel class="rounded-none" role="region" aria-label="Changes">
       <Panel.Header class="gap-1.5">
         <ChangesHeader
-          mobile={isMobile()}
+          mobile={isTouchDevice()}
           spotlit={layout.layout() === 'full'}
           range={range()}
           pullRequestUrl={context.host.pullRequestUrl()}
