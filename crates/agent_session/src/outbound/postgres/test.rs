@@ -1081,6 +1081,48 @@ async fn create_records_the_session_in_the_owners_history(pool: PgPool) {
     assert_eq!(history[0].item_type, "agent_session");
 }
 
+/// Inline `@macro` (the agent-session Macro bot, born on a thread) starts
+/// hidden from lists. The same bot started with no thread, and any other
+/// bot, is listed immediately. Creation does not pin the owner.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn inline_macro_sessions_start_hidden_and_unpinned(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    create_test_bot(&pool).await;
+    let (_channel_id, thread_id, originating_message_id) =
+        insert_originating_thread_fixture(&pool).await;
+
+    let inline = create_session(
+        &repo,
+        new_session(
+            bot_id::MACRO_NEW_BOT_ID,
+            Some(thread_id),
+            Some(originating_message_id),
+        ),
+    )
+    .await;
+    let composer = create_session(&repo, new_session(bot_id::MACRO_NEW_BOT_ID, None, None)).await;
+
+    let hidden = sqlx::query!(
+        "SELECT id, list_hidden FROM agent_session WHERE id = ANY($1) ORDER BY list_hidden DESC",
+        &[inline.id.as_uuid(), composer.id.as_uuid()] as &[Uuid],
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read list visibility");
+    assert!(hidden[0].list_hidden, "the thread session starts hidden");
+    assert_eq!(hidden[0].id, inline.id.as_uuid());
+    assert!(!hidden[1].list_hidden, "a composer session is listed");
+
+    let pins = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM agent_session_list_pin WHERE agent_session_id = ANY($1)"#,
+        &[inline.id.as_uuid(), composer.id.as_uuid()] as &[Uuid],
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count pins");
+    assert_eq!(pins, 0, "creating a session does not promote it");
+}
+
 /// A preview reports every existing id with whether the viewer holds a grant:
 /// the owner through their own row, a channel member through the channel's,
 /// a stranger through none, and an unknown id not at all. Duplicates in the
