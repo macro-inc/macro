@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for durable hydration generations and viewed-first search projections.
-version = "0.6.27"
+# Rebuild for response-derived optimistic property assignment links.
+version = "0.6.28"
 
 [features]
 default = []
