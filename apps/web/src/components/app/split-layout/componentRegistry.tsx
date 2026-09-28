@@ -380,11 +380,6 @@ if (LOCAL_ONLY) {
     'agent-replay',
     lazy(() => import('@app/features/block-agent/debug/replay/Replay'))
   );
-
-  registerComponent(
-    'agent-changes-ui',
-    lazy(() => import('@app/features/agent-changes/debug/Gallery'))
-  );
 }
 
 if (import.meta.env.DEV) {
@@ -448,6 +443,10 @@ if (DEV_MODE_ENV) {
   registerComponent(
     'diff-view-ui',
     lazy(() => import('@app/components/diff-view/debug/DiffViewGallery'))
+  );
+  registerComponent(
+    'agent-changes-ui',
+    lazy(() => import('@app/features/agent-changes/debug/Gallery'))
   );
 }
 
