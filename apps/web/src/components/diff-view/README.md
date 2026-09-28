@@ -78,4 +78,4 @@ in the layer or with the host (`draft` option), never in the rendered editor.
 `pierre/theme.ts` holds the theme signal and CSS variables every Pierre diff in
 the app shares, including the transcript's tool-call diffs. Examples, including
 review threads and a generated changeset of up to 500 files, live at
-`/debug/diff-view-ui` in local builds.
+`/debug/diff-view-ui` in local and dev (`--mode development`) builds.
