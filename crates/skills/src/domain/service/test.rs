@@ -249,10 +249,6 @@ fn discovery_service(
     SkillServiceImpl::new(searcher, lister, FakeReader::unused())
 }
 
-use entity_access::domain::models::{
-    AccessError, EntityAccessReceipt, EntityType, ViewAccessLevel,
-};
-
 struct FakeReader {
     allowed: bool,
     document: Option<SkillDocumentMetadata>,
