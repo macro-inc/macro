@@ -82,6 +82,12 @@ workspace-members = [
     "document_sub_type",
     "model_file_type",
     "macro_user_id",
+    # Typed owner reference and the bot id it parses. The filter literals'
+    # owner is a `model_owner::Owner`, so both are now in the browser-side
+    # filter model chain (item_filters -> item-filter-index ->
+    # soup-filter-cache-adapter -> cache-wasm) and must stay wasm-safe.
+    "model_owner",
+    "bot_id",
     "macro_uuid",
     "non_empty",
     "cowlike",

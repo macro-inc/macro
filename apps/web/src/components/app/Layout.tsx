@@ -23,13 +23,13 @@ import {
   isAddInboxDialogOpen,
 } from '@app/features/inbox/AddInboxDialog';
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
+import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { Paywall } from '@app/features/paywall/Paywall';
 import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
 import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { MobileSettings } from '@app/features/settings/MobileSettings';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
-import { GlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
 import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
@@ -51,7 +51,9 @@ import {
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
-import { enableReminders } from '@core/constant/featureFlags';
+import { UserCardDrawer } from '@core/component/UserCardDrawer';
+import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
+import { DEV_MODE_ENV, enableReminders } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
@@ -80,6 +82,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
+import { ContentLoading } from './ContentLoading';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
@@ -350,6 +353,7 @@ function NewOnboardingRedirect() {
 function LayoutInner(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
+  const { usageLimitOpen } = useAiUsageLimitState();
   const location = useLocation();
   const [sidebarOverlayOpen, setSidebarOverlayOpen] = createSignal(false);
   const [sidebarOverlayTriggerHovered, setSidebarOverlayTriggerHovered] =
@@ -437,7 +441,7 @@ function LayoutInner(props: RouteSectionProps) {
   return (
     <div
       class={cn(
-        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)'
+        'relative flex flex-col justify-between not-touch:bg-panel w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)'
       )}
     >
       <ImperativeDialogHost />
@@ -462,7 +466,6 @@ function LayoutInner(props: RouteSectionProps) {
             <PropertyEditorModal />
           </Suspense>
           <GlobalBulkEditEntityModal />
-          <GlobalShareModal />
           <IosShareSheet />
           <MacroMcpSetupModal />
           <CreateChannelModal />
@@ -492,7 +495,12 @@ function LayoutInner(props: RouteSectionProps) {
       </Show> */}
 
       <Show when={paywallOpen()}>
-        <Paywall />
+        <Suspense>
+          <Paywall />
+        </Suspense>
+      </Show>
+      <Show when={DEV_MODE_ENV && usageLimitOpen()}>
+        <AiUsageLimitDialog />
       </Show>
       <div class="max-h-full grow flex">
         {/* The provider spans the sidebar too so its favorites can register
@@ -535,7 +543,8 @@ function LayoutInner(props: RouteSectionProps) {
           </Show>
 
           <div class="flex-1 w-full min-h-0 font-sans text-ink caret-current">
-            {props.children}
+            {/* Route loading must not detach the shell or mobile navigation. */}
+            <Suspense fallback={<ContentLoading />}>{props.children}</Suspense>
           </div>
         </ItemDndProvider>
       </div>
@@ -556,6 +565,9 @@ function LayoutInner(props: RouteSectionProps) {
         }
       >
         <FloatRegionHost />
+        <Suspense>
+          <UserCardDrawer />
+        </Suspense>
         <Show when={isMobile()}>
           <MobileSettings />
         </Show>

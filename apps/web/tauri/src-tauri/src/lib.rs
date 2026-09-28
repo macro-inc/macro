@@ -34,6 +34,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
 
 mod device;
+mod logging;
 mod share_target;
 mod staged_upload;
 
@@ -117,13 +118,8 @@ type Type = std::sync::OnceLock<
 pub fn run() {
     use tracing_subscriber::EnvFilter;
 
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        if cfg!(debug_assertions) {
-            "debug,tungstenite=info,tokio_tungstenite=info,reqwest=info,hyper=info,h2=info".into()
-        } else {
-            "info,tungstenite=info,tokio_tungstenite=info,reqwest=info".into()
-        }
-    });
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| logging::default_filter(cfg!(debug_assertions)));
 
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_file(true)
@@ -263,6 +259,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             graphql_cache_plugin::commands::graphql_cache_init,
             graphql_cache_plugin::commands::graphql_cache_current_revision,
+            graphql_cache_plugin::commands::graphql_cache_current_storage_generation,
             graphql_cache_plugin::commands::graphql_cache_read,
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
             graphql_cache_plugin::commands::graphql_cache_search,

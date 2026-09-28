@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { NewThreadAnchorOneOfMarkedText } from './newThreadAnchorOneOfMarkedText';
 import type { NewThreadAnchorOneOfType } from './newThreadAnchorOneOfType';
 
 /**
@@ -12,5 +13,9 @@ import type { NewThreadAnchorOneOfType } from './newThreadAnchorOneOfType';
 export type NewThreadAnchorOneOf = {
   /** Serialized mark identifier. */
   mark_id: string;
+  /** The document text the mark covers, captured by the editor as the
+comment is written. Trimmed and bounded before it is stored, so an
+oversized or whitespace-only claim cannot reach the thread row. */
+  marked_text?: NewThreadAnchorOneOfMarkedText;
   type: NewThreadAnchorOneOfType;
 };

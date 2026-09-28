@@ -239,6 +239,11 @@ fn points_every_acp_server_at_the_proxy() {
                 authorization.clone(),
             ),
             (
+                "macro-preview".to_owned(),
+                "https://egress.macro.com/mcp-preview".to_owned(),
+                authorization.clone(),
+            ),
+            (
                 "datadog".to_owned(),
                 "https://egress.macro.com/mcp/datadog".to_owned(),
                 authorization.clone(),
@@ -267,6 +272,10 @@ fn an_owner_with_no_connected_apps_still_gets_the_macro_server() {
             (
                 "macro_internal".to_owned(),
                 "https://egress.macro.com/mcp/internal".to_owned()
+            ),
+            (
+                "macro-preview".to_owned(),
+                "https://egress.macro.com/mcp-preview".to_owned()
             )
         ]
     );
@@ -294,4 +303,25 @@ fn the_egress_environment_does_not_print_its_secrets() {
             "MACRO_SESSION_TOKEN".to_owned()
         ]
     );
+}
+
+#[test]
+fn external_runtime_uses_host_reachable_urls_with_the_existing_session_credential() {
+    use agent_client_protocol::schema::v1::McpServer;
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![])),
+        "http://agent-harness-service:8102",
+    )
+    .with_external_base_url(Some("http://localhost:28102/".into()));
+    let sandbox = egress(&[]);
+    let servers = provisioner.external_mcp_servers(&sandbox);
+    assert_eq!(servers.len(), 2);
+    for (server, path) in servers.iter().zip(["/mcp/internal", "/mcp-preview"]) {
+        let McpServer::Http(server) = server else {
+            panic!("expected HTTP MCP");
+        };
+        assert_eq!(server.url, format!("http://localhost:28102{path}"));
+        assert_eq!(server.headers[0].value, sandbox.authorization_header());
+    }
+    assert_eq!(sandbox.base_url, "https://egress.macro.com");
 }

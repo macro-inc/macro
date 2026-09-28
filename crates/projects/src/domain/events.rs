@@ -1,5 +1,8 @@
 //! Kafka event models for the `macro.projects` topic.
 
+#[cfg(test)]
+mod test;
+
 use chrono::{DateTime, Utc};
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroProjectsTopic;

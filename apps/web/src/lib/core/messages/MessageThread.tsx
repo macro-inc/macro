@@ -42,9 +42,12 @@ type ThreadOptions = {
   canWrite: boolean;
   buildLink?: (message: MessageData) => string;
   targetId?: string | null;
+  /** Releases the highlight on `targetId`; called when the linked message is clicked. */
+  onClearTarget?: () => void;
   expanded?: boolean;
   hideReplyInput?: boolean;
   onEditingChange?: (id: string, editing: boolean) => void;
+  monorail?: boolean;
 };
 
 /** Document and source-channel threads compose the existing channel thread and message controls. */
@@ -106,10 +109,10 @@ export function MessageThread(
               ? { ...value, onReply: undefined }
               : value;
           }}
-          messageEditor={editor}
+          messageEditor={props.canWrite ? editor : undefined}
           isExpanded={() => expanded() || !!props.targetId}
           setIsExpanded={setExpanded}
-          isReplying={replying}
+          isReplying={() => props.canWrite && replying()}
           setIsReplying={setReplying}
           replyInputState={draft}
           setReplyInputState={setDraft}
@@ -117,6 +120,7 @@ export function MessageThread(
           setReplyInputHandle={setHandle}
           replyInputFocusRequest={focus}
           isFindBarOpen={() => false}
+          monorail={props.monorail}
           messageListScopeId={scopeId}
           selectedMessageId={() => (props.targetId ? props.data.id : undefined)}
           targetNavigation={{
@@ -136,7 +140,12 @@ export function MessageThread(
             },
             onTargetMessageScrolled: () => {},
             onTargetReplyScrolled: () => {},
-            onClearTarget: () => {},
+            onClearTarget: () => {
+              // The link expanded the thread; releasing its highlight keeps
+              // the thread open rather than collapsing the replies in view.
+              setExpanded(true);
+              props.onClearTarget?.();
+            },
           }}
         />
       </div>

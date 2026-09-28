@@ -7,6 +7,7 @@ fn empty_service() -> AuthenticatedToolService<()> {
         Arc::new(AsyncToolCollection::new()),
         (),
         "https://macro.com".to_owned(),
+        url::Url::parse("https://static-file-service.macro.com").unwrap(),
     )
 }
 
@@ -58,8 +59,14 @@ async fn server_instructions_describe_available_workflows() {
         "ReadContent",
         "ReadMetadata",
         "ReadThread",
+        "ReadChannelMessages",
+        "ReadChannelThread",
+        "ReadChannelMessageContext",
+        "downloadable URLs",
         "CreateDocument",
         "ListEntities",
+        "ListSkills",
+        "ReadSkill",
     ] {
         assert!(
             instructions.contains(expected_text),

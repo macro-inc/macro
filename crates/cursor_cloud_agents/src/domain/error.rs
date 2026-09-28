@@ -2,6 +2,7 @@
 
 use crate::domain::model::RepoUrl;
 use agent_client_protocol::schema::v1::SessionId;
+pub use agent_runtime_protocol::domain::turn::{FailureLink, FailureNotice, FailureNoticeKind};
 use thiserror::Error;
 
 /// Why a session operation failed.
@@ -22,16 +23,102 @@ pub enum SessionError {
     #[error("{0}")]
     Cursor(rootcause::Report),
     /// The provider refused the prompt for a reason the person who sent it
-    /// can act on. Carries the message meant for them and nothing else: it is
+    /// can act on. Carries what is meant for them and nothing else: it is
     /// what the `session/prompt` error says, so a report's decorations (a
     /// bullet, a source location) would be read as part of the instruction.
     #[error("{0}")]
-    Rejected(String),
+    Rejected(PromptRefusal),
 }
 
 impl From<rootcause::Report> for SessionError {
     fn from(report: rootcause::Report) -> Self {
         Self::Cursor(report)
+    }
+}
+
+/// What a refused prompt tells the person who sent it.
+///
+/// `message` is the `session/prompt` error's message and is always present.
+/// `notice` is the same refusal in the shape a reader renders as an
+/// instruction with somewhere to go; it exists only for the refusals a
+/// person can resolve outside Macro, and travels as the error's `data`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptRefusal {
+    /// One plain sentence or two, no report decorations.
+    pub message: String,
+    /// The refusal as a rendered notice, when there is more to say than a line.
+    pub notice: Option<FailureNotice>,
+}
+
+impl PromptRefusal {
+    /// A refusal that is only its message.
+    #[must_use]
+    pub fn plain(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            notice: None,
+        }
+    }
+}
+
+impl std::fmt::Display for PromptRefusal {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+/// A prompt Cursor refused because the account behind the API key has no
+/// background-agent budget left.
+///
+/// Seen in production as a 400 with code `usage_limit_exceeded`: "You need
+/// to increase your hard limit. Background Agent requires at least $2
+/// remaining until your hard limit." A fact about the person's own Cursor
+/// account, fixed on Cursor's dashboard, so it is the person's to read - not
+/// an internal error, which is how the raw report presented it.
+#[derive(Debug, Error)]
+#[error("cursor refused the prompt ({code}): {detail}")]
+pub struct UsageLimitExceeded {
+    /// Cursor's error code, one of [`Self::CODES`].
+    pub code: String,
+    /// Cursor's own error body, verbatim, for the logs.
+    pub detail: String,
+}
+
+impl UsageLimitExceeded {
+    /// Cursor's error codes for an exhausted budget.
+    ///
+    /// Matched on the structured `error.code`, never the message: Cursor's
+    /// wording (and the dollar figure in it) is theirs to change.
+    pub const CODES: [&'static str; 1] = ["usage_limit_exceeded"];
+
+    /// Where the limit is raised.
+    pub const DASHBOARD_URL: &'static str = "https://www.cursor.com/dashboard?tab=settings";
+
+    /// What to show the person who sent the prompt.
+    #[must_use]
+    pub fn notice(&self) -> FailureNotice {
+        FailureNotice {
+            kind: FailureNoticeKind::ProviderUsageLimit,
+            title: "Cursor usage limit reached".to_owned(),
+            body: "Your Cursor account has no background-agent budget left, so this message \
+                   wasn't sent. Raise the spending limit in your Cursor dashboard, then send \
+                   it again."
+                .to_owned(),
+            link: Some(FailureLink {
+                label: "Manage Cursor usage".to_owned(),
+                url: Self::DASHBOARD_URL.to_owned(),
+            }),
+        }
+    }
+
+    /// The refusal as the `session/prompt` error carries it.
+    #[must_use]
+    pub fn refusal(&self) -> PromptRefusal {
+        let notice = self.notice();
+        PromptRefusal {
+            message: format!("{} {}", notice.title, notice.body),
+            notice: Some(notice),
+        }
     }
 }
 

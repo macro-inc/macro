@@ -21,6 +21,17 @@ default = []
 local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
+activity = { path = "../../crates/activity", default-features = false }
+channel_sender = { path = "../../crates/channel_sender" }
+channels = { path = "../../crates/channels", default-features = false }
+documents = { path = "../../crates/documents", default-features = false }
+entity_access = { path = "../../crates/entity_access", default-features = false, features = ["ports"] }
+kafka_util = { path = "../../crates/kafka_util" }
+macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
+macro_event_topics = { path = "../../crates/macro_event_topics" }
+rdkafka = { workspace = true }
+rootcause = { workspace = true }
+thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 macro_env_var = { path = "../../crates/macro_env_var" }

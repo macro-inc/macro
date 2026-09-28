@@ -50,7 +50,7 @@ fn team_share_request(level: Option<AccessLevel>) -> UpdateSharePermissionReques
 /// Authorize `level` exactly as the domain service would for the persisted owner.
 fn command(facts: &TeamShareFacts, level: Option<AccessLevel>) -> AuthorizedTeamShareCommand {
     authorize_team_share(
-        Some(&facts.owner),
+        facts.owner.as_user(),
         facts,
         TeamShareRequest {
             access_level: Some(level),
@@ -147,7 +147,7 @@ async fn get_team_share_facts_reads_owner_team_and_null_state(pool: PgPool) {
 
     assert_eq!(facts.entity.entity_type, EntityType::Chat);
     assert_eq!(facts.entity.entity_id, chat_id);
-    assert_eq!(facts.owner, owner());
+    assert!(facts.owner.is_user(&owner()));
     assert_eq!(facts.owner_team_id, Some(TEAM_ID));
     assert_eq!(facts.current, None);
     assert_eq!(facts.revision, 0);

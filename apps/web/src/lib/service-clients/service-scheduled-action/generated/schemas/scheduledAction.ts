@@ -7,30 +7,34 @@
  */
 
 import type { ActionKind } from './actionKind';
-import type { Schedule } from './schedule';
+import type { ActionTrigger } from './actionTrigger';
 import type { ScheduledActionClaimed } from './scheduledActionClaimed';
+import type { ScheduledActionEventActivatedAt } from './scheduledActionEventActivatedAt';
 import type { ScheduledActionId } from './scheduledActionId';
+import type { ScheduledActionNextRunAt } from './scheduledActionNextRunAt';
 import type { ScheduledActionTask } from './scheduledActionTask';
 
 export interface ScheduledAction {
   claimed?: ScheduledActionClaimed;
+  /** Independent of execution bookkeeping in `updated_at`. */
+  configuration_revision: number;
   created_at: string;
-  /** When false, the cron dispatcher skips this schedule. `run_now` remains
+  /** When false, automatic dispatch skips this action. `run_now` remains
 available regardless. */
   enabled: boolean;
+  /** Event publication boundary; absent for cron actions. */
+  event_activated_at?: ScheduledActionEventActivatedAt;
   id?: ScheduledActionId;
   kind: ActionKind;
   name: string;
-  /** Time of the next scheduled firing (derived from the cron on write). UI
-uses this to render "next run" without having to parse the cron itself. */
-  next_run_at: string;
+  /** Next cron firing, absent for event-triggered actions. */
+  next_run_at?: ScheduledActionNextRunAt;
   /** Who the action belongs to. Every action is user-owned today, but the
 type no longer says so: the principal string on the wire and in the
 `owner` column is the same, and a bot- or team-owned row decodes
 rather than failing to parse. */
   owner: string;
-  schedule: Schedule;
   task: ScheduledActionTask;
-  timezone: string;
+  trigger: ActionTrigger;
   updated_at: string;
 }

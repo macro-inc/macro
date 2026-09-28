@@ -7,6 +7,7 @@ fn harness(command: &str) -> Harness {
     Harness {
         command: command.to_owned(),
         args: Vec::new(),
+        env: Default::default(),
     }
 }
 
@@ -78,6 +79,7 @@ async fn model_probe_process_failures_are_safely_redacted() {
             command: "macro-no-such-harness-binary".into(),
             args: vec!["secret-argument".to_owned()],
             cwd: "/".into(),
+            env: Default::default(),
         },
     };
 

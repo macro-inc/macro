@@ -113,9 +113,9 @@ describe('createReviewState', () => {
         endLineNumber: 12,
       };
       review.openNote(anchor);
-      expect(review.composing()).toEqual(anchor);
+      expect(review.draft()).toEqual({ range: anchor, text: '' });
       review.addNote(anchor, '   ');
-      expect(review.composing()).toBeUndefined();
+      expect(review.draft()).toBeUndefined();
       expect(review.notes()).toHaveLength(0);
 
       review.addNote(anchor, 'Extract a helper');

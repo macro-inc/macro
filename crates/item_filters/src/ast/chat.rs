@@ -1,5 +1,5 @@
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -20,9 +20,9 @@ pub enum ChatLiteral {
     /// the chat has the id [Uuid]
     #[serde(rename = "cid")]
     ChatId(Uuid),
-    /// the chat is owned by [MacroUserIdStr]
+    /// the chat is owned by [Owner]
     #[serde(rename = "o")]
-    Owner(MacroUserIdStr<'static>),
+    Owner(Owner),
     /// this node value filters by chat importance. false short-circuits to match nothing.
     #[serde(rename = "imp")]
     Importance(bool),
@@ -92,7 +92,7 @@ impl ExpandFrame<ChatLiteral> for ChatFilters {
 
         let owners = owners
             .iter()
-            .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
+            .map(|s| Owner::from_principal_str(s))
             .try_expand(|r| r.map(ChatLiteral::Owner), Expr::or)?;
 
         let importance_node = importance.map(|imp| Expr::Literal(ChatLiteral::Importance(imp)));

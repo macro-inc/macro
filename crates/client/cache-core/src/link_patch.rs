@@ -16,6 +16,8 @@ use serde_json::Value as Json;
 use std::collections::{BTreeSet, HashMap};
 use thiserror::Error;
 
+mod upsert;
+
 /// Maximum number of link recipes accepted for one mutation.
 pub const MAX_PATCHES: usize = 128;
 /// Maximum number of path segments accepted for one recipe.
@@ -68,6 +70,18 @@ pub enum LinkOperation {
         #[serde(rename = "entityKey")]
         entity_key: EntityKey<'static>,
     },
+    /// Replaces links with the same scalar identity using the matching record
+    /// in this mutation's normalized response. The response may assign a new ID.
+    UpsertByField {
+        /// Optimistic identity; its type constrains the response record lookup.
+        #[serde(rename = "entityKey")]
+        entity_key: EntityKey<'static>,
+        /// Selected scalar field identifying one logical list member.
+        #[serde(rename = "whereField")]
+        where_field: FieldKey,
+        /// Stable logical identity shared by optimistic and server records.
+        equals: Json,
+    },
     /// Removes a link from a matching embedded list item and decrements its
     /// count when the link was present.
     RemoveEmbeddedLink {
@@ -110,8 +124,23 @@ impl LinkOperation {
         match self {
             Self::Remove { entity_key }
             | Self::PrependUnique { entity_key }
+            | Self::UpsertByField { entity_key, .. }
             | Self::RemoveEmbeddedLink { entity_key, .. }
             | Self::UpsertEmbeddedLink { entity_key, .. } => entity_key.borrowed(),
+        }
+    }
+
+    /// The entity key this operation INSERTS a reference to, when it does.
+    /// Inserted references must resolve to a normalized record: applying one
+    /// against a record-less key would plant a dangling reference that turns
+    /// every read of the containing query into a miss. Removals need no
+    /// record — removing an absent reference is a natural no-op.
+    pub fn inserted_entity_key(&self) -> Option<&EntityKey<'static>> {
+        match self {
+            Self::PrependUnique { entity_key }
+            | Self::UpsertByField { entity_key, .. }
+            | Self::UpsertEmbeddedLink { entity_key, .. } => Some(entity_key),
+            Self::Remove { .. } | Self::RemoveEmbeddedLink { .. } => None,
         }
     }
 }
@@ -172,6 +201,11 @@ pub enum LinkPatchError {
     /// The selected normalized record is absent.
     #[error("link update record `{0}` is missing")]
     MissingParent(EntityKey<'static>),
+    /// An inserted reference targets an entity with no normalized record.
+    /// Applying it would plant a dangling reference, so at settlement (skip
+    /// mode) such a patch is dropped and recovered by its revalidation.
+    #[error("link update inserts a reference to record-less entity `{0}`")]
+    MissingLinkedRecord(EntityKey<'static>),
     /// The selected record field is absent.
     #[error("link update field `{field}` is missing on `{parent}`")]
     MissingField { parent: String, field: String },
@@ -190,6 +224,9 @@ pub enum LinkPatchError {
     /// A list selector did not resolve exactly one embedded object.
     #[error("link patch list selector matched {0} items instead of exactly one")]
     SelectorMatchCount(usize),
+    /// A logical upsert must identify exactly one record in the mutation response.
+    #[error("link upsert matched {0} response records instead of exactly one")]
+    ResponseMatchCount(usize),
     /// A selector value is not a JSON scalar.
     #[error("link patch selector values must be JSON scalars")]
     NonScalarSelector,
@@ -253,6 +290,11 @@ fn validate_recipe(patch: &OptimisticLinkPatch) -> Result<(), LinkPatchError> {
         }
     }
     match &patch.operation {
+        LinkOperation::UpsertByField { equals, .. } => {
+            if !is_json_scalar(equals) {
+                return Err(LinkPatchError::NonScalarSelector);
+            }
+        }
         LinkOperation::RemoveEmbeddedLink {
             list_item,
             link_field,
@@ -378,7 +420,7 @@ pub fn apply_link_patches(
     let mut staged_effective = effective.clone();
     let mut staged_updates = updates.clone();
     for patch in &patches {
-        if let Err(error) = apply_one(&mut staged_effective, &mut staged_updates, patch) {
+        if let Err(error) = apply_one(&mut staged_effective, &mut staged_updates, updates, patch) {
             if skip_not_applicable {
                 continue;
             }
@@ -393,11 +435,20 @@ pub fn apply_link_patches(
 fn apply_one(
     effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &mut RecordUpdates,
+    response_updates: &RecordUpdates,
     patch: &OptimisticLinkPatch,
 ) -> Result<(), LinkPatchError> {
     let resolved = resolve_target(effective, patch)?;
+    let upsert = upsert::resolve(&patch.operation, &resolved, response_updates)?;
+    if let Some(inserted) = upsert
+        .as_ref()
+        .or_else(|| patch.operation.inserted_entity_key())
+        && !effective.contains_key(inserted)
+    {
+        return Err(LinkPatchError::MissingLinkedRecord(inserted.clone()));
+    }
     let record = effective
-        .get_mut(&resolved.parent_entity_key)
+        .get(&resolved.parent_entity_key)
         .ok_or_else(|| LinkPatchError::MissingParent(resolved.parent_entity_key.clone()))?;
     let mut field_value = record
         .fields
@@ -417,6 +468,18 @@ fn apply_one(
         }
         LinkOperation::PrependUnique { entity_key } => {
             prepend_unique(normalized_links(target)?, entity_key.borrowed());
+        }
+        LinkOperation::UpsertByField { equals, .. } => {
+            upsert::apply(
+                normalized_links(target)?,
+                effective,
+                resolved
+                    .match_field
+                    .as_ref()
+                    .ok_or(LinkPatchError::WrongShape)?,
+                equals,
+                upsert.as_ref().ok_or(LinkPatchError::WrongShape)?,
+            )?;
         }
         LinkOperation::RemoveEmbeddedLink { entity_key, .. } => {
             let fields = resolved
@@ -447,7 +510,9 @@ fn apply_one(
         }
     }
 
-    record
+    effective
+        .get_mut(&resolved.parent_entity_key)
+        .ok_or_else(|| LinkPatchError::MissingParent(resolved.parent_entity_key.clone()))?
         .fields
         .insert(resolved.field_key.clone(), field_value.clone());
     updates
@@ -646,6 +711,7 @@ struct ResolvedTarget {
     field_key: FieldKey,
     path: Vec<LinkPathSegment>,
     embedded_link: Option<ResolvedEmbeddedLink>,
+    match_field: Option<FieldKey>,
 }
 
 #[derive(Debug)]
@@ -659,13 +725,14 @@ struct ResolvedEmbeddedLink {
 /// Returns the next normalized record required to resolve one query-rooted
 /// update. Engines use this to hydrate graph links from cold storage before
 /// applying the update.
-pub fn missing_patch_record(
+pub fn missing_patch_records(
     effective: &HashMap<EntityKey<'static>, Record>,
     patch: &OptimisticLinkPatch,
-) -> Option<EntityKey<'static>> {
+) -> Vec<EntityKey<'static>> {
     match resolve_target(effective, patch) {
-        Err(LinkPatchError::MissingParent(key)) => Some(key),
-        _ => None,
+        Err(LinkPatchError::MissingParent(key)) => vec![key],
+        Ok(target) if target.match_field.is_some() => upsert::missing_records(effective, &target),
+        _ => Vec::new(),
     }
 }
 
@@ -756,6 +823,12 @@ fn resolve_from_value(
             parent_entity_key: cursor.owner,
             field_key: cursor.anchor_field,
             path: cursor.relative_path,
+            match_field: upsert::resolve_field(
+                cursor.selections,
+                cursor.type_name,
+                variables,
+                operation,
+            )?,
             embedded_link: resolve_embedded_link_fields(
                 cursor.selections,
                 cursor.type_name,
@@ -823,19 +896,28 @@ fn resolve_from_value(
             let selector =
                 selected_field(cursor.selections, cursor.type_name, &list_item.where_field)?;
             let selector_key = selected_storage_key(selector, variables)?;
-            let matches: Vec<_> = items
-                .iter()
-                .enumerate()
-                .filter_map(|(index, value)| {
-                    let CacheValue::Object(object) = value else {
-                        return None;
-                    };
-                    object
+            let mut matches = Vec::new();
+            for (index, value) in items.iter().enumerate() {
+                let matches_item = match value {
+                    CacheValue::Ref(key) if selector.name == "id" => key
+                        .as_ref()
+                        .split_once(':')
+                        .is_some_and(|(_, id)| list_item.equals.as_str() == Some(id)),
+                    CacheValue::Ref(key) => effective
+                        .get(key)
+                        .ok_or_else(|| LinkPatchError::MissingParent(key.clone()))?
+                        .fields
                         .get(&selector_key)
-                        .is_some_and(|value| cache_scalar_equals(value, &list_item.equals))
-                        .then_some(index)
-                })
-                .collect();
+                        .is_some_and(|value| cache_scalar_equals(value, &list_item.equals)),
+                    CacheValue::Object(object) => object
+                        .get(&selector_key)
+                        .is_some_and(|value| cache_scalar_equals(value, &list_item.equals)),
+                    _ => false,
+                };
+                if matches_item {
+                    matches.push(index);
+                }
+            }
             if matches.len() != 1 {
                 return Err(LinkPatchError::SelectorMatchCount(matches.len()));
             }
@@ -885,7 +967,9 @@ fn resolve_embedded_link_fields(
             insert_fields,
             ..
         } => (list_item, link_field, count_field, Some(insert_fields)),
-        LinkOperation::Remove { .. } | LinkOperation::PrependUnique { .. } => return Ok(None),
+        LinkOperation::Remove { .. }
+        | LinkOperation::PrependUnique { .. }
+        | LinkOperation::UpsertByField { .. } => return Ok(None),
     };
 
     let selector_key = selected_storage_key(
@@ -1076,6 +1160,18 @@ mod tests {
         (parent, record)
     }
 
+    /// Record for the entity the fixtures link to. Inserted references
+    /// validate against a loaded record, and the engine loads inserted
+    /// keys' bases before applying, so fixtures must carry it too.
+    fn linked_item() -> (EntityKey<'static>, Record) {
+        (
+            EntityKey("GraphqlSoupItem:task-1".into()),
+            Record {
+                fields: BTreeMap::from([("id".into(), CacheValue::String("task-1".into()))]),
+            },
+        )
+    }
+
     fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
         OptimisticLinkPatch {
             query: QUERY.into(),
@@ -1241,6 +1337,7 @@ mod tests {
     #[test]
     fn remove_and_prepend_compose_without_touching_unrelated_values() {
         let (parent, initial) = record();
+        let (item_key, item_record) = linked_item();
         let mut effective = HashMap::from([
             (
                 EntityKey::root(),
@@ -1249,6 +1346,7 @@ mod tests {
                 },
             ),
             (parent.clone(), initial.clone()),
+            (item_key, item_record),
         ]);
         let mut updates = RecordUpdates::new();
         apply_link_patches(
@@ -1297,8 +1395,70 @@ mod tests {
     }
 
     #[test]
+    fn inserted_reference_requires_a_record() {
+        let (parent, initial) = record();
+        let base = HashMap::from([
+            (
+                EntityKey::root(),
+                Record {
+                    fields: BTreeMap::from([("user".into(), CacheValue::Ref(parent.clone()))]),
+                },
+            ),
+            (parent.clone(), initial.clone()),
+        ]);
+        let ghost = patch(
+            "completed",
+            LinkOperation::PrependUnique {
+                entity_key: EntityKey("GraphqlSoupItem:ghost".into()),
+            },
+        );
+
+        // Strict mode rejects the whole set: applying would plant a
+        // dangling reference and turn later reads into misses.
+        let mut effective = base.clone();
+        let mut updates = RecordUpdates::new();
+        assert_eq!(
+            apply_link_patches(
+                &mut effective,
+                &mut updates,
+                std::slice::from_ref(&ghost),
+                false
+            )
+            .unwrap_err(),
+            LinkPatchError::MissingLinkedRecord(EntityKey("GraphqlSoupItem:ghost".into()))
+        );
+        assert_eq!(effective.get(&parent), Some(&initial));
+        assert!(updates.is_empty());
+
+        // Skip mode (settlement, hydration) drops the not-applicable patch
+        // and leaves the base untouched for the revalidation to repair.
+        let mut effective = base;
+        let mut updates = RecordUpdates::new();
+        apply_link_patches(&mut effective, &mut updates, &[ghost], true).unwrap();
+        assert_eq!(effective.get(&parent), Some(&initial));
+        assert!(updates.is_empty());
+
+        // Removing a record-less reference stays a natural no-op: a delete
+        // must never require its target to still exist.
+        let mut updates = RecordUpdates::new();
+        apply_link_patches(
+            &mut effective,
+            &mut updates,
+            &[patch(
+                "in-progress",
+                LinkOperation::Remove {
+                    entity_key: EntityKey("GraphqlSoupItem:ghost".into()),
+                },
+            )],
+            false,
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn embedded_link_changes_create_bins_and_adjust_counts_once() {
         let (parent, initial) = record();
+        let (item_key, item_record) = linked_item();
         let mut effective = HashMap::from([
             (
                 EntityKey::root(),
@@ -1307,6 +1467,7 @@ mod tests {
                 },
             ),
             (parent.clone(), initial),
+            (item_key, item_record),
         ]);
         let mut updates = RecordUpdates::new();
         let urgent = upsert_bin_patch("urgent");

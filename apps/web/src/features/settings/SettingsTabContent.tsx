@@ -4,14 +4,13 @@ import { Show, Suspense } from 'solid-js';
 import { Account } from './Account';
 import { Admin } from './Admin';
 import { Agent } from './Agent';
-import { Agents } from './Agents';
+import { AgentSettings } from './AgentSettings';
 import { ApiKeys } from './ApiKeys';
 import { Appearance } from './Appearance';
 import { Billing } from './Billing';
 import { Bots } from './Bots';
 import { ConnectedAccounts } from './ConnectedAccounts';
 import { Crm } from './Crm';
-import { Harness } from './Harness';
 import { MobileApp } from './MobileApp';
 import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
@@ -68,10 +67,10 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
         <Agent />
       </Show>
       <Show when={isCurrentTab('Agents')}>
-        <Agents />
+        <AgentSettings />
       </Show>
       <Show when={isCurrentTab('Harness')}>
-        <Harness />
+        <AgentSettings initialSection="runtimes" />
       </Show>
       <Show when={isCurrentTab('Bots')}>
         <Bots />

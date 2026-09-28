@@ -272,3 +272,44 @@ fn notification_failure_preserves_durable_update_and_allows_idempotent_retry() {
     assert!(!retried.applied);
     assert_eq!(*port.calls.borrow(), ["persist", "broadcast", "keep_alive"]);
 }
+
+#[test]
+fn session_attribution_uses_the_verified_human_or_agent_identity() {
+    let long_user = format!(
+        "macro|{}@{}.{}.{}",
+        "a".repeat(64),
+        "b".repeat(63),
+        "c".repeat(63),
+        "d".repeat(61)
+    );
+    assert_eq!(long_user.len(), 260);
+    assert_eq!(
+        DocumentAttribution::from_session_claims(None, Some(long_user.clone()))
+            .unwrap()
+            .unwrap()
+            .actor,
+        long_user
+    );
+
+    let user = "macro|editor@example.com".to_string();
+    assert_eq!(
+        DocumentAttribution::from_session_claims(None, Some(user.clone())).unwrap(),
+        Some(DocumentAttribution {
+            actor: user.clone(),
+            on_behalf_of: None
+        })
+    );
+    assert_eq!(
+        DocumentAttribution::from_session_claims(Some("bot|agent".into()), Some(user.clone()))
+            .unwrap(),
+        Some(DocumentAttribution {
+            actor: "bot|agent".into(),
+            on_behalf_of: Some(user)
+        })
+    );
+    assert_eq!(
+        DocumentAttribution::from_session_claims(None, None).unwrap(),
+        None
+    );
+    assert!(DocumentAttribution::from_session_claims(None, Some("x".repeat(1025))).is_err());
+}

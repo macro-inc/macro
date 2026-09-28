@@ -462,6 +462,7 @@ fn generic_terminal_facts_restore_stops_without_changing_load_success_semantics(
             json!({"kind":"failed","message":"provider failed"}),
             StopReason::Failed {
                 message: "provider failed".into(),
+                notice: None,
             },
         ),
     ] {

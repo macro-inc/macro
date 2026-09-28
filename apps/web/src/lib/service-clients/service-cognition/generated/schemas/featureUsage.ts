@@ -9,13 +9,13 @@ import type { AiFeature } from './aiFeature';
 import type { CompletionUsage } from './completionUsage';
 
 /**
- * Usage for a single feature, with its rolled-up dollar total.
+ * Recorded invocations and total for one feature.
  */
 export interface FeatureUsage {
-  /** The individual completions recorded for this feature. */
+  /** Recorded invocations. */
   entries: CompletionUsage[];
-  /** The feature. */
+  /** Feature attribution. */
   feature: AiFeature;
-  /** Total cost across `entries` (USD). */
+  /** Total cost (USD). */
   total: number;
 }

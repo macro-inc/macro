@@ -11,7 +11,6 @@ import {
   registerEditorWidthObserver,
   registerInternalLayoutShiftListener,
 } from '@core/component/LexicalMarkdown/plugins';
-import { getScrollParentElement } from '@core/util/scrollParent';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import {
@@ -49,43 +48,6 @@ export function createCommentLayout() {
     Partial<Record<MarkId, number>>
   >({});
 
-  const [marginTop, setMarginTop] = createSignal(0);
-  const [scrollY, setScrollY] = createSignal(0);
-
-  createEffect(() => {
-    const commentMargin = md.commentMargin;
-
-    if (!commentMargin) {
-      return;
-    }
-
-    // Track the top of the bounding NON-scrolling element.
-    const blockContent = commentMargin.closest('[data-block-content]');
-    if (blockContent) {
-      const resizeObserver = new ResizeObserver(() => {
-        const top = blockContent?.getBoundingClientRect().top ?? 0;
-        setMarginTop(top);
-      });
-      resizeObserver.observe(blockContent);
-      onCleanup(() => {
-        resizeObserver.disconnect();
-      });
-    }
-
-    // Track the scroll top of the bounding scrolling element.
-    const scrollParent = getScrollParentElement(commentMargin);
-    if (scrollParent) {
-      const updateScrollY = () => {
-        const scrollTop = scrollParent.scrollTop;
-        setScrollY(scrollTop);
-      };
-      scrollParent.addEventListener('scroll', updateScrollY, { passive: true });
-      onCleanup(() => {
-        scrollParent.removeEventListener('scroll', updateScrollY);
-      });
-    }
-  });
-
   // Sort comments by their marks' positions.
   function markElementSort(a: HTMLElement, b: HTMLElement) {
     const { left: aLeft, top: aTop } = a.getBoundingClientRect();
@@ -97,7 +59,13 @@ export function createCommentLayout() {
   }
 
   createEffect(() => {
+    const commentMargin = md.commentMargin;
+    if (!commentMargin) return;
+
+    // Measure marks against the margin itself: it scrolls with the document,
+    // so the offsets hold at any scroll position without tracking scrollTop.
     const updateMarkPositions = () => {
+      const marginTop = commentMargin.getBoundingClientRect().top;
       for (const markId in commentState.marks) {
         const mark = commentState.marks[markId];
         if (!mark) continue;
@@ -107,7 +75,7 @@ export function createCommentLayout() {
 
         // attach the comment layout to the top element of the mark
         const topEl = markEls.sort(markElementSort)[0];
-        const top = topEl.getBoundingClientRect().top + scrollY();
+        const top = topEl.getBoundingClientRect().top - marginTop;
         setMarkLocationTops(markId, top);
       }
     };
@@ -119,6 +87,12 @@ export function createCommentLayout() {
       updateMarkPositions,
       LAYOUT_THROTTLE
     );
+
+    // The margin is display:none until the document has a comment; re-measure
+    // once it is laid out.
+    const marginResizeObserver = new ResizeObserver(() => throttledUpdate());
+    marginResizeObserver.observe(commentMargin);
+    onCleanup(() => marginResizeObserver.disconnect());
 
     // Throttle updates on comment positions. Update on (1) editor updates, (2)
     // internal layout shifts causes by non-updating element height changed to
@@ -152,7 +126,7 @@ export function createCommentLayout() {
           return {
             id: m.id,
             layout: {
-              top: top - marginTop(),
+              top,
             },
           };
         }

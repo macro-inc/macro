@@ -1,6 +1,8 @@
 import { EmailAttachmentPill } from '@app/features/email-message/components/attachment-pill';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
+import { isInlineMediaFileName } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { Telemetry } from '@macro-inc/observability';
 import { cn, Scroll } from '@ui';
@@ -16,6 +18,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { createAttachmentViewer } from '../components/attachment-viewer';
 import { MacroSignatureButton } from '../components/macro-signature-button';
 import { useCompose } from '../context/compose-context';
 import type { DraftFormAttachment } from '../primitives/email-form-state';
@@ -30,6 +33,8 @@ export function ComposeBody(props: {
   onAddFiles?: (files: File[]) => void;
 }) {
   const ctx = useCompose();
+  const attachmentViewer = createAttachmentViewer();
+  const resolveAppLink = useMacroMentionLinkResolver();
 
   const [editor, setEditor] = createSignal<LexicalEditor>();
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -97,8 +102,23 @@ export function ComposeBody(props: {
           use:fileFolderDrop={{
             onDragStart: (valid) => setIsDragging(valid),
             onDragEnd: () => setIsDragging(false),
-            onDrop: (files, dirs) => {
-              ctx.bodyActions.readDroppedFiles(files, dirs, (files) =>
+            onDrop: (files, dirs, event) => {
+              const ed = editor();
+              const media =
+                ed && event
+                  ? files.filter((file) => isInlineMediaFileName(file.name))
+                  : [];
+              if (ed && media.length > 0) {
+                ctx.bodyActions.insertFiles(ed, {
+                  files: media,
+                  directories: [],
+                  dropEvent: event,
+                  onVideos: props.onAddFiles,
+                });
+              }
+              const attachments = files.filter((file) => !media.includes(file));
+              if (attachments.length === 0 && dirs.length === 0) return;
+              ctx.bodyActions.readDroppedFiles(attachments, dirs, (files) =>
                 props.onAddFiles?.(files)
               );
             },
@@ -110,6 +130,7 @@ export function ComposeBody(props: {
 
           <Scroll>
             <MarkdownTextarea
+              resolveAppLink={resolveAppLink}
               autoLinkMatchMode="common-tlds"
               floatingFormatMenu
               domRef={props.inputRef}
@@ -154,7 +175,12 @@ export function ComposeBody(props: {
               portalScope="local"
               onPasteFilesAndDirs={(files, directories) => {
                 const ed = editor();
-                if (ed) ctx.bodyActions.pasteFiles(ed, files, directories);
+                if (!ed) return;
+                ctx.bodyActions.insertFiles(ed, {
+                  files,
+                  directories,
+                  onVideos: props.onAddFiles,
+                });
               }}
             />
           </Scroll>
@@ -162,9 +188,15 @@ export function ComposeBody(props: {
         {ctx.signaturePreview?.()}
         <div class="flex flex-wrap items-center gap-2">
           <For each={ctx.attachments()}>
-            {(attachment) => <AttachmentItem attachment={attachment} />}
+            {(attachment) => (
+              <AttachmentItem
+                attachment={attachment}
+                onOpen={attachmentViewer.onClickFor(attachment)}
+              />
+            )}
           </For>
         </div>
+        <attachmentViewer.Viewer />
       </div>
       <Show when={ctx.validationError('no_message')}>
         {(err) => <div class="text-failure-ink mt-1">{err().message}</div>}
@@ -173,7 +205,10 @@ export function ComposeBody(props: {
   );
 }
 
-function AttachmentItem(props: { attachment: DraftFormAttachment }) {
+function AttachmentItem(props: {
+  attachment: DraftFormAttachment;
+  onOpen?: () => void;
+}) {
   const ctx = useCompose();
 
   const handleRemove = () => {
@@ -191,6 +226,7 @@ function AttachmentItem(props: { attachment: DraftFormAttachment }) {
             }}
             removable
             onRemove={handleRemove}
+            onClick={props.onOpen}
           />
         )}
       </Match>
@@ -203,6 +239,7 @@ function AttachmentItem(props: { attachment: DraftFormAttachment }) {
             }}
             removable
             onRemove={handleRemove}
+            onClick={props.onOpen}
           />
         )}
       </Match>
@@ -215,6 +252,7 @@ function AttachmentItem(props: { attachment: DraftFormAttachment }) {
             }}
             removable
             onRemove={handleRemove}
+            onClick={props.onOpen}
           />
         )}
       </Match>

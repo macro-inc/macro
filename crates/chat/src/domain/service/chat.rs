@@ -24,6 +24,7 @@ use entity_access_management::domain::ports::EntityAccessManagementService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
@@ -204,7 +205,7 @@ where
 
         self.publish_chat_event(&ChatMacroEvent::created(ChatCreatedMetadata {
             chat_id: chat_id.clone(),
-            owner: user_id,
+            owner: Owner::User(user_id),
             name,
             project_id,
         }));

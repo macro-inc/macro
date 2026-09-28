@@ -99,6 +99,7 @@ fn searchable_text_includes_folded_json_and_visible_failure() {
     }]);
     message.stop = Some(StopReason::Failed {
         message: "runtime disconnected".to_owned(),
+        notice: None,
     });
 
     assert_eq!(

@@ -1,3 +1,6 @@
+//! An indexed `owner_id` is the owner's canonical principal string. "Mine" filters compare it
+//! directly with the caller's principal string, so indexing must preserve prefixes such as `bot|`.
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};

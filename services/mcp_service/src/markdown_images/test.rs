@@ -38,6 +38,10 @@ impl MarkdownImageResolver for FakeResolver {
     async fn resolve_dss(&self, _user_id: &MacroUserIdStr<'_>, id: &str) -> Option<ResolvedImage> {
         self.dss_images.get(id).cloned()
     }
+
+    async fn resolve_channel_image(&self, url: &str) -> Option<ResolvedImage> {
+        self.resolve_static(url).await
+    }
 }
 
 struct CountingResolver {
@@ -56,6 +60,10 @@ impl MarkdownImageResolver for CountingResolver {
 
     async fn resolve_dss(&self, _user_id: &MacroUserIdStr<'_>, _id: &str) -> Option<ResolvedImage> {
         None
+    }
+
+    async fn resolve_channel_image(&self, url: &str) -> Option<ResolvedImage> {
+        self.resolve_static(url).await
     }
 }
 

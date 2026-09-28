@@ -27,6 +27,7 @@ const REPO_ROOT = '../../..';
 
 type CreateCalendarServiceArgs = {
   calendarBackfillQueueArn: pulumi.Output<string> | string;
+  linkManagerQueueArn: pulumi.Output<string> | string;
   vpc: {
     vpcId: pulumi.Output<string> | string;
     privateSubnetIds: pulumi.Output<string[]> | string[];
@@ -55,6 +56,7 @@ export class CalendarService extends pulumi.ComponentResource {
     name: string,
     {
       calendarBackfillQueueArn,
+      linkManagerQueueArn,
       vpc,
       tags,
       platform,
@@ -70,7 +72,7 @@ export class CalendarService extends pulumi.ComponentResource {
     super('my:components:CalendarService', name, {}, opts);
     this.domain = `https://${
       stack === 'prod' ? '' : `${stack}-`
-    }gateway.${BASE_DOMAIN}/calendar-service`;
+    }gateway.${BASE_DOMAIN}/calendar`;
     this.tags = tags;
     this.cloudStorageClusterName = cloudStorageClusterName;
 
@@ -110,6 +112,11 @@ export class CalendarService extends pulumi.ComponentResource {
                 'sqs:DeleteMessage',
               ],
               Resource: [pulumi.interpolate`${calendarBackfillQueueArn}`],
+              Effect: 'Allow',
+            },
+            {
+              Action: ['sqs:SendMessage'],
+              Resource: [pulumi.interpolate`${linkManagerQueueArn}`],
               Effect: 'Allow',
             },
           ],
@@ -177,10 +184,10 @@ export class CalendarService extends pulumi.ComponentResource {
         containerPort: serviceContainerPort,
         service: GatewayService.CALENDAR_SERVICE,
         healthCheckPath,
-        // calendar-service does NOT own `/calendar` yet — email-service keeps
-        // that route until cutover. This temporary prefix keeps the dormant
-        // service reachable for health checks without shadowing email.
-        pathPatterns: ['/calendar-service', '/calendar-service/*'],
+        // calendar-service owns `/calendar` on the shared gateway listener
+        // (GatewayService.CALENDAR_SERVICE, priority 140) — see
+        // infra/packages/shared/src/gateway_priorities.ts.
+        pathPatterns: ['/calendar', '/calendar/*'],
         serviceSecurityGroupId: this.serviceSg.id,
         albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
       },

@@ -24,4 +24,4 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack", optional = true }
 
 [dev-dependencies]
-macro_user_id = { path = "../macro_user_id" }
+model_owner = { path = "../model_owner" }

@@ -18,6 +18,9 @@ import {
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
+  ChannelListItemFieldsFragmentDoc,
+  ChannelListSoupDocument,
+  type ChannelListSoupQuery,
   type MailItemFieldsFragment,
   MailItemFieldsFragmentDoc,
   SoupDocument,
@@ -48,6 +51,7 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
+import { NIL as NIL_UUID } from 'uuid';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { soupPageTimestamp } from '../page-timestamp';
 import {
@@ -75,6 +79,11 @@ export type GraphqlSoupAstItemsQueryArgs = {
 
 export type GraphqlSoupAstItemsQueryOptions = {
   enabled: boolean;
+  networkPaused?: boolean;
+  keepPreviousData?: boolean;
+  projection?: 'channel-list';
+  /** Reconcile indexed members while retaining server-only email rows. */
+  localReconciliation?: 'without-email';
   showSupportedForeignEntities?: boolean;
 };
 
@@ -142,6 +151,7 @@ export function createGraphqlSoupAstItemsQuery(
     generation: number;
     baselineKeys: ReadonlySet<string>;
     displayedKeys: ReadonlySet<string>;
+    withoutEmail: boolean;
     data: SoupAstItemsData;
     mail?: {
       nextCursor: string | null;
@@ -149,6 +159,14 @@ export function createGraphqlSoupAstItemsQuery(
       records: GraphqlSoupItem[];
     };
   };
+  type UnpersistedPage = {
+    input: GraphqlSoupInput | undefined;
+    generation: number;
+    observation: number;
+  };
+  const [unpersistedPages, setUnpersistedPages] = createSignal<
+    ReadonlyMap<number, UnpersistedPage>
+  >(new Map());
   const [currentCacheRevision, setCurrentCacheRevision] = createSignal<
     CacheRevision | undefined
   >();
@@ -159,12 +177,24 @@ export function createGraphqlSoupAstItemsQuery(
     LocalProjection | undefined
   >();
   const [localEvaluationTrigger, setLocalEvaluationTrigger] = createSignal(0);
+  const queryDocument = () =>
+    options().projection === 'channel-list'
+      ? ChannelListSoupDocument
+      : SoupDocument;
   const soupItemSelection = selectRecords(SoupItemFieldsFragmentDoc);
+  const channelListItemSelection = selectRecords(
+    ChannelListItemFieldsFragmentDoc
+  );
   const mailItemSelection = selectRecords(MailItemFieldsFragmentDoc);
   let localRequest = 0;
   let localEvaluationRunning = false;
   let localEvaluationPending = false;
   let cacheGeneration = 0;
+  let cacheObservation = 0;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const [baselineGeneration, setBaselineGeneration] = createSignal<number>();
   let previousInitialInput: GraphqlSoupInput | undefined;
   let networkAuthorityInput: GraphqlSoupInput | undefined;
@@ -181,6 +211,51 @@ export function createGraphqlSoupAstItemsQuery(
     staleFallbackSpan = undefined;
   };
 
+  const hasUnpersistedPages = (input: GraphqlSoupInput | undefined) =>
+    [...unpersistedPages().values()].some(
+      (page) => page.input === input && page.generation === cacheGeneration
+    );
+  const forgetUnpersistedPage = (index: number) => {
+    setUnpersistedPages((pages) => {
+      if (!pages.has(index)) return pages;
+      const next = new Map(pages);
+      next.delete(index);
+      return next;
+    });
+  };
+  const acknowledgeNetworkPage = async (
+    index: number,
+    page: UnpersistedPage,
+    persistence: Promise<CacheRevision | undefined>
+  ): Promise<void> => {
+    let revision: CacheRevision | undefined;
+    try {
+      revision = await persistence;
+    } catch {
+      // A failed cache write cannot revoke the successful network snapshot.
+      return;
+    }
+    if (
+      revision === undefined ||
+      disposed ||
+      page.generation !== cacheGeneration ||
+      page.input !== firstPageInput() ||
+      unpersistedPages().get(index) !== page
+    )
+      return;
+    batch(() => {
+      // Cache pushes (including optimistic writes) can arrive before this ack.
+      // Never rewind their watermark or republish/clear the visible row data.
+      if (cacheObservation === page.observation) {
+        setCurrentCacheRevision(revision);
+        cacheObservation += 1;
+      }
+      networkAuthorityInput = page.input;
+      setNetworkAuthorityRevision(revision);
+      forgetUnpersistedPage(index);
+    });
+  };
+
   createEffect(() => {
     const host = getGraphqlSoupCacheHost();
     if (!host) return;
@@ -191,6 +266,7 @@ export function createGraphqlSoupAstItemsQuery(
       setNetworkAuthorityRevision(undefined);
       setLocalProjection(undefined);
       setBaselineGeneration(undefined);
+      setUnpersistedPages(new Map());
     };
     const observeCurrentRevision = () => {
       const observedGeneration = cacheGeneration;
@@ -207,6 +283,7 @@ export function createGraphqlSoupAstItemsQuery(
         .catch(() => undefined);
     };
     const unsubscribeChanges = host.onCacheChanged((revision) => {
+      cacheObservation += 1;
       if (
         networkAuthorityRevision() !== undefined &&
         networkAuthorityRevision() !== revision &&
@@ -240,7 +317,14 @@ export function createGraphqlSoupAstItemsQuery(
     const input = firstPageInput();
     const queryOptions = options();
     const host = getGraphqlSoupCacheHost();
-    const records = serverRecords();
+    const withoutEmail = queryOptions.localReconciliation === 'without-email';
+    // Email membership remains server-owned. Leaving it out of the overlay's
+    // baseline makes displayData retain those rows, including later pages.
+    const records = withoutEmail
+      ? serverRecords().filter(
+          (record) => record.__typename !== 'GraphqlSoupEmailThread'
+        )
+      : serverRecords();
     const requestId = ++localRequest;
     const requestGeneration = cacheGeneration;
     if (input !== previousInitialInput) {
@@ -257,6 +341,7 @@ export function createGraphqlSoupAstItemsQuery(
       return;
     if (
       revision === undefined ||
+      hasUnpersistedPages(input) ||
       (networkAuthorityInput === input &&
         networkAuthorityRevision() === revision &&
         !offline() &&
@@ -275,14 +360,23 @@ export function createGraphqlSoupAstItemsQuery(
       localEvaluationPending = false;
       return;
     }
-    const filters = initial.filters ?? {};
+    const filters = withoutEmail
+      ? {
+          ...initial.filters,
+          emailFilter: { tree: { literal: { threadId: NIL_UUID } } },
+        }
+      : (initial.filters ?? {});
+    const mailView =
+      !withoutEmail && isCachedMailView(initial.emailView)
+        ? initial.emailView
+        : undefined;
     const sortMethod = initial.sortMethod;
     if (sortMethod !== 'CREATED_AT' && sortMethod !== 'UPDATED_AT') {
       localEvaluationPending = false;
       return;
     }
     const baseline = soupReconciliationBaseline(records, sortMethod);
-    if (!baseline && !isCachedMailView(initial.emailView)) {
+    if (!baseline && !mailView) {
       setLocalProjection(undefined);
       localEvaluationPending = false;
       return;
@@ -305,9 +399,6 @@ export function createGraphqlSoupAstItemsQuery(
       let outcome: 'success' | 'incomplete' | 'error' = 'incomplete';
       try {
         for (let attempt = 0; attempt < 3; attempt += 1) {
-          const mailView = isCachedMailView(initial.emailView)
-            ? initial.emailView
-            : undefined;
           let result = await host.entityFilter({
             filters,
             sortMethod,
@@ -343,11 +434,13 @@ export function createGraphqlSoupAstItemsQuery(
             offset += 500
           ) {
             chunks.push(
-              await readRecordsByKeys(
+              await readRecordsByKeys<GraphqlSoupItem>(
                 host,
                 result.kind === 'mail-page'
                   ? mailItemSelection
-                  : soupItemSelection,
+                  : queryOptions.projection === 'channel-list'
+                    ? channelListItemSelection
+                    : soupItemSelection,
                 result.keys.slice(offset, offset + 500)
               )
             );
@@ -400,6 +493,7 @@ export function createGraphqlSoupAstItemsQuery(
               result.kind === 'mail-page' ? [] : records.map(soupItemKey)
             ),
             displayedKeys: new Set(reconciledRecords.map(soupItemKey)),
+            withoutEmail,
             ...(result.kind === 'mail-page'
               ? {
                   mail: {
@@ -468,7 +562,10 @@ export function createGraphqlSoupAstItemsQuery(
     return ({
       pages,
       pageParams,
-    }: UrqlInfiniteData<SoupQuery, string | null>): ServerProjection => {
+    }: UrqlInfiniteData<
+      SoupQuery | ChannelListSoupQuery,
+      string | null
+    >): ServerProjection => {
       const mappedPages = pages.map(mapGraphqlSoupPage);
       const oldestFetchedTimestamp = soupPageTimestamp(
         mappedPages.flatMap((page) => page.items.map(mapApiSoupItemToEntity)),
@@ -480,7 +577,9 @@ export function createGraphqlSoupAstItemsQuery(
           showSupportedForeignEntities,
         })
       );
-      const records = pages.flatMap((page) => page.user.soup.items);
+      const records = pages.flatMap<GraphqlSoupItem>(
+        (page) => page.user.soup.items
+      );
       return {
         // Raw wire records are reconciliation evidence, not reactive UI state.
         // Publish them atomically without walking their entire notification
@@ -493,7 +592,7 @@ export function createGraphqlSoupAstItemsQuery(
   });
 
   const query = createUrqlInfiniteQuery<
-    SoupQuery,
+    SoupQuery | ChannelListSoupQuery,
     SoupQueryVariables,
     string | null,
     ServerProjection
@@ -502,7 +601,7 @@ export function createGraphqlSoupAstItemsQuery(
     const queryOptions = options();
 
     return {
-      query: SoupDocument,
+      query: queryDocument(),
       client: getGraphqlSoupClient(),
       initialPageParam: null,
       variables: (cursor) => {
@@ -515,14 +614,52 @@ export function createGraphqlSoupAstItemsQuery(
       getNextPageParam: (lastPage) =>
         lastPage.user.soup.nextCursor ?? undefined,
       enabled: queryOptions.enabled && firstInput !== undefined,
-      requestPolicy: 'cache-and-network',
-      keepPreviousData: false,
+      requestPolicy: queryOptions.networkPaused
+        ? 'cache-only'
+        : 'cache-and-network',
+      keepPreviousData: queryOptions.keepPreviousData ?? false,
       onResult: (result, page) => {
-        if (result.data) setBaselineGeneration(cacheGeneration);
-        if (page.pageIndex !== 0) return;
+        if (!result.data) return;
+        setBaselineGeneration(cacheGeneration);
         const metadata = normalizedCacheResultMetadata(result);
-        if (metadata?.source !== 'live-network' || !metadata.revision) return;
+        if (metadata?.source !== 'live-network') {
+          // An affected/cache result already reflects local state. Its pending
+          // network acknowledgement may no longer claim authority over it.
+          forgetUnpersistedPage(page.pageIndex);
+          return;
+        }
+        if (metadata.persistence) {
+          const pending: UnpersistedPage = {
+            input: firstInput,
+            generation: cacheGeneration,
+            observation: cacheObservation,
+          };
+          localRequest += 1;
+          batch(() => {
+            setUnpersistedPages((pages) =>
+              new Map(
+                [...pages].filter(
+                  ([, entry]) =>
+                    entry.input === firstInput &&
+                    entry.generation === cacheGeneration
+                )
+              ).set(page.pageIndex, pending)
+            );
+            setLocalProjection(undefined);
+          });
+          recordAuthority('network');
+          finishStaleFallback('network');
+          void acknowledgeNetworkPage(
+            page.pageIndex,
+            pending,
+            metadata.persistence
+          );
+          return;
+        }
+        forgetUnpersistedPage(page.pageIndex);
+        if (page.pageIndex !== 0 || !metadata.revision) return;
         networkAuthorityInput = firstInput;
+        cacheObservation += 1;
         batch(() => {
           setCurrentCacheRevision(metadata.revision);
           setNetworkAuthorityRevision(metadata.revision);
@@ -541,7 +678,9 @@ export function createGraphqlSoupAstItemsQuery(
       const cursors = new Set([null, ...(query.data?.pageParams ?? [])]);
       return [...cursors].flatMap((cursor) => {
         const input = inputForCursor(cursor);
-        return input ? [{ document: SoupDocument, variables: { input } }] : [];
+        return input
+          ? [{ document: queryDocument(), variables: { input } }]
+          : [];
       });
     })
   );
@@ -566,7 +705,17 @@ export function createGraphqlSoupAstItemsQuery(
     if (
       !local ||
       local.input !== firstPageInput() ||
-      local.generation !== cacheGeneration
+      local.generation !== cacheGeneration ||
+      local.withoutEmail !== (options().localReconciliation === 'without-email')
+    )
+      return undefined;
+    // A partial projection with no visible rows after pending deletes cannot
+    // prove that a folder is empty (it could contain only email). Keep initial
+    // loading/errors until the server establishes membership.
+    if (
+      local.withoutEmail &&
+      !query.data &&
+      local.data.entities.every((entity) => pendingDeleteIds().has(entity.id))
     )
       return undefined;
     const keys = serverRecordKeys();
@@ -576,11 +725,12 @@ export function createGraphqlSoupAstItemsQuery(
     return local;
   };
   const networkIsAuthoritative = (): boolean =>
-    !offline() &&
-    !query.error?.networkError &&
-    networkAuthorityInput === firstPageInput() &&
-    networkAuthorityRevision() !== undefined &&
-    networkAuthorityRevision() === currentCacheRevision();
+    hasUnpersistedPages(firstPageInput()) ||
+    (!offline() &&
+      !query.error?.networkError &&
+      networkAuthorityInput === firstPageInput() &&
+      networkAuthorityRevision() !== undefined &&
+      networkAuthorityRevision() === currentCacheRevision());
 
   // An overlay covers only the server rows that existed when it was evaluated.
   // New server pages must render immediately, even if the next evaluation stalls

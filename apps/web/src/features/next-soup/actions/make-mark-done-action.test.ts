@@ -118,7 +118,14 @@ function createAction() {
 
 describe('canExecuteMarkDoneOnView', () => {
   it('allows mark done on every thread-listing mail tab', () => {
-    for (const tab of ['important', 'noise', 'calendar', 'shared', 'all']) {
+    for (const tab of [
+      'important',
+      'noise',
+      'favorites',
+      'calendar',
+      'shared',
+      'all',
+    ]) {
       expect(canExecuteMarkDoneOnView('mail', tab)).toBe(true);
     }
   });
@@ -146,6 +153,48 @@ describe('makeMarkDoneAction', () => {
       reminderIds: [],
     });
     mocks.toNotificationEntityRef.mockReset();
+  });
+
+  it('allows mark done on agent-session rows', () => {
+    const { action, dispose } = createAction();
+
+    expect(
+      action.canExecute({
+        type: 'agent_session',
+        id: 'session-1',
+      } as EntityData)
+    ).toBe(true);
+    expect(
+      action.canExecute({ type: 'channel_message', id: 'msg-1' } as EntityData)
+    ).toBe(false);
+    dispose();
+  });
+
+  it('uses the agent-session entity target while GraphQL Soup is enabled', async () => {
+    mocks.graphqlSoupEnabled.mockReturnValue(true);
+    mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
+      emailIds: [],
+      notificationIds: ['agent-notification'],
+      reminderIds: [],
+    });
+    mocks.toNotificationEntityRef.mockReturnValue({
+      type: 'agent_session',
+      id: 'session-1',
+    });
+    const session = { type: 'agent_session', id: 'session-1' } as EntityData;
+    const { action, dispose } = createAction();
+
+    await action.execute([session]);
+
+    expect(mocks.toNotificationEntityRef).toHaveBeenCalledWith(session);
+    expect(mocks.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exactNotificationIds: { current: [] },
+        notificationEntities: [{ type: 'agent_session', id: 'session-1' }],
+        optimisticNotificationIds: ['agent-notification'],
+      })
+    );
+    dispose();
   });
 
   it('moves list focus without opening the next entity', async () => {
@@ -237,7 +286,7 @@ describe('makeMarkDoneAction', () => {
 
   it('keeps whole-channel inbox writes ID-based to exclude thread rows', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
-    mocks.splitHandle.content.mockReturnValue({ id: 'inbox' });
+    mocks.splitHandle.content.mockReturnValue({ id: 'home' });
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['channel-notification'],
@@ -263,7 +312,7 @@ describe('makeMarkDoneAction', () => {
 
   it('uses the canonical message entity for inbox channel-thread rows', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(true);
-    mocks.splitHandle.content.mockReturnValue({ id: 'inbox' });
+    mocks.splitHandle.content.mockReturnValue({ id: 'home' });
     mocks.resolveMarkEntitiesDoneVariables.mockReturnValue({
       emailIds: [],
       notificationIds: ['thread-notification'],

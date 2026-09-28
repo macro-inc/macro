@@ -4,6 +4,7 @@ import type { ChatData } from '@block-chat/definition';
 import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId, useIsNestedBlock } from '@core/block';
@@ -41,6 +42,7 @@ import {
   storeChatState,
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -97,6 +99,7 @@ function ChatWithController(props: {
   loadedInputText: string | undefined;
 }) {
   const { showPaywall } = usePaywallState();
+  const { showUsageLimit } = useAiUsageLimitState();
   const input = useChatInputContext();
   const hasPaidAccess = useHasPaidAccess();
 
@@ -127,6 +130,7 @@ function ChatWithController(props: {
       messages={props.data.chat.messages}
       controllerOptions={{
         onShowPaywall: showPaywall,
+        onShowUsageLimit: showUsageLimit,
         onSwitchModel,
         hasAlternateModel: () => nextModel() !== undefined,
       }}
@@ -160,11 +164,13 @@ function ChatInner(props: {
     input.attachments,
     getAttachmentFromMention
   );
-  const editor = buildChatEditor().withMentions({
-    ...attachmentMentionCallbacks,
-    block: 'chat',
-    showOpenTabs: true,
-  });
+  const editor = buildChatEditor()
+    .withAppLinkResolver(useMacroMentionLinkResolver())
+    .withMentions({
+      ...attachmentMentionCallbacks,
+      block: 'chat',
+      showOpenTabs: true,
+    });
 
   // Sync isGenerating from controller phase
   createEffect(() => {
@@ -227,6 +233,7 @@ function ChatInner(props: {
       chat.dispatch({
         type: 'send_failed',
         paymentError: result.paymentError,
+        usageLimit: result.usageLimit,
       });
       return;
     }

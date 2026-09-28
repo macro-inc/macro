@@ -2304,7 +2304,7 @@ fn team_share_facts(
 ) -> TeamShareFacts {
     TeamShareFacts {
         entity: EntityType::Project.with_entity_string(project_id.to_string()),
-        owner,
+        owner: owner.into(),
         owner_team_id,
         current: None,
         revision,

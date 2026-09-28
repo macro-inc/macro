@@ -62,7 +62,10 @@ describe('composer model discovery', () => {
   it('does not read pending resource data and exposes discovered choices when ready', () => {
     createRoot((dispose) => {
       const [ready, setReady] = createSignal(false);
-      const models = [{ id: 'runtime-model', name: 'Runtime model' }];
+      const models = [
+        { id: 'runtime-model', name: 'Runtime model' },
+        { id: 'anthropic/claude-fable-5-1', name: 'Fable 5.1' },
+      ];
       discovery.queries = [
         {
           get isSuccess() {
@@ -93,7 +96,7 @@ describe('composer model discovery', () => {
       expect(source.models()).toEqual([]);
       expect(source.message()).toBe('Loading models…');
       setReady(true);
-      expect(source.models()).toEqual(models);
+      expect(source.models()).toEqual([models[0]]);
       expect(source.currentModel()).toBe('runtime-model');
       dispose();
     });

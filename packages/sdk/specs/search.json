@@ -198,7 +198,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+            "description": "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           }
         }
       },
@@ -645,7 +645,6 @@
           "id",
           "owner_id",
           "call_id",
-          "channel_id",
           "participant_ids",
           "call_search_results"
         ],
@@ -661,7 +660,7 @@
             }
           },
           "channel_id": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "id": {
@@ -1191,7 +1190,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -1540,7 +1539,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -2164,9 +2163,17 @@
             "$ref": "#/components/schemas/EmailFilters",
             "description": "the bundled [EmailFilters]"
           },
+          "favorites_only": {
+            "type": ["boolean", "null"],
+            "description": "Restrict results to the authenticated viewer's favorites when true."
+          },
           "foreign_entity_filters": {
             "$ref": "#/components/schemas/ForeignEntityFilters",
             "description": "the bundled [ForeignEntityFilters]"
+          },
+          "initiative_filters": {
+            "$ref": "#/components/schemas/InitiativeFilters",
+            "description": "Initiative filters. Initiatives are opt-in."
           },
           "project_filters": {
             "$ref": "#/components/schemas/ProjectFilters",
@@ -2224,6 +2231,7 @@
           "CHAT",
           "COMPANY",
           "DOCUMENT",
+          "INITIATIVE",
           "PROJECT",
           "TASK",
           "THREAD",
@@ -2722,6 +2730,44 @@
           }
         }
       },
+      "InitiativeFilters": {
+        "type": "object",
+        "description": "Filters for initiatives.",
+        "properties": {
+          "due_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive lower due-date bound."
+          },
+          "due_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive upper due-date bound."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in."
+          },
+          "initiative_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Initiative ids to filter by. Empty to include all accessible initiatives."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Case-insensitive name substring."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+          }
+        }
+      },
       "MatchType": {
         "type": "string",
         "enum": ["exact", "partial", "regexp", "query"]
@@ -2766,7 +2812,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+            "description": "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
           },
           "project_ids": {
             "type": "array",
@@ -3269,7 +3315,6 @@
       "SearchGotoCallRecord": {
         "type": "object",
         "required": [
-          "channel_id",
           "transcript_id",
           "speaker_id",
           "sequence_num",
@@ -3278,7 +3323,7 @@
         ],
         "properties": {
           "channel_id": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "ended_at": {
@@ -3549,7 +3594,6 @@
         "type": "object",
         "required": [
           "call_id",
-          "channel_id",
           "user_id",
           "participant_ids",
           "started_at",
@@ -3562,7 +3606,7 @@
             "type": "string"
           },
           "channel_id": {
-            "type": "string"
+            "type": ["string", "null"]
           },
           "channel_name": {
             "type": ["string", "null"]

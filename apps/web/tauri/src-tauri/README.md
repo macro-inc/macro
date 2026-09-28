@@ -24,6 +24,22 @@ single `vite.config.ts`.
 You can override the dev server host for devices/emulators by exporting
 `TAURI_DEV_HOST` before running `cargo tauri …`.
 
+Default native logging keeps Turso at `warn`, including Debug builds: its
+per-record/page debug spans are expensive through iOS OS activity logging.
+Application and Tao debug logs remain enabled in Debug builds. An explicit
+`RUST_LOG` still overrides the defaults; opt into Turso debug logs only for a
+focused diagnostic, not startup/performance measurements. Persistent-cache startup
+and explicit integrity checks are described in the
+[cache guide](../../../../crates/client/README.md#startup-and-integrity-checks).
+
+The native workspace also optimizes the `turso_core` dependency in Debug builds
+and disables only that dependency's internal debug assertions. Its per-cell B-tree
+validation otherwise makes large read-only filter queries unrepresentative of
+release execution. The app and cache adapters remain debuggable, and their schema,
+codec, scope, and queued-write validation is unchanged. Root-workspace storage tests
+still exercise the ordinary Debug VM; native integration tests exercise this
+optimized dependency profile.
+
 ## iOS 27 scene lifecycle
 
 Apps built with the iOS 27 SDK must use the scene lifecycle. Keep the
@@ -95,6 +111,12 @@ its initializer to remain unresolved only in the unused iOS dylib. The final
 Xcode app link must still resolve `init_plugin_call_kit` from the Swift package.
 Do not remove Android's `cdylib` output or disable undefined-symbol checking
 globally to work around an iOS link failure.
+
+GraphQL hydration checkpoints require the native
+`graphql_cache_current_storage_generation` command. When shipping this frontend
+through the bundle updater, set `MIN_NATIVE_BUILD` to the first native build that
+includes that command. Older binaries must receive a native update before this
+bundle; they cannot validate a saved hydration cursor against the cache database.
 
 ## Automated offline tests (Linux)
 

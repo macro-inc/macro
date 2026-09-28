@@ -1,0 +1,34 @@
+# The aliased selection is unread evidence, never a complete list for bulk reads.
+query ChannelListSoup($input: SoupInput!) {
+	user {
+		id
+		emailLinks @cacheOnly { id emailAddress photoUrl }
+		soup(input: $input) {
+			items { ...ChannelListItemFields }
+			nextCursor
+		}
+	}
+}
+
+fragment ChannelListItemFields on GraphqlSoupEntity {
+	...SoupItemPreviewFields
+	... on GraphqlSoupChannel {
+		unreadNotifications: notifications(
+			filter: {
+				states: [UNSEEN]
+				eventTypes: ["channel_mention", "channel_message_send", "channel_message_reply", "document_mention"]
+			}
+			limit: 1
+		) {
+			id
+			state
+			createdAt
+		}
+	}
+}
+
+# Retained for decoding legacy notification projections, not used by the bounded list.
+fragment ChannelListNotificationFields on GraphqlNotification {
+	...SoupNotificationStateFields
+	metadata { ...SoupNotificationNavigationMetadataFields }
+}

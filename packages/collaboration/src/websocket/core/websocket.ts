@@ -403,6 +403,14 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       if (this.binaryType !== undefined) {
         this._underlyingWebsocket.binaryType = this.binaryType;
       }
+    } catch {
+      // URL resolution can require online authorization. No native socket
+      // exists to emit a close event when that fails, so retry it here too.
+      if (!this._closedByUser) {
+        this.connectionState = WebsocketConnectionState.Closed;
+        this.dispatchEvent(WebsocketEvent.Error, new Event('error'));
+        this.scheduleConnectionRetryIfNeeded();
+      }
     } finally {
       this.connectPending = false;
     }

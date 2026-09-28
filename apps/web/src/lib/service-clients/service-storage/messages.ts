@@ -3,14 +3,18 @@ import { dssFetch } from './client';
 import type { Message as StoredMessage } from './generated/schemas/message';
 import type { MessageCursor } from './generated/schemas/messageCursor';
 import type { MessageParent } from './generated/schemas/messageParent';
-import type { MessageThread } from './generated/schemas/messageThread';
+import type { MessageThread as StoredMessageThread } from './generated/schemas/messageThread';
 import type { PostMessage } from './generated/schemas/postMessage';
 import type { ThreadPatch } from './generated/schemas/threadPatch';
 import type { ThreadState } from './generated/schemas/threadState';
 
-export type { MessageParent, MessageThread, PostMessage, ThreadPatch };
+export type { MessageParent, PostMessage, ThreadPatch };
 export type Message = StoredMessage & {
   sender?: import('./generated/schemas/apiMessageSender').ApiMessageSender;
+};
+export type MessageThread = Omit<StoredMessageThread, 'root' | 'replies'> & {
+  root: Message;
+  replies: Message[];
 };
 export type { MessagePatch } from './generated/schemas/messagePatch';
 export type { MessageCursor };

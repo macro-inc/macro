@@ -16,7 +16,11 @@ import { useInput, useInputCommands } from './context';
  * to accept whatever it would accept on a drop.
  */
 export function AttachFilesAction(
-  props: { accept?: string | null; disabled?: boolean } = {}
+  props: {
+    accept?: string | null;
+    disabled?: boolean;
+    children?: JSX.Element;
+  } = {}
 ) {
   const commands = useInputCommands();
   let fileInputRef: HTMLInputElement | undefined;
@@ -53,7 +57,7 @@ export function AttachFilesAction(
         disabled={props.disabled}
         onClick={() => fileInputRef?.click()}
       >
-        <PaperclipIcon />
+        {props.children ?? <PaperclipIcon />}
       </InputActionButton>
     </>
   );

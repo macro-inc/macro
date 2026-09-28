@@ -22,7 +22,6 @@ const CATEGORY_TO_INDEX: Partial<Record<CategoryFilter, SearchIndexId>> = {
   documents: 'document-or-file',
   tasks: 'task',
   chats: 'agent',
-  projects: 'folders',
 };
 
 export function getCategorySearchFilters(

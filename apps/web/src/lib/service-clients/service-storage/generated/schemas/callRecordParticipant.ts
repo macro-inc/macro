@@ -14,6 +14,6 @@ export interface CallRecordParticipant {
   joinedAt: string;
   /** When the user left (None if still in an active call). */
   leftAt?: CallRecordParticipantLeftAt;
-  /** The user id. */
+  /** The Macro user id. */
   userId: string;
 }

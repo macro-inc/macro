@@ -2,11 +2,7 @@ import {
   type ParsedDuration,
   parsedDurationToMilliseconds,
 } from '@core/util/dateSearch/dateParser';
-import type {
-  Query,
-  QueryCacheNotifyEvent,
-  QueryKey,
-} from '@tanstack/query-core';
+import type { Query, QueryClient, QueryKey } from '@tanstack/query-core';
 import type {
   PerQueryPersistence,
   PersistedQueryEntry,
@@ -29,20 +25,14 @@ export type PersistScope = Readonly<{
   buster: string;
   shouldPersist: (queryKey: QueryKey) => boolean;
   shouldRestore?: (queryKey: QueryKey) => boolean;
+  /** Reject persisted values before publishing them to query observers. */
+  shouldRestoreData?: (data: unknown) => boolean;
 }>;
 
-type QueryClientLike = {
-  getQueryCache: () => {
-    subscribe: (listener: (event: QueryCacheNotifyEvent) => void) => () => void;
-  };
-  getQueryState: (
-    queryKey: QueryKey
-  ) => { status: string; data: unknown; dataUpdatedAt: number } | undefined;
-  setQueryData: (
-    queryKey: QueryKey,
-    data: unknown,
-    options?: { updatedAt?: number }
-  ) => void;
+export type QueryPersistence = {
+  /** Restore this query without starting or waiting for its network request. */
+  restoreQuery: (queryKey: QueryKey) => Promise<void>;
+  dispose: () => void;
 };
 
 /**
@@ -69,14 +59,15 @@ function validatePersistedEntry(
  * a fresh fetch resolves before the IDB read completes.
  */
 async function handleRestore(
-  queryClient: QueryClientLike,
+  queryClient: QueryClient,
   scope: PersistScope,
-  query: Query
+  query: Query,
+  isCurrent: () => boolean
 ): Promise<void> {
   if (scope.shouldRestore && !scope.shouldRestore(query.queryKey)) return;
 
-  const state = queryClient.getQueryState(query.queryKey);
-  if (state && state.status === 'success') return;
+  const state = query.state;
+  if (state.data !== undefined) return;
 
   let entry: PersistedQueryEntry | undefined;
   try {
@@ -86,18 +77,26 @@ async function handleRestore(
     return;
   }
 
-  if (!entry) return;
+  // Removal/recreation, disposal, or a fresh update (including logout) fences
+  // an older IDB read even when the replacement query is pending or errored.
+  if (
+    !entry ||
+    !isCurrent() ||
+    query.state.dataUpdateCount !== state.dataUpdateCount ||
+    (scope.shouldRestore && !scope.shouldRestore(query.queryKey))
+  )
+    return;
 
   const maxAgeMs = scope.maxAge
     ? parsedDurationToMilliseconds(scope.maxAge)
     : undefined;
-  if (validatePersistedEntry(entry, scope.buster, maxAgeMs) !== 'valid') {
+  if (
+    validatePersistedEntry(entry, scope.buster, maxAgeMs) !== 'valid' ||
+    (scope.shouldRestoreData && !scope.shouldRestoreData(entry.data))
+  ) {
     scope.store.remove(query.queryHash);
     return;
   }
-
-  const current = queryClient.getQueryState(query.queryKey);
-  if (current && current.status === 'success') return;
 
   queryClient.setQueryData(query.queryKey, entry.data, {
     updatedAt: entry.dataUpdatedAt,
@@ -128,18 +127,44 @@ function handleUpdate(scope: PersistScope, query: Query): void {
  * - On 'updated': writes the query's successful data to IDB.
  * - On 'removed': deletes the query's entry from IDB.
  *
- * Returns an unsubscribe function to stop listening.
+ * Restoration is shared with explicit callers; it never waits for the network.
+ * Dispose stops listening and fences unfinished restores.
  */
 export function setupQueryPersistence(
   params: Readonly<{
-    queryClient: QueryClientLike;
+    queryClient: QueryClient;
     scopes: readonly PersistScope[];
   }>
-): () => void {
+): QueryPersistence {
   const { queryClient, scopes } = params;
+  const restores = new WeakMap<Query, Promise<void>>();
+  let disposed = false;
 
   const findScope = (queryKey: QueryKey) =>
     scopes.find((s) => s.shouldPersist(queryKey));
+
+  async function restoreFromStore(query: Query, scope: PersistScope) {
+    try {
+      await handleRestore(
+        queryClient,
+        scope,
+        query,
+        () =>
+          !disposed &&
+          queryClient.getQueryCache().get(query.queryHash) === query
+      );
+    } catch {
+      console.error('[query] IDB restore failed');
+    }
+  }
+
+  const restore = (query: Query, scope: PersistScope): Promise<void> => {
+    const existing = restores.get(query);
+    if (existing) return existing;
+    const pending = restoreFromStore(query, scope);
+    restores.set(query, pending);
+    return pending;
+  };
 
   const flushAll = () => {
     for (const scope of scopes) {
@@ -161,9 +186,7 @@ export function setupQueryPersistence(
     if (!scope) return;
 
     if (type === 'added') {
-      handleRestore(queryClient, scope, query).catch((err) => {
-        console.error('[query] IDB restore failed', err);
-      });
+      void restore(query, scope);
     } else if (type === 'updated') {
       handleUpdate(scope, query);
     } else {
@@ -171,8 +194,21 @@ export function setupQueryPersistence(
     }
   });
 
-  return () => {
-    cacheUnsubscribe();
-    document.removeEventListener('visibilitychange', onVisibilityChange);
+  return {
+    restoreQuery(queryKey) {
+      const scope = findScope(queryKey);
+      if (disposed || !scope) return Promise.resolve();
+      // Building a missing query emits `added`, starting the same restore that
+      // an observer would start, without issuing a request or needing a queryFn.
+      const query = queryClient
+        .getQueryCache()
+        .build(queryClient, { queryKey });
+      return restore(query, scope);
+    },
+    dispose() {
+      disposed = true;
+      cacheUnsubscribe();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    },
   };
 }

@@ -3,7 +3,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
+use super::attachment::{AttachmentDraft, AttachmentForwarded, MessageAttachment};
 use super::contact::{ContactInfo, RecipientType};
+use super::label::MessageLabel;
+use super::link::Link;
 
 /// Input for creating a draft message. Mirrors the fields from `MessageToSend`.
 #[derive(Debug, Clone)]
@@ -46,6 +49,14 @@ pub struct CreateDraftInput {
     /// delegated inboxes; attribution (events, activity) follows the actor.
     /// Ignored for drafts.
     pub actor: Option<MacroUserIdStr<'static>>,
+    /// Client draft handle to bind to the final message row. Set only by
+    /// user-scoped (GraphQL) saves during handle resolution — never from a
+    /// request body. The binding is upserted inside the insert transaction
+    /// so replayed offline saves converge on one server-minted row.
+    pub draft_client_binding: Option<Uuid>,
+    /// Client thread handle to bind to the final thread row; same contract
+    /// as `draft_client_binding`.
+    pub thread_client_binding: Option<Uuid>,
 }
 
 /// A draft input with all IDs resolved, ready for database insertion.
@@ -83,6 +94,25 @@ pub struct ResolvedDraftInput {
     /// The sending user's principal string, persisted with the scheduled
     /// send so the eventual `message_sent` event can attribute the actor.
     pub actor_id: Option<String>,
+    /// Client draft handle to bind to `db_id` in the insert transaction.
+    pub draft_client_id: Option<Uuid>,
+    /// Client thread handle to bind to `thread_db_id` in the insert
+    /// transaction.
+    pub thread_client_id: Option<Uuid>,
+}
+
+/// The row IDs a save actually settled on, reported back by the insert.
+///
+/// Usually these are the IDs the caller resolved, but a save carrying a
+/// client draft handle can adopt a row a concurrent first save minted for
+/// the same handle, so the caller must echo these — not its own candidates —
+/// back to the client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SettledDraftIds {
+    /// The message row the save wrote.
+    pub message_db_id: Uuid,
+    /// The thread that message belongs to.
+    pub thread_db_id: Uuid,
 }
 
 /// Simplified message info used for validation queries.
@@ -102,6 +132,58 @@ pub struct SimpleMessageInfo {
     pub is_sent: bool,
     /// Whether the message is a draft.
     pub is_draft: bool,
+}
+
+/// A draft saved on behalf of a user, paired with the sending inbox the save
+/// resolved into — transports that build a message representation of the
+/// draft (the GraphQL payload) need the inbox's address for the sender.
+/// Metadata and attachment collections have been loaded successfully; a failed load
+/// returns an error instead of an incomplete saved draft.
+#[derive(Clone)]
+pub struct SavedUserDraft {
+    /// The created or updated draft.
+    pub draft: CreatedDraft,
+    /// The inbox the draft was saved into.
+    pub link: Link,
+    /// Persisted creation time; updating a draft does not reset it.
+    pub created_at: DateTime<Utc>,
+    /// Persisted modification time after the save.
+    pub updated_at: DateTime<Utc>,
+    /// Persisted labels, loaded after saving.
+    pub labels: Vec<MessageLabel>,
+    /// Persisted provider attachments, loaded after saving.
+    pub attachments: Vec<MessageAttachment>,
+    /// Persisted uploaded draft attachments, loaded after saving.
+    pub attachments_draft: Vec<AttachmentDraft>,
+    /// Persisted forwarded attachments, loaded after saving.
+    pub attachments_forwarded: Vec<AttachmentForwarded>,
+}
+
+/// Persisted message timestamps used when returning an updated draft.
+#[derive(Debug, Clone, Copy)]
+pub struct MessageTimestamps {
+    /// When the message was first stored.
+    pub created_at: DateTime<Utc>,
+    /// When the stored message was last updated.
+    pub updated_at: DateTime<Utc>,
+}
+
+/// What an applied guarded draft delete removed beyond the draft row.
+#[derive(Debug, Clone, Copy)]
+pub struct DraftDeletion {
+    /// Whether deleting the draft emptied its thread and removed it too.
+    pub thread_deleted: bool,
+}
+
+/// Outcome of a user-scoped draft deletion. Deletes are idempotent: a replay
+/// after the row is already gone reports `deleted: false` instead of failing,
+/// so a queued offline delete lands cleanly no matter how late it arrives.
+#[derive(Debug, Clone, Copy)]
+pub struct DeletedUserDraft {
+    /// Whether a draft row was actually deleted.
+    pub deleted: bool,
+    /// Whether the delete emptied the draft's thread and removed it too.
+    pub thread_deleted: bool,
 }
 
 /// The result of creating a draft.

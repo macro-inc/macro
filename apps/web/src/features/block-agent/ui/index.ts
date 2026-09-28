@@ -25,12 +25,11 @@ export {
   ElicitationForm,
   type ElicitationFormProps,
 } from './ElicitationForm';
-export { FoldedAnsiText } from './FoldedAnsiText';
 export {
-  exchangeText,
-  FoldedExchange,
-  type FoldedExchangeProps,
-} from './FoldedExchange';
+  FailureNoticeCard,
+  type FailureNoticeCardProps,
+} from './FailureNoticeCard';
+export { FoldedAnsiText } from './FoldedAnsiText';
 export { FoldedOutput } from './FoldedOutput';
 export { FoldedPathList } from './FoldedPathList';
 export { FoldedTerminal } from './FoldedTerminal';

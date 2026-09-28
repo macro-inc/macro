@@ -27,12 +27,14 @@ use macro_user_id::{
     user_id::{MacroUserId, MacroUserIdStr},
 };
 use model_entity::EntityType as ModelEntityType;
+use model_owner::Owner;
 use model_user::UserContext;
 use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
 use models_soup::{
     chat::SoupChat,
     document::SoupDocument,
     email_thread::{SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview},
+    initiative::SoupInitiative,
     item::SoupItem,
     project::SoupProject,
 };
@@ -42,6 +44,8 @@ use uuid::Uuid;
 
 use super::*;
 
+mod email_archive;
+mod initiative;
 mod soup_patches;
 
 const VALID_USER_ID: &str = "macro|user@example.com";
@@ -83,11 +87,24 @@ fn soup_document(id: Uuid) -> SoupItem<()> {
     grouped_document(id).map_extra(|_| ())
 }
 
+fn soup_initiative(id: Uuid) -> SoupItem<()> {
+    SoupItem::Initiative(SoupInitiative {
+        id,
+        name: "Launch project".to_string(),
+        owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
+        description_document_id: Some(Uuid::from_u128(43)),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        viewed_at: None,
+        extra: (),
+    })
+}
+
 fn soup_project(id: Uuid) -> SoupItem<()> {
     SoupItem::Project(SoupProject {
         id,
         name: format!("Project {id}"),
-        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
         parent_id: None,
         created_at: Default::default(),
         updated_at: Default::default(),
@@ -102,7 +119,7 @@ fn soup_chat(id: Uuid) -> SoupItem<()> {
         id,
         name: format!("Chat {id}"),
         model: Some("openai/gpt-5.6".to_string()),
-        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
         project_id: None,
         is_persistent: true,
         created_at: Default::default(),
@@ -117,7 +134,7 @@ fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesFi
     SoupItem::Document(SoupDocument {
         id,
         document_version_id: 1,
-        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
         name: format!("Document {id}"),
         file_type: None,
         sha: None,
@@ -289,6 +306,9 @@ impl SoupService for CountingSoupService {
 /// the lazy extraction actually runs.
 #[derive(Clone, Default)]
 struct CountingEmailService {
+    thread_is_read: Arc<Mutex<bool>>,
+    thread_archived: Arc<Mutex<bool>>,
+    archive_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, bool)>>>,
     inbox_calls: Arc<AtomicUsize>,
     user_label_calls: Arc<AtomicUsize>,
     user_link_calls: Arc<AtomicUsize>,
@@ -296,6 +316,23 @@ struct CountingEmailService {
     seen_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
     unread_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
     label_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, Uuid, bool)>>>,
+}
+
+impl graphql_soup::EmailMutationThreadReader for CountingEmailService {
+    async fn read(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> async_graphql::Result<Option<SoupEnrichedEmailThreadPreview<()>>> {
+        assert_eq!(user_id.as_ref(), VALID_USER_ID);
+        let SoupItem::EmailThread(mut thread) =
+            soup_email_thread_with_read_status(thread_id, *self.thread_is_read.lock().unwrap())
+        else {
+            unreachable!()
+        };
+        thread.thread.inbox_visible = !*self.thread_archived.lock().unwrap();
+        Ok(Some(thread))
+    }
 }
 
 fn test_email_err() -> EmailErr {
@@ -354,6 +391,20 @@ impl EmailUserService for CountingEmailService {
 }
 
 impl EmailService for CountingEmailService {
+    async fn set_thread_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        archived: bool,
+    ) -> Result<(), EmailErr> {
+        *self.thread_archived.lock().unwrap() = archived;
+        self.archive_mutation_calls
+            .lock()
+            .unwrap()
+            .push((user_id, thread_id, archived));
+        Ok(())
+    }
+
     async fn get_email_thread_previews(
         &self,
         _req: GetEmailsRequest,
@@ -420,6 +471,23 @@ impl EmailService for CountingEmailService {
         Err(test_email_err())
     }
 
+    async fn save_draft_for_user(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        _link_id: Option<Uuid>,
+        _input: CreateDraftInput,
+    ) -> Result<email::domain::models::SavedUserDraft, EmailErr> {
+        Err(test_email_err())
+    }
+
+    async fn delete_draft_for_user(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        _draft_id: Uuid,
+    ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
+        Err(test_email_err())
+    }
+
     async fn send_message(
         &self,
         _link: &Link,
@@ -448,6 +516,7 @@ impl EmailService for CountingEmailService {
         macro_id: MacroUserIdStr<'static>,
         thread_id: Uuid,
     ) -> Result<(), EmailErr> {
+        *self.thread_is_read.lock().unwrap() = true;
         self.seen_mutation_calls
             .lock()
             .expect("seen mutation calls lock")
@@ -460,6 +529,7 @@ impl EmailService for CountingEmailService {
         macro_id: MacroUserIdStr<'static>,
         thread_id: Uuid,
     ) -> Result<(), EmailErr> {
+        *self.thread_is_read.lock().unwrap() = false;
         self.unread_mutation_calls
             .lock()
             .expect("unread mutation calls lock")
@@ -748,6 +818,7 @@ fn full_message(thread_id: Uuid) -> Message {
     let message_id = Uuid::from_u128(100);
     let draft_attachment_id = Uuid::from_u128(102);
     Message {
+        calendar_invitations: Default::default(),
         db_id: message_id,
         provider_id: Some("provider-message".to_owned()),
         thread_db_id: thread_id,
@@ -1112,9 +1183,16 @@ impl TestHarness {
             .data(GraphqlRequestParts::new(parts))
             .data(self.state.clone())
             .data(self.state.email.service())
+            .data(graphql_soup::EmailMutationThreadLoader::new(
+                self.email_service.clone(),
+            ))
             .data(graphql_soup::soup_item_loader(
                 self.soup_service.clone(),
                 Arc::new(self.email_service.clone()),
+            ))
+            .data(graphql_properties::entity_properties_loader(
+                user_id.clone(),
+                NoOpEntityPropertyReader,
             ))
             .data(graphql_email::email_content_loader(
                 user_id.clone(),
@@ -2139,13 +2217,13 @@ async fn latest_email_message_full_fields_request_the_full_edge_payload() {
 }
 
 #[tokio::test]
-async fn email_mutations_return_the_canonical_thread_for_normalized_cache_updates() {
+async fn email_mutations_return_primary_state_even_when_the_soup_replica_is_stale() {
     let harness = harness();
     let thread_id = Uuid::from_u128(44);
     let label_id = Uuid::from_u128(45);
     harness
         .soup_service
-        .set_raw_response(vec![soup_email_thread_with_read_status(thread_id, true)]);
+        .set_raw_response(vec![soup_email_thread_with_read_status(thread_id, false)]);
 
     let seen_response = harness
         .execute_authenticated_mutation(&format!(
@@ -2179,7 +2257,7 @@ async fn email_mutations_return_the_canonical_thread_for_normalized_cache_update
 
     harness
         .soup_service
-        .set_raw_response(vec![soup_email_thread_with_read_status(thread_id, false)]);
+        .set_raw_response(vec![soup_email_thread_with_read_status(thread_id, true)]);
     let unread_response = harness
         .execute_authenticated_mutation(&format!(
             r#"mutation {{ markEmailThreadUnread(input: {{threadId: "{thread_id}"}}) {{ __typename id isRead }} }}"#
@@ -2194,6 +2272,7 @@ async fn email_mutations_return_the_canonical_thread_for_normalized_cache_update
     assert_eq!(unread_thread["__typename"], "GraphqlSoupEmailThread");
     assert_eq!(unread_thread["id"], thread_id.to_string());
     assert_eq!(unread_thread["isRead"], false);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
 
     let expected_user = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
     assert_eq!(
@@ -2261,4 +2340,41 @@ async fn email_thread_rejects_an_invalid_thread_id_before_loading_soup() {
     );
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn initiatives_are_returned_by_soup_with_shared_edges() {
+    let harness = harness();
+    let id = Uuid::from_u128(42);
+    harness
+        .soup_service
+        .set_raw_response(vec![soup_initiative(id)]);
+    let response = harness
+        .execute(
+            r#"{
+        user { soup(input: {initial: {filters: {initiativeFilter: {literal: {include: true}}}}}) {
+            items {
+                __typename id entityType displayName
+                metadata { ownerId ownerType createdAt updatedAt }
+                properties { id }
+                ... on GraphqlSoupInitiative { descriptionDocumentId }
+            }
+        } }
+    }"#,
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let item = &data["user"]["soup"]["items"][0];
+    assert_eq!(item["__typename"], "GraphqlSoupInitiative");
+    assert_eq!(item["id"], id.to_string());
+    assert_eq!(item["entityType"], "INITIATIVE");
+    assert_eq!(item["displayName"], "Launch project");
+    assert_eq!(item["metadata"]["ownerId"], VALID_USER_ID);
+    assert_eq!(
+        item["descriptionDocumentId"],
+        Uuid::from_u128(43).to_string()
+    );
+    assert!(item["properties"].is_array());
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
 }

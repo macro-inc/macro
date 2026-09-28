@@ -269,7 +269,19 @@ export function createCallLifecycle(options: {
                 delay,
               ]);
               if (!active) return;
-              if (!needsConnection && call && !sameCall(call, token)) {
+              if (token.channelId !== request.channelId) {
+                throw new Error(
+                  'Call token does not belong to the requested channel'
+                );
+              }
+              if (
+                !needsConnection &&
+                call &&
+                !sameCall(call, {
+                  channelId: token.channelId,
+                  callId: token.callId,
+                })
+              ) {
                 // The server ended the session native still reports. Release
                 // the newly issued membership and the stale native session.
                 await releaseStaleNativeSession(call);
@@ -416,6 +428,8 @@ export function createCallLifecycle(options: {
       leaving: ({ request }, dispatch) => {
         let active = true;
         let settled = false;
+        // Leave the call surface immediately; media teardown may be slow or fail.
+        notifyLeft(request.channelId);
         options.rollbackJoin();
         options.setError(null);
         const finish = (error?: unknown) => {
@@ -434,7 +448,6 @@ export function createCallLifecycle(options: {
             try {
               await options.disconnect(request.options);
               if (!active) return;
-              notifyLeft(request.channelId);
               options.onLeft(request.channelId);
             } finally {
               if (active && !request.skipServerLeave)

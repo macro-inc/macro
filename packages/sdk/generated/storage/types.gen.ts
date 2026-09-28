@@ -47,6 +47,26 @@ export type ActiveCallsResponse = {
 };
 
 /**
+ * Active quick-call metadata available to its authenticated owner or attendees.
+ */
+export type ActiveMeeting = Meeting & {
+    /**
+     * Creator identity for displaying the caller in the authenticated active list.
+     */
+    createdBy: string;
+};
+
+/**
+ * The authenticated actor's active quick calls, including their creators.
+ */
+export type ActiveMeetingsResponse = {
+    /**
+     * Persistent meeting invitations for currently active sessions.
+     */
+    meetings: Array<ActiveMeeting>;
+};
+
+/**
  * The kind of activity a user performs in a channel.
  */
 export type ActivityType = 'view' | 'interact';
@@ -121,6 +141,13 @@ export type Agent = {
      */
     instructions: string;
     /**
+     * Whether the agent works in a repository, which decides how it answers
+     * a channel mention: a coding agent posts a magic chip into its live
+     * session, a chat agent replies in the thread. Chosen in the agent's
+     * settings; the persona's word, not the runtime's.
+     */
+    is_coding: boolean;
+    /**
      * Which MCP servers sessions of this agent are handed.
      */
     mcp: AgentMcpServers;
@@ -181,6 +208,11 @@ export type AgentMcpServers = {
 };
 
 /**
+ * Last synchronized state of a session's linked GitHub pull request.
+ */
+export type AgentPullRequestState = 'open' | 'draft' | 'closed' | 'merged';
+
+/**
  * Filters for agent sessions.
  */
 export type AgentSessionFilters = {
@@ -195,8 +227,9 @@ export type AgentSessionFilters = {
      */
     include?: boolean;
     /**
-     * Filter by session owner. Examples: ['macro|user1@user.com']. Empty to
-     * include every owner.
+     * Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+     * owner.
      */
     owners?: Array<string>;
 };
@@ -891,6 +924,10 @@ export type ApiEntityFilterAst = {
      * unlike the materialized [`EntityFilterAst`] used for cursors.
      */
     ef?: unknown;
+    /**
+     * Restrict to the authenticated viewer's favorites before pagination when true.
+     */
+    favorites_only?: boolean | null;
     /**
      * the filters that should be applied to foreign entity records
      */
@@ -1734,13 +1771,19 @@ export type CalendarEventSourceContent = {
 
 /**
  * Meeting-level fields shown in a calendar event mention preview, taken from
- * the requester's own projection of the meeting.
+ * the requester's own projection of the meeting, or — when the requester has
+ * none — from the mentioned projection a channel they belong to was given.
  */
 export type CalendarMentionEvent = {
     /**
-     * Number of attendees on the requester's copy.
+     * Number of attendees on the previewed copy.
      */
     attendeeCount: number;
+    /**
+     * Provider description, plain text or HTML, truncated for the preview.
+     * Clients must sanitize it before rendering.
+     */
+    description?: string | null;
     /**
      * Whether the event repeats.
      */
@@ -1773,14 +1816,17 @@ export type CalendarMentionEvent = {
      */
     title: string;
     /**
-     * Entity update time of the requester's copy.
+     * Entity update time of the previewed copy.
      */
     updatedAt: string;
     /**
      * The requester's own event entity for the mentioned meeting. Differs
      * from the mentioned id when the mention came from another attendee.
+     * Absent when the meeting is on none of the requester's calendars and
+     * they see it only because it was shared with one of their channels:
+     * that preview is read-only and there is no event of theirs to open.
      */
-    viewerEventId: string;
+    viewerEventId?: string | null;
 };
 
 /**
@@ -1947,7 +1993,7 @@ export type CallRecord = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -1974,11 +2020,16 @@ export type CallRecord = {
      */
     endedAt?: string | null;
     /**
+     * Non-account guests (both active and historic). Guests only ever exist
+     * on standalone meeting calls, never on channel calls.
+     */
+    guests: Array<CallRecordGuest>;
+    /**
      * Whether the call is currently active (from `calls` table).
      */
     isActive: boolean;
     /**
-     * Participants (both active and historic).
+     * Macro-account participants (both active and historic).
      */
     participants: Array<CallRecordParticipant>;
     /**
@@ -2025,6 +2076,28 @@ export type CallRecord = {
 };
 
 /**
+ * A non-account guest as returned in a [`CallRecord`].
+ */
+export type CallRecordGuest = {
+    /**
+     * Guest-provided display name.
+     */
+    displayName: string;
+    /**
+     * Opaque guest identity; matches the guest's transcript `speaker_id`.
+     */
+    id: GuestId;
+    /**
+     * When the guest joined the call.
+     */
+    joinedAt: string;
+    /**
+     * When the guest left (None if still in an active call).
+     */
+    leftAt?: string | null;
+};
+
+/**
  * A participant as returned in a [`CallRecord`] (historic — includes `left_at`).
  */
 export type CallRecordParticipant = {
@@ -2037,7 +2110,7 @@ export type CallRecordParticipant = {
      */
     leftAt?: string | null;
     /**
-     * The user id.
+     * The Macro user id.
      */
     userId: string;
 };
@@ -2066,7 +2139,7 @@ export type CallRecordPreviewData = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -2143,7 +2216,11 @@ export type CallTokenResponse = {
     /**
      * The channel this call is associated with.
      */
-    channelId: string;
+    channelId?: string | null;
+    /**
+     * RTC participant identity.
+     */
+    participantId: string;
     /**
      * The RTC room name.
      */
@@ -2152,6 +2229,10 @@ export type CallTokenResponse = {
      * The RTC server URL for the frontend SDK to connect to.
      */
     serverUrl: string;
+    /**
+     * Meeting link capability, when joined using a link.
+     */
+    shareToken?: string | null;
     /**
      * The RTC token for connecting to the room.
      */
@@ -2316,6 +2397,74 @@ export type ChannelJoinCodeResponse = {
      * Reusable code for joining the channel.
      */
     join_code: string;
+};
+
+/**
+ * A shared or account-private label grouping chat channels in the sidebar.
+ *
+ * `channel_ids` is viewer-relative: it lists only the labelled channels the
+ * requesting user participates in. `channel_count` counts every channel in
+ * the label so clients can warn accurately before a delete.
+ */
+export type ChannelLabel = {
+    /**
+     * All assignments for a manual label; visible matches for a smart tag.
+     */
+    channelCount: number;
+    /**
+     * Channels in this label that the requesting user participates in.
+     */
+    channelIds: Array<string>;
+    /**
+     * When the label was created.
+     */
+    createdAt: string;
+    /**
+     * Stable label id.
+     */
+    id: string;
+    /**
+     * Display name, unique within the scope (case-insensitive).
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
+    /**
+     * Manual ordering value within the scope; lower sorts first.
+     */
+    sortOrder: number;
+    /**
+     * Owning team, or `None` for account-private labels.
+     */
+    teamId?: string | null;
+    /**
+     * When the label was last renamed or reordered.
+     */
+    updatedAt: string;
+};
+
+/**
+ * Case-insensitive, literal substring matching on the channel name.
+ */
+export type ChannelLabelRule = {
+    attribute: 'name';
+    /**
+     * The substring to find anywhere in the name.
+     */
+    contains: string;
+};
+
+/**
+ * The authorized scope's labels in manual order.
+ */
+export type ChannelLabelsList = {
+    /**
+     * Every label of the scope, whether or not the caller sees channels in it.
+     */
+    labels: Array<ChannelLabel>;
+    /**
+     * Team scope, or `None` for private labels.
+     */
+    teamId?: string | null;
 };
 
 /**
@@ -2925,7 +3074,10 @@ export type ChatFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -3124,6 +3276,11 @@ export type CreateAgentRequest = {
      */
     instructions: string;
     /**
+     * Whether the agent is a coding agent: a mention is answered with a magic
+     * chip into its live session (`true`) or a reply in the thread (`false`).
+     */
+    is_coding: boolean;
+    /**
      * Which MCP servers sessions of this agent are handed.
      */
     mcp?: AgentMcpServers;
@@ -3185,6 +3342,21 @@ export type CreateBulkDocumentResponseData = {
      * Indicates if the document was created successfully
      */
     success: boolean;
+};
+
+/**
+ * Request body for creating a label.
+ */
+export type CreateChannelLabelRequest = {
+    /**
+     * Channels to move into the new label.
+     */
+    channelIds?: Array<string>;
+    /**
+     * Display name; unique within the scope, case-insensitively.
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
 };
 
 /**
@@ -3298,7 +3470,7 @@ export type CreateCommentResponse = CommentThread & {
  */
 export type CreateCrmCommentRequest = {
     /**
-     * Arbitrary client metadata for the comment.
+     * Ignored: messages keep no client metadata.
      */
     metadata?: unknown;
     /**
@@ -3311,8 +3483,7 @@ export type CreateCrmCommentRequest = {
      */
     threadId?: string | null;
     /**
-     * Metadata to set on a newly created thread (ignored when replying
-     * without a value).
+     * Ignored: discussions keep no thread metadata.
      */
     threadMetadata?: unknown;
 };
@@ -3499,7 +3670,8 @@ export type CreateInitiativeRequest = {
      */
     name: string;
     /**
-     * When true, share with the owner's team at create time.
+     * Share with the owner's team at create time. Defaults to true; users without
+     * a team create an unshared initiative. Explicit false skips the team grant.
      */
     shareWithTeam?: boolean | null;
 };
@@ -3547,6 +3719,24 @@ export type CreateMarkdownDocumentResponse = {
      * A pre-generated permission token that you can use for SS
      */
     token: string;
+};
+
+/**
+ * Inputs for creating a meeting without starting its RTC room.
+ */
+export type CreateMeetingRequest = {
+    /**
+     * Optional scheduled end.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Optional scheduled start.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Optional display title.
+     */
+    title?: string | null;
 };
 
 /**
@@ -4292,8 +4482,8 @@ export type DeleteCommentResponse = {
 };
 
 /**
- * Outcome of soft-deleting a CRM comment: reports whether the parent thread
- * was soft-deleted too (it is when the deleted comment was its last live one).
+ * Outcome of deleting a CRM comment: reports whether its discussion went with
+ * it (it does when the deleted comment was the discussion's first).
  */
 export type DeleteCrmCommentResult = {
     /**
@@ -4301,8 +4491,8 @@ export type DeleteCrmCommentResult = {
      */
     commentId: string;
     /**
-     * Whether the thread itself was soft-deleted because no live comments
-     * remained.
+     * Whether the whole discussion was deleted because the comment was its
+     * first.
      */
     threadDeleted: boolean;
     /**
@@ -4421,6 +4611,10 @@ export type DocumentContentUploadedMetadata = {
  */
 export type DocumentCopiedMetadata = {
     /**
+     * Who mechanically created the copy.
+     */
+    actor?: string | null;
+    /**
      * The id of the newly created copy.
      */
     document_id: string;
@@ -4429,8 +4623,9 @@ export type DocumentCopiedMetadata = {
      */
     document_name: string;
     file_type?: null | FileType;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
-     * The owner of the new copy (the copier).
+     * The principal who owns the new copy.
      */
     owner: string;
     /**
@@ -4454,7 +4649,8 @@ export type DocumentCopiedMetadata = {
 export type DocumentCreatedMetadata = {
     /**
      * Who mechanically created the document. Absent on events published
-     * before attribution: ingest then treats [`Self::owner`] as the actor.
+     * before attribution: ingest derives a user/bot actor from [`Self::owner`].
+     * Team owners fall back to [`Self::on_behalf_of`], then the system bot.
      */
     actor?: string | null;
     /**
@@ -4472,7 +4668,7 @@ export type DocumentCreatedMetadata = {
     file_type?: null | FileType;
     on_behalf_of?: null | MacroUserIdStr;
     /**
-     * The owner (creator) of the document.
+     * The principal who owns the document.
      */
     owner: string;
     /**
@@ -4529,7 +4725,10 @@ export type DocumentFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -4863,8 +5062,7 @@ export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_descrip
  */
 export type DocumentSyncContentUpdatedMetadata = {
     /**
-     * Who mechanically changed the content. Absent on events published
-     * before attribution, and on human-only collab sessions.
+     * Legacy single-editor attribution; newer Sync callers send `editors`.
      */
     actor?: string | null;
     /**
@@ -4876,9 +5074,24 @@ export type DocumentSyncContentUpdatedMetadata = {
      */
     document_version_id?: string | null;
     /**
+     * Distinct editors since the preceding snapshot notification.
+     */
+    editors?: Array<DocumentSyncEditor>;
+    /**
      * File type of the sync document, resolved by the document backend.
      */
     file_type: FileType;
+    on_behalf_of?: null | MacroUserIdStr;
+};
+
+/**
+ * An editor reported by Sync from an authenticated session.
+ */
+export type DocumentSyncEditor = {
+    /**
+     * User or bot that performed the edit.
+     */
+    actor: string;
     on_behalf_of?: null | MacroUserIdStr;
 };
 
@@ -5267,9 +5480,17 @@ export type EntityFilters = {
      */
     email_filters?: EmailFilters;
     /**
+     * Restrict results to the authenticated viewer's favorites when true.
+     */
+    favorites_only?: boolean | null;
+    /**
      * the bundled [ForeignEntityFilters]
      */
     foreign_entity_filters?: ForeignEntityFilters;
+    /**
+     * Initiative filters. Initiatives are opt-in.
+     */
+    initiative_filters?: InitiativeFilters;
     /**
      * the bundled [ProjectFilters]
      */
@@ -5349,7 +5570,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.
@@ -6283,6 +6504,26 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated';
 
 /**
+ * A non-account guest of a single call session.
+ *
+ * The id doubles as the guest's RTC participant identity, so identities are
+ * opaque UUIDs and never share a namespace (or a column) with Macro user
+ * ids. Only the server mints them; Macro users keep `macro|…` identities,
+ * so an RTC identity classifies as exactly one of the two.
+ */
+export type GuestId = string;
+
+/**
+ * Public guest join inputs. The server generates the participant identity.
+ */
+export type GuestJoinRequest = {
+    /**
+     * Guest's name, displayed to everyone in the room.
+     */
+    displayName: string;
+};
+
+/**
  * A registered user-run harness.
  *
  * Clients deserialize this, so both derives are used.
@@ -6502,6 +6743,40 @@ export type InitiativeDetail = {
 };
 
 /**
+ * Filters for initiatives.
+ */
+export type InitiativeFilters = {
+    /**
+     * Inclusive lower due-date bound.
+     */
+    due_after?: string | null;
+    /**
+     * Inclusive upper due-date bound.
+     */
+    due_before?: string | null;
+    /**
+     * Opt this query into initiatives at all. Initiatives are off by
+     * default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
+     * Asking for specific `initiative_ids` or `owners` also opts in.
+     */
+    include?: boolean;
+    /**
+     * Initiative ids to filter by. Empty to include all accessible initiatives.
+     */
+    initiative_ids?: Array<string>;
+    /**
+     * Case-insensitive name substring.
+     */
+    name?: string | null;
+    /**
+     * Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+     * owner.
+     */
+    owners?: Array<string>;
+};
+
+/**
  * Opaque identifier for an initiative. Minted as UUIDv7 in application code.
  */
 export type InitiativeId = string;
@@ -6560,6 +6835,26 @@ export type InputReceivedMetadata = {
  * Why a document interaction was reported.
  */
 export type InteractionReason = 'edited' | 'first_join' | 'last_leave';
+
+/**
+ * A single email recipient for a call invitation.
+ */
+export type InviteMeetingRequest = {
+    /**
+     * Recipient email; no Macro account is required.
+     */
+    email: string;
+};
+
+/**
+ * Registered teammates selected for an incoming call invitation.
+ */
+export type InviteMeetingUsersRequest = {
+    /**
+     * Human user principals; bot principals and historical bare bot UUIDs are invalid.
+     */
+    userIds: Array<string>;
+};
 
 export type Item = ({
     type: 'document';
@@ -6665,6 +6960,65 @@ export type LocationResponseV3 = {
 };
 
 export type MacroUserIdStr = string;
+
+/**
+ * Persistent meeting metadata. No channel contents or archived media are exposed.
+ */
+export type Meeting = {
+    /**
+     * Currently active call session, if any.
+     */
+    callId?: string | null;
+    /**
+     * Associated channel, for links to existing channel calls only.
+     */
+    channelId?: string | null;
+    /**
+     * Persistent meeting identifier.
+     */
+    id: string;
+    /**
+     * Scheduled end, or none for an instant meeting.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Scheduled start, or none for an instant meeting.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Bearer capability embedded in the invitation URL.
+     */
+    shareToken: MeetingToken;
+    /**
+     * Human-readable meeting title.
+     */
+    title: string;
+};
+
+/**
+ * Whether the authenticated caller can invite teammates to this meeting.
+ */
+export type MeetingInvitePermissions = {
+    /**
+     * True for the owner of an uncancelled standalone meeting.
+     */
+    canInvite: boolean;
+};
+
+/**
+ * A bearer capability that grants access only to a meeting's RTC room.
+ */
+export type MeetingToken = string;
+
+/**
+ * Uncancelled standalone meetings visible in the requested meeting list.
+ */
+export type MeetingsResponse = {
+    /**
+     * Persistent meeting invitations, most recently created first.
+     */
+    meetings: Array<Meeting>;
+};
 
 export type Mentions = {
     mentionId: string;
@@ -6908,6 +7262,24 @@ export type MessageParent = {
      */
     id: DocumentId;
     type: 'document';
+} | {
+    /**
+     * An initiative, presented as a project in the application.
+     */
+    id: string;
+    type: 'initiative';
+} | {
+    /**
+     * A CRM company.
+     */
+    id: string;
+    type: 'crm_company';
+} | {
+    /**
+     * A CRM contact.
+     */
+    id: string;
+    type: 'crm_contact';
 };
 
 /**
@@ -7059,6 +7431,12 @@ export type NewThreadAnchor = {
      * Serialized mark identifier.
      */
     mark_id: string;
+    /**
+     * The document text the mark covers, captured by the editor as the
+     * comment is written. Trimmed and bounded before it is stored, so an
+     * oversized or whitespace-only claim cannot reach the thread row.
+     */
+    marked_text?: string | null;
     type: 'markdown';
 } | {
     /**
@@ -7465,6 +7843,11 @@ export type PostMessage = {
      */
     content: string;
     /**
+     * Client-minted UUIDv7 for the new message, so an optimistic message
+     * already carries its final id; the server mints one when absent.
+     */
+    id?: string | null;
+    /**
      * Mentions tracked by the editor.
      */
     mentions?: Array<SimpleMention>;
@@ -7688,7 +8071,10 @@ export type ProjectFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -7883,39 +8269,6 @@ export type RecentlyDeletedResponseData = {
 };
 
 /**
- * A source channel thread that mentions the requested document.
- */
-export type ReferencedThread = {
-    /**
-     * Whether this viewer currently has permission to reply in the source channel.
-     */
-    can_reply: boolean;
-    /**
-     * Source channel's current display name, returned only after access checks.
-     */
-    channel_name?: string | null;
-    /**
-     * Source parent used by the common message reader and mutations.
-     */
-    parent: MessageParent;
-    /**
-     * Source root identity; discovery does not copy its message content.
-     */
-    root_id: string;
-};
-
-/**
- * Authorized source threads, deduplicated by root.
- */
-export type ReferencedThreadPage = {
-    next_cursor?: null | MessageCursor;
-    /**
-     * Accessible channel discussions mentioning the document.
-     */
-    threads: Array<ReferencedThread>;
-};
-
-/**
  * A reminder belonging to a user.
  *
  * `user_id` is deliberately absent: a reminder is only ever read by its owner,
@@ -8047,6 +8400,17 @@ export type RemoveParticipantsRequest = {
      * User ids to remove.
      */
     participants: Array<string>;
+};
+
+/**
+ * Request body for renaming a label.
+ */
+export type RenameChannelLabelRequest = {
+    /**
+     * New display name.
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
 };
 
 /**
@@ -8230,6 +8594,12 @@ export type SessionMentionedMetadata = {
      */
     mentioned: Array<MacroUserIdStr>;
     mentioned_by?: null | MacroUserIdStr;
+    /**
+     * The channel or document message the prompt was posted as, when it
+     * arrived from a thread rather than the session view. That message
+     * already notified the users it named when it was posted.
+     */
+    origin_message_id?: string | null;
 };
 
 /**
@@ -8284,6 +8654,16 @@ export type SessionStoppedMetadata = {
      */
     reason: string;
     turn_in_flight?: null | InFlightTurnSummary;
+};
+
+/**
+ * Request body for moving a channel between labels.
+ */
+export type SetChannelLabelRequest = {
+    /**
+     * The label to put the channel in, or `null` to remove it from its label.
+     */
+    labelId?: string | null;
 };
 
 /**
@@ -8458,11 +8838,38 @@ export type SimpleMention = {
 };
 
 /**
+ * A channel visible to the caller that matches a smart tag rule.
+ */
+export type SmartTagChannelMatch = {
+    /**
+     * Channel id.
+     */
+    id: string;
+    /**
+     * Channel display name.
+     */
+    name: string;
+};
+
+/**
+ * A bounded preview and the total number of visible channels matching a rule.
+ */
+export type SmartTagPreview = {
+    /**
+     * First matches, in alphabetical order.
+     */
+    channels: Array<SmartTagChannelMatch>;
+    /**
+     * Number of matching channels the caller participates in, including overflow.
+     */
+    totalCount: number;
+};
+
+/**
  * An agent session as displayed in Soup.
  *
- * Mirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent
- * counterpart of a chat, so it carries the same identity, ownership, and
- * recency fields plus the session's last known status.
+ * Includes the persisted runtime and repository metadata needed to render
+ * coding and non-coding sessions without fetching each session separately.
  */
 export type SoupAgentSessionSoupPropertiesField = {
     /**
@@ -8479,6 +8886,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      */
     createdAt: string;
     /**
+     * The runtime snapshotted when the session was created.
+     */
+    harness: string;
+    /**
      * The agent session uuid
      */
     id: string;
@@ -8490,6 +8901,23 @@ export type SoupAgentSessionSoupPropertiesField = {
      * Who the session belongs to
      */
     ownerId: string;
+    /**
+     * The linked pull request's Macro entity, when visible to the viewer.
+     */
+    pullRequestId?: string | null;
+    pullRequestState?: null | AgentPullRequestState;
+    /**
+     * The persisted pull request associated with the session.
+     */
+    pullRequestUrl?: string | null;
+    /**
+     * The starting branch selected for this session, not its current branch.
+     */
+    repoBranch?: string | null;
+    /**
+     * The repository the session works with, when one was selected.
+     */
+    repoUrl?: string | null;
     /**
      * The session's last known status.
      *
@@ -8503,6 +8931,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      */
     threadId?: string | null;
     /**
+     * Last persisted fold turn state. Absent until an older session next runs.
+     */
+    turnState?: string | null;
+    /**
      * The time the session was last modified
      */
     updatedAt: string;
@@ -8510,6 +8942,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The time the session was last viewed by the requesting user
      */
     viewedAt?: string | null;
+    /**
+     * Last captured working branch, when the runtime has reported one.
+     */
+    workingBranch?: string | null;
 };
 
 /**
@@ -8704,7 +9140,29 @@ export type SoupCalendarEventSoupPropertiesField = {
 };
 
 /**
- * A participant in a call record, as displayed in Soup.
+ * A non-account guest of a call record, as displayed in Soup.
+ */
+export type SoupCallRecordGuest = {
+    /**
+     * Guest-provided display name.
+     */
+    displayName: string;
+    /**
+     * Opaque guest identity; matches the guest's transcript speaker id.
+     */
+    id: string;
+    /**
+     * When the guest joined the call.
+     */
+    joinedAt: string;
+    /**
+     * When the guest left (None if still in an active call).
+     */
+    leftAt?: string | null;
+};
+
+/**
+ * A Macro-account participant in a call record, as displayed in Soup.
  */
 export type SoupCallRecordParticipant = {
     /**
@@ -8716,7 +9174,7 @@ export type SoupCallRecordParticipant = {
      */
     leftAt?: string | null;
     /**
-     * The user id.
+     * The Macro user id.
      */
     userId: string;
 };
@@ -8743,7 +9201,7 @@ export type SoupCallRecordSoupPropertiesField = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -8765,11 +9223,15 @@ export type SoupCallRecordSoupPropertiesField = {
      */
     endedAt?: string | null;
     /**
+     * Non-account guests in the call.
+     */
+    guests: Array<SoupCallRecordGuest>;
+    /**
      * Whether the call is currently active.
      */
     isActive: boolean;
     /**
-     * Participants in the call.
+     * Macro-account participants in the call.
      */
     participants: Array<SoupCallRecordParticipant>;
     /**
@@ -9264,6 +9726,45 @@ export type SoupForeignEntity = {
 };
 
 /**
+ * An initiative (called a project in the frontend) in the Soup feed.
+ */
+export type SoupInitiativeSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * Creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Document holding the initiative description.
+     */
+    descriptionDocumentId?: string | null;
+    /**
+     * Initiative identifier.
+     */
+    id: string;
+    /**
+     * Initiative display name.
+     */
+    name: string;
+    /**
+     * Initiative owner.
+     */
+    ownerId: string;
+    /**
+     * Last modification timestamp.
+     */
+    updatedAt: string;
+    /**
+     * Last time the requesting user viewed the initiative.
+     */
+    viewedAt?: string | null;
+};
+
+/**
  * A single item in the Soup feed.
  */
 export type SoupItem = {
@@ -9284,6 +9785,12 @@ export type SoupItem = {
      */
     data: SoupProjectSoupPropertiesField;
     tag: 'project';
+} | {
+    /**
+     * Initiative entity.
+     */
+    data: SoupInitiativeSoupPropertiesField;
+    tag: 'initiative';
 } | {
     /**
      * Email thread item.
@@ -9484,7 +9991,7 @@ export type SoupProjectSoupPropertiesField = {
      */
     name: string;
     /**
-     * The user id of who created the project
+     * The owner of the project
      */
     ownerId: string;
     /**
@@ -9820,12 +10327,26 @@ export type ThreadAnchor = {
      * Mark UUID serialized in the document.
      */
     mark_id: string;
+    /**
+     * The marked text as it read when the discussion was created, already
+     * trimmed and bounded. Absent on threads created or imported before
+     * snapshots were captured: the text a mark covers cannot be recovered
+     * from the mark id alone.
+     */
+    marked_text?: string | null;
     type: 'markdown';
 } | {
     /**
      * Highlight annotation UUID.
      */
     anchor_id: string;
+    /**
+     * The text the highlight covers, trimmed and bounded like a markdown
+     * snapshot. The highlight owns it and it can be edited there, so it is
+     * read from the highlight whenever the thread is, never stored on the
+     * thread. Absent when the highlight carries no text.
+     */
+    marked_text?: string | null;
     type: 'pdf_highlight';
 } | {
     /**
@@ -9859,7 +10380,7 @@ export type ThreadOrigin = {
 };
 
 /**
- * Partial changes to the lifecycle and placement of a document discussion.
+ * Partial changes to discussion lifecycle or document anchor placement.
  */
 export type ThreadPatch = {
     /**
@@ -9909,6 +10430,16 @@ export type ThreadState = {
      * User who owns this discussion, including imported discussions.
      */
     user_id: string;
+};
+
+/**
+ * Transcription result.
+ */
+export type TranscribeResponse = {
+    /**
+     * Recognized text.
+     */
+    text: string;
 };
 
 /**
@@ -10156,6 +10687,11 @@ export type UpdateAgentRequest = {
      */
     instructions: string;
     /**
+     * Whether the agent is a coding agent: a mention is answered with a magic
+     * chip into its live session (`true`) or a reply in the thread (`false`).
+     */
+    is_coding: boolean;
+    /**
      * Which MCP servers sessions of this agent are handed.
      */
     mcp?: AgentMcpServers;
@@ -10212,7 +10748,7 @@ export type UpdateCrmTeamSettingsRequest = {
  */
 export type UpdateInitiativeRequest = {
     /**
-     * Full replacement member list when present.
+     * Full replacement collaborator list when present. Only the owner may send this field.
      */
     memberIds?: Array<string> | null;
     /**
@@ -10220,6 +10756,28 @@ export type UpdateInitiativeRequest = {
      */
     name?: string | null;
     sharePermission?: null | UpdateSharePermissionRequestV2;
+};
+
+/**
+ * Changes to a meeting's title or scheduled time; omitted values stay unchanged.
+ */
+export type UpdateMeetingRequest = {
+    /**
+     * Remove timed scheduling, for example when the calendar event becomes all-day.
+     */
+    clearSchedule?: boolean;
+    /**
+     * Replacement scheduled end; requires a matching start.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Replacement scheduled start; requires a matching end.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Replacement title, when supplied.
+     */
+    title?: string | null;
 };
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
@@ -11109,6 +11667,279 @@ export type GetActiveCallsResponses = {
 
 export type GetActiveCallsResponse = GetActiveCallsResponses[keyof GetActiveCallsResponses];
 
+export type MeetingLookupData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}';
+};
+
+export type MeetingLookupErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingLookupError = MeetingLookupErrors[keyof MeetingLookupErrors];
+
+export type MeetingLookupResponses = {
+    200: Meeting;
+};
+
+export type MeetingLookupResponse = MeetingLookupResponses[keyof MeetingLookupResponses];
+
+export type MeetingGuestJoinData = {
+    body: GuestJoinRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}';
+};
+
+export type MeetingGuestJoinErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingGuestJoinError = MeetingGuestJoinErrors[keyof MeetingGuestJoinErrors];
+
+export type MeetingGuestJoinResponses = {
+    200: CallTokenResponse;
+};
+
+export type MeetingGuestJoinResponse = MeetingGuestJoinResponses[keyof MeetingGuestJoinResponses];
+
+export type MeetingLeaveData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}/leave';
+};
+
+export type MeetingLeaveErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingLeaveError = MeetingLeaveErrors[keyof MeetingLeaveErrors];
+
+export type MeetingLeaveResponses = {
+    200: LeaveCallResponse;
+};
+
+export type MeetingLeaveResponse = MeetingLeaveResponses[keyof MeetingLeaveResponses];
+
+export type MeetingListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings';
+};
+
+export type MeetingListErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingListError = MeetingListErrors[keyof MeetingListErrors];
+
+export type MeetingListResponses = {
+    200: MeetingsResponse;
+};
+
+export type MeetingListResponse = MeetingListResponses[keyof MeetingListResponses];
+
+export type MeetingCreateData = {
+    body: CreateMeetingRequest;
+    path?: never;
+    query?: never;
+    url: '/call/meetings';
+};
+
+export type MeetingCreateErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingCreateError = MeetingCreateErrors[keyof MeetingCreateErrors];
+
+export type MeetingCreateResponses = {
+    200: Meeting;
+};
+
+export type MeetingCreateResponse = MeetingCreateResponses[keyof MeetingCreateResponses];
+
+export type MeetingListActiveData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings/active';
+};
+
+export type MeetingListActiveErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingListActiveError = MeetingListActiveErrors[keyof MeetingListActiveErrors];
+
+export type MeetingListActiveResponses = {
+    200: ActiveMeetingsResponse;
+};
+
+export type MeetingListActiveResponse = MeetingListActiveResponses[keyof MeetingListActiveResponses];
+
+export type MeetingInvitePermissionsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}';
+};
+
+export type MeetingInvitePermissionsErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingInvitePermissionsError = MeetingInvitePermissionsErrors[keyof MeetingInvitePermissionsErrors];
+
+export type MeetingInvitePermissionsResponses = {
+    200: MeetingInvitePermissions;
+};
+
+export type MeetingInvitePermissionsResponse = MeetingInvitePermissionsResponses[keyof MeetingInvitePermissionsResponses];
+
+export type MeetingInviteData = {
+    body: InviteMeetingRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}';
+};
+
+export type MeetingInviteErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type MeetingInviteError = MeetingInviteErrors[keyof MeetingInviteErrors];
+
+export type MeetingInviteResponses = {
+    204: void;
+};
+
+export type MeetingInviteResponse = MeetingInviteResponses[keyof MeetingInviteResponses];
+
+export type MeetingInviteUsersData = {
+    body: InviteMeetingUsersRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}/users';
+};
+
+export type MeetingInviteUsersErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingInviteUsersError = MeetingInviteUsersErrors[keyof MeetingInviteUsersErrors];
+
+export type MeetingInviteUsersResponses = {
+    204: void;
+};
+
+export type MeetingInviteUsersResponse = MeetingInviteUsersResponses[keyof MeetingInviteUsersResponses];
+
+export type MeetingJoinData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/join/{token}';
+};
+
+export type MeetingJoinErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingJoinError = MeetingJoinErrors[keyof MeetingJoinErrors];
+
+export type MeetingJoinResponses = {
+    200: CallTokenResponse;
+};
+
+export type MeetingJoinResponse = MeetingJoinResponses[keyof MeetingJoinResponses];
+
+export type MeetingCancelData = {
+    body?: never;
+    path: {
+        meeting_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/{meeting_id}';
+};
+
+export type MeetingCancelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingCancelError = MeetingCancelErrors[keyof MeetingCancelErrors];
+
+export type MeetingCancelResponses = {
+    204: void;
+};
+
+export type MeetingCancelResponse = MeetingCancelResponses[keyof MeetingCancelResponses];
+
+export type MeetingUpdateData = {
+    body: UpdateMeetingRequest;
+    path: {
+        meeting_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/{meeting_id}';
+};
+
+export type MeetingUpdateErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type MeetingUpdateError = MeetingUpdateErrors[keyof MeetingUpdateErrors];
+
+export type MeetingUpdateResponses = {
+    200: Meeting;
+};
+
+export type MeetingUpdateResponse = MeetingUpdateResponses[keyof MeetingUpdateResponses];
+
 export type GetBatchCallRecordPreviewData = {
     body: GetBatchCallRecordPreviewRequest;
     path?: never;
@@ -11228,6 +12059,30 @@ export type EditCallRecordResponses = {
 };
 
 export type EditCallRecordResponse = EditCallRecordResponses[keyof EditCallRecordResponses];
+
+export type MeetingShareData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/link';
+};
+
+export type MeetingShareErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingShareError = MeetingShareErrors[keyof MeetingShareErrors];
+
+export type MeetingShareResponses = {
+    200: Meeting;
+};
+
+export type MeetingShareResponse = MeetingShareResponses[keyof MeetingShareResponses];
 
 export type ToggleShareWithTeamData = {
     body?: never;
@@ -11431,12 +12286,12 @@ export type IngestTranscriptData = {
     body: TranscriptSegmentRequest;
     path: {
         /**
-         * Channel ID
+         * RTC room name; the transcription agent passes its LiveKit room verbatim
          */
-        channel_id: string;
+        room_name: string;
     };
     query?: never;
-    url: '/call/{channel_id}/transcript';
+    url: '/call/{room_name}/transcript';
 };
 
 export type IngestTranscriptErrors = {
@@ -11456,6 +12311,157 @@ export type IngestTranscriptResponses = {
      */
     200: unknown;
 };
+
+export type ListChannelLabelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/channel-labels';
+};
+
+export type ListChannelLabelsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelLabelsError = ListChannelLabelsErrors[keyof ListChannelLabelsErrors];
+
+export type ListChannelLabelsResponses = {
+    200: ChannelLabelsList;
+};
+
+export type ListChannelLabelsResponse = ListChannelLabelsResponses[keyof ListChannelLabelsResponses];
+
+export type CreateChannelLabelData = {
+    body: CreateChannelLabelRequest;
+    path?: never;
+    query?: never;
+    url: '/channel-labels';
+};
+
+export type CreateChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateChannelLabelError = CreateChannelLabelErrors[keyof CreateChannelLabelErrors];
+
+export type CreateChannelLabelResponses = {
+    200: ChannelLabel;
+};
+
+export type CreateChannelLabelResponse = CreateChannelLabelResponses[keyof CreateChannelLabelResponses];
+
+export type SetChannelLabelData = {
+    body: SetChannelLabelRequest;
+    path: {
+        /**
+         * The channel id.
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/channels/{channel_id}';
+};
+
+export type SetChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetChannelLabelError = SetChannelLabelErrors[keyof SetChannelLabelErrors];
+
+export type SetChannelLabelResponses = {
+    204: void;
+};
+
+export type SetChannelLabelResponse = SetChannelLabelResponses[keyof SetChannelLabelResponses];
+
+export type PreviewSmartTagData = {
+    body: ChannelLabelRule;
+    path?: never;
+    query?: never;
+    url: '/channel-labels/preview';
+};
+
+export type PreviewSmartTagErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PreviewSmartTagError = PreviewSmartTagErrors[keyof PreviewSmartTagErrors];
+
+export type PreviewSmartTagResponses = {
+    200: SmartTagPreview;
+};
+
+export type PreviewSmartTagResponse = PreviewSmartTagResponses[keyof PreviewSmartTagResponses];
+
+export type DeleteChannelLabelData = {
+    body?: never;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/{label_id}';
+};
+
+export type DeleteChannelLabelErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteChannelLabelError = DeleteChannelLabelErrors[keyof DeleteChannelLabelErrors];
+
+export type DeleteChannelLabelResponses = {
+    204: void;
+};
+
+export type DeleteChannelLabelResponse = DeleteChannelLabelResponses[keyof DeleteChannelLabelResponses];
+
+export type RenameChannelLabelData = {
+    body: RenameChannelLabelRequest;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/{label_id}';
+};
+
+export type RenameChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RenameChannelLabelError = RenameChannelLabelErrors[keyof RenameChannelLabelErrors];
+
+export type RenameChannelLabelResponses = {
+    200: ChannelLabel;
+};
+
+export type RenameChannelLabelResponse = RenameChannelLabelResponses[keyof RenameChannelLabelResponses];
 
 export type CreateChannelData = {
     body: CreateChannelRequest;
@@ -13117,6 +14123,64 @@ export type PutCrmTeamStagesResponses = {
 };
 
 export type PutCrmTeamStagesResponse = PutCrmTeamStagesResponses[keyof PutCrmTeamStagesResponses];
+
+export type TranscribeDictationData = {
+    /**
+     * OpenAPI representation of the raw encoded audio body extracted as `Bytes`.
+     */
+    body: Blob | File;
+    path?: never;
+    query?: {
+        /**
+         * ISO 639-1 language hint
+         */
+        language?: string;
+    };
+    url: '/dictation/transcribe';
+};
+
+export type TranscribeDictationErrors = {
+    /**
+     * Empty, oversized, or malformed request
+     */
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * Only signed-in users may dictate
+     */
+    403: ErrorResponse;
+    /**
+     * Body exceeds 8 MiB
+     */
+    413: unknown;
+    /**
+     * Unsupported audio container
+     */
+    415: ErrorResponse;
+    /**
+     * Per-user hourly rate limit exceeded
+     */
+    429: unknown;
+    /**
+     * Provider failure
+     */
+    502: ErrorResponse;
+    /**
+     * Transcription capacity exhausted; retry after the Retry-After delay
+     */
+    503: ErrorResponse;
+};
+
+export type TranscribeDictationError = TranscribeDictationErrors[keyof TranscribeDictationErrors];
+
+export type TranscribeDictationResponses = {
+    200: TranscribeResponse;
+};
+
+export type TranscribeDictationResponse = TranscribeDictationResponses[keyof TranscribeDictationResponses];
 
 export type GetUserDocumentsHandlerData = {
     body?: never;
@@ -15181,35 +16245,6 @@ export type EntityMessageLegacyResponses = {
 };
 
 export type EntityMessageLegacyResponse = EntityMessageLegacyResponses[keyof EntityMessageLegacyResponses];
-
-export type EntityMessageReferencesData = {
-    body?: never;
-    path: {
-        parent_type: string;
-        parent_id: string;
-    };
-    query?: {
-        /**
-         * Maximum number of roots.
-         */
-        limit?: number | null;
-        /**
-         * Last root's creation timestamp.
-         */
-        created_at?: string | null;
-        /**
-         * Last root's UUID.
-         */
-        cursor_id?: string | null;
-    };
-    url: '/messages/{parent_type}/{parent_id}/references';
-};
-
-export type EntityMessageReferencesResponses = {
-    200: ReferencedThreadPage;
-};
-
-export type EntityMessageReferencesResponse = EntityMessageReferencesResponses[keyof EntityMessageReferencesResponses];
 
 export type EntityMessageDeleteThreadData = {
     body?: never;

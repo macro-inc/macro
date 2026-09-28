@@ -83,6 +83,35 @@ const SCALE: StepperTransition = {
   exitToClass: 'opacity-0 scale-95',
 };
 
+const nextFrame = (fn: () => void) =>
+  requestAnimationFrame(() => requestAnimationFrame(fn));
+
+const classList = (value?: string) => value?.split(' ').filter(Boolean) ?? [];
+
+/* Runs one enter/exit class swap and reports completion once the node's own
+   animations settle. Waiting on `transitionend` instead wedges an outin swap
+   forever whenever nothing animates: a node detached by an ancestor
+   <Suspense>, or a swap that changes no computed value. getAnimations()
+   flushes style, so it sees exactly the transitions the swap started, and
+   none in those cases. */
+function animate(
+  el: Element,
+  from: string[],
+  active: string[],
+  to: string[],
+  done: () => void
+) {
+  el.classList.add(...from, ...active);
+  nextFrame(async () => {
+    el.classList.remove(...from);
+    el.classList.add(...to);
+    const running = el.getAnimations?.() ?? [];
+    await Promise.allSettled(running.map((a) => a.finished));
+    el.classList.remove(...active, ...to);
+    done();
+  });
+}
+
 /* Same trick as solid-js's Match: returning the props object lets the parent
    Stepper read `index`/`children` without evaluating the JSX subtree. Solid's
    JSX compiler keeps `children` as a getter, so it stays lazy until the
@@ -150,15 +179,29 @@ function StepperRoot(props: StepperProps) {
           </Show>
         }
       >
+        {/* Two-argument hooks take the class swap over from the library,
+            which only sequences the switch. */}
         <Transition
           appear={props.appear}
           mode={transition().mode}
-          enterActiveClass={transition().enterActiveClass}
-          enterClass={transition().enterClass}
-          enterToClass={transition().enterToClass}
-          exitActiveClass={transition().exitActiveClass}
-          exitClass={transition().exitClass}
-          exitToClass={transition().exitToClass}
+          onEnter={(el, done) =>
+            animate(
+              el,
+              classList(transition().enterClass),
+              classList(transition().enterActiveClass),
+              classList(transition().enterToClass),
+              done
+            )
+          }
+          onExit={(el, done) =>
+            animate(
+              el,
+              classList(transition().exitClass),
+              classList(transition().exitActiveClass),
+              classList(transition().exitToClass),
+              done
+            )
+          }
         >
           <Show when={activeStep()} keyed>
             {(step) => slot(step)}

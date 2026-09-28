@@ -5,7 +5,7 @@ import type {
   MessageThread as ThreadData,
 } from '@service-storage/messages';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MessageThread, threadListItem } from './MessageThread';
 
@@ -63,6 +63,12 @@ vi.mock('@channel/Thread/ChannelThread', () => ({
         <p>
           thread of {props.parent().type} {props.parent().id}
         </p>
+        <Show when={props.isReplying()}>
+          <textarea aria-label="Reply composer" />
+        </Show>
+        <Show when={props.messageEditor}>
+          <p>Editor enabled</p>
+        </Show>
         <button
           onClick={() =>
             drawer?.open(props.data(), props.getMessageActions?.(props.data()))
@@ -70,6 +76,12 @@ vi.mock('@channel/Thread/ChannelThread', () => ({
         >
           Long press message
         </button>
+        <button
+          onClick={() => props.targetNavigation?.onClearTarget(props.data().id)}
+        >
+          Click linked message
+        </button>
+        <p>{props.isExpanded() ? 'expanded' : 'collapsed'}</p>
       </>
     );
   },
@@ -179,6 +191,26 @@ describe('document discussion controls', () => {
   });
 });
 
+describe('linked message highlight', () => {
+  it('releases the highlight when the linked message is clicked, keeping the thread expanded', () => {
+    const [targetId, setTargetId] = createSignal<string | null>('root');
+    const clearTarget = vi.fn(() => setTargetId(null));
+    const view = render(() => (
+      <MessageThread
+        data={message}
+        canWrite
+        targetId={targetId()}
+        onClearTarget={clearTarget}
+      />
+    ));
+    expect(view.getByText('expanded')).toBeTruthy();
+    fireEvent.click(view.getByRole('button', { name: 'Click linked message' }));
+    expect(clearTarget).toHaveBeenCalledOnce();
+    expect(targetId()).toBeNull();
+    expect(view.getByText('expanded')).toBeTruthy();
+  });
+});
+
 describe('threadListItem', () => {
   const reply = (id: string, createdAt: string) =>
     ({
@@ -210,4 +242,23 @@ describe('threadListItem', () => {
     expect(item.thread.preview.map((r) => r.id)).toEqual(['r3', 'r4', 'r5']);
     expect(item.thread.latest_reply_at).toBe('2026-01-05T00:00:00Z');
   });
+});
+
+it('closes an active project reply composer and editor when comment access is lost', () => {
+  const [canWrite, setCanWrite] = createSignal(true);
+  const view = render(() => (
+    <MessageThread
+      data={{ ...message, parent: { type: 'initiative', id: 'project' } }}
+      canWrite={canWrite()}
+    />
+  ));
+  openActions(view);
+  fireEvent.click(view.getByRole('button', { name: 'Reply' }));
+  expect(view.getByRole('textbox', { name: 'Reply composer' })).toBeTruthy();
+  expect(view.getByText('Editor enabled')).toBeTruthy();
+
+  setCanWrite(false);
+
+  expect(view.queryByRole('textbox', { name: 'Reply composer' })).toBeNull();
+  expect(view.queryByText('Editor enabled')).toBeNull();
 });

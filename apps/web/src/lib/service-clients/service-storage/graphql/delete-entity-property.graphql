@@ -1,0 +1,15 @@
+mutation DeleteEntityProperty(
+  $entityType: GraphqlPropertyTargetEntityType!
+  $entityId: String!
+  $entityPropertyId: ID!
+) {
+  deleteEntityProperty(
+    entityType: $entityType
+    entityId: $entityId
+    entityPropertyId: $entityPropertyId
+  ) {
+    __typename
+    graphqlTypeName
+    entityId
+  }
+}

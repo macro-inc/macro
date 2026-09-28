@@ -7,6 +7,7 @@ import {
   isMacroAgentId,
   MACRO_AGENT_HANDLE,
   MACRO_AGENT_NAME,
+  MACRO_HARNESS_NAME,
 } from '@core/constant/macroAgent';
 import { type AgentKind, kindForHarness, systemBotKind } from './agent-kind';
 
@@ -90,7 +91,7 @@ export function runtimeLabel(
   switch (harness) {
     case 'in-memory':
     case 'macro-inmem':
-      return 'Macro';
+      return MACRO_HARNESS_NAME;
     case 'cursor':
       return 'Cursor';
     case 'macrod':
@@ -157,10 +158,8 @@ function persistedAgent(
         ? 'Connect Cursor'
         : undefined,
     unavailableReason:
-      agent.harness === 'macrod'
-        ? connected
-          ? 'Runs on its own machine · start it from a channel mention'
-          : 'Its runtime is disconnected'
+      agent.harness === 'macrod' && !connected
+        ? 'Its runtime is disconnected'
         : agent.harness === 'cursor' && !connected
           ? 'Connect Cursor to start it'
           : undefined,
@@ -183,7 +182,7 @@ export function buildAgentRoster(input: RosterInput): RosterAgent[] {
       harness: 'in-memory',
       defaultModel: input.macroDefaultModel,
       share: 'system',
-      runtime: { label: 'Macro', connected: true },
+      runtime: { label: MACRO_HARNESS_NAME, connected: true },
     },
     {
       id: CURSOR_BOT_ID,

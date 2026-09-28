@@ -7,7 +7,7 @@
 
 import { makePersisted } from '@solid-primitives/storage';
 import { createSignal } from 'solid-js';
-import { CALENDAR_PREFERENCES_KEY } from '../components/CalendarViewContext';
+import { CALENDAR_PREFERENCES_KEY } from '../calendar-preferences';
 import type { CalendarTimeFormat } from '../types';
 import { getDefaultCalendarTimeFormat } from '../utils/time-format';
 import {
@@ -81,7 +81,7 @@ export function useAvailabilitySettings() {
 
 /**
  * The calendar's persisted 12/24-hour preference, readable outside the
- * calendar block (the email composer has no CalendarViewContext). Read at
+ * Calendar view (the email composer has no CalendarViewContext). Read at
  * copy time, so a preference change applies to the next copy.
  */
 export function getPersistedCalendarTimeFormat(): CalendarTimeFormat {

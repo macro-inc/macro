@@ -2,6 +2,7 @@ import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { openChannelCallTab } from '@channel/Call/open-channel-call-tab';
 import type { SidebarState } from '@components/app/app-sidebar/sidebar';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import { UserIcon } from '@core/component/UserIcon';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -31,11 +32,29 @@ function ChannelCallBadge(props: {
   letters: string;
   slim: boolean;
 }) {
+  const userId = useUserId();
+  const peer = () =>
+    props.channel?.channel_type === ChannelTypeEnum.DirectMessage
+      ? props.channel.participants.find((person) => person.user_id !== userId())
+          ?.user_id
+      : undefined;
   return (
     <div class="relative flex items-center justify-center shrink-0 size-[22px]">
-      <Avatar size="fill" class="bg-ink-extra-muted/15 text-ink-muted">
-        <Avatar.Fallback class="font-semibold">{props.letters}</Avatar.Fallback>
-      </Avatar>
+      <Show
+        when={peer()}
+        keyed
+        fallback={
+          <Avatar size="fill" class="bg-ink-extra-muted/15 text-ink-muted">
+            <Avatar.Fallback class="font-semibold">
+              {props.letters}
+            </Avatar.Fallback>
+          </Avatar>
+        }
+      >
+        {(id) => (
+          <UserIcon id={id} size="fill" suppressClick showTooltip={false} />
+        )}
+      </Show>
       <Show when={props.slim}>
         <span class="absolute -top-0.5 -right-0.5 size-1.5 bg-success rounded-full ring-surface ring-2" />
       </Show>
@@ -92,8 +111,7 @@ function computeChannelLetters(
 }
 
 type IncomingCallContextMenuProps = {
-  callId: string;
-  channelId: string;
+  onJoin: () => void;
   onDismiss: () => void;
 };
 
@@ -108,10 +126,7 @@ const IncomingCallContextMenu: FlowComponent<IncomingCallContextMenuProps> = (
 
       <ContextMenu.Portal>
         <ContextMenuContent class="text-xs text-ink-muted">
-          <MenuItem
-            text="Join call"
-            onClick={() => void joinChannelCall(props.channelId)}
-          />
+          <MenuItem text="Join call" onClick={props.onJoin} />
           <MenuItem text="Dismiss" onClick={props.onDismiss} />
         </ContextMenuContent>
       </ContextMenu.Portal>
@@ -158,8 +173,7 @@ export function SidebarActiveCallWidget(props: {
                 return (
                   <div class="size-8">
                     <IncomingCallContextMenu
-                      callId={call.callId}
-                      channelId={call.channelId}
+                      onJoin={() => void joinChannelCall(call.channelId)}
                       onDismiss={() =>
                         dismissIncomingCallEverywhere(call.callId)
                       }
@@ -216,8 +230,7 @@ export function SidebarActiveCallWidget(props: {
                 return (
                   <div class="w-full">
                     <IncomingCallContextMenu
-                      callId={call.callId}
-                      channelId={call.channelId}
+                      onJoin={() => void joinChannelCall(call.channelId)}
                       onDismiss={() =>
                         dismissIncomingCallEverywhere(call.callId)
                       }

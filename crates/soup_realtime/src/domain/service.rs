@@ -10,8 +10,9 @@ use futures::{StreamExt as _, stream};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use rootcause::prelude::{Report, ResultExt as _};
-use tokio::task::JoinHandle;
+use tokio::{sync::oneshot, task::JoinHandle};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
+use tracing::Instrument as _;
 
 use super::{
     models::{Patch, SoupRealtimeMessage, SoupRealtimePatch},
@@ -113,24 +114,35 @@ const PUBLISH_CONCURRENCY: usize = 16;
 
 /// Domain service that expands entity access and fans out lightweight patches.
 pub struct SoupRealtimeServiceImpl {
-    sender: tokio::sync::mpsc::Sender<SoupRealtimePatch>,
+    sender: tokio::sync::mpsc::Sender<PendingPatch>,
     _bg: JoinHandle<()>,
+}
+
+struct PendingPatch {
+    patch: SoupRealtimePatch,
+    completed: oneshot::Sender<Result<(), Report>>,
+    span: tracing::Span,
 }
 
 struct Worker<A, P> {
     access_expander: A,
     publisher: P,
-    rx: tokio::sync::mpsc::Receiver<SoupRealtimePatch>,
+    rx: tokio::sync::mpsc::Receiver<PendingPatch>,
 }
 
 impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
-    async fn run(&mut self) -> () {
-        while let Some(msg) = self.rx.recv().await {
-            let _ = self.process_one(msg).await;
+    async fn run(&mut self) {
+        while let Some(pending) = self.rx.recv().await {
+            let result = self
+                .process_one(pending.patch)
+                .instrument(pending.span)
+                .await;
+            // A cancelled caller leaves its source event uncommitted for replay.
+            let _ = pending.completed.send(result);
         }
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self), fields(recipient_count))]
     async fn process_one(&self, msg: SoupRealtimePatch) -> Result<(), Report> {
         let mut users = self
             .access_expander
@@ -196,7 +208,19 @@ impl SoupRealtimeServiceImpl {
 
 impl SoupRealtimeService for SoupRealtimeServiceImpl {
     #[tracing::instrument(skip(self), err)]
-    fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
-        Ok(self.sender.try_send(patch)?)
+    async fn notify_users(&self, patch: SoupRealtimePatch) -> Result<(), Report> {
+        let (completed, result) = oneshot::channel();
+        self.sender
+            .send(PendingPatch {
+                patch,
+                completed,
+                span: tracing::Span::current(),
+            })
+            .await
+            .context("realtime Soup worker unavailable")?;
+
+        result
+            .await
+            .context("realtime Soup worker stopped before completing patch")?
     }
 }

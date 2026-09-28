@@ -198,6 +198,21 @@ impl AgentSessionRepo for StubSessions {
     ) -> SessionResult<()> {
         unimplemented!("resizing is the harness service's job")
     }
+
+    async fn list_queued_actions(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<Vec<agent_session::domain::model::StoredQueuedAction>> {
+        unimplemented!("the manager never reads the queue")
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        _id: AgentSessionId,
+        _entries: &[agent_session::domain::model::StoredQueuedAction],
+    ) -> SessionResult<()> {
+        unimplemented!("the manager never writes the queue")
+    }
 }
 
 /// A fake Cursor API: create/get/archive/stream, canned. Returns its base url,
@@ -823,6 +838,48 @@ fn a_pipe_is_not_idle_while_a_command_is_pending() {
     // just before the reap tick looks like, before the runtime has had a
     // chance to mark a turn active.
     assert!(!should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, false, true));
+}
+
+/// The warning for a pipe kept open past its deadline: silent for the first
+/// half hour a turn holds it, then once per half hour after, and re-armed
+/// as soon as the pipe is either free or active again.
+#[test]
+fn a_pipe_held_open_past_its_deadline_warns_once_per_interval() {
+    let minute = std::time::Duration::from_secs(60);
+    let armed = HELD_OPEN_WARNING_INTERVAL;
+
+    // Idle but not yet past the deadline, or past it and free: nothing to say.
+    assert_eq!(held_open_warning(minute, true, armed), (false, armed));
+    assert_eq!(
+        held_open_warning(CURSOR_IDLE_TIMEOUT, false, armed),
+        (false, armed)
+    );
+
+    // Held past the deadline, but for less than the interval: not yet.
+    assert_eq!(
+        held_open_warning(CURSOR_IDLE_TIMEOUT, true, armed),
+        (false, armed)
+    );
+    assert_eq!(
+        held_open_warning(armed - minute, true, armed),
+        (false, armed)
+    );
+
+    // The interval reached: warn, and wait a whole interval for the next.
+    let (warn, next) = held_open_warning(armed, true, armed);
+    assert!(warn);
+    assert_eq!(next, armed * 2);
+    assert_eq!(
+        held_open_warning(armed + minute, true, next),
+        (false, next),
+        "the same stretch does not warn on every tick"
+    );
+    let (warn, next) = held_open_warning(armed * 2, true, next);
+    assert!(warn);
+    assert_eq!(next, armed * 3);
+
+    // Activity resumed: the threshold is re-armed for the next stretch.
+    assert_eq!(held_open_warning(minute, true, next), (false, armed));
 }
 
 /// Teardown archives the agent on cursor.com and forgets the mapping; a

@@ -5,13 +5,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NewThreadAnchorOneOf } from './newThreadAnchorOneOf';
-import type { NewThreadAnchorOneOfFive } from './newThreadAnchorOneOfFive';
-import type { NewThreadAnchorOneOfThree } from './newThreadAnchorOneOfThree';
+import type { NewThreadAnchorOneOfFour } from './newThreadAnchorOneOfFour';
+import type { NewThreadAnchorOneOfSix } from './newThreadAnchorOneOfSix';
 
 /**
  * Location supplied when creating a document discussion.
  */
 export type NewThreadAnchor =
   | NewThreadAnchorOneOf
-  | NewThreadAnchorOneOfThree
-  | NewThreadAnchorOneOfFive;
+  | NewThreadAnchorOneOfFour
+  | NewThreadAnchorOneOfSix;

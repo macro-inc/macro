@@ -1,3 +1,4 @@
+import { PLAN_BY_TIER, PLANS } from '@app/features/paywall/plans';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getLinkShareScope,
@@ -28,7 +29,10 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import UsersIcon from '@phosphor/users.svg';
 import XIcon from '@phosphor/x.svg';
-import { useGithubLinkStatusQuery } from '@queries/auth';
+import {
+  useAiBillingSummaryQuery,
+  useGithubLinkStatusQuery,
+} from '@queries/auth';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -39,7 +43,10 @@ import {
   useInviteToTeamMutation,
   useTeamInvitesQuery,
 } from '@queries/team/invites';
-import { useRemoveUserFromTeamMutation } from '@queries/team/members';
+import {
+  useRemoveUserFromTeamMutation,
+  useSetTeamMemberPlanMutation,
+} from '@queries/team/members';
 import {
   useCreateTeamWithInvitesMutation,
   useDeleteTeamMutation,
@@ -49,6 +56,7 @@ import {
   useToggleNonAdminInvitesMutation,
   useUserTeamsQuery,
 } from '@queries/team/teams';
+import type { PaidPlan } from '@service-auth/ai-billing-types';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
@@ -147,6 +155,99 @@ function RoleSelect(props: {
       </Select.Trigger>
       <Select.Portal>
         <Select.Content class="z-action-menu border border-edge bg-surface rounded shadow-lg min-w-25 p-1">
+          <Select.Listbox />
+        </Select.Content>
+      </Select.Portal>
+    </Select>
+  );
+}
+
+type PlanOption = { value: PaidPlan; label: string; description: string };
+
+const maxPlan = PLAN_BY_TIER.max;
+const MAX_PLAN_OPTION: PlanOption = {
+  value: 'max',
+  label: maxPlan.name,
+  description: `$${maxPlan.price} · $${maxPlan.aiIncluded} of AI`,
+};
+const purchasablePlanOptions: PlanOption[] = [
+  ...PLANS.flatMap((plan) =>
+    plan.tier === 'free'
+      ? []
+      : [
+          {
+            value: plan.tier,
+            label: plan.name,
+            description: `$${plan.price} · $${plan.aiIncluded} of AI`,
+          },
+        ]
+  ),
+];
+
+function planOptionsFor(currentPlan: PaidPlan): PlanOption[] {
+  return currentPlan === 'max'
+    ? [...purchasablePlanOptions, MAX_PLAN_OPTION]
+    : purchasablePlanOptions;
+}
+
+/**
+ * The plan a member's seat is billed at. Until the generated `TeamMember`
+ * schema carries `plan`, read it defensively; every seat starts on Premium.
+ */
+function memberPlan(member: TeamMember): PaidPlan {
+  const plan = (member as TeamMember & { plan?: PaidPlan }).plan;
+  return plan === 'max' ? 'max' : 'premium';
+}
+
+function PlanSelect(props: {
+  value: PaidPlan;
+  onChange: (plan: PaidPlan) => void;
+  disabled?: boolean;
+}) {
+  const options = () => planOptionsFor(props.value);
+  const selectedOption = () =>
+    options().find((option) => option.value === props.value) ?? options()[0];
+
+  return (
+    <Select<PlanOption>
+      options={options()}
+      value={selectedOption()}
+      onChange={(opt) => opt && props.onChange(opt.value)}
+      optionValue="value"
+      optionTextValue="label"
+      gutter={4}
+      placement="bottom-end"
+      disabled={props.disabled}
+      itemComponent={(itemProps: { item: CollectionNode<PlanOption> }) => (
+        <Select.Item
+          item={itemProps.item}
+          class="flex items-center justify-between gap-3 px-2 py-1.5 text-sm rounded-xs hover:bg-hover outline-none data-highlighted:bg-hover"
+        >
+          <Select.ItemLabel class="flex flex-col">
+            <span>{itemProps.item.rawValue.label}</span>
+            <span class="text-xs text-ink-muted">
+              {itemProps.item.rawValue.description}
+            </span>
+          </Select.ItemLabel>
+          <Select.ItemIndicator>
+            <CheckIcon class="size-3" />
+          </Select.ItemIndicator>
+        </Select.Item>
+      )}
+    >
+      <Select.Trigger
+        as={Button}
+        class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
+        disabled={props.disabled}
+        aria-label="Seat plan"
+      >
+        <Select.Value<PlanOption>>
+          {(state) => state.selectedOption().label}
+        </Select.Value>
+        <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content class="z-action-menu border border-edge bg-surface rounded shadow-lg min-w-40 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -320,8 +421,13 @@ function MemberRow(props: {
   isCurrentUser: boolean;
   canManageRemovals: boolean;
   canRemove: boolean;
+  /** Whether seat plans apply (paid team) and the viewer may change them. */
+  showPlan: boolean;
+  canEditPlan: boolean;
+  planPending: boolean;
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
+  onPlanChange: (plan: PaidPlan) => void;
 }) {
   const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
   const isMemberOwner = () => props.member.role === TeamRole.owner;
@@ -353,6 +459,22 @@ function MemberRow(props: {
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0">
+        <Show when={props.showPlan}>
+          <Show
+            when={props.canEditPlan}
+            fallback={
+              <span class="text-xs text-ink-muted capitalize">
+                {memberPlan(props.member)}
+              </span>
+            }
+          >
+            <PlanSelect
+              value={memberPlan(props.member)}
+              onChange={props.onPlanChange}
+              disabled={props.planPending}
+            />
+          </Show>
+        </Show>
         <Show
           when={props.isOwner && !isMemberOwner()}
           fallback={
@@ -963,6 +1085,30 @@ function TeamManagement(props: {
   });
   const isAdminOrOwner = () => isTeamAdminOrOwner(currentUserRole());
   const canManageMemberRemovals = () => isAdminOrOwner();
+  // Seat plans only exist on teams billed per seat: enterprise teams, and
+  // paying teams, whose shared credits and overage are billed to the owner.
+  // The team API does not expose its subscription, so a paying team is
+  // recognised from the viewer's billing position: a paid tier whose payer is
+  // the team owner and whose seat count spans more than one member (a free-team
+  // owner with a personal subscription is billed for exactly one seat). A
+  // paying team of one therefore shows no seat menu; its owner moves their own
+  // seat from Billing.
+  const billingSummary = useAiBillingSummaryQuery();
+  const showSeatPlans = () => {
+    const team = teamQuery.data?.team;
+    if (!team) return false;
+    if (team.enterprise) return true;
+    return (
+      billingSummary.isSuccess &&
+      billingSummary.data.tier !== 'free' &&
+      billingSummary.data.payer === team.owner_id &&
+      billingSummary.data.seats > 1
+    );
+  };
+  const setMemberPlanMutation = useSetTeamMemberPlanMutation();
+  // Seat moves read and rewrite the subscription's item quantities, so only
+  // one may be in flight per team: every plan menu waits while one runs.
+  const planMovePending = () => setMemberPlanMutation.isPending;
   const isOwner = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return false;
@@ -1455,6 +1601,18 @@ function TeamManagement(props: {
                         currentUserRole(),
                         member
                       )}
+                      showPlan={showSeatPlans()}
+                      canEditPlan={isAdminOrOwner()}
+                      planPending={planMovePending()}
+                      onPlanChange={(plan) => {
+                        if (!props.teamId || plan === memberPlan(member))
+                          return;
+                        setMemberPlanMutation.mutate({
+                          teamId: props.teamId,
+                          userId: member.user_id,
+                          plan,
+                        });
+                      }}
                       onRemove={() => setShowRemoveModal(member)}
                       onRoleChange={(newRole) => {
                         if (!props.teamId) return;

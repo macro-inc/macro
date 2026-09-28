@@ -145,7 +145,7 @@ export const SoupViewCreateButton = () => {
   // one thing you make from that list rather than triage into it.
   const createView = createMemo(() => {
     const view = currentView();
-    if (view === 'inbox' && soupView?.activeTab() === 'reminders') {
+    if (view === 'home' && soupView?.activeTab() === 'reminders') {
       return 'reminders';
     }
     return view;

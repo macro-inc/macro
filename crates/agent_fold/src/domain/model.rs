@@ -43,6 +43,7 @@ mod tool;
 /// Macro user tools.
 mod user_tool;
 
+pub use agent_runtime_protocol::domain::turn::{FailureLink, FailureNotice, FailureNoticeKind};
 pub use elicitation::{
     AnsweredChoice, AnsweredField, AnsweredValue, ElicitationOption, ElicitationOutcome,
     ElicitationProperty, ElicitationPropertySchema, ElicitationRequest, ElicitationRequestId,

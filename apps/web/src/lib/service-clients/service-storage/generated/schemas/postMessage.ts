@@ -7,6 +7,7 @@
 
 import type { NewAttachment } from './newAttachment';
 import type { PostMessageAnchor } from './postMessageAnchor';
+import type { PostMessageId } from './postMessageId';
 import type { PostMessageNonce } from './postMessageNonce';
 import type { PostMessageThreadId } from './postMessageThreadId';
 import type { SimpleMention } from './simpleMention';
@@ -20,6 +21,9 @@ export interface PostMessage {
   attachments?: NewAttachment[];
   /** Macro Markdown body. */
   content: string;
+  /** Client-minted UUIDv7 for the new message, so an optimistic message
+already carries its final id; the server mints one when absent. */
+  id?: PostMessageId;
   /** Mentions tracked by the editor. */
   mentions?: SimpleMention[];
   /** Client nonce for optimistic reconciliation. */

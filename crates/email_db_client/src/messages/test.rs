@@ -155,6 +155,32 @@ async fn get_scheduled_db_messages_excludes_non_scheduled_messages(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("get_scheduled_db_messages"))
 )]
+async fn get_scheduled_db_messages_excludes_immediate_send_undo_rows(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let immediate_send_id = Uuid::parse_str("00000000-0000-0000-0000-0000000d0001")?;
+    sqlx::query!(
+        "UPDATE email_messages SET is_draft = false WHERE id = $1",
+        immediate_send_id
+    )
+    .execute(&pool)
+    .await?;
+
+    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100).await?;
+
+    assert!(
+        result.iter().all(|message| message.id != immediate_send_id),
+        "Immediate-send undo rows are not user-created scheduled drafts"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("get_scheduled_db_messages"))
+)]
 async fn get_scheduled_db_messages_isolates_by_link_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
     let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100).await?;

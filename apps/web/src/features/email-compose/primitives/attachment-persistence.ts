@@ -1,5 +1,9 @@
 import { type Accessor, createSignal } from 'solid-js';
-import type { EmailAttachmentStorage } from '../context/compose-capabilities';
+import type {
+  EmailAttachmentStorage,
+  EmailComposeFeedback,
+  EmailConnectivity,
+} from '../context/compose-capabilities';
 import type { DraftFormAttachment } from './email-form-state';
 import type { EmailFormContextValue } from './email-form-types';
 
@@ -13,6 +17,23 @@ type AttachmentState = Pick<
   | 'removeForwarded'
 >;
 
+/**
+ * A queued save carries only text; file bytes live in the composer's memory
+ * until a save commits, so adding attachments offline is refused rather than
+ * silently missed. Resolves true when the add must not proceed.
+ */
+export async function refuseAttachmentsOffline(
+  connectivity: EmailConnectivity,
+  notices: Pick<EmailComposeFeedback, 'blockingNotice'>
+): Promise<boolean> {
+  if (!connectivity.looksOffline()) return false;
+  await notices.blockingNotice({
+    title: "You're offline",
+    body: "Attachments can't be added while you're offline. Reconnect and try again.",
+  });
+  return true;
+}
+
 /** Attachment transport and completion, independent of draft/send orchestration. */
 export function createAttachmentPersistence(options: {
   attachments: AttachmentState;
@@ -20,17 +41,38 @@ export function createAttachmentPersistence(options: {
   inboxId: Accessor<string | undefined>;
   services: Pick<
     EmailAttachmentStorage,
-    'uploadAttachments' | 'removeAttachment' | 'removeForwardedAttachment'
+    | 'uploadAttachments'
+    | 'addForwardedAttachments'
+    | 'removeAttachment'
+    | 'removeForwardedAttachment'
   >;
 }) {
   // An assigned ID only proves that the attachment record exists. Every save
   // must also wait for content uploads started by earlier concurrent saves.
   const inFlight = new Set<Promise<void>>();
   const [uploading, setUploading] = createSignal(false);
+  let generation = 0;
 
   return {
     uploading,
+    /** Local files can be uploaded again; remote-only draft files cannot be cloned. */
+    detach() {
+      generation += 1;
+      let removed = 0;
+      for (const attachment of options.attachments.list()) {
+        if (attachment.type === 'local') {
+          options.attachments.clearAttachmentId(attachment.file);
+        } else if (attachment.type === 'remote') {
+          options.attachments.removeById(attachment.attachmentId);
+          removed += 1;
+        }
+      }
+      return removed;
+    },
     async upload(draftId: string, inbox = { inboxId: options.inboxId() }) {
+      const uploadGeneration = generation;
+      const stillCurrent = () =>
+        uploadGeneration === generation && options.draftId() === draftId;
       const attachments = options.attachments
         .list()
         .filter(
@@ -45,8 +87,13 @@ export function createAttachmentPersistence(options: {
           draftId: draftId,
           attachments: attachments.map((attachment) => attachment.file),
           inboxId: inbox.inboxId,
-          onAttachmentAdded: options.attachments.assignAttachmentId,
-          onAttachmentUploadFailed: options.attachments.clearAttachmentId,
+          onAttachmentAdded: (file, id) => {
+            if (stillCurrent())
+              options.attachments.assignAttachmentId(file, id);
+          },
+          onAttachmentUploadFailed: (file) => {
+            if (stillCurrent()) options.attachments.clearAttachmentId(file);
+          },
         });
         const settled = run.then(
           () => undefined,
@@ -62,6 +109,17 @@ export function createAttachmentPersistence(options: {
       while (inFlight.size) await Promise.all([...inFlight]);
       // All work has settled; rethrow this save's own upload failure.
       if (run) await run;
+      if (!stillCurrent()) return;
+      const forwarded = options.attachments
+        .list()
+        .filter((attachment) => attachment.type === 'forwarded');
+      if (forwarded.length) {
+        await options.services.addForwardedAttachments({
+          draftId,
+          inboxId: inbox.inboxId,
+          attachments: forwarded.map(({ attachmentId }) => ({ attachmentId })),
+        });
+      }
     },
     remove(attachment: DraftFormAttachment) {
       const state = options.attachments;

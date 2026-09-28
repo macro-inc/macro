@@ -31,7 +31,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
 };
-use agent_runtime_protocol::domain::action::{COMPACT_COMMAND, MODEL_CONFIG_ID};
+use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use agent_session::domain::model::AgentSessionId;
 use ai_tools::user_tool_review::{
     ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
@@ -824,15 +824,14 @@ async fn run_ask(
     }
 }
 
-/// The slash commands this agent handles itself, as ACP advertises them:
-/// bare names, no leading slash. `/ask` only while the host enables
-/// development commands, since the prompt handler ignores it otherwise.
+/// The slash commands this agent advertises over ACP: bare names, no
+/// leading slash. `/compact` is still handled if a client sends it, but it
+/// is not listed — dropping history is not a product command for this
+/// harness. `/ask` only while the host enables development commands, since
+/// the prompt handler ignores it otherwise.
 fn available_commands(state: &AgentState) -> Vec<AvailableCommand> {
     let name = |command: &str| command.trim_start_matches('/').to_owned();
-    let mut commands = vec![AvailableCommand::new(
-        name(COMPACT_COMMAND),
-        "Drop the earlier conversation from the model's context",
-    )];
+    let mut commands = Vec::new();
     if state.enable_dev_commands {
         commands.push(
             AvailableCommand::new(

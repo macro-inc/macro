@@ -1,18 +1,14 @@
 import { ModelCatalogMenu } from '@core/component/AI/component/input/ModelCatalogPicker';
-import {
-  modelProvider,
-  ProviderIcon,
-} from '@core/component/AI/component/ProviderIcon';
+import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CodeIcon from '@phosphor/code.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
 import { Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { AgentIcon } from '../components/AgentGlyph';
-import { modelLabel } from '../components/model-label';
 import {
   MACRO_PERSONA_ID,
   type RosterAgent,
@@ -53,14 +49,14 @@ export function AgentPicker(props: {
   return (
     <Dropdown open={open()} onOpenChange={setOpen} placement="top-end">
       <Dropdown.Trigger
-        variant="ghost"
+        variant="plain"
         aria-label="Agent"
         title={
           rawModel()
             ? label()
             : `${props.selected?.name ?? 'Choose agent'} · ${label()}`
         }
-        class="h-[33.75px] min-w-0 max-w-full gap-[5.625px] rounded-full bg-transparent hover:bg-hover px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder"
+        class="h-[33.75px] min-w-0 max-w-full gap-[5.625px] px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder"
       >
         <Show
           when={rawModel()}
@@ -98,46 +94,21 @@ export function AgentPicker(props: {
           <div class="min-h-0 overflow-y-auto overscroll-contain">
             <Show when={macro()}>
               {(agent) => (
-                <Dropdown.Group>
-                  <Dropdown.GroupLabel>Models</Dropdown.GroupLabel>
-                  <For each={macroCatalog.models()}>
-                    {(option) => (
-                      <Dropdown.Item
-                        closeOnSelect
-                        class="min-w-0 gap-2"
-                        disabled={Boolean(agent().unavailableReason)}
-                        textValue={modelLabel(option.id, option.name)}
-                        title={modelLabel(option.id, option.name)}
-                        onSelect={() => choose(agent(), option.id)}
-                      >
-                        <span class="flex size-5 shrink-0 items-center justify-center">
-                          <Show
-                            when={modelProvider(option.id)}
-                            fallback={<SparkleIcon class="size-4 shrink-0" />}
-                          >
-                            <ProviderIcon model={option.id} class="size-4" />
-                          </Show>
-                        </span>
-                        <span class="min-w-0 flex-1 truncate">
-                          {modelLabel(option.id, option.name)}
-                        </span>
-                        <Show
-                          when={
-                            props.selected?.id === agent().id &&
-                            model() === option.id
-                          }
-                        >
-                          <CheckIcon class="size-3.5 shrink-0 text-accent" />
-                        </Show>
-                      </Dropdown.Item>
-                    )}
-                  </For>
-                  <Show when={macroCatalog.models().length === 0}>
-                    <div role="status" class="px-3 py-2 text-xs text-ink-muted">
-                      {macroCatalog.message()}
-                    </div>
-                  </Show>
-                </Dropdown.Group>
+                <ModelCatalogMenu
+                  value={
+                    props.selected?.id === agent().id ? (model() ?? null) : null
+                  }
+                  recommendedId={macroCatalog.currentModel()}
+                  disabled={Boolean(agent().unavailableReason)}
+                  options={macroCatalog.models().map((option) => ({
+                    id: option.id,
+                    label: modelLabel(option.id, option.name),
+                    description: option.description ?? undefined,
+                    group: option.group ?? undefined,
+                  }))}
+                  onSelect={(id) => choose(agent(), id)}
+                  emptyMessage={macroCatalog.message()}
+                />
               )}
             </Show>
             <For each={['agent', 'coder'] as const}>
@@ -250,6 +221,7 @@ function AgentPickerRow(props: {
           <Dropdown.SubContent
             aria-label={`Models for ${props.agent.name}`}
             class="w-72 max-w-[calc(100vw-1rem)] max-h-[min(28rem,var(--kb-popper-content-available-height))] overflow-y-auto overscroll-contain"
+            onOpenAutoFocus={(event: Event) => event.preventDefault()}
             onPointerDown={(event: PointerEvent) => event.stopPropagation()}
             onMouseDown={(event: MouseEvent) => event.stopPropagation()}
           >
@@ -276,6 +248,7 @@ function AgentModels(props: {
   const defaultModel = () => props.agent.defaultModel ?? catalog.currentModel();
   return (
     <ModelCatalogMenu
+      autoFocusSearch
       value={props.modelOverride ?? defaultModel() ?? null}
       options={catalog.models().map((option) => ({
         id: option.id,

@@ -210,13 +210,149 @@ struct AgentConnectionPromptRequest<'a> {
     connection_prompt: &'a AgentConnectionPrompt,
 }
 
-/// A channel message included as context for an agent prompt.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+/// What a chat agent's thread message says below its session link, in the
+/// shape the lexical service `/agent-announcement` endpoint validates.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AgentChatReplyBody {
+    /// The spinner while the turn runs.
+    Pending,
+    /// Prose, posted as written: the answer, or what the harness says for a
+    /// turn that answered with nothing or stopped to ask.
+    Markdown {
+        /// The prose, as channel markdown.
+        markdown: String,
+    },
+}
+
+/// A chat agent's thread message in one of its states.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentChatReply {
+    /// Session the message speaks for; linked ahead of the body.
+    pub session_id: String,
+    pub body: AgentChatReplyBody,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentChatReplyRequest<'a> {
+    chat_reply: &'a AgentChatReply,
+}
+
+/// A message included as context for an agent prompt.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentContextMessage<'a> {
-    /// Display name of the message sender.
-    pub sender: &'a str,
+    /// Message id.
+    pub id: String,
+    /// Sender identifier as the message service represents it.
+    pub sender_id: &'a str,
+    /// Readable name of the sender.
+    pub author: &'a str,
     /// Markdown content of the message.
     pub content: &'a str,
+    /// RFC 3339 time the message was posted.
+    pub posted_at: String,
+}
+
+/// Messages of one discussion included as context, oldest first.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentContextThread<'a> {
+    /// Root message of the discussion.
+    pub root_id: String,
+    /// Live messages, the root first when it is included.
+    pub messages: Vec<AgentContextMessage<'a>>,
+    /// Whether some messages of the discussion were left out.
+    pub messages_omitted: bool,
+}
+
+/// What an agent prompt answers.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum AgentContextReplyTarget<'a> {
+    /// The author quote-replied to one message.
+    Quote {
+        /// The quoted message.
+        message_id: String,
+        /// The discussion holding the quoted message.
+        thread_id: String,
+        /// The one-line preview the quote renders.
+        preview: &'a str,
+        /// The quoted message in full, when it could be read.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        message: Option<AgentContextMessage<'a>>,
+    },
+    /// The prompt was posted as a reply in a discussion.
+    Thread {
+        /// Root of that discussion.
+        thread_id: String,
+    },
+    /// The prompt was posted at the top level of a channel.
+    None,
+}
+
+/// The conversation an agent prompt was posted in.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentContext<'a> {
+    /// The document location of the comment thread, when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<AgentContextAnchor<'a>>,
+    /// What the prompt answers.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_target: Option<AgentContextReplyTarget<'a>>,
+    /// The prompting message, marked where it appears in the context.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_message_id: Option<String>,
+    /// The discussion the prompt was posted in, through the prompt.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread: Option<AgentContextThread<'a>>,
+    /// Other channel activity, grouped by discussion, oldest first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub channel: Vec<AgentContextThread<'a>>,
+}
+
+/// The document location of the comment thread an agent prompt was posted in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum AgentContextAnchor<'a> {
+    /// A comment mark in a markdown document.
+    Markdown {
+        /// Lexical mark the comment is attached to.
+        mark_id: &'a str,
+        /// The marked text when the comment was posted, when it was captured.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        marked_text: Option<&'a str>,
+        /// The text the mark covers in the document now, when it was resolved.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        current_marked_text: Option<&'a str>,
+        /// The passage around the mark now, when it was resolved.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        surrounding_text: Option<&'a str>,
+    },
+    /// A highlight on a PDF.
+    PdfHighlight {
+        /// Highlight annotation the comment is attached to.
+        anchor_id: &'a str,
+        /// The text the highlight covers, when it carries any.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        marked_text: Option<&'a str>,
+    },
+    /// A point pinned on a PDF page, which covers no text.
+    PdfPin {
+        /// Pin annotation the comment is attached to.
+        anchor_id: &'a str,
+    },
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -225,13 +361,29 @@ struct AgentContextRequest<'a> {
     prompt_markdown: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     parent: Option<&'a MessageParent>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    messages: Option<&'a [AgentContextMessage<'a>]>,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    context: Option<&'a AgentContext<'a>>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct AgentContextResponse {
     markdown: String,
+}
+
+/// The live text of a comment mark, resolved from the current document by the
+/// lexical service `/comment-mark` endpoint. Both fields are bounded there.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentMarkContext {
+    /// The text the mark covers now.
+    pub marked_text: String,
+    /// The block or blocks containing the mark, windowed around it.
+    pub surrounding_text: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct CommentMarkResponse {
+    data: Option<CommentMarkContext>,
 }
 
 /// Rendering target supported by the lexical service `/markdown` endpoint.
@@ -355,6 +507,20 @@ impl LexicalClient {
             .get_markdown(document_id, MarkdownTarget::Embedding)
             .await?;
         Ok(EmbeddingMarkdown(markdown))
+    }
+
+    /// Resolve a comment mark against the live document: `None` when the
+    /// document no longer carries it. Performs no access check of its own, so
+    /// callers must already hold access to the document.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn resolve_comment_mark(
+        &self,
+        document_id: &str,
+        mark_id: &str,
+    ) -> Result<Option<CommentMarkContext>> {
+        let url = format!("{}/comment-mark/{}/{}", self.url, document_id, mark_id);
+        let response: CommentMarkResponse = self.get_json(&url).await?;
+        Ok(response.data)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -482,15 +648,33 @@ impl LexicalClient {
         Ok(data.markdown)
     }
 
-    /// Sanitizes an agent prompt and optionally composes it with prior-message
-    /// context via the lexical service, so internal nodes and escaping are
-    /// handled by Lexical rather than assembled manually by the caller.
-    #[tracing::instrument(skip(self, prompt_markdown, messages), err)]
+    /// Compose a chat agent's thread message - its session link over the
+    /// spinner or its prose - through the lexical service's real nodes.
+    #[tracing::instrument(skip(self, reply), err)]
+    pub async fn compose_agent_chat_reply(&self, reply: &AgentChatReply) -> Result<String> {
+        let url = format!("{}/agent-announcement", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&AgentChatReplyRequest { chat_reply: reply })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentAnnouncementResponse =
+            response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
+    /// Sanitizes an agent prompt and optionally composes it with the
+    /// conversation it was posted in via the lexical service, so internal
+    /// nodes and escaping are handled by Lexical rather than by the caller.
+    #[tracing::instrument(skip(self, prompt_markdown, context), err)]
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
         parent: Option<&MessageParent>,
-        messages: Option<&[AgentContextMessage<'_>]>,
+        context: Option<&AgentContext<'_>>,
     ) -> Result<String> {
         let url = format!("{}/agent-context", self.url);
         let response = check_response(
@@ -499,7 +683,7 @@ impl LexicalClient {
                 .json(&AgentContextRequest {
                     prompt_markdown,
                     parent,
-                    messages,
+                    context,
                 })
                 .send()
                 .await?,
@@ -700,6 +884,23 @@ mod tests {
         let value = serde_json::to_value(&document).unwrap();
         assert!(value.get("channelId").is_none());
         assert_eq!(value["parent"]["id"], "doc-1");
+    }
+
+    #[test]
+    fn comment_mark_response_reads_a_resolved_or_missing_mark() {
+        let found: CommentMarkResponse = serde_json::from_str(
+            r#"{"data":{"markedText":"the phrase","surroundingText":"all of the phrase here"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            found.data,
+            Some(CommentMarkContext {
+                marked_text: "the phrase".to_owned(),
+                surrounding_text: "all of the phrase here".to_owned(),
+            })
+        );
+        let missing: CommentMarkResponse = serde_json::from_str(r#"{"data":null}"#).unwrap();
+        assert_eq!(missing.data, None);
     }
 
     #[test]

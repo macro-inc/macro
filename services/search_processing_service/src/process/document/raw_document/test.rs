@@ -103,6 +103,24 @@ fn parent_only_document_info(file_type: Option<&str>) -> DocumentMetadata {
 }
 
 #[test]
+fn generate_upserts_preserves_a_bot_owner_principal() {
+    const BOT_PRINCIPAL: &str = "bot|00000000-0000-0000-0000-00000000a1a1";
+
+    let mut document_info = parent_only_document_info(Some("md"));
+    document_info.owner = BOT_PRINCIPAL.to_string().try_into().unwrap();
+    let markdown_result = vec![MarkdownParseResult {
+        node_id: "node1".to_string(),
+        raw_content: "# Bot document".to_string(),
+        content: "Bot document".to_string(),
+    }];
+
+    let upserts = generate_upserts(document_info, markdown_result).expect("valid upsert");
+
+    assert_eq!(upserts.len(), 1);
+    assert_eq!(upserts[0].owner_id, BOT_PRINCIPAL);
+}
+
+#[test]
 fn test_generate_parent_only_upsert() {
     let args = generate_parent_only_upsert(parent_only_document_info(Some("zip")))
         .expect("could not generate parent-only upsert")

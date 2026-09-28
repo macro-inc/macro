@@ -1,0 +1,46 @@
+[package]
+name = "preview_gateway"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "preview_gateway_doppler_config"
+path = "src/doppler_config.rs"
+
+[dependencies]
+doppler-config = { workspace = true }
+agent_preview = { path = "../../crates/agent_preview" }
+agent_egress = { path = "../../crates/agent_egress" }
+agent_session = { path = "../../crates/agent_session" }
+async-trait = { workspace = true }
+axum = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+database_env_vars = { path = "../../crates/database_env_vars" }
+entity_access = { path = "../../crates/entity_access" }
+macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization", default-features = false, features = ["axum", "outbound", "postgres"] }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_config = { path = "../../crates/macro_config" }
+macro_cors = { path = "../../crates/macro_cors" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+macro_user_id = { path = "../../crates/macro_user_id" }
+macro_uuid = { path = "../../crates/macro_uuid" }
+model-entity = { path = "../../crates/model-entity" }
+rootcause = { workspace = true }
+anyhow = { workspace = true }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio-util = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }

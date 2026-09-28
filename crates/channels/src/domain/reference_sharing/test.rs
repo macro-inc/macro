@@ -1,13 +1,13 @@
 use super::*;
 
 #[test]
-fn only_owner_can_share_session_control_with_channel() {
+fn only_owner_can_share_session_view_with_channel() {
     for (access, expected) in [
         (None, None),
         (Some(AccessLevel::View), None),
         (Some(AccessLevel::Comment), None),
         (Some(AccessLevel::Edit), None),
-        (Some(AccessLevel::Owner), Some(AccessLevel::Edit)),
+        (Some(AccessLevel::Owner), Some(AccessLevel::View)),
     ] {
         assert_eq!(
             grant_level(ReferencedShareItemType::AgentSession, access),
@@ -33,6 +33,22 @@ fn existing_reference_types_keep_view_sharing() {
         assert_eq!(
             grant_level(kind, Some(AccessLevel::Owner)),
             Some(AccessLevel::View)
+        );
+    }
+}
+
+#[test]
+fn only_calendar_holders_can_share_event_view_with_channel() {
+    for (access, expected) in [
+        (None, None),
+        (Some(AccessLevel::View), None),
+        (Some(AccessLevel::Comment), None),
+        (Some(AccessLevel::Edit), Some(AccessLevel::View)),
+        (Some(AccessLevel::Owner), Some(AccessLevel::View)),
+    ] {
+        assert_eq!(
+            grant_level(ReferencedShareItemType::CalendarEvent, access),
+            expected
         );
     }
 }

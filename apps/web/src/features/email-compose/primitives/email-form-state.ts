@@ -50,7 +50,6 @@ type EmailFormState = {
   replyType: ReplyType;
   withQuotedText: boolean;
   subject: string;
-  sendTime?: Date;
 };
 
 const EMPTY_FORM_STATE: EmailFormState = {
@@ -153,9 +152,6 @@ export function createEmailFormState(
       replyType,
       withQuotedText: draftContainsAppendedReply(),
       subject: initialSubject,
-      sendTime: draft?.scheduled_send_time
-        ? new Date(draft.scheduled_send_time)
-        : undefined,
     } satisfies EmailFormState;
   };
 
@@ -253,10 +249,6 @@ export function createEmailFormState(
     setRecipients('bcc', recalculated.bcc);
   };
 
-  const setSendTime = (date: Date | null) => {
-    setState('sendTime', date ?? undefined);
-  };
-
   const callDirty = () => {
     setEditRevision((revision) => revision + 1);
   };
@@ -285,8 +277,6 @@ export function createEmailFormState(
     selectedInboxId,
     setSelectedInbox,
     editRevision,
-    sendTime: () => state.sendTime,
-    setSendTime,
     reset: () => reset(getInitialState()),
     clear: () => reset({ ...EMPTY_FORM_STATE }),
     attachments: {

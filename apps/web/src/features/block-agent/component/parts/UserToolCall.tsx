@@ -11,6 +11,8 @@
  */
 
 import { ItemPreview } from '@core/component/ItemPreview';
+import CalendarIcon from '@phosphor/calendar-blank.svg';
+import EmailIcon from '@phosphor/envelope.svg';
 import type {
   ToolDetail,
   UserToolOutcome,
@@ -26,7 +28,15 @@ import type {
   EventTimeInput,
   SendEmail,
 } from '@service-cognition/generated/tools/types';
-import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import { FoldedOutput, ToolCard } from '../../ui';
 import type { ToolCallCommon, ToolCallContext } from './shared';
@@ -49,9 +59,8 @@ function outcomeLabel(outcome: UserToolOutcome): string {
 }
 
 /**
- * The draft, typed by the tool's own schema, when the input fits it. A
- * draft that does not - a tool this block has no view for, or arguments the
- * schema rejects - shows as JSON instead.
+ * The draft, typed by the tool's own schema, when the input fits it.
+ * Unsupported tools and rejected arguments remain summary-only rows.
  */
 function typedDraft(
   common: ToolCallCommon,
@@ -83,34 +92,41 @@ export function UserToolCall(props: {
 
   return (
     <ToolCard
+      icon={
+        props.common.label === 'CreateCalendarEvent' ? (
+          <CalendarIcon class="size-4" />
+        ) : (
+          <EmailIcon class="size-4" />
+        )
+      }
       title={props.common.label}
       status={props.common.status}
       subtitle={draft() && draftSubtitle(draft()!)}
       muted={props.common.muted || failure() !== undefined}
-      trailing={
-        props.common.trailing ?? <OutcomeTrailing outcome={outcome()} />
-      }
+      trailing={props.common.trailing ?? outcomeLabel(outcome())}
+      hasContent={draft() !== undefined}
     >
-      <Switch
-        fallback={
-          <FoldedOutput text={JSON.stringify(props.detail.input, null, 2)} />
-        }
-      >
-        <Match when={failure()}>
-          {(message) => <FoldedOutput text={message()} />}
-        </Match>
-        <Match when={draft()?.name === 'SendEmail' && draft()}>
-          {(tool) => (
-            <EmailDraft
-              email={tool().data as SendEmail}
-              inFlight={props.context?.inFlight ?? false}
-            />
-          )}
-        </Match>
-        <Match when={draft()?.name === 'CreateCalendarEvent' && draft()}>
-          {(tool) => <EventDraft event={tool().data as CreateCalendarEvent} />}
-        </Match>
-      </Switch>
+      <Show when={draft()}>
+        <Switch>
+          <Match when={failure()}>
+            {(message) => <FoldedOutput text={message()} />}
+          </Match>
+          <Match when={draft()?.name === 'SendEmail' && draft()}>
+            {(tool) => (
+              <EmailDraft
+                email={tool().data as SendEmail}
+                inFlight={props.context?.inFlight ?? false}
+              />
+            )}
+          </Match>
+          <Match when={draft()?.name === 'CreateCalendarEvent' && draft()}>
+            {(tool) => (
+              <EventDraft event={tool().data as CreateCalendarEvent} />
+            )}
+          </Match>
+        </Switch>
+        <OutcomeLink outcome={outcome()} />
+      </Show>
     </ToolCard>
   );
 }
@@ -130,19 +146,20 @@ function draftSubtitle(
  * The outcome, and for an email that went somewhere, a link to where: the
  * thread it was sent into, or the thread its draft belongs to.
  */
-function OutcomeTrailing(props: { outcome: UserToolOutcome }): JSX.Element {
+function OutcomeLink(props: { outcome: UserToolOutcome }): JSX.Element {
   const threadId = () =>
     match(props.outcome)
       .with({ kind: 'sent' }, (sent) => sent.threadId)
       .with({ kind: 'draft' }, (draft) => draft.threadId ?? undefined)
       .otherwise(() => undefined);
   return (
-    <span class="flex items-center gap-2">
-      <span class="text-ink">{outcomeLabel(props.outcome)}</span>
-      <Show when={threadId()}>
-        {(id) => <ItemPreview id={id()} type="email" class="ring-0" />}
-      </Show>
-    </span>
+    <Show when={threadId()}>
+      {(id) => (
+        <Suspense>
+          <ItemPreview id={id()} type="email" class="mt-2 ring-0" />
+        </Suspense>
+      )}
+    </Show>
   );
 }
 

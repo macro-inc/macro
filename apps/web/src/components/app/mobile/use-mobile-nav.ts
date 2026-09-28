@@ -1,6 +1,6 @@
 import type { ListView } from '@app/constants/list-views';
+import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { type Accessor, createMemo } from 'solid-js';
 import { useSplitLayout } from '../split-layout/layout';
@@ -14,9 +14,10 @@ import { isMobileNavViewId, type MobileNavViewId } from './mobile-nav-views';
 export type MobileDockNavId = ListView | 'calendar' | 'settings';
 
 function mobileNavContent(id: Exclude<MobileDockNavId, 'settings'>) {
-  return id === 'calendar'
-    ? ({ type: 'calendar', id: CALENDAR_BLOCK_ID } as const)
-    : ({ type: 'component', id } as const);
+  return {
+    type: 'component' as const,
+    id: id === 'calendar' ? CALENDAR_VIEW_ID : id,
+  };
 }
 
 /** The mobile navigation view represented by the foreground split content. */
@@ -26,9 +27,6 @@ export function useForegroundMobileView(): Accessor<
   return createMemo(() => {
     const content = globalSplitManager()?.activeSplit()?.content();
     if (!content) return undefined;
-    if (content.type === 'calendar') {
-      return content.id === CALENDAR_BLOCK_ID ? 'calendar' : undefined;
-    }
     if (content.type !== 'component') return undefined;
     return isMobileNavViewId(content.id) ? content.id : undefined;
   });
@@ -50,8 +48,7 @@ export function useMobileNavNavigate(): (id: MobileDockNavId) => void {
       return;
     }
     const fgContent = globalSplitManager()?.activeSplit()?.content();
-    const isOnNavView =
-      fgContent?.type === 'component' || fgContent?.type === 'calendar';
+    const isOnNavView = fgContent?.type === 'component';
     openWithSplit(mobileNavContent(id), { mergeHistory: isOnNavView });
   };
 }

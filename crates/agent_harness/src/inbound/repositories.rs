@@ -1,5 +1,5 @@
 //! Authenticated HTTP adapter listing the repositories a caller can hand a
-//! coding session.
+//! coding session, and the branches on one of those repositories.
 //!
 //! The same listing the open path authorizes an explicit `repoUrl` against
 //! and the Cursor chooser picks from, offered to the app so a repository is
@@ -9,19 +9,21 @@
 
 use std::sync::Arc;
 
+use agent_egress::domain::model::RepoSlug;
 use axum::Router;
-use axum::extract::{FromRef, Json, State};
+use axum::extract::{FromRef, Json, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::domain::error::HarnessError;
 use crate::domain::model::ReachableRepository;
-use crate::domain::ports::ReachableRepositories;
+use crate::domain::ports::{ReachableRepositories, RepositoryBranches};
 
 #[cfg(test)]
 mod test;
@@ -63,9 +65,28 @@ impl From<Vec<ReachableRepository>> for AgentRepositoriesResponse {
     }
 }
 
+/// Query for `GET /agent-repositories/branches`.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRepositoryBranchesQuery {
+    /// Canonical `https://github.com/owner/name` url, as `POST /agent-sessions`
+    /// accepts as `repoUrl`.
+    pub repo_url: String,
+}
+
+/// Response body for `GET /agent-repositories/branches`.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRepositoryBranchesResponse {
+    /// Branch names on the repository, in the order GitHub returned them.
+    /// Empty when the repository has no commits yet.
+    pub branches: Vec<String>,
+}
+
 /// Router state for repository listing.
 pub struct AgentRepositoriesRouterState<Auth> {
     repositories: Arc<dyn ReachableRepositories>,
+    branches: Arc<dyn RepositoryBranches>,
     authorization: MacroAuthorizationState<Auth>,
 }
 
@@ -73,10 +94,12 @@ impl<Auth> AgentRepositoriesRouterState<Auth> {
     /// Build repository-listing route state.
     pub fn new(
         repositories: Arc<dyn ReachableRepositories>,
+        branches: Arc<dyn RepositoryBranches>,
         authorization: MacroAuthorizationState<Auth>,
     ) -> Self {
         Self {
             repositories,
+            branches,
             authorization,
         }
     }
@@ -86,6 +109,7 @@ impl<Auth> Clone for AgentRepositoriesRouterState<Auth> {
     fn clone(&self) -> Self {
         Self {
             repositories: Arc::clone(&self.repositories),
+            branches: Arc::clone(&self.branches),
             authorization: self.authorization.clone(),
         }
     }
@@ -107,6 +131,10 @@ where
         .route(
             "/agent-repositories",
             get(list_agent_repositories_handler::<Auth>),
+        )
+        .route(
+            "/agent-repositories/branches",
+            get(list_agent_repository_branches_handler::<Auth>),
         )
         .with_state(state)
 }
@@ -148,6 +176,70 @@ where
             (
                 StatusCode::BAD_GATEWAY,
                 "could not list your GitHub repositories".to_owned(),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// List the branches on one repository the caller can start a session from.
+#[utoipa::path(
+    get,
+    path = "/agent-repositories/branches",
+    tag = "agent-repositories",
+    operation_id = "list_agent_repository_branches",
+    security(("bearerAuth" = [])),
+    params(
+        ("repoUrl" = String, Query, description = "Canonical https://github.com/owner/name URL")
+    ),
+    responses(
+        (status = 200, description = "The repository's branches", body = AgentRepositoryBranchesResponse),
+        (status = 400, description = "The query did not name a GitHub repository"),
+        (status = 401, description = "Unauthenticated"),
+        (status = 403, description = "The caller cannot reach this repository"),
+        (status = 502, description = "GitHub could not be asked which branches the repository has"),
+    )
+)]
+pub async fn list_agent_repository_branches_handler<Auth>(
+    State(state): State<AgentRepositoriesRouterState<Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(query): Query<AgentRepositoryBranchesQuery>,
+) -> Response
+where
+    Auth: MacroAuthorizationService,
+{
+    let Some(repository) = RepoSlug::parse_github_url(&query.repo_url) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            "Enter a GitHub repository as https://github.com/owner/repo.".to_owned(),
+        )
+            .into_response();
+    };
+
+    match state
+        .branches
+        .for_repository(
+            &authorization.authorization.macro_user_id,
+            repository.owner(),
+            repository.name(),
+        )
+        .await
+    {
+        Ok(branches) => (
+            StatusCode::OK,
+            Json(AgentRepositoryBranchesResponse { branches }),
+        )
+            .into_response(),
+        Err(HarnessError::RepositoryUnavailable) => (
+            StatusCode::FORBIDDEN,
+            "repository is not available to this user".to_owned(),
+        )
+            .into_response(),
+        Err(error) => {
+            tracing::warn!(error = ?error, "could not list the repository's branches");
+            (
+                StatusCode::BAD_GATEWAY,
+                "could not list this repository's branches".to_owned(),
             )
                 .into_response()
         }

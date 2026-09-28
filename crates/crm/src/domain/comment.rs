@@ -89,8 +89,8 @@ pub struct CrmCommentThread {
     pub comments: Vec<CrmComment>,
 }
 
-/// Outcome of soft-deleting a CRM comment: reports whether the parent thread
-/// was soft-deleted too (it is when the deleted comment was its last live one).
+/// Outcome of deleting a CRM comment: reports whether its discussion went with
+/// it (it does when the deleted comment was the discussion's first).
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -99,7 +99,7 @@ pub struct DeleteCrmCommentResult {
     pub comment_id: Uuid,
     /// The thread the comment belonged to.
     pub thread_id: Uuid,
-    /// Whether the thread itself was soft-deleted because no live comments
-    /// remained.
+    /// Whether the whole discussion was deleted because the comment was its
+    /// first.
     pub thread_deleted: bool,
 }

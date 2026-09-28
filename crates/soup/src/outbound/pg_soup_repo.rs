@@ -24,6 +24,7 @@ mod calendar_event;
 mod candidate_gates;
 mod expanded;
 pub mod grouping;
+mod initiative;
 mod notified;
 mod touched;
 mod unexpanded;
@@ -221,7 +222,16 @@ impl SoupRepo for PgSoupRepo {
                 }),
         );
         items.extend(
-            agent_session::by_ids(&self.pool.0, calendar_req)
+            agent_session::by_ids(&self.pool.0, calendar_req.clone())
+                .await?
+                .into_iter()
+                .map(|item| SoupProjectionHydration {
+                    item,
+                    document_server_facts: None,
+                }),
+        );
+        items.extend(
+            initiative::by_ids(&self.pool.0, calendar_req)
                 .await?
                 .into_iter()
                 .map(|item| SoupProjectionHydration {
@@ -241,7 +251,8 @@ impl SoupRepo for PgSoupRepo {
             unexpanded::by_ids::unexpanded_soup_by_ids(&self.pool.0, req.user_id, req.entities)
                 .await?;
         items.extend(calendar_event::by_ids(&self.pool.0, calendar_req.clone()).await?);
-        items.extend(agent_session::by_ids(&self.pool.0, calendar_req).await?);
+        items.extend(agent_session::by_ids(&self.pool.0, calendar_req.clone()).await?);
+        items.extend(initiative::by_ids(&self.pool.0, calendar_req).await?);
         Ok(items)
     }
 
@@ -384,6 +395,7 @@ pub(crate) async fn populate_properties(
             let properties = match &item {
                 SoupItem::Document(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::Project(x) => properties_map.get(&x.id.to_string()),
+                SoupItem::Initiative(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
                 SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
@@ -420,9 +432,8 @@ macro_rules! map_soup_type {
                         .document_version_id
                         .ok_or_else(|| type_err("document version id must exist"))
                         .and_then(|s| FromStr::from_str(&s).map_err(type_err))?,
-                    owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                        .map_err(type_err)?
-                        .into_owned(),
+                    owner_id: ::model_owner::Owner::from_principal_str(&r.user_id)
+                        .map_err(type_err)?,
                     name: r.name,
                     file_type: r.file_type,
                     sha: r.sha,
@@ -456,9 +467,8 @@ macro_rules! map_soup_type {
                     id: Uuid::parse_str(&r.id).map_err(type_err)?,
                     name: r.name,
                     model: r.model,
-                    owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                        .map_err(type_err)?
-                        .into_owned(),
+                    owner_id: ::model_owner::Owner::from_principal_str(&r.user_id)
+                        .map_err(type_err)?,
                     project_id: r
                         .project_id
                         .as_deref()
@@ -477,9 +487,8 @@ macro_rules! map_soup_type {
                 ::models_soup::project::SoupProject {
                     id: Uuid::parse_str(&r.id).map_err(type_err)?,
                     name: r.name,
-                    owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                        .map_err(type_err)?
-                        .into_owned(),
+                    owner_id: ::model_owner::Owner::from_principal_str(&r.user_id)
+                        .map_err(type_err)?,
                     parent_id: r
                         .project_id
                         .as_deref()

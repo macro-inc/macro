@@ -3,7 +3,7 @@ query PropertySeed {
     id
     soup(input: {initial: {limit: 100}}) {
       items {
-        __typename id cacheProjection
+        __typename id isFavorited cacheProjection
         ... on GraphqlSoupProject {
           ownerId parentId createdAt updatedAt notifications { id }
           properties {

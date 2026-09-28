@@ -15,7 +15,10 @@ INSERT INTO "Document" (id, name, owner) VALUES
     ('20000000-0000-0000-0000-000000000008', 'Initiative description', 'macro|owner@example.com');
 INSERT INTO "Chat" (id, name, "userId") VALUES
     ('20000000-0000-0000-0000-000000000003', 'Chat', 'macro|owner@example.com');
-INSERT INTO "SharePermission" (id) VALUES ('project'), ('document'), ('chat'), ('active-call'), ('archived-call'), ('initiative');
+INSERT INTO "SharePermission" (id) VALUES ('project'), ('document'), ('chat'), ('active-call'), ('archived-call'), ('initiative'), ('agent-session');
+INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace, share_permission_id) VALUES
+    ('20000000-0000-0000-0000-000000000009', 'macro|owner@example.com', '00000000-0000-0000-0000-00000000a9e7', 'model', 'harness', '/workspace', 'agent-session'),
+    ('20000000-0000-0000-0000-000000000010', 'macro|owner@example.com', '00000000-0000-0000-0000-00000000a9e7', 'model', 'harness', '/workspace', NULL);
 INSERT INTO initiative (id, name, owner_user_id, share_permission_id, description_document_id) VALUES
     ('20000000-0000-0000-0000-000000000007', 'Initiative', 'macro|owner@example.com', 'initiative', '20000000-0000-0000-0000-000000000008');
 INSERT INTO "ProjectPermission" ("projectId", "sharePermissionId") VALUES ('20000000-0000-0000-0000-000000000001', 'project');

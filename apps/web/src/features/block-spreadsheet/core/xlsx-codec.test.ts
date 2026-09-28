@@ -70,6 +70,32 @@ describe('Excel workbook files', () => {
       ExcelJS.ValueType.String
     );
   });
+  it('exports a lone date pill as a dated number instead of its label', async () => {
+    const sheet = simpleSheet();
+    const due = encodeCellMention({
+      type: 'date',
+      date: new Date(2026, 8, 28).toISOString(),
+      displayFormat: 'Tomorrow',
+    });
+    sheet.cells = {
+      A1: { value: `${due} ` },
+      A2: { value: `Due ${due}` },
+      A3: { value: due, format: 'number' },
+    };
+    sheet.values = calculator.calculate(sheet.cells);
+    const result = await encodeXlsx({ sheets: [sheet] });
+    expect(result.warnings.join(' ')).toContain('mention');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(result.bytes.slice().buffer);
+    const exported = workbook.worksheets[0];
+    expect(exported.getCell('A1').value).toEqual(
+      new Date(Date.UTC(2026, 8, 28))
+    );
+    expect(exported.getCell('A1').numFmt).toBe('m/d/yyyy');
+    expect(exported.getCell('A2').value).toBe('Due Tomorrow');
+    expect(exported.getCell('A3').value).toBe(46293);
+    expect(exported.getCell('A3').numFmt).toBe('#,##0.00');
+  });
   it('round trips real XLSX with multiple sheets, formula caches, values, styles and widths', async () => {
     const sheets: WorkbookFileSheet[] = [
       {

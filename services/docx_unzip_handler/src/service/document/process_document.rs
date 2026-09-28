@@ -53,9 +53,9 @@ pub async fn process(
             from_bucket: bucket.clone(),
             from_key: document_key_parts.to_key(),
             // The key for storing a converted version of a file is
-            // "{user_id}/{document_id}/converted.{file_extension}"
+            // "{owner}/{document_id}/converted.{file_extension}"
             to_key: build_docx_to_pdf_converted_document_key(
-                &document_key_parts.user_id,
+                &document_key_parts.owner,
                 &document_key_parts.document_id,
             ),
             to_bucket: ctx.config.document_storage_bucket.clone(),

@@ -10,6 +10,9 @@ use serde_json::Value;
 use std::str::FromStr;
 use utoipa::ToSchema;
 
+use super::event_runs::ConfigurationRevision;
+use super::event_trigger::ActionTrigger;
+
 #[cfg(test)]
 mod test;
 
@@ -53,7 +56,7 @@ impl<'de> Deserialize<'de> for Schedule {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, ToSchema)]
 pub enum ActionKind {
     Agent,
 }
@@ -65,11 +68,22 @@ pub struct AgentTask {
     pub user_prompt: String,
 }
 
-/// Client-supplied payload for creating a scheduled action. The server fills
-/// in `id`, `owner` (from the authenticated user), timestamps, `claimed`, and
-/// `next_run_at` (derived from the cron).
+/// Canonical client configuration. Ownership and execution state are server-owned.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct CreateScheduledAction {
+#[serde(deny_unknown_fields)]
+pub struct ActionConfiguration {
+    pub name: String,
+    pub trigger: ActionTrigger,
+    pub kind: ActionKind,
+    #[schema(value_type = Object)]
+    pub task: Value,
+    pub enabled: bool,
+}
+
+/// Deprecated cron-only input, accepted during the compatibility rollout.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LegacyActionConfiguration {
     pub name: String,
     pub schedule: Schedule,
     pub kind: ActionKind,
@@ -80,19 +94,66 @@ pub struct CreateScheduledAction {
     pub enabled: bool,
 }
 
-/// Client-supplied payload for updating a scheduled action. Mirrors the fields
-/// the repository actually writes — `id`/`owner`/timestamps/`claimed`/
-/// `next_run_at` are not client-mutable.
+impl From<LegacyActionConfiguration> for ActionConfiguration {
+    fn from(input: LegacyActionConfiguration) -> Self {
+        Self {
+            name: input.name,
+            trigger: ActionTrigger::Cron {
+                schedule: input.schedule,
+                timezone: input.timezone,
+            },
+            kind: input.kind,
+            task: input.task,
+            enabled: input.enabled,
+        }
+    }
+}
+
+/// Exactly one representation is accepted, even if mixed fields agree or are null.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-pub struct UpdateScheduledAction {
-    pub name: String,
-    pub schedule: Schedule,
-    pub kind: ActionKind,
-    #[schema(value_type = String)]
-    pub timezone: Tz,
-    #[schema(value_type = Object)]
-    pub task: Value,
-    pub enabled: bool,
+#[serde(untagged)]
+pub enum CreateScheduledAction {
+    Canonical(ActionConfiguration),
+    Legacy(LegacyActionConfiguration),
+}
+
+/// Full replacement of client configuration, not of server-owned action state.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(untagged)]
+pub enum UpdateScheduledAction {
+    Canonical(ActionConfiguration),
+    Legacy(LegacyActionConfiguration),
+}
+
+impl From<CreateScheduledAction> for ActionConfiguration {
+    fn from(input: CreateScheduledAction) -> Self {
+        match input {
+            CreateScheduledAction::Canonical(input) => input,
+            CreateScheduledAction::Legacy(input) => input.into(),
+        }
+    }
+}
+
+impl From<UpdateScheduledAction> for ActionConfiguration {
+    fn from(input: UpdateScheduledAction) -> Self {
+        match input {
+            UpdateScheduledAction::Canonical(input) => input,
+            UpdateScheduledAction::Legacy(input) => input.into(),
+        }
+    }
+}
+
+/// Expected management failures; adapters map these without exposing internals.
+#[derive(Debug, thiserror::Error)]
+pub enum ActionPolicyError {
+    #[error("scheduled action not found")]
+    NotFound,
+    #[error("schedule has no future firings")]
+    NoFutureFirings,
+    #[error("event-trigger management is not enabled")]
+    EventManagementDisabled,
+    #[error("scheduled action changed or is running; reload before updating")]
+    UpdateConflict,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -106,19 +167,21 @@ pub struct ScheduledAction {
     #[schema(value_type = String)]
     pub owner: Owner,
     pub name: String,
-    pub schedule: Schedule,
+    pub trigger: ActionTrigger,
     pub kind: ActionKind,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    #[schema(value_type = String)]
-    pub timezone: Tz,
+    /// Independent of execution bookkeeping in `updated_at`.
+    #[schema(value_type = i64)]
+    pub configuration_revision: ConfigurationRevision,
+    /// Event publication boundary; absent for cron actions.
+    pub event_activated_at: Option<DateTime<Utc>>,
     #[schema(value_type = Object)]
     pub task: Value,
     pub claimed: Option<DateTime<Utc>>,
-    /// Time of the next scheduled firing (derived from the cron on write). UI
-    /// uses this to render "next run" without having to parse the cron itself.
-    pub next_run_at: DateTime<Utc>,
-    /// When false, the cron dispatcher skips this schedule. `run_now` remains
+    /// Next cron firing, absent for event-triggered actions.
+    pub next_run_at: Option<DateTime<Utc>>,
+    /// When false, automatic dispatch skips this action. `run_now` remains
     /// available regardless.
     pub enabled: bool,
 }

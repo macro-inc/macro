@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use doppleganger::Doppleganger;
+use doppleganger::{Doppleganger, Mirror};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -179,4 +179,16 @@ pub struct SoupEnrichedEmailThreadPreview<T = ()> {
     /// Extra fields passed from above
     #[serde(flatten)]
     pub extra: T,
+}
+
+impl From<email::domain::models::EnrichedEmailThreadPreview> for SoupEnrichedEmailThreadPreview<()> {
+    fn from(preview: email::domain::models::EnrichedEmailThreadPreview) -> Self {
+        Self {
+            thread: SoupEmailThreadPreview::mirror(preview.thread),
+            attachments: Vec::<SoupAttachment>::mirror(preview.attachments),
+            participants: Vec::<SoupContact>::mirror(preview.participants),
+            labels: Vec::<SoupLabel>::mirror(preview.labels),
+            extra: (),
+        }
+    }
 }

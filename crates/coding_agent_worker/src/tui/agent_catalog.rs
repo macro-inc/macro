@@ -3,12 +3,16 @@
 mod claude_code;
 mod codex;
 mod hermes;
+mod npm_adapter;
 mod open_claw;
 mod open_code;
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::config::Harness;
+
+pub use npm_adapter::AdapterInstall;
 
 #[cfg(test)]
 mod test;
@@ -16,6 +20,9 @@ mod test;
 mod environment {
     macro_env_var::maybe_env_var! {
         pub struct Path;
+    }
+    macro_env_var::maybe_env_var! {
+        pub struct Home;
     }
 }
 
@@ -34,6 +41,8 @@ pub struct LaunchSpec {
     pub command: String,
     /// Arguments passed to the command.
     pub args: Vec<String>,
+    /// Environment the agent needs on top of the daemon's own.
+    pub env: BTreeMap<String, String>,
 }
 
 impl LaunchSpec {
@@ -41,7 +50,14 @@ impl LaunchSpec {
         Self {
             command: command.to_owned(),
             args: args.into_iter().map(str::to_owned).collect(),
+            env: BTreeMap::new(),
         }
+    }
+
+    fn with_env(mut self, name: &str, value: &Path) -> Self {
+        self.env
+            .insert(name.to_owned(), value.to_string_lossy().into_owned());
+        self
     }
 }
 
@@ -56,6 +72,17 @@ pub struct DetectedAgent {
     pub launch: LaunchSpec,
     /// Short explanation for adapter-backed launchers.
     pub note: Option<&'static str>,
+    /// What must be installed before `launch` can run, when anything must.
+    pub install: Option<AdapterInstall>,
+}
+
+impl DetectedAgent {
+    /// The installation still to run before `launch` works, if any.
+    pub fn pending_install(&self) -> Option<&AdapterInstall> {
+        self.install
+            .as_ref()
+            .filter(|install| !install.is_installed())
+    }
 }
 
 /// Agent identity after converting executable discovery into UI state.
@@ -82,11 +109,14 @@ pub enum Availability {
 pub trait CommandLookup {
     /// Resolve an executable through the environment's command search path.
     fn resolve(&self, command: &str) -> Option<&Path>;
+    /// Directory macrod installs npm ACP adapters under, when there is one.
+    fn adapter_root(&self) -> Option<&Path>;
 }
 
 /// Commands discovered on the process's `PATH`.
 pub struct PathCommands {
     found: std::collections::HashMap<&'static str, PathBuf>,
+    adapter_root: Option<PathBuf>,
 }
 
 impl PathCommands {
@@ -103,7 +133,6 @@ impl PathCommands {
             "claude",
             "codex",
             "npm",
-            "npx",
             "openclaw",
             "opencode",
         ] {
@@ -111,7 +140,13 @@ impl PathCommands {
                 found.insert(command, path);
             }
         }
-        Self { found }
+        let adapter_root = environment::Home::new()
+            .and_then(|home| home.value().map(PathBuf::from))
+            .map(|home| home.join(".macrod").join("adapters"));
+        Self {
+            found,
+            adapter_root,
+        }
     }
 }
 
@@ -149,6 +184,10 @@ impl CommandLookup for PathCommands {
     fn resolve(&self, command: &str) -> Option<&Path> {
         self.found.get(command).map(PathBuf::as_path)
     }
+
+    fn adapter_root(&self) -> Option<&Path> {
+        self.adapter_root.as_deref()
+    }
 }
 
 /// One known way to expose an installed agent harness over ACP.
@@ -179,27 +218,7 @@ fn direct(
         name: preset.name(),
         launch: LaunchSpec::new(command, args),
         note: None,
-    })
-}
-
-fn npm_adapter(
-    preset: &dyn AgentPreset,
-    commands: &dyn CommandLookup,
-    cli: &'static str,
-    package: &'static str,
-) -> Availability {
-    let missing = [cli, "npm", "npx"]
-        .into_iter()
-        .filter(|command| commands.resolve(command).is_none())
-        .collect::<Vec<_>>();
-    if !missing.is_empty() {
-        return Availability::Unavailable { missing };
-    }
-    Availability::Available(DetectedAgent {
-        kind: preset.kind(),
-        name: preset.name(),
-        launch: LaunchSpec::new("npx", ["-y", package]),
-        note: Some("via npm ACP adapter"),
+        install: None,
     })
 }
 
@@ -223,12 +242,21 @@ pub fn discover(commands: &dyn CommandLookup) -> Vec<DetectedAgent> {
         .collect()
 }
 
-/// Friendly name for an existing launch configuration.
-pub fn name_for(harness: &Harness) -> Option<&'static str> {
+fn preset_for(harness: &Harness) -> Option<&'static dyn AgentPreset> {
     PRESETS
         .iter()
+        .copied()
         .find(|preset| preset.recognizes(harness))
-        .map(|preset| preset.name())
+}
+
+/// Friendly name for an existing launch configuration.
+pub fn name_for(harness: &Harness) -> Option<&'static str> {
+    preset_for(harness).map(|preset| preset.name())
+}
+
+/// Preset identity of an existing launch configuration.
+pub fn kind_for(harness: &Harness) -> Option<AgentKind> {
+    preset_for(harness).map(|preset| preset.kind())
 }
 
 /// Parse a custom command line into an ACP launch specification.
@@ -246,7 +274,9 @@ pub fn custom(command_line: &str) -> Result<DetectedAgent, String> {
         launch: LaunchSpec {
             command,
             args: parts.collect(),
+            env: BTreeMap::new(),
         },
         note: None,
+        install: None,
     })
 }

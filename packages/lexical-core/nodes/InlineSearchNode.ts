@@ -5,6 +5,7 @@ import {
   $getNodeByKey,
   $getSelection,
   $isRangeSelection,
+  $isTextNode,
   type EditorConfig,
   type EditorState,
   type LexicalEditor,
@@ -44,10 +45,30 @@ export const SEARCH_NODE_TYPE_VALUES = {
   [InlineSearchNodesType.Tags]: '##',
 };
 
+/**
+ * The text the caret sits behind. A caret at offset 0 of a text node is still
+ * mid-word when the previous sibling is another run of the same word, as
+ * happens where formatting splits one word across text nodes.
+ */
+function $textBeforeCaret(anchorNode: LexicalNode, offset: number): string {
+  const text = anchorNode.getTextContent().slice(0, offset);
+  if (text !== '' || !$isTextNode(anchorNode)) return text;
+  const previous = anchorNode.getPreviousSibling();
+  return $isTextNode(previous) ? previous.getTextContent() : '';
+}
+
+/**
+ * Decides whether a trigger character typed at the caret should open an inline
+ * search menu.
+ *
+ * `before` guards against triggering inside a word. `after` guards against
+ * triggering immediately in front of one; pass `null` to allow a trigger at the
+ * start of a word, where the following text is left out of the search term.
+ */
 export function validTriggerPosition(
   editor: LexicalEditor,
   before: RegExp = /\s$/,
-  after: RegExp = /^\s/
+  after: RegExp | null = /^\s/
 ) {
   return editor.getEditorState().read(() => {
     const selection = $getSelection();
@@ -57,9 +78,7 @@ export function validTriggerPosition(
     if ($isInlineSearchNode(anchorNode)) return false;
     if ($isChildOfCode(anchorNode)) return false;
 
-    const beforeText = anchorNode
-      .getTextContent()
-      .slice(0, selection.anchor.offset);
+    const beforeText = $textBeforeCaret(anchorNode, selection.anchor.offset);
 
     if (beforeText.endsWith('`')) {
       return false;
@@ -68,6 +87,8 @@ export function validTriggerPosition(
     if (!isEmptyOrMatches(beforeText, before)) {
       return false;
     }
+
+    if (after === null) return true;
 
     const afterText = anchorNode
       .getTextContent()

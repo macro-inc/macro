@@ -144,6 +144,7 @@ impl GithubSyncRepo for FakeRepo {
 struct FakeClient {
     installation: Option<u64>,
     minted: Mutex<Vec<(u64, String, Vec<(String, String)>)>>,
+    branches: Vec<String>,
 }
 
 impl FakeClient {
@@ -151,6 +152,7 @@ impl FakeClient {
         Self {
             installation: Some(INSTALLATION),
             minted: Mutex::default(),
+            branches: vec!["main".to_owned(), "develop".to_owned()],
         }
     }
 
@@ -158,6 +160,7 @@ impl FakeClient {
         Self {
             installation: None,
             minted: Mutex::default(),
+            branches: Vec::new(),
         }
     }
 
@@ -255,6 +258,15 @@ impl GithubSyncClient for FakeClient {
         _access_token: &str,
     ) -> Result<Vec<EnrichedGithubPullRequest>, GithubError> {
         unimplemented!("minting a token does not list pull requests")
+    }
+
+    async fn list_repository_branches(
+        &self,
+        _access_token: &str,
+        _owner: &str,
+        _repository: &str,
+    ) -> Result<Vec<String>, GithubError> {
+        Ok(self.branches.clone())
     }
 }
 
@@ -375,6 +387,48 @@ async fn scopes_the_token_to_the_one_repository_and_the_asked_for_permissions() 
             ]
         )]
     );
+}
+
+#[tokio::test]
+async fn lists_branches_after_proving_the_user_reaches_the_repository() {
+    let service = service(
+        vec![GithubAppInstallationSource::User(user().to_string())],
+        vec![],
+        FakeClient::installed(),
+    );
+
+    let branches = service
+        .branches_for_repository(&user(), "macro-inc", "macro")
+        .await
+        .expect("listed");
+
+    assert_eq!(branches, vec!["main".to_owned(), "develop".to_owned()]);
+    let minted = service.client.minted.lock().expect("lock").clone();
+    assert_eq!(
+        minted,
+        vec![(
+            INSTALLATION,
+            "macro".to_owned(),
+            vec![("contents".to_owned(), "read".to_owned())]
+        )]
+    );
+}
+
+#[tokio::test]
+async fn listing_branches_refuses_a_repository_the_user_cannot_reach() {
+    let service = service(
+        vec![GithubAppInstallationSource::Team(uuid::Uuid::from_u128(1))],
+        vec![uuid::Uuid::from_u128(2)],
+        FakeClient::installed(),
+    );
+
+    let error = service
+        .branches_for_repository(&user(), "someone-else", "private")
+        .await
+        .expect_err("refused");
+
+    assert!(matches!(error, GithubError::RepositoryUnavailable));
+    assert_eq!(service.client.mint_count(), 0);
 }
 
 #[test]

@@ -17,13 +17,20 @@ export {
 } from './components/PlatformNotificationProvider';
 export { NotificationsPlayground } from './components/Playground';
 export {
+  documentCommentLocation,
+  getDocumentCommentLocation,
+} from './document-comment-location';
+export { getDocumentCommentNotification } from './document-comment-notification';
+export {
   createEffectOnEntityTypeNotification,
   entityHasUnreadNotifications,
   executeMarkNotificationsDone,
   executeMarkNotificationsUndone,
+  isDocumentCommentNotification,
   markNotificationForEntityIdAsRead,
   markNotificationsForEntityAsDone,
   markNotificationsForEntityAsRead,
+  markNotificationsForEntityAsReadInBackground,
   notificationIsOfEntity,
   notificationIsOfEntityType,
   notificationIsRead,

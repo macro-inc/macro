@@ -9,6 +9,7 @@
  * in-progress state would only make the switch look slower than it is.
  */
 
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import { match, P } from 'ts-pattern';
 import { ActionLine } from '../../ui';
@@ -23,11 +24,11 @@ function label(part: ControlPartData): string {
       // runtime refusal, after the fact, reads differently.
       .with(
         [{ kind: 'set_model' }, { kind: P.union('pending', 'accepted') }],
-        ([control]) => `Model set to ${control.model}`
+        ([control]) => `Model set to ${modelLabel(control.model)}`
       )
       .with(
         [{ kind: 'set_model' }, { kind: 'rejected' }],
-        ([control]) => `Couldn't switch to ${control.model}`
+        ([control]) => `Couldn't switch to ${modelLabel(control.model)}`
       )
       .with(
         [{ kind: 'compact' }, { kind: 'pending' }],

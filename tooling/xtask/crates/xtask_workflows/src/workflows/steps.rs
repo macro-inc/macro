@@ -297,6 +297,23 @@ pub fn mount_web_cache_volume(with_rust: bool) -> Step<Use> {
         })
 }
 
+/// [`mount_web_cache_volume`] for jobs that compile the browser wasm packages
+/// (`just build-*`). Cargo registry/git feed wasm-pack; `.wasm-pack` is the
+/// downloaded `wasm-opt` the same way [`mount_wasm_cache_volume`] keeps the
+/// worker build warm. Compiled objects use Namespace remote sccache.
+pub fn mount_web_build_cache_volume() -> Step<Use> {
+    nscloud_cache_action("Mount Namespace cache volume")
+        .add_with(("cache", "nix"))
+        .add_with((
+            "path",
+            format!(
+                "{}\n/home/runner/.cargo/registry\n/home/runner/.cargo/git\n{}",
+                vars::BUN_CACHE_VOLUME_DIR,
+                xtask_paths::runtime_path!("/home/runner/.cache/.wasm-pack").as_str(),
+            ),
+        ))
+}
+
 /// The web-app composite: Nix dev shell (bun, biome, just) + `bun install`.
 /// Jobs that run `gen-api` follow this with [`configure_namespace_sccache`].
 /// Requires [`setup_nix`] first.
@@ -306,6 +323,13 @@ pub fn setup_reqs_web(name: &str, playwright: bool) -> Step<Use> {
         xtask_paths::repo_dir!(".github/actions/setup-reqs-web"),
     )
     .when(playwright, |step| step.add_with(("playwright", "true")))
+}
+
+/// Start the server before parallel compiler invocations can race to launch it.
+/// Keep this in a separate step after remote configuration so `GITHUB_ENV`
+/// has supplied the selected backend's credentials to the process.
+pub fn start_sccache_server() -> Step<Run> {
+    Step::new("Start sccache server").run("sccache --start-server")
 }
 
 /// `sccache --show-stats` at the end of a job (never fails the job).

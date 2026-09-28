@@ -15,9 +15,10 @@ import { createSignal, type ParentProps } from 'solid-js';
 import { useAgentSession } from '../block-agent/context/AgentSessionContext';
 import type { ChangesHost } from './context/agent-changes-context';
 import { AgentChangesControllerProvider } from './context/agent-changes-controller';
+import { createPaneViewState } from './pane-view-state';
 import { createAgentChanges } from './primitives/create-agent-changes';
+import { createPullRequestStatsSource } from './queries/pull-request-stats';
 import { createSessionChangesSource } from './queries/session-changes';
-import { createUrlDiffState } from './url-diff-state';
 
 export { AgentChangesSplit } from './views/AgentChangesSplit';
 export {
@@ -37,11 +38,15 @@ async function copyText(text: string): Promise<boolean> {
 
 export function AgentChangesProvider(props: ParentProps) {
   const session = useAgentSession();
+  const pullRequestUrl = () => session.session()?.pullRequestUrl ?? undefined;
   // Only a coding harness has a repository to diff; a chat-only session
   // (in-memory) never fetches changes and shows none of the GitHub chrome.
   const coding = () => isCoderHarness(session.session()?.harness);
+  // The harness captures a session's changeset from its linked pull
+  // request, so until one is linked there is nothing to fetch or show.
+  const canHaveChanges = () => coding() && pullRequestUrl() !== undefined;
   const source = createSessionChangesSource(() =>
-    coding() ? session.sessionId() : undefined
+    canHaveChanges() ? session.sessionId() : undefined
   );
   const sendPrompt = async (markdown: string) => {
     try {
@@ -53,7 +58,12 @@ export function AgentChangesProvider(props: ParentProps) {
       toast.failure('The review notes could not be sent');
     }
   };
+  const pullRequestChangeCounts = createPullRequestStatsSource(
+    () => (coding() && session.userId() ? pullRequestUrl() : undefined),
+    () => source.summary()?.changeset?.id
+  );
   const host: ChangesHost = {
+    pullRequestChangeCounts,
     scopeKey: session.sessionId,
     agent: {
       send: (markdown) => void sendPrompt(markdown),
@@ -62,8 +72,8 @@ export function AgentChangesProvider(props: ParentProps) {
         !session.loadFailed() &&
         (session.session()?.canEdit ?? true),
     },
-    canHaveChanges: coding,
-    pullRequestUrl: () => session.session()?.pullRequestUrl ?? undefined,
+    canHaveChanges,
+    pullRequestUrl,
     openExternal: openExternalUrl,
     copyText,
     notify: (message, tone) => {
@@ -71,12 +81,11 @@ export function AgentChangesProvider(props: ParentProps) {
       else toast.failure(message);
     },
   };
-  const urlState = createUrlDiffState(session.sessionId);
+  const view = createPaneViewState();
   const [dismissed, setDismissed] = createSignal<string>();
   const controller = createAgentChanges({
     context: { source, host },
-    paneLayout: [urlState.layout, urlState.setLayout],
-    diffStyle: [urlState.diffStyle, urlState.setDiffStyle],
+    view,
     dismissed: [dismissed, (id) => setDismissed(id)],
   });
   return (

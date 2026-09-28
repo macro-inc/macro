@@ -5,7 +5,8 @@ use s3_key::CONVERTED_DOCUMENT_FILE_NAME;
 /// Search text extractor message
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
 pub struct SearchExtractorMessage {
-    /// The user id who owns the document
+    /// The owner principal of the document: `macro|<email>`, `bot|<uuid>`, or a team UUID.
+    /// The field keeps its historical name on the wire.
     pub user_id: String,
     /// The document id
     pub document_id: String,

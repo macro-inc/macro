@@ -13,7 +13,15 @@ mod sandbox_size;
 pub mod search;
 pub mod service;
 pub mod session;
+/// Session link, channel, and team sharing.
+pub mod sharing;
 
 pub mod credentials;
 
 pub mod repository_branch;
+
+/// Durable activity projection and bounded history backfill.
+pub mod turn_state;
+
+/// Repository-matched working branches reported by a session's runtime.
+pub mod working_branch;

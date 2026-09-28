@@ -81,6 +81,7 @@ const notificationQueue = new Queue('notification', {
 
 const notificationIngressQueue = new Queue('notification-ingress', {
   tags,
+  maxReceiveCount: 2,
 });
 
 const pushNotificationEventHandler = new PushNotificationEventHandler(

@@ -1,4 +1,4 @@
-//! Handler for `POST /documents`.
+//! Handlers for `POST /documents` and the internal `POST /internal/documents`.
 
 use std::str::FromStr;
 
@@ -10,11 +10,13 @@ use macro_authorization::{
 };
 use model::document::response::CreateDocumentRequest;
 use model::document::{FileType, FileTypeExt};
+use model_owner::CreationPrincipal;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
+use super::creation_principal::CreationPrincipalExtractor;
 use crate::domain::models::{
-    CreateDocumentRepoArgs, DocumentError, ImportEmailAttachmentRepoArgs, InitialLinkShare,
+    DocumentError, ImportEmailAttachmentRepoArgs, InitialLinkShare, NewDocument,
 };
 use crate::domain::ports::DocumentService;
 use crate::domain::response::CreateDocumentResponse;
@@ -38,26 +40,80 @@ use crate::domain::response::CreateDocumentResponse;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, project), fields(user_id=?user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip(state, project))]
 pub async fn create_document_handler<
     T: DocumentService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     State(state): State<DocumentRouterState<T, Svc, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
     project: ProjectBodyAccessLevelExtractorV2<EditAccessLevel, CreateDocumentRequest, Svc, Auth>,
 ) -> Result<Json<CreateDocumentResponse>, DocumentError> {
     let req = project.into_inner();
 
-    // Email linking is internal only
-    if req.email_attachment_id.is_some()
-        && user.authorization.caller != UserOrInternalCaller::Internal
-    {
+    if req.email_attachment_id.is_some() {
         return Err(DocumentError::Unauthorized);
     }
 
-    // Parse file type from the request
+    let job_id = req.job_id.clone();
+    let response_data = state
+        .service
+        .create_document(&principal, new_document(req), job_id)
+        .await?;
+
+    Ok(Json(CreateDocumentResponse {
+        error: false,
+        data: response_data,
+    }))
+}
+
+/// Handler for the internal `POST /internal/documents`.
+///
+/// Creates a document owned by the calling or acting user. Only an internal
+/// caller may import an email attachment.
+#[tracing::instrument(skip(state, caller, project), fields(user_id=?caller.authorization.user.macro_user_id))]
+pub async fn create_document_internal_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    project: ProjectBodyAccessLevelExtractorV2<EditAccessLevel, CreateDocumentRequest, Svc, Auth>,
+) -> Result<Json<CreateDocumentResponse>, DocumentError> {
+    let req = project.into_inner();
+    let is_internal = caller.authorization.caller == UserOrInternalCaller::Internal;
+    let user = caller.authorization.user.macro_user_id;
+
+    let response_data = match req.email_attachment_id {
+        Some(email_attachment_id) if is_internal => {
+            state
+                .service
+                .import_email_attachment(ImportEmailAttachmentRepoArgs {
+                    email_attachment_id,
+                    owner: user,
+                    document: new_document(req),
+                })
+                .await?
+        }
+        Some(_) => return Err(DocumentError::Unauthorized),
+        None => {
+            let job_id = req.job_id.clone();
+            state
+                .service
+                .create_document(&CreationPrincipal::User(user), new_document(req), job_id)
+                .await?
+        }
+    };
+
+    Ok(Json(CreateDocumentResponse {
+        error: false,
+        data: response_data,
+    }))
+}
+
+fn new_document(req: CreateDocumentRequest) -> NewDocument {
     let user_provided_file_type: Option<FileType> = req
         .file_type
         .as_deref()
@@ -88,47 +144,19 @@ pub async fn create_document_handler<
         );
     }
 
-    let team_id = req.team_id;
-
-    let args = CreateDocumentRepoArgs {
+    NewDocument {
         id: req.id,
         sha: req.sha,
         document_name,
-        user_id: user.authorization.user.macro_user_id.clone(),
         file_type,
         project_id: req.project_id,
-        team_id,
+        team_id: req.team_id,
         share_with_team: false,
         created_at: req.created_at,
         sub_type: req
             .is_task
             .then_some(document_sub_type::DocumentSubType::Task),
         skip_history: req.skip_history,
-        attribution: None,
         initial_link_share: InitialLinkShare::EntityDefault,
-    };
-
-    let user_id = user.authorization.user.macro_user_id.clone();
-    let response_data = if let Some(email_attachment_id) = req.email_attachment_id {
-        state
-            .service
-            .import_email_attachment(
-                user_id,
-                ImportEmailAttachmentRepoArgs {
-                    email_attachment_id,
-                    create: args,
-                },
-            )
-            .await?
-    } else {
-        state
-            .service
-            .create_document(user_id, args, req.job_id)
-            .await?
-    };
-
-    Ok(Json(CreateDocumentResponse {
-        error: false,
-        data: response_data,
-    }))
+    }
 }

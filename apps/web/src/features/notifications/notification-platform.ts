@@ -3,6 +3,7 @@ import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { markdownToPlainText } from '@macro-inc/lexical-core';
 import { themeReactive } from '../theme/signals/themeReactive';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
+import { isEntityDiscussionEvent } from './entity-discussion';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import {
   getNotificationAction,
@@ -54,6 +55,9 @@ async function resolveActorName(
     meta.tag === 'agent_session_waiting_for_input'
   ) {
     return meta.content.botName;
+  }
+  if (isEntityDiscussionEvent(meta) && meta.content.senderDisplayName) {
+    return meta.content.senderDisplayName;
   }
   if (meta.tag === 'agent_session_mentioned') {
     return meta.content.mentionedBy
