@@ -24,7 +24,14 @@ export function EmailThreadLoadGate<Data>(
   return (
     <Suspense>
       <EntityLoadGate
-        result={props.result}
+        result={{
+          data: props.result.data,
+          error: props.result.error,
+          // Adopting a server ID starts a new query for the same loaded thread.
+          // Keep its composer mounted while that page replaces the local one.
+          isPending: () =>
+            props.result.isPending() && props.result.data() === undefined,
+        }}
         loadErrorTitle="Unable to load this email"
         onRetry={props.onRetry}
       >

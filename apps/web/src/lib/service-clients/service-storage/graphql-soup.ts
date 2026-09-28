@@ -50,6 +50,7 @@ import {
   type Client as GraphqlWsClient,
 } from 'graphql-ws';
 import { match } from 'ts-pattern';
+import { emailCacheDeletionKeys } from './email-cache-deletions';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
 import type { SoupCalendarEventTime } from './generated/schemas/soupCalendarEventTime';
@@ -471,6 +472,7 @@ export function getGraphqlSoupClient(): Client {
         preferGetMethod: false,
         exchanges: [
           normalizedCacheExchange(host, {
+            deletedRecordKeys: emailCacheDeletionKeys,
             onCacheError: (error, operation) => {
               // Initialization failure already reports before retiring the host;
               // rejected in-flight operations must not report it again.

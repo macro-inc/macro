@@ -231,6 +231,7 @@ struct JsClaimedMutation {
     transaction_id: String,
     uuid: String,
     superseded: bool,
+    requires_confirmation: bool,
     lease_generation: String,
     query: String,
     operation_name: Option<String>,
@@ -243,11 +244,13 @@ impl TryFrom<ClaimedMutation> for JsClaimedMutation {
     type Error = JsValue;
 
     fn try_from(claimed: ClaimedMutation) -> Result<Self, Self::Error> {
+        let requires_confirmation = claimed.queued.requires_confirmation();
         let request = claimed.queued.mutation.request;
         Ok(Self {
             transaction_id: claimed.queued.id.to_string(),
             uuid: claimed.queued.uuid.to_string(),
             superseded: claimed.queued.superseded,
+            requires_confirmation,
             lease_generation: claimed.lease_generation.to_string(),
             query: request.query,
             operation_name: request.operation_name,

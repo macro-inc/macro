@@ -1,5 +1,54 @@
 import { expect, test } from '@playwright/test';
 
+test('a superseded offline create recovers its server identity after reload and unblocks the newer save', async ({
+  page,
+  context,
+}) => {
+  await page.goto(`/mail-projection.html?scope=draft-recovery-${Date.now()}`);
+  await expect(page.locator('#result')).toHaveAttribute(
+    'data-status',
+    'ready',
+    { timeout: 60_000 }
+  );
+  await context.setOffline(true);
+  for (let i = 0; i < 2; i++) {
+    await page.locator('#draft-status').evaluate((element) => {
+      element.textContent = '';
+    });
+    await page.getByRole('button', { name: 'Create offline draft' }).click();
+    await expect(page.locator('#draft-status')).toHaveText('Draft queued');
+  }
+  await context.setOffline(false);
+  await page.reload();
+  await expect(page.locator('#result')).toHaveAttribute(
+    'data-status',
+    'ready',
+    { timeout: 60_000 }
+  );
+  await page.getByRole('button', { name: 'Resume draft sync' }).click();
+  await expect(page.locator('#draft-status')).toHaveText(
+    'Draft synced after reload; latest edit and server identity confirmed',
+    { timeout: 20_000 }
+  );
+});
+
+test('server-null threads and committed draft deletes leave records and Mail views', async ({
+  page,
+}) => {
+  await page.goto('/mail-projection.html');
+  await expect(page.locator('#result')).toHaveAttribute(
+    'data-status',
+    'ready',
+    { timeout: 60_000 }
+  );
+  await page
+    .getByRole('button', { name: 'Check deleted thread cleanup' })
+    .click();
+  await expect(page.locator('#draft-status')).toHaveText(
+    'Deleted threads absent from records and Mail views'
+  );
+});
+
 test('a new offline draft reaches Drafts and reopens through another cache client', async ({
   page,
   context,

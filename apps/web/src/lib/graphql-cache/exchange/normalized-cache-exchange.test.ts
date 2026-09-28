@@ -232,6 +232,7 @@ function makeFakeHost(): FakeHost {
       transactionId: head.transactionId,
       uuid: head.args.uuid,
       superseded: false,
+      requiresConfirmation: false,
       leaseGeneration: String(head.attemptCount),
       query: head.args.query,
       operationName: head.args.operationName,
@@ -625,6 +626,42 @@ describe('normalizedCacheExchange', () => {
 
   beforeEach(() => {
     host = makeFakeHost();
+  });
+
+  it('evicts inferred missing records after writing the network response', async () => {
+    const deletedRecordKeys = vi.fn(() => ['GraphqlSoupEmailThread:gone']);
+    const { ops, results } = harness(
+      host,
+      () => ({ data: { user: { emailThread: null } } }),
+      { deletedRecordKeys }
+    );
+    ops.next(makeOp(901, 'network-only'));
+    await tick();
+    expect(host.cacheActions.map((action) => action.kind)).toEqual([
+      'write',
+      'delete',
+    ]);
+    expect(host.invalidations).toEqual([['GraphqlSoupEmailThread:gone']]);
+    expect(results.at(-1)?.data).toEqual({ user: { emailThread: null } });
+  });
+
+  it('does not infer deletions from GraphQL errors with partial data', async () => {
+    const deletedRecordKeys = vi.fn(() => ['GraphqlSoupEmailThread:keep']);
+    const { ops } = harness(
+      host,
+      () => ({
+        data: { user: { emailThread: null } },
+        error: new CombinedError({
+          graphQLErrors: [{ message: 'database unavailable' }],
+        }),
+      }),
+      { deletedRecordKeys }
+    );
+    ops.next(makeOp(902, 'network-only'));
+    await tick();
+    expect(deletedRecordKeys).not.toHaveBeenCalled();
+    expect(host.invalidations).toEqual([]);
+    expect(host.writes).toEqual([]);
   });
 
   it('normalizes ordinary buffered subscription data without inspecting event types', async () => {
@@ -1721,6 +1758,65 @@ describe('normalizedCacheExchange', () => {
       expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
       expect(forwarded[0]?.context.fetch).toBeTypeOf('function');
       expect(host.commits[0]?.transactionId).toBe('restored-1');
+    });
+
+    it.each([true, undefined])(
+      'settles a restored superseded identity write before its replacement (confirmation=%s)',
+      async (requiresConfirmation) => {
+        for (const version of ['create', 'edit']) {
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000001',
+            query: stringifyDocument(MUTATION),
+            operationName: 'SetEntityProperty',
+            variables: { input: { version } },
+            data: optimistic,
+          });
+        }
+        const claimNext = host.claimNextMutation.bind(host);
+        host.claimNextMutation = async (...args) => {
+          const claimed = await claimNext(...args);
+          if (claimed?.transactionId === 'restored-1') {
+            claimed.superseded = true;
+            if (requiresConfirmation === undefined) {
+              // Old deployed hosts have no flag. They must also recover.
+              delete (claimed as Partial<ClaimedMutation>).requiresConfirmation;
+            } else {
+              claimed.requiresConfirmation = requiresConfirmation;
+            }
+          }
+          return claimed;
+        };
+        const onCacheError = vi.fn();
+        const { forwarded } = harness(host, undefined, { onCacheError });
+        await tick();
+        expect(forwarded.map((op) => op.variables?.input.version)).toEqual([
+          'create',
+          'edit',
+        ]);
+        expect(host.commits.map((commit) => commit.transactionId)).toEqual([
+          'restored-1',
+          'restored-2',
+        ]);
+        expect(host.defers).toEqual([]);
+        expect(onCacheError).not.toHaveBeenCalled();
+      }
+    );
+
+    it('evicts deleted threads when a persisted mutation replays without its caller', async () => {
+      host.seedQueued({
+        uuid: '00000000-0000-4000-8000-000000000003',
+        query: stringifyDocument(MUTATION),
+        operationName: 'SetEntityProperty',
+        variables: { input: {} },
+        data: optimistic,
+      });
+      const deletedRecordKeys = vi.fn(() => {
+        expect(host.commits).toHaveLength(1);
+        return ['GraphqlSoupEmailThread:gone'];
+      });
+      harness(host, undefined, { deletedRecordKeys });
+      await tick();
+      expect(host.invalidations).toEqual([['GraphqlSoupEmailThread:gone']]);
     });
 
     it('rolls back when a persisted replay resolves with an urql error', async () => {

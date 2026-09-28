@@ -616,6 +616,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
         );
       }
       resetState();
+      // A standalone draft owns its thread; after discard there is no
+      // conversation left to display. Reset before leaving so disposal cannot
+      // flush the deleted draft back into the save queue.
+      props.host?.goBack?.();
       return true;
     } finally {
       setDiscarding(false);

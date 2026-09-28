@@ -1075,6 +1075,7 @@ fn active_uuid_replacement_is_superseded_and_failed_attempt_is_discarded() {
             .unwrap()
             .unwrap();
         assert!(recovered.queued.superseded);
+        assert!(!recovered.queued.requires_confirmation());
         let deferred = engine
             .defer_optimistic_write(
                 active,

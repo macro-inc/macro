@@ -400,6 +400,8 @@ function queuedMutationResult(
 }
 
 export interface NormalizedCacheExchangeOptions {
+  /** Domain-specific deletions inferred from a successful server response. */
+  deletedRecordKeys?: (result: OperationResult) => string[];
   /** Schema-typed singular entity relations derived from field arguments. */
   entityResolvers?: EntityResolverConfig;
   /** Called when cache work fails; the operation may degrade or emit uncertainty. */
@@ -732,7 +734,11 @@ export function normalizedCacheExchange(
         claimed: ClaimedMutation
       ): Promise<void> {
         deferredUntil = undefined;
-        if (claimed.superseded) {
+        // A superseded create can already exist on the server. Replay it to
+        // recover its identity before sending the newer edit or discard.
+        // Older hosts omit this flag: conservatively replay rather than loop
+        // forever asking the engine to discard a write it must retain.
+        if (claimed.superseded && claimed.requiresConfirmation === false) {
           const discarded = await host.deferOptimisticWrite(
             claimed.transactionId,
             { owner: queueOwner, generation: claimed.leaseGeneration },
@@ -1090,6 +1096,15 @@ export function normalizedCacheExchange(
         result: OperationResult
       ): Promise<OperationResult> {
         const op = result.operation;
+        const deleteReportedRecords = async () => {
+          if (result.error || result.hasNext || result.data == null) return;
+          try {
+            const keys = options.deletedRecordKeys?.(result) ?? [];
+            if (keys.length) return await host.deleteRecords(keys);
+          } catch (error) {
+            options.onCacheError?.(error, op);
+          }
+        };
         let output =
           op.kind === 'query'
             ? withResultMetadata(result, { source: 'live-network' })
@@ -1113,6 +1128,7 @@ export function normalizedCacheExchange(
             }
           }
         } else if (op.kind === 'query' && isHydrateOnly(op)) {
+          if (result.error) return { ...result, data: undefined };
           if (result.data == null) return result;
           try {
             const hydration = await host.hydrateQuery({
@@ -1123,12 +1139,16 @@ export function normalizedCacheExchange(
               identity: options.extractIdentity?.(result.data),
               entityResolvers,
             });
+            const deletion = await deleteReportedRecords();
             return withResultMetadata(
               {
                 ...result,
                 data: hydration.kind === 'data' ? hydration.data : undefined,
               },
-              { source: 'live-network', revision: hydration.revision }
+              {
+                source: 'live-network',
+                revision: deletion?.revision ?? hydration.revision,
+              }
             );
           } catch (error) {
             options.onCacheError?.(error, op);
@@ -1150,7 +1170,10 @@ export function normalizedCacheExchange(
             // Every newer result supersedes an older retained payload, even an
             // error or intermediate streamed result with no cache write.
             await invalidateOlderRetainedFallback(op.key, resultVersion);
-            if (result.data != null) {
+            // A resolver failure may replace a valid relation with null. Keep
+            // the last usable cache snapshot rather than persisting that null
+            // as authoritative absence.
+            if (result.data != null && !result.error) {
               const readArgs = {
                 opKey: op.key,
                 query: queryText(op),
@@ -1184,9 +1207,10 @@ export function normalizedCacheExchange(
               }
               try {
                 const write = await host.writeQuery(writeArgs);
+                const deletion = await deleteReportedRecords();
                 output = withResultMetadata(result, {
                   source: 'live-network',
-                  revision: write.revision,
+                  revision: deletion?.revision ?? write.revision,
                 });
                 state.networkRegistrationSatisfied =
                   writeArgs.registerDependencies;
@@ -1273,6 +1297,7 @@ export function normalizedCacheExchange(
                     data: result.data,
                   }
                 );
+                await deleteReportedRecords();
                 if (committed.kind === 'committed-superseded') {
                   replacementTransactionId = committed.replacementTransactionId;
                   disposition = 'superseded';
@@ -1325,6 +1350,7 @@ export function normalizedCacheExchange(
               op,
               operationCacheEffects(result.data)
             );
+            await deleteReportedRecords();
           }
           if (optimistic) {
             return withOptimisticMutationDisposition(result, {

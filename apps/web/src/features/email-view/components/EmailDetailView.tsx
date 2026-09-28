@@ -118,6 +118,7 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
   const listNavigation = useEmailDetailListNavigation(threadId);
   const hotkeyScope = () => panel.splitHotkeyScope;
   const host: EmailThreadHost = {
+    returnToList: closeThread,
     listNavigation,
     focusContainer,
     isActive: panel.isPanelActive,

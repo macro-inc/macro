@@ -928,6 +928,119 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   );
 
+  it.each([
+    { emailView: 'INBOX', networkFirst: false },
+    { emailView: 'DRAFTS', networkFirst: false },
+    { emailView: 'INBOX', networkFirst: true },
+    { emailView: 'DRAFTS', networkFirst: true },
+  ])(
+    'keeps a restored queued draft visible in $emailView (network first: $networkFirst)',
+    async ({ emailView, networkFirst }) => {
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      let revision = REVISION_0;
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: () => () => {},
+        onCacheGenerationChanged: () => () => {},
+      });
+      makeGraphqlSoupInputMock.mockReturnValue({
+        initial: { emailView, sortMethod: 'UPDATED_AT', limit: 20 },
+      });
+      const preview = {
+        id: 'draft-message',
+        subject: 'Offline draft',
+        snippet: 'Keep me',
+        isDraft: true,
+        senderEmail: null,
+        senderName: null,
+        senderPhotoUrl: null,
+      };
+      entityFilterMock.mockImplementation(async () => ({
+        kind: 'mail-page',
+        revision,
+        keys: ['GraphqlSoupEmailThread:local-draft'],
+        sortTimestamps: ['2026-09-28T12:00:00Z'],
+        nextCursor: null,
+        optimistic: revision !== REVISION_2,
+      }));
+      readRecordsByKeysMock.mockImplementation(async () => ({
+        revision,
+        records: [
+          {
+            recordKey: 'GraphqlSoupEmailThread:local-draft',
+            record: {
+              __typename: 'GraphqlSoupEmailThread',
+              id: 'local-draft',
+              mailAllPreview: preview,
+              mailDraftPreview: preview,
+              mailSentPreview: null,
+            },
+          },
+        ],
+      }));
+      let dispose!: () => void;
+      let query!: ReturnType<typeof createGraphqlSoupAstItemsQuery>;
+      createRoot((stop) => {
+        dispose = stop;
+        query = createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true })
+        );
+      });
+      try {
+        if (networkFirst) {
+          fake.executions[0].next(
+            graphqlSoupPage({ items: [], next_cursor: null }),
+            { source: 'live-network', revision }
+          );
+        }
+        await vi.waitFor(() =>
+          expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+            'local-draft',
+          ])
+        );
+        revision = REVISION_1;
+        fake.executions[0].next(
+          graphqlSoupPage({ items: [], next_cursor: null }),
+          { source: 'live-network', revision }
+        );
+        // Keep the pending draft even before evaluation of the new revision.
+        expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+          'local-draft',
+        ]);
+        await vi.waitFor(() => expect(query.localRevision?.()).toBe(revision));
+        await vi.waitFor(() =>
+          expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+            'local-draft',
+          ])
+        );
+        expect(query.data()?.cachedMail).toBe(true);
+
+        // Once the write settles, the fresh server page takes over even if
+        // an old local row remains. Pending preservation must not retain ghosts.
+        revision = REVISION_2;
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: [{ id: 'server-draft' }],
+            next_cursor: null,
+          }),
+          { source: 'live-network', revision }
+        );
+        await vi.waitFor(() =>
+          expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+            'server-draft',
+          ])
+        );
+        expect(query.data()?.cachedMail).not.toBe(true);
+      } finally {
+        dispose();
+      }
+    }
+  );
+
   it('does not run the local filter for the implicit VIEWED_AT sort', () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

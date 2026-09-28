@@ -37,6 +37,7 @@ import {
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
+import { updateEmailThreadLabel } from './cache-cleanup';
 import {
   createGraphqlEmailThreadQuery,
   fetchGraphqlEmailThread,
@@ -143,6 +144,8 @@ export type ThreadQueryData = {
 export type ThreadQueryTransport = 'rest' | 'graphql';
 
 export type ThreadQueryResult<TData> = {
+  /** Canonical identity for this route, including a resolved offline handle. */
+  readonly resolvedThreadId: string;
   readonly data: TData | undefined;
   readonly error: Error | null;
   readonly isLoading: boolean;
@@ -199,10 +202,11 @@ export function useThreadQuery<TData = ThreadQueryData>(
   const select = () =>
     options?.().select ?? (selectThreadQueryData as ThreadQuerySelector<TData>);
 
-  const graphqlQuery = createGraphqlEmailThreadQuery<TData>(threadId, () => ({
-    enabled: queryEnabled() && usesGraphql(),
-    select: select(),
-  }));
+  const { query: graphqlQuery, resolvedThreadId } =
+    createGraphqlEmailThreadQuery<TData>(threadId, () => ({
+      enabled: queryEnabled() && usesGraphql(),
+      select: select(),
+    }));
   const restQuery = useInfiniteQuery(() => ({
     ...threadQueryOptions(threadId()),
     ...options?.(),
@@ -211,6 +215,9 @@ export function useThreadQuery<TData = ThreadQueryData>(
   }));
 
   return {
+    get resolvedThreadId() {
+      return usesGraphql() ? resolvedThreadId() : threadId();
+    },
     get data() {
       return usesGraphql()
         ? graphqlQuery.data
@@ -389,7 +396,7 @@ export function useMarkThreadAsUnreadMutation(
       }
       const labelId = await fetchUnreadLabelId(params.linkId);
       await throwOnErr(() =>
-        emailClient.updateThreadLabel({
+        updateEmailThreadLabel({
           thread_id: params.threadId,
           label_id: labelId,
           value: true,

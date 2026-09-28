@@ -549,7 +549,7 @@ fn identity_binding_keeps_newer_edits_readable_across_commit_and_restart() {
             )
             .await
             .unwrap();
-        let claim = claim_head(&mut engine).await;
+        let _claim = claim_head(&mut engine).await;
         engine
             .begin_optimistic_write(
                 None,
@@ -567,6 +567,24 @@ fn identity_binding_keeps_newer_edits_readable_across_commit_and_restart() {
             )
             .await
             .unwrap();
+        // Reload after the first attempt and newer edit. The superseded
+        // create must still replay to establish the identity used by the edit.
+        let mut engine = Engine::new(engine.into_storage());
+        let recovered = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "recovered".into(),
+                now_ms: 2_000,
+                lease_expires_at_ms: 3_000,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(recovered.queued.superseded);
+        assert!(recovered.queued.requires_confirmation());
+        let claim = MutationClaimToken {
+            owner: "recovered".into(),
+            generation: recovered.lease_generation,
+        };
         engine
             .commit_optimistic_write(
                 transaction,

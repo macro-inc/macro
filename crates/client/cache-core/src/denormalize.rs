@@ -234,6 +234,13 @@ impl<'a, S: RecordSource> Walk<'a, S> {
             let args_key = resolved_args_key(f, &arguments);
             let storage_key = field_key(&f.name, args_key.as_deref());
 
+            // An observed null is authoritative. Argument-derived relations
+            // may fill an unseen edge, but must not resurrect a missing entity.
+            if matches!(fields.get(&storage_key), Some(CacheValue::Null)) {
+                out.insert(f.response_key.clone(), Json::Null);
+                continue;
+            }
+
             if let Some(entity_resolver) = entity_resolver {
                 let Some(target_key) = entity_resolver.entity_key(&arguments) else {
                     self.mark_miss(owner, storage_key);

@@ -71,6 +71,8 @@ export interface EmailThreadListNavigation {
 
 /** Host behavior is optional. A thread can render without a block or router. */
 export interface EmailThreadHost {
+  /** Close an embedded thread without navigating the containing split's history. */
+  returnToList?: () => void;
   listNavigation?: EmailThreadListNavigation;
   isActive?: Accessor<boolean>;
   registerKeyboard?: (handlers: EmailThreadKeyboardHandlers) => void;

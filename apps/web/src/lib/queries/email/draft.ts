@@ -10,6 +10,7 @@ import type {
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
+import { refreshEmailThreadCache } from './cache-cleanup';
 import { emailKeys } from './keys';
 
 type CreateDraftParams = {
@@ -106,8 +107,11 @@ export function useDeleteDraftMutation(
           console.error('Failed to delete draft', error);
           toast.failure('Failed to delete draft');
         },
-        onSuccess(_data, vars) {
+        async onSuccess(_data, vars) {
           try {
+            if (vars.threadId) {
+              await refreshEmailThreadCache(vars.threadId);
+            }
             void queryClient
               .invalidateQueries({
                 queryKey: emailKeys.previews._def,

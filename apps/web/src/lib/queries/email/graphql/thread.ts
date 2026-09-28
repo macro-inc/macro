@@ -172,7 +172,10 @@ export async function fetchGraphqlEmailThread(
 export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
   threadId: Accessor<string>,
   options: Accessor<GraphqlEmailThreadQueryOptions<TData>>
-): GraphqlEmailThreadQuery<TData> {
+): {
+  query: GraphqlEmailThreadQuery<TData>;
+  resolvedThreadId: Accessor<string>;
+} {
   const [identity, setIdentity] =
     createSignal<Awaited<ReturnType<typeof cachedThreadIdentity>>>();
   let request = 0;
@@ -210,7 +213,9 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     disposed = true;
     unsubscribe?.();
   });
-  return createUrqlInfiniteQuery<
+  const resolvedThreadId = () =>
+    identity()?.requested === threadId() ? identity()!.canonical : threadId();
+  const query = createUrqlInfiniteQuery<
     EmailThreadPageQuery,
     EmailThreadPageQueryVariables,
     number,
@@ -220,7 +225,7 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     client: getGraphqlSoupClient(),
     initialPageParam: 0,
     variables: (offset) => ({
-      threadId: identity()?.canonical ?? threadId(),
+      threadId: resolvedThreadId(),
       offset,
       limit: DEFAULT_THREAD_MESSAGES_LIMIT,
     }),
@@ -247,4 +252,5 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
       return options().select?.(mapped) ?? (mapped as TData);
     },
   }));
+  return { query, resolvedThreadId };
 }

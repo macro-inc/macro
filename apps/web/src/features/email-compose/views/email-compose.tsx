@@ -219,7 +219,7 @@ function LoadedEmailComposeView(
                       setDraftBackMenuOpen(false);
                       return;
                     }
-                    leaveCompose();
+                    setDraftBackMenuOpen(false);
                   }}
                 >
                   Delete Draft

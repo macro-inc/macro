@@ -91,13 +91,36 @@ export function createEmailThreadSource(
   query: ThreadQueryResult<ThreadQueryData>
 ): EmailThreadSource {
   // Status guards prevent a pending Solid resource from suspending its owner.
-  const thread = createMemo(() => {
-    if (!query.isSuccess && !query.isError) return undefined;
-    const data = query.data?.thread;
-    return data?.db_id === threadId() ? toEmailThread(data) : undefined;
-  });
+  const snapshot = createMemo<{ requested: string; thread?: EmailThread }>(
+    (previous) => {
+      const requested = threadId();
+      if (!query.isSuccess && !query.isError) {
+        // Resolving a local handle changes the query key, but must not unmount
+        // an open composer while the same thread's canonical page loads.
+        return {
+          requested,
+          thread:
+            previous?.requested === requested ? previous.thread : undefined,
+        };
+      }
+      const data = query.data?.thread;
+      if (!data) return { requested };
+      // Cache aliases and the async identity lookup have separate subscribers.
+      // Keep the last verified row until both observe the canonical identity.
+      return {
+        requested,
+        thread:
+          data.db_id === requested || data.db_id === query.resolvedThreadId
+            ? toEmailThread(data)
+            : previous?.requested === requested
+              ? previous.thread
+              : undefined,
+      };
+    }
+  );
+  const thread = () => snapshot().thread;
   return {
-    id: threadId,
+    id: () => thread()?.db_id ?? query.resolvedThreadId ?? threadId(),
     thread,
     isError: () => query.isError,
     isLoading: () => query.isLoading,

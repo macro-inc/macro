@@ -91,17 +91,42 @@ it('discard waits for an in-flight first save and deletes its returned draft', a
 });
 it('keeps the draft editable after failed deletion and saves later edits', async () => {
   const composeContext = createComposeContext();
-  const root = mountEmailComposer(composeContext);
+  const goBack = vi.fn();
+  const root = mountEmailComposer(composeContext, { goBack });
   root.edit('Saved');
   await vi.advanceTimersByTimeAsync(600);
   vi.mocked(composeContext.drafts.deleteDraft).mockRejectedValueOnce(
     new Error('offline')
   );
   await expect(root.state.deleteDraftAndReset()).rejects.toThrow('offline');
+  expect(goBack).not.toHaveBeenCalled();
   root.edit('Still here');
   await vi.advanceTimersByTimeAsync(600);
   root.dispose();
   expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(2);
+});
+
+it('toolbar discard returns to the list after deletion without recreating the draft on disposal', async () => {
+  const composeContext = createComposeContext();
+  const pending = Promise.withResolvers<void>();
+  const goBack = vi.fn(() => root.dispose());
+  const root = mountEmailComposer(composeContext, { goBack });
+  root.edit('Discard this standalone thread');
+  await vi.advanceTimersByTimeAsync(600);
+  vi.mocked(composeContext.drafts.deleteDraft).mockReturnValueOnce(
+    pending.promise
+  );
+
+  root.state.context.onDelete?.();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(composeContext.drafts.deleteDraft).toHaveBeenCalledOnce();
+  expect(goBack).not.toHaveBeenCalled();
+  pending.resolve();
+  await vi.advanceTimersByTimeAsync(1000);
+
+  expect(goBack).toHaveBeenCalledOnce();
+  expect(root.state.context.hasDraft()).toBe(false);
+  expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
 });
 it('waits for the saved draft ID, prevents duplicate sends, and does not recreate the sent draft on disposal', async () => {
   const pending = Promise.withResolvers<PersistedEmailIdentity>();
@@ -219,7 +244,8 @@ it('waits for an existing attachment upload before flushing newer body edits', a
 it('rejects sender/schedule changes and repeated discard while a deletion is pending', async () => {
   const pending = Promise.withResolvers<void>();
   const composeContext = createComposeContext();
-  const root = mountEmailComposer(composeContext);
+  const goBack = vi.fn();
+  const root = mountEmailComposer(composeContext, { goBack });
   root.edit('Saved');
   await vi.advanceTimersByTimeAsync(600);
   vi.mocked(composeContext.drafts.deleteDraft).mockReturnValueOnce(
@@ -227,6 +253,7 @@ it('rejects sender/schedule changes and repeated discard while a deletion is pen
   );
   const discard = root.state.deleteDraftAndReset();
   expect(await root.state.deleteDraftAndReset()).toBe(false);
+  expect(goBack).not.toHaveBeenCalled();
   root.state.context.onSelectInbox?.('other-inbox');
   await root.state.context.onSendTimeChange?.(new Date('2026-12-01T12:00:00Z'));
   expect(root.state.context.selectedInboxId?.()).toBe('inbox');
@@ -234,6 +261,7 @@ it('rejects sender/schedule changes and repeated discard while a deletion is pen
   expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
   pending.resolve();
   expect(await discard).toBe(true);
+  expect(goBack).toHaveBeenCalledOnce();
   root.dispose();
 });
 

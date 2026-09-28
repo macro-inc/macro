@@ -74,6 +74,7 @@ import {
   type UnifiedNotification,
 } from '@notifications';
 import { queryClient } from '@queries/client';
+import { updateEmailThreadLabel } from '@queries/email/cache-cleanup';
 import { emailKeys } from '@queries/email/keys';
 import { fetchAndCacheThread } from '@queries/email/thread';
 import {
@@ -1144,7 +1145,7 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
       const outcomes = await Promise.allSettled(
         ids.map((id, i) =>
           throwOnErr(() =>
-            emailClient.updateThreadLabel({
+            updateEmailThreadLabel({
               thread_id: id,
               label_id: labelIds[i]!,
               value: true,
@@ -1162,7 +1163,7 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
             outcomes[i]?.status === 'fulfilled'
               ? [
                   throwOnErr(() =>
-                    emailClient.updateThreadLabel({
+                    updateEmailThreadLabel({
                       thread_id: id,
                       label_id: labelIds[i]!,
                       value: false,
@@ -1211,7 +1212,7 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
             const labelId = threadTrashLabelIds.get(id);
             if (!labelId) return Promise.resolve();
             return throwOnErr(() =>
-              emailClient.updateThreadLabel({
+              updateEmailThreadLabel({
                 thread_id: id,
                 label_id: labelId,
                 value: false,

@@ -183,6 +183,8 @@ pub struct ClaimedMutationWire {
     pub uuid: String,
     /// Whether a newer current row superseded this request.
     pub superseded: bool,
+    /// Whether settlement must recover a server identity before a replacement runs.
+    pub requires_confirmation: bool,
     /// Claim generation required for settlement.
     pub lease_generation: String,
     /// GraphQL mutation document.
@@ -269,11 +271,13 @@ impl TryFrom<ClaimedMutation> for ClaimedMutationWire {
     type Error = String;
 
     fn try_from(claimed: ClaimedMutation) -> Result<Self, Self::Error> {
+        let requires_confirmation = claimed.queued.requires_confirmation();
         let request = claimed.queued.mutation.request;
         Ok(Self {
             transaction_id: claimed.queued.id.to_string(),
             uuid: claimed.queued.uuid.to_string(),
             superseded: claimed.queued.superseded,
+            requires_confirmation,
             lease_generation: claimed.lease_generation.to_string(),
             query: request.query,
             operation_name: request.operation_name,

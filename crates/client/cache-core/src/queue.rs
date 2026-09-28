@@ -214,6 +214,13 @@ pub struct QueuedMutation {
     pub optimistic: PersistedOptimisticLayer,
 }
 
+impl QueuedMutation {
+    /// Whether settlement must recover a server identity before a replacement can run.
+    pub fn requires_confirmation(&self) -> bool {
+        source_requires_confirmation(&self.optimistic.optimistic_data_json)
+    }
+}
+
 /// Queue and lifecycle state used to fence a staged UUID upsert.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MutationQueueSnapshot {

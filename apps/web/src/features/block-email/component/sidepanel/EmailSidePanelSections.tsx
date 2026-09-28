@@ -59,7 +59,12 @@ function ReferencesSectionConditional(props: { threadId: string }) {
     () => 'email'
   );
 
-  const count = () => references.data?.length ?? 0;
+  // This condition sits outside the section's Suspense boundary. A pending
+  // resource read here would hide the surrounding email view on reconnect.
+  const count = () =>
+    references.isSuccess || references.isError
+      ? (references.data?.length ?? 0)
+      : 0;
 
   return (
     <Show when={count() > 0}>

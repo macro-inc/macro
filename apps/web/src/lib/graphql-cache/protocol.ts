@@ -378,6 +378,8 @@ export type ClaimedMutation = {
   transactionId: string;
   uuid: string;
   superseded: boolean;
+  /** Must recover a server identity before a newer edit/discard can run. */
+  requiresConfirmation: boolean;
   leaseGeneration: string;
   query: string;
   operationName?: string;

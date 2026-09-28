@@ -38,7 +38,82 @@ function thread(messages: ApiMessage[]): ApiThread {
   };
 }
 
+import { createThreadSnapshot } from '../primitives/thread-snapshot';
 import { createEmailThreadSource, toEmailThread } from './thread-source';
+
+it('keeps a reopened local draft through server identity adoption and rejects another route', () =>
+  createRoot((dispose) => {
+    try {
+      const [route, setRoute] = createSignal('local-thread');
+      const [resolved, setResolved] = createSignal('local-thread');
+      const [loading, setLoading] = createSignal(false);
+      const local = {
+        ...thread([message('local-draft', { is_draft: true })]),
+        db_id: 'local-thread',
+      };
+      const [data, setData] = createSignal<ThreadQueryData | undefined>({
+        thread: local,
+        hasMore: false,
+      });
+      const source = createEmailThreadSource(route, {
+        get resolvedThreadId() {
+          return resolved();
+        },
+        get isSuccess() {
+          return !loading();
+        },
+        get isLoading() {
+          return loading();
+        },
+        isError: false,
+        get data() {
+          if (loading()) throw new Error('suspending resource read');
+          return data();
+        },
+      } as ThreadQueryResult<ThreadQueryData>);
+      const snapshot = createThreadSnapshot(source);
+      expect(snapshot()?.messages[0].db_id).toBe('local-draft');
+
+      // Cache subscriptions can publish the aliased record before the async
+      // identity lookup observes the same settlement.
+      setData({ thread: { ...local, db_id: 'server-thread' }, hasMore: false });
+      expect(snapshot()?.messages[0].db_id).toBe('local-draft');
+
+      // The route remains a durable local handle while its query changes keys.
+      batch(() => {
+        setResolved('server-thread');
+        setLoading(true);
+        setData(undefined);
+      });
+      expect(snapshot()?.messages[0].db_id).toBe('local-draft');
+      batch(() => {
+        setData({
+          thread: { ...local, db_id: 'server-thread' },
+          hasMore: false,
+        });
+        setLoading(false);
+      });
+      expect(source.id()).toBe('server-thread');
+      expect(snapshot()?.db_id).toBe('server-thread');
+
+      // Reopening the old route after settlement also accepts the canonical row.
+      const reopened = createEmailThreadSource(route, {
+        resolvedThreadId: 'server-thread',
+        isSuccess: true,
+        isError: false,
+        data: data(),
+      } as ThreadQueryResult<ThreadQueryData>);
+      expect(reopened.thread()?.db_id).toBe('server-thread');
+      batch(() => {
+        setRoute('another-thread');
+        setResolved('another-thread');
+        setLoading(true);
+      });
+      expect(snapshot()).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  }));
 
 describe('thread query adaptation', () => {
   it('guards resource reads, retains available data during refresh errors, and clears it when switching threads', () =>

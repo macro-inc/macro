@@ -64,9 +64,12 @@ export function findPrimaryEmailLinkId(
 export function usePrimaryEmailLinkId() {
   const linksQuery = useEmailLinksQuery();
   const userId = useUserId();
-  return createMemo(() =>
-    findPrimaryEmailLinkId(linksQuery.data?.links ?? [], userId())
-  );
+  return createMemo(() => {
+    // Offline GraphQL mail can render before this REST lookup completes.
+    // Reading its pending resource would suspend the surrounding email view.
+    if (!linksQuery.isSuccess && !linksQuery.isError) return undefined;
+    return findPrimaryEmailLinkId(linksQuery.data?.links ?? [], userId());
+  });
 }
 
 /** The `X-Email-Link-Id` value for a target inbox; see useNonPrimaryEmailLinkIdHeader. */

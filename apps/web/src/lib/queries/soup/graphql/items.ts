@@ -145,6 +145,7 @@ export function createGraphqlSoupAstItemsQuery(
     mail?: {
       nextCursor: string | null;
       revision: CacheRevision;
+      optimistic: boolean;
       records: GraphqlSoupItem[];
     };
   };
@@ -259,7 +260,12 @@ export function createGraphqlSoupAstItemsQuery(
       (networkAuthorityInput === input &&
         networkAuthorityRevision() === revision &&
         !offline() &&
-        !query.error?.networkError) ||
+        !query.error?.networkError &&
+        !(
+          input &&
+          'initial' in input &&
+          isCachedMailView(input.initial?.emailView)
+        )) ||
       !queryOptions.enabled ||
       !graphqlSoupProjectionSupported() ||
       !input ||
@@ -404,6 +410,7 @@ export function createGraphqlSoupAstItemsQuery(
                   mail: {
                     nextCursor: result.nextCursor,
                     revision: result.revision,
+                    optimistic: result.optimistic,
                     records: reconciledRecords,
                   },
                 }
@@ -529,7 +536,9 @@ export function createGraphqlSoupAstItemsQuery(
         batch(() => {
           setCurrentCacheRevision(metadata.revision);
           setNetworkAuthorityRevision(metadata.revision);
-          setLocalProjection(undefined);
+          // Keep same-view Mail evidence while checking the new revision.
+          // A server page cannot supersede an unsettled offline draft.
+          if (!untrack(localProjection)?.mail) setLocalProjection(undefined);
         });
         recordAuthority('network');
         finishStaleFallback('network');
@@ -583,7 +592,8 @@ export function createGraphqlSoupAstItemsQuery(
     !query.error?.networkError &&
     networkAuthorityInput === firstPageInput() &&
     networkAuthorityRevision() !== undefined &&
-    networkAuthorityRevision() === currentCacheRevision();
+    networkAuthorityRevision() === currentCacheRevision() &&
+    !displayLocalProjection()?.mail?.optimistic;
 
   // An overlay covers only the server rows that existed when it was evaluated.
   // New server pages must render immediately, even if the next evaluation stalls
@@ -739,6 +749,7 @@ export function createGraphqlSoupAstItemsQuery(
           mail: {
             nextCursor: result.nextCursor,
             revision: result.revision,
+            optimistic: result.optimistic,
             records,
           },
           data: {

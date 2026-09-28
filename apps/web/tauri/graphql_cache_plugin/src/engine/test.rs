@@ -473,6 +473,7 @@ fn optimistic_layer_commits_durably() {
     assert_eq!(claimed.transaction_id, optimistic.transaction_id);
     assert_eq!(claimed.uuid, "00000000-0000-4000-8000-000000000001");
     assert!(!claimed.superseded);
+    assert!(!claimed.requires_confirmation);
 
     // The optimistic view answers reads.
     let ReadResultWire::Hit { data } = read(&handle, None) else {

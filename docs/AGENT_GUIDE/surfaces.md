@@ -428,11 +428,35 @@ Verify the durable lifecycle: create a standalone draft offline, enter recipient
 subject and body, close the composer, then restart while still offline. Open it
 from Drafts and confirm its content and sending inbox; edit it again. Reconnect
 and check that exactly one draft remains and the open editor keeps any new text.
+Keep a reopened offline draft open while reconnecting: the composer must remain
+mounted when the local thread handle resolves to its server ID. After syncing,
+reopen the original local thread URL and confirm the composer still loads; then
+open a different thread and confirm the previous draft is not shown there.
+Make multiple edits while offline, reconnect, wait for syncing to finish, then
+send. Repeat after refreshing with queued edits: the first attempted save must
+recover its server identity and let newer saves complete, rather than leaving
+Send permanently blocked by "Draft still syncing".
+After restarting offline, reconnect and visit Signal and Drafts. The queued draft
+must stay visible when the first server list arrives, including in date-grouped
+views, until its save settles; it must not briefly appear and then disappear.
 Repeat with discard before reconnect, including a save that was already attempted
 before connectivity dropped. The discarded draft must stay absent after restart
 and reconnect. Opening through an older local thread link must reach the same
 server thread after synchronization. Repeat with an existing reply and confirm
 that other messages, attachments, and the Sent preview remain intact.
+
+With GraphQL Mail enabled, discarding the last draft in a thread must remove the
+thread from every local Mail view, including after queued replay. Discarding a
+standalone draft from its composer returns to the previous list after deletion
+is accepted, including offline; a failed deletion keeps the composer open.
+Check both the toolbar trash button and the mobile Delete Draft action.
+In Email's inline detail, deletion closes the detail and preserves the current
+mail tab and filters; it must not navigate split history to an older composer.
+Discarding a reply draft must preserve the remaining conversation. A previously
+cached thread that the server no longer has must leave the lists after opening it or receiving
+a 404 while changing its labels; a cached record must not override the server's
+not-found response. Check the same behavior after REST discard. Offline/network
+errors alone must never evict a cached thread.
 
 While a schedule change is pending, immediate send and further schedule changes
 are disabled. Reply recipients cannot be edited or dragged during scheduling,

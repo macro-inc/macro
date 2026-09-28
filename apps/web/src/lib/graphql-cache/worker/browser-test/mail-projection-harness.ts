@@ -1,18 +1,31 @@
-import { stringifyDocument } from '@urql/core';
+import { createClient, gql, stringifyDocument } from '@urql/core';
+import { filter, map, pipe } from 'wonka';
 import { createDraftThread } from '../../../queries/email/graphql/optimistic-thread';
 import {
   type CachedMailView,
   materializeMailView,
 } from '../../../queries/soup/graphql/mail-view';
+import { emailCacheDeletionKeys } from '../../../service-clients/service-storage/email-cache-deletions';
 import {
+  DeleteEmailDraftDocument,
+  EmailThreadMessageFieldsFragmentDoc,
   type MailItemFieldsFragment,
   SaveEmailDraftDocument,
   type SaveEmailDraftMutation,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
+import { entityFromArgument } from '../../exchange/entity-resolvers';
+import { normalizedCacheExchange } from '../../exchange/normalized-cache-exchange';
+import { executeOptimisticMutation } from '../../exchange/optimistic';
+import {
+  readRecordsByKeys,
+  selectRecords,
+} from '../../exchange/record-selection';
 import { createWorkerCacheHost } from '../../host/worker-host';
 import { mailProjectionCapsules } from './mail-projection-capsules';
 
-const scope = `offline-mail-${crypto.randomUUID()}`;
+const scope =
+  new URLSearchParams(location.search).get('scope') ??
+  `offline-mail-${crypto.randomUUID()}`;
 const createHost = () =>
   createWorkerCacheHost({
     scope,
@@ -27,6 +40,17 @@ const select = (id: string) =>
 const id = (n: number) =>
   `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const nil = id(0);
+const mailOnlyFilters = {
+  documentFilter: { literal: { id: nil } },
+  projectFilter: { literal: { projectIdSelf: nil } },
+  chatFilter: { literal: { chatId: nil } },
+  calendarEventFilter: { literal: { id: nil } },
+  channelFilter: { literal: { channelId: nil } },
+  channelThreadFilter: { literal: { threadId: nil } },
+  callFilter: { literal: { callId: nil } },
+  crmCompanyFilter: { literal: { id: nil } },
+  foreignEntityFilter: { literal: { id: nil } },
+};
 const previewFields =
   'id subject snippet isDraft senderEmail senderName senderPhotoUrl';
 const previews = `mailAllPreview { ${previewFields} } mailDraftPreview { ${previewFields} } mailSentPreview { ${previewFields} }`;
@@ -66,15 +90,7 @@ async function refresh(append = false) {
     undefined
   );
   const filters = {
-    documentFilter: { literal: { id: nil } },
-    projectFilter: { literal: { projectIdSelf: nil } },
-    chatFilter: { literal: { chatId: nil } },
-    calendarEventFilter: { literal: { id: nil } },
-    channelFilter: { literal: { channelId: nil } },
-    channelThreadFilter: { literal: { threadId: nil } },
-    callFilter: { literal: { callId: nil } },
-    crmCompanyFilter: { literal: { id: nil } },
-    foreignEntityFilter: { literal: { id: nil } },
+    ...mailOnlyFilters,
     ...(tree ? { emailFilter: { tree } } : {}),
   };
   try {
@@ -131,8 +147,11 @@ more.addEventListener('click', () => {
 
 const draftStatus =
   document.querySelector<HTMLParagraphElement>('#draft-status')!;
+let draftVersion = 0;
 document.querySelector('#create-draft')!.addEventListener('click', async () => {
   try {
+    const body =
+      ++draftVersion === 1 ? 'Saved on this device' : 'Latest offline edit';
     const now = new Date().toISOString();
     const draft: SaveEmailDraftMutation['saveEmailDraft']['draft'] = {
       __typename: 'GraphqlSoupEmailMessage',
@@ -159,8 +178,8 @@ document.querySelector('#create-draft')!.addEventListener('click', async () => {
       attachments: [],
       attachmentsDraft: [],
       attachmentsForwarded: [],
-      bodyText: 'Saved on this device',
-      bodyHtmlSanitized: '<p>Saved on this device</p>',
+      bodyText: body,
+      bodyHtmlSanitized: `<p>${body}</p>`,
       bodyMacro: null,
       bodyReplyless: null,
       createdAt: now,
@@ -176,6 +195,7 @@ document.querySelector('#create-draft')!.addEventListener('click', async () => {
             draftId: id(8001),
             threadDbId: id(8002),
             subject: draft.subject,
+            bodyText: draft.bodyText,
           },
         },
         data: {
@@ -226,6 +246,232 @@ document.querySelector('#reopen-draft')!.addEventListener('click', async () => {
     draftStatus.textContent = String(error);
   }
 });
+
+document.querySelector('#resume-draft')!.addEventListener('click', async () => {
+  try {
+    const readDraft = () =>
+      readRecordsByKeys(
+        host,
+        selectRecords(EmailThreadMessageFieldsFragmentDoc),
+        [`GraphqlSoupEmailMessage:${id(8001)}`]
+      );
+    const restored = (await readDraft()).records[0];
+    if (!restored?.identity?.pending)
+      throw new Error('expected a persisted pending draft');
+    const draft = {
+      ...restored.record,
+      id: id(9001),
+      threadId: id(9002),
+    };
+    const sentDraftIds: unknown[] = [];
+    const errors: unknown[] = [];
+    const client = createClient({
+      url: '/scripted-email-server',
+      exchanges: [
+        normalizedCacheExchange(host, {
+          onCacheError: (error) => errors.push(error),
+        }),
+        () => (operations) =>
+          pipe(
+            operations,
+            filter((operation) => operation.kind === 'mutation'),
+            map((operation) => {
+              sentDraftIds.push(operation.variables?.input.draftId);
+              return {
+                operation,
+                stale: false,
+                hasNext: false,
+                data: {
+                  saveEmailDraft: {
+                    draftId: draft.id,
+                    draft: {
+                      ...draft,
+                      bodyText: operation.variables?.input.bodyText,
+                    },
+                    thread: createDraftThread(
+                      draft,
+                      'offline-mail-viewer',
+                      true
+                    ),
+                  },
+                },
+              };
+            })
+          ),
+      ],
+    });
+    // Initialize the exchange, which resumes the durable queue without a composer.
+    await client
+      .query(
+        gql`query Viewer { user { id } }`,
+        {},
+        { requestPolicy: 'cache-only' }
+      )
+      .toPromise();
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      if (errors.length) throw errors[0];
+      const current = (await readDraft()).records[0];
+      if (current && current.identity?.pending === false) {
+        if (
+          JSON.stringify(sentDraftIds) !== JSON.stringify([id(8001), id(8001)])
+        ) {
+          throw new Error(
+            `unexpected replay order: ${JSON.stringify(sentDraftIds)}`
+          );
+        }
+        if (
+          current.record.id !== id(9001) ||
+          current.record.threadId !== id(9002)
+        ) {
+          throw new Error('server identity was not recovered');
+        }
+        if (current.record.bodyText !== 'Latest offline edit')
+          throw new Error('newer edit was lost');
+        draftStatus.textContent =
+          'Draft synced after reload; latest edit and server identity confirmed';
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error('draft stayed pending after reconnect');
+  } catch (error) {
+    draftStatus.textContent = String(error);
+  }
+});
+
+document
+  .querySelector('#check-deletions')!
+  .addEventListener('click', async () => {
+    try {
+      const missingThread = id(12);
+      const deletedDraftThread = id(24);
+      const directQuery = gql`
+      query EmailThreadPage($threadId: ID!) {
+        user { id emailThread(input: {threadId: $threadId}) { id name } }
+      }
+    `;
+      const client = createClient({
+        url: '/scripted-email-server',
+        exchanges: [
+          normalizedCacheExchange(host, {
+            deletedRecordKeys: emailCacheDeletionKeys,
+            entityResolvers: {
+              GraphqlUser: {
+                emailThread: entityFromArgument('GraphqlSoupEmailThread', [
+                  'input',
+                  'threadId',
+                ]),
+              },
+            },
+          }),
+          () => (operations) =>
+            pipe(
+              operations,
+              map((operation) => ({
+                operation,
+                stale: false,
+                hasNext: false,
+                data:
+                  operation.kind === 'mutation'
+                    ? {
+                        deleteEmailDraft: {
+                          draftId: id(20024),
+                          deleted: true,
+                          threadDeleted: true,
+                          threadId: deletedDraftThread,
+                          thread: null,
+                        },
+                      }
+                    : {
+                        user: { id: 'offline-mail-viewer', emailThread: null },
+                      },
+              }))
+            ),
+        ],
+      });
+      const before = await client
+        .query(
+          directQuery,
+          { threadId: missingThread },
+          { requestPolicy: 'cache-only' }
+        )
+        .toPromise();
+      if (!before.data?.user.emailThread)
+        throw new Error('ghost was not seeded');
+      await client
+        .query(
+          directQuery,
+          { threadId: missingThread },
+          { requestPolicy: 'network-only' }
+        )
+        .toPromise();
+      const after = await client
+        .query(
+          directQuery,
+          { threadId: missingThread },
+          { requestPolicy: 'cache-only' }
+        )
+        .toPromise();
+      if (after.data?.user.emailThread !== null)
+        throw new Error('cached entity overrode server null');
+      const deleted = await executeOptimisticMutation(
+        client,
+        DeleteEmailDraftDocument,
+        {
+          input: { draftId: id(20024) },
+        },
+        {
+          deleteEmailDraft: {
+            draftId: id(20024),
+            deleted: true,
+            threadDeleted: false,
+            threadId: deletedDraftThread,
+            thread: null,
+          },
+        },
+        { uuid: crypto.randomUUID() }
+      ).toPromise();
+      if (deleted.error) throw deleted.error;
+      const reader = createHost();
+      try {
+        const records = await reader.readRecordsByKeys({
+          document: fragment,
+          fragmentName: 'MailRow',
+          keys: [missingThread, deletedDraftThread].map(
+            (value) => `GraphqlSoupEmailThread:${value}`
+          ),
+        });
+        if (records.records.length)
+          throw new Error('deleted thread remains readable');
+        for (const view of ['ALL', 'DRAFTS', 'SENT'] as const) {
+          const page = await reader.entityFilter({
+            filters: mailOnlyFilters,
+            sortMethod: 'UPDATED_AT',
+            sortDirection: 'DESC',
+            limit: 100,
+            mail: { view },
+          });
+          if (page.kind !== 'mail-page') throw new Error('missing Mail page');
+          if (
+            page.keys.some(
+              (key) =>
+                key.endsWith(missingThread) || key.endsWith(deletedDraftThread)
+            )
+          ) {
+            throw new Error(`ghost remains in ${view}`);
+          }
+        }
+      } finally {
+        reader.dispose();
+      }
+      await refresh();
+      draftStatus.textContent =
+        'Deleted threads absent from records and Mail views';
+    } catch (error) {
+      draftStatus.textContent = String(error);
+    }
+  });
 await host.writeQuery({
   query,
   identity: 'offline-mail-viewer',
