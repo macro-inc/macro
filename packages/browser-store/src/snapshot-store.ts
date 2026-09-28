@@ -18,6 +18,17 @@ interface SnapshotSchema<T> extends DBSchema {
   };
 }
 
+/** A saved snapshot with the scope it was saved under. */
+export type ScopedSnapshot<T> = { scopeId: string; snapshot: T };
+
+function open<T>(dbName: string): Promise<IDBPDatabase<SnapshotSchema<T>>> {
+  return openDB<SnapshotSchema<T>>(dbName, DB_VERSION, {
+    upgrade(db) {
+      db.createObjectStore(STORE, { keyPath: 'scopeId' });
+    },
+  });
+}
+
 export class IDBSnapshotStore<T> implements SnapshotStore<T> {
   private db: Promise<IDBPDatabase<SnapshotSchema<T>>>;
 
@@ -26,11 +37,32 @@ export class IDBSnapshotStore<T> implements SnapshotStore<T> {
     private readonly scopeId: string,
     private readonly logger?: StoreLogger
   ) {
-    this.db = openDB<SnapshotSchema<T>>(dbName, DB_VERSION, {
-      upgrade(db) {
-        db.createObjectStore(STORE, { keyPath: 'scopeId' });
-      },
-    });
+    this.db = open<T>(dbName);
+  }
+
+  /** Drop every scope's snapshot in `dbName`. */
+  static async clear(dbName: string): Promise<void> {
+    const db = await open<unknown>(dbName);
+    await db.clear(STORE);
+  }
+
+  /**
+   * Delete the scopes `select` names, given every saved snapshot in
+   * `dbName`. Loads every value, so this is for an occasional sweep (a
+   * time-to-live, a cap on entries), not a hot path.
+   */
+  static async prune<T>(
+    dbName: string,
+    select: (saved: ScopedSnapshot<T>[]) => string[]
+  ): Promise<number> {
+    const db = await open<T>(dbName);
+    const saved = await db.getAll(STORE);
+    const doomed = select(saved);
+    if (doomed.length === 0) return 0;
+    const tx = db.transaction(STORE, 'readwrite');
+    for (const scopeId of doomed) void tx.store.delete(scopeId);
+    await tx.done;
+    return doomed.length;
   }
 
   public async save(snapshot: T): Promise<void> {

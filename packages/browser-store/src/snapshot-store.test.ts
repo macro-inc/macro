@@ -62,4 +62,26 @@ describe('IDBSnapshotStore', () => {
       'snapshot-store: loaded from IDB',
     ]);
   });
+
+  it('clears every scope at once', async () => {
+    await new IDBSnapshotStore<string>(dbName, 'a').save('a');
+    await new IDBSnapshotStore<string>(dbName, 'b').save('b');
+    await IDBSnapshotStore.clear(dbName);
+    expect(await new IDBSnapshotStore<string>(dbName, 'a').load()).toBeNull();
+    expect(await new IDBSnapshotStore<string>(dbName, 'b').load()).toBeNull();
+  });
+
+  it('prunes the scopes the selector names', async () => {
+    await new IDBSnapshotStore<number>(dbName, 'old').save(1);
+    await new IDBSnapshotStore<number>(dbName, 'new').save(2);
+    const seen: string[] = [];
+    const deleted = await IDBSnapshotStore.prune<number>(dbName, (saved) => {
+      seen.push(...saved.map((row) => `${row.scopeId}=${row.snapshot}`));
+      return saved.filter((row) => row.snapshot < 2).map((row) => row.scopeId);
+    });
+    expect(seen.sort()).toEqual(['new=2', 'old=1']);
+    expect(deleted).toBe(1);
+    expect(await new IDBSnapshotStore<number>(dbName, 'old').load()).toBeNull();
+    expect(await new IDBSnapshotStore<number>(dbName, 'new').load()).toBe(2);
+  });
 });

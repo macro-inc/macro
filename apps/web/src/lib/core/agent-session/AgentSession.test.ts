@@ -24,6 +24,11 @@ const harness = vi.hoisted(() => ({
   getLog: vi.fn(),
   control: vi.fn(),
 }));
+const cache = vi.hoisted(() => ({
+  read: vi.fn(),
+  write: vi.fn(),
+  remove: vi.fn(),
+}));
 const socket = vi.hoisted(() => ({
   listeners: new Set<() => void>(),
   subscribeSocketSessionStarted: vi.fn((listener: () => void) => {
@@ -38,6 +43,9 @@ vi.mock('@service-agent-harness/client', () => ({
 }));
 vi.mock('@queries/agent-session/queue-sync', () => ({
   subscribeSocketSessionStarted: socket.subscribeSocketSessionStarted,
+}));
+vi.mock('@queries/agent-session/log-cache', () => ({
+  agentSessionLogCache: cache,
 }));
 
 import {
@@ -95,6 +103,9 @@ beforeEach(() => {
   }
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({ messages: [], metadata: {} });
+  cache.read.mockResolvedValue(undefined);
+  cache.write.mockResolvedValue(undefined);
+  cache.remove.mockResolvedValue(undefined);
   harness.get.mockResolvedValue(ok(session));
   harness.getLog.mockResolvedValue(ok({ bot, entries: [row(1)] }));
   harness.control.mockImplementation(
@@ -490,6 +501,126 @@ describe('AgentSession', () => {
     harness.getLog.mockResolvedValueOnce(err([{ code: 'FORBIDDEN' }]));
     await expect(live.load()).rejects.toBeInstanceOf(AgentSessionAccessDenied);
     live.release();
+  });
+
+  describe('cached log', () => {
+    const stale = { id: SESSION, name: 'As last seen', canEdit: true };
+
+    it('folds the cached log first and the fetched one over it', async () => {
+      cache.read.mockResolvedValue({
+        session: stale,
+        bot,
+        rows: [row(1), row(2)],
+      });
+      const log = deferred<LogResult>();
+      harness.getLog.mockReturnValue(log.promise);
+
+      const live = AgentSession.acquire(SESSION);
+      expect(await live.warm()).toEqual({ session: stale, bot });
+      expect(inputs()).toEqual([{ kind: 'snapshot', rows: [row(1), row(2)] }]);
+
+      log.resolve(logOf([row(1), row(2), row(3)]));
+      expect(await live.load()).toEqual({ session, bot });
+      expect(inputs().at(-1)).toEqual({
+        kind: 'snapshot',
+        rows: [row(1), row(2), row(3)],
+      });
+      live.release();
+    });
+
+    it('replays rows folded onto the cached log after the fetched one', async () => {
+      cache.read.mockResolvedValue({ session: stale, bot, rows: [row(1)] });
+      const log = deferred<LogResult>();
+      harness.getLog.mockReturnValue(log.promise);
+
+      const live = AgentSession.acquire(SESSION);
+      await live.warm();
+      // Delivered while the fetch is on the wire and after the response was
+      // built: the fetched snapshot does not carry it, and replacing the
+      // machine's rows would drop it.
+      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(3)] });
+      await settle();
+      log.resolve(logOf([row(1), row(2)]));
+      await live.load();
+
+      expect(inputs()).toEqual([
+        { kind: 'snapshot', rows: [row(1)] },
+        { kind: 'confirmed', row: row(3) },
+        { kind: 'snapshot', rows: [row(1), row(2)] },
+        { kind: 'confirmed', row: row(3) },
+      ]);
+      // The fetched snapshot and the replay are one push: one replace.
+      expect(fold.pushSession).toHaveBeenLastCalledWith(SESSION, [
+        { kind: 'snapshot', rows: [row(1), row(2)] },
+        { kind: 'confirmed', row: row(3) },
+      ]);
+      live.release();
+    });
+
+    it('never lets a cached log replace a fetched one that landed first', async () => {
+      const read = deferred<unknown>();
+      cache.read.mockReturnValue(read.promise);
+
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      read.resolve({ session: stale, bot, rows: [row(9)] });
+
+      expect(await live.warm()).toBeUndefined();
+      expect(inputs()).toEqual([{ kind: 'snapshot', rows: [row(1)] }]);
+      live.release();
+    });
+
+    it('treats an unreadable cache as a miss', async () => {
+      cache.read.mockRejectedValue(new Error('quota'));
+      const live = AgentSession.acquire(SESSION);
+      expect(await live.warm()).toBeUndefined();
+      expect(await live.load()).toEqual({ session, bot });
+      live.release();
+    });
+
+    it('caches the fetched log with every row delivered after it, once', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+      await settle();
+      // Debounced: nothing written yet.
+      expect(cache.write).not.toHaveBeenCalled();
+
+      live.release();
+      expect(cache.write).toHaveBeenCalledWith(SESSION, {
+        session,
+        bot,
+        rows: [row(1), row(2)],
+      });
+    });
+
+    it('caches rows that waited behind the fetched log too', async () => {
+      const log = deferred<LogResult>();
+      harness.getLog.mockReturnValue(log.promise);
+      const live = AgentSession.acquire(SESSION);
+      AgentSession.ingest({ agentSessionId: SESSION, entries: [row(2)] });
+      log.resolve(logOf([row(1)]));
+      await live.load();
+      live.release();
+      // The buffered row is folded after the snapshot, and remembered too.
+      expect(cache.write).toHaveBeenCalledWith(SESSION, {
+        session,
+        bot,
+        rows: [row(1), row(2)],
+      });
+    });
+
+    it('forgets the cached log when the viewer is refused', async () => {
+      harness.getLog.mockResolvedValueOnce(err([{ code: 'FORBIDDEN' }]));
+      const live = AgentSession.acquire(SESSION);
+      await expect(live.load()).rejects.toBeInstanceOf(
+        AgentSessionAccessDenied
+      );
+      expect(cache.remove).toHaveBeenCalledWith(SESSION);
+      expect(cache.write).not.toHaveBeenCalled();
+      live.release();
+    });
   });
 
   it('re-runs a failed load on the next call only', async () => {
