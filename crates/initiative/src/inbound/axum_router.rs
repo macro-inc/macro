@@ -21,7 +21,7 @@ use axum::{
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::IntoResponse,
-    routing::{self, put},
+    routing::{self},
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
@@ -130,7 +130,7 @@ where
         )
         .route(
             "/{initiative_id}/tasks",
-            put(assign_initiative_tasks_handler::<S, Eas, Auth>),
+            routing::put(assign_initiative_tasks_handler::<S, Eas, Auth>),
         )
         .route(
             "/{initiative_id}/tasks/{task_id}",
@@ -212,7 +212,7 @@ impl IntoResponse for InitiativeError {
         let status_code = match &self {
             InitiativeError::NotFound => StatusCode::NOT_FOUND,
             InitiativeError::Unauthorized => StatusCode::UNAUTHORIZED,
-            InitiativeError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            InitiativeError::BadRequest(_) | InitiativeError::NotATask => StatusCode::BAD_REQUEST,
             InitiativeError::Conflict(_) => StatusCode::CONFLICT,
             InitiativeError::NameTooLong { .. } => StatusCode::UNPROCESSABLE_ENTITY,
             InitiativeError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,

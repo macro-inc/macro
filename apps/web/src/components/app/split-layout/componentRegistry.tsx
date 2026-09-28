@@ -12,7 +12,6 @@ import { EmailCompose } from '@app/features/email-compose/email-compose';
 import { MailRouteView } from '@app/features/email-view/route';
 import { GettingStartedRouteView } from '@app/features/getting-started/route';
 import { HomeRouteView } from '@app/features/home/route';
-import { InboxRouteView } from '@app/features/inbox-view/route';
 import {
   CallsRouteView,
   FoldersRouteView,
@@ -140,18 +139,17 @@ export function resolveComponent(
 }
 
 registerComponent('unified-list', () => (
-  <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
+  <RedirectSplit to={{ type: 'component', id: 'home' }} />
 ));
 
 // Compatibility factories for restored content and hosts outside a route outlet.
 // App views themselves are composed by the application route layer.
-registerComponent('home', () => <HomeRouteView />);
-registerComponent('getting-started', () => <GettingStartedRouteView />);
 registerComponent(
-  'inbox',
-  () => <InboxRouteView />,
+  'home',
+  () => <HomeRouteView />,
   () => composableLayout(true)
 );
+registerComponent('getting-started', () => <GettingStartedRouteView />);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent('reminders', () => <RemindersRouteView />);
@@ -179,7 +177,13 @@ registerComponent(
   () => <TasksRouteView />,
   () => composableLayout(true)
 );
-registerComponent('calendar', () => <CalendarRouteView />);
+registerComponent(
+  'calendar',
+  () => <CalendarRouteView />,
+  // Desktop Calendar draws its own top bar. Touch still needs the split header
+  // for the floating month and action controls.
+  () => (isTouchDevice() ? undefined : { splitPanelLayout: 'composable' })
+);
 registerComponent(
   'channels',
   () => <ChannelsRouteView />,
@@ -222,7 +226,17 @@ registerComponent('email-compose', (params) => {
       .filter(Boolean);
   const draftID =
     typeof params.draftID === 'string' ? params.draftID : undefined;
-  return <EmailCompose draftId={draftID} initialTo={initialTo} />;
+  const initialInboxId =
+    typeof params.initialInboxId === 'string'
+      ? params.initialInboxId
+      : undefined;
+  return (
+    <EmailCompose
+      draftId={draftID}
+      initialTo={initialTo}
+      initialInboxId={initialInboxId}
+    />
+  );
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
@@ -384,7 +398,7 @@ if (import.meta.env.DEV) {
       return (
         <Show
           when={enabled()}
-          fallback={<RedirectSplit to={{ type: 'component', id: 'inbox' }} />}
+          fallback={<RedirectSplit to={{ type: 'component', id: 'home' }} />}
         >
           <Demo />
         </Show>

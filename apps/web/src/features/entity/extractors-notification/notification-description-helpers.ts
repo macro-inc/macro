@@ -103,6 +103,7 @@ export function getActionVerb(type: NotificationType): string {
       .with('document_mention', () => 'shared with you')
       .with('mentioned_in_document_comment', () => 'mentioned you in a comment')
       .with('replied_to_document_comment_thread', () => 'replied to a comment')
+      .with('initiative_discussion', () => 'commented')
       .with('commented_on_document', () => 'commented')
       .with('channel_message_reply', () => 'replied')
       .with('channel_message_send', () => 'sent a message')
@@ -148,6 +149,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('replied_to_document_comment_thread', () =>
       count === 1 ? 'reply' : 'replies'
     )
+    .with('initiative_discussion', () => (count === 1 ? 'comment' : 'comments'))
     .with('commented_on_document', () => (count === 1 ? 'comment' : 'comments'))
     .with('new_email', () => (count === 1 ? 'email' : 'emails'))
     .with('channel_invite', () => (count === 1 ? 'invite' : 'invites'))

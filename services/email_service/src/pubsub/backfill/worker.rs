@@ -75,6 +75,10 @@ pub async fn run_worker_with_cancellation(
     cancellation_token: CancellationToken,
 ) {
     let ctx = PubSubContext {
+        invitation_extractor: crate::pubsub::invitation_extraction::compose(
+            db.clone(),
+            email_api.clone(),
+        ),
         db,
         sqs_worker: worker.clone(),
         sqs_client,

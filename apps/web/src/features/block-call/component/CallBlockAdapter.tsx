@@ -14,7 +14,6 @@ import { useSearchParams } from '@solidjs/router';
 import { createSignal, Show } from 'solid-js';
 import { CallRecordingBody } from './CallRecording/CallRecordingBody';
 import { CallRecordingSplitHeader } from './CallRecording/CallRecordingSplitHeader';
-import { ModalsProvider } from './ModalsProvider';
 import { CallSidePanelSections } from './sidepanel/CallSidePanelSections';
 
 export function CallBlockAdapter(props: CallBlockProps) {
@@ -57,24 +56,22 @@ export function CallBlockAdapter(props: CallBlockProps) {
   return (
     <DocumentBlockContainer>
       <div class="h-full flex flex-col @container">
-        <ModalsProvider>
-          <Show when={callRecord.isPending ? undefined : callRecord.data}>
-            {(data) => (
-              <SidePanel.Layout>
-                <CallSidePanelSections record={data()} callId={callId} />
-                <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-                  <CallRecordingSplitHeader record={data()} />
-                  <CallRecordingBody
-                    record={data()}
-                    callId={callId}
-                    transcriptTarget={transcriptTarget()}
-                    showOverlayHeaderGap
-                  />
-                </div>
-              </SidePanel.Layout>
-            )}
-          </Show>
-        </ModalsProvider>
+        <Show when={callRecord.isPending ? undefined : callRecord.data}>
+          {(data) => (
+            <SidePanel.Layout>
+              <CallSidePanelSections record={data()} callId={callId} />
+              <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+                <CallRecordingSplitHeader record={data()} />
+                <CallRecordingBody
+                  record={data()}
+                  callId={callId}
+                  transcriptTarget={transcriptTarget()}
+                  showOverlayHeaderGap
+                />
+              </div>
+            </SidePanel.Layout>
+          )}
+        </Show>
       </div>
     </DocumentBlockContainer>
   );

@@ -1,5 +1,5 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { isMutedItem } from '@entity/utils/notification';
+import { isMutedItem, muteItemForRef } from '@entity/utils/notification';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
@@ -47,10 +47,15 @@ export function useChannelRailItemState(
 
 export function useChannelRailFavoriteItemState(favorite: Accessor<Favorite>) {
   const rail = useChannelsRail();
+  const notificationSource = useGlobalNotificationSource();
 
   return createMemo(() => {
     const current = favorite();
     const rowId = rowKeyForFavorite(current);
+    const muteItem = muteItemForRef({
+      id: current.entityId,
+      type: current.entityType,
+    });
 
     return {
       domId: domIdForRow(rail.railId, rowId),
@@ -58,6 +63,9 @@ export function useChannelRailFavoriteItemState(favorite: Accessor<Favorite>) {
         current.entityType === 'channel' &&
         rail.selectedChannel()?.id === current.entityId,
       focused: rail.list.focus.key() === rowId,
+      muted:
+        muteItem !== undefined &&
+        isMutedItem(notificationSource.mutedEntities(), muteItem),
     };
   });
 }

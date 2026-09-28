@@ -18,7 +18,7 @@ const SoupView = lazy(async () => ({
 
 export const CompaniesRouteView = withAuth(() => {
   if (!isFeatureEnabled(enableCrm))
-    return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
+    return <RedirectSplit to={{ type: 'component', id: 'home' }} />;
   usePageViewTracking('companies');
   const preset = getViewPreset('companies');
   const crmView = new URLSearchParams(window.location.search).get(

@@ -1,9 +1,9 @@
-import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { useUserId } from '@core/context/user';
 import { openExternalUrl } from '@core/util/url';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { useNavigate } from '@solidjs/router';
 import { isSameDay, isTomorrow } from 'date-fns';
+import { createDeferred } from 'solid-js';
 import { useCalendarView } from '../calendar/components/CalendarViewContext';
 import { formatCompactCalendarTime } from '../calendar/utils/time-format';
 import { calendarCallNavigation } from '../meetings/core/calendar-calls';
@@ -14,29 +14,19 @@ import { useUpcomingCalendarEventsSource } from '../meetings/queries/upcoming-ca
 import { useQuickCallsFlag } from '../meetings/use-quick-calls-flag';
 import { CallSidebar } from '../meetings/views/call-sidebar';
 
-export function CalendarCallsSidePanelSection() {
-  return (
-    <SidePanel.Section
-      id="calendar-calls"
-      title="Upcoming events"
-      order={15}
-      defaultOpen
-    >
-      <CalendarCallSidebar />
-    </SidePanel.Section>
-  );
-}
-
 /** Production wiring, mounted within the section's Suspense boundary. */
-function CalendarCallSidebar() {
+export function CalendarCallSidebar() {
   const calendar = useCalendarView();
   const userId = useUserId();
   const quickCalls = useQuickCallsFlag();
   const now = createCallSidebarClock();
+  const renderedHiddenSourceIds = createDeferred(calendar.hiddenSourceIds);
+  const isRenderedSourceVisible = (sourceId: string) =>
+    !renderedHiddenSourceIds().has(sourceId);
   const upcoming = useUpcomingCalendarEventsSource({
     userId,
     sourceById: calendar.sourceById,
-    isSourceVisible: calendar.isSourceVisible,
+    isSourceVisible: isRenderedSourceVisible,
     now,
   });
   const active = useActiveQuickCallsSource(() =>
@@ -48,21 +38,31 @@ function CalendarCallSidebar() {
     const start = new Date(
       call.allDay ? `${call.start.slice(0, 10)}T00:00:00` : call.start
     );
-    const day = isSameDay(start, now())
-      ? 'Today'
-      : isTomorrow(start)
-        ? 'Tomorrow'
-        : start.toLocaleDateString([], {
-            month: 'short',
-            day: 'numeric',
-          });
-    if (call.allDay) return `${day} · All day`;
-    if (start <= now()) return 'Now';
+    let day: string;
+    if (isSameDay(start, now())) {
+      day = 'Today';
+    } else if (isTomorrow(start)) {
+      day = 'Tomorrow';
+    } else {
+      day = start.toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric',
+      });
+    }
+    if (call.allDay) {
+      return `${day} · All day`;
+    }
+    if (start <= now()) {
+      return 'Now';
+    }
     const time = formatCompactCalendarTime(
       start,
       calendar.displaySettings.timeFormat
     );
-    return isSameDay(start, now()) ? time : `${day} · ${time}`;
+    if (isSameDay(start, now())) {
+      return time;
+    }
+    return `${day} · ${time}`;
   }
 
   return (
@@ -70,11 +70,13 @@ function CalendarCallSidebar() {
       sources={{ upcoming, active }}
       now={now}
       when={when}
+      selectedEventId={calendar.selectedEvent()?.id}
       actions={{
         openEvent: (event, anchor) => {
           const calendarEvent = upcoming.findEvent(event.id);
-          if (calendarEvent)
+          if (calendarEvent) {
             calendar.selectEvent(calendarEvent, anchor, 'agenda');
+          }
         },
         join: (url) => {
           const target = calendarCallNavigation(url, getWebOrigin());

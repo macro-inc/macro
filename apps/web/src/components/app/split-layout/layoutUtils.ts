@@ -90,7 +90,7 @@ export function closeSplitOrReturnToList(
   )
     return;
   handle.replace({
-    next: { type: 'component', id: LIST_VIEW_ID.inbox },
+    next: { type: 'component', id: LIST_VIEW_ID.home },
     mergeHistory: true,
   });
 }

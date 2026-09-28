@@ -65,8 +65,6 @@ export type EntityDetailContext =
 
 export type EntityDetailProps = {
   target: EntityDetailTarget;
-  shareOpen?: boolean;
-  onShareOpenChange?: (open: boolean) => void;
   previewHeaderLeading?: JSX.Element;
   navigationRequest?: number;
   children?: (context: EntityDetailContext) => JSX.Element;
@@ -198,64 +196,38 @@ export function EntityDetail(props: EntityDetailProps) {
             documentId={target().id}
             kind={markdownKind(blockType()!)}
             fallbackName={target().fallbackName}
-            shareOpen={props.shareOpen}
-            onShareOpenChange={props.onShareOpenChange}
           >
             {(context) => <>{renderChildren(context)}</>}
           </MarkdownDetail>
         )}
       </Match>
       <Match when={blockType() === 'code' || blockType() === 'csv'}>
-        <CodeDetail
-          documentId={props.target.id}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
-        >
+        <CodeDetail documentId={props.target.id}>
           {(context) => <>{renderChildren(context)}</>}
         </CodeDetail>
       </Match>
       <Match when={blockType() === 'canvas'}>
-        <CanvasDetail
-          documentId={props.target.id}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
-        >
+        <CanvasDetail documentId={props.target.id}>
           {(context) => <>{renderChildren(context)}</>}
         </CanvasDetail>
       </Match>
       <Match when={blockType() === 'image'}>
-        <ImageDetail
-          documentId={props.target.id}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
-        >
+        <ImageDetail documentId={props.target.id}>
           {(context) => <>{renderChildren(context)}</>}
         </ImageDetail>
       </Match>
       <Match when={blockType() === 'video'}>
-        <VideoDetail
-          documentId={props.target.id}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
-        >
+        <VideoDetail documentId={props.target.id}>
           {(context) => <>{renderChildren(context)}</>}
         </VideoDetail>
       </Match>
       <Match when={blockType() === 'pdf'}>
-        <PdfDetail
-          documentId={props.target.id}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
-        >
+        <PdfDetail documentId={props.target.id}>
           {(context) => <>{renderChildren(context)}</>}
         </PdfDetail>
       </Match>
       <Match when={blockType() === 'unknown'}>
-        <UnknownDetail
-          documentId={props.target.id}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
-        >
+        <UnknownDetail documentId={props.target.id}>
           {(context) => <>{renderChildren(context)}</>}
         </UnknownDetail>
       </Match>

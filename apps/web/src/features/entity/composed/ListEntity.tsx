@@ -21,6 +21,7 @@ import {
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui';
 import {
+  children,
   createEffect,
   createMemo,
   createSignal,
@@ -93,6 +94,8 @@ export function MaybeEntityRow(props: {
 export function ListEntity(props: ListEntityProps) {
   // Legacy Soup callers do not pass row behavior explicitly yet.
   const soupView = useMaybeSoupView();
+  const rowActions = children(() => props.actions);
+  const leadingAction = children(() => props.leadingAction);
 
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
@@ -148,6 +151,8 @@ export function ListEntity(props: ListEntityProps) {
 
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
+    actions: !isTouchDevice() ? rowActions() : undefined,
+    leadingAction: !isTouchDevice() ? leadingAction() : undefined,
     authorDisplayName: props.authorDisplayName,
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
@@ -219,6 +224,8 @@ export function ListEntity(props: ListEntityProps) {
             props.highlighted && !props.checked && !isTouchDevice(),
           'hover:bg-list-hover':
             !props.highlighted && !props.checked && !isTouchDevice(),
+          'focus-within:bg-list-hover':
+            !!rowActions() && !props.highlighted && !props.checked,
         }
       )}
       onMouseMove={props.onMouseMove}

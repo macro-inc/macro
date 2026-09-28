@@ -14,20 +14,10 @@ import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetail
 import type { MarkdownDocumentKind } from '@block-md/types';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { toast } from '@core/component/Toast/Toast';
-import {
-  ShareDialogContext,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
-import { useReferralCode } from '@core/context/user';
-import {
-  createSignal,
-  ErrorBoundary,
-  For,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
+import { useCopyLink } from '@core/util/useCopyLink';
+import { ErrorBoundary, For, Match, Show, Switch } from 'solid-js';
 import { useDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
@@ -65,6 +55,8 @@ function markdownKind(target: DocumentDetailTarget): MarkdownDocumentKind {
 function DriveDetailTopBar() {
   const navigationStack = useDriveDetailNavigation();
   const panel = useSplitPanelOrThrow();
+  const copyViewLink = useCopyLink();
+  const copyLink = () => copyViewLink(window.location.href);
   const activeDetail = () => {
     const target = navigationStack.active()?.data;
     const blockType = target ? entityDetailBlockType(target) : undefined;
@@ -72,6 +64,15 @@ function DriveDetailTopBar() {
       ? { target, blockType }
       : undefined;
   };
+  const openShare = useDocumentShareModal(() => {
+    const detail = activeDetail();
+    if (!detail) return;
+    return {
+      documentId: detail.target.id,
+      blockAlias: detail.blockType,
+      copyLink,
+    };
+  });
 
   return (
     <ViewShell.TopBar class="touch:flex">
@@ -83,9 +84,11 @@ function DriveDetailTopBar() {
         <Show when={activeDetail()}>
           {(detail) => (
             <ShareTrigger
+              onClick={openShare}
               id={detail().target.id}
               blockType={detail().blockType}
               hotkeyScope={panel.splitHotkeyScope}
+              copyLink={copyLink}
             />
           )}
         </Show>
@@ -98,8 +101,6 @@ function DriveDetailTopBar() {
 function StackEntityDetail(props: {
   entry: EntityDetailNavigationEntry;
   order: number;
-  shareOpen: boolean;
-  onShareOpenChange: (open: boolean) => void;
 }) {
   const navigationStack = useDriveDetailNavigation();
   const markdownTarget = () => {
@@ -124,8 +125,6 @@ function StackEntityDetail(props: {
               documentId={target().id}
               kind={kind()}
               fallbackName={target().fallbackName}
-              shareOpen={props.shareOpen}
-              onShareOpenChange={props.onShareOpenChange}
             >
               {(context) => (
                 <MarkdownDetailBreadcrumbItem
@@ -160,8 +159,6 @@ function StackEntityDetail(props: {
         </Show>
         <EntityDetail
           target={props.entry.data}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
           previewHeaderLeading={
             <Show
               when={entityDetailBlockType(props.entry.data) === 'spreadsheet'}
@@ -213,16 +210,7 @@ export function DriveDetailView() {
   const { state, sidebar } = useDriveView();
   const breadcrumbOrderOffset = () =>
     driveLocationBreadcrumbs(state.value().location, sidebar.folders()).length;
-  const [shareOpen, setShareOpen] = createSignal(false);
   const navigationStack = useDriveDetailNavigation();
-  const referralCode = useReferralCode();
-  const copyLink = () => {
-    const url = new URL(window.location.href);
-    const code = referralCode();
-    if (code) url.searchParams.set('referral_code', code);
-    void navigator.clipboard.writeText(url.toString());
-    toast.success('Link copied to clipboard.');
-  };
   // Spreadsheets use their live block in PreviewPanel, which supplies its own
   // header, sharing controls and the enclosing ViewShell's sidebar toggle.
   const hasBlockHeader = () => {
@@ -231,14 +219,7 @@ export function DriveDetailView() {
   };
 
   return (
-    <ShareDialogContext.Provider
-      value={{
-        isOpen: shareOpen,
-        open: () => setShareOpen(true),
-        close: () => setShareOpen(false),
-        copyLink,
-      }}
-    >
+    <>
       <DriveDetailAncestorBreadcrumbs orderOffset={breadcrumbOrderOffset()} />
       <SidePanel.Root>
         <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -264,8 +245,6 @@ export function DriveDetailView() {
                       navigationStack.entries().length -
                       1
                     }
-                    shareOpen={shareOpen()}
-                    onShareOpenChange={setShareOpen}
                   />
                 </ErrorBoundary>
               )}
@@ -273,6 +252,6 @@ export function DriveDetailView() {
           </div>
         </div>
       </SidePanel.Root>
-    </ShareDialogContext.Provider>
+    </>
   );
 }

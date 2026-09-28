@@ -63,6 +63,8 @@ use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamReposito
 use tokio_util::task::TaskTracker;
 
 mod activity_metadata;
+mod initiatives;
+pub use initiatives::{ToolInitiativeToolContext, build_initiative_tool_context};
 
 use activity_metadata::ToolActivityMetadataResolver;
 pub use ai_toolset::RequestContext;
@@ -234,7 +236,10 @@ pub fn shared_message_service<E: messages::domain::ports::MessageEventPublisher>
     E,
 > {
     messages::domain::service::MessageService::new(
-        messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+        messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone())
+            .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+            )),
         effects,
     )
     .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
@@ -892,6 +897,7 @@ pub type ToolPropertiesService = properties::PropertiesServiceImpl<
     properties::PropertiesPgRepo,
     properties::PermissionServiceImpl<ToolEntityAccessService>,
     NoOpNotificationService,
+    ToolBotEventBroker,
 >;
 
 /// Imported-document property enrichment backed by the AI tool host's Properties service.
@@ -907,14 +913,47 @@ pub fn build_properties_service(
     pool: sqlx::PgPool,
     entity_access_service: Arc<ToolEntityAccessService>,
 ) -> Arc<ToolPropertiesService> {
-    Arc::new(properties::PropertiesServiceImpl::new(
-        properties::PropertiesPgRepo::new(pool.clone()),
-        Some(properties::PermissionServiceImpl::new(
-            pool,
-            entity_access_service,
-        )),
-        Some(NoOpNotificationService),
-    ))
+    properties_service_with_events(
+        pool,
+        entity_access_service,
+        ToolBotEventBroker::NoOp(Default::default()),
+    )
+}
+
+/// Build canonical property tools with committed changes published to activity.
+pub fn build_properties_service_with_broker(
+    pool: sqlx::PgPool,
+    entity_access_service: Arc<ToolEntityAccessService>,
+    broker: ToolEventBroker,
+) -> Arc<ToolPropertiesService> {
+    properties_service_with_events(
+        pool,
+        entity_access_service,
+        ToolBotEventBroker::Real(broker),
+    )
+}
+
+fn properties_service_with_events(
+    pool: sqlx::PgPool,
+    entity_access_service: Arc<ToolEntityAccessService>,
+    broker: ToolBotEventBroker,
+) -> Arc<ToolPropertiesService> {
+    Arc::new(
+        properties::PropertiesServiceImpl::new(
+            properties::PropertiesPgRepo::new(pool.clone()),
+            Some(properties::PermissionServiceImpl::new(
+                pool.clone(),
+                entity_access_service,
+            )),
+            Some(NoOpNotificationService),
+        )
+        .with_initiative_assignees(Arc::new(
+            initiative::domain::assignees::InitiativeAssignees::new(
+                initiative::outbound::PgInitiativeRepo::new(pool),
+            ),
+        ))
+        .with_event_broker(broker),
+    )
 }
 
 /// Build the real task properties adapter used by document creation tools.
@@ -1394,7 +1433,10 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
 
 pub type ToolActivityToolContext = activity::inbound::toolset::ActivityToolContext<
-    activity::outbound::pg_activity_repo::PgActivityRepo,
+    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+        activity::outbound::pg_activity_repo::PgActivityRepo,
+        ToolEntityAccessService,
+    >,
 >;
 
 pub fn build_activity_tool_context(
@@ -1403,7 +1445,10 @@ pub fn build_activity_tool_context(
     entity_access_service: Arc<ToolEntityAccessService>,
 ) -> ToolActivityToolContext {
     activity::inbound::toolset::ActivityToolContext::new(
-        activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+        initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+            entity_access_service.clone(),
+        ),
     )
     .with_metadata_resolver(ToolActivityMetadataResolver::new(
         properties,
@@ -1446,6 +1491,8 @@ pub struct ToolServiceContext {
     pub channel_tool_context: ToolChannelToolContext,
     pub bot_tool_context: ToolBotToolContext,
     pub project_tool_context: ToolProjectToolContext,
+    /// Native task project lifecycle, properties, sharing and history.
+    pub initiative_tool_context: ToolInitiativeToolContext,
     pub team_tool_context: ToolTeamToolContext,
     pub crm_tool_context: ToolCrmToolContext,
     pub skill_tool_context: ToolSkillToolContext,
@@ -1467,7 +1514,18 @@ impl ToolServiceContext {
         self.document_tool_context = self.document_tool_context.with_actor(actor);
         self.properties_tool_context = self.properties_tool_context.with_actor(actor);
         self.project_tool_context = self.project_tool_context.with_actor(actor);
+        self.initiative_tool_context = self.initiative_tool_context.with_actor(actor);
         self.channel_tool_context = self.channel_tool_context.with_actor(actor);
+        self
+    }
+
+    /// Name the actor set with [`Self::with_actor`], so what the tools write
+    /// is presented under the agent's own name where a reader sees it live -
+    /// the cursor the editing worker draws while it types. First-party bots
+    /// present under their constant names without this; a user- or
+    /// team-owned bot has no name the tools can find on their own.
+    pub fn with_actor_name(mut self, name: &str) -> Self {
+        self.document_tool_context = self.document_tool_context.with_actor_name(name);
         self
     }
 }

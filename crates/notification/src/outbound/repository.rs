@@ -603,6 +603,7 @@ impl NotificationDbOps for PgPool {
             r#"
             SELECT user_id FROM user_notification_item_unsubscribe
             WHERE item_id = $1 AND user_id = ANY($2)
+              AND (snoozed_until IS NULL OR snoozed_until > NOW())
             "#,
             item_id,
             &ids

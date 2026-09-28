@@ -8,14 +8,15 @@ import type { FileOperation } from '@components/app/split-layout/components/Spli
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { SplitToolbarRight } from '@components/app/split-layout/components/SplitToolbar';
-import { useBlockId } from '@core/block';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
-import { blockTextSignal } from '@core/signal/load';
+import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -42,7 +43,16 @@ export const TopBar: Component<{
   const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
 
-  const shareCtx = useShareDialogContext();
+  const blockAlias = useBlockAliasedName();
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: blockId,
+    blockAlias,
+    itemType: 'document',
+    name: name() ?? '',
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
 
   const downloadDocument = createCallback(() => {
     const content = text();
@@ -70,8 +80,8 @@ export const TopBar: Component<{
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
-      buttonComponent: () => <ShareTrigger />,
+      action: openShare,
+      buttonComponent: () => <ShareTrigger onClick={openShare} />,
       focusTarget: getShareDrawerRecipientInput,
     },
   ];

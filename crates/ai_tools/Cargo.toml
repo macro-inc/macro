@@ -8,6 +8,8 @@ version = "0.1.0"
 test-support = []
 
 [dependencies]
+initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }
+initiative_documents = { path = "../initiative_documents" }
 activity = { path = "../activity", default-features = false, features = ["ai_tools", "outbound"] }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
@@ -35,7 +37,7 @@ contacts = { path = "../contacts", default-features = false, features = [
   "outbound",
 ] }
 crm = { path = "../crm" }
-documents = { path = "../documents", features = ["ai_tools"] }
+documents = { path = "../documents", features = ["ai_tools", "purge"] }
 email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }
 entity_access = { path = "../entity_access" }

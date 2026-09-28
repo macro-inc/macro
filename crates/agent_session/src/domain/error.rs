@@ -23,6 +23,11 @@ pub enum AgentSessionError {
     AlreadyConnected(AgentSessionId),
     #[error("agent session {0} is managed by another live replica")]
     ManagedElsewhere(AgentSessionId),
+    /// This replica is shutting down, so it started nothing it could not
+    /// finish. Retryable: another replica is serving, and the retry lands
+    /// there.
+    #[error("this replica is draining; retry agent session {0} on another")]
+    Draining(AgentSessionId),
     #[error("agent session {0} write was fenced out: another replica claimed the session")]
     FencedOut(AgentSessionId),
     #[error("acp handshake failed: {0}")]

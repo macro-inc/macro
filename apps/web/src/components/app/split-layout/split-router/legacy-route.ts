@@ -58,10 +58,10 @@ export function decodeLegacyPair(
   }
 
   if (type === 'component') {
-    // Retired Preview Pair placeholders must never reach the view registry.
+    // Preview Pair placeholders must never reach the view registry.
     return {
       type: 'component',
-      id: id === 'preview-empty' || id === 'non-member-channel' ? 'inbox' : id,
+      id: id === 'preview-empty' || id === 'non-member-channel' ? 'home' : id,
     };
   }
 

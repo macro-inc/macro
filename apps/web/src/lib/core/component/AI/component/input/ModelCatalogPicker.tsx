@@ -1,3 +1,4 @@
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 import CaretDown from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
@@ -9,6 +10,7 @@ import {
   buildModelCatalog,
   type CatalogModelOption,
   MAX_RECOMMENDED_MODELS,
+  type ModelFamily,
   matchesModelQuery,
   modelFamilyHint,
   moreModelFamilies,
@@ -54,6 +56,34 @@ function ModelRow(props: {
         <CheckIcon class="size-3.5 shrink-0 text-accent" />
       </Show>
     </Dropdown.Item>
+  );
+}
+
+/** The remaining families, grouped, for the More models screen. */
+function FamilyList(props: {
+  families: ModelFamily[];
+  value: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <For each={props.families}>
+      {(family) => (
+        <>
+          <Show when={family.label}>
+            <Dropdown.GroupLabel>{family.label}</Dropdown.GroupLabel>
+          </Show>
+          <For each={family.options}>
+            {(option) => (
+              <ModelRow
+                option={option}
+                selected={option.id === props.value}
+                onSelect={() => props.onSelect(option.id)}
+              />
+            )}
+          </For>
+        </>
+      )}
+    </For>
   );
 }
 
@@ -143,6 +173,9 @@ export function ModelCatalogMenu(
   }
 ) {
   const [query, setQuery] = createSignal('');
+  // A submenu needs a second menu's width beside the first, which a phone
+  // does not have: there, More models replaces the list in place instead.
+  const [showingMore, setShowingMore] = createSignal(false);
   const normalizedQuery = () => query().trim().toLowerCase();
   const filtered = createMemo(() => {
     const currentQuery = normalizedQuery();
@@ -197,7 +230,28 @@ export function ModelCatalogMenu(
       <Show
         when={normalizedQuery().length > 0}
         fallback={
-          <>
+          <Show
+            when={!(isMobileWidth() && showingMore())}
+            fallback={
+              <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">
+                <Dropdown.Item
+                  closeOnSelect={false}
+                  class="h-8 gap-2 text-ink-muted"
+                  onSelect={() => setShowingMore(false)}
+                >
+                  <CaretRight class="size-3 shrink-0 rotate-180" />
+                  <span class="min-w-0 flex-1 truncate text-sm">
+                    Recommended
+                  </span>
+                </Dropdown.Item>
+                <FamilyList
+                  families={extraFamilies()}
+                  value={props.value}
+                  onSelect={props.onSelect}
+                />
+              </Dropdown.Group>
+            }
+          >
             <Show when={catalog().recommended.length > 0}>
               <Dropdown.Group>
                 <Dropdown.GroupLabel>Recommended</Dropdown.GroupLabel>
@@ -216,48 +270,52 @@ export function ModelCatalogMenu(
 
             <Show when={extraCount() > 0}>
               <Dropdown.Group>
-                <Dropdown.Sub>
-                  <Dropdown.SubTrigger>
-                    <span class="truncate">More models</span>
-                    <span class="flex shrink-0 items-center gap-1 text-xs text-ink-extra-muted">
-                      {extraCount()}
-                      <CaretRight class="size-3" />
-                    </span>
-                  </Dropdown.SubTrigger>
-                  <Dropdown.SubContent
-                    onPointerDown={(event: PointerEvent) =>
-                      event.stopPropagation()
-                    }
-                    onMouseDown={(event: MouseEvent) => event.stopPropagation()}
-                    class="w-72 max-w-[calc(100vw-1rem)] max-h-[var(--kb-popper-content-available-height)] overflow-y-auto overscroll-contain"
-                  >
-                    <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">
-                      <For each={extraFamilies()}>
-                        {(family) => (
-                          <>
-                            <Show when={family.label}>
-                              <Dropdown.GroupLabel>
-                                {family.label}
-                              </Dropdown.GroupLabel>
-                            </Show>
-                            <For each={family.options}>
-                              {(option) => (
-                                <ModelRow
-                                  option={option}
-                                  selected={option.id === props.value}
-                                  onSelect={() => props.onSelect(option.id)}
-                                />
-                              )}
-                            </For>
-                          </>
-                        )}
-                      </For>
-                    </Dropdown.Group>
-                  </Dropdown.SubContent>
-                </Dropdown.Sub>
+                <Show
+                  when={!isMobileWidth()}
+                  fallback={
+                    <Dropdown.Item
+                      closeOnSelect={false}
+                      class="justify-between"
+                      onSelect={() => setShowingMore(true)}
+                    >
+                      <span class="truncate">More models</span>
+                      <span class="flex shrink-0 items-center gap-1 text-xs text-ink-extra-muted">
+                        {extraCount()}
+                        <CaretRight class="size-3" />
+                      </span>
+                    </Dropdown.Item>
+                  }
+                >
+                  <Dropdown.Sub>
+                    <Dropdown.SubTrigger>
+                      <span class="truncate">More models</span>
+                      <span class="flex shrink-0 items-center gap-1 text-xs text-ink-extra-muted">
+                        {extraCount()}
+                        <CaretRight class="size-3" />
+                      </span>
+                    </Dropdown.SubTrigger>
+                    <Dropdown.SubContent
+                      onPointerDown={(event: PointerEvent) =>
+                        event.stopPropagation()
+                      }
+                      onMouseDown={(event: MouseEvent) =>
+                        event.stopPropagation()
+                      }
+                      class="w-72 max-w-[calc(100vw-1rem)] max-h-[var(--kb-popper-content-available-height)] overflow-y-auto overscroll-contain"
+                    >
+                      <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">
+                        <FamilyList
+                          families={extraFamilies()}
+                          value={props.value}
+                          onSelect={props.onSelect}
+                        />
+                      </Dropdown.Group>
+                    </Dropdown.SubContent>
+                  </Dropdown.Sub>
+                </Show>
               </Dropdown.Group>
             </Show>
-          </>
+          </Show>
         }
       >
         <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">

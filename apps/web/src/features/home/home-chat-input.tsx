@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
@@ -18,7 +19,7 @@ import { createRenameDssEntityMutation } from '@entity';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { $getRoot } from 'lexical';
-import { createEffect, Show, Suspense } from 'solid-js';
+import { createEffect, Show } from 'solid-js';
 import { HomeAgentComposer } from './home-agent-composer';
 import { replaceHomeComposerDraft } from './home-composer-selection';
 
@@ -38,10 +39,20 @@ export type HomeChatInputProps = {
 export const HomeChatInput = (props: HomeChatInputProps) => {
   const flag = useFeatureFlag(enableChatV3Agents);
   return (
-    <Show when={flag().enabled} fallback={<LegacyHomeChatInput {...props} />}>
-      <Suspense fallback={<div class="min-h-24" />}>
+    <Show
+      when={flag().enabled}
+      fallback={
+        <DebugSuspense name="Home.legacy-composer">
+          <LegacyHomeChatInput {...props} />
+        </DebugSuspense>
+      }
+    >
+      <DebugSuspense
+        name="Home.agent-composer"
+        fallback={<div class="min-h-24" />}
+      >
         <HomeAgentComposer autoFocus={props.autoFocusOnMount} />
-      </Suspense>
+      </DebugSuspense>
     </Show>
   );
 };

@@ -47,6 +47,56 @@ fn new_option(display_order: i32, value: PropertyOptionValue) -> PropertyOption 
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties"))
 )]
+async fn option_batches_filter_requested_ids_and_caller_visibility(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let priority = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let personal = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+    let empty = Uuid::parse_str("88888888-8888-8888-8888-888888888888")?;
+    let foreign = Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd")?;
+    let system = repo.list_property_definitions(None, None, true).await?[0].id;
+    let missing = Uuid::new_v4();
+    let ids = [priority, personal, empty, foreign, system, missing];
+
+    let options = repo
+        .get_visible_property_options_batch(&ids, &user_1(), Some(team_1()))
+        .await?;
+    assert_eq!(options.len(), 4);
+    assert_eq!(options[&personal].len(), 2);
+    assert!(options[&empty].is_empty());
+    assert!(options.contains_key(&system));
+    assert!(!options.contains_key(&foreign));
+    assert!(!options.contains_key(&missing));
+    assert_eq!(
+        options[&priority]
+            .iter()
+            .map(|option| option.display_order)
+            .collect::<Vec<_>>(),
+        vec![0, 1, 2, 3]
+    );
+    assert_eq!(
+        options[&priority][0].value,
+        PropertyOptionValue::String("Low".into())
+    );
+
+    let outsider_options = repo
+        .get_visible_property_options_batch(&ids, &user_2(), None)
+        .await?;
+    assert_eq!(outsider_options.len(), 1);
+    assert!(outsider_options.contains_key(&system));
+    assert!(
+        repo.get_visible_property_options_batch(&[], &user_1(), Some(team_1()))
+            .await?
+            .is_empty()
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
 async fn list_property_definitions_by_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PropertiesPgRepo::new(pool);
 

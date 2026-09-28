@@ -845,6 +845,29 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'commented_on_document'>
     )
     .with(
+      { __typename: 'GraphqlInitiativeDiscussionMetadata' },
+      (metadata) =>
+        ({
+          tag: 'initiative_discussion',
+          content: {
+            projectName: metadata.initiativeDiscussionProjectName,
+            owner: metadata.initiativeDiscussionOwner,
+            reason: match(metadata.initiativeDiscussionReason)
+              .with('MENTION', () => 'mention' as const)
+              .with('REPLY', () => 'reply' as const)
+              .with('ASSIGNEE', () => 'assignee' as const)
+              .with('OWNER', () => 'owner' as const)
+              .exhaustive(),
+            messageId: metadata.initiativeDiscussionMessageId,
+            threadId: metadata.initiativeDiscussionThreadId,
+            text: metadata.initiativeDiscussionText,
+            senderDisplayName: metadata.initiativeDiscussionSenderDisplayName,
+            senderProfilePictureUrl:
+              metadata.initiativeDiscussionSenderProfilePictureUrl,
+          },
+        }) satisfies NotifEventMember<'initiative_discussion'>
+    )
+    .with(
       { __typename: 'GraphqlChannelInviteMetadata' },
       (metadata) =>
         ({
@@ -1288,6 +1311,9 @@ function mapGraphqlReminderSchedule(entity: {
 }
 
 export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
+  // No client opts into initiatives until the Projects UI adds its fragment.
+  if (item.__typename === 'GraphqlSoupInitiative') return null;
+
   const frecency = item.frecencyScore ?? 0;
 
   return match(item)

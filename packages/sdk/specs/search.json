@@ -2163,9 +2163,17 @@
             "$ref": "#/components/schemas/EmailFilters",
             "description": "the bundled [EmailFilters]"
           },
+          "favorites_only": {
+            "type": ["boolean", "null"],
+            "description": "Restrict results to the authenticated viewer's favorites when true."
+          },
           "foreign_entity_filters": {
             "$ref": "#/components/schemas/ForeignEntityFilters",
             "description": "the bundled [ForeignEntityFilters]"
+          },
+          "initiative_filters": {
+            "$ref": "#/components/schemas/InitiativeFilters",
+            "description": "Initiative filters. Initiatives are opt-in."
           },
           "project_filters": {
             "$ref": "#/components/schemas/ProjectFilters",
@@ -2223,6 +2231,7 @@
           "CHAT",
           "COMPANY",
           "DOCUMENT",
+          "INITIATIVE",
           "PROJECT",
           "TASK",
           "THREAD",
@@ -2718,6 +2727,44 @@
           "name": {
             "type": ["string", "null"],
             "description": "If the match was on the entity name, this will be present with that highlight"
+          }
+        }
+      },
+      "InitiativeFilters": {
+        "type": "object",
+        "description": "Filters for initiatives.",
+        "properties": {
+          "due_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive lower due-date bound."
+          },
+          "due_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive upper due-date bound."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in."
+          },
+          "initiative_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Initiative ids to filter by. Empty to include all accessible initiatives."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Case-insensitive name substring."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           }
         }
       },

@@ -245,6 +245,15 @@ impl InfraEnv {
             "OVERRIDE_STATIC_FILE_SERVICE_URL".into(),
             "http://static-file-service:8080".into(),
         );
+        // Same split for the AI editing worker: `AiEditingWorkerUrl`'s Local
+        // default is http://localhost:8933, the worker's host port. Every
+        // container hosting the document tools (document cognition, the agent
+        // harness's in-process agent, the MCP server) calls EditDocument
+        // through this, so without it an agent's edit dials the caller itself.
+        env.insert(
+            "OVERRIDE_AI_EDITING_WORKER_URL".into(),
+            "http://ai-editing-worker:8933".into(),
+        );
         // The alias LocalStack provisions for the Cursor API key CMK. Named by
         // alias rather than key id because `CreateKey` mints a random id every
         // run, and KMS accepts an alias anywhere a key id goes. Required by

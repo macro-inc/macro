@@ -394,7 +394,11 @@ Enter) to open `/app/agent/<id>`.
 It references an existing session; it does not invoke the persona, attach its
 transcript to AI context, or grant access. Private/deleted sessions show an
 unavailable label. Mounted references refresh every 30 seconds while the tab is
-active to update titles and check access.
+active to update titles and check access. Expanded session references are block-level
+Magic Chips with the same filled background as document cards. Click the card body
+to select its editor node (border and selection ring); use **Open session** to navigate.
+The collapse action returns the card to an inline session mention. Text before and
+after an expanded reference remains in separate paragraphs.
 
 Hover a document reference chip to open its preview without navigating. With
 the preview open, the compact header shows a tinted icon, title, and author/time
@@ -448,8 +452,10 @@ access to the title and property controls.
 1. Click `Edit with AI` (button directly under the editor body).
 2. A focused prompt box appears (placeholder `Describe the edit…`). Type the instruction,
    press Enter (or click `Send`).
-3. While running, the button row shows an author chip (e.g. `Wolf (AI)`) and a `Stop` button
-   (a11y text `Stop AI edit`). Edits stream directly into the document — there is no
+3. While running, the button row shows a `Stop` button (a11y text `Stop AI edit`), and the
+   live cursor walking the text is labelled with the editor's name: `Macro (AI)` for an
+   inline edit, or the name of the agent or persona whose session asked for the edit
+   (e.g. `Grunk (AI)`). Edits stream directly into the document — there is no
    accept/reject step. The editor can insert the same `@` mention chips a person can:
    dates/times, people, documents, channels, agent sessions (including the expanded
    Magic Chip card), and the other chip types.

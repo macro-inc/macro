@@ -168,6 +168,7 @@ export const CommandMenuShell = Object.assign(CommandMenuShellRoot, {
 });
 
 export function CommandMenuList<T>(props: {
+  id?: string;
   items: readonly T[];
   selectedIndex: number;
   scrollSelectedIntoView?: boolean;
@@ -218,6 +219,7 @@ export function CommandMenuList<T>(props: {
 
   return (
     <div
+      id={props.id}
       ref={listRef}
       role="listbox"
       class={cn(
@@ -234,6 +236,8 @@ export function CommandMenuList<T>(props: {
             {props.beforeItem?.(item, index())}
             <CommandMenuListItem
               as="div"
+              role="option"
+              aria-selected={isSelected(index())}
               id={itemId(item, index())}
               selected={isSelected(index())}
               disabled={props.itemDisabled?.(item, index())}
@@ -269,6 +273,8 @@ export function CommandMenuSearchInput(
 export function CommandMenuListItem(
   props: ParentProps<{
     id?: string;
+    role?: JSX.HTMLAttributes<HTMLElement>['role'];
+    'aria-selected'?: boolean;
     as?: 'button' | 'div';
     class?: string;
     selected?: boolean;
@@ -282,6 +288,8 @@ export function CommandMenuListItem(
       component={props.as ?? 'button'}
       type={props.as === 'div' ? undefined : 'button'}
       id={props.id}
+      role={props.role}
+      aria-selected={props['aria-selected']}
       disabled={props.as === 'div' ? undefined : props.disabled}
       aria-disabled={props.disabled || undefined}
       class={cn(

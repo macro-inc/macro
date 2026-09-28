@@ -5,7 +5,6 @@ import type {
   MessageParent,
   MessageThread,
 } from '@service-storage/messages';
-import { entityMessagesClient } from '@service-storage/messages';
 import { queryClient } from '../client';
 import { consumeNonce } from '../nonce';
 import { MessageNonceKeys, messageKeys } from './keys';
@@ -20,7 +19,7 @@ import {
   softInvalidateTargetCaches,
   topLevelMessageHasReplies,
 } from './reconcile';
-import { getThreadRepliesQueryKey } from './thread-replies';
+import { fetchMessageThread, getThreadRepliesQueryKey } from './thread-replies';
 import {
   getMessageTimelineQueryKey,
   getMessageTimelineQueryKeyPrefix,
@@ -189,10 +188,15 @@ function refetchTimelineAwaitingFirstPage(parent: MessageParent): boolean {
   return true;
 }
 
-/** A live document root arrives without its anchor; its thread state carries it. */
+/**
+ * A live document root arrives without its anchor; its thread state carries
+ * it. The fetched thread replaces what the timeline seeded for this root, so
+ * it must carry the same derived senders or an agent's comment loses its name
+ * until the next full load.
+ */
 async function loadDocumentRootState(parent: MessageParent, rootId: string) {
   try {
-    const thread = await entityMessagesClient.thread(parent, rootId);
+    const thread = await fetchMessageThread(parent, rootId);
     queryClient.setQueryData<MessageThread>(
       getThreadRepliesQueryKey(parent, rootId),
       thread

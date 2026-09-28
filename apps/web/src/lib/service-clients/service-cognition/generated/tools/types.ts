@@ -36,6 +36,7 @@ export type CodeExecutionErrorCode =
  */
 export type ToolPropertyTargetEntityType =
   | 'document'
+  | 'initiative'
   | 'project'
   | 'chat'
   | 'thread'
@@ -863,6 +864,12 @@ export type ToolActivityAction =
       type: 'callStarted';
     }
   | {
+      type: 'taskAdded';
+    }
+  | {
+      type: 'taskRemoved';
+    }
+  | {
       /**
        * The stored action tag.
        */
@@ -1026,6 +1033,39 @@ export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
  */
 export type ProjectItemType = 'document' | 'chat' | 'project';
 /**
+ * Privacy-preserving task project reference.
+ */
+export type TaskProjectReference =
+  | {
+      /**
+       * Requested task id.
+       */
+      taskId: string;
+      state: 'none';
+    }
+  | {
+      /**
+       * Requested task id.
+       */
+      taskId: string;
+      state: 'unavailable';
+    }
+  | {
+      /**
+       * Requested task id.
+       */
+      taskId: string;
+      /**
+       * Associated project id.
+       */
+      initiativeId: string;
+      /**
+       * Associated project name.
+       */
+      name: string;
+      state: 'visible';
+    };
+/**
  * How search terms are matched against skill names.
  */
 export type SearchSkillsMatchType = 'partial' | 'exact';
@@ -1063,6 +1103,7 @@ export type UserToolResponseForSendEmailResponse =
 export type ToolEntityType =
   | 'document'
   | 'task'
+  | 'initiative'
   | 'project'
   | 'chat'
   | 'thread'
@@ -1102,6 +1143,14 @@ export type ConferenceChangeInput = 'google_meet' | 'remove';
  * The requester's own RSVP on an event they were invited to.
  */
 export type RsvpResponseInput = 'accepted' | 'declined' | 'tentative';
+/**
+ * A share can be disabled or grant a non-owner permission.
+ */
+export type ProjectShareAccess = 'off' | 'view' | 'comment' | 'edit';
+/**
+ * Scope admitted by a project's share link.
+ */
+export type ProjectLinkScope = 'off' | 'public' | 'team';
 /**
  * Content of a web fetch response - either a successful result or an error
  */
@@ -2870,6 +2919,97 @@ export interface ImportEntityView {
   importedByTeammate: boolean;
 }
 /**
+ * Create a project for coordinating tasks (called an initiative in the API). Projects have status, priority, assignees, due dates, discussions and activity. Shares with the owner's team by default. This is different from CreateProject, which creates a folder. Use property tools with entity_type='initiative' to set project properties.
+ */
+export interface CreateInitiative {
+  /**
+   * Project name, up to 100 graphemes.
+   */
+  name: string;
+  /**
+   * Initial Markdown description, up to 2000 graphemes; optional.
+   */
+  description?: string | null;
+  /**
+   * Users to grant collaboration access; distinct from property assignees.
+   */
+  memberIds?: string[] | null;
+  /**
+   * Defaults to true. False creates without an explicit team grant.
+   */
+  shareWithTeam?: boolean | null;
+}
+/**
+ * Current project state, including visibility-filtered task membership.
+ */
+export interface ProjectDetails {
+  /**
+   * Project id; use entity type `initiative` in property tools.
+   */
+  initiativeId: string;
+  /**
+   * Project name.
+   */
+  name: string;
+  /**
+   * Description document; read or edit its Markdown using document tools.
+   */
+  descriptionDocumentId: string;
+  /**
+   * Project owner.
+   */
+  ownerId: string;
+  /**
+   * Collaboration members, distinct from property assignees.
+   */
+  memberIds: string[];
+  /**
+   * Up to 200 associated tasks the caller can view.
+   */
+  taskIds: string[];
+  /**
+   * Total associated tasks the caller can view.
+   */
+  taskCount: number;
+  /**
+   * Whether the project contains additional visible tasks beyond taskIds.
+   */
+  tasksTruncated: boolean;
+  /**
+   * Caller's effective permission.
+   */
+  access: string;
+  /**
+   * Explicit owner-team access, or absent when off.
+   */
+  teamAccess?: string | null;
+  /**
+   * Link scope: PUBLIC or TEAM, or absent when off.
+   */
+  linkScope?: string | null;
+  /**
+   * Access granted by the link.
+   */
+  linkAccess?: string | null;
+  /**
+   * Explicit channel shares.
+   */
+  channelShares: ProjectChannelShare[];
+}
+/**
+ * One channel's explicit project grant.
+ */
+export interface ProjectChannelShare {
+  /**
+   * Shared channel identifier.
+   */
+  channelId: string;
+  /**
+   * Granted access level.
+   */
+  access: string;
+}
+/**
  * Create a project — shown as a folder in the app UI. Documents, AI chats, email threads, and other projects can be placed inside it.
  */
 export interface CreateProject {
@@ -3112,6 +3252,24 @@ export interface DeleteImportEntityResponse {
    * What happened.
    */
   message: string;
+}
+/**
+ * Permanently delete a project, its description and properties. Associated tasks remain and lose their project association. Requires ownership. This operation cannot be undone.
+ */
+export interface DeleteInitiative {
+  /**
+   * Project to permanently delete.
+   */
+  initiativeId: string;
+}
+/**
+ * Successful project mutation with no further result body.
+ */
+export interface ProjectOperationComplete {
+  /**
+   * True when the operation completed.
+   */
+  success: boolean;
 }
 /**
  * Permanently delete one of the current user's reminders, along with any notification it already produced. Get the `reminderId` from ListReminders or CreateReminder.
@@ -4157,6 +4315,115 @@ export interface ToolInbox {
    * caller (versus one of the caller's own connected inboxes).
    */
   isDelegated: boolean;
+}
+/**
+ * Find projects (initiatives), with canonical properties and progress over tasks you can view. Returns at most 100 recently updated matches per page. Pass nextCursor back as cursor with the same filters to read more. Filter by name, status, priority, assignee, or due date. Project folders use ReadProject instead.
+ */
+export interface ListInitiatives {
+  /**
+   * Case-insensitive project name substring.
+   */
+  query?: string | null;
+  /**
+   * Status option id, obtained from property definitions.
+   */
+  status?: string | null;
+  /**
+   * Priority option id, obtained from property definitions.
+   */
+  priority?: string | null;
+  /**
+   * Assigned user id.
+   */
+  assignee?: string | null;
+  /**
+   * Earliest inclusive due timestamp.
+   */
+  dueAfter?: string | null;
+  /**
+   * Latest inclusive due timestamp.
+   */
+  dueBefore?: string | null;
+  /**
+   * Opaque nextCursor from the preceding page, with the same filters.
+   */
+  cursor?: string | null;
+  /**
+   * Maximum projects to return, from 1 through 100; defaults to 100.
+   */
+  limit?: number | null;
+}
+/**
+ * Bounded project search results.
+ */
+export interface ProjectListResult {
+  /**
+   * Matching visible projects.
+   */
+  projects: ProjectListRow[];
+  /**
+   * True when additional matches exist.
+   */
+  truncated: boolean;
+  /**
+   * Opaque cursor for the next page, absent after the final page.
+   */
+  nextCursor?: string | null;
+}
+/**
+ * One visible project with canonical fields and permission-aware progress.
+ */
+export interface ProjectListRow {
+  /**
+   * Project id.
+   */
+  initiativeId: string;
+  /**
+   * Project name.
+   */
+  name: string;
+  /**
+   * Description document id.
+   */
+  descriptionDocumentId: string;
+  /**
+   * Effective caller access.
+   */
+  access: string;
+  properties: ProjectPropertyValues;
+  /**
+   * Count of associated tasks visible to the caller.
+   */
+  taskCount: number;
+  /**
+   * Visible completed tasks.
+   */
+  completedTaskCount: number;
+}
+/**
+ * Canonical system-property values, editable through SetEntityProperty.
+ */
+export interface ProjectPropertyValues {
+  /**
+   * Status option id, or unset.
+   */
+  status?: string | null;
+  /**
+   * Priority option id, or unset.
+   */
+  priority?: string | null;
+  /**
+   * Assigned users, independent from sharing membership.
+   */
+  assignees: string[];
+  /**
+   * Due timestamp, or unset.
+   */
+  dueDate?: string | null;
+  /**
+   * Whether the status is completed.
+   */
+  completed: boolean;
 }
 /**
  * List the user's Gmail labels. Returns both system labels (INBOX, SENT, DRAFTS, UNREAD, STARRED, TRASH, SPAM, IMPORTANT, CATEGORY_PERSONAL, CATEGORY_SOCIAL, CATEGORY_PROMOTIONS, CATEGORY_UPDATES, CATEGORY_FORUMS, etc.) and any custom user-created labels. Each label has a UUID `id` and a `name`.
@@ -5372,6 +5639,120 @@ export interface DocumentComment {
   editedAt?: string | null;
 }
 /**
+ * Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The descriptionDocumentId can be read or edited with document tools. Use entity_type='initiative' with property tools. ReadInitiativeActivity returns the project's activity history.
+ */
+export interface ReadInitiative {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Opaque nextTaskCursor from the preceding page for this project.
+   */
+  taskCursor?: string | null;
+  /**
+   * Maximum task ids to return, from 1 through 100; defaults to 100.
+   */
+  taskLimit?: number | null;
+}
+/**
+ * Project detail and canonical property values.
+ */
+export interface ProjectReadResult {
+  project: ProjectDetails;
+  properties: ProjectPropertyValues;
+  /**
+   * Opaque cursor for the next task page, absent after the final page.
+   */
+  nextTaskCursor?: string | null;
+}
+/**
+ * Read project creation, edits, property changes, and task membership changes, newest first. Task references require current task view access. Each page scans at most 100 events and may contain fewer visible records. Pass nextCursor back as cursor with the same time filters to continue, including after an empty page.
+ */
+export interface ReadInitiativeActivity {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Only changes at or after this timestamp.
+   */
+  after?: string | null;
+  /**
+   * Only changes before this timestamp.
+   */
+  before?: string | null;
+  /**
+   * Opaque nextCursor from the preceding activity page.
+   */
+  cursor?: InitiativeActivityCursor | null;
+  /**
+   * Maximum events to scan, from 1 through 100; defaults to 100.
+   */
+  limit?: number | null;
+}
+/**
+ * Stable cursor for project history.
+ */
+export interface InitiativeActivityCursor {
+  /**
+   * Time of the last scanned activity.
+   */
+  occurredAt: string;
+  /**
+   * Tie-breaker within the same timestamp.
+   */
+  id: string;
+}
+/**
+ * Bounded visible project activity.
+ */
+export interface ProjectActivityResult {
+  /**
+   * Visible events ordered newest first.
+   */
+  records: InitiativeActivityRecord[];
+  /**
+   * More events may match; follow nextCursor.
+   */
+  truncated: boolean;
+  /**
+   * Stable continuation, absent after the final matching page.
+   */
+  nextCursor?: InitiativeActivityCursor | null;
+}
+/**
+ * One authorized activity row; task names are hydrated through existing authorized task reads.
+ */
+export interface InitiativeActivityRecord {
+  /**
+   * Stable record identifier, also used for realtime deduplication.
+   */
+  id: string;
+  /**
+   * Principal who acted.
+   */
+  actorId: string;
+  /**
+   * Acting user's feed identity when a bot acted on their behalf.
+   */
+  subjectId: string;
+  /**
+   * Durable activity action tag.
+   */
+  action: string;
+  /**
+   * Typed payload for known actions. Absent for unknown actions.
+   */
+  actionPayload?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Time of the change.
+   */
+  occurredAt: string;
+}
+/**
  * Retrieve a documents metadata
  */
 export interface ReadMetadata {
@@ -5562,6 +5943,24 @@ export interface ReadSpreadsheet {
    * Include cell formatting.
    */
   includeStyles?: boolean | null;
+}
+/**
+ * Find the project associated with each requested task. Returns project id/name only when both task and project are visible. Distinguishes no project from unavailable. Accepts up to 100 unique task ids.
+ */
+export interface ReadTaskInitiatives {
+  /**
+   * Task ids to look up, deduplicated in input order.
+   */
+  taskIds: string[];
+}
+/**
+ * Visibility-aware project references for the requested tasks.
+ */
+export interface TaskProjectReferences {
+  /**
+   * References in deduplicated request order.
+   */
+  references: TaskProjectReference[];
 }
 /**
  * Rename an existing channel. Requires the current user to be an active channel participant. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
@@ -5872,7 +6271,7 @@ export interface SendEmail {
   includeSignature?: boolean | null;
 }
 /**
- * Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.
+ * Set or update a property value on an entity. Tasks are targeted as entity_type='document'. Projects in the Tasks UI are entity_type='initiative'; entity_type='project' still means a folder. Initiatives share the Assignees, Status, Priority and Due Date definitions below and their clearing behavior. Project Status accepts only Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), and Completed (...0004); In Review and Canceled are task-only options. Provide the property_definition_id and exactly one value field matching the property's data type.
  *
  * For multi-select properties — including tags — prefer add_option_ids / remove_option_ids over option_ids: they add or remove just those options atomically, composing with concurrent edits. option_ids replaces the entire value, so a stale read can silently drop options someone else just added; only use it when the user asks to set the value to exactly a given list. To apply a tag, pass the tag set's property_definition_id and the tag's option id (both from ListTags) in add_option_ids; to remove a tag, use remove_option_ids.
  *
@@ -6008,6 +6407,41 @@ export interface SetSenderPolicyResponse {
    * A human-readable summary of the change.
    */
   summary: string;
+}
+/**
+ * Set the project associated with tasks, moving them from their previous project if needed. Requires edit access to each task and the destination project; access to the previous project is unnecessary. Omit initiativeId to clear the association using task edit access alone. Reports each task's outcome independently; at most 100 unique tasks.
+ */
+export interface SetTaskInitiative {
+  /**
+   * Task ids to assign or clear, deduplicated in request order.
+   */
+  taskIds: string[];
+  /**
+   * Destination project; omit to clear each task's current project.
+   */
+  initiativeId?: string | null;
+}
+/**
+ * Results in deduplicated input order.
+ */
+export interface TaskProjectOutcomes {
+  /**
+   * Outcome for every submitted task.
+   */
+  results: TaskProjectOutcome[];
+}
+/**
+ * One task mutation outcome.
+ */
+export interface TaskProjectOutcome {
+  /**
+   * Requested task identifier.
+   */
+  taskId: string;
+  /**
+   * assigned, moved, cleared, notATask, notFound, skippedNoPermission, or failed.
+   */
+  status: string;
 }
 /**
  * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.
@@ -6156,6 +6590,58 @@ export interface UpdateCalendarEvent {
    * Adjust out-of-office decline behavior; only valid on an event that is already out of office (its event type cannot be changed). Replaces the whole block: set `autoDeclineMode` ("decline_none", "decline_all", or "decline_new_only") and optionally `declineMessage`. Omit to leave it untouched.
    */
   outOfOffice?: OutOfOfficeInput | null;
+}
+/**
+ * Rename a project with edit access, or replace its collaboration member list as the owner. Members control sharing independently of the assignee property. Assigning a user grants collaboration access; removing an assignment retains that access. For status, priority, assignees and due date use SetEntityProperty with entity_type='initiative'. ReadInitiative returns the description document id for document editing tools.
+ */
+export interface UpdateInitiative {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Replacement name; omitted leaves it unchanged.
+   */
+  name?: string | null;
+  /**
+   * Owner-only complete replacement member list; omitted preserves existing members, [] clears it.
+   */
+  memberIds?: string[] | null;
+}
+/**
+ * Change a project's team, link or channel sharing. Only the actual project owner may change sharing. Each omitted field remains unchanged; off disables that share. Project and description document permissions change together. Collaboration member changes use UpdateInitiative.
+ */
+export interface UpdateInitiativeSharing {
+  /**
+   * Project identifier.
+   */
+  initiativeId: string;
+  /**
+   * Explicit owner-team grant; off removes it.
+   */
+  teamAccess?: ProjectShareAccess | null;
+  /**
+   * Who the project link admits; off disables it.
+   */
+  linkScope?: ProjectLinkScope | null;
+  /**
+   * Permission granted by an enabled link. Off resets it to the default view level.
+   */
+  linkAccess?: ProjectShareAccess | null;
+  /**
+   * Individual channel shares to set or remove; other shares remain unchanged.
+   */
+  channels?: ProjectChannelSharing[] | null;
+}
+/**
+ * Update one channel's grant without replacing other channel grants.
+ */
+export interface ProjectChannelSharing {
+  /**
+   * Channel id to share with or revoke.
+   */
+  channelId: string;
+  access: ProjectShareAccess;
 }
 /**
  * Change one of the current user's reminders: reword it, move when it fires, or mark it done. Get the `reminderId` from ListReminders or CreateReminder.

@@ -19,9 +19,11 @@ import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
+import { blockMetadataSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
 import { buildEntityData } from '@entity';
 import IconShared from '@icon/share.svg';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
@@ -50,8 +52,16 @@ export function CallRecordingSplitHeaderLoading() {
 export function CallRecordingSplitHeader(props: { record: CallRecord }) {
   const record = () => props.record;
   const blockId = useBlockId();
-  const shareCtx = useShareDialogContext();
   const callName = () => record().customName ?? record().channelName ?? 'Call';
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: blockId,
+    blockAlias: 'call',
+    itemType: 'call',
+    name: callName(),
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
   const { canCallAgain, callAgain } = useCallAgain(
     () => record().callId,
     () => record().channelId
@@ -60,8 +70,8 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
   const shareTool: BlockTool = {
     label: 'Share',
     icon: IconShared,
-    action: () => shareCtx.open(),
-    buttonComponent: () => <ShareTrigger />,
+    action: openShare,
+    buttonComponent: () => <ShareTrigger onClick={openShare} />,
     focusTarget: getShareDrawerRecipientInput,
   };
 

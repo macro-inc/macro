@@ -286,8 +286,17 @@ async fn main() -> anyhow::Result<()> {
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
-    let properties_service =
-        ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
+    let event_broker_tracker = TaskTracker::new();
+    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
+        macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
+    );
+    let properties_service = ai_tools::build_properties_service_with_broker(
+        db.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+    );
     let task_properties_service = ai_tools::build_task_properties_adapter(
         db.clone(),
         properties_service.clone(),
@@ -300,12 +309,6 @@ async fn main() -> anyhow::Result<()> {
         import::outbound::document_properties::DocumentPropertiesApplicator::new(
             properties_service.clone(),
         );
-    let event_broker_tracker = TaskTracker::new();
-    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
-        macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-        event_broker_tracker.clone(),
-    );
     let document_service = DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -622,6 +625,15 @@ async fn main() -> anyhow::Result<()> {
         user_email_service,
     );
 
+    let initiative_tool_context = ai_tools::build_initiative_tool_context(
+        db.clone(),
+        &document_tool_context,
+        properties_service.clone(),
+        entity_access_service.clone(),
+        aws_sdk_sqs::Client::new(&aws_config),
+        macro_event_broker.clone(),
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -658,6 +670,7 @@ async fn main() -> anyhow::Result<()> {
             DocumentStorageServiceUrl::new()?.to_string(),
         ),
         project_tool_context,
+        initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
         skill_tool_context: ai_tools::build_skill_tool_context(

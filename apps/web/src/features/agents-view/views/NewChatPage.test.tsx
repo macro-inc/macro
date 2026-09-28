@@ -137,7 +137,11 @@ vi.mock('../components/ChatComposer', () => ({
   ),
 }));
 
-function page(connected = true, agents: PersistedAgentLike[] = []) {
+function page(
+  connected = true,
+  agents: PersistedAgentLike[] = [],
+  availabilityLoading = false
+) {
   const onStart = vi.fn();
   render(() => (
     <NewChatPage
@@ -150,6 +154,7 @@ function page(connected = true, agents: PersistedAgentLike[] = []) {
         cursorDefaultModel: 'cursor-default',
       })}
       rosterLoading={false}
+      availabilityLoading={availabilityLoading}
       onStart={onStart}
       onOpenRoster={vi.fn()}
     />
@@ -526,6 +531,14 @@ describe('agent-led new conversation', () => {
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
       'Cursor'
     );
+    expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
+  });
+  it('keeps the most recent agent while its connection status loads', () => {
+    mocks.recentIds = [CURSOR_BOT_ID];
+    page(false, [], true);
+    expect(
+      screen.getByRole('heading', { name: 'What should we build?' })
+    ).toBeTruthy();
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
   });
   it('offers Cursor setup when disconnected without switching to an unavailable agent', async () => {
