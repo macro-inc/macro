@@ -20,6 +20,7 @@ import { bindStateAs } from '../utils';
 import { checklistPlugin } from './checklist/';
 import { customDeletePlugin } from './custom-delete';
 import { markdownShortcutsPlugin } from './markdown-shortcuts';
+import { nativeIosBackspacePlugin } from './native-ios-backspace/nativeIosBackspacePlugin';
 import { normalizeTripleClickPlugin } from './normalize-triple-click';
 import { wordNavigationPlugin } from './word-navigation/wordNavigationPlugin';
 
@@ -91,6 +92,7 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
       // register it explicitly here.
       cleanupFunctions.push(normalizeTripleClickPlugin()(editor));
       cleanupFunctions.push(wordNavigationPlugin()(editor));
+      cleanupFunctions.push(nativeIosBackspacePlugin()(editor));
       return pluginManager;
     },
 
