@@ -1,8 +1,8 @@
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { EntityPropertiesDocument } from '@service-storage/graphql/generated/graphql';
-import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
 import { validate as validateUuid } from 'uuid';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
 
 const executeOptimisticMutationMock = vi.hoisted(() => vi.fn());
 const optimisticMutationDispositionOfMock = vi.hoisted(() => vi.fn());
