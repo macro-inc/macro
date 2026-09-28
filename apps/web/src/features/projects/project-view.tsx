@@ -2,19 +2,30 @@ import {
   projectDetailRoute,
   tasksProjectsRoute,
 } from '@app/features/tasks-view/route';
-import { useNavigate } from '@app/lib/split-router';
+import { useNavigate, useSplitHistory } from '@app/lib/split-router';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import { onCleanup, onMount } from 'solid-js';
+import { createEffect, onCleanup, onMount } from 'solid-js';
 import { type ProjectRoute, projectRouteId } from './core/route';
 import type { ProjectComposerDraft } from './primitives/create-project';
 import { Projects } from './projects';
 import { CreateProject } from './views/create-project';
 
+/** A split opened moments ago joins the router after it mounts; earlier navigation is dropped. */
+function useRedirectOnceRouted(redirect: () => void) {
+  const routed = useSplitHistory();
+  let redirected = false;
+  createEffect(() => {
+    if (redirected || !routed()) return;
+    redirected = true;
+    redirect();
+  });
+}
+
 export function ProjectsListView() {
   const navigate = useNavigate();
-  onMount(() =>
+  useRedirectOnceRouted(() =>
     navigate(
       { route: tasksProjectsRoute, params: { projectsTab: 'projects' } },
       { replace: true }
@@ -26,7 +37,7 @@ export function ProjectsListView() {
 /** Project links restore the same Tasks workspace and breadcrumb navigation. */
 export function ProjectView(props: { route: ProjectRoute }) {
   const navigate = useNavigate();
-  onMount(() =>
+  useRedirectOnceRouted(() =>
     navigate(
       {
         route: projectDetailRoute,

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
+import { type Accessor, createSignal, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 
 const fixtures = vi.hoisted(() => ({
@@ -7,12 +7,17 @@ const fixtures = vi.hoisted(() => ({
   close: vi.fn(),
   open: vi.fn(),
   replace: vi.fn(),
+  navigate: vi.fn(),
+  routed: (() => true) as Accessor<boolean>,
 }));
 vi.mock('@app/features/tasks-view/route', () => ({
   projectDetailRoute: {},
   tasksProjectsRoute: {},
 }));
-vi.mock('@app/lib/split-router', () => ({ useNavigate: () => vi.fn() }));
+vi.mock('@app/lib/split-router', () => ({
+  useNavigate: () => fixtures.navigate,
+  useSplitHistory: () => () => (fixtures.routed() ? { index: 0 } : undefined),
+}));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({
     openWithSplit: fixtures.open,
@@ -47,7 +52,7 @@ vi.mock('./views/create-project', () => ({
   ),
 }));
 
-import { CreateProjectView } from './project-view';
+import { CreateProjectView, ProjectView } from './project-view';
 
 afterEach(() => {
   cleanup();
@@ -75,3 +80,26 @@ it.each([true, false])(
     }
   }
 );
+
+it('redirects a project link once the router tracks its newly opened split', () => {
+  const [routed, setRouted] = createSignal(false);
+  fixtures.routed = routed;
+  render(() => (
+    <ProjectView
+      route={{
+        id: '01992d2f-8444-7000-8000-000000000001',
+        section: 'tasks',
+      }}
+    />
+  ));
+  expect(fixtures.navigate).not.toHaveBeenCalled();
+  setRouted(true);
+  expect(fixtures.navigate).toHaveBeenCalledOnce();
+  expect(fixtures.navigate.mock.calls[0][0].params).toEqual({
+    projectId: '01992d2f-8444-7000-8000-000000000001',
+    section: 'tasks',
+  });
+  setRouted(false);
+  setRouted(true);
+  expect(fixtures.navigate).toHaveBeenCalledOnce();
+});
