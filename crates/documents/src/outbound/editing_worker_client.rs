@@ -1,9 +1,13 @@
 //! Outbound adapter for the AI editing worker.
 
 use crate::domain::ports::editing::{EditResult, EditUsage, EditingWorkerService};
+use anyhow::Context;
 use macro_sync_service_jwt::DocumentPermissionToken;
 use reqwest::Client;
 use std::sync::Arc;
+
+#[cfg(test)]
+mod test;
 
 /// Reqwest-backed client for the AI editing worker.
 #[derive(Clone)]
@@ -87,7 +91,8 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             .headers(headers)
             .json(&request_body)
             .send()
-            .await?;
+            .await
+            .context("editing worker request failed")?;
 
         let status = edit_resp.status();
         if !status.is_success() {

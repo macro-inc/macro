@@ -2,8 +2,8 @@
 
 Datadog monitors and synthetic tests as code.
 
-35 of the 36 resources here were created by hand in the Datadog UI between 2024
-and 2026. This stack **adopts** them — it does not recreate them. `import.json`
+36 resources here (35 monitors and one synthetic test) already exist in
+Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. The two AI-editing monitors in `monitors/ai-editing.ts`
 are new and are meant to be created.
 
@@ -94,3 +94,14 @@ Declare it in the matching `monitors/*.ts` with `new datadog.Monitor(...)`. Use
 the `adopted()` helper only for monitors that already exist in Datadog — it sets
 `protect`, which is there to stop a program that no longer declares a
 pre-existing monitor from deleting it.
+
+## AI-editing coverage
+
+The caller-side log alert matches `editing worker returned` for non-2xx HTTP
+responses and `editing worker request failed` for transport failures. The latter
+requires the updated `ReqwestEditingWorkerClient` to be deployed in the caller
+services; creating the monitor alone does not add that telemetry.
+
+Neither new alert detects successful responses that apply no edits, or failures
+during periods without editing requests. The end-to-end canary remains a
+follow-up.

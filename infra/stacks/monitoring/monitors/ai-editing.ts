@@ -5,7 +5,7 @@
 //
 // Two independent angles, because each misses what the other catches. The APM
 // monitor sees the worker's own view of its requests; the log monitor sees
-// document-storage's view, so it still fires when the worker is unreachable and
+// the callers' view, so it still fires when the worker is unreachable and
 // reporting no telemetry at all.
 //
 // Neither covers "the worker answers 200 but silently produces no edits", and
@@ -47,8 +47,9 @@ cancels; only the former counts as an error here.
   }
 );
 
-// Emitted by ReqwestEditingWorkerClient::edit when the worker answers non-2xx
-// or is unreachable (crates/documents/src/outbound/editing_worker_client.rs).
+// ReqwestEditingWorkerClient::edit reports "editing worker returned" for
+// non-2xx responses and "editing worker request failed" for transport failures
+// (crates/documents/src/outbound/editing_worker_client.rs).
 //
 // The callers are document-cognition-service (the EditDocument tool, 174 of
 // these in the 30 days to 2026-08-31) and cloud-storage-service (7). Note the
@@ -65,7 +66,7 @@ export const aiEditingRequestsFailing = new datadog.Monitor(
     name: '[PROD] AI editing requests failing for callers',
     type: 'log alert',
     query:
-      'logs("env:prod service:(document-cognition-service OR cloud-storage-service) \\"editing worker returned\\"").index("*").rollup("count").last("1h") > 25',
+      'logs("env:prod service:(document-cognition-service OR cloud-storage-service) (\\"editing worker returned\\" OR \\"editing worker request failed\\")").index("*").rollup("count").last("1h") > 25',
     message: `Callers are getting errors back from the AI editing worker.
 
 Unlike the APM monitor this fires even when the worker is unreachable, since it
