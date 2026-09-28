@@ -1,13 +1,26 @@
 import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import type { ChannelEntity } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
 import type { ChannelRailRow } from './ChannelsRailContext';
 
 const mocks = vi.hoisted(() => ({
-  hydrate: vi.fn<(channel: ChannelEntity) => WithNotification<ChannelEntity> | Promise<WithNotification<ChannelEntity>>>(),
+  hydrate:
+    vi.fn<
+      (
+        channel: ChannelEntity
+      ) =>
+        | WithNotification<ChannelEntity>
+        | Promise<WithNotification<ChannelEntity>>
+    >(),
   markRead: vi.fn(),
   navigate: vi.fn(async () => {}),
   openSplit: vi.fn(async () => {}),
@@ -20,18 +33,31 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@app/components/list', () => ({
   createListController: (options: {
-    onActivate: (event: { item: ChannelRailRow; metadata: { event: MouseEvent } }) => void;
+    onActivate: (event: {
+      item: ChannelRailRow;
+      metadata: { event: MouseEvent };
+    }) => void;
   }) => {
-    mocks.activate = (event) => options.onActivate({
-      item: { kind: 'conversation', id: 'channel:one', scope: 'channels', localIndex: 0, channel: mocks.row! },
-      metadata: { event },
-    });
+    mocks.activate = (event) =>
+      options.onActivate({
+        item: {
+          kind: 'conversation',
+          id: 'channel:one',
+          scope: 'channels',
+          localIndex: 0,
+          channel: mocks.row!,
+        },
+        metadata: { event },
+      });
     return {};
   },
   listOwnedSlotName: (name: string) => name,
   useListInteractions: vi.fn(),
 }));
-vi.mock('@app/components/view-shell', () => ({ useViewControlHotkeys: vi.fn(), useViewTabHotkeys: vi.fn() }));
+vi.mock('@app/components/view-shell', () => ({
+  useViewControlHotkeys: vi.fn(),
+  useViewTabHotkeys: vi.fn(),
+}));
 vi.mock('@app/features/next-soup/utils', () => ({
   channelPreviewSelection: (id: string) => ({ type: 'channel', id }),
   getChannelEntityTarget: () => ({ kind: 'latest' }),
@@ -39,28 +65,45 @@ vi.mock('@app/features/next-soup/utils', () => ({
   navigateChannelEntityToTarget: mocks.navigate,
   openEntityInSplitFromUnifiedList: mocks.openSplit,
 }));
-vi.mock('@app/features/soup/entity-notifications', () => ({ withEntityNotifications: (channel: ChannelEntity) => channel }));
-vi.mock('@app/lib/analytics/posthog', () => ({ useFeatureFlag: () => () => ({ enabled: false }) }));
+vi.mock('@app/features/soup/entity-notifications', () => ({
+  withEntityNotifications: (channel: ChannelEntity) => channel,
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false }),
+}));
 vi.mock('@app/util/favorites', () => ({ favoriteSplitContent: vi.fn() }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => mocks.source,
   useGlobalBlockOrchestrator: () => ({}),
 }));
-vi.mock('@components/app/split-layout/layout', () => ({ useSplitLayout: () => ({ openWithSplit: mocks.openSplit }) }));
+vi.mock('@components/app/split-layout/layout', () => ({
+  useSplitLayout: () => ({ openWithSplit: mocks.openSplit }),
+}));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ isPanelActive: () => true }),
   withSplitPanelOwner: (_name: string, run: () => unknown) => run(),
 }));
-vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: mocks.failure } }));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.failure },
+}));
 vi.mock('@core/constant/featureFlags', () => ({ enableChannelTags: {} }));
 vi.mock('@core/hotkey/hotkeys', () => ({
   createHotkeyGroup: () => ({ dispose: vi.fn() }),
   registerHotkey: () => ({ withGroup: vi.fn() }),
 }));
-vi.mock('@entity', () => ({ isChannelEntity: (entity: { type: string }) => entity.type === 'channel' }));
-vi.mock('@entity/utils/notification', () => ({ notificationIsRead: (notification: { state: string }) => notification.state !== 'unseen' }));
-vi.mock('@notifications/notification-helpers', () => ({ ensureNotificationSourceLoaded: vi.fn() }));
-vi.mock('@queries/channel/notification-selection', () => ({ hydrateChannelNotificationSelection: mocks.hydrate }));
+vi.mock('@entity', () => ({
+  isChannelEntity: (entity: { type: string }) => entity.type === 'channel',
+}));
+vi.mock('@entity/utils/notification', () => ({
+  notificationIsRead: (notification: { state: string }) =>
+    notification.state !== 'unseen',
+}));
+vi.mock('@notifications/notification-helpers', () => ({
+  ensureNotificationSourceLoaded: vi.fn(),
+}));
+vi.mock('@queries/channel/notification-selection', () => ({
+  hydrateChannelNotificationSelection: mocks.hydrate,
+}));
 vi.mock('@queries/channel-labels/channel-labels', () => ({
   useChannelLabelsQuery: () => ({ isSuccess: false }),
   useCreateChannelLabelMutation: () => ({}),
@@ -68,42 +111,91 @@ vi.mock('@queries/channel-labels/channel-labels', () => ({
   useRenameChannelLabelMutation: () => ({}),
   useSetChannelLabelMutation: () => ({}),
 }));
-vi.mock('@queries/favorites/favorites', () => ({ useFavoritesData: () => () => ({ favorites: [] }) }));
-vi.mock('@queries/soup/search', () => ({ useSearchSoupQuery: () => ({ isSuccess: false }) }));
-vi.mock('@thisbeyond/solid-dnd', () => ({ useDragDropContext: () => undefined }));
+vi.mock('@queries/favorites/favorites', () => ({
+  useFavoritesData: () => () => ({ favorites: [] }),
+}));
+vi.mock('@queries/soup/search', () => ({
+  useSearchSoupQuery: () => ({ isSuccess: false }),
+}));
+vi.mock('@thisbeyond/solid-dnd', () => ({
+  useDragDropContext: () => undefined,
+}));
 vi.mock('@ui', () => ({ confirmDialog: vi.fn() }));
 vi.mock('../../channels-view-context', () => ({
   useChannelsView: () => ({
-    state: { tab: 'browse', expandedGroups: { channels: true, direct_messages: true }, collapsedLabels: [] },
+    state: {
+      tab: 'browse',
+      expandedGroups: { channels: true, direct_messages: true },
+      collapsedLabels: [],
+    },
     selectedChannel: () => mocks.selected,
     setSelectedChannel: mocks.select,
   }),
 }));
 vi.mock('../../queries', () => ({
-  deduplicateChannels: (collections: ChannelEntity[][]) => [...new Map(collections.flat().map(channel => [channel.id, channel])).values()],
+  deduplicateChannels: (collections: ChannelEntity[][]) => [
+    ...new Map(
+      collections.flat().map((channel) => [channel.id, channel])
+    ).values(),
+  ],
   useChannelsByIdsQuery: () => ({ isEnabled: false }),
 }));
 vi.mock('./ChannelLabelNameDialog', () => ({ promptLabelName: vi.fn() }));
 vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
 vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
-vi.mock('./hooks/useChannelRailActivity', () => ({ useChannelRailActivity: () => ({}) }));
+vi.mock('./hooks/useChannelRailActivity', () => ({
+  useChannelRailActivity: () => ({}),
+}));
 vi.mock('./ExpandedChannelsRail', () => ({
-  ExpandedChannelsRail: () => <button onClick={event => mocks.activate(event)}>Open conversation</button>,
+  ExpandedChannelsRail: () => (
+    <button onClick={(event) => mocks.activate(event)}>
+      Open conversation
+    </button>
+  ),
 }));
 
 import { ChannelsRail } from './ChannelsRail';
 
 const channel: ChannelEntity = {
-  id: 'one', type: 'channel', name: 'One', ownerId: 'owner', channelType: 'private', isParticipant: true,
-  unreadNotifications: [{ id: 'witness', state: 'unseen', createdAt: '2026-01-01' }],
+  id: 'one',
+  type: 'channel',
+  name: 'One',
+  ownerId: 'owner',
+  channelType: 'private',
+  isParticipant: true,
+  unreadNotifications: [
+    { id: 'witness', state: 'unseen', createdAt: '2026-01-01' },
+  ],
 };
-const hydrated: WithNotification<ChannelEntity> = { ...channel, unreadNotifications: undefined, notifications: () => [] };
+const hydrated: WithNotification<ChannelEntity> = {
+  ...channel,
+  unreadNotifications: undefined,
+  notifications: () => [],
+};
 const source = {
-  items: () => [channel], isLoading: () => false, isFetching: () => false, error: () => undefined,
-  hasMore: () => false, isLoadingMore: () => false, loadMore: async () => {}, refresh: async () => {},
+  items: () => [channel],
+  isLoading: () => false,
+  isFetching: () => false,
+  error: () => undefined,
+  hasMore: () => false,
+  isLoadingMore: () => false,
+  loadMore: async () => {},
+  refresh: async () => {},
 };
-const sources: ChannelsSources = { channels: source, direct_messages: source, recents: source, search: source };
-const mount = () => render(() => <ChannelsRail sources={sources} searchOpen={false} onSearchOpenChange={() => {}} />);
+const sources: ChannelsSources = {
+  channels: source,
+  direct_messages: source,
+  recents: source,
+  search: source,
+};
+const mount = () =>
+  render(() => (
+    <ChannelsRail
+      sources={sources}
+      searchOpen={false}
+      onSearchOpenChange={() => {}}
+    />
+  ));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -119,13 +211,21 @@ describe('explicit channel activation read marking', () => {
     mocks.selected = { type: 'channel', id: channel.id };
     mount();
     fireEvent.click(screen.getByRole('button'));
-    await waitFor(() => expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(hydrated, mocks.source, { scopeChannelThreads: false }));
+    await waitFor(() =>
+      expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(
+        hydrated,
+        mocks.source,
+        { scopeChannelThreads: false }
+      )
+    );
     expect(mocks.navigate).toHaveBeenCalledOnce();
     const refreshed = { ...hydrated, notifications: () => [] };
     mocks.hydrate.mockReturnValue(refreshed);
     fireEvent.click(screen.getByRole('button'));
     await waitFor(() => expect(mocks.markRead).toHaveBeenCalledTimes(2));
-    expect(mocks.markRead).toHaveBeenLastCalledWith(refreshed, mocks.source, { scopeChannelThreads: false });
+    expect(mocks.markRead).toHaveBeenLastCalledWith(refreshed, mocks.source, {
+      scopeChannelThreads: false,
+    });
     expect(mocks.navigate).toHaveBeenCalledTimes(2);
   });
 
@@ -142,7 +242,11 @@ describe('explicit channel activation read marking', () => {
 
   it('does not mark a superseded hydration; only the latest click is accepted', async () => {
     let resolve!: (channel: WithNotification<ChannelEntity>) => void;
-    mocks.hydrate.mockReturnValueOnce(new Promise(value => { resolve = value; }));
+    mocks.hydrate.mockReturnValueOnce(
+      new Promise((value) => {
+        resolve = value;
+      })
+    );
     mount();
     fireEvent.click(screen.getByRole('button'));
     expect(mocks.markRead).not.toHaveBeenCalled();
@@ -157,9 +261,14 @@ describe('explicit channel activation read marking', () => {
   it('hydrates shift-clicks and requests channel-wide marking in the split-open path', async () => {
     mount();
     fireEvent.click(screen.getByRole('button'), { shiftKey: true });
-    await waitFor(() => expect(mocks.openSplit).toHaveBeenCalledExactlyOnceWith(hydrated, {
-      openInNewSplit: true, referredFrom: 'channels', notificationSource: mocks.source, scopeChannelThreads: false,
-    }));
+    await waitFor(() =>
+      expect(mocks.openSplit).toHaveBeenCalledExactlyOnceWith(hydrated, {
+        openInNewSplit: true,
+        referredFrom: 'channels',
+        notificationSource: mocks.source,
+        scopeChannelThreads: false,
+      })
+    );
     expect(mocks.select).not.toHaveBeenCalled();
   });
 
@@ -172,6 +281,8 @@ describe('explicit channel activation read marking', () => {
       await waitFor(() => expect(mocks.failure).toHaveBeenCalledOnce());
       expect(mocks.markRead).not.toHaveBeenCalled();
       expect(mocks.select).not.toHaveBeenCalled();
-    } finally { log.mockRestore(); }
+    } finally {
+      log.mockRestore();
+    }
   });
 });

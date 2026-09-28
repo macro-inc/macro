@@ -281,7 +281,7 @@ const asRead = (notification: UnifiedNotification): UnifiedNotification =>
   }) as unknown as UnifiedNotification;
 
 const notificationSourceWithBulkMarkAsRead = (
-  bulkMarkAsRead = vi.fn(async () => {})
+  bulkMarkAsRead: NotificationSource['bulkMarkAsRead'] = vi.fn(async () => {})
 ) => ({ bulkMarkAsRead }) as unknown as NotificationSource;
 
 const channelMessageRow = (opts?: {
@@ -962,7 +962,10 @@ describe('getChannelEntityTarget', () => {
       const notificationsByEntity = vi.fn(() => ({}));
       markChannelNotificationsSeenOnOpen(
         channelRow({ notifications: [notification] }),
-        { ...notificationSourceWithBulkMarkAsRead(bulkMarkAsRead), notificationsByEntity },
+        {
+          ...notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+          notificationsByEntity,
+        },
         { scopeChannelThreads: false }
       );
       expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([notification]);
@@ -982,20 +985,33 @@ describe('getChannelEntityTarget', () => {
       },
     } as UnifiedNotification;
     const read = asRead(sendNotification('seen', 'seen-message'));
-    const done = { ...sendNotification('done', 'done-message'), state: 'done' as const };
+    const done = {
+      ...sendNotification('done', 'done-message'),
+      state: 'done' as const,
+    };
     const readIds = new Set<string>();
-    const bulkMarkAsRead = vi.fn(async (notifications: UnifiedNotification[]) => {
-      for (const notification of notifications) readIds.add(notification.id);
-    });
+    const bulkMarkAsRead = vi.fn(
+      async (notifications: UnifiedNotification[]) => {
+        for (const notification of notifications) readIds.add(notification.id);
+      }
+    );
     const source: NotificationSource = {
       ...notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
-      withLocalOverrides: (notification) => readIds.has(notification.id) ? asRead(notification) : notification,
+      withLocalOverrides: (notification) =>
+        readIds.has(notification.id) ? asRead(notification) : notification,
     };
     const notifications = [send, reply, mention, read, done];
     const channel = channelRow({ notifications });
-    const open = () => markChannelNotificationsSeenOnOpen(channel, source, { scopeChannelThreads: false });
+    const open = () =>
+      markChannelNotificationsSeenOnOpen(channel, source, {
+        scopeChannelThreads: false,
+      });
     open();
-    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([send, reply, mention]);
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([
+      send,
+      reply,
+      mention,
+    ]);
     open();
     expect(bulkMarkAsRead).toHaveBeenCalledTimes(1);
     const incoming = replyNotification('incoming', 'new-reply', 'root');
@@ -1036,35 +1052,42 @@ describe('getChannelEntityTarget', () => {
     expect(bulkMarkAsRead).toHaveBeenCalledWith([notification]);
   });
 
-  it.each([false, true])('marks the whole GraphQL channel from Chat (new split=%s)', async (openInNewSplit) => {
-    const unread = sendNotification('mobile-unread', 'message');
-    const read = asRead(sendNotification('mobile-read', 'read-message'));
-    const reply = replyNotification('mobile-reply', 'reply', 'thread-root');
-    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
-    setGlobalSplitManager({
-      activeSplit: vi.fn(),
-      getOrchestrator: vi.fn(() => ({
-        getBlockHandle: vi.fn(async () => undefined),
-      })),
-      getSplitByContent: vi.fn(),
-      openWithSplit,
-    } as unknown as SplitManager);
+  it.each([false, true])(
+    'marks the whole GraphQL channel from Chat (new split=%s)',
+    async (openInNewSplit) => {
+      const unread = sendNotification('mobile-unread', 'message');
+      const read = asRead(sendNotification('mobile-read', 'read-message'));
+      const reply = replyNotification('mobile-reply', 'reply', 'thread-root');
+      const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+      setGlobalSplitManager({
+        activeSplit: vi.fn(),
+        getOrchestrator: vi.fn(() => ({
+          getBlockHandle: vi.fn(async () => undefined),
+        })),
+        getSplitByContent: vi.fn(),
+        openWithSplit,
+      } as unknown as SplitManager);
 
-    const bulkMarkAsRead = vi.fn(async () => {});
-    const channel = { ...channelRow(), notifications: [unread, read, reply] };
-    await openEntityInSplitFromUnifiedList(channel, {
-      referredFrom: 'channels',
-      openInNewSplit,
-      notificationSource: notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
-      scopeChannelThreads: false,
-    });
+      const bulkMarkAsRead = vi.fn(async () => {});
+      const channel = { ...channelRow(), notifications: [unread, read, reply] };
+      await openEntityInSplitFromUnifiedList(channel, {
+        referredFrom: 'channels',
+        openInNewSplit,
+        notificationSource:
+          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+        scopeChannelThreads: false,
+      });
 
-    expect(openWithSplit).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'channel', id: 'channel-1' }),
-      expect.objectContaining({ referredFrom: 'channels', preferNewSplit: openInNewSplit })
-    );
-    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread, reply]);
-  });
+      expect(openWithSplit).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'channel', id: 'channel-1' }),
+        expect.objectContaining({
+          referredFrom: 'channels',
+          preferNewSplit: openInNewSplit,
+        })
+      );
+      expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread, reply]);
+    }
+  );
 
   it('chooses the unread reply target before marking a Chat conversation read', async () => {
     const reply = replyNotification('reply-target', 'reply-message', 'root');
@@ -1077,11 +1100,17 @@ describe('getChannelEntityTarget', () => {
       getSplitByContent: vi.fn(),
       openWithSplit,
     } as unknown as SplitManager);
-    const bulkMarkAsRead = vi.fn(async () => { reply.state = 'seen'; });
-    await openEntityInSplitFromUnifiedList(channelRow({ notifications: [reply] }), {
-      notificationSource: notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
-      scopeChannelThreads: false,
+    const bulkMarkAsRead = vi.fn(async () => {
+      reply.state = 'seen';
     });
+    await openEntityInSplitFromUnifiedList(
+      channelRow({ notifications: [reply] }),
+      {
+        notificationSource:
+          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+        scopeChannelThreads: false,
+      }
+    );
     expect(openWithSplit).toHaveBeenCalledWith(
       expect.objectContaining({
         params: expect.objectContaining({
