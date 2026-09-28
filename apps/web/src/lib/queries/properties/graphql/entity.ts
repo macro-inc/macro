@@ -44,7 +44,12 @@ import {
   buildOptimisticGroupedPropertyUpdates,
   groupedPropertyKeys,
 } from '../../soup/grouped/graphql-optimistic';
-import { buildOptimisticSetEntityProperty } from '../graphql-optimistic';
+import {
+  buildOptimisticSetEntityProperty,
+  isTemporaryGraphqlProperty,
+} from '../graphql-optimistic';
+import { buildPropertyAssignmentLinks } from './assignment-links';
+import { observePropertyMutationSettlements } from './mutation-settlements';
 
 /** Builds the exact Soup input used to load one entity's properties. */
 export const buildEntityPropertiesInput = buildGraphqlEntitySoupInput;
@@ -223,32 +228,48 @@ async function prepareMutationArgs(
     };
   }
 
+  const entityType = toGraphqlPropertyTargetEntityType(input.entityType);
+  const propertyDefinitionId = getPropertyDefinitionId(input.property);
   const optimisticProperty = buildOptimisticSetEntityProperty(
     input.property,
-    input.apiValues
+    input.apiValues,
+    { entityType, entityId: input.entityId }
   );
-  let optimisticCache;
-
-  if (isInstantiatedProperty(input.property)) {
-    const host = getGraphqlCacheHost();
-    if (host) {
-      try {
-        const oldGroupKeys = groupedPropertyKeys(input.property);
-        const newGroupKeys = groupedPropertyKeys(input.apiValues);
-        optimisticCache = await buildOptimisticGroupedPropertyUpdates({
+  const optimisticCache: NonNullable<SetEntityPropertyArgs['optimisticCache']> =
+    {
+      updates: [],
+      revalidations: [],
+    };
+  const host = getGraphqlCacheHost();
+  if (host) {
+    try {
+      if (
+        optimisticProperty &&
+        isTemporaryGraphqlProperty(optimisticProperty.id)
+      ) {
+        optimisticCache.updates = await buildPropertyAssignmentLinks(
           host,
-          entityId: input.entityId,
-          propertyDefinitionId: input.property.propertyDefinitionId,
-          oldGroupKeys: oldGroupKeys ?? [],
-          newGroupKeys: newGroupKeys ?? [],
-          revalidateOnly:
-            oldGroupKeys === undefined || newGroupKeys === undefined,
-        });
-      } catch (error) {
-        // Relation discovery is an optimization. The normalized property write
-        // remains valid when cache inspection is unavailable.
-        console.warn('Failed to build grouped Soup optimism', error);
+          input.entityId,
+          optimisticProperty.id,
+          propertyDefinitionId
+        );
       }
+      const oldGroupKeys = groupedPropertyKeys(input.property);
+      const newGroupKeys = groupedPropertyKeys(input.apiValues);
+      const grouped = await buildOptimisticGroupedPropertyUpdates({
+        host,
+        entityId: input.entityId,
+        propertyDefinitionId,
+        oldGroupKeys: oldGroupKeys ?? [],
+        newGroupKeys: newGroupKeys ?? [],
+        revalidateOnly:
+          oldGroupKeys === undefined || newGroupKeys === undefined,
+      });
+      // Link the assignment before moving its owning row between groups.
+      optimisticCache.updates.push(...grouped.updates);
+      optimisticCache.revalidations.push(...grouped.revalidations);
+    } catch (error) {
+      console.warn('Failed to build property Soup optimism', error);
     }
   }
 
@@ -309,11 +330,18 @@ export function entityPropertyOptimisticMutationUuid(args: {
   );
 }
 
-const executeGraphqlEntityPropertyMutation: UrqlMutationExecutor<
-  SetEntityPropertyMutation,
-  SetEntityPropertyMutationVariables,
-  GraphqlEntityPropertyMutationInput
-> = async ({ client, mutation, input, context }) => {
+type EntityPropertyExecution = Parameters<
+  UrqlMutationExecutor<
+    SetEntityPropertyMutation,
+    SetEntityPropertyMutationVariables,
+    GraphqlEntityPropertyMutationInput
+  >
+>[0];
+
+async function executeGraphqlEntityPropertyMutation(
+  { client, mutation, input, context }: EntityPropertyExecution,
+  onEnqueued?: () => void
+) {
   const args = await prepareMutationArgs(input);
   const variables: SetEntityPropertyMutationVariables = {
     input: {
@@ -333,6 +361,7 @@ const executeGraphqlEntityPropertyMutation: UrqlMutationExecutor<
         {
           ...args.optimisticCache,
           uuid: entityPropertyOptimisticMutationUuid(args),
+          onEnqueued,
         }
       ).toPromise()
     : client.mutation(mutation, variables, context).toPromise());
@@ -358,7 +387,7 @@ const executeGraphqlEntityPropertyMutation: UrqlMutationExecutor<
         ? disposition.error
         : new CombinedError({ networkError: disposition.error }),
   };
-};
+}
 
 export type AddEntityPropertyInput = {
   entityType: EntityType | PropertyTargetEntityType;
@@ -448,7 +477,11 @@ type GraphqlBulkMutationOptions<Context> = {
   ) => void | Promise<void>;
 };
 
-/** Creates one callback-driven urql mutation for a bulk property save. */
+/**
+ * Enqueues every optimistic layer before waiting for HTTP, but keeps the bulk
+ * lifecycle pending until queued saves commit or permanently fail. Replayed
+ * saves retain their submission payload; settlement events carry no response.
+ */
 export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
   options: GraphqlBulkMutationOptions<Context> = {}
 ) {
@@ -469,23 +502,67 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
         | undefined;
       let permanentError: Error | undefined;
 
-      // Begin each durable layer sequentially so later relation recipes see
-      // the effective result of earlier property edits.
-      for (const item of input.properties) {
-        latestResult = await executeGraphqlEntityPropertyMutation({
-          client,
-          mutation,
-          input: { kind: 'save', ...item },
-          context,
-        });
-        const disposition = mutationDisposition(latestResult);
-        if (disposition.kind === 'committed') {
-          await options.onCommitted?.(item, disposition);
-        } else if (disposition.kind === 'permanently-failed') {
-          permanentError ??= disposition.error;
+      const pending = [];
+      const settlements = observePropertyMutationSettlements(
+        getGraphqlCacheHost()
+      );
+      try {
+        for (const item of input.properties) {
+          let acknowledge!: () => void;
+          const enqueued = new Promise<void>((resolve) => {
+            acknowledge = resolve;
+          });
+          async function submitSave() {
+            try {
+              const result = await executeGraphqlEntityPropertyMutation(
+                {
+                  client,
+                  mutation,
+                  input: { kind: 'save', ...item },
+                  context,
+                },
+                acknowledge
+              );
+              acknowledge();
+              const disposition = mutationDisposition(result);
+              if (disposition.kind === 'queued') {
+                await settlements.waitForCommit(disposition.transactionId);
+                await options.onCommitted?.(item, { kind: 'committed' });
+              } else if (disposition.kind === 'committed') {
+                await options.onCommitted?.(item, disposition);
+              }
+              return { kind: 'result' as const, result };
+            } catch (error) {
+              return {
+                kind: 'error' as const,
+                error:
+                  error instanceof Error ? error : new Error(String(error)),
+              };
+            } finally {
+              // Plain clients and failed preparation have no cache acknowledgement.
+              acknowledge();
+            }
+          }
+          pending.push(submitSave());
+          // Preserve layer ordering for relation recipes, not HTTP completion.
+          await enqueued;
         }
+        for (const settled of await Promise.all(pending)) {
+          if (settled.kind === 'error') {
+            permanentError ??= settled.error;
+            continue;
+          }
+          latestResult = settled.result;
+          const disposition = mutationDisposition(latestResult);
+          if (disposition.kind === 'permanently-failed') {
+            permanentError ??= disposition.error;
+          }
+        }
+      } finally {
+        settlements.dispose();
       }
 
+      if (!latestResult && permanentError) throw permanentError;
       if (!latestResult) {
         throw new Error(
           'bulk property mutation requires at least one property'

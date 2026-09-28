@@ -3,6 +3,12 @@ import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsla
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { Contact } from '@contacts/Contact/Contact';
 import { useBlockId } from '@core/block';
+import {
+  createParamsState,
+  ParamsProvider,
+} from '@core/component/ParamsProvider';
+import { createMethodRegistration } from '@core/orchestrator';
+import { blockHandleSignal } from '@core/signal/load';
 
 /**
  * Legacy adapter: bridges the block/split-layout system to the standalone
@@ -11,6 +17,10 @@ import { useBlockId } from '@core/block';
  */
 export function ContactBlockAdapter() {
   const contactId = useBlockId();
+  const params = createParamsState();
+  createMethodRegistration(blockHandleSignal.get, {
+    goToLocationFromParams: params.navigate,
+  });
   return (
     <>
       <SplitHeaderRight>
@@ -18,7 +28,9 @@ export function ContactBlockAdapter() {
           <CrmCopyLinkButton type="contact" id={contactId} />
         </HeaderIsland>
       </SplitHeaderRight>
-      <Contact contactId={contactId} />
+      <ParamsProvider state={params}>
+        <Contact contactId={contactId} />
+      </ParamsProvider>
     </>
   );
 }

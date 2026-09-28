@@ -312,6 +312,11 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
 
+AI text-writing operations require a paragraph/list-item or text-run ID. A
+table, row, cell, or list-container ID is rejected with guidance to choose a
+content block or use `setCell`. Existing stray inline content directly inside
+table cells is preserved in paragraphs when the editor opens the document.
+
 `@` opens the mention menu wherever the caret starts a word, including directly
 in front of existing text — the menu opens empty there instead of searching for
 the word ahead of the caret. Typed inside a word (`he@llo`) it stays literal text.

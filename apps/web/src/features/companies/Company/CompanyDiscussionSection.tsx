@@ -1,16 +1,14 @@
-import { Discussion, DiscussionProvider } from '@core/comments/discussion';
-import { CrmCommentEntityType } from '@service-storage/generated/schemas/crmCommentEntityType';
-import { useCrmDiscussionSource } from './crmDiscussionSource';
+import { useUserId } from '@core/context/user';
+import { EntityDiscussion } from '@core/messages/EntityDiscussion';
 
-/** Comment discussion for a CRM company, reusing the shared discussion UI. */
+/** Discussion on a CRM company, on the shared message components. */
 export function CompanyDiscussionSection(props: { companyId: string }) {
-  const source = useCrmDiscussionSource(
-    CrmCommentEntityType.crm_company,
-    () => props.companyId
-  );
+  const userId = useUserId();
   return (
-    <DiscussionProvider source={source}>
-      <Discussion />
-    </DiscussionProvider>
+    <EntityDiscussion
+      parent={{ type: 'crm_company', id: props.companyId }}
+      canWrite={!!userId()}
+      link={{ type: 'company', id: props.companyId }}
+    />
   );
 }

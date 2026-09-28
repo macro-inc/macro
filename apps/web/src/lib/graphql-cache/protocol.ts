@@ -304,6 +304,12 @@ export type OptimisticLinkPatchWire = {
     | { kind: 'remove'; entityKey: string }
     | { kind: 'prependUnique'; entityKey: string }
     | {
+        kind: 'upsertByField';
+        entityKey: string;
+        whereField: string;
+        equals: string | number | boolean | null;
+      }
+    | {
         kind: 'removeEmbeddedLink';
         listItem: {
           whereField: string;

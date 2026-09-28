@@ -10,31 +10,36 @@
 /** Which side of the diff a line belongs to, in Pierre's vocabulary. */
 export type DiffSide = 'additions' | 'deletions';
 
-export type ReviewNote = {
-  id: string;
+/**
+ * Where a note goes: the lines the reviewer picked. It ends on `side`; a
+ * unified range dragged from deleted lines into added ones starts on the
+ * other side, in `startSide`'s numbering.
+ */
+export type NoteAnchor = {
   /** The file the note is on, by its current path. */
   path: string;
   side: DiffSide;
-  /** First line of the annotated range, in that side's numbering. */
+  startSide?: DiffSide;
+  /** First line of the range. */
   lineNumber: number;
   /** Last line, equal to `lineNumber` for a single line. */
   endLineNumber: number;
+};
+
+export type ReviewNote = NoteAnchor & {
+  id: string;
   text: string;
   /** Set once the note has been posted to the agent. */
   sentAt?: string;
   createdAt: string;
 };
 
-/** Where a new note goes: the line the reviewer picked. */
-export type NoteAnchor = {
-  path: string;
-  side: DiffSide;
-  lineNumber: number;
-  endLineNumber: number;
-};
+/** The note being written: where it goes, and its text so far. */
+export type NoteDraft = { range: NoteAnchor; text: string };
 
 export function noteAnchorKey(anchor: NoteAnchor): string {
-  return `${anchor.path}:${anchor.side}:${anchor.lineNumber}-${anchor.endLineNumber}`;
+  const start = anchor.startSide ? `${anchor.startSide}@` : '';
+  return `${anchor.path}:${anchor.side}:${start}${anchor.lineNumber}-${anchor.endLineNumber}`;
 }
 
 export function queuedNotes(notes: readonly ReviewNote[]): ReviewNote[] {
@@ -55,24 +60,18 @@ export function orderNotes(notes: readonly ReviewNote[]): ReviewNote[] {
   );
 }
 
-/** Notes on one file, in line order, queued first. */
-export function notesForFile(
-  notes: readonly ReviewNote[],
-  path: string
-): ReviewNote[] {
-  return notes
-    .filter((note) => note.path === path)
-    .sort((a, b) => a.lineNumber - b.lineNumber);
-}
+const version = (side: DiffSide) => (side === 'additions' ? 'new' : 'old');
 
 export function describeNoteLines(
-  note: Pick<ReviewNote, 'side' | 'lineNumber' | 'endLineNumber'>
+  note: Pick<ReviewNote, 'side' | 'startSide' | 'lineNumber' | 'endLineNumber'>
 ): string {
-  const version = note.side === 'additions' ? 'new' : 'old';
-  if (note.endLineNumber > note.lineNumber) {
-    return `lines ${note.lineNumber}–${note.endLineNumber} (${version})`;
+  if (note.startSide && note.startSide !== note.side) {
+    return `line ${note.lineNumber} (${version(note.startSide)}) to line ${note.endLineNumber} (${version(note.side)})`;
   }
-  return `line ${note.lineNumber} (${version})`;
+  if (note.endLineNumber > note.lineNumber) {
+    return `lines ${note.lineNumber}–${note.endLineNumber} (${version(note.side)})`;
+  }
+  return `line ${note.lineNumber} (${version(note.side)})`;
 }
 
 /**
