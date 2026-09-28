@@ -602,18 +602,19 @@ export const SpreadsheetResponse = z.any().superRefine((x, ctx) => {
   }
 });
 
-export const CommentOnDocumentText = z.object({
+export const CommentOnDocument = z.object({
   documentId: z.string().uuid(),
-  text: z.string(),
-  occurrence: z.union([z.number().int().gte(1), z.null()]).optional(),
   content: z.string(),
+  threadId: z.union([z.string().uuid(), z.null()]).optional(),
+  quote: z.union([z.string(), z.null()]).optional(),
+  occurrence: z.union([z.number().int().gte(1), z.null()]).optional(),
 });
 
-export const CommentOnDocumentTextResponse = z.object({
+export const CommentOnDocumentResponse = z.object({
   documentId: z.string().uuid(),
   threadId: z.string().uuid(),
   commentId: z.string().uuid(),
-  markedText: z.string(),
+  markedText: z.union([z.string(), z.null()]).optional(),
 });
 
 export const ConfigureBot = z.object({
@@ -5281,18 +5282,6 @@ export const RenameDocumentResponse = z.object({
   success: z.boolean(),
   documentId: z.string().uuid(),
   message: z.string(),
-});
-
-export const ReplyToDocumentComment = z.object({
-  documentId: z.string().uuid(),
-  content: z.string(),
-  threadId: z.union([z.string().uuid(), z.null()]).optional(),
-});
-
-export const ReplyToDocumentCommentResponse = z.object({
-  documentId: z.string().uuid(),
-  threadId: z.string().uuid(),
-  commentId: z.string().uuid(),
 });
 
 export const ResolveDocumentComment = z.object({
