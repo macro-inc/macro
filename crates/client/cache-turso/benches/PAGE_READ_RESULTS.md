@@ -1,5 +1,10 @@
 # Reading 100–500 entries from a 10,000-record cache
 
+The matched original-baseline comparison is now in the
+[optimization review](OPTIMIZATION_REVIEW.md) and
+[interactive artifact](PAGE_READ_COMPARISON.html). This page retains the original
+optimized-only measurements.
+
 **Every measured database contains exactly 10,000 normalized records, including the requested data. Each outer result collection contains 100, 250 or 500 entries; fragment reads request that many keys.** This measures the current implementation after the [read optimizations](SCALE_OPTIMIZATION_RESULTS.md); it is an absolute latency study, not another before/after comparison.
 
 Run started 2026-09-26T23:40:38.841621+00:00, reported 2026-09-27T02:02:34.799300+00:00. AMD EPYC 9B45 shared Linux host; release native file-backed Turso and real Chromium/Firefox worker/WASM/OPFS. Runs were sequential and pinned to CPUs 0–3. Production worker/WASM assets match the optimized scale run byte-for-byte. Completed Chromium runs used the original harness; Firefox used a one-line harness guard to skip setup of the excluded pressure scenario. The timed warm/hydration paths are identical, and both bundle hashes and the guard are preserved in the raw artifact.

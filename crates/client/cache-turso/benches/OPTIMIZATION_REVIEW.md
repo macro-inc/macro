@@ -10,24 +10,86 @@ exactly 10,000 normalized records**, including the requested data. Fragment read
 request that many keys. The normal memory tier holds 10,000 records. Each timed
 read reconstructs the selected response; responses are not memoized.
 
-## Results and comparison status
+## Before and after
 
-The [completed optimized workload study](PAGE_READ_RESULTS.md) contains every
-operation's timings and p95 values. The matched rerun of the original
-pre-optimization implementation is in progress. This document will be completed
-with that comparison before the PR is marked ready for review.
+The complete comparison contains **576 matched distributions and 34,560 timed reads** across native Turso, Chromium and Firefox. Each version uses 30 measured reads after five warmups, at each response size and read state. All result and population assertions passed.
 
-The comparison freezes the original commit `ea7a41f9fd8a9106b839fad3695aac06ccb6244a`
-and its schema/operation corpus: 22 queries and 10 fragment selections. Both sides
-use the same fixtures, sizes, population, 30 measured reads after five warmups,
-and warm-memory versus selected-record Turso hydration scenarios. Original source
-and executable/WASM hashes are retained. The baseline uses the original production
-code, including its original SharedWorker lifecycle.
+[Explore every operation in the standalone HTML artifact](PAGE_READ_COMPARISON.html), [download p50/p95 comparisons](results/page-read-comparison.csv), or inspect [raw samples, hashes, run plans and diagnostic reruns](results/page-read-comparison-raw.json.gz).
 
-Current `main` has since added an operation and schema fields. Separate integration
-validation covers all **23 queries, 10 fragments and 13 Soup entity types** on
-the rebased branch. Those correctness runs are not mixed into the historical
-performance comparison.
+Values below are the **unweighted median of the 32 operation p50s**, in milliseconds. The speedup column is the median of their individual before/after ratios; it is not the ratio of the two aggregate columns or a traffic-weighted estimate.
+
+| Host | State | Returned entries | Before p50 median | After p50 median | Median operation speedup |
+| --- | --- | ---: | ---: | ---: | ---: |
+| native | Warm | 100 | 0.317 | 0.166 | 2.02× |
+| native | Warm | 250 | 0.853 | 0.419 | 1.93× |
+| native | Warm | 500 | 1.710 | 0.875 | 1.85× |
+| native | Turso hydration | 100 | 0.923 | 0.727 | 1.26× |
+| native | Turso hydration | 250 | 2.309 | 1.896 | 1.40× |
+| native | Turso hydration | 500 | 4.527 | 3.587 | 1.39× |
+| chromium | Warm | 100 | 1.350 | 0.900 | 1.73× |
+| chromium | Warm | 250 | 2.900 | 2.050 | 1.74× |
+| chromium | Warm | 500 | 6.200 | 3.700 | 1.94× |
+| chromium | Turso hydration | 100 | 2.800 | 2.250 | 1.31× |
+| chromium | Turso hydration | 250 | 5.850 | 5.100 | 1.45× |
+| chromium | Turso hydration | 500 | 11.100 | 7.950 | 1.57× |
+| firefox | Warm | 100 | 4.630 | 3.790 | 1.53× |
+| firefox | Warm | 250 | 11.010 | 8.940 | 1.59× |
+| firefox | Warm | 500 | 22.080 | 17.410 | 1.71× |
+| firefox | Turso hydration | 100 | 10.030 | 9.150 | 1.19× |
+| firefox | Turso hydration | 250 | 22.910 | 20.060 | 1.29× |
+| firefox | Turso hydration | 500 | 44.040 | 38.520 | 1.38× |
+
+Representative query **p50 before → after milliseconds** (p95 for every row is in the CSV and HTML artifact):
+
+| Query | Returned entries | State | Native | Chromium | Firefox |
+| --- | ---: | --- | ---: | ---: | ---: |
+| ChannelListSoup | 100 | Warm | 1.79 → 0.96 | 6.40 → 4.10 | 20.54 → 13.86 |
+| ChannelListSoup | 100 | Turso hydration | 5.16 → 3.18 | 11.60 → 7.30 | 44.18 → 31.62 |
+| ChannelListSoup | 500 | Warm | 10.43 → 5.13 | 39.70 → 16.80 | 109.60 → 58.46 |
+| ChannelListSoup | 500 | Turso hydration | 31.79 → 15.66 | 57.70 → 30.70 | 216.26 → 130.92 |
+| EmailThreadPage | 100 | Warm | 3.62 → 1.81 | 19.00 → 12.90 | 76.14 → 40.70 |
+| EmailThreadPage | 100 | Turso hydration | 11.27 → 6.12 | 29.60 → 17.70 | 122.80 → 72.36 |
+| EmailThreadPage | 500 | Warm | 26.68 → 19.95 | 98.40 → 67.10 | 419.10 → 237.38 |
+| EmailThreadPage | 500 | Turso hydration | 77.84 → 38.22 | 145.60 → 90.00 | 645.48 → 365.72 |
+| Soup | 100 | Warm | 3.59 → 1.78 | 14.00 → 5.80 | 45.24 → 22.54 |
+| Soup | 100 | Turso hydration | 9.36 → 5.73 | 19.20 → 11.70 | 72.84 → 50.50 |
+| Soup | 500 | Warm | 23.95 → 13.67 | 71.50 → 34.50 | 217.70 → 126.46 |
+| Soup | 500 | Turso hydration | 58.64 → 29.74 | 103.80 → 54.50 | 357.30 → 212.40 |
+
+17 of the 576 rows crossed a diagnostic threshold: p50 >20% slower with >5 µs native or >100 µs browser added, or p95 >40% slower with >20 µs native or >500 µs browser added. All 17 were rerun in three alternating before/after pairs, using 60 measured reads after 10 warmups per version (6,120 additional timed reads). 0 cases crossed the same diagnostic threshold in at least two of the three repeat pairs. This is a diagnostic rule, not a statistical significance test or production tail guarantee. All initial rows and repeat samples are retained.
+
+Some repeat medians remain slower: native ItemPreviewFileTypeCacheWrite (250, Turso hydration) p95 is 22.5% slower; firefox GraphqlProjectQuickAccessName (500, Turso hydration) p50 is 9.3% slower; firefox GraphqlProjectQuickAccessName (500, Turso hydration) p95 is 10.6% slower. These results are retained even when they do not cross the diagnostic threshold.
+
+Repeat values are the median of the three paired speedup ratios, not pooled latency estimates. The native optimized repeat executable was rebuilt from the optimized sources in the isolated frozen-schema tree; it differs from the saved primary executable because that executable embeds a source-directory path now containing the newer schema. Both executable hashes are retained in the raw provenance. Browser repeats reuse the primary production WASM assets.
+
+| Host | Operation | Returned | State | p50 speedup | p95 speedup | Threshold crossings (p50 / p95) |
+| --- | --- | ---: | --- | ---: | ---: | --- |
+| native | ItemPreviewFileTypeCacheWrite | 250 | Turso hydration | 1.10× | 0.82× | 0/3 / 0/3 |
+| native | MailAccounts | 250 | Turso hydration | 1.19× | 1.26× | 0/3 / 0/3 |
+| chromium | ChannelUnreadPresence | 100 | Turso hydration | 1.21× | 1.10× | 0/3 / 0/3 |
+| chromium | EntityProperties | 100 | Warm | 1.94× | 1.67× | 0/3 / 0/3 |
+| chromium | Favorites | 100 | Warm | 2.00× | 1.78× | 0/3 / 0/3 |
+| chromium | GraphqlChatQuickAccessName | 100 | Warm | 1.33× | 1.22× | 0/3 / 0/3 |
+| chromium | GraphqlDocumentQuickAccessName | 100 | Warm | 1.71× | 1.30× | 0/3 / 0/3 |
+| chromium | GraphqlProjectQuickAccessName | 100 | Turso hydration | 1.07× | 1.10× | 0/3 / 0/3 |
+| chromium | GraphqlProjectQuickAccessName | 250 | Turso hydration | 1.06× | 1.00× | 0/3 / 0/3 |
+| chromium | ItemPreview | 250 | Warm | 1.89× | 1.62× | 0/3 / 0/3 |
+| chromium | ItemPreviews | 500 | Warm | 2.04× | 1.93× | 0/3 / 0/3 |
+| chromium | MailAccounts | 250 | Warm | 1.75× | 1.58× | 0/3 / 0/3 |
+| chromium | MyActivityOverview | 100 | Warm | 1.60× | 1.25× | 0/3 / 0/3 |
+| chromium | SoupMembership | 500 | Warm | 1.60× | 1.27× | 0/3 / 0/3 |
+| firefox | GraphqlCrmCompanyQuickAccessFields | 100 | Turso hydration | 1.13× | 1.17× | 0/3 / 0/3 |
+| firefox | GraphqlProjectQuickAccessName | 500 | Turso hydration | 0.92× | 0.90× | 0/3 / 0/3 |
+| firefox | ItemPreviewFileTypeCacheWrite | 100 | Warm | 1.06× | 1.05× | 0/3 / 1/3 |
+
+
+Baseline runs began 2026-09-28T03:16:03.610689+00:00; the saved optimized run began 2026-09-26T23:40:38.841621+00:00. These are separate runs on a shared host, so scheduling differences can affect the comparison. Native setup twice failed under temporary-filesystem quota pressure; those attempts are archived and excluded from the final distributions. Moving older benchmark fixtures out of `/tmp` allowed the unchanged run to complete.
+
+The comparison freezes the original commit `ea7a41f9fd8a9106b839fad3695aac06ccb6244a` and its schema/operation corpus: 22 queries and 10 fragment selections. Both sides use identical workload inputs. Original production source, executable/WASM hashes and full manifests are preserved. The baseline includes the original SharedWorker lifecycle.
+
+The original Firefox worker can stall for 60 seconds during untimed cache reopening. Its baseline harness waits 500 ms after the existing close/lock checks, before reopening. All four production assets are byte-identical to the original bundle. Seeding, validation, warmups and timed reads are unchanged; the interrupted run is archived but excluded. The extra wait can affect scheduling/GC state, so this study makes no startup/reconnect claim. The saved optimized run and Chromium baseline did not use that wait.
+
+Current `main` has since added an operation and schema fields. Separate integration validation covers all **23 queries, 10 fragments and 13 Soup entity types** on the rebased branch. Those correctness runs are not mixed into this historical performance comparison.
 
 ## Changes
 
@@ -74,6 +136,8 @@ Integrated with `main` at `6aa857f746acea8e7b19666b2698d20155a33f13`:
 - Current-schema fixtures passed 450 native correctness scenarios and 112 browser
   scenarios in each browser. These small-sample integration runs are correctness
   evidence, not published latency estimates.
+- The standalone report passed offline Chromium checks for all 576 rows,
+  filters, sorting, displayed p50/p95 values, exact selections and narrow layouts.
 
 Integration exposed stale full-projection fixtures after main added the required
 `isFavorited` fact. Complete native/WASM/browser seeds now include it; deliberately
@@ -88,6 +152,12 @@ records before timing, then include their Turso fetch and response assembly.
 Seeding, invalidation and its auxiliary projection updates, and correctness checks
 are outside timing. Parsing and OS caches remain warm. Browser timings include
 worker messaging, WASM conversion and OPFS access when needed.
+
+Query pages are already cached under their variables; fragment reads request
+explicit entity keys. This measures cached selections, not server-side pagination
+or fetching a cache miss. Response size controls seeded list length or explicit
+fragment keys; it is not a SQL limit over the 10,000 records. Turso looks up the
+normalized keys needed to reconstruct the selection.
 
 The cache population is a count of normalized records, not complete documents or
 email threads. Background records are synthetic document metadata. GroupSoup sizes

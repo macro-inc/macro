@@ -1,7 +1,9 @@
 # GraphQL cache query benchmarks
 
 See the [optimization review](OPTIMIZATION_REVIEW.md) for the implementation,
-validation and original-baseline comparison.
+validation and original-baseline comparison. The standalone
+[interactive comparison](PAGE_READ_COMPARISON.html) includes every operation's
+p50 and p95; download/open the HTML file to use it offline.
 
 These release-mode suites discover every `query` in the web app's production
 GraphQL directory and every generated fragment passed to `selectRecords` under
@@ -234,7 +236,11 @@ reports time for the whole wave, not individual request p95.
 
 ## Comparing revisions
 
-Keep the benchmark harness identical across revisions. Create any additional
+Keep the timed benchmark harness identical across revisions. If an untimed setup
+workaround is necessary for the old implementation, record its exact diff, prove
+production assets are unchanged, and disclose the potential scheduling/GC effect.
+The original-baseline Firefox comparison documents such a settling wait.
+Create any additional
 worktree with **Herdr**, then run the same commands against the original and
 optimized implementations. Run measurements sequentially, after builds finish;
 avoid other CPU-heavy jobs. `taskset -c 0-3 <benchmark-executable> ...` can pin both
