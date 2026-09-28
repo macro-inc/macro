@@ -99,6 +99,7 @@ export function AgentPicker(props: {
                     props.selected?.id === agent().id ? (model() ?? null) : null
                   }
                   recommendedId={macroCatalog.currentModel()}
+                  disabled={Boolean(agent().unavailableReason)}
                   options={macroCatalog.models().map((option) => ({
                     id: option.id,
                     label: modelLabel(option.id, option.name),

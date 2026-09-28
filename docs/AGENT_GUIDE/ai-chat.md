@@ -79,7 +79,9 @@ permission failures should display a failed tool call without a successful resul
   A model chosen from that catalog is remembered in local storage as the
   default for Macro's in-memory agent until another model entry is picked.
   The built-in Macro agent is the only agent excluded from these sections; its models remain available.
-  Unavailable paired agents stay visible with a reason. Model discovery uses the
+  Unavailable paired agents stay visible with a reason.
+  If Macro is unavailable, its catalog stays searchable but
+  model choices are disabled in every list. Model discovery uses the
   selected runtime, including Claude Cloud. Every coding agent opens the repository
   drawer; chat agents hide it. Repository/branch overrides are currently applied
   only to Cursor sessions by the create-session API.

@@ -12,6 +12,7 @@ import {
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAgentRoster, type PersistedAgentLike } from '../core/roster';
+import { AgentPicker } from './AgentPicker';
 import { NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
@@ -553,6 +554,49 @@ describe('agent-led new conversation', () => {
     expect(send.mock.calls[1][0]).toMatchObject({
       modelOverride: 'anthropic/claude-sonnet-5',
     });
+  });
+  it('keeps unavailable Macro models disabled throughout the catalog', async () => {
+    const roster = buildAgentRoster({
+      agents: [],
+      runtimes: [],
+      cursorConnected: true,
+      cursorNeedsConnection: false,
+    });
+    const macro = {
+      ...roster[0],
+      unavailableReason: 'Temporarily unavailable',
+    };
+    const onSelect = vi.fn();
+    render(() => (
+      <AgentPicker
+        agents={[macro]}
+        selected={macro}
+        loading={false}
+        onSelect={onSelect}
+        onConnect={vi.fn()}
+        onCreate={vi.fn()}
+      />
+    ));
+    openAgents();
+    const sonnet = screen.getByTitle('Sonnet 5');
+    expect(sonnet.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(sonnet);
+    fireEvent.keyDown(sonnet, { key: 'Enter' });
+
+    const search = screen.getByRole('textbox', { name: 'Search models' });
+    fireEvent.input(search, { target: { value: 'GLM' } });
+    const flash = screen.getByTitle('GLM 5.3 Flash');
+    expect(flash.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(flash);
+    fireEvent.input(search, { target: { value: '' } });
+
+    const more = screen.getByRole('menuitem', { name: /More models/ });
+    more.focus();
+    fireEvent.keyDown(more, { key: 'ArrowRight' });
+    const extra = await screen.findByTitle('GLM 5.3 Flash');
+    expect(extra.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(extra);
+    expect(onSelect).not.toHaveBeenCalled();
   });
   it('restores a preferred Macro model on a fresh composer', () => {
     mocks.preferredInmemModel = 'anthropic/claude-sonnet-5';
