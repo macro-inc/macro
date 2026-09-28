@@ -17,7 +17,7 @@ describe('localDevServer', () => {
     const target = 'http://localhost:20109';
     const config = localDevServer({
       MACRO_LOCAL_BACKEND_PROXY: target,
-      MACRO_LOCAL_HOSTNAME: 'coworker-dev',
+      MACRO_LOCAL_HOSTNAME: 'Coworker-Dev',
       MACRO_LOCAL_BACKEND_ROUTES:
         '/auth,/connection-gateway,/websocket,/sync,/ai-editing,/i,/static-file',
     });

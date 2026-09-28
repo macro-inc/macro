@@ -25,7 +25,9 @@ export function localDevServer(
   return {
     hmr,
     // The launcher calls hostname; localhost and IPs remain Vite defaults.
-    allowedHosts: env.MACRO_LOCAL_HOSTNAME ? [env.MACRO_LOCAL_HOSTNAME] : [],
+    allowedHosts: env.MACRO_LOCAL_HOSTNAME
+      ? [env.MACRO_LOCAL_HOSTNAME.toLowerCase()]
+      : [],
     proxy: Object.fromEntries(
       routes.map((route) => [
         // Include bare WebSocket paths, but not /authentic or /sync-other.

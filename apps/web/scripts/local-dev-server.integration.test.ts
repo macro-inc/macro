@@ -48,7 +48,7 @@ it('proxies real HTTP and WebSocket requests through Vite without rewriting path
       port: 0,
       ...localDevServer({
         MACRO_LOCAL_BACKEND_PROXY: target,
-        MACRO_LOCAL_HOSTNAME: 'wolf-macro-google',
+        MACRO_LOCAL_HOSTNAME: 'Wolf-Macro-Google',
         MACRO_LOCAL_BACKEND_ROUTES: '/auth,/connection-gateway,/i',
       }),
     },
