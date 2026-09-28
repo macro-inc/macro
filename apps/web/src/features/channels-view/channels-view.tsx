@@ -215,7 +215,9 @@ function ChannelDetailRouteContent() {
     on(readyId, () => {
       const channel = hydrated();
       if (channel && channel.isParticipant !== false)
-        markChannelNotificationsSeenOnOpen(channel, notificationSource);
+        markChannelNotificationsSeenOnOpen(channel, notificationSource, {
+          scopeChannelThreads: false,
+        });
     })
   );
 

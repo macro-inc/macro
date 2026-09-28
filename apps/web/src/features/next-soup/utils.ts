@@ -429,6 +429,8 @@ interface OpenEntityOptions {
    * opening a channel row. Callers that can open channels must provide it.
    */
   notificationSource?: NotificationSource;
+  /** False for Chat conversations; Inbox rows keep their thread-scoped reads. */
+  scopeChannelThreads?: boolean;
 }
 
 /**
@@ -763,13 +765,17 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const content = getEntitySplitContent(entity);
 
-  const channelTarget = getChannelEntityTarget(entity);
+  const channelTarget = getChannelEntityTarget(entity, {
+    scopeChannelThreads: options.scopeChannelThreads,
+  });
   const channelMessageTarget =
     channelTarget?.kind === 'message' ? channelTarget : undefined;
   const openChannelAtLatest = channelTarget?.kind === 'latest';
 
   if (options.notificationSource) {
-    markChannelNotificationsSeenOnOpen(entity, options.notificationSource);
+    markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
+      scopeChannelThreads: options.scopeChannelThreads,
+    });
   }
 
   let params: Record<string, string> | undefined;
@@ -894,11 +900,13 @@ export const openEntityInSplitFromUnifiedList = async (
  * array (mobile Channels) or a list accessor. Only rows without an edge fall
  * back to the separately paginated global source. Passing these notifications
  * through the source keeps its REST cache and durable seen overrides in sync
- * while the configured mutation updates GraphQL edges.
+ * while the configured mutation updates GraphQL edges. Chat opens the whole
+ * conversation (scopeChannelThreads: false); Inbox opens only the row's stack.
  */
 export function markChannelNotificationsSeenOnOpen(
   entity: EntityWithRawNotifications<EntityData>,
-  notificationSource: NotificationSource
+  notificationSource: NotificationSource,
+  options: { scopeChannelThreads?: boolean } = {}
 ) {
   if (
     entity.type !== 'channel' &&
@@ -909,7 +917,7 @@ export function markChannelNotificationsSeenOnOpen(
   }
 
   const notifications = getEntityNotifications(entity, notificationSource, {
-    scopeChannelThreads: true,
+    scopeChannelThreads: options.scopeChannelThreads !== false,
   }).filter((notification) => !notificationIsRead(notification));
   if (notifications.length === 0) return;
 

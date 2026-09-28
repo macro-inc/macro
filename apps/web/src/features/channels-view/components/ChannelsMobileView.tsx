@@ -124,6 +124,7 @@ export function ChannelsMobileView(props: {
         splitHandle: panel.handle,
         referredFrom: 'channels',
         notificationSource,
+        scopeChannelThreads: false,
       });
     } catch (error) {
       if (request !== opening) return;

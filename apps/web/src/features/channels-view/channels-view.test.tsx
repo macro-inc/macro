@@ -214,7 +214,11 @@ describe('channel selection loading and recovery', () => {
       setQuery('isFetching', false);
     });
     expect(screen.getByTestId('channel-detail').textContent).toBe('one');
-    expect(mocks.markRead).toHaveBeenCalledOnce();
+    expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ id: 'one' }),
+      expect.anything(),
+      { scopeChannelThreads: false }
+    );
   });
 
   it('never marks cached data while a reopened selection is refreshing', async () => {

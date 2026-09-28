@@ -947,6 +947,64 @@ describe('getChannelEntityTarget', () => {
     ]);
   });
 
+  it.each(['channel_mention', 'channel_message_reply'] as const)(
+    'marks %s when Chat opens the whole channel without reading the global feed',
+    (tag) => {
+      const notification = {
+        ...sendNotification('thread-notification', 'message'),
+        notification_event_type: tag,
+        notification_metadata: {
+          tag,
+          content: { messageId: 'message', threadId: 'root' },
+        },
+      } as UnifiedNotification;
+      const bulkMarkAsRead = vi.fn(async () => {});
+      const notificationsByEntity = vi.fn(() => ({}));
+      markChannelNotificationsSeenOnOpen(
+        channelRow({ notifications: [notification] }),
+        { ...notificationSourceWithBulkMarkAsRead(bulkMarkAsRead), notificationsByEntity },
+        { scopeChannelThreads: false }
+      );
+      expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([notification]);
+      expect(notificationsByEntity).not.toHaveBeenCalled();
+    }
+  );
+
+  it('marks mixed channel notifications on repeated Chat opens, skipping local reads', () => {
+    const send = sendNotification('send', 'root');
+    const reply = replyNotification('reply', 'reply-message', 'root');
+    const mention = {
+      ...sendNotification('mention', 'mentioned-message'),
+      notification_event_type: 'channel_mention',
+      notification_metadata: {
+        tag: 'channel_mention',
+        content: { messageId: 'mentioned-message' },
+      },
+    } as UnifiedNotification;
+    const read = asRead(sendNotification('seen', 'seen-message'));
+    const done = { ...sendNotification('done', 'done-message'), state: 'done' as const };
+    const readIds = new Set<string>();
+    const bulkMarkAsRead = vi.fn(async (notifications: UnifiedNotification[]) => {
+      for (const notification of notifications) readIds.add(notification.id);
+    });
+    const source: NotificationSource = {
+      ...notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      withLocalOverrides: (notification) => readIds.has(notification.id) ? asRead(notification) : notification,
+    };
+    const notifications = [send, reply, mention, read, done];
+    const channel = channelRow({ notifications });
+    const open = () => markChannelNotificationsSeenOnOpen(channel, source, { scopeChannelThreads: false });
+    open();
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([send, reply, mention]);
+    open();
+    expect(bulkMarkAsRead).toHaveBeenCalledTimes(1);
+    const incoming = replyNotification('incoming', 'new-reply', 'root');
+    notifications.push(incoming);
+    open();
+    expect(bulkMarkAsRead).toHaveBeenCalledTimes(2);
+    expect(bulkMarkAsRead).toHaveBeenLastCalledWith([incoming]);
+  });
+
   it('marks attached channel notifications through the shared split-open path', async () => {
     const notification = sendNotification('shared-open', 'message');
     const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
@@ -978,7 +1036,7 @@ describe('getChannelEntityTarget', () => {
     expect(bulkMarkAsRead).toHaveBeenCalledWith([notification]);
   });
 
-  it('marks raw GraphQL notifications when opening a mobile channel', async () => {
+  it.each([false, true])('marks the whole GraphQL channel from Chat (new split=%s)', async (openInNewSplit) => {
     const unread = sendNotification('mobile-unread', 'message');
     const read = asRead(sendNotification('mobile-read', 'read-message'));
     const reply = replyNotification('mobile-reply', 'reply', 'thread-root');
@@ -996,14 +1054,44 @@ describe('getChannelEntityTarget', () => {
     const channel = { ...channelRow(), notifications: [unread, read, reply] };
     await openEntityInSplitFromUnifiedList(channel, {
       referredFrom: 'channels',
+      openInNewSplit,
       notificationSource: notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      scopeChannelThreads: false,
     });
 
     expect(openWithSplit).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'channel', id: 'channel-1' }),
-      expect.objectContaining({ referredFrom: 'channels' })
+      expect.objectContaining({ referredFrom: 'channels', preferNewSplit: openInNewSplit })
     );
-    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread]);
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread, reply]);
+  });
+
+  it('chooses the unread reply target before marking a Chat conversation read', async () => {
+    const reply = replyNotification('reply-target', 'reply-message', 'root');
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({
+        getBlockHandle: vi.fn(async () => undefined),
+      })),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+    const bulkMarkAsRead = vi.fn(async () => { reply.state = 'seen'; });
+    await openEntityInSplitFromUnifiedList(channelRow({ notifications: [reply] }), {
+      notificationSource: notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      scopeChannelThreads: false,
+    });
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          channel_message_id: 'reply-message',
+          channel_thread_id: 'root',
+        }),
+      }),
+      expect.any(Object)
+    );
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([reply]);
   });
 
   it('uses the global source for channels without an attached notification edge', () => {
