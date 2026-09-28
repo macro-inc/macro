@@ -28,3 +28,8 @@ Caddy forwards frontend assets and HMR to Vite while routing API and backend
 WebSockets directly. No Tailscale setup is required; the browser needs network
 access to that hostname and port. Plain HTTP on a remote hostname cannot retain
 secure login cookies.
+
+Standalone `bun run dev` uses the same CA and serves HTTPS directly through
+Vite. Hosted dev API and WebSocket requests use `/__macro_dev/` on the page
+origin, with auth cookies scoped to that hostname. Use email-code sign-in; the
+hosted Google/SSO redirect allowlist does not include arbitrary hostnames.

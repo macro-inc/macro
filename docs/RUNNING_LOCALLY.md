@@ -72,12 +72,18 @@ Vite detects your hostname and prints `https://<hostname>:3000/app/` when ready
 development CA as `just local`; trust `infra/local/certs/ca.pem` once on the
 machine running the browser. See the [certificate README](../infra/local/certs/README.md).
 The visiting machine must resolve the hostname and reach that port. No Docker
-proxy or Tailscale is needed. Hosted service authentication and CORS rules still
-apply; HTTPS does not change which origins those services accept.
+proxy or Tailscale is needed. Vite forwards hosted development API and WebSocket
+requests through `/__macro_dev/` on this same origin, so arbitrary machine
+hostnames do not need to be added to the deployed CORS allowlist. Authentication
+cookies are scoped to the visiting hostname; sign in with an email code on that
+hostname rather than relying on an existing `.macro.com` cookie. Google/SSO
+redirects still use the hosted authentication service’s redirect allowlist, which
+does not currently include arbitrary development hostnames.
 
 Use `MACRO_DEV_HTTPS=false bun run dev` for an HTTP-only workflow. Tauri and the
 local stack's internal Vite server keep using HTTP automatically; the stack
 provides HTTPS through its proxy. Builds and preview servers are unchanged.
+`MACRO_DEV_PROXY=false` opts out of the hosted API proxy.
 
 ## Run the local stack
 
@@ -277,6 +283,11 @@ Login fallback redirects, Pipedream origins, MCP callbacks, and file permalinks
 use that same HTTPS origin for attached local stacks.
 If your host firewall blocks Docker-to-host traffic, allow the instance's
 Docker network to reach the Vite port through `host.docker.internal`.
+Startup verifies `/app/` through the HTTPS proxy before printing “ready”;
+a listening Vite port alone is insufficient. A 502 with a proxy log such as
+`dial tcp <host-gateway>:<vite-port>: i/o timeout` indicates this firewall path
+is blocked. Firewall rules must cover the current instance's Docker network
+and frontend port, which can differ between instances.
 
 Trust `infra/local/certs/ca.pem` in the visiting browser once (see the
 [certificate README](../infra/local/certs/README.md)), then open that URL.

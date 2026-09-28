@@ -190,6 +190,42 @@ pub fn wait_backend_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     stage.run("Waiting for backend (proxy /auth/health)", &mut cmd)
 }
 
+/// A listening Vite port does not prove the containerized proxy can reach it.
+/// Verify the browser's route before announcing that the stack is ready.
+fn wait_frontend_proxy_ready(stage: &Stage, instance: &Instance) -> Result<()> {
+    let mut cmd = Command::new("curl");
+    cmd.args([
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--retry",
+        "8",
+        "--retry-connrefused",
+        "--retry-delay",
+        "1",
+        "--retry-max-time",
+        "45",
+        "--max-time",
+        "5",
+        "--output",
+        "/dev/null",
+        "--cacert",
+    ])
+    .arg(proxy::ca_pem())
+    .arg(format!("{}/app/", proxy::url(instance)));
+    stage
+        .run("Checking frontend through HTTPS proxy", &mut cmd)
+        .with_context(|| {
+            format!(
+                "HTTPS proxy could not serve the frontend. Check proxy logs and Docker-to-host \
+                 firewall access to host.docker.internal:{} (Vite's port). \
+                 Direct Vite URL: {}",
+                instance.port(Port::Frontend),
+                url(instance)
+            )
+        })
+}
+
 /// A running frontend dev server plus its captured output, so an unexpected
 /// exit can be explained (the output is otherwise suppressed).
 pub struct Frontend {
@@ -335,6 +371,7 @@ pub fn start(
         cmd.env(k, v);
     }
     let process = spawn(stage, &mut cmd, port)?;
+    wait_frontend_proxy_ready(stage, instance)?;
     Ok(Some(Frontend {
         process,
         command: cmd,
