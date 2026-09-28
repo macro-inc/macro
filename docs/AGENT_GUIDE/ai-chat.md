@@ -35,8 +35,9 @@ roster. **Agents** and **Connections** remain reachable from the list.
 
 With the flag enabled, Home/list composers, search, the create menu, folder AI
 creation, contextual **Chat with AI**, and onboarding prompts all start new agent
-sessions. Existing legacy chat rows still open their original chats. Without the
-flag, the existing creation and list flows remain available.
+sessions. Existing legacy chat rows still open their original chats. Contextual
+chat actions use agent sessions regardless of the flag; without the flag, the
+legacy list and flag-gated composer flows remain available.
 
 While an agent works, a draft can be sent to its queue. Above the queue,
 **Send next** explicitly interrupts the current turn and sends the oldest queued
@@ -305,10 +306,11 @@ the shimmer.
   Archived sessions are read-only: Rename and all message controls are unavailable,
   and an **Unarchive** action replaces the composer at the bottom. Archive /
   Unarchive is also available from the title dropdown.
-- Touch devices and users outside the flag retain the Owned / Running / Shared /
-  Automations / Skills list. On touch devices, conversation links open standalone
-  agent sessions or legacy chats instead of the desktop Agents workspace. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
-  is `/app/md/<doc>/chat/<chat>` (split view).
+- Users without `enable-chat-v3-agents` retain the Owned / Running / Shared /
+  Automations / Skills list. With the flag enabled, touch devices use the new
+  conversation list described above. Touch conversation links open standalone
+  agent sessions or legacy chats. A standalone legacy chat is `/app/chat/<uuid>`;
+  doc-scoped chat is `/app/md/<doc>/chat/<chat>` (split view).
 
 ## Routine run history
 
