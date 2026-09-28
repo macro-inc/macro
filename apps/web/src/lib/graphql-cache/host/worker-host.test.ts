@@ -30,6 +30,7 @@ import { CacheNavigationError } from './navigation-error';
 import { createWorkerCacheHost } from './worker-host';
 
 const CLIENT_ID = '00000000-0000-4000-8000-000000000007';
+const STORAGE_GENERATION = '00000000-0000-7000-8000-000000000001';
 const EMPTY_WRITE: WriteResult = {
   revision: INITIAL_CACHE_REVISION,
   revisionAdvanced: false,
@@ -42,6 +43,8 @@ function responseFor(request: CacheRequest): unknown {
   switch (request.kind) {
     case 'current-revision':
       return INITIAL_CACHE_REVISION;
+    case 'current-storage-generation':
+      return STORAGE_GENERATION;
     case 'read':
       return { kind: 'miss' };
     case 'read-records-by-keys':
@@ -245,6 +248,44 @@ describe('createWorkerCacheHost', () => {
         identity: 'user-1',
       })
     );
+  });
+
+  it('reads the durable generation through initialization without requiring a reset notification', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await expect(host.currentStorageGeneration()).resolves.toBe(
+      STORAGE_GENERATION
+    );
+    expect(requireAdapter().requests.map(({ kind }) => kind)).toEqual([
+      'init',
+      'current-storage-generation',
+    ]);
+    host.dispose();
+  });
+
+  it('notifies generation subscribers only when a live cache change resets storage', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentStorageGeneration();
+    const changed = vi.fn();
+    const unsubscribe = host.onCacheGenerationChanged(changed);
+    requireAdapter().push({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+    });
+    expect(changed).not.toHaveBeenCalled();
+    requireAdapter().push({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+      reset: true,
+    });
+    expect(changed).toHaveBeenCalledExactlyOnceWith({ storage: 'reset' });
+    unsubscribe();
+    requireAdapter().push({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+      reset: true,
+    });
+    expect(changed).toHaveBeenCalledOnce();
+    host.dispose();
   });
 
   it('uses the no-op host when OPFS is unavailable', () => {

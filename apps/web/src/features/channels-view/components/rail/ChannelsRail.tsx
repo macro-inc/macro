@@ -13,7 +13,9 @@ import {
   type ChannelPreviewSelection,
   channelPreviewSelection,
   getChannelEntityTarget,
+  markChannelNotificationsSeenOnOpen,
   navigateChannelEntityToTarget,
+  openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -161,10 +163,20 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const selectChannel = async (
     channel: WithNotification<ChannelEntity>,
-    channelId: string
+    channelId: string,
+    openInNewSplit: boolean
   ) => {
     try {
       const entity = withEntityNotifications(channel, notificationSource);
+      if (openInNewSplit) {
+        await openEntityInSplitFromUnifiedList(entity, {
+          openInNewSplit: true,
+          referredFrom: 'channels',
+          notificationSource,
+          scopeChannelThreads: false,
+        });
+        return;
+      }
       const selection = channelPreviewSelection(channelId, {
         target: getChannelEntityTarget(entity, {
           scopeChannelThreads: false,
@@ -173,6 +185,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
       });
       const previous = selectedChannel();
       if (!setSelectedChannel(selection)) return;
+      // Mark on every accepted activation, including re-clicks of the same
+      // route. The detail's ready-id effect only handles initial/route opens.
+      if (channel.isParticipant !== false) {
+        markChannelNotificationsSeenOnOpen(entity, notificationSource, {
+          scopeChannelThreads: false,
+        });
+      }
       // Repeated clicks must navigate even when the route stays the same.
       if (
         previous?.id === selection.id &&
@@ -189,21 +208,23 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const selectHydratedChannel = async (
     pending: Promise<WithNotification<ChannelEntity>>,
     request: number,
-    channelId: string
+    channelId: string,
+    openInNewSplit: boolean
   ) => {
     try {
       const channel = await pending;
       if (request !== activation) return;
       // Only fetched selections need to join the browser router's transition.
       await startTransition(() => {
-        if (request === activation) void selectChannel(channel, channelId);
+        if (request === activation)
+          void selectChannel(channel, channelId, openInNewSplit);
       });
     } catch (error) {
       if (request === activation) reportActivationError(error);
     }
   };
 
-  const activateChannel = (channel: ChannelEntity) => {
+  const activateChannel = (channel: ChannelEntity, openInNewSplit: boolean) => {
     const request = ++activation;
     // Capture before hydrate/await — store proxies from the list can lose
     // fields if the query refreshes while notifications are fetched.
@@ -216,10 +237,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
       channel,
       notificationSource.withLocalOverrides
     );
-    if (selection instanceof Promise) {
-      void selectHydratedChannel(selection, request, channelId);
+    // Telemetry installs ZoneAwarePromise; native async results are not
+    // instances of that constructor. Detect the pending edge structurally.
+    if ('then' in selection) {
+      void selectHydratedChannel(selection, request, channelId, openInNewSplit);
     } else {
-      void selectChannel(selection, channelId);
+      void selectChannel(selection, channelId, openInNewSplit);
     }
   };
 
@@ -495,20 +518,17 @@ export function ChannelsRail(props: ChannelsRailProps) {
         const channelId =
           item.kind === 'favorite' ? item.favorite.entityId : item.channel.id;
 
-        if (openInNewSplit) {
-          layout.openWithSplit(
-            { type: 'channel', id: channelId },
-            { preferNewSplit: true, referredFrom: 'channels' }
-          );
-          return;
-        }
-
         const channel =
           item.kind === 'conversation'
             ? item.channel
             : channelsById().get(channelId);
-        if (channel) activateChannel(channel);
-        else setSelectedChannel({ type: 'channel', id: channelId });
+        if (channel) activateChannel(channel, openInNewSplit);
+        else if (openInNewSplit) {
+          layout.openWithSplit(
+            { type: 'channel', id: channelId },
+            { preferNewSplit: true, referredFrom: 'channels' }
+          );
+        } else setSelectedChannel({ type: 'channel', id: channelId });
       },
     })
   );

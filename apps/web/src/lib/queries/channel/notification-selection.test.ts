@@ -61,6 +61,25 @@ describe('channel selection hydration', () => {
     expect(full.notifications?.()).toEqual([{ id: 'one' }]);
   });
 
+  it.each([true, false, undefined])(
+    'preserves participant status (%s) when the source changes during hydration',
+    async (isParticipant) => {
+      const row = {
+        ...channel([{ id: 'one', state: 'unseen', createdAt: '2026-01-01' }]),
+        isParticipant,
+      };
+      fetchNotifications.mockImplementation(async () => {
+        row.isParticipant = undefined;
+        return [{ id: 'one' }];
+      });
+
+      const full = await hydrateChannelNotificationSelection(row);
+
+      expect(full.isParticipant).toBe(isParticipant);
+      expect(full.notifications?.()).toEqual([{ id: 'one' }]);
+    }
+  );
+
   it('does not silently mark a partial selection on a failed full read', async () => {
     fetchNotifications.mockRejectedValue(new Error('offline and uncached'));
     await expect(

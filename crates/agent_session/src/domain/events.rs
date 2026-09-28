@@ -46,7 +46,10 @@ impl ThreadOrigin {
     pub fn new(parent: MessageParent, thread_id: Uuid, originating_message_id: Uuid) -> Self {
         let channel_id = match &parent {
             MessageParent::Channel(channel_id) => Some(*channel_id),
-            MessageParent::Document(_) | MessageParent::Initiative(_) => None,
+            MessageParent::Document(_)
+            | MessageParent::Initiative(_)
+            | MessageParent::CrmCompany(_)
+            | MessageParent::CrmContact(_) => None,
         };
         Self {
             parent,

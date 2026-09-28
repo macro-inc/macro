@@ -5,6 +5,20 @@ User-sent messages in chat and agent transcripts use an ink-colored bubble with
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
+## Working with projects
+
+Project tools can list, read, create, update, delete, and share projects; set or
+clear task associations; and read project activity. Backend tool names use
+`Initiative`. These operate on the native Projects views in Tasks.
+
+Each completed tool row has an expandable result toggle, including empty results
+and per-task failures. Project chips open the native project. Shift-click opens
+another split. **Result data** reveals the complete returned response. Successful
+mutations refresh the project views.
+Deleting a project shows its result without a link to the deleted project.
+Failed project deletions show `Not deleted`. Clearing projects from several tasks
+reports each task's outcome, including partial failures.
+
 ## Uploading files with AI
 
 `UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
@@ -65,19 +79,23 @@ permission failures should display a failed tool call without a successful resul
   Direct model selections show only the model name and provider icon in the input.
   Saved and coding agents show their identity beside the current model. There is
   no Chat/Code switch or separate model button.
-- The agent dropdown includes every saved agent regardless of runtime, plus Cursor,
-  grouped in **Models**, **Agents**, and **Coding agents** sections. **Models** lists
-  Macro’s available models with readable names (for example, **Sonnet 5**) and
-  provider or model icons aligned with the agent icons. The in-memory catalog
-  offers the closed Anthropic and OpenAI chat models, Fireworks-hosted
-  **Kimi K3**, **DeepSeek V4 Pro**, and **Muse Glimmer**, and Google's
-  **Gemini 3.8 Flash**; older Sonnet and Opus versions are not offered.
+- The agent dropdown includes every saved agent regardless of runtime, plus Cursor.
+  Macro's models use the same searchable catalog as running sessions: a short
+  **Recommended** list and a **More models** submenu grouped by model family,
+  followed by **Agents** and **Coding agents** sections. Models have readable
+  names (for example, **Sonnet 5**) and provider or model icons aligned with the
+  agent icons. The in-memory catalog offers the closed Anthropic and OpenAI chat
+  models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
+  open-weight models; and Google's **Gemini 3.8 Flash**. Older Sonnet and Opus
+  versions are not offered.
   Selecting a model here selects
   the default runtime and applies that model to the next send, retracting the repository drawer.
-  A model chosen from that **Models** list is remembered in local storage as the
-  default for Macro's in-memory agent until another Models entry is picked.
+  A model chosen from that catalog is remembered in local storage as the
+  default for Macro's in-memory agent until another model entry is picked.
   The built-in Macro agent is the only agent excluded from these sections; its models remain available.
-  Unavailable paired agents stay visible with a reason. Model discovery uses the
+  Unavailable paired agents stay visible with a reason.
+  If Macro is unavailable, its catalog stays searchable but
+  model choices are disabled in every list. Model discovery uses the
   selected runtime, including Claude Cloud. Every coding agent opens the repository
   drawer; chat agents hide it. Repository/branch overrides are currently applied
   only to Cursor sessions by the create-session API.
@@ -304,9 +322,9 @@ request, sending a message answers HTTP 402 and the app opens the
 **AI usage limit** dialog (title `You've used this month's included AI`, or the
 spending-limit / failed-charge variants). It shows the same meter and controls
 as Settings → Billing: credit-pack buttons, the `Usage billing` toggle, an
-`Open billing settings` button, and `Upgrade to Max` for Premium payers (on a
-team this moves only the payer's own seat). Team members who are not the payer
-see a note to ask the team owner, or a team admin to move their seat to Max.
+`Open billing settings` button, and no Max purchase or upgrade control. Team
+members who are not the payer see a note to ask the team owner to add credits
+or turn on usage billing.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
 
@@ -513,6 +531,9 @@ appears in the header (top right) and in the side-panel Details. Click it
 to open the PR entity in a split; until GitHub has synced the entity the
 chip is a GitHub link instead. The icon and status word follow open /
 merged / closed.
+
+Tool rows show the tool's own name without an MCP server or workspace prefix.
+Chat MCP rows retain their service icon.
 
 Individual tools appear as bare rows with an icon, tool name, optional detail,
 and a right-aligned result summary. The caret on the right opens the results;

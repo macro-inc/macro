@@ -12,6 +12,7 @@ stay outside this library.
 - `defineRoute()` infers node-local callback and synchronous Standard Schema
   output types, including `remountKey`, and types descendant references relative
   to that root. `defineRoutes()` assembles the static tree and rebinds ancestry.
+  Both attach a non-enumerable `to(params)` builder to route definitions in place.
 - `toReference(params)` optionally describes the matched content as `{ type, id }`
   for host consumers. The router does not interpret or invoke it during navigation.
 - `useRouteParams(route)` reads only that node's params. `useParams(route)` reads
@@ -32,6 +33,7 @@ export const folder = defineRoute({
   id: 'folder',
   path: 'drive/folder/:folderId',
   params: z.object({ folderId: z.string() }),
+  search: ['drive'],
   children: [defineRoute({
     id: 'document',
     path: 'document/:documentId',
@@ -42,16 +44,21 @@ export const folder = defineRoute({
 export const document = folder.children[0];
 export const routes = defineRoutes({ definitions: [folder] });
 
-navigate({
-  route: document,
-  params: { folderId: 'folder-1', documentId: 'document-1' },
+navigate(document.to({ folderId: 'folder-1', documentId: 'document-1' }));
+// Search remains a navigation option, not part of the route target:
+navigate(document.to({ folderId: 'folder-1', documentId: 'document-1' }), {
+  search: { drive: { commentId: ['comment-1'] } },
 });
 const branch = useParams(document);       // folderId + documentId
 const local = useRouteParams(document);  // documentId only
 ```
 
-Both helpers return the same objects: they do not clone, mutate, compile, or
-cache the tree. Ancestry metadata exists only in TypeScript. Export root definitions
+These helpers preserve the same route objects; they do not clone or compile the tree.
+`to(params)` returns `{ route, params }` without serializing, validating, or
+navigating. It is available on nested declarations and plain nodes assembled by
+`defineRoutes()`. TypeScript enforces the complete destination params; navigation
+validates them at runtime. Route identity is preserved while the builder is attached
+in place. Ancestry metadata exists only in TypeScript. Export root definitions
 directly and take descendant references through their named parent; positional
 aliases from `routes.definitions` are unnecessary. A separately declared child
 variable cannot acquire knowledge of a parent that later adopts it. Use `defineRoute`

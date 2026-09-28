@@ -306,6 +306,14 @@ pub trait MessageRepository: Send + Sync + 'static {
         id: i64,
         is_thread: bool,
     ) -> impl Future<Output = Result<Option<Uuid>, MessageError>> + Send;
+    /// The parent a live message belongs to; `None` once it is deleted. Grants
+    /// nothing: it only tells an id-addressed adapter which parent receipt to mint.
+    fn parent_of(
+        &self,
+        _id: Uuid,
+    ) -> impl Future<Output = Result<Option<MessageParent>, MessageError>> + Send {
+        async { Ok(None) }
+    }
 }
 
 /// Publish committed changes, deriving delivery policy from the persisted parent.
@@ -392,4 +400,33 @@ impl MessageGroupRecipients for NoMessageGroups {
             "channel group mentions are unavailable",
         ))
     }
+}
+
+/// Identity of a CRM company or contact that hosts a discussion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmParentFacts {
+    /// The team that owns the record.
+    pub team_id: Uuid,
+    /// The company itself, or the contact's company.
+    pub company_id: Uuid,
+    /// Display name: a company's custom or directory name (else its primary
+    /// domain), a contact's name (else its email).
+    pub name: String,
+}
+
+/// Read-only CRM parent identity, implemented by the CRM domain. Returned facts
+/// grant nothing: callers verify capabilities before exposing them.
+pub trait CrmParentReader: Send + Sync + 'static {
+    /// The facts for a live CRM company or contact parent, or `None` once it has
+    /// been deleted or when the parent is not a CRM record.
+    fn read_crm_parent(
+        &self,
+        parent: &MessageParent,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<Option<CrmParentFacts>, rootcause::Report>>
+                + Send
+                + '_,
+        >,
+    >;
 }

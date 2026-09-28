@@ -74,6 +74,7 @@ export type {
   EmptyStatePanelProps,
 } from './components/EmptyStatePanel';
 export { EmptyStatePanel } from './components/EmptyStatePanel';
+export { EntityComposer } from './components/EntityComposer';
 export type { FilteredHiddenBannerProps } from './components/FilteredHiddenBanner';
 export { FilteredHiddenBanner } from './components/FilteredHiddenBanner';
 export { Hotkey } from './components/Hotkey';

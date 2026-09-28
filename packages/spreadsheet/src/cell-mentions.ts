@@ -7,8 +7,20 @@ export type CellMention =
       documentName: string;
       blockName: string;
       blockParams?: Record<string, string>;
-    };
+    }
+  | CellDateMention;
+/** `date` is the ISO instant docs store; `displayFormat` is the label chosen at insertion. */
+export type CellDateMention = {
+  type: 'date';
+  date: string;
+  displayFormat: string;
+};
 export type CellTextPart = { text: string; mention?: CellMention };
+const dateLabelFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
 const blocks = new Set([
   'csv',
   'write',
@@ -81,6 +93,19 @@ function mentionData(type: string, encoded: string): CellMention | undefined {
         ...(params ? { blockParams: params } : {}),
       };
     }
+    if (
+      type === 'date' &&
+      text('date') &&
+      data.date.length <= 64 &&
+      Number.isFinite(Date.parse(data.date)) &&
+      typeof data.displayFormat === 'string' &&
+      data.displayFormat.length <= 2048
+    )
+      return {
+        type: 'date',
+        date: data.date,
+        displayFormat: data.displayFormat,
+      };
   } catch {
     /* Malformed tags remain literal text. */
   }
@@ -91,7 +116,7 @@ export function cellTextParts(value: string): CellTextPart[] {
   const parts: CellTextPart[] = [];
   let end = 0;
   for (const match of value.matchAll(
-    /<m-(user|document)-mention>(.*?)<\/m-\1-mention>/gs
+    /<m-(user|document|date)-mention>(.*?)<\/m-\1-mention>/gs
   )) {
     const mention = mentionData(match[1], match[2]);
     if (!mention) continue;
@@ -103,9 +128,24 @@ export function cellTextParts(value: string): CellTextPart[] {
   return parts.length ? parts : [{ text: value }];
 }
 export function cellMentionLabel(mention: CellMention): string {
-  return mention.type === 'user'
-    ? `@${mention.displayName || mention.email}`
-    : mention.documentName || 'Linked item';
+  if (mention.type === 'user')
+    return `@${mention.displayName || mention.email}`;
+  if (mention.type === 'date')
+    return (
+      mention.displayFormat || dateLabelFormatter.format(new Date(mention.date))
+    );
+  return mention.documentName || 'Linked item';
+}
+/** A cell holding exactly one date pill, ignoring surrounding whitespace. */
+export function cellDateMention(value: string): CellDateMention | undefined {
+  let found: CellDateMention | undefined;
+  for (const part of cellTextParts(value)) {
+    if (part.mention?.type === 'date') {
+      if (found) return;
+      found = part.mention;
+    } else if (part.mention || part.text.trim()) return;
+  }
+  return found;
 }
 export function cellPlainText(value: string): string {
   return cellTextParts(value)

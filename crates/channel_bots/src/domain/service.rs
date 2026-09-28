@@ -397,10 +397,12 @@ where
             .thread_id
             .or_else(|| parent.is_discussion().then_some(trigger_id));
         if let Some(root_id) = thread_root {
-            let place = if parent.is_discussion() {
-                "a document discussion"
-            } else {
-                "a channel thread"
+            let place = match parent {
+                MessageParent::Channel(_) => "a channel thread",
+                MessageParent::Document(_) => "a document discussion",
+                MessageParent::Initiative(_) => "a project discussion",
+                MessageParent::CrmCompany(_) => "a CRM company discussion",
+                MessageParent::CrmContact(_) => "a CRM contact discussion",
             };
             let (intro, thread_instruction, marker) = match event.trigger {
                 BotTrigger::Mention => (

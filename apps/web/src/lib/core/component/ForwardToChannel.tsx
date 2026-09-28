@@ -27,6 +27,7 @@ import {
   itemTypeToReferenceEntityType,
 } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { Button, cn, Hotkey } from '@ui';
 import {
@@ -191,6 +192,16 @@ interface ForwardToChannelProps {
   }) => void;
   hideAccessLevelSelector?: boolean;
   initialAccessLevel?: AccessLevel | null;
+  /** Attach an entity that has no block, instead of `blockId`/`blockName`. */
+  entity?: NewAttachment;
+  /**
+   * Grant the destination before the message is sent, for entities that
+   * sending does not grant. Rejecting cancels that delivery.
+   */
+  prepareChannel?: (
+    channelId: string,
+    accessLevel: AccessLevel | null
+  ) => Promise<void>;
   blockId?: string;
   blockName?: BlockName | BlockAlias;
 }
@@ -244,9 +255,11 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
   const contextBlockBaseName = useMaybeBlockName();
-  const blockBaseName = props.blockName
-    ? resolveBlockAlias(props.blockName)
-    : contextBlockBaseName;
+  const blockBaseName = props.entity
+    ? undefined
+    : props.blockName
+      ? resolveBlockAlias(props.blockName)
+      : contextBlockBaseName;
   const [submitAccessLevel, setSubmitAccessLevel] =
     createSignal<AccessLevel | null>(
       props.initialAccessLevel ?? (blockBaseName === 'md' ? 'edit' : 'view')
@@ -272,6 +285,10 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     }
 
     try {
+      if (props.prepareChannel) {
+        await props.prepareChannel(channelId, accessLevel);
+        return true;
+      }
       const result = await props.submitPermissionInfo.setChannelPermissions(
         channelId,
         accessLevel
@@ -307,11 +324,13 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   const blockName = () => props.blockName ?? contextBlockName;
   const blockId = () => props.blockId ?? contextBlockId;
   const itemType = () => {
+    if (props.entity) return;
     const name = blockName();
     return name != null ? blockNameToItemType(name) : undefined;
   };
 
-  const asAttachment = () => {
+  const asAttachment = (): NewAttachment => {
+    if (props.entity) return props.entity;
     const type = itemType();
     return {
       entity_type: type ? itemTypeToReferenceEntityType(type) : 'unknown',
@@ -344,10 +363,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     target: NonNullable<ReturnType<typeof destination>>,
     accessLevel: AccessLevel | null
   ) {
+    const prepare = props.prepareChannel;
     const message = {
       attachments: [asAttachment()],
       content: markdown(),
       mentions: [],
+      beforeSend: prepare && ((id: string) => prepare(id, accessLevel)),
     };
     const deliveryKey = JSON.stringify([
       message,
@@ -370,8 +391,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
         toast.failure('Message failed to send');
         return;
       }
-      delivery = { result };
+      // A prepared destination was granted this level before sending.
+      delivery = prepare ? { result, accessLevel } : { result };
       deliveries.set(deliveryKey, delivery);
+      if (prepare) {
+        trackForwardShare(target.type === 'channel' ? 'channel' : 'user');
+      }
     }
 
     // Sending an attachment can automatically grant access. Apply the selected

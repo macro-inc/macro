@@ -80,6 +80,20 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     .with({ tag: 'commented_on_document' }, () => {
       refreshSoupEntity(notification, 'document');
     })
+    .with({ tag: 'crm_discussion' }, () => {
+      const parent = {
+        type: notification.entity_type,
+        id: notification.entity_id,
+      };
+      for (const key of [
+        messageKeys.messages,
+        messageKeys.messagesByIds,
+        messageKeys.threadReplies,
+      ]) {
+        void queryClient.invalidateQueries({ queryKey: [...key._def, parent] });
+      }
+      void invalidateEntityNotifications(notification.entity_id);
+    })
     .with({ tag: 'channel_invite' }, () => {
       refreshChannel(notification);
     })

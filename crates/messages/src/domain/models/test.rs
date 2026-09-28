@@ -6,6 +6,8 @@ fn parent_identifiers_are_validated_and_round_trip() {
         ("channel", "0194e3b0-121a-7000-8000-000000000001"),
         ("document", "legacy-document-id"),
         ("initiative", "0194e3b0-121a-7000-8000-000000000003"),
+        ("crm_company", "0194e3b0-121a-7000-8000-000000000004"),
+        ("crm_contact", "0194e3b0-121a-7000-8000-000000000005"),
     ] {
         let parent = MessageParent::parse(kind, id).unwrap();
         assert_eq!(parent.entity_type(), kind);
@@ -21,6 +23,9 @@ fn parent_identifiers_are_validated_and_round_trip() {
         ("channel", "not-a-uuid"),
         ("initiative", "not-a-uuid"),
         ("project", "0194e3b0-121a-7000-8000-000000000003"),
+        ("crm_company", "not-a-uuid"),
+        ("crm_contact", "not-a-uuid"),
+        ("crm", "0194e3b0-121a-7000-8000-000000000004"),
         ("email_thread", "not-a-uuid"),
         ("document", ""),
         ("document", " leading-space"),

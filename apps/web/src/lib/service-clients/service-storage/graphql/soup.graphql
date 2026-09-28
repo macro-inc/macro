@@ -123,6 +123,15 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		}
 	}
 	frecencyScore
+	... on GraphqlSoupInitiative {
+		descriptionDocumentId
+		metadata { ownerId createdAt updatedAt viewedAt }
+		viewerPermission {
+			__typename
+			... on GraphqlAccessLevelPermission { accessLevel }
+		}
+		properties { ...SoupPropertyFields }
+	}
 	... on GraphqlSoupDocument {
 		documentName: name
 		ownerId
@@ -514,6 +523,15 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		initiativeDiscussionText: text
 		initiativeDiscussionSenderDisplayName: senderDisplayName
 		initiativeDiscussionSenderProfilePictureUrl: senderProfilePictureUrl
+	}
+	... on GraphqlCrmDiscussionMetadata {
+		crmDiscussionRecordName: recordName
+		crmDiscussionReason: reason
+		crmDiscussionMessageId: messageId
+		crmDiscussionThreadId: threadId
+		crmDiscussionText: text
+		crmDiscussionSenderDisplayName: senderDisplayName
+		crmDiscussionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlChannelInviteMetadata {
 		channelInviteInvitedBy: invitedBy
