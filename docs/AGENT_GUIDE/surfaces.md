@@ -1,5 +1,12 @@
 # Other Surfaces
 
+## Home list loading
+
+Home shows compact row skeletons during initial loading, with taller notification
+placeholders on touch devices. Date grouping includes a placeholder heading.
+Pagination appends three placeholders without replacing existing items; refresh
+keeps loaded items visible. Wait for real rows before navigating or selecting.
+
 ## Top bars
 
 Right-aligned split-header actions (including Calendar's touch/preview New event

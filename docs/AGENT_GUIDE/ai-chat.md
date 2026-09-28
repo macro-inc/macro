@@ -35,6 +35,12 @@ permission failures should display a failed tool call without a successful resul
 
 ## Where chats live
 
+The Agents conversation list shows row skeletons after a short delay on first
+load. Fetching another page appends three placeholders while existing sessions
+remain usable. Wait for named conversation buttons before selecting a session;
+the placeholders are decorative and cannot be focused. Reduced motion disables
+the shimmer.
+
 - If session creation fails, the session view shows **Unable to start this agent**
   with the service's reason. Repository access requires a GitHub connection to
   Macro that covers that repository; connecting only Cursor does not grant Macro
