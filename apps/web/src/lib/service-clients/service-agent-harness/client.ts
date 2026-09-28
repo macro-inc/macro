@@ -9,6 +9,7 @@ import type {
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
+  AnswerToolApprovalResponse,
   ControlRequest,
   ControlResponse,
   CreateAgentSessionRequest,
@@ -23,6 +24,7 @@ import type {
   SandboxSizeBody,
   SessionPullRequestsResponse,
   SharePermissionV2,
+  ToolApprovalAnswerDto,
   UpdateSharePermissionRequestV2,
 } from './generated/schemas';
 
@@ -338,6 +340,26 @@ export const agentHarnessServiceClient = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
+      }
+    );
+  },
+
+  /**
+   * Answer a tool call the agent made in a turn somebody other than the
+   * owner prompted. Approve and deny are the owner's; cancel is anyone's
+   * with edit access. 409 once somebody already answered.
+   */
+  answerToolApproval(
+    sessionId: string,
+    approvalId: string,
+    answer: ToolApprovalAnswerDto
+  ) {
+    return fetchWithToken<AnswerToolApprovalResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/tool-approvals/${approvalId}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer }),
       }
     );
   },

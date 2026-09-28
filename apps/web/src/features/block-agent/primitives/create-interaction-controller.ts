@@ -31,6 +31,7 @@ export function createInteractionController(
       .pending()
       .some(
         (request) =>
+          request.kind !== 'tool_approval' &&
           request.kind === response.kind &&
           request.turn === response.turn &&
           request.requestId === response.requestId

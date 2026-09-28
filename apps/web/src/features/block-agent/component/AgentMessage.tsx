@@ -39,6 +39,7 @@ import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
 import { type ToolUsePart, toolUsedAfter } from './parts/shared';
 import { TextPart } from './parts/TextPart';
+import { ToolApprovalPart } from './parts/ToolApprovalPart';
 import { ToolCallPart } from './parts/ToolCallPart';
 
 /**
@@ -96,6 +97,9 @@ function AgentMessagePart(props: {
       </Match>
       <Match when={props.part.kind === 'permission' && props.part}>
         {(part) => <PermissionPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'tool_approval' && props.part}>
+        {(part) => <ToolApprovalPart part={part()} />}
       </Match>
       <Match when={props.part.kind === 'plan' && props.part}>
         {(part) => <PlanPart part={part()} />}
@@ -183,6 +187,7 @@ function showsWorkingLine(message: FoldedMessage): boolean {
       { kind: 'text' },
       { kind: 'thought' },
       { kind: 'permission' },
+      { kind: 'tool_approval' },
       { kind: 'elicitation' },
       () => false
     )

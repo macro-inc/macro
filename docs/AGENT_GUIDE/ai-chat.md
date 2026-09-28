@@ -668,6 +668,21 @@ who has prompted or answered the session also receive an `agent_session_waiting_
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
 
+## Tool calls waiting for the session owner
+
+An agent session always runs with its owner's access. When someone else prompts it (a
+second person replying in the session's channel thread, or a bot), every tool call it
+makes on Macro's own tools or a connected app is held until the owner approves it; the
+owner's own turns are not held. The session view shows a card over the composer: the owner
+sees `Approval needed` with the server and tool (`Macro · ListEmails`), the arguments, and
+`Decline` / `Approve`; everyone else sees `Waiting for <owner> to approve` and, with edit
+access, a `Cancel` button for when the owner is away. The owner also gets an
+`agent_session_waiting_for_input` notification. Once answered the transcript shows
+`<Server> · <tool>` with `Approved by …`, `Declined by …`, `Cancelled`, or `Not approved in
+time` (about four minutes for the in-process agent, longer for sandboxed ones). A declined or
+cancelled call does not run and the agent says so. The Magic Chip reads
+`Waiting for approval`. The agent's hidden context names the owner and the prompter.
+
 ## In channels
 
 Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is

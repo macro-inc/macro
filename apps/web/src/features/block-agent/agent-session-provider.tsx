@@ -10,7 +10,9 @@ import type {
   FoldedMessage,
   TurnState,
 } from '@service-agent-fold/generated/types';
+import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
+import { useEntitySubscription } from '@service-connection/client';
 import {
   type Accessor,
   createEffect,
@@ -27,6 +29,7 @@ import { resolveSessionId } from './context/resolve-session-id';
 import { createSendNext } from './context/send-next';
 import { createSteer } from './context/steer';
 import { createInteractionController } from './primitives/create-interaction-controller';
+import { createToolApprovalController } from './primitives/create-tool-approval-controller';
 import type { QuoteInsert } from './ui';
 
 export function AgentSessionProvider(
@@ -113,6 +116,22 @@ export function AgentSessionProvider(
     issue: live.issue,
     onFailure: toast.failure,
   });
+  // Frames reach a viewer only while the gateway knows they are watching.
+  // The owner hears every frame regardless; anyone else would otherwise see
+  // nothing live here unless they also had the parent channel open.
+  useEntitySubscription(() => {
+    const id = sessionId();
+    return id ? { entity_type: 'agent_session', entity_id: id } : undefined;
+  });
+  const toolApprovals = createToolApprovalController({
+    sessionId,
+    pending: () => live.metadata()?.pendingInteractions ?? [],
+    ownerId: () => live.session()?.ownerId,
+    userId,
+    canEdit: () => live.session()?.canEdit,
+    onFailure: toast.failure,
+    answer: agentHarnessServiceClient.answerToolApproval,
+  });
 
   // The transcript's "Reply to this" chip hands selected text to the
   // composer through here. A plain variable, not a signal: it is only read
@@ -161,6 +180,7 @@ export function AgentSessionProvider(
           sendNext,
           steer,
           interactions,
+          toolApprovals,
           queue,
           quoteSelection,
           registerQuoteInsert,
