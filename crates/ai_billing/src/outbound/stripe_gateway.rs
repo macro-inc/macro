@@ -339,7 +339,7 @@ impl PaymentGateway for StripePaymentGateway {
             .map_err(payment)?;
         let invoice_scope = stamped_scope(&invoice)?;
         let scope = invoice_scope.unwrap_or(request.scope);
-        let charge_method = if invoice_scope.is_some() {
+        let charge_method = if invoice_scope.is_some_and(|scope| scope != request.scope) {
             self.resolve_charge_method(&customer, scope).await?
         } else {
             live_method

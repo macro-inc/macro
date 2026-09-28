@@ -257,8 +257,10 @@ pub trait PaymentGateway: Send + Sync + 'static {
     /// Open a finalized invoice for exactly this overage chunk (and nothing
     /// else pending on the customer). [`OverageChargeRequest::scope`] selects
     /// the active or trialing subscription. Another scope is ignored. No
-    /// matching subscription, or distinct effective methods in that scope,
-    /// fail with [`BillingError::Payment`](super::BillingError::Payment).
+    /// matching subscription fails unless an idempotent retry finds an invoice
+    /// that already stores its payment method. Distinct effective methods in
+    /// the selected scope fail with
+    /// [`BillingError::Payment`](super::BillingError::Payment).
     /// Returns the invoice id. Idempotent on `charge_id`.
     fn open_overage_invoice(
         &self,
