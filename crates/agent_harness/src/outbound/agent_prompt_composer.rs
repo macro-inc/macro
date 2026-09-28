@@ -49,6 +49,15 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
 
 fn anchor(anchor: &CommentAnchor) -> AgentContextAnchor<'_> {
     match anchor {
+        CommentAnchor::Spreadsheet {
+            sheet_id,
+            sheet_name,
+            range,
+        } => AgentContextAnchor::Spreadsheet {
+            sheet_id,
+            sheet_name,
+            range,
+        },
         CommentAnchor::Mark {
             mark_id,
             marked_text,

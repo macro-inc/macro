@@ -26938,6 +26938,29 @@
                 "description": "Vertical position as a fraction of the page height."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A cell or rectangular range in a native spreadsheet.",
+            "required": ["sheetId", "sheetName", "range", "type"],
+            "properties": {
+              "range": {
+                "type": "string",
+                "description": "A1 cell or range, such as B4 or B4:C9."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet identity within the workbook."
+              },
+              "sheetName": {
+                "type": "string",
+                "description": "Sheet name when the discussion was created."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["spreadsheet"]
+              }
+            }
           }
         ],
         "description": "Location supplied when creating a document discussion."
@@ -31644,9 +31667,32 @@
                 "enum": ["pdf_placeable"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A cell or rectangular range in a native spreadsheet.",
+            "required": ["sheetId", "sheetName", "range", "type"],
+            "properties": {
+              "range": {
+                "type": "string",
+                "description": "A1 cell or range, such as B4 or B4:C9."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet identity within the workbook."
+              },
+              "sheetName": {
+                "type": "string",
+                "description": "Sheet name when the discussion was created."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["spreadsheet"]
+              }
+            }
           }
         ],
-        "description": "A thread's location within its document. Geometry remains annotation-owned."
+        "description": "A thread's location within its document. PDF geometry remains annotation-owned."
       },
       "ThreadOrigin": {
         "type": "object",

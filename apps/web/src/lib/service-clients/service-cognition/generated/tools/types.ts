@@ -971,6 +971,21 @@ export type CommentThreadKind = 'inline' | 'discussion';
  */
 export type CommentAnchor =
   | {
+      /**
+       * Stable sheet identity within the workbook.
+       */
+      sheetId: string;
+      /**
+       * Sheet name when the discussion was created.
+       */
+      sheetName: string;
+      /**
+       * A1 cell or range, such as B4 or B4:C9.
+       */
+      range: string;
+      type: 'spreadsheet';
+    }
+  | {
       type: 'document';
     }
   | {
