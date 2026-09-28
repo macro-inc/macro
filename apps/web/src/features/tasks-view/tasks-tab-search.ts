@@ -5,7 +5,7 @@ import type { TasksTab } from './types';
 export const tasksTabSearch = {
   namespace: 'tasks',
   schema: z.object({
-    tab: z.enum(['my-tasks', 'created-by-me', 'team-tasks']),
+    tab: z.enum(['my-tasks', 'created-by-me', 'team-tasks', 'projects']),
   }),
   defaults: { tab: 'my-tasks' as TasksTab },
 };

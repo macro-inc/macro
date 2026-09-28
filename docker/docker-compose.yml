@@ -357,6 +357,21 @@ services:
   # DEV_DANGEROUS_LOCAL_CONTAINERS and runs sandboxes on the host Docker daemon
   # instead. Trigger processing and external sessions run without either.
   # ============================================================================
+  preview_gateway:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/preview_gateway"]
+    restart: on-failure
+    environment:
+      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
+    depends_on:
+      - postgres
+      - connection_gateway
+    networks:
+      databases:
+      services:
+        aliases:
+          - preview-gateway
+
   agent_harness_service:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/agent_harness_service"]

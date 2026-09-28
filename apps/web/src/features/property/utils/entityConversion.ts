@@ -70,6 +70,7 @@ export function macroEntityToPropertyEntityType(
     .when(isTaskEntity, () => EntityType.DOCUMENT)
     .with({ type: 'channel' }, () => EntityType.CHANNEL)
     .with({ type: 'chat' }, () => EntityType.CHAT)
+    .with({ type: 'initiative' }, () => EntityType.INITIATIVE)
     .with({ type: 'project' }, () => EntityType.PROJECT)
     .with({ type: 'email' }, () => EntityType.THREAD)
     .with({ type: 'document' }, () => EntityType.DOCUMENT)

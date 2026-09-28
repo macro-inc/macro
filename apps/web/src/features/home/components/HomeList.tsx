@@ -39,7 +39,6 @@ import {
 } from '@entity';
 import { getChannelThreadName } from '@entity/utils/channel-thread-name';
 import CheckIcon from '@phosphor/check.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button } from '@ui';
@@ -77,6 +76,7 @@ import {
 import { HomeDateGroupHeader } from './HomeDateGroupHeader';
 import { HomeEmptyState } from './HomeEmptyState';
 import { HomeListEntity } from './HomeListEntity';
+import { HomeListSkeleton } from './HomeListSkeleton';
 
 type HomeActionRow = {
   entity: WithNotification<EntityData>;
@@ -181,7 +181,9 @@ export function HomeList(props: HomeListProps) {
   }
 
   function showPreview(entity: WithNotification<EntityData>) {
-    props.onPreviewEntityChange(entity);
+    props.onPreviewEntityChange(
+      entity?.type === 'initiative' ? undefined : entity
+    );
   }
 
   const previewAfterNavigation = debounce(showPreview, 150);
@@ -281,7 +283,9 @@ export function HomeList(props: HomeListProps) {
 
     return ({ entity }) => {
       previewAfterNavigation.clear();
-      props.onPreviewEntityChange(entity);
+      props.onPreviewEntityChange(
+        entity?.type === 'initiative' ? undefined : entity
+      );
     };
   };
 
@@ -489,6 +493,7 @@ export function HomeList(props: HomeListProps) {
         ref={setListRoot}
         role="grid"
         aria-label="Home"
+        aria-busy={source.isLoading() || source.isLoadingMore()}
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
@@ -543,10 +548,9 @@ export function HomeList(props: HomeListProps) {
                   !isPullRefreshing()
                 }
               >
-                <div class="grid min-h-0 flex-1 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top)">
-                  <SpinnerIcon
-                    aria-label="Loading Home"
-                    class="size-5 animate-spin"
+                <div class="min-h-0 flex-1 overflow-hidden touch:pt-(--mobile-content-inset-top)">
+                  <HomeListSkeleton
+                    grouped={state.groupBy === 'date' && !state.search.trim()}
                   />
                 </div>
               </Match>
@@ -712,6 +716,9 @@ export function HomeList(props: HomeListProps) {
                       </Switch>
                     )}
                   </Virtualizer>
+                  <Show when={source.isLoadingMore()}>
+                    <HomeListSkeleton loadingMore />
+                  </Show>
                 </div>
               </Match>
             </Switch>

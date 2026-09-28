@@ -3732,3 +3732,222 @@ async fn a_resumed_stream_continues_the_captured_prefix_without_duplicating_it()
         "the matched prefix is not captured a second time"
     );
 }
+
+/// Start a mirror of a run started elsewhere and hold it open.
+///
+/// The session has an agent whose only run, `R1`, Cursor still calls
+/// running; the mirror follows its stream and holds the turn gate for as
+/// long as the stream stays open. Returns the mirror's task and the stream
+/// the test feeds it.
+async fn mirror_following_a_live_run(
+    service: &Arc<Service>,
+    cursor: &FakeCursor,
+    id: &SessionId,
+) -> (tokio::task::JoinHandle<()>, crate::testing::ScriptSender) {
+    service.session(id).unwrap().state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("R1"),
+        status: RunStatus::Running,
+    }]);
+    let foreign = cursor.script_stream();
+    foreign
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "asked over there".into(),
+        }))
+        .unwrap();
+    let mirror = tokio::spawn({
+        let service = Arc::clone(service);
+        async move { service.sync_foreign_runs().await }
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            if service
+                .journal
+                .read(id)
+                .await
+                .unwrap()
+                .iter()
+                .any(|e| matches!(e.input, JournalInput::Sse(_)))
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the mirror captures the foreign run");
+    assert!(service.has_active_turn(), "the mirror holds the turn gate");
+    (mirror, foreign)
+}
+
+/// The production hang (2026-09-27): a mirror following a run started from
+/// cursor.com held the turn gate, the prompt behind it waited with no way to
+/// be stopped, and everything queued after that prompt never sent.
+///
+/// A stop now ends the waiting prompt at once, as `Cancelled`, and asks
+/// Cursor to cancel the run the mirror was following - the same remote cancel
+/// any stop sends for a run this process did not start.
+#[tokio::test]
+async fn a_stop_ends_a_prompt_waiting_behind_a_mirror() {
+    let (service, cursor, _notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let (mirror, foreign) = mirror_following_a_live_run(&service, &cursor, &id).await;
+
+    let prompt = tokio::spawn({
+        let service = Arc::clone(&service);
+        let id = id.clone();
+        async move { service.prompt(&id, "queued behind the mirror").await }
+    });
+    // The prompt reaches the gate and parks there: it has no awaits before it.
+    for _ in 0..16 {
+        tokio::task::yield_now().await;
+    }
+    assert!(!prompt.is_finished(), "the prompt waits behind the mirror");
+
+    service.cancel(&id).await.expect("cancel works");
+    let stop = tokio::time::timeout(std::time::Duration::from_secs(5), prompt)
+        .await
+        .expect("the stop ends the wait")
+        .expect("task joins")
+        .expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(_, run) if run.as_str() == "R1")),
+        "the run the mirror was following is asked to stop"
+    );
+    assert!(
+        !cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CreateRun(..))),
+        "a stopped prompt never reaches Cursor"
+    );
+
+    // Cursor answers the cancel with the run's end; the mirror reconciles it
+    // and lets go of the gate.
+    foreign.send(cancelled("R1")).unwrap();
+    foreign.send(CursorEvent::Done).unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), mirror)
+        .await
+        .expect("the mirror ends with the run")
+        .unwrap();
+    assert!(!service.has_active_turn());
+}
+
+/// A stop reaches the mirror itself, not only the prompt behind it.
+///
+/// Cursor was observed to keep a run at `RUNNING` after a cancel, with a
+/// stream that says nothing more. A mirror that waited for that run's
+/// `result` frame would hold the turn gate for good. Instead the stop ends
+/// the following at the mirror's next check, the run is left as one a turn
+/// gave up on, and the next prompt runs without waiting behind it.
+#[tokio::test(start_paused = true)]
+async fn a_stop_ends_a_mirror_following_a_run_cursor_never_ends() {
+    let (service, cursor, notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    // The quiet-stream checks and the fallback poll each read the record,
+    // and every read says the run is still going.
+    for _ in 0..8 {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+    let (mirror, _foreign) = mirror_following_a_live_run(&service, &cursor, &id).await;
+
+    service.cancel(&id).await.expect("cancel works");
+
+    // The stream stays open and silent; the stop is what ends the mirror.
+    tokio::time::timeout(std::time::Duration::from_secs(600), mirror)
+        .await
+        .expect("the stop ends the mirror")
+        .unwrap();
+    assert!(!service.has_active_turn(), "the mirror let go of the gate");
+    let entries = service.journal.read(&id).await.unwrap();
+    assert!(
+        entries
+            .iter()
+            .any(|e| e.run.as_ref().map(CursorRunId::as_str) == Some("R1")
+                && matches!(e.input, JournalInput::Interrupted(_))),
+        "the run is recorded as one this session gave up on"
+    );
+    assert!(
+        !entries
+            .iter()
+            .any(|e| e.run.as_ref().map(CursorRunId::as_str) == Some("R1")
+                && e.input == JournalInput::Reconciled),
+        "an interrupted following is not reconciliation"
+    );
+    assert_eq!(
+        notifier.reloads(),
+        vec![id.clone()],
+        "what the mirror captured before the stop is still shown"
+    );
+
+    // The next prompt does not wait behind the run Cursor never ended: it is
+    // skipped as abandoned, and the prompt runs.
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).unwrap();
+    events.send(CursorEvent::Done).unwrap();
+    let stop = tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        service.prompt(&id, "next"),
+    )
+    .await
+    .expect("the prompt is not blocked by the abandoned run")
+    .expect("prompt resolves");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CreateRun(..))),
+        "the prompt reached Cursor"
+    );
+}
+
+/// A prompt behind a mirror does not wait forever, even with nobody to stop
+/// it: a mirror still following a run after the busy-agent budget ends the
+/// prompt with a refusal the person can read, instead of a turn that never
+/// ends and a queue that never drains.
+#[tokio::test(start_paused = true)]
+async fn a_prompt_gives_up_on_the_turn_gate_after_the_busy_budget() {
+    let (service, cursor, _notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    // Enough record reads for every quiet check across the budget.
+    for _ in 0..2000 {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+    let (mirror, foreign) = mirror_following_a_live_run(&service, &cursor, &id).await;
+
+    let outcome = tokio::time::timeout(
+        GATE_WAIT_BUDGET + std::time::Duration::from_secs(60),
+        service.prompt(&id, "queued behind the mirror"),
+    )
+    .await
+    .expect("the wait is bounded");
+    assert!(
+        matches!(&outcome, Err(SessionError::Rejected(refusal)) if refusal.message.contains("started outside Macro")),
+        "the prompt is refused in the person's terms, got {outcome:?}"
+    );
+    assert!(
+        !cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CreateRun(..))),
+        "a refused prompt never reaches Cursor"
+    );
+    assert!(
+        service.has_active_turn(),
+        "giving up on the wait does not end the mirror"
+    );
+    drop(foreign);
+    mirror.abort();
+    let _ = mirror.await;
+}

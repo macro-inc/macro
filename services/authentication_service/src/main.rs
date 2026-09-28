@@ -418,7 +418,8 @@ async fn main() -> anyhow::Result<()> {
             messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
                 .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
                     initiative::outbound::PgInitiativeRepo::new(db.clone()),
-                )),
+                ))
+                .with_crm(crm::outbound::lookup::PgCrmParentReader::new(db.clone())),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
                 messages::domain::ports::NoMessageEventPublisher,

@@ -6,6 +6,7 @@ import {
   MODEL_PRETTYNAME,
   Model,
   modelsForPlan,
+  PAID_MODELS,
   type TModel,
 } from '@core/component/AI/constant';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
@@ -87,9 +88,10 @@ vi.mock('@phosphor-icons/core/regular/lock-simple.svg?component-solid', () => ({
   default: () => <span data-testid="lock-icon" />,
 }));
 
-const ALL_PAID: ModelOption[] = (Object.values(Model) as TModel[]).map(
-  (id) => ({ id, available: true })
-);
+const ALL_PAID: ModelOption[] = PAID_MODELS.map((id) => ({
+  id,
+  available: true,
+}));
 
 /** Find the menu item row for a model by its pretty name. */
 function itemFor(container: HTMLElement, model: TModel): HTMLElement {
@@ -113,6 +115,15 @@ describe('ModelSelector: availability', () => {
     );
   });
 
+  it('does not list Fable', () => {
+    const { container } = render(() => (
+      <ModelSelector models={ALL_PAID} onSelect={() => {}} />
+    ));
+    expect(container.textContent).not.toContain(
+      MODEL_PRETTYNAME[Model.fable51]
+    );
+  });
+
   it.each([
     { dev: false, mobile: false },
     { dev: true, mobile: false },
@@ -133,9 +144,10 @@ describe('ModelSelector: availability', () => {
   it('grays out and locks inaccessible models, leaving accessible ones clean', () => {
     // A free user: only the fast model is available.
     const freeAllowed = modelsForPlan(false);
-    const options: ModelOption[] = (Object.values(Model) as TModel[]).map(
-      (id) => ({ id, available: freeAllowed.includes(id) })
-    );
+    const options: ModelOption[] = PAID_MODELS.map((id) => ({
+      id,
+      available: freeAllowed.includes(id),
+    }));
     const { container } = render(() => (
       <ModelSelector models={options} onSelect={() => {}} />
     ));
@@ -171,9 +183,10 @@ describe('ModelSelector: selection routing', () => {
     const onSelect = vi.fn();
     const onLocked = vi.fn();
     const freeAllowed = modelsForPlan(false);
-    const options: ModelOption[] = (Object.values(Model) as TModel[]).map(
-      (id) => ({ id, available: freeAllowed.includes(id) })
-    );
+    const options: ModelOption[] = PAID_MODELS.map((id) => ({
+      id,
+      available: freeAllowed.includes(id),
+    }));
     const { container } = render(() => (
       <ModelSelector models={options} onSelect={onSelect} onLocked={onLocked} />
     ));
@@ -221,9 +234,10 @@ describe('ModelSelector: what is shown is what is sent', () => {
   it('a free user cannot select an inaccessible model into the would-send value', () => {
     const onLocked = vi.fn();
     const freeAllowed = modelsForPlan(false);
-    const options: ModelOption[] = (Object.values(Model) as TModel[]).map(
-      (id) => ({ id, available: freeAllowed.includes(id) })
-    );
+    const options: ModelOption[] = PAID_MODELS.map((id) => ({
+      id,
+      available: freeAllowed.includes(id),
+    }));
     function FreeHarness() {
       const [model, setModel] = createSignal<TModel>(Model.haiku45);
       return (

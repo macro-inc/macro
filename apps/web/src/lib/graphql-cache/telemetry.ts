@@ -516,7 +516,12 @@ export function operationCategoryForRequest(
       () => 'inspection' as const
     )
     .with('invalidate', 'delete-records', () => 'invalidation' as const)
-    .with('teardown', 'clear', () => 'lifecycle' as const)
+    .with(
+      'teardown',
+      'clear',
+      'current-storage-generation',
+      () => 'lifecycle' as const
+    )
     .exhaustive();
 }
 

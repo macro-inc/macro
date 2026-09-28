@@ -166,6 +166,7 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - '.github/actions/setup-nix-dev-shell/**'
                   - '.github/actions/teardown-nix/**'
                   - '.github/actions/setup-sccache/**'
+                  - '.github/services-config.json'
                   - .github/workflows/code_check_cloud_storage.yml
             "#},
         ))

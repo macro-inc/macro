@@ -18,10 +18,11 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
+use model_owner::{CreationPrincipal, Owner};
+use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts,
 };
-use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 use super::content::DocumentContent;
 use super::events::InteractionReason;
@@ -33,13 +34,12 @@ use model::sync_service::SyncServiceVersionID;
 
 use model_entity::Entity;
 
-use activity::Attribution;
-
 use super::models::{
     BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
     DocumentError, DocumentTeamShare, DocumentTeamShareResponse, EditDocumentRepoArgs,
     EditDocumentServiceArgs, EmailImportRepoOutcome, GithubPullRequestsResponse,
-    ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
+    ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument, OwnerTeam, TaskBranchName,
+    TeamTaskMetadata,
 };
 
 /// Repository for accessing document data from the database.
@@ -137,9 +137,10 @@ pub trait DocumentRepo: Send + Sync + 'static {
     ///
     /// `share_permission` is the pre-resolved initial link permission — the
     /// repository persists it verbatim and carries no share-policy of its own.
-    /// Canonical team state starts NULL; `args.share_with_team` initializes explicit
-    /// task consent from the persisted owner's team inside the same transaction and
-    /// fails with `BadRequest` when that owner has no team.
+    /// Canonical team state starts NULL; `args.document.share_with_team`
+    /// initializes explicit task consent from the persisted owner's team inside
+    /// the same transaction and fails with `BadRequest` when that owner has no team.
+    /// The entity row and its owner grants are registered in the same transaction.
     fn create_document(
         &self,
         args: CreateDocumentRepoArgs,
@@ -157,12 +158,12 @@ pub trait DocumentRepo: Send + Sync + 'static {
         share_permission: SharePermissionV2,
     ) -> impl Future<Output = Result<EmailImportRepoOutcome, DocumentError>> + Send;
 
-    /// Get the link-share preference of the user's team, or `None` when the
-    /// user is not on a team.
-    fn get_team_default_link_share(
+    /// Get the team `owner` resolves to and its link-share preference, or
+    /// `None` when the owner has no team.
+    fn get_owner_team(
         &self,
-        user_id: &str,
-    ) -> impl Future<Output = Result<Option<TeamLinkShareDefault>, Self::Err>> + Send;
+        owner: &Owner,
+    ) -> impl Future<Output = Result<Option<OwnerTeam>, Self::Err>> + Send;
 
     /// Update an upload job to associate it with a document.
     fn update_upload_job(
@@ -278,7 +279,9 @@ pub trait DocumentRepo: Send + Sync + 'static {
     /// Copy a document's DB records in a single transaction.
     ///
     /// Creates: Document row, version (DocumentBom or DocumentInstance),
-    /// SharePermission, DocumentPermission, UserItemAccess, and user history.
+    /// SharePermission, DocumentPermission, the registered entity with its
+    /// owner grants, and access history. The returned metadata carries the
+    /// persisted owner.
     ///
     /// `share_permission` is the pre-resolved initial share permission for the
     /// copy — the repository persists it verbatim.
@@ -350,14 +353,13 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         status: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Set a property value on an entity.
+    /// Set a property value on an entity as the principal that created it.
     fn set_entity_property(
         &self,
-        user_id: &str,
+        principal: &CreationPrincipal,
         entity_id: &str,
         property_definition_id: uuid::Uuid,
         value: Option<models_properties::api::requests::SetPropertyValue>,
-        attribution: &Attribution,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Copy all task property values from one task to another.
@@ -371,30 +373,40 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
 /// Mint the edit receipt a [`TaskPropertiesPort`] adapter writes task
 /// properties with.
 ///
-/// A bot creating the task for a user gets a bot receipt scoped to that user,
-/// so the property write publishes the same delegated attribution as the
-/// document itself. Every other attribution writes as `user_id`.
+/// The receipt carries the same principal as the task's creation, so the
+/// property write publishes the same attribution as the document itself.
 pub async fn task_property_edit_receipt<A: EntityAccessService>(
     entity_access: &A,
-    user_id: &MacroUserIdStr<'_>,
-    attribution: &Attribution,
+    principal: &CreationPrincipal,
     task_id: &str,
 ) -> Result<EntityAccessReceipt<EditAccessLevel>, AccessError> {
-    if let Attribution::Delegated { actor, subject } = attribution
-        && let Some(bot) = actor.as_bot()
-    {
-        return entity_access
-            .generate_bot_entity_access_receipt(
-                bot.bot_id(),
-                BotAccessScope::user(subject.clone()),
-                task_id,
-                EntityType::Document,
-            )
-            .await;
+    match principal {
+        CreationPrincipal::User(user) => {
+            entity_access
+                .generate_entity_access_receipt(user, None, task_id, EntityType::Document)
+                .await
+        }
+        CreationPrincipal::BotForUser { bot, user } => {
+            entity_access
+                .generate_bot_entity_access_receipt(
+                    *bot,
+                    BotAccessScope::user(user.clone()),
+                    task_id,
+                    EntityType::Document,
+                )
+                .await
+        }
+        CreationPrincipal::TeamBot { bot, team } => {
+            entity_access
+                .generate_bot_entity_access_receipt(
+                    bot.get(),
+                    BotAccessScope::Team { team_id: *team },
+                    task_id,
+                    EntityType::Document,
+                )
+                .await
+        }
     }
-    entity_access
-        .generate_entity_access_receipt(user_id, None, task_id, EntityType::Document)
-        .await
 }
 
 /// Use cases for relaying document content-change events.
@@ -460,22 +472,22 @@ pub trait DocumentService: Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<String, DocumentError>> + Send;
 
-    /// Create a new document, generate an S3 presigned upload URL, and
-    /// optionally attach task properties and update project modified.
+    /// Create a new document owned as `principal` decides, generate an S3
+    /// presigned upload URL, and optionally attach task properties and update
+    /// project modified.
     fn create_document(
         &self,
-        user_id: MacroUserIdStr<'static>,
-        args: CreateDocumentRepoArgs,
+        principal: &CreationPrincipal,
+        document: NewDocument,
         job_id: Option<String>,
     ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
 
-    /// Import an email attachment as a document.
+    /// Import an email attachment as a document owned by the mailbox owner.
     ///
     /// Reuse returns existing content and no upload URL. A first import
     /// follows the same post-create lifecycle as [`DocumentService::create_document`].
     fn import_email_attachment(
         &self,
-        user_id: MacroUserIdStr<'static>,
         args: ImportEmailAttachmentRepoArgs,
     ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
 
@@ -523,12 +535,13 @@ pub trait DocumentService: Send + Sync + 'static {
         status: &str,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
-    /// Copy an existing document, creating a new document with the same content.
+    /// Copy an existing document, creating a new document with the same content
+    /// owned as `principal` decides.
     fn copy_document(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         document_context: DocumentBasic,
-        user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         document_name: String,
         query_version_id: Option<i64>,
         sync_version_id: Option<SyncServiceVersionID>,
@@ -546,13 +559,12 @@ pub trait DocumentService: Send + Sync + 'static {
         project_id: &str,
     ) -> impl Future<Output = Result<Vec<Entity<'static>>, DocumentError>> + Send;
 
-    /// Assigns the task properties to a document
+    /// Assigns the task properties to a document as the principal that created it.
     fn handle_task_properties(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         document_id: &str,
         request: &CreateTaskRequest,
-        attribution: &Attribution,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.

@@ -31,6 +31,7 @@ use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
+use bot_id::MACRO_NEW_BOT_ID;
 use bots::domain::models::BotId;
 use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
@@ -297,10 +298,9 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         } = params;
         let mcp_servers_json = serde_json::to_value(mcp_servers.servers())
             .context("serialize agent session mcp servers")?;
-        // The row's `owner_id` references `"User"`, the owner's grant is a
-        // user access row, and the session lands in the owner's history:
-        // this store holds user-owned sessions, and says so before writing
-        // anything rather than letting the foreign key say it for a bot.
+        // The owner's grant is a user access row, and the session lands in
+        // the owner's history: this store still holds user-owned sessions,
+        // even though the denormalized owner_id no longer references "User".
         let owner_user = owner_id
             .as_user()
             .ok_or_else(|| AgentSessionError::OwnerNotUser(owner_id.owner_type()))?;
@@ -315,6 +315,10 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             .context("begin agent session create")?;
 
         let (status, status_event_name) = status_columns(&SessionStatus::NoMessages);
+        // An inline @macro mention is a one-shot on the message. It stays out
+        // of the agents list and search. Every other session — the agents
+        // composer, coding agents — is a list row.
+        let list_hidden = bot_id == MACRO_NEW_BOT_ID && thread_id.is_some();
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
@@ -322,9 +326,9 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
                 harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status, status_event_name, egress_token_hash,
-                mcp_scope, mcp_servers, repo_branch
+                mcp_scope, mcp_servers, repo_branch, list_hidden
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             RETURNING
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
@@ -356,6 +360,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             mcp_servers.scope_str(),
             mcp_servers_json,
             repo_branch.as_ref().map(|branch| branch.as_str()),
+            list_hidden,
         )
         .fetch_one(&mut *transaction)
         .await
@@ -363,7 +368,6 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             |error| match error.as_database_error().and_then(|e| e.constraint()) {
                 Some("agent_session_pkey") => AgentSessionError::SessionIdTaken(id),
                 Some("agent_session_thread_bot_unique") => AgentSessionError::ThreadSessionExists,
-                Some("agent_session_owner_id_fkey") => AgentSessionError::UnknownOwner,
                 _ => AgentSessionError::Unknown(
                     anyhow::Error::new(error).context("failed to create agent session"),
                 ),

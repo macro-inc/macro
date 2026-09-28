@@ -1,5 +1,12 @@
 # Other Surfaces
 
+## Home list loading
+
+Home shows compact row skeletons during initial loading, with taller notification
+placeholders on touch devices. Date grouping includes a placeholder heading.
+Pagination appends three placeholders without replacing existing items; refresh
+keeps loaded items visible. Wait for real rows before navigating or selecting.
+
 ## Top bars
 
 Right-aligned split-header actions (including Calendar's touch/preview New event
@@ -25,6 +32,13 @@ changing the swatch. The rectangle should have a light neutral fill and a dark
 outline; the text should be dark and visible. Also check the neutral swatch after
 selecting another color. Neutral colors use an OKLCH `none` hue, which must render
 as gray rather than transparent.
+
+## Canvas link paste
+
+Pasting a supported routed Macro app link onto the canvas creates a text
+node with an entity mention, as legacy links do. Routed links retain compatible
+block targets, but not workspace paths or pane-local search state; unsupported
+links remain text.
 
 ## Live updates in flat Soup lists
 
@@ -1048,6 +1062,9 @@ Guests enter `Your name`, choose their microphone and camera preferences, and
 press `Join call`. Setup requests device
 permissions and previews video locally; sharing starts only after joining.
 Permission denial leaves the affected device off and still allows joining.
+The preview and full-width join button retain their size while joining.
+Copying the meeting URL is available after joining, in the in-call header.
+
 The creator presses `Start call`; invitees press `Join call`. Loading the page or
 completing authentication never joins automatically, including old `?join=true`
 URLs. `Back to Macro` exits setup.
@@ -1070,12 +1087,32 @@ call without gaining access to the channel.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
-The join screen uses small switches for Microphone and Camera. Join and
-`Copy Meeting Url` use gray buttons; the copy action includes a copy icon.
-The in-call header uses the same copy button and shows the current local time
-before the call name. Owners can click the name to rename it, then Save or press
-Enter; Cancel or Escape discards the edit. Guests and other participants see a
+The join screen has microphone, camera, and background effects buttons over the
+preview, with pill selectors below for microphone, speaker, camera, and
+backgrounds. The background button over the preview toggles the selected effect
+off and back on; when no effect has been selected, it enables Strong blur.
+Backgrounds use a simple menu with None, Light blur, Strong blur, and image upload
+(JPG, PNG, or WebP, up to 10 MB). Dot icons distinguish the two blur strengths.
+Selected devices and backgrounds carry into the call; unsupported browsers use
+the system speaker. If a background cannot be applied, the camera stays off
+until the user retries or chooses None. The screen uses a gray join
+button. The in-call header has a gray `Copy Meeting Url` button with a copy icon
+and shows the current local time before the call name. Owners can click the name
+to rename it, then Save or press Enter; Cancel or Escape discards the edit. Guests and other participants see a
 read-only name.
+
+Join-preview and in-call controls use the standard Macro icon buttons. Pause
+over the microphone, camera, or background group to reveal an animated settings popover
+above the call toolbar; click its caret to keep it open. Brief pointer passes
+do not open settings, and moving into the popover keeps it open. Settings
+respect reduced-motion preferences.
+Audio settings include microphone, speaker, and noise suppression. Camera
+settings include the camera selector. Clicking the background icon toggles the
+selected effect off/on, restoring the last blur strength or image (Strong blur
+by default). Its hover panel contains the same None, Light blur, Strong blur,
+and image-upload menu as the join screen; the caret pins this panel for keyboard
+and touch access. Click outside or press Escape to close the settings.
+The controls also work by keyboard and touch.
 
 ### Sharing a call
 
@@ -1137,6 +1174,13 @@ use the standalone contact page.
 Company and contact headers have `Copy link` beside the side-panel toggle.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
+
+Company and contact pages have a **Discussion** section built from the same
+message conversation as a document's Discussion: threaded replies, reactions,
+attachments, and edit/delete from the message menu. `@` suggests the team's
+members and agents. A message's copied link is the standalone record URL
+with `comment_id`; opening it, or a CRM discussion notification, scrolls to and
+highlights that message. Deleting a thread's first comment deletes the thread.
 
 Company selection actions **Set owner** and **Set revenue** remain available
 while team deal-stage definitions are loading. **Set stage** waits for the active
@@ -1255,6 +1299,12 @@ use a glass sheet with a title, description, Close confirmation button, and
 side-by-side cancel and confirm actions. Pending actions disable both buttons
 and prevent dismissal; canceling leaves the underlying data unchanged.
 
+## Setup plan step — `/app/onboarding`
+
+The plan step shows two cards: Free and Premium. Premium starts Stripe Checkout.
+The step has no Max card or Max checkout path. A returning account that already
+has Max still sees Max named as its active plan.
+
 ## Settings — `/app/settings/<section>`
 
 ### Email signatures
@@ -1351,13 +1401,14 @@ list / delete personal keys; the secret is shown only once and is sent as
 backend), paid plans show an **AI usage** card with the period meter, credit
 balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that redirect to Stripe
 Checkout, and a `Usage billing` toggle with per-period limit pills; these
-controls and usage-billing promotional copy are hidden outside dev; an
-`Upgrade`/`Upgrade to Max` card, or a `Switch to Premium` link on Max; on a team
-the plan change moves only the viewer's own seat),
+controls and usage-billing promotional copy are hidden outside dev; an `Upgrade`
+card for Free users to buy Premium, no Max purchase or upgrade control, and a
+`Switch to Premium` link on Max; on a team the downgrade moves only the viewer's
+own seat),
 `Appearance`, `Agents`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
 Workspace → `Team` (members list; on a paid team each row shows the seat's plan,
-and admins/owners change it with the `Seat plan` menu: `Premium` or `Max`,
-prorated at once), `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
+and admins/owners can move an existing Max seat to Premium with the `Seat plan`
+menu; Premium seats have no Max option; moves are prorated at once), `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`),

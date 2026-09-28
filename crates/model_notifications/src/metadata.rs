@@ -1866,3 +1866,5 @@ impl NotificationExtIos for AgentSessionMentionedMetadata {
 }
 mod initiative_discussion;
 pub use initiative_discussion::{InitiativeDiscussionMetadata, InitiativeDiscussionReason};
+mod crm_discussion;
+pub use crm_discussion::{CrmDiscussionMetadata, CrmDiscussionReason};

@@ -1237,7 +1237,7 @@ export function SpreadsheetGrid(props: {
                           cell()?.value.startsWith('=') &&
                           cell()?.format !== 'text'
                         ) &&
-                        /<m-(?:user|document)-mention>|https?:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+/i.test(
+                        /<m-(?:user|document|date)-mention>|https?:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+/i.test(
                           cell()?.value ?? ''
                         );
                       return (

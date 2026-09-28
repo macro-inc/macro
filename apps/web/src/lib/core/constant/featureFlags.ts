@@ -429,6 +429,15 @@ export const enableCrmLists = defineFlag({
   default: false,
 });
 
+// Native Projects frontend: navigation, creation, task assignment and project
+// views. Enabled in development; PostHog controls production rollout. Override
+// with VITE_ENABLE_PROJECTS; legacy Files folders are unaffected.
+export const enableProjects = defineFlag({
+  key: 'enable-projects',
+  env: 'ENABLE_PROJECTS',
+  default: onInDev,
+});
+
 // Reminders: the "Remind me" entry in the command menu, the soup
 // context menu and the block ⋯ menu, its 'h' shortcut, and the composer modal.
 // Every surface routes through `makeCreateReminderAction().canExecute`, so this

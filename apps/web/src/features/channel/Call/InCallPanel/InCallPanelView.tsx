@@ -145,7 +145,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
       <section
         data-in-call-panel
         aria-label="In call"
-        class="relative isolate overflow-hidden rounded-lg border border-ink-muted/[0.08] bg-ink-muted/[0.025] divide-y divide-ink-muted/[0.08]"
+        class="relative isolate rounded-lg border border-ink-muted/[0.08] bg-ink-muted/[0.025] divide-y divide-ink-muted/[0.08]"
       >
         {/* Header — soup notification vocabulary: muted label, accent pulse,
             share affordance is a single icon button (no chunky toggle switch).

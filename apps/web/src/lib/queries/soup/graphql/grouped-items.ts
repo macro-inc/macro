@@ -47,6 +47,8 @@ export type GraphqlGroupedSoupAstItemsQueryArgs = {
 
 export type GraphqlGroupedSoupAstItemsQueryOptions = {
   enabled: boolean;
+  networkPaused?: boolean;
+  keepPreviousData?: boolean;
   showSupportedForeignEntities?: boolean;
 };
 
@@ -119,8 +121,10 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     const common = {
       query: GroupSoupDocument,
       client: getGraphqlSoupClient(),
-      requestPolicy: 'cache-and-network' as const,
-      keepPreviousData: false,
+      requestPolicy: queryOptions.networkPaused
+        ? ('cache-only' as const)
+        : ('cache-and-network' as const),
+      keepPreviousData: queryOptions.keepPreviousData ?? false,
       select: (data: GroupSoupQuery) =>
         mapGraphqlGroupedSoupData(data, groupBy!, {
           instructionsIdQuery,

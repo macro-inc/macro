@@ -587,6 +587,15 @@ impl AccessRepository for PgAccessRepository {
         entity_id: &uuid::Uuid,
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        if matches!(entity_type, EntityType::CrmCompany | EntityType::CrmContact) {
+            return queries::crm_entity_users::get_crm_entity_users(
+                &self.pool,
+                entity_id,
+                entity_type,
+            )
+            .await
+            .map_err(AccessError::from);
+        }
         queries::get_entity_users(&self.pool, entity_id, entity_type)
             .await
             .map_err(anyhow_access_error)

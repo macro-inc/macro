@@ -337,6 +337,26 @@ export function formatRelativeDay(date: Date): string {
   }
 }
 
+/**
+ * Full date for a mention tooltip, with the time of day for dates near now.
+ * (Moved from the DateMention decorator so spreadsheet chips can share it.)
+ */
+export function formatTooltipDate(date: Date): string {
+  const diff = Math.abs(differenceInCalendarDays(date, new Date()));
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  };
+  if (diff <= 5) {
+    options.hour = 'numeric';
+    options.minute = '2-digit';
+    options.hour12 = true;
+  }
+  return date.toLocaleDateString('en-US', options);
+}
+
 function _getDateSuggestions(input: string): ParsedDate[] {
   const suggestions: ParsedDate[] = [];
   const normalized = input.toLowerCase().trim();

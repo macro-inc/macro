@@ -15,6 +15,7 @@ import {
   NewAppView,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { useUserContext } from '@core/context/user';
 import { lazy } from 'solid-js';
 import { z } from 'zod';
@@ -120,6 +121,7 @@ export const driveCallRoute = defineRoute({
   component: DriveCallRouteView,
   remountKey: ({ callId }) => callId,
   claim: ({ callId }) => ({ namespace: 'block', id: `call:${callId}` }),
+  toReference: ({ callId }) => uuidRouteReference(callId, 'call'),
 });
 const driveDocumentParams = z.object({
   documentType: z.enum(DRIVE_DOCUMENT_TYPES),
@@ -143,6 +145,8 @@ export const driveRootDocumentRoute = defineRoute({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
+  toReference: ({ documentId, documentType }) =>
+    uuidRouteReference(documentId, documentType),
 });
 
 export const driveFolderDocumentRoute = defineRoute({
@@ -156,6 +160,8 @@ export const driveFolderDocumentRoute = defineRoute({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
+  toReference: ({ documentId, documentType }) =>
+    uuidRouteReference(documentId, documentType),
 });
 
 export const driveTabDocumentRoute = defineRoute({
@@ -169,6 +175,8 @@ export const driveTabDocumentRoute = defineRoute({
     namespace: 'block',
     id: `${driveDocumentBlockType(documentType)}:${documentId}`,
   }),
+  toReference: ({ documentId, documentType }) =>
+    uuidRouteReference(documentId, documentType),
 });
 
 export const driveFolderRoute = defineRoute({

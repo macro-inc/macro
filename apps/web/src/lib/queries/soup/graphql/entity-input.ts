@@ -34,11 +34,15 @@ export function buildGraphqlEntitiesSoupInput(
   const input = buildGraphqlEntitySoupInput('DOCUMENT', NIL_ENTITY_ID);
   if (!input || !('initial' in input) || !input.initial) return undefined;
   const base = input.initial.filters!;
+  const initiativeFilter = or(
+    ids('INITIATIVE').map((id) => ({ literal: { id } }))
+  );
   const filters: GraphqlEntityFilterAst = {
     ...base,
     documentFilter:
       or(ids('DOCUMENT', 'TASK').map((id) => ({ literal: { id } }))) ??
       base.documentFilter,
+    ...(initiativeFilter ? { initiativeFilter } : {}),
     projectFilter:
       or(
         ids('PROJECT').map((projectIdSelf) => ({ literal: { projectIdSelf } }))
@@ -108,7 +112,10 @@ export function buildGraphqlEntitySoupInput(
     .with('CALENDAR_EVENT', () => ({
       calendarEventFilter: { literal: { id: entityId } },
     }))
-    .with('USER', 'INITIATIVE', () => undefined)
+    .with('INITIATIVE', () => ({
+      initiativeFilter: { literal: { id: entityId } },
+    }))
+    .with('USER', () => undefined)
     .exhaustive();
   if (!targetFilter) return undefined;
 

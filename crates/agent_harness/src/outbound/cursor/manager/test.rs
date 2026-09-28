@@ -840,6 +840,48 @@ fn a_pipe_is_not_idle_while_a_command_is_pending() {
     assert!(!should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, false, true));
 }
 
+/// The warning for a pipe kept open past its deadline: silent for the first
+/// half hour a turn holds it, then once per half hour after, and re-armed
+/// as soon as the pipe is either free or active again.
+#[test]
+fn a_pipe_held_open_past_its_deadline_warns_once_per_interval() {
+    let minute = std::time::Duration::from_secs(60);
+    let armed = HELD_OPEN_WARNING_INTERVAL;
+
+    // Idle but not yet past the deadline, or past it and free: nothing to say.
+    assert_eq!(held_open_warning(minute, true, armed), (false, armed));
+    assert_eq!(
+        held_open_warning(CURSOR_IDLE_TIMEOUT, false, armed),
+        (false, armed)
+    );
+
+    // Held past the deadline, but for less than the interval: not yet.
+    assert_eq!(
+        held_open_warning(CURSOR_IDLE_TIMEOUT, true, armed),
+        (false, armed)
+    );
+    assert_eq!(
+        held_open_warning(armed - minute, true, armed),
+        (false, armed)
+    );
+
+    // The interval reached: warn, and wait a whole interval for the next.
+    let (warn, next) = held_open_warning(armed, true, armed);
+    assert!(warn);
+    assert_eq!(next, armed * 2);
+    assert_eq!(
+        held_open_warning(armed + minute, true, next),
+        (false, next),
+        "the same stretch does not warn on every tick"
+    );
+    let (warn, next) = held_open_warning(armed * 2, true, next);
+    assert!(warn);
+    assert_eq!(next, armed * 3);
+
+    // Activity resumed: the threshold is re-armed for the next stretch.
+    assert_eq!(held_open_warning(minute, true, next), (false, armed));
+}
+
 /// Teardown archives the agent on cursor.com and forgets the mapping; a
 /// session that never minted an agent tears down without any API call.
 #[tokio::test]

@@ -15,6 +15,7 @@ mod test;
 pub struct PgMessageRepository {
     pool: PgPool,
     initiatives: Option<std::sync::Arc<dyn initiative::domain::lookup::InitiativeReader>>,
+    crm: Option<std::sync::Arc<dyn CrmParentReader>>,
 }
 
 #[derive(Deserialize)]
@@ -56,7 +57,10 @@ fn database_error(error: sqlx::Error) -> MessageError {
 fn channel_column(parent: &MessageParent) -> Option<Uuid> {
     match parent {
         MessageParent::Channel(id) => Some(*id),
-        MessageParent::Document(_) | MessageParent::Initiative(_) => None,
+        MessageParent::Document(_)
+        | MessageParent::Initiative(_)
+        | MessageParent::CrmCompany(_)
+        | MessageParent::CrmContact(_) => None,
     }
 }
 
@@ -74,6 +78,7 @@ impl PgMessageRepository {
         Self {
             pool,
             initiatives: None,
+            crm: None,
         }
     }
 
@@ -85,6 +90,23 @@ impl PgMessageRepository {
     ) -> Self {
         self.initiatives = Some(std::sync::Arc::new(initiatives));
         self
+    }
+
+    /// Supply the owning CRM identity service for company and contact discussions.
+    /// Unconfigured compositions reject CRM operations.
+    pub fn with_crm(mut self, crm: impl CrmParentReader) -> Self {
+        self.crm = Some(std::sync::Arc::new(crm));
+        self
+    }
+
+    async fn crm_parent_exists(&self, parent: &MessageParent) -> Result<bool, MessageError> {
+        let Some(crm) = &self.crm else {
+            return Ok(false);
+        };
+        crm.read_crm_parent(parent)
+            .await
+            .map(|value| value.is_some())
+            .map_err(MessageError::Repository)
     }
 
     /// Fill in what each PDF highlight anchor covers. The highlight owns its
@@ -537,6 +559,9 @@ impl MessageRepository for PgMessageRepository {
                     .await.map(|value| value.is_some())
                     .map_err(|error| MessageError::Repository(rootcause::report!(error).into()));
             }
+            MessageParent::CrmCompany(_) | MessageParent::CrmContact(_) => {
+                return self.crm_parent_exists(parent).await;
+            }
             MessageParent::Document(_) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL) AS "exists!""#, parent.entity_id())
                 .fetch_one(&self.pool).await,
             MessageParent::Channel(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS "exists!""#, id)
@@ -764,6 +789,22 @@ impl MessageRepository for PgMessageRepository {
     ) -> Result<ThreadState, MessageError> {
         self.set_thread(parent, root, ThreadPatch::default(), true)
             .await
+    }
+
+    async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
+        let row = sqlx::query!(
+            "SELECT parent_entity_type, parent_entity_id FROM comms_messages
+             WHERE id = $1 AND deleted_at IS NULL",
+            id
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(database_error)?;
+        row.map(|row| {
+            MessageParent::parse(&row.parent_entity_type, &row.parent_entity_id)
+                .map_err(|_| MessageError::Invalid("stored message has an invalid parent"))
+        })
+        .transpose()
     }
 
     async fn resolve_legacy(

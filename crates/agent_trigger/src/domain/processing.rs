@@ -121,7 +121,13 @@ where
                 }
             }
         }
-        (MessageParent::Document(_) | MessageParent::Initiative(_), _) => None,
+        (
+            MessageParent::Document(_)
+            | MessageParent::Initiative(_)
+            | MessageParent::CrmCompany(_)
+            | MessageParent::CrmContact(_),
+            _,
+        ) => None,
     };
 
     for decision in decisions {

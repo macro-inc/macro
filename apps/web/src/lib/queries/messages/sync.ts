@@ -88,6 +88,8 @@ export function applyMessage(
           created_at: message.created_at,
           updated_at: message.created_at,
           resolved: false,
+          // Only document roots can be anchored; theirs load with the thread.
+          ...(parent.type !== 'document' && { anchor: null }),
         },
         thread: { reply_count: 0, preview: [], latest_reply_at: null },
       };
@@ -163,8 +165,8 @@ export function handleMessageEvent(
   if (isRootPost && refetchTimelineAwaitingFirstPage(parent)) return;
   if (isOwnEcho) return;
   applyMessage(change.message, change.type);
-  if (isRootPost && parent.type === 'document') {
-    void loadDocumentRootState(parent, change.message.id);
+  if (isRootPost && parent.type !== 'channel') {
+    void loadDiscussionRootState(parent, change.message.id);
   }
 }
 
@@ -189,12 +191,10 @@ function refetchTimelineAwaitingFirstPage(parent: MessageParent): boolean {
 }
 
 /**
- * A live document root arrives without its anchor; its thread state carries
- * it. The fetched thread replaces what the timeline seeded for this root, so
- * it must carry the same derived senders or an agent's comment loses its name
- * until the next full load.
+ * Live discussion roots need authoritative thread state. Preserve derived senders
+ * when replacing cached roots so agent comments keep their names after live updates.
  */
-async function loadDocumentRootState(parent: MessageParent, rootId: string) {
+async function loadDiscussionRootState(parent: MessageParent, rootId: string) {
   try {
     const thread = await fetchMessageThread(parent, rootId);
     queryClient.setQueryData<MessageThread>(

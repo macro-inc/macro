@@ -197,7 +197,7 @@ describe('availableBotMentionUsers', () => {
     expect(availableBotMentionUsers([], [cursorAgent], true)).toHaveLength(1);
   });
 
-  it.each(['document', 'initiative'] as const)(
+  it.each(['document', 'initiative', 'crm_company', 'crm_contact'] as const)(
     'includes channel-selected agents on a %s discussion surface',
     (surface) => {
       const selected = agent('doc-only', 'Doc only', 'selected');

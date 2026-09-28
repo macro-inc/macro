@@ -1,7 +1,7 @@
+import { DiffCounts } from '@app/components/diff-view';
 import SquareSplitHorizontalIcon from '@phosphor/square-split-horizontal.svg';
 import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
-import { DiffCounts } from './DiffCounts';
 
 /** Opens the changes pane and summarizes its added/deleted lines. */
 export function ChangesToggleButton(props: {
