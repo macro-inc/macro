@@ -178,7 +178,7 @@ describe('CoordinatorCore', () => {
     });
   });
 
-  it('yields to a newer build: drains, sends every tab on, never re-elects', () => {
+  it('hands the database to a newer build and never elects again', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');
     core.registerTab('tab-b');
@@ -187,23 +187,16 @@ describe('CoordinatorCore', () => {
       { kind: 'route-request', ownerEpoch: 1 },
     ]);
 
-    const actions = core.yieldToNewerBuild();
-
-    expect(actions).toEqual([
+    expect(core.supersede()).toEqual([
       {
         kind: 'broadcast-cache-superseded',
         reason: expect.stringContaining('newer version of the app'),
       },
-      { kind: 'drain-owner', tabId: 'tab-a', ownerEpoch: 1 },
     ]);
     expect(core.superseded).toBe(true);
-    expect(core.state).toEqual({
-      kind: 'draining',
-      tabId: 'tab-a',
-      ownerEpoch: 1,
-    });
-    expect(core.yieldToNewerBuild()).toEqual([]);
-    // Work already routed finishes; new work is refused quietly.
+    expect(core.supersede()).toEqual([]);
+    // Routed work still gets its answer; new work is refused quietly.
+    expect(core.state).toMatchObject({ kind: 'active', tabId: 'tab-a' });
     expect(core.request('tab-b', clear(2))).toEqual([
       expect.objectContaining({
         kind: 'reject-request',
@@ -212,51 +205,48 @@ describe('CoordinatorCore', () => {
       }),
     ]);
 
-    expect(core.engineDrained('tab-a', 1)).toEqual([
-      expect.objectContaining({
-        kind: 'reject-request',
-        tabId: 'tab-b',
-        requestId: 1,
-      }),
-      { kind: 'close-engine-route', tabId: 'tab-a', ownerEpoch: 1 },
-      { kind: 'terminate-drained-engine', tabId: 'tab-a', ownerEpoch: 1 },
-    ]);
-    expect(core.state).toEqual({
-      kind: 'waiting-for-tab',
-      nextDatabaseAction: 'open-existing',
+    // The owner's page then leaves like a navigation, freeing the database.
+    const departure = core.departForNavigation(
+      'tab-a',
+      1,
+      'a newer build took over'
+    );
+    expect(departure).toContainEqual({
+      kind: 'close-engine-route',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
     });
+    expect(departure.some((action) => action.kind === 'elect-owner')).toBe(
+      false
+    );
+    expect(core.state.kind).toBe('waiting-for-tab');
+    // A page of this build that loads afterwards could reload into this
+    // build again, so it runs uncached instead of reloading.
     expect(core.registerTab('tab-c')).toEqual([
       {
-        kind: 'notify-cache-superseded',
+        kind: 'notify-cache-unavailable',
         tabId: 'tab-c',
         reason: expect.stringContaining('newer version of the app'),
       },
     ]);
-    expect(core.snapshot().tabIds).toEqual(['tab-a', 'tab-b', 'tab-c']);
   });
 
-  it('yields only an active engine, and sends idle tabs on without a drain', () => {
+  it('hands over only while no engine is changing the files', () => {
     const activating = new CoordinatorCore('scope');
     activating.registerTab('tab-a');
     grantStorage(activating, 'tab-a', 1);
-    // Mid-open the files may be changing, so nothing is handed over.
-    expect(activating.yieldToNewerBuild()).toEqual([]);
-    expect(activating.yieldIdleToNewerBuild()).toEqual([]);
+    expect(activating.supersede()).toEqual([]);
 
+    // An idle coordinator's tabs, already uncached, move on too.
     const idle = new CoordinatorCore('scope');
     idle.registerTab('tab-a');
     idle.beginOwnerLockWait('tab-a', 1);
     idle.ownerLockUnavailable('tab-a', 1);
-    expect(idle.yieldToNewerBuild()).toEqual([]);
-    expect(idle.yieldIdleToNewerBuild()).toEqual([
+    expect(idle.supersede()).toEqual([
       {
         kind: 'broadcast-cache-superseded',
         reason: expect.stringContaining('newer version of the app'),
       },
-    ]);
-    expect(idle.yieldIdleToNewerBuild()).toEqual([]);
-    expect(idle.registerTab('tab-b')).toEqual([
-      expect.objectContaining({ kind: 'notify-cache-superseded' }),
     ]);
   });
 

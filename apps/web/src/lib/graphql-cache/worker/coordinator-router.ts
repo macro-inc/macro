@@ -49,7 +49,6 @@ import {
   ENGINE_DATABASE_OPEN_TIMEOUT_MS,
   OWNER_LOCK_WAIT_TIMEOUT_MS,
   TAKEOVER_REPLY_TIMEOUT_MS,
-  YIELD_DRAIN_TIMEOUT_MS,
 } from './startup';
 
 export interface CoordinatorMessagePort {
@@ -67,8 +66,6 @@ export interface CoordinatorRouterOptions {
   ownerLockWaitTimeoutMs?: number;
   /** How long a takeover request waits for the holding build to agree. */
   takeoverReplyTimeoutMs?: number;
-  /** How long a yielding engine may take to drain before it is terminated. */
-  yieldDrainTimeoutMs?: number;
   openTakeoverChannel?: (
     scope: string,
     onMessage: (message: CacheTakeoverMessage) => void
@@ -114,6 +111,8 @@ type EngineRoute = {
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 2_000;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
+/** How many departed tab ids a long-lived coordinator remembers. */
+const DEPARTED_TAB_MEMORY = 256;
 const RECOVERY_RETRY_LIMIT = 5;
 const RECOVERY_RETRY_BASE_DELAY_MS = 100;
 
@@ -210,6 +209,9 @@ export class CoordinatorRouter {
   private coreValue: CoordinatorCore | undefined;
   private hotCapacity: number | undefined;
   private readonly tabs = new Map<string, TabConnection>();
+  /** Recently departed tabs, whose liveness locks can outlast their
+   * departure but never belong to another build. */
+  private readonly departedTabIds = new Set<string>();
   private readonly portTabs = new Map<CoordinatorMessagePort, string>();
   private readonly pendingRegistrations = new Map<
     CoordinatorMessagePort,
@@ -227,13 +229,11 @@ export class CoordinatorRouter {
   private readonly assetLoadTimeoutMs: number;
   private readonly ownerLockWaitTimeoutMs: number;
   private readonly takeoverReplyTimeoutMs: number;
-  private readonly yieldDrainTimeoutMs: number;
   private readonly openTakeoverChannel: NonNullable<
     CoordinatorRouterOptions['openTakeoverChannel']
   >;
   private takeoverChannel: CacheTakeoverChannel | undefined;
   private takeover: PendingTakeover | undefined;
-  private yieldDrainTimer: ReturnType<typeof setTimeout> | undefined;
   /** The newest app build among this coordinator's registered pages. */
   private buildTime = 0;
   private readonly activationTimeoutMs: number;
@@ -277,8 +277,6 @@ export class CoordinatorRouter {
       options.ownerLockWaitTimeoutMs ?? OWNER_LOCK_WAIT_TIMEOUT_MS;
     this.takeoverReplyTimeoutMs =
       options.takeoverReplyTimeoutMs ?? TAKEOVER_REPLY_TIMEOUT_MS;
-    this.yieldDrainTimeoutMs =
-      options.yieldDrainTimeoutMs ?? YIELD_DRAIN_TIMEOUT_MS;
     this.openTakeoverChannel =
       options.openTakeoverChannel ?? openCacheTakeoverChannel;
     this.activationTimeoutMs =
@@ -963,21 +961,13 @@ export class CoordinatorRouter {
             })
           );
           break;
-        case 'notify-cache-superseded':
+        case 'notify-cache-unavailable':
           this.postToTab(
             action.tabId,
             envelope<CoordinatorToTabEnvelope>({
-              kind: 'cache-superseded',
+              kind: 'cache-unavailable',
               reason: action.reason,
             })
-          );
-          break;
-        case 'terminate-drained-engine':
-          this.clearYieldDrainTimer();
-          this.postTerminateEngine(
-            action.tabId,
-            action.ownerEpoch,
-            'a newer app build took over the cache database'
           );
           break;
         case 'broadcast-engine-replaced':
@@ -1095,7 +1085,7 @@ export class CoordinatorRouter {
     } catch {
       return;
     }
-    const known = new Set(this.tabs.keys());
+    const known = new Set([...this.tabs.keys(), ...this.departedTabIds]);
     for (const registration of this.pendingRegistrations.values()) {
       known.add(registration.tabId);
     }
@@ -1110,7 +1100,16 @@ export class CoordinatorRouter {
   private async checkBusyOwnerLock(route: EngineRoute): Promise<void> {
     if (this.takeover?.ownerEpoch === route.ownerEpoch) return;
     const others = await this.otherBuildTabIds();
-    if (!others?.length || this.engineRoute !== route) return;
+    const state = this.coreValue?.state;
+    if (
+      !others?.length ||
+      this.engineRoute !== route ||
+      state?.kind !== 'activating' ||
+      state.ownerEpoch !== route.ownerEpoch ||
+      state.phase !== 'awaiting-owner-lock'
+    ) {
+      return;
+    }
     this.requestTakeover(route);
   }
 
@@ -1509,6 +1508,12 @@ export class CoordinatorRouter {
     const connection = this.tabs.get(tabId);
     if (!connection) return;
     this.tabs.delete(tabId);
+    // Tab ids are fresh per page load, so the oldest can be forgotten.
+    this.departedTabIds.add(tabId);
+    if (this.departedTabIds.size > DEPARTED_TAB_MEMORY) {
+      const [oldest] = this.departedTabIds;
+      if (oldest !== undefined) this.departedTabIds.delete(oldest);
+    }
     this.portTabs.delete(connection.port);
     connection.cancelLivenessWatch();
     connection.port.close();
@@ -1642,7 +1647,6 @@ export class CoordinatorRouter {
     this.clearActivationTimer();
     this.clearHeartbeatTimers();
     this.clearTakeover();
-    this.clearYieldDrainTimer();
   }
 
   /**
@@ -1721,53 +1725,38 @@ export class CoordinatorRouter {
     );
   }
 
-  /** Yields only to a strictly newer build, so builds never trade the
-   * database back and forth and a reload never lands on an older build. */
+  /**
+   * Only the coordinator whose engine holds the database answers, and it
+   * yields only to a strictly newer build, so builds never trade the database
+   * back and forth and a reload never lands on an older build. An idle
+   * coordinator's tabs already run on the network; they move on silently.
+   */
   private answerTakeover(request: CacheTakeoverRequest): void {
     const core = this.coreValue;
     if (!core || core.superseded) return;
     const newer = request.buildTime > this.buildTime;
-    const state = core.state;
-    if (state.kind !== 'active') {
-      // Only the holder answers. An idle coordinator's tabs already run on
-      // the network, so they reload into the newer build.
-      if (newer) this.applyActions(core.yieldIdleToNewerBuild());
-      return;
+    const holdsDatabase = core.state.kind === 'active';
+    if (holdsDatabase) {
+      this.takeoverChannel?.post({
+        takeover: CACHE_TAKEOVER_VERSION,
+        kind: 'reply',
+        scope: core.scope,
+        requestId: request.requestId,
+        decision: newer ? 'yield' : 'keep',
+      });
     }
-    this.takeoverChannel?.post({
-      takeover: CACHE_TAKEOVER_VERSION,
-      kind: 'reply',
-      scope: core.scope,
-      requestId: request.requestId,
-      decision: newer ? 'yield' : 'keep',
-    });
     if (!newer) return;
-    this.telemetry.record({
-      name: 'graphql_cache.owner',
-      operationCategory: 'lifecycle',
-      outcome: 'graceful',
-      ownerEvent: 'superseded',
-    });
-    this.applyActions(core.yieldToNewerBuild());
-    this.armYieldDrainWatchdog(state.tabId, state.ownerEpoch);
-  }
-
-  private armYieldDrainWatchdog(tabId: string, ownerEpoch: number): void {
-    this.clearYieldDrainTimer();
-    this.yieldDrainTimer = this.setTimeoutFn(() => {
-      this.yieldDrainTimer = undefined;
-      this.failOwner(
-        tabId,
-        ownerEpoch,
-        'engine did not drain for a newer app build'
-      );
-    }, this.yieldDrainTimeoutMs);
-  }
-
-  private clearYieldDrainTimer(): void {
-    if (this.yieldDrainTimer === undefined) return;
-    this.clearTimeoutFn(this.yieldDrainTimer);
-    this.yieldDrainTimer = undefined;
+    const actions = core.supersede();
+    if (actions.length === 0) return;
+    if (holdsDatabase) {
+      this.telemetry.record({
+        name: 'graphql_cache.owner',
+        operationCategory: 'lifecycle',
+        outcome: 'graceful',
+        ownerEvent: 'superseded',
+      });
+    }
+    this.applyActions(actions);
   }
 
   private clearTakeover(): void {

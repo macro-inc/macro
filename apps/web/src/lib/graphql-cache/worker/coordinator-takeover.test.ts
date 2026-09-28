@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CACHE_STORAGE_VERSION } from './coordinator-protocol';
 import {
   cacheTakeoverChannelName,
   parseCacheTakeoverMessage,
@@ -20,9 +21,11 @@ describe('cache takeover messages', () => {
     decision: 'yield',
   };
 
-  it('keeps one channel name per scope across builds', () => {
+  it('names one channel per database, shared only by builds that open it', () => {
+    const { schemaCompatibilityEpoch, formatVersion, storageSchemaVersion } =
+      CACHE_STORAGE_VERSION;
     expect(cacheTakeoverChannelName('scope')).toBe(
-      'graphql-cache-takeover:scope'
+      `graphql-cache-takeover:graphql-cache:scope:s${schemaCompatibilityEpoch}.v${formatVersion}.t${storageSchemaVersion}`
     );
   });
 

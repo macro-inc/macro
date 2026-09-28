@@ -217,25 +217,34 @@ scope only when the coordinator explicitly proves storage was untouched, not fro
 a page's last-seen phase. Missing/broken transports remain conservatively
 uncertain.
 
-Each build's coordinator is a separate SharedWorker (its script URL is
+A build's coordinator is usually a separate SharedWorker (its script URL is
 content-hashed), so after a deploy two builds can target one database. The newer
 build takes it over. Pages report their build time (`__APP_BUILD_TIME__`,
 stamped by Vite) when they register. When the lock stays busy while tabs of
-another build are alive (liveness locks this coordinator did not register), the
-coordinator posts a takeover request on the cross-build
-`graphql-cache-takeover:{scope}` channel (`coordinator-takeover.ts`, a contract
-every later build must keep). Only the coordinator whose engine holds the
-database answers:
+another build are alive (liveness locks of tabs this coordinator never
+registered; a departed tab's lock can outlast it), the coordinator posts a
+takeover request on the cross-build channel
+`graphql-cache-takeover:{database name}` (`coordinator-takeover.ts`, a contract
+every later build must keep). Only builds that open the same database join it,
+and only the coordinator whose engine holds the database answers:
 
-- **Yield**, if the requester is strictly newer. Every one of its tabs gets
-  `cache-superseded`: the page retires its host to the network, and the app
-  reloads the page into the newer build. Hidden tabs reload at once. The visible
-  tab gets a prompt and reloads when the user leaves it, never while offline.
-  The engine then drains, which closes the database and releases the owner lock,
-  and nothing is elected again. The requester's engine, still retrying the lock,
-  opens the same database with its data and queued mutations. A yielding engine
-  that does not drain within 10 seconds is terminated.
+- **Yield**, if the requester is strictly newer. Every tab registered there gets
+  `cache-superseded`. Each page retires its host to the network. The owner's
+  page leaves the way a navigating page does: it terminates its engine, which
+  releases the owner lock without counting as a lost owner. An enqueue that was
+  already sent is reported as uncertain rather than sent again, because it may
+  be in the durable queue that the newer build replays. Nothing is elected
+  again. The requester's engine, still retrying the lock, opens the same
+  database with its data and queued mutations.
 - **Keep**, if the requester is not newer. The requester fails closed as below.
+
+A superseded page offers a persistent reload prompt. It reloads by itself only
+while hidden, online, not holding work (a call or an upload, via
+`holdAutomaticReload`), and not focused on a text field that holds text.
+Otherwise it retries the next time it is hidden or comes back online. A page
+that registers with a superseded coordinator later, for example after a
+rollback or from stale HTML, only runs uncached, because a reload could land on
+the same build again.
 
 A coordinator that holds nothing but gets a request from a newer build sends
 its tabs there too, without answering. When no yield arrives within a second
@@ -263,11 +272,13 @@ The physical database name embeds the storage versions,
 compatibility epochs, record formats, or storage schemas use separate files and
 owner locks instead of resetting each other's data. Once an owner is active and
 no other build has live tabs, the coordinator lets that page delete stale
-databases of its scope: the pre-versioning `graphql-cache:{scope}` and other
-storage versions. The page lists OPFS and, only if a stale name exists, starts a
-disposable worker (a file Turso cannot read may poison its OPFS registry) that
-deletes each stale database whose owner lock is free and whose `mutation_queue`
-is empty. Databases still queueing mutations are kept and reported.
+databases of its scope: the pre-versioning `graphql-cache:{scope}` and strictly
+older storage versions. A newer version is kept, because its build may come
+back after a rollback. The page lists OPFS and, only if a stale name exists,
+starts a disposable worker (a file Turso cannot read may poison its OPFS
+registry) that deletes each stale database whose owner lock is free and whose
+`mutation_queue` is empty. Databases still queueing mutations, or whose queue
+cannot be counted, are kept and reported.
 
 Browsers missing the required worker, lock, or OPFS
 capabilities use a storage-free no-op cache host. Tauri

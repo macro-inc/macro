@@ -16,8 +16,6 @@ export const OWNER_LOCK_RETRY_DELAYS_MS: readonly number[] = [
  * The coordinator asks that build to hand the database over and gives up
  * unless the holder agrees this soon; builds from before handover never do. */
 export const TAKEOVER_REPLY_TIMEOUT_MS = 1_000;
-/** A yielding engine that has not drained by then is terminated. */
-export const YIELD_DRAIN_TIMEOUT_MS = 10_000;
 /** Coordinator backstop for an engine that stops reporting while it waits. */
 export const OWNER_LOCK_WAIT_TIMEOUT_MS =
   OWNER_LOCK_RETRY_DELAYS_MS.reduce((total, delay) => total + delay, 0) + 5_000;

@@ -8,7 +8,7 @@ const QUERY = { query: 'query Q { user { id } }', operationName: 'Q' };
 
 /** A host whose every call fails like a disposed worker host. */
 function disposedLikeHost(): CacheHost {
-  const rejecting = createNoopCacheHost('test inner host');
+  const rejecting = createNoopCacheHost();
   const disposed = () =>
     Promise.reject(new Error('cache worker host was disposed'));
   return {
@@ -26,7 +26,7 @@ function disposedLikeHost(): CacheHost {
 
 describe('createRetirableCacheHost', () => {
   beforeEach(() => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'warn');
   });
 
   afterEach(() => {
@@ -53,6 +53,8 @@ describe('createRetirableCacheHost', () => {
     host.dispose();
 
     expect(inner.dispose).toHaveBeenCalledOnce();
+    // The owner already logged why it retired the cache.
+    expect(console.warn).not.toHaveBeenCalled();
     expect(host.disabled).toBe(true);
     expect(host.clientId).toBe('inner-client');
     // Durable checkpoints must not trust a generation from a retired cache.

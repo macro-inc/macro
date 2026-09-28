@@ -333,8 +333,8 @@ describe('cache engine worker runtime', () => {
       expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1)
     );
     expect(messagesOfKind(direct, 'owner-lock-busy')).toEqual([
-      expect.objectContaining({ tabId: 'tab-a', ownerEpoch: 7, attempt: 1 }),
-      expect.objectContaining({ tabId: 'tab-a', ownerEpoch: 7, attempt: 2 }),
+      expect.objectContaining({ tabId: 'tab-a', ownerEpoch: 7 }),
+      expect.objectContaining({ tabId: 'tab-a', ownerEpoch: 7 }),
     ]);
     expect(sleep.mock.calls.map(([delayMs]) => delayMs)).toEqual(
       OWNER_LOCK_RETRY_DELAYS_MS.slice(0, 2)

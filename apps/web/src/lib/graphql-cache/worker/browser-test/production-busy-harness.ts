@@ -335,7 +335,10 @@ void (async () => {
     resultElement.textContent = JSON.stringify(result, null, 2);
   } catch (error) {
     resultElement.dataset.status = 'failed';
+    // Firefox stacks leave out the message.
     resultElement.textContent =
-      error instanceof Error ? (error.stack ?? error.message) : String(error);
+      error instanceof Error
+        ? `${error.message}\n${error.stack ?? ''}`
+        : String(error);
   }
 })();

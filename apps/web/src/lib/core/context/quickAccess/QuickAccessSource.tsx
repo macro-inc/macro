@@ -358,11 +358,12 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   });
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
   // Read reactively: if the session abandons its cache mid-session, Quick
-  // Access falls back to the REST channel list instead of the dead host.
-  const cacheHost = () => {
+  // Access falls back to the REST channel list instead of the dead host. The
+  // memo keeps the subscription below until the host itself changes.
+  const cacheHost = createMemo(() => {
     const graphqlCacheHost = getGraphqlSoupCacheHost();
     return graphqlCacheHost?.disabled ? undefined : graphqlCacheHost;
-  };
+  });
   const [cacheRevision, setCacheRevision] = createSignal(0);
   const cachedChannelsQuery = useCachedGraphqlChannelsQuery(cacheHost);
   createEffect(() => {

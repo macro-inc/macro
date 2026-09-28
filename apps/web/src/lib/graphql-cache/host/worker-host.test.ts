@@ -1378,12 +1378,54 @@ describe('createWorkerCacheHost', () => {
     expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ errorCode: 'owner-lock-unavailable' })
     );
-    expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
+    // Leaving like a navigating page stops the engine without counting as a
+    // lost owner, so the newer build opens the same database.
+    expect(adapter.dispose).toHaveBeenCalledWith({
+      graceful: false,
+      preserveDatabase: true,
+    });
     // The newer build opens the same database, so the scope is kept.
     expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
     await expect(
       host.readQuery({ query: 'query Q { q }' })
     ).rejects.toMatchObject({ errorCode: 'owner-lock-unavailable' });
+  });
+
+  it('reports an enqueue in flight at the handover as uncertain, never unsent', async () => {
+    localStorage.setItem('graphql-cache:scope', 'scope-1');
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.clear();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('enqueue-optimistic-mutation');
+    adapter.ignoredKinds.add('read');
+    const mutation = host.enqueueOptimisticMutation(
+      {
+        uuid: '00000000-0000-4000-8000-000000000101',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      },
+      { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
+    );
+    const read = host.readQuery({ query: 'query Q { q }' });
+    // The newer build replays the queued row, so the page must not send the
+    // mutation itself; the read never touched durable state.
+    const mutationRejected = expect(mutation).rejects.toMatchObject({
+      errorCode: 'admitted-enqueue-uncertain',
+    });
+    const readRejected = expect(read).rejects.toMatchObject({
+      errorCode: 'owner-lock-unavailable',
+    });
+    await vi.waitFor(() =>
+      expect(adapter.requests.map(({ kind }) => kind)).toEqual(
+        expect.arrayContaining(['enqueue-optimistic-mutation', 'read'])
+      )
+    );
+
+    adapter.superseded('a newer version of the app took over the local cache');
+
+    await mutationRejected;
+    await readRejected;
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
   });
 
   it('quarantines transport scope before invoking the product failure callback', async () => {

@@ -115,14 +115,7 @@ describe('coordinator runtime protocol', () => {
       tabId: 'tab',
       ownerEpoch: 1,
     };
-    const busy = {
-      ...version,
-      kind: 'owner-lock-busy',
-      tabId: 'tab',
-      ownerEpoch: 1,
-      attempt: 2,
-      elapsedMs: 75,
-    };
+    const busy = { ...acquired, kind: 'owner-lock-busy' };
     const unavailable = { ...acquired, kind: 'owner-lock-unavailable' };
     for (const valid of [acquired, busy, unavailable]) {
       expect(validateEngineToCoordinatorEnvelope(valid).ok).toBe(true);
@@ -131,8 +124,7 @@ describe('coordinator runtime protocol', () => {
       { ...acquired, tabId: '' },
       { ...acquired, ownerEpoch: 0 },
       { ...acquired, extra: true },
-      { ...busy, attempt: 0 },
-      { ...busy, elapsedMs: -1 },
+      { ...busy, attempt: 2 },
       { ...unavailable, reason: 'extra' },
     ]) {
       expect(validateEngineToCoordinatorEnvelope(invalid).ok).toBe(false);
@@ -720,7 +712,9 @@ describe('coordinator runtime protocol', () => {
     });
   });
 
-  it("recognizes only this scope's other databases as stale", () => {
+  it("recognizes only this scope's older databases as stale", () => {
+    const { schemaCompatibilityEpoch, formatVersion, storageSchemaVersion } =
+      CACHE_STORAGE_VERSION;
     expect(isStaleCacheDatabaseIdentity('a', cacheDatabaseIdentity('a'))).toBe(
       false
     );
@@ -728,7 +722,16 @@ describe('coordinator runtime protocol', () => {
     expect(isStaleCacheDatabaseIdentity('a', 'graphql-cache:a:s1.v2.t3')).toBe(
       true
     );
+    expect(
+      isStaleCacheDatabaseIdentity(
+        'a',
+        `graphql-cache:a:s${schemaCompatibilityEpoch}.v${formatVersion}.t${storageSchemaVersion - 1}`
+      )
+    ).toBe(true);
     for (const other of [
+      // A newer build may come back after a rollback, so it keeps its file.
+      `graphql-cache:a:s${schemaCompatibilityEpoch}.v${formatVersion}.t${storageSchemaVersion + 1}`,
+      'graphql-cache:a:s99.v0.t0',
       'graphql-cache:b:s1.v2.t3',
       'graphql-cache:ab',
       'graphql-cache:a-wal',

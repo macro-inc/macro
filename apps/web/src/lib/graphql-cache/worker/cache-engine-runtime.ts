@@ -213,7 +213,6 @@ async function activate(
   let ownerLockGaveUp = false;
   // Set when opening outwaited database files another context kept open.
   let storageBusy = false;
-  let ownerLockWaitStartedAt = activationStartedAt;
   let openGranted = false;
   let resolveOpen!: () => void;
   const openPermission = new Promise<void>((resolve) => {
@@ -306,8 +305,6 @@ async function activate(
           kind: 'owner-lock-busy',
           tabId: activation.tabId,
           ownerEpoch: activation.ownerEpoch,
-          attempt,
-          elapsedMs: Math.max(0, Math.round(now() - ownerLockWaitStartedAt)),
         })
       );
       const delayMs = OWNER_LOCK_RETRY_DELAYS_MS[attempt - 1];
@@ -481,7 +478,6 @@ async function activate(
     );
     // Opening first takes the database owner lock, retrying briefly while
     // another context holds it. Storage is touched only after `open-engine`.
-    ownerLockWaitStartedAt = now();
     await initializeCore(core, activation);
     if (failed) return;
     const ownerLockIsHeld = options.ownerLockIsHeld ?? defaultOwnerLockIsHeld;

@@ -95,6 +95,7 @@ const mocks = vi.hoisted(() => {
     });
   let queuedMutationCount = 0;
   let initializationErrorHandler: ((error: Error) => void) | undefined;
+  let supersededHandler: (() => void) | undefined;
   const cleanupOrder: string[] = [];
   const host = {
     disabled: false,
@@ -152,6 +153,7 @@ const mocks = vi.hoisted(() => {
       queuedMutationCount = 0;
       cleanupOrder.length = 0;
       initializationErrorHandler = undefined;
+      supersededHandler = undefined;
     },
     queueDepth: () => queuedMutationCount,
     recordSubscriptionDisposal: () => cleanupOrder.push('subscriptions'),
@@ -159,6 +161,8 @@ const mocks = vi.hoisted(() => {
     failInitialization: (
       error = new Error('injected initialization failure')
     ) => initializationErrorHandler?.(error),
+    supersede: () => supersededHandler?.(),
+    reloadForNewerBuild: vi.fn(),
     plainClient,
     realtimeClient,
     replaceSubscriptions,
@@ -172,8 +176,12 @@ const mocks = vi.hoisted(() => {
       })
     ),
     createWorkerCacheHost: vi.fn(
-      (options: { onInitializationError?: (error: Error) => void }) => {
+      (options: {
+        onInitializationError?: (error: Error) => void;
+        onSuperseded?: () => void;
+      }) => {
         initializationErrorHandler = options.onInitializationError;
+        supersededHandler = options.onSuperseded;
         return host;
       }
     ),
@@ -198,6 +206,9 @@ vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'document-storage-service': 'http://dss.test' },
 }));
 vi.mock('@core/util/fetchWithToken', () => ({ fetchToken: vi.fn() }));
+vi.mock('@core/util/reloadForNewerBuild', () => ({
+  reloadForNewerBuild: mocks.reloadForNewerBuild,
+}));
 vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.tauri }));
 vi.mock('@core/util/platformFetch', () => ({
   platformFetch: mocks.platformFetch,
@@ -864,6 +875,17 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(mocks.host.dispose).toHaveBeenCalledOnce();
     expect(soup.graphqlCacheEnabled()).toBe(false);
     expect(soup.getGraphqlSoupClient()).not.toBe(cachedClient);
+  });
+
+  it('moves the page to a newer build that took the database over', async () => {
+    const soup = await import('./graphql-soup');
+    soup.getGraphqlSoupClient();
+    expect(mocks.reloadForNewerBuild).not.toHaveBeenCalled();
+
+    mocks.supersede();
+
+    expect(mocks.reloadForNewerBuild).toHaveBeenCalledOnce();
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
   });
 
   it('imports and uses the native path without constructing browser workers', async () => {

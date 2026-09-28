@@ -184,7 +184,6 @@ async function activate(
   );
   // Never queue for the owner lock: retry it briefly, then give up without
   // touching storage, exactly like the production engine.
-  const waitStartedAt = performance.now();
   for (let attempt = 1; ; attempt += 1) {
     let lockWasBusy = false;
     await navigator.locks.request(
@@ -368,8 +367,6 @@ async function activate(
         kind: 'owner-lock-busy',
         tabId: activation.tabId,
         ownerEpoch: activation.ownerEpoch,
-        attempt,
-        elapsedMs: Math.round(performance.now() - waitStartedAt),
       })
     );
     const delayMs = OWNER_LOCK_RETRY_DELAYS_MS[attempt - 1];

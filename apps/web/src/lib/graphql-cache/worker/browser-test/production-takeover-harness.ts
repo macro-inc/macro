@@ -128,15 +128,6 @@ const run = async (): Promise<Record<string, unknown>> => {
     return await result;
   };
 
-  const readError = async (tabId: string): Promise<string> => {
-    try {
-      await command(tabId, { kind: 'read' });
-      return 'hit';
-    } catch (error) {
-      return error instanceof Error ? error.message : String(error);
-    }
-  };
-
   const openTab = (tabId: string, build: keyof typeof BUILDS): void => {
     const url = new URL('./production-tab.html', location.href);
     url.searchParams.set('scope', scope);
@@ -173,39 +164,41 @@ const run = async (): Promise<Record<string, unknown>> => {
   await waitUntil('both old-build tabs to be sent on', () =>
     ['old-a', 'old-b'].every((tabId) => superseded.has(tabId))
   );
-  await waitUntil('the drained old engine to be terminated', () =>
-    terminated.some((event) => event.tabId === oldOwner)
-  );
-  const oldTabRead = await readError('old-a');
 
   // A tab of an even older build is turned away; the new build keeps it.
   openTab('older-a', 'older');
   await waitUntil('the older-build tab to be told to run uncached', () =>
     unavailable.has('older-a')
   );
+  const olderBuildSentOn = superseded.has('older-a');
+  // A page of the old build that loads after the handover, as after a
+  // rollback, runs uncached rather than reloading, which could land on the
+  // old build again. Its coordinator either was superseded or, once the old
+  // tabs let it go, starts fresh and is turned away by the newer build.
+  openTab('old-c', 'old');
+  await waitUntil('the late old-build tab to be told to run uncached', () =>
+    unavailable.has('old-c')
+  );
   expectHit(await command('new-a', { kind: 'read' }), 'takeover-preserved');
 
-  const oldEngineDrained = telemetry.some(
-    (event) => event.kind === 'drained' && event.tabId === oldOwner
-  );
   const result = {
     passed: true,
     newBuildDatabaseAction: telemetry.find(
       (event) => event.kind === 'activation-started' && event.tabId === 'new-a'
     )?.databaseAction,
     newBuildKeptData: true,
-    oldEngineDrained,
-    oldEngineTerminatedAfterDrain:
-      terminated
-        .find((event) => event.tabId === oldOwner)
-        ?.reason.includes('newer app build') ?? false,
+    // The old owner stopped its engine the way a navigating page does.
+    oldEngineStoppedLikeNavigation:
+      terminated.find((event) => event.tabId === oldOwner)?.reason ===
+      'page navigation',
     oldTabsSentOn: ['old-a', 'old-b'].every((tabId) =>
       superseded.get(tabId)?.includes('newer version of the app')
     ),
-    oldTabReadFellBack: oldTabRead.includes('newer version of the app'),
     olderBuildTurnedAway:
       unavailable.get('older-a')?.includes('owner lock is held') ?? false,
-    olderBuildSentOn: superseded.has('older-a'),
+    olderBuildSentOn,
+    lateOldTabRunsUncached: unavailable.has('old-c'),
+    lateOldTabSentOn: superseded.has('old-c'),
     newBuildSentOn: superseded.has('new-a'),
     protocolErrors,
   };
@@ -237,7 +230,10 @@ void (async () => {
     resultElement.textContent = JSON.stringify(result, null, 2);
   } catch (error) {
     resultElement.dataset.status = 'failed';
+    // Firefox stacks leave out the message.
     resultElement.textContent =
-      error instanceof Error ? (error.stack ?? error.message) : String(error);
+      error instanceof Error
+        ? `${error.message}\n${error.stack ?? ''}`
+        : String(error);
   }
 })();

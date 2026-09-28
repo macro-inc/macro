@@ -1,11 +1,14 @@
+import { cacheDatabaseIdentity } from './coordinator-protocol';
+
 /**
  * Handover of the cache database between app builds.
  *
- * Each build runs its own coordinator, because the coordinator's script URL is
- * content-hashed, yet every build of a scope shares one database. When a
- * newer build finds the database held by an older one, it asks on this
- * channel. The holder either yields, closing the database and telling its
- * tabs to reload into the newer build, or keeps it.
+ * A build usually runs its own coordinator, because the coordinator's script
+ * URL is content-hashed, yet builds with the same storage version open one
+ * database. When a newer build finds that database held by an older one, it
+ * asks on this channel, which only builds opening the same database join.
+ * The holder either yields, closing the database and telling its tabs to
+ * reload into the newer build, or keeps it.
  *
  * Builds answer each other across releases, so the channel name and these
  * message shapes must never change. Extend them only with fields that older
@@ -14,7 +17,7 @@
 export const CACHE_TAKEOVER_VERSION = 1;
 
 export const cacheTakeoverChannelName = (scope: string): string =>
-  `graphql-cache-takeover:${scope}`;
+  `graphql-cache-takeover:${cacheDatabaseIdentity(scope)}`;
 
 export type CacheTakeoverRequest = {
   takeover: typeof CACHE_TAKEOVER_VERSION;

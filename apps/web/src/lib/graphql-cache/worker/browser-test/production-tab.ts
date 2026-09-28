@@ -90,6 +90,9 @@ const adapter = createCacheCoordinatorPageAdapter({
   },
   onCacheSuperseded: (reason) => {
     report({ kind: 'cache-superseded', reason });
+    // What the app's host does: leave like a navigating page, which stops
+    // this tab's engine so the newer build can open the database.
+    void adapter.dispose({ graceful: false, preserveDatabase: true });
   },
 });
 

@@ -247,8 +247,6 @@ export type EngineToCoordinatorEnvelope =
       kind: 'owner-lock-busy';
       tabId: string;
       ownerEpoch: OwnerEpoch;
-      attempt: number;
-      elapsedMs: number;
     }
   | {
       /** Gave up on the owner lock without touching storage. */
@@ -1202,6 +1200,7 @@ export function validateEngineToCoordinatorEnvelope(
       break;
     case 'engine-assets-ready':
     case 'owner-lock-acquired':
+    case 'owner-lock-busy':
     case 'owner-lock-unavailable':
     case 'engine-drained':
       if (
@@ -1213,24 +1212,6 @@ export function validateEngineToCoordinatorEnvelope(
         ]) &&
         isNonEmptyString(value.tabId) &&
         isPositiveInteger(value.ownerEpoch)
-      ) {
-        return pass(value as EngineToCoordinatorEnvelope);
-      }
-      break;
-    case 'owner-lock-busy':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'tabId',
-          'ownerEpoch',
-          'attempt',
-          'elapsedMs',
-        ]) &&
-        isNonEmptyString(value.tabId) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isPositiveInteger(value.attempt) &&
-        isSafeNonNegativeInteger(value.elapsedMs)
       ) {
         return pass(value as EngineToCoordinatorEnvelope);
       }
@@ -1327,21 +1308,35 @@ export function cacheDatabaseIdentity(scope: string): string {
 }
 
 /**
- * Whether `identity` is one of this scope's databases that this build does
- * not open: the name all versions shared before names embedded versions, or
- * another storage version's name. Mirrors the WASM's own check.
+ * Whether `identity` is one of this scope's databases that an older build
+ * left behind: the name all versions shared before names embedded versions,
+ * or a strictly older storage version. A newer version belongs to a build that
+ * may come back, for example after a rollback. Mirrors the WASM's own check.
  */
 export function isStaleCacheDatabaseIdentity(
   scope: string,
   identity: string
 ): boolean {
   const legacy = `${LEGACY_DATABASE_PREFIX}${scope}`;
-  if (identity === cacheDatabaseIdentity(scope)) return false;
   if (identity === legacy) return true;
-  return (
-    identity.startsWith(legacy) &&
-    /^:s\d+\.v\d+\.t\d+$/.test(identity.slice(legacy.length))
-  );
+  const own = storageVersion(legacy, cacheDatabaseIdentity(scope));
+  const other = storageVersion(legacy, identity);
+  if (!own || !other) return false;
+  // Compared as a tuple, like the WASM: the first version that differs decides.
+  const index = own.findIndex((version, at) => version !== other[at]);
+  return index >= 0 && (other[index] ?? 0) < (own[index] ?? 0);
+}
+
+/** The `[epoch, format, storage]` versions embedded in a database name. */
+function storageVersion(
+  legacy: string,
+  identity: string
+): number[] | undefined {
+  if (!identity.startsWith(legacy)) return;
+  const match = /^:s(\d+)\.v(\d+)\.t(\d+)$/.exec(identity.slice(legacy.length));
+  if (!match) return;
+  const parts = match.slice(1).map(Number);
+  return parts.every(Number.isSafeInteger) ? parts : undefined;
 }
 
 /** Mirrors turso-opfs's canonical lock derivation without exposing a new lock. */

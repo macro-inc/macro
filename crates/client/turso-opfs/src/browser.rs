@@ -79,8 +79,12 @@ pub enum OpfsErrorKind {
     Poisoned,
     /// Turso requested a synchronous operation that this adapter forbids.
     Unsupported,
-    /// Another context kept a database path open for the whole busy-entry
-    /// wait. The operation touched neither file, so this is not damage.
+    /// Another context, usually a predecessor worker still being torn down,
+    /// kept a database path open for the whole busy-entry wait. A busy open
+    /// changed neither file and hands its owner back. A busy wipe or reset may
+    /// already have removed the other path and poisons the owner like any
+    /// partial wipe, so the worker must be replaced and the next owner wipes
+    /// again; a busy [`OpfsOwner::remove_and_release`] still releases the lock.
     Busy,
 }
 

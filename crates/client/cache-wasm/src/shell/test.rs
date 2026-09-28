@@ -2418,7 +2418,16 @@ fn stale_identities_are_only_this_scopes_other_databases() {
     assert!(!is_stale_identity(scope, &own));
     assert!(is_stale_identity(scope, "graphql-cache:scope-a"));
     assert!(is_stale_identity(scope, "graphql-cache:scope-a:s1.v2.t3"));
+    let newer = format!(
+        "graphql-cache:scope-a:s{}.v{}.t{}",
+        cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+        cache_core::codec::CACHE_FORMAT_VERSION,
+        cache_turso::STORAGE_SCHEMA_VERSION + 1
+    );
     for other in [
+        // A newer build may come back after a rollback, so it keeps its file.
+        newer.as_str(),
+        "graphql-cache:scope-a:s99.v0.t0",
         "graphql-cache:scope-b:s1.v2.t3",
         "graphql-cache:scope-ab",
         "graphql-cache:scope-a-wal",

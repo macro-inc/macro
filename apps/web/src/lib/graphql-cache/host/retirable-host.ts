@@ -51,7 +51,7 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     onMutationSettled: (cb) => current.onMutationSettled(cb),
     dispose() {
       if (current !== inner) return;
-      current = createNoopCacheHost('cache host was retired for this session');
+      current = createNoopCacheHost();
       inner.dispose();
     },
   };

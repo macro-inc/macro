@@ -205,7 +205,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       errorCode: 'unsupported',
     });
     telemetry?.flush();
-    return createNoopCacheHost(unsupportedReason);
+    console.warn(`[graphql-cache] disabled: ${unsupportedReason}`);
+    return createNoopCacheHost();
   }
 
   const clientId = crypto.randomUUID();
@@ -466,7 +467,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       onCacheSuperseded: (reason) => {
         if (adapter !== created || superseded) return;
         superseded = true;
-        retireUnavailable(reason);
+        retireUnavailable(reason, true);
         options.onSuperseded?.();
       },
       telemetry,
@@ -624,23 +625,38 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       durationMs:
         initializationStartedAt > 0 ? now() - initializationStartedAt : 0,
     });
+    stopForSession(error);
+    reportFailure(error);
+  }
+
+  /**
+   * Fails this host for the rest of the page session: pending requests reject
+   * (an admitted enqueue as uncertain when `uncertain`), subscribers are
+   * dropped, and the coordinator connection closes.
+   */
+  function stopForSession(
+    error: Error,
+    { uncertain = false, preserveDatabase = false } = {}
+  ): void {
     state = 'failed';
     initialization = undefined;
     initializationError = error;
-    rejectPending(error);
+    rejectPending(error, uncertain);
     clearSubscribers();
     unregisterPagehide();
-    void disposeAdapter(false).then(finishTelemetry);
-    reportFailure(error);
+    void disposeAdapter(false, preserveDatabase).then(finishTelemetry);
   }
 
   /**
    * Another context, usually a tab on another deployed build, holds the
    * database, and the coordinator touched no storage. Nothing is quarantined:
    * this page stops using the cache until it reloads, and a later page load
-   * tries again.
+   * tries again. A page handing the database to a newer build leaves like a
+   * navigating page: its engine stops without counting as a lost owner, and
+   * an enqueue already sent may have reached the durable queue, so it is
+   * reported uncertain rather than sent again.
    */
-  function retireUnavailable(reason: string): void {
+  function retireUnavailable(reason: string, leaveForNewerBuild = false): void {
     if (
       terminalFailureHandled ||
       state === 'failed' ||
@@ -665,13 +681,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       });
     }
     stopStorageHealthSampling();
-    state = 'failed';
-    initialization = undefined;
-    initializationError = error;
-    rejectPending(error);
-    clearSubscribers();
-    unregisterPagehide();
-    void disposeAdapter(false).then(finishTelemetry);
+    stopForSession(error, {
+      uncertain: leaveForNewerBuild,
+      preserveDatabase: leaveForNewerBuild,
+    });
     reportFailure(error);
   }
 
@@ -690,13 +703,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     );
     if (state === 'disposed' && !admittedWorkIsUncertain) return;
     terminalFailureHandled = true;
-    state = 'failed';
-    initialization = undefined;
-    initializationError = error;
-    rejectPending(error, true);
-    clearSubscribers();
-    unregisterPagehide();
-    void disposeAdapter(false).then(finishTelemetry);
+    stopForSession(error, { uncertain: true });
     // Product failure handling may immediately construct another host. Make
     // the matching old scope unreachable before invoking that callback.
     const quarantine = storageWasUntouched

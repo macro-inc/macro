@@ -495,34 +495,40 @@ fn database_identity(scope: &str) -> String {
     cache_database_name(scope, cache_turso::STORAGE_SCHEMA_VERSION)
 }
 
-/// Whether `identity` names one of this scope's databases that this build does
-/// not open: the pre-versioning name, or another storage version's name.
+/// Whether `identity` names one of this scope's databases that an older build
+/// left behind: the pre-versioning name, or a strictly older storage version.
+/// A newer version belongs to a build that may come back, for example after a
+/// rollback, so it is never stale.
 fn is_stale_identity(scope: &str, identity: &str) -> bool {
     let legacy = legacy_cache_database_name(scope);
-    if identity == database_identity(scope) {
-        return false;
-    }
     if identity == legacy {
         return true;
     }
-    let Some(version) = identity
-        .strip_prefix(legacy.as_str())
-        .and_then(|rest| rest.strip_prefix(":s"))
-    else {
-        return false;
+    match (
+        storage_version(&legacy, identity),
+        storage_version(&legacy, &database_identity(scope)),
+    ) {
+        (Some(other), Some(own)) => other < own,
+        _ => false,
+    }
+}
+
+/// The `(epoch, format, storage)` versions embedded in a scope's database name.
+fn storage_version(legacy: &str, identity: &str) -> Option<(u64, u64, u64)> {
+    let mut parts = identity
+        .strip_prefix(legacy)?
+        .strip_prefix(":s")?
+        .split('.');
+    let number = |part: &str| -> Option<u64> {
+        if part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        part.parse().ok()
     };
-    let mut parts = version.split('.');
-    let (Some(epoch), Some(format), Some(storage), None) = (
-        parts.next(),
-        parts.next().and_then(|part| part.strip_prefix('v')),
-        parts.next().and_then(|part| part.strip_prefix('t')),
-        parts.next(),
-    ) else {
-        return false;
-    };
-    [epoch, format, storage]
-        .iter()
-        .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+    let epoch = number(parts.next()?)?;
+    let format = number(parts.next()?.strip_prefix('v')?)?;
+    let storage = number(parts.next()?.strip_prefix('t')?)?;
+    parts.next().is_none().then_some((epoch, format, storage))
 }
 
 fn build_engine(storage: TursoStorage, hot_capacity: Option<u32>) -> BrowserEngine {
@@ -611,7 +617,10 @@ async fn open_storage(scope: &str, owner: OpfsOwner) -> Result<OpenedStorage, Js
                 }),
                 Err(failure) => {
                     let reset_required = failure.error().requires_physical_reset();
-                    let owner = failure.reset().await.map_err(err_js)?;
+                    let owner = failure
+                        .reset()
+                        .await
+                        .map_err(|failure| storage_err_js(failure.error()))?;
                     owner.release().await.map_err(err_js)?;
                     Err(if reset_required {
                         reset_required_js_error()
@@ -622,7 +631,10 @@ async fn open_storage(scope: &str, owner: OpfsOwner) -> Result<OpenedStorage, Js
             }
         }
         OpenResult::ResetRequired(session) => {
-            let owner = session.reset().await.map_err(err_js)?;
+            let owner = session
+                .reset()
+                .await
+                .map_err(|failure| storage_err_js(failure.error()))?;
             owner.release().await.map_err(err_js)?;
             Err(reset_required_js_error())
         }
@@ -813,12 +825,13 @@ struct StaleDatabaseCleanup {
     queued_mutations: Option<u64>,
 }
 
-/// Deletes one of this scope's databases that this build does not open (see
+/// Deletes one of this scope's databases that an older build left behind (see
 /// [`cacheDatabaseIdentity`](cache_database_identity)), unless another context
 /// holds its owner lock (`in-use`) or it still queues mutations
-/// (`queued-mutations`). Never waits for the lock. A file Turso cannot read
-/// rejects; the caller should use a disposable worker, because such a failure
-/// can poison the worker-local OPFS registry.
+/// (`queued-mutations`). Never waits for the lock. A file Turso cannot read,
+/// or whose queue cannot be counted, is kept and rejects; the caller should
+/// use a disposable worker, because such a failure can poison the
+/// worker-local OPFS registry.
 #[wasm_bindgen(js_name = removeStaleCacheDatabase)]
 pub async fn remove_stale_cache_database(
     scope: String,
@@ -850,9 +863,14 @@ pub async fn remove_stale_cache_database(
                         queued_mutations: Some(queued),
                     });
                 }
-                // An empty queue, no queue, or unreadable rows hold no work
-                // that any open build could still send.
-                _ => owner,
+                // A queue that cannot be counted may still hold work, so the
+                // file is kept and the cleanup rejects as for an unreadable file.
+                Err(error) => {
+                    owner.release().await.map_err(err_js)?;
+                    return Err(err_js(error));
+                }
+                // An empty queue or no queue holds no work any build could send.
+                Ok(_) => owner,
             }
         }
         // Only one of the pair exists, so it never held a complete database.
