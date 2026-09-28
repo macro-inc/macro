@@ -23,10 +23,16 @@ import {
 
 // Pierre mounts a custom element and highlights with shiki; the pane test
 // covers everything around it and leaves the diff body to the browser.
-vi.mock('../components/PierreFileDiff', () => ({
+vi.mock('@app/components/diff-view/pierre/PierreFileDiff', () => ({
   PierreFileDiff: (props: { path: string }) => (
     <div data-testid="diff" data-path={props.path} />
   ),
+}));
+
+// jsdom has no ResizeObserver; the file tree's collapse animation measures with one.
+vi.mock('@solid-primitives/resize-observer', () => ({
+  createResizeObserver: () => {},
+  createElementSize: () => ({ width: 0, height: 0 }),
 }));
 
 // Module-load quarantine, not a dependency substitute: the connection-gateway

@@ -1,3 +1,4 @@
+import { type DiffStyle, DiffView } from '@app/components/diff-view';
 import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
 import ArrowsInSimpleIcon from '@phosphor/arrows-in-simple.svg';
@@ -5,19 +6,17 @@ import ArrowsOutSimpleIcon from '@phosphor/arrows-out-simple.svg';
 import GitBranchIcon from '@phosphor/git-branch.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
 import XIcon from '@phosphor/x.svg';
-import { Button, cn, SegmentedControl } from '@ui';
+import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
 import { pullRequestNumber } from '../core/pull-request';
-
-export type DiffStyleValue = 'unified' | 'split';
 
 export function ChangesHeader(props: {
   /** The pane fills the width; the session is off screen. */
   spotlit: boolean;
   /** `head → base`, when known. */
   range: string | undefined;
-  diffStyle: DiffStyleValue;
-  onDiffStyle: (style: DiffStyleValue) => void;
+  diffStyle: DiffStyle;
+  onDiffStyle: (style: DiffStyle) => void;
   /** The linked pull request, opened by the header action. */
   pullRequestUrl: string | undefined;
   onViewPullRequest: () => void;
@@ -60,14 +59,8 @@ export function ChangesHeader(props: {
         )}
       </Show>
       <span class="flex-1" />
-      <SegmentedControl
-        size="sm"
-        aria-label="Diff layout"
+      <DiffView.StyleToggle
         value={props.diffStyle}
-        options={[
-          { value: 'unified', label: 'Unified' },
-          { value: 'split', label: 'Split' },
-        ]}
         onChange={props.onDiffStyle}
         class="max-md:hidden"
       />

@@ -663,9 +663,11 @@ segmented control (`aria-label="Diff layout"`), a refresh button, the
 **View pull request** button (opens GitHub), and **Expand changes to the full width**
 (spotlight; **Bring the session back** returns to the split) and **Close the
 changes pane**. Below it is a **Collapse all / Expand all** button.
-The body is a file tree (`nav[aria-label="Changed files"]`, directories
-compressed along single-child chains, status letters A/M/D/R and +/− counts)
-next to a scrollable stack of file cards. Expanded cards keep their full height;
+The body is a file tree (`[role="group"][aria-label="Changed files"]`, rows
+styled like Drive's folder tree, directories compressed along single-child
+chains with **Collapse / Expand** buttons, each file's +/− counts and status
+letter A/M/D/R; the arrow keys move between rows and Left/Right close and open a
+directory) next to a scrollable stack of file cards. Expanded cards keep their full height;
 **Collapse all / Expand all** hides or restores their bodies. Each card's header has a disclosure
 caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; hover a
 line and click the accent **+** in the gutter (drag for a range) to leave a

@@ -15,6 +15,12 @@ the linked pull request, so a chat-only (in-memory) session or a coding session
 without a pull request yet shows no GitHub chrome. Clipboard, external navigation,
 and notifications are host callbacks.
 
+`views/ChangesPane.tsx` composes the generic `FileTree`
+(`src/components/file-tree`) and `DiffView` (`src/components/diff-view`) from the
+controller: tree rows show status letters and counts, file headers add **Copy
+path**, and review notes hang under their lines through `DiffView.Stack`'s
+annotation slot. Another host composes the same components its own way.
+
 The source owns fetching, cache identity, and conversion into the feature's core
 changeset types. A PR entity adapter should resolve its GitHub owner/repository/PR
 number and implement this same contract using shared queries. It does not need to

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  composingAtLine,
   describeNoteLines,
   formatNotesForAgent,
+  noteLines,
+  notesAtLine,
   notesForFile,
   queuedNotes,
   type ReviewNote,
@@ -61,6 +64,33 @@ describe('notesForFile', () => {
       note({ id: 'c', lineNumber: 5, endLineNumber: 5 }),
     ];
     expect(notesForFile(list, 'a.ts').map((n) => n.id)).toEqual(['c', 'a']);
+  });
+});
+
+describe('noteLines', () => {
+  it("hangs a file's notes and the new-note editor under the last line of each range", () => {
+    const list = [
+      note({ id: 'a', lineNumber: 8, endLineNumber: 10 }),
+      note({ id: 'b' }),
+      note({ id: 'other', path: 'b.ts' }),
+    ];
+    const composing = {
+      path: 'a.ts',
+      side: 'deletions' as const,
+      lineNumber: 4,
+      endLineNumber: 4,
+    };
+    expect(noteLines(list, composing, 'a.ts')).toEqual([
+      { key: 'additions:10', side: 'additions', lineNumber: 10 },
+      { key: 'deletions:4', side: 'deletions', lineNumber: 4 },
+    ]);
+    expect(notesAtLine(list, 'a.ts', 'additions:10').map((n) => n.id)).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(composingAtLine(composing, 'a.ts', 'deletions:4')).toBe(composing);
+    expect(composingAtLine(composing, 'a.ts', 'additions:10')).toBeUndefined();
+    expect(noteLines(list, composing, 'c.ts')).toEqual([]);
   });
 });
 

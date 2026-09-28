@@ -37,6 +37,60 @@ export function noteAnchorKey(anchor: NoteAnchor): string {
   return `${anchor.path}:${anchor.side}:${anchor.lineNumber}-${anchor.endLineNumber}`;
 }
 
+/** A line that notes hang under, in the diff view's annotation shape. */
+export type NoteLine = { key: string; side: DiffSide; lineNumber: number };
+
+/**
+ * Notes hang from the last line of their range, like GitHub's review
+ * comments; the editor for a new note does the same. One line holds every
+ * note that ends there.
+ */
+function lineKey(anchor: Pick<NoteAnchor, 'side' | 'endLineNumber'>): string {
+  return `${anchor.side}:${anchor.endLineNumber}`;
+}
+
+/** The lines one file's notes, and the editor for a new one, hang under. */
+export function noteLines(
+  notes: readonly ReviewNote[],
+  composing: NoteAnchor | undefined,
+  path: string
+): NoteLine[] {
+  const lines = new Map<string, NoteLine>();
+  const add = (anchor: NoteAnchor) => {
+    const key = lineKey(anchor);
+    if (!lines.has(key)) {
+      lines.set(key, {
+        key,
+        side: anchor.side,
+        lineNumber: anchor.endLineNumber,
+      });
+    }
+  };
+  for (const note of notes) if (note.path === path) add(note);
+  if (composing?.path === path) add(composing);
+  return [...lines.values()];
+}
+
+/** The notes under one of `noteLines`, in line order. */
+export function notesAtLine(
+  notes: readonly ReviewNote[],
+  path: string,
+  key: string
+): ReviewNote[] {
+  return notesForFile(notes, path).filter((note) => lineKey(note) === key);
+}
+
+/** The new note being written under one of `noteLines`, if it is there. */
+export function composingAtLine(
+  composing: NoteAnchor | undefined,
+  path: string,
+  key: string
+): NoteAnchor | undefined {
+  return composing?.path === path && lineKey(composing) === key
+    ? composing
+    : undefined;
+}
+
 export function queuedNotes(notes: readonly ReviewNote[]): ReviewNote[] {
   return notes.filter((note) => note.sentAt === undefined);
 }
