@@ -57,8 +57,9 @@ global Favorites sidebar or command menu.
 
 Select a PR to open `/app/reviews/pr/<foreignEntityId>` in the Reviews shell.
 Its breadcrumb returns to the Reviews list. Old `/app/pr/<id>` links redirect
-to the Reviews detail. When the flag is off, the Reviews shortcut is hidden,
-but copied PR detail links still work.
+to the Reviews detail. When the flag is off, the Reviews shortcut is hidden and
+opening `/app/reviews` redirects to `/app/tasks` after flags load. Copied PR
+detail links still work; check both URLs with the flag off.
 
 Check all three tab URLs, author avatars and display names, row selection and
 context menu, favorites add/remove and collapse/empty visibility, filters, sort,
