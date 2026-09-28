@@ -103,9 +103,9 @@ describe('ChangesPane', () => {
       screen.queryByRole('button', { name: 'Mark all viewed' })
     ).toBeNull();
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^Hide / })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide a.ts' }));
     expect(screen.getAllByTestId('diff')).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: /^Show / })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Show a.ts' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
     expect(screen.queryAllByTestId('diff')).toHaveLength(0);
