@@ -8,7 +8,9 @@ export const emailTabSearch = {
     tab: z.enum([
       'important',
       'noise',
+      'favorites',
       'sent',
+      'scheduled',
       'calendar',
       'drafts',
       'shared',

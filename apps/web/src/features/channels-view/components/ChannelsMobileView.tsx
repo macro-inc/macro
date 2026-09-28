@@ -19,10 +19,12 @@ import { hydrateChannelNotificationSelection } from '@queries/channel/notificati
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, EmptyStatePanel } from '@ui';
 import {
+  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
   Match,
+  on,
   onCleanup,
   Show,
   Switch,
@@ -87,6 +89,13 @@ export function ChannelsMobileView(props: {
     viewport()?.scrollTo({ top: 0 });
   };
 
+  createEffect(
+    on(
+      () => props.searchQuery,
+      () => viewport()?.scrollTo({ top: 0 })
+    )
+  );
+
   const topInset = () => topSpacerSize.height ?? 0;
 
   function loadNextPage() {
@@ -128,6 +137,7 @@ export function ChannelsMobileView(props: {
         splitHandle: panel.handle,
         referredFrom: 'channels',
         notificationSource,
+        scopeChannelThreads: false,
       });
     } catch (error) {
       if (request !== opening) return;

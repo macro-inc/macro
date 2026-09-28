@@ -1,3 +1,4 @@
+import type { ListDetailNavigationTarget } from '@app/components/list';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
@@ -5,6 +6,7 @@ import { driveLocationLabel } from '@app/features/drive-view/core/location-label
 import type { DriveState } from '@app/features/drive-view/core/types';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { projectRouteId } from '@app/features/projects/core/route';
 import { useSplitRouter } from '@app/lib/split-router';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSidebarCollapse } from '@components/app/sidebarVisibility';
@@ -69,6 +71,10 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   return (
     match(data)
       .returnType<{ type: SplitContent['type']; id: string } | undefined>()
+      .with({ type: 'initiative' }, (entity) => ({
+        type: 'component' as const,
+        id: projectRouteId({ id: entity.id, section: 'overview' }),
+      }))
       .with({ type: 'document' }, (entity) => ({
         type: fileTypeToBlockName(entity.subType?.type ?? entity.fileType) as
           | BlockName
@@ -297,7 +303,7 @@ function SoupNavigationButtons() {
 
   const navigationReferredFrom = createMemo(() => {
     const referredFrom = context.handle.referredFrom();
-    if (referredFrom !== 'inbox' && referredFrom !== 'mail') {
+    if (referredFrom !== 'home' && referredFrom !== 'mail') {
       return;
     }
 
@@ -311,7 +317,7 @@ function SoupNavigationButtons() {
 
     const referredFrom = navigationReferredFrom();
     const isNavigableListView =
-      referredFrom === 'inbox' || referredFrom === 'mail';
+      referredFrom === 'home' || referredFrom === 'mail';
 
     return isNavigableListView && rows().length > 0;
   });
@@ -338,27 +344,45 @@ function SoupNavigationButtons() {
 
   return (
     <Show when={shouldShow()}>
-      <div class="flex items-center gap-0.5">
-        <Button
-          class="p-1 rounded-lg"
-          label="Previous item"
-          hotkey={TOKENS.entity.step.start}
-          disabled={!canNavigateUp()}
-          onClick={() => navigate(-1)}
-        >
-          <CaretUp class="size-4" />
-        </Button>
-        <Button
-          class="p-1 rounded-lg"
-          label="Next item"
-          hotkey={TOKENS.entity.step.end}
-          disabled={!canNavigateDown()}
-          onClick={() => navigate(1)}
-        >
-          <CaretDown class="size-4" />
-        </Button>
-      </div>
+      <ListNavigationButtons
+        navigation={{
+          canPrevious: canNavigateUp,
+          canNext: canNavigateDown,
+          previous: () => navigate(-1),
+          next: () => navigate(1),
+        }}
+      />
     </Show>
+  );
+}
+
+/** Shared header controls; each host supplies its current list navigation. */
+export function ListNavigationButtons(props: {
+  navigation: ListDetailNavigationTarget;
+}) {
+  return (
+    <div class="flex items-center gap-0.5">
+      <Button
+        size="icon-md"
+        label="Previous item"
+        hotkey={TOKENS.entity.step.start}
+        disabled={!props.navigation.canPrevious()}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={props.navigation.previous}
+      >
+        <CaretUp class="size-4" />
+      </Button>
+      <Button
+        size="icon-md"
+        label="Next item"
+        hotkey={TOKENS.entity.step.end}
+        disabled={!props.navigation.canNext()}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={props.navigation.next}
+      >
+        <CaretDown class="size-4" />
+      </Button>
+    </div>
   );
 }
 
@@ -381,7 +405,7 @@ function SplitHeaderContextMenu(props: ParentProps) {
 
   const newSplitContent = () => ({
     type: 'component' as const,
-    id: LIST_VIEW_ID.inbox,
+    id: LIST_VIEW_ID.home,
   });
 
   const duplicateContent = (): SplitContent => ({ ...panel.handle.content() });
@@ -642,7 +666,7 @@ export function SplitHeader(props: {
             }}
           />
 
-          <div class="h-full grow shrink flex items-center justify-end gap-0.5 px-2 touch:px-0 touch:gap-2">
+          <div class="header-actions h-full grow shrink flex items-center justify-end gap-0.5 px-2 touch:px-0 touch:gap-2">
             <div
               class="contents"
               ref={(ref) => {

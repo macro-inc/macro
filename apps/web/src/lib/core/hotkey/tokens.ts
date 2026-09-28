@@ -118,7 +118,6 @@ export const TOKENS = {
     goTo: {
       home: 'sidebar.goTo.home',
       gettingStarted: 'sidebar.goTo.gettingStarted',
-      inbox: 'sidebar.goTo.inbox',
       recent: 'sidebar.goTo.recent',
       activity: 'sidebar.goTo.activity',
       calendar: 'sidebar.goTo.calendar',
@@ -265,6 +264,7 @@ export const TOKENS = {
 
   // create menu
   create: {
+    call: 'create.call',
     note: 'create.note',
     noteNewSplit: 'create.noteNewSplit',
     email: 'create.email',
@@ -284,6 +284,7 @@ export const TOKENS = {
     codeNewSplit: 'create.codeNewSplit',
     task: 'create.task',
     taskNewSplit: 'create.taskNewSplit',
+    initiative: 'create.initiative',
     snippet: 'create.snippet',
     snippetNewSplit: 'create.snippetNewSplit',
     automation: 'create.automation',

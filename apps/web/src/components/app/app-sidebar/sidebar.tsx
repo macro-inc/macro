@@ -6,6 +6,7 @@ import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { ChannelsRecentWidget } from '@app/features/channel/sidebar/channels-recent-widget';
+import { useHasActiveChannelsCall } from '@app/features/channels-view/use-has-active-call';
 import { CommandState } from '@app/features/command';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
 import { FavoritesSection } from '@app/features/favorites/sidebar/favorites-section';
@@ -90,7 +91,6 @@ import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import XIcon from '@phosphor/x.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
-import { useActiveCallsQuery } from '@queries/call/call';
 import { useMailAccountsQuery } from '@queries/email/mail-accounts';
 import {
   useJoinTeamMutation,
@@ -181,16 +181,16 @@ const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
 
 const SIDEBAR_LINKS = [
   {
-    id: 'inbox',
+    id: 'home',
     get label() {
       return isTouchDevice() ? 'Notifications' : 'Home';
     },
-    href: LIST_VIEW_PATHS.inbox,
+    href: LIST_VIEW_PATHS.home,
     get icon() {
       return isTouchDevice() ? BellIcon : HomeIcon;
     },
     hotkey: ['h', 'i'],
-    hotkeyToken: TOKENS.sidebar.goTo.inbox,
+    hotkeyToken: TOKENS.sidebar.goTo.home,
   },
   {
     id: 'search',
@@ -569,6 +569,7 @@ const SidebarSectionMenu = (props: {
     onOpenChange={props.onOpenChange}
   >
     <Dropdown.Trigger
+      size="icon-xs"
       variant="ghost"
       class="opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100 transition-opacity rounded-md size-5 min-h-0 p-0 bg-transparent hover:bg-ink/6 [&_svg]:size-3.5"
       label={`Customize ${props.label}`}
@@ -639,6 +640,7 @@ const TryCard = (props: {
             Quick Start
           </h3>
           <Button
+            size="icon-xs"
             variant="ghost"
             class="shrink-0 size-5 rounded-sm p-0 [&_svg]:size-3"
             label="Dismiss Quick Start"
@@ -864,7 +866,7 @@ export const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
       onOpenChange={props.onMenuOpenChange}
     >
       <Dropdown.Trigger
-        variant="ghost"
+        variant="plain"
         class={cn(
           'flex items-center rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
           props.compact
@@ -936,7 +938,7 @@ export const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
               <div class="truncate text-sm text-ink-muted">{email()}</div>
             </div>
           </div>
-          <div class="-mx-1.5 mt-2 mb-1.5 h-px bg-edge-muted" />
+          <div class="-mx-1.5 mt-2 mb-1.5 h-px bg-edge-divider" />
           <Show when={props.gettingStartedLink}>
             {(link) => (
               <Dropdown.Item
@@ -1020,14 +1022,6 @@ const COMPANIES_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.companies,
 };
 
-const DASHBOARD_LINK: SidebarItem = {
-  id: 'home',
-  label: 'Assistant',
-  href: '/home',
-  icon: HomeIcon,
-  hotkeyToken: TOKENS.sidebar.goTo.home,
-};
-
 const GETTING_STARTED_LINK: SidebarItem = {
   id: 'getting-started',
   label: 'Getting Started',
@@ -1058,9 +1052,9 @@ const RECENT_LINK: SidebarItem = {
 };
 
 /**
- * Assemble the ordered sidebar link list: the static links plus Home, Getting
- * started, and the flag-gated Activity, Calendar, Calls, and CRM entries in
- * their correct positions.
+ * Assemble the ordered sidebar link list: the static links plus Getting
+ * started and the flag-gated Recent, Activity, Calendar, Calls, and CRM
+ * entries in their correct positions.
  * Shared by the rendered sidebar (`AppSidebar.visibleLinks`) and the
  * always-mounted `GoToHotkeys` registrar so their link sets can't drift. Call
  * from a reactive context — it reads `ENABLE_CALLS` / `isFeatureEnabled(enableCrm)`.
@@ -1076,27 +1070,26 @@ const buildSidebarLinks = (
   showActivity: boolean,
   showRecent: boolean
 ): SidebarItem[] => {
-  let links: SidebarItem[] = [
-    DASHBOARD_LINK,
-    ...(showGettingStarted ? [GETTING_STARTED_LINK] : []),
-    ...SIDEBAR_LINKS.filter((link) => showCalendar || link.id !== 'calendar'),
-  ];
+  let links: SidebarItem[] = SIDEBAR_LINKS.filter(
+    (link) => showCalendar || link.id !== 'calendar'
+  );
 
+  const insertAfter = (anchorId: string, link: SidebarItem) => {
+    const idx = links.findIndex((l) => l.id === anchorId);
+    links = [...links.slice(0, idx + 1), link, ...links.slice(idx + 1)];
+  };
+
+  // Home leads; Getting started, Recent, and Activity follow it in that order.
+  let anchorId = 'home';
+  if (showGettingStarted) {
+    insertAfter(anchorId, GETTING_STARTED_LINK);
+    anchorId = 'getting-started';
+  }
   if (showRecent) {
-    // Directly below Inbox; Activity anchors after it.
-    const idx = links.findIndex((link) => link.id === 'inbox');
-    links = [...links.slice(0, idx + 1), RECENT_LINK, ...links.slice(idx + 1)];
+    insertAfter(anchorId, RECENT_LINK);
+    anchorId = 'recent';
   }
-
-  if (showActivity) {
-    const anchorId = showRecent ? 'recent' : 'inbox';
-    const idx = links.findIndex((link) => link.id === anchorId);
-    links = [
-      ...links.slice(0, idx + 1),
-      ACTIVITY_LINK,
-      ...links.slice(idx + 1),
-    ];
-  }
+  if (showActivity) insertAfter(anchorId, ACTIVITY_LINK);
 
   if (ENABLE_CALLS) {
     const idx = links.findIndex((l) => l.id === 'channels');
@@ -1356,7 +1349,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   // lives in the collapsible Workspace section. `findLink` drops ids that
   // `buildSidebarLinks` gated out, so flag-gated rows need no filter here.
   const topLinks = createMemo(() =>
-    ['home', 'getting-started', 'inbox', 'recent', 'activity']
+    ['home', 'getting-started', 'recent', 'activity']
       .filter(
         (id) => id !== 'getting-started' || !gettingStartedVisibility.hidden()
       )
@@ -1488,7 +1481,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar flex flex-col gap-0 overflow-hidden bg-surface px-3 pb-3 pt-4 text-[13px]',
         isExpanded() &&
-          'relative h-full shrink-0 max-w-55 w-55 border-r border-edge-muted opacity-100',
+          'relative h-full shrink-0 max-w-55 w-55 border-edge-frame opacity-100',
+        isExpanded() &&
+          (globalSplitManager()?.splits().length ?? 1) <= 1 &&
+          'border-r',
         props.sidebarState === 'hidden' &&
           'fixed left-0 top-0 bottom-0 h-full -translate-x-full max-w-0 w-0 opacity-0 pointer-events-none',
         isCollapsed() && 'fixed z-modal-content',
@@ -1496,7 +1492,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           !overlayOpen() &&
           'left-0 inset-y-0 h-full max-w-0 w-0 opacity-0 pointer-events-none -translate-x-2',
         isOverlayExpanded() &&
-          'left-0 inset-y-0 h-full max-w-55 w-55 opacity-100 translate-x-0 rounded-r-xl shadow-menu ring-1 ring-edge-muted'
+          'left-0 inset-y-0 h-full max-w-55 w-55 opacity-100 translate-x-0 rounded-r-xl shadow-menu ring-1 ring-edge-frame'
       )}
       data-expanded={isExpandedView()}
       data-slim={isSlim()}
@@ -1848,15 +1844,21 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
 };
 
 /**
- * Accent phone icon on the Channels link while any channel the user is a
- * member of has a live call. Backed by the shared all-active-calls query,
- * which the call websocket events keep current.
+ * Accent phone icon for a visible active channel call or Quick Call.
  */
 const ChannelsActiveCallIcon = () => {
-  const activeCallsQuery = useActiveCallsQuery();
+  return (
+    <Suspense>
+      <ChannelsActiveCallIconContent />
+    </Suspense>
+  );
+};
+
+const ChannelsActiveCallIconContent = () => {
+  const hasActiveCall = useHasActiveChannelsCall();
 
   return (
-    <Show when={(activeCallsQuery.data ?? []).length > 0}>
+    <Show when={hasActiveCall()}>
       <PhoneIcon class="size-4 shrink-0 text-accent fill-accent" />
     </Show>
   );

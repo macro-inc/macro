@@ -19,6 +19,7 @@ import type {
 } from '../plugins';
 import type { Action } from '../plugins/actions/types';
 import type { TagMentionLifecycle } from '../plugins/tags';
+import type { MentionLinkResolver } from '../plugins/text-paste/textPastePlugin';
 import type { createMenuOperations } from '../shared/inlineMenu';
 import type { UserMentionRecord } from '../utils/mentionsUtils';
 
@@ -164,6 +165,7 @@ export interface EditorConfig {
   agentCommands?: AgentCommandsOptions;
   emojis?: EmojisOptions;
   links?: LinksOptions;
+  resolveAppLink?: MentionLinkResolver;
   history?: HistoryOptions;
   singleLine: boolean;
   handlers: EditorCallbacks;

@@ -48,6 +48,14 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
+    /// Gets the owner of a team.
+    ///
+    /// Every team has exactly one owner.
+    fn get_team_owner(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<MacroUserIdStr<'static>, TeamError>> + Send;
+
     /// Creates a new team with the provided normalized slug. `subscription_id` is `None` for
     /// free teams. Membership is not capped by team size. `owner_plan` is the plan the owner's
     /// own seat is already billed at.

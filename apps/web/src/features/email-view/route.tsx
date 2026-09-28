@@ -9,20 +9,17 @@ import {
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { lazy, Show } from 'solid-js';
 import { z } from 'zod';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '../email-thread/core/location';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
+import { EmailDetailRouteView } from './components/EmailDetailView';
 import { emailDetailSearch } from './email-route';
+import { EmailView } from './email-view';
 
 const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
-}));
-const EmailView = lazy(async () => ({
-  default: (await import('./email-view')).EmailView,
-}));
-const EmailDetailRouteView = lazy(async () => ({
-  default: (await import('./components/EmailDetailView')).EmailDetailRouteView,
 }));
 
 function LegacyMailView() {
@@ -81,6 +78,7 @@ export const emailThreadRoute = defineRoute({
     namespace: 'block',
     id: `email:${threadId}`,
   }),
+  toReference: ({ threadId }) => uuidRouteReference(threadId, 'email'),
 });
 
 export const emailSplitRoute = defineRoute({

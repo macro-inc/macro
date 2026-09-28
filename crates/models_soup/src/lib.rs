@@ -20,6 +20,8 @@ pub mod document;
 pub mod email_thread;
 /// Foreign entity models for Soup responses.
 pub mod foreign_entity;
+/// Initiative models for Soup responses.
+pub mod initiative;
 /// Unified Soup feed item model.
 pub mod item;
 /// Project models for Soup responses.

@@ -23,6 +23,7 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 
 use super::instance::Instance;
+use super::local_env::Tunnels;
 use super::{Mode, local_env};
 
 #[cfg(test)]
@@ -46,7 +47,7 @@ pub fn resolve(
     no_doppler: bool,
     env_file: Option<&Path>,
     static_frontend: bool,
-    egress_public_url: Option<&str>,
+    tunnels: Tunnels<'_>,
     wire_otel: bool,
 ) -> Result<ResolvedEnv> {
     // Base = Doppler (`lcl_personal`/`dev_personal`); it supplies the
@@ -56,9 +57,9 @@ pub fn resolve(
     // has — unlike the old defaults.env, which Doppler overrode). Dev keeps
     // Doppler as-is.
     let spec = mode.spec();
-    let local = spec.overlay_local_env.then(|| {
-        local_env::LocalEnv::for_instance(mode, instance, static_frontend, egress_public_url)
-    });
+    let local = spec
+        .overlay_local_env
+        .then(|| local_env::LocalEnv::for_instance(mode, instance, static_frontend, tunnels));
     let mut env = BTreeMap::new();
     // Boot stubs go in FIRST so Doppler overrides them: they only exist to keep
     // a `--no-doppler` stack's config loaders satisfied, never to replace a
@@ -75,6 +76,31 @@ pub fn resolve(
         for (k, v) in local.to_env() {
             env.insert(k, v);
         }
+        // Persistent per-instance SSH host identity; never reuse a production key in local stacks.
+        let key_path = instance.ensure_artifact_dir()?.join("preview_ssh_host_key");
+        if !key_path.exists() {
+            let status = Command::new("ssh-keygen")
+                .args([
+                    "-q",
+                    "-t",
+                    "ed25519",
+                    "-N",
+                    "",
+                    "-C",
+                    "macro-local-preview",
+                    "-f",
+                ])
+                .arg(&key_path)
+                .status()
+                .context("generating preview SSH host key (run inside nix develop)")?;
+            if !status.success() {
+                bail!("ssh-keygen failed generating preview host identity");
+            }
+        }
+        env.insert(
+            "PREVIEW_SSH_HOST_KEY".into(),
+            std::fs::read_to_string(key_path).context("reading preview host key")?,
+        );
         // Local telemetry export: point services at the local OTLP collector
         // (docker-network alias `otel-collector`) only when the run asked for
         // tracing AND one answers on the OTLP HTTP port (so services don't

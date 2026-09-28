@@ -1,4 +1,4 @@
-import type { EntityDetailNavigationOptions } from '@app/components/entity-detail/EntityDetailNavigationStack';
+import type { EntityDetailNavigationOptions } from '@app/components/entity-detail/entity-detail-target';
 import {
   createListController,
   type ListActivation,
@@ -8,11 +8,13 @@ import {
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { normalizeFacetSelection } from '@app/features/soup';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableProjects } from '@app/lib/core/constant/featureFlags';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   createSearchParams,
   useNavigate,
-  useRouteParams,
+  useParams,
 } from '@app/lib/split-router';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
@@ -45,20 +47,32 @@ import { createTasksViewPersistence } from './persistence';
 import {
   type TasksDataSource,
   type TasksDataSourceItem,
+  type UseTasksDataSourceOptions,
   useTasksDataSource,
 } from './queries/use-tasks-query';
-import { taskDetailRoute, tasksSplitRoute } from './route';
+import { taskDetailRoute, tasksProjectsRoute, tasksSplitRoute } from './route';
 import { tasksTabSearch, tasksTabSearchCodec } from './tasks-tab-search';
 import type {
   TaskDetailTarget,
   TaskSortId,
+  TasksTab,
   TasksViewState,
   TasksViewStateOptions,
-  TaskTab,
 } from './types';
 
-type TasksViewProviderProps = ContextProviderProps & {
+export type TasksViewProviderProps = ContextProviderProps & {
   initialState?: TasksViewStateOptions;
+  restoreEntryState?: boolean;
+  scopeKey?: string;
+  sourceFactory?: (
+    state: Store<TasksViewState>,
+    options: UseTasksDataSourceOptions
+  ) => TasksDataSource;
+  onOpenTask?: (
+    task: TaskDetailTarget,
+    options?: EntityDetailNavigationOptions
+  ) => boolean;
+  onCloseTask?: () => void;
 };
 
 export type TasksListActivationMetadata = {
@@ -72,7 +86,9 @@ type TasksListController = ListController<
 >;
 
 export type TasksViewContext = {
+  scopeKey?: string;
   state: Store<TasksViewState>;
+  projectsEnabled: Accessor<boolean>;
   setState: SetStoreFunction<TasksViewState>;
   selectedTask: Accessor<TaskDetailTarget | undefined>;
   source: TasksDataSource;
@@ -91,7 +107,7 @@ export type TasksViewContext = {
     options?: EntityDetailNavigationOptions
   ) => boolean;
   closeTask: () => void;
-  setTab: (tab: TaskTab) => void;
+  setTab: (tab: TasksTab) => void;
   setFacets: (facets: TasksViewState['facets']) => void;
   setPrimarySort: (id: TaskSortId) => void;
   isSidebarSectionOpen: (id: string) => boolean;
@@ -104,87 +120,103 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
 >('TasksView', (props) => {
   const panel = useSplitPanelOrThrow();
   const navigate = useNavigate();
-  const routeParams = useRouteParams(taskDetailRoute);
+  const routeParams = useParams<{
+    taskId?: string;
+    projectId?: string;
+    projectsTab?: 'projects';
+  }>();
   const [tabSearch] = createSearchParams(tasksTabSearch);
   const selectPreview = createPreviewSelectionGuard();
   const userId = useUserId();
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
+  const projectsFlag = useFeatureFlag(enableProjects);
+  const projectsEnabled = () => projectsFlag().enabled;
 
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'my-tasks';
 
-  const [persistedState, setState] = makePersistedState(
-    createStore<TasksViewState>({
-      tab: initialTab,
-      search: initial.search ?? '',
-      groupBy: initial.groupBy ?? TASK_DEFAULT_GROUP_BY[initialTab],
-      sort: (initial.sort ?? [{ id: 'updated_at' }]).map((item) => ({
-        ...item,
-      })),
-      facets: normalizeFacetSelection(
-        initial.facets ?? DEFAULT_TASK_FACET_SELECTION
-      ),
-      collapsedGroupIds: [...(initial.collapsedGroupIds ?? [])],
-      collapsedSidebarSectionIds: [
-        ...(initial.collapsedSidebarSectionIds ?? []),
-      ],
-    }),
-    createTasksViewPersistence({
-      handle: panel.handle,
-      userId,
-      restoreEntryState: props.initialState === undefined,
-      restorePreferences: initial.collapsedSidebarSectionIds === undefined,
-    })
-  );
+  const ownedSlot = (name: string) =>
+    listOwnedSlotName(props.scopeKey ? `${props.scopeKey}:${name}` : name);
+  const createState = () =>
+    makePersistedState(
+      createStore<TasksViewState>({
+        tab: initialTab,
+        search: initial.search ?? '',
+        groupBy: initial.groupBy ?? TASK_DEFAULT_GROUP_BY[initialTab],
+        sort: (initial.sort ?? [{ id: 'updated_at' }]).map((item) => ({
+          ...item,
+        })),
+        facets: normalizeFacetSelection(
+          initial.facets ?? DEFAULT_TASK_FACET_SELECTION
+        ),
+        collapsedGroupIds: [...(initial.collapsedGroupIds ?? [])],
+        collapsedSidebarSectionIds: [
+          ...(initial.collapsedSidebarSectionIds ?? []),
+        ],
+      }),
+      createTasksViewPersistence({
+        handle: panel.handle,
+        userId,
+        restoreEntryState:
+          props.restoreEntryState ?? props.initialState === undefined,
+        restorePreferences: initial.collapsedSidebarSectionIds === undefined,
+        scopeKey: props.scopeKey,
+      })
+    );
+  const [persistedState, setState] = props.scopeKey
+    ? withSplitPanelOwner(ownedSlot('view-state'), createState)
+    : createState();
   const searchText = useMobileSearchText(
     () => persistedState.search,
-    panel.handle.isActive
+    () => !props.scopeKey && panel.handle.isActive()
   );
+  // A pending or disabled rollout must not overwrite the saved Projects tab.
   const state = mergeProps(persistedState, {
     get search() {
       return searchText();
     },
+    get tab(): TasksTab {
+      return persistedState.tab === 'projects' && !projectsEnabled()
+        ? 'my-tasks'
+        : persistedState.tab;
+    },
   });
 
+  const routeTab = (): TasksTab =>
+    routeParams.projectId || routeParams.projectsTab
+      ? 'projects'
+      : tabSearch.tab;
   createEffect(
-    on(
-      () => tabSearch.tab,
-      (tab) => {
-        if (state.tab === tab) return;
-        setState(
-          produce((draft) => {
-            draft.tab = tab;
-            draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
-            draft.facets = normalizeFacetSelection(
-              DEFAULT_TASK_FACET_SELECTION
-            );
-            draft.collapsedGroupIds = [];
-          })
-        );
-      }
-    )
+    on(routeTab, (tab) => {
+      if (props.scopeKey || persistedState.tab === tab) return;
+      setState(
+        produce((draft) => {
+          draft.tab = tab;
+          draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
+          draft.facets = normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION);
+          draft.collapsedGroupIds = [];
+        })
+      );
+    })
   );
-
   const isGroupExpanded = (groupId: string) =>
     !state.collapsedGroupIds.includes(groupId);
-  const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
-    useTasksDataSource(state, {
+  const source = withSplitPanelOwner(ownedSlot('data-source'), () =>
+    (props.sourceFactory ?? useTasksDataSource)(state, {
       userId,
       tagSets,
       tagSetsReady,
       isGroupExpanded,
     })
   );
-  let listActivationHandler:
-    | ((
-        activation: ListActivation<
-          TasksDataSourceItem,
-          TasksListActivationMetadata
-        >
-      ) => void)
-    | undefined;
-  const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
+  type ActivationHandler = (
+    activation: ListActivation<TasksDataSourceItem, TasksListActivationMetadata>
+  ) => void;
+  const activation = withSplitPanelOwner(ownedSlot('activation'), () => ({
+    current: undefined as ActivationHandler | undefined,
+  }));
+  const list = withSplitPanelOwner(ownedSlot('controller'), () =>
     createListController<TasksDataSourceItem, TasksListActivationMetadata>({
       items: source.items,
       getKey: (row) => row.id,
@@ -193,15 +225,13 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       },
       isNavigable: (row) => row.kind !== 'section-header',
       isSelectable: (row) => row.kind === 'entity',
-      onActivate: (activation) => listActivationHandler?.(activation),
+      onActivate: (value) => activation.current?.(value),
     })
   );
-  const registerListActivationHandler = (
-    handler: NonNullable<typeof listActivationHandler>
-  ) => {
-    listActivationHandler = handler;
+  const registerListActivationHandler = (handler: ActivationHandler) => {
+    activation.current = handler;
     onCleanup(() => {
-      if (listActivationHandler === handler) listActivationHandler = undefined;
+      if (activation.current === handler) activation.current = undefined;
     });
   };
 
@@ -222,9 +252,13 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
     );
   };
-  const closeTask = () =>
+  const closeTask = () => {
+    if (props.onCloseTask) return props.onCloseTask();
     navigate(
-      { route: tasksSplitRoute, params: {} },
+      {
+        route: state.tab === 'projects' ? tasksProjectsRoute : tasksSplitRoute,
+        params: {},
+      },
       {
         search: {
           [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
@@ -233,10 +267,12 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         },
       }
     );
+  };
   const openTask = (
     task: TaskDetailTarget,
     options?: EntityDetailNavigationOptions
   ) => {
+    if (props.onOpenTask) return props.onOpenTask(task, options);
     if (!opensInline(options)) return false;
     if (!selectPreview.canSelect(taskSelection(task.id))) return true;
     navigate(
@@ -254,6 +290,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
 
   createEffect(
     on(selectedTask, (task, previous) => {
+      if (props.scopeKey || routeParams.projectId) return;
       if (!selectPreview(task ? taskSelection(task.id) : undefined)) {
         if (previous) {
           navigate(
@@ -269,7 +306,11 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
           );
         } else {
           navigate(
-            { route: tasksSplitRoute, params: {} },
+            {
+              route:
+                state.tab === 'projects' ? tasksProjectsRoute : tasksSplitRoute,
+              params: {},
+            },
             {
               replace: true,
               search: {
@@ -292,8 +333,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     })
   );
 
-  const setTab = (tab: TaskTab) => {
-    if (state.tab === tab) {
+  const setTab = (tab: TasksTab) => {
+    if (tab === 'projects' && !projectsEnabled()) return;
+    if (persistedState.tab === tab) {
       closeTask();
       return;
     }
@@ -330,7 +372,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     );
 
   return {
+    scopeKey: props.scopeKey,
     state,
+    projectsEnabled,
     setState,
     selectedTask,
     source,

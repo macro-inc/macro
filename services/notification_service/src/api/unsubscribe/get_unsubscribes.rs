@@ -26,21 +26,28 @@ pub async fn handler(
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, Response> {
-    let unsubscribe_items = notification_db_client::unsubscribe::get::get_user_unsubscribes(
-        &ctx.db,
-        &user.authorization.user.user_context.user_id,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "unable to unsubscribe item");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "unable to unsubscribe item".into(),
-            }),
-        )
-            .into_response()
-    })?;
+    let unsubscribe_items = ctx
+        .item_preferences
+        .list(user.authorization.user.macro_user_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "unable to unsubscribe item");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to unsubscribe item".into(),
+                }),
+            )
+                .into_response()
+        })?;
 
-    Ok((StatusCode::OK, Json(unsubscribe_items)).into_response())
+    let items: Vec<UserUnsubscribe> = unsubscribe_items
+        .into_iter()
+        .map(|item| UserUnsubscribe {
+            item_id: item.entity.entity_id.into_owned(),
+            item_type: item.entity.entity_type.to_string(),
+            snoozed_until: item.snoozed_until,
+        })
+        .collect();
+    Ok((StatusCode::OK, Json(items)).into_response())
 }

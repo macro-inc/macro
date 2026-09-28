@@ -17,6 +17,8 @@ export type EntityBase = {
   name: string;
   ownerId: string;
   frecencyScore?: number;
+  /** Viewer-owned favorite state from Soup; absent on search-only results. */
+  isFavorited?: boolean;
   /**
    * The viewer's latest own mutation of this entity, present only on rows
    * from `touched_by_me` pages. The Recent feed sorts on it, so mutation
@@ -285,6 +287,8 @@ export type EmailEntity = EntityBase & {
   hasIcsAttachment?: boolean;
   attachments?: EmailAttachment[];
   properties?: SoupProperty[];
+  /** ISO 8601 time of the thread draft's confirmed scheduled send. */
+  scheduledSendTime?: string;
 };
 
 export type ProjectEntity = EntityBase & {
@@ -295,16 +299,24 @@ export type ProjectEntity = EntityBase & {
 
 export type CallStatus = StorageCallStatus;
 
+/** Session-scoped guest identity on a call; not a Macro account. */
+export type CallGuest = {
+  id: string;
+  displayName: string;
+};
+
 export type CallEntity = EntityBase & {
   type: 'call';
-  channelId: string;
+  channelId?: string | null;
   channelName?: string;
   isActive: boolean;
   status: CallStatus;
   /** Compatibility flag derived from status. */
   attended: boolean;
   durationMs?: number;
+  /** Macro users only; guests are listed separately in `guests`. */
   participantIds: string[];
+  guests?: CallGuest[];
   summary?: string;
   properties?: SoupProperty[];
 };
@@ -383,7 +395,7 @@ export type ReminderEntity = EntityBase & {
     id: string;
     // Calendar events are excluded alongside reminders: neither has a
     // previewable block, and the mapper yields `undefined` for both.
-    type: Exclude<EntityType, 'reminder' | 'calendar_event'>;
+    type: Exclude<EntityType, 'reminder' | 'calendar_event' | 'initiative'>;
     fileType?: string;
     subType?: string;
   };
@@ -434,6 +446,13 @@ export type CalendarEventEntity = EntityBase & {
   properties?: SoupProperty[];
 };
 
+/** A native project, distinct from folder entities. */
+export type InitiativeEntity = EntityBase & {
+  type: 'initiative';
+  descriptionDocumentId: string;
+  properties?: SoupProperty[];
+};
+
 export type EntityData =
   | AgentSessionEntity
   | ChannelEntity
@@ -445,6 +464,7 @@ export type EntityData =
   | SnippetEntity
   | EmailEntity
   | ProjectEntity
+  | InitiativeEntity
   | CallEntity
   | CrmCompanyEntity
   | CrmContactEntity
@@ -462,6 +482,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'document',
   'email',
   'project',
+  'initiative',
   'call',
   'crm_company',
   'crm_contact',

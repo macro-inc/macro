@@ -11,6 +11,7 @@ mod entity_notifications;
 pub mod fanout_notification_realtime;
 /// Realtime notification fanout across multiple delivery adapters.
 pub mod fanout_realtime;
+pub mod item_preferences;
 /// Kafka-backed notification status update publication.
 pub mod kafka_notification_realtime;
 /// Kafka-backed realtime notification delivery.

@@ -13,6 +13,8 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { createSplitRouter } from './router';
 import {
+  getRouteEntryState,
+  getRouteSearchNamespaces,
   resolveRouteBranch,
   routeParams,
   type SplitRoutesManifest,
@@ -20,6 +22,7 @@ import {
 import type {
   InferSplitRouteBranchParams,
   InferSplitRouteParams,
+  InferSplitRouteState,
   SplitNavigate,
   SplitNavigateOptions,
   SplitNavigateTo,
@@ -67,6 +70,12 @@ export function useSplitRouter<TSplitId>(): SplitRouterController<TSplitId> {
     .router as unknown as SplitRouterController<TSplitId>;
 }
 
+export function useOptionalSplitRouter<TSplitId>() {
+  return useContext(SplitRouterContext)?.router as
+    | SplitRouterController<TSplitId>
+    | undefined;
+}
+
 export function useSplitRouterState<TSplitId>() {
   const context = useSplitRouterContext();
   const router = context.router as unknown as SplitRouterController<TSplitId>;
@@ -77,6 +86,11 @@ export function useSplitRouterState<TSplitId>() {
       context.track(splitId);
 
       return router.canGo(splitId, delta);
+    },
+    entry(splitId: TSplitId) {
+      context.track(splitId);
+
+      return router.entry(splitId);
     },
     history(splitId: TSplitId) {
       context.track(splitId);
@@ -113,6 +127,23 @@ export function useSplitRouterScope<TSplitId>(): Accessor<TSplitId> {
   return splitId as Accessor<TSplitId>;
 }
 
+/**
+ * Whether the enclosing split's current route owns search `namespace`, so
+ * `createSearchParams` may write it. False outside a split.
+ */
+export function useOwnsSearchNamespace(namespace: string): Accessor<boolean> {
+  const context = useContext(SplitRouterContext);
+  const splitId = useContext(SplitRouterScopeContext);
+  if (!context || !splitId) return () => false;
+  return () => {
+    context.track(splitId());
+    const route = context.router.route(splitId());
+    if (!route) return false;
+    const owned = getRouteSearchNamespaces(context.router.routes, route);
+    return owned.has('*') || owned.has(namespace);
+  };
+}
+
 export function useNavigate<TSplitId = unknown>(): SplitNavigate<TSplitId> {
   const router = useSplitRouter<TSplitId>();
   const splitId = useSplitRouterScope<TSplitId>();
@@ -132,6 +163,16 @@ export function useCanGo(delta: number): Accessor<boolean> {
   const splitId = useSplitRouterScope<unknown>();
 
   return () => router.canGo(splitId(), delta);
+}
+
+export function useRouteState<const TRoute extends { id: string }>(
+  route: TRoute
+): Accessor<InferSplitRouteState<TRoute> | undefined> {
+  const state = useSplitRouterState<unknown>();
+  const splitId = useSplitRouterScope<unknown>();
+
+  return () =>
+    getRouteEntryState(state.router.routes, state.entry(splitId()), route);
 }
 
 export function useSplitHistory() {

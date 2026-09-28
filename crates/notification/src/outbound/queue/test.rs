@@ -1,6 +1,8 @@
 use super::*;
 use aws_sdk_sqs::config::{BehaviorVersion, Credentials, Region, retry::RetryConfig};
 use serde_json::json;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 use wiremock::matchers::{body_json, header, method};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -121,4 +123,58 @@ async fn ingress_delete_failure_does_not_block_valid_messages() {
     assert_eq!(messages[0].receipt_handle, "receipt-1");
     assert_eq!(server.received_requests().await.unwrap().len(), 2);
     server.verify().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn sends_in_parallel_with_bounded_concurrency() {
+    let active = AtomicUsize::new(0);
+    let peak = AtomicUsize::new(0);
+    let completed = AtomicUsize::new(0);
+    let count = MAX_CONCURRENT_SENDS * 2 + 1;
+    let delay = Duration::from_secs(1);
+    let start = tokio::time::Instant::now();
+
+    send_concurrently((0..count).map(|_| async {
+        let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+        peak.fetch_max(current, Ordering::SeqCst);
+        tokio::time::sleep(delay).await;
+        active.fetch_sub(1, Ordering::SeqCst);
+        completed.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }))
+    .await
+    .unwrap();
+
+    assert_eq!(peak.load(Ordering::SeqCst), MAX_CONCURRENT_SENDS);
+    assert_eq!(completed.load(Ordering::SeqCst), count);
+    assert_eq!(active.load(Ordering::SeqCst), 0);
+    assert_eq!(start.elapsed(), delay * 3);
+}
+
+#[tokio::test(start_paused = true)]
+async fn reports_send_failure_without_abandoning_other_sends() {
+    let completed = AtomicUsize::new(0);
+    let count = MAX_CONCURRENT_SENDS * 2;
+    let result = send_concurrently((0..count).map(|index| {
+        let completed = &completed;
+        async move {
+            if index == 0 {
+                return Err(rootcause::report!("SQS send failed"));
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            completed.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }))
+    .await;
+
+    assert!(result.unwrap_err().to_string().contains("SQS send failed"));
+    assert_eq!(completed.load(Ordering::SeqCst), count - 1);
+}
+
+#[tokio::test]
+async fn empty_publish_succeeds_without_sending() {
+    send_concurrently(std::iter::empty::<std::future::Ready<Result<(), Report>>>())
+        .await
+        .unwrap();
 }

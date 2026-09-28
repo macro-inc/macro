@@ -91,7 +91,7 @@ export function MobileSearchInput() {
   // returns to the default view.
   const handleClear = () => {
     SearchState.close();
-    if (foregroundView() === 'search') navigate('inbox');
+    if (foregroundView() === 'search') navigate('home');
   };
 
   return (

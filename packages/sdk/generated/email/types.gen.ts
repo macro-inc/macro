@@ -302,6 +302,7 @@ export type ApiMessage = {
     body_macro?: string | null;
     body_replyless?: string | null;
     body_text?: string | null;
+    calendar_invitations?: Array<CalendarInvitation>;
     cc: Array<ApiContactInfo>;
     created_at: string;
     db_id: string;
@@ -500,6 +501,11 @@ export type AttachmentForwarded = {
     size_bytes?: number | null;
 };
 
+/**
+ * RSVP state for an attendee.
+ */
+export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
+
 export type BackfillJob = {
     created_at: string;
     fusionauth_user_id: string;
@@ -529,9 +535,328 @@ export type BlockSenderRequest = {
     email_address: string;
 };
 
+/**
+ * An attendee on a calendar event.
+ */
+export type CalendarAttendee = {
+    /**
+     * Optional attendee comment.
+     */
+    comment?: string | null;
+    /**
+     * Provider display name.
+     */
+    displayName?: string | null;
+    /**
+     * Normalized email address.
+     */
+    email: string;
+    /**
+     * Whether attendance is optional.
+     */
+    isOptional: boolean;
+    /**
+     * Whether this attendee is the organizer.
+     */
+    isOrganizer: boolean;
+    /**
+     * Whether this attendee is one of the viewing requester's inboxes.
+     */
+    isSelf: boolean;
+    /**
+     * RSVP state.
+     */
+    responseStatus: AttendeeResponseStatus;
+};
+
+/**
+ * A stable, first-class Macro calendar event entity.
+ *
+ * Content fields hold the canonical source's values: the account's primary
+ * calendar copy when one is synced, else the freshest remaining copy.
+ */
+export type CalendarEvent = {
+    /**
+     * Attendees, keyed by email during persistence.
+     */
+    attendees: Array<CalendarAttendee>;
+    /**
+     * Calendar the canonical source belongs to, when known. Absent only in
+     * projections stored before calendars were attributed.
+     */
+    calendarId?: string | null;
+    conferenceProvider?: null | ConferenceProvider;
+    /**
+     * Direct join URL when known.
+     */
+    conferenceUrl?: string | null;
+    /**
+     * Entity creation time.
+     */
+    createdAt: string;
+    /**
+     * Provider-reported creator email. Distinct from the organizer when
+     * someone writes onto a calendar they do not own. Omitted from stored
+     * projections when unknown so events ingested before this field still
+     * compare equal.
+     */
+    creatorEmail?: string | null;
+    /**
+     * Provider-reported creator display name.
+     */
+    creatorName?: string | null;
+    /**
+     * Optional event body.
+     */
+    description?: string | null;
+    /**
+     * Provider event type. Skipped when it is the regular type so
+     * projections stored before event types were modeled still compare
+     * equal.
+     */
+    eventType?: EventType;
+    /**
+     * RFC 5545 UID used to reconcile provider and email sources.
+     */
+    icalUid: string;
+    /**
+     * Macro entity identifier.
+     */
+    id: string;
+    /**
+     * Whether the canonical source's calendar prohibits editing it.
+     */
+    isReadOnly: boolean;
+    /**
+     * Optional physical or virtual location label.
+     */
+    location?: string | null;
+    /**
+     * Organizer email.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer display name.
+     */
+    organizerName?: string | null;
+    /**
+     * Macro user who owns this event entity.
+     */
+    ownerId: string;
+    /**
+     * Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
+     */
+    recurrenceLines: Array<string>;
+    /**
+     * Per-user reminder configuration. Skipped when it is the provider
+     * default so projections stored before reminders were modeled still
+     * compare equal.
+     */
+    reminders?: EventReminders;
+    /**
+     * Provider/iCalendar sequence number.
+     */
+    sequence: number;
+    /**
+     * Content of every active copy of this event, canonical first: the
+     * primary calendar's copy, then the freshest. A client picks the copy
+     * whose calendar it is showing and falls back to the first. Populated
+     * only on the read path, so stored projections omit it.
+     */
+    sources?: Array<CalendarEventSourceContent>;
+    /**
+     * Event status.
+     */
+    status: EventStatus;
+    /**
+     * Timed or all-day shape.
+     */
+    time: EventTime;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Availability behavior.
+     */
+    transparency: EventTransparency;
+    /**
+     * Entity update time.
+     */
+    updatedAt: string;
+    /**
+     * Event visibility.
+     */
+    visibility: EventVisibility;
+};
+
+/**
+ * The content one provider copy of an event carries.
+ *
+ * Google keeps these fields per calendar copy: a shared calendar's copy of a
+ * member's event can have its own title, type, reminders, and access role.
+ * The entity holds its canonical source's values. Every other copy's values
+ * are read from here so a client can show the copy that belongs to the
+ * calendar being viewed.
+ */
+export type CalendarEventSourceContent = {
+    /**
+     * Calendar this copy lives on.
+     */
+    calendarId: string;
+    /**
+     * Provider-reported creator email.
+     */
+    creatorEmail?: string | null;
+    /**
+     * Provider-reported creator display name.
+     */
+    creatorName?: string | null;
+    /**
+     * Optional event body.
+     */
+    description?: string | null;
+    /**
+     * Provider event type.
+     */
+    eventType: EventType;
+    /**
+     * Whether the calendar's access role prohibits editing this copy.
+     */
+    isReadOnly: boolean;
+    /**
+     * Optional physical or virtual location label.
+     */
+    location?: string | null;
+    /**
+     * Reminder configuration of this copy.
+     */
+    reminders: EventReminders;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Availability behavior.
+     */
+    transparency: EventTransparency;
+    /**
+     * Event visibility.
+     */
+    visibility: EventVisibility;
+};
+
+/**
+ * Display snapshot of one meaningful VEVENT, owned by the email domain.
+ */
+export type CalendarInvitation = {
+    /**
+     * Historical attendee identities and participation metadata.
+     */
+    attendees: Array<InvitationParticipant>;
+    /**
+     * Reply or counter-proposal comment.
+     */
+    comment?: string | null;
+    /**
+     * Validated HTTP(S) conferencing URL; never fetched during rendering.
+     */
+    conference_url?: string | null;
+    /**
+     * Plaintext description, retaining passwords and dial-in instructions.
+     */
+    description?: string | null;
+    /**
+     * Scheduling timestamp in its original spelling.
+     */
+    dtstamp?: string | null;
+    end?: null | InvitationDateTime;
+    /**
+     * Content-derived component identity, stable across repeated extraction.
+     */
+    id: string;
+    /**
+     * Last modification timestamp in its original spelling.
+     */
+    last_modified?: string | null;
+    /**
+     * Plaintext event location.
+     */
+    location?: string | null;
+    /**
+     * Original scheduling method.
+     */
+    method: InvitationMethod;
+    organizer?: null | InvitationParticipant;
+    recurrence_id?: null | InvitationDateTime;
+    /**
+     * Original recurrence identifier spelling and parameters.
+     */
+    recurrence_id_raw?: string | null;
+    /**
+     * Scheduling revision, distinct from delivery order.
+     */
+    sequence: number;
+    start?: null | InvitationDateTime;
+    /**
+     * Original event status.
+     */
+    status?: string | null;
+    /**
+     * Event summary.
+     */
+    title?: string | null;
+    /**
+     * iCalendar UID; never a Google provider event ID.
+     */
+    uid: string;
+};
+
+/**
+ * A materialized recurrence instance optimized for range queries.
+ */
+export type CalendarOccurrence = {
+    /**
+     * Owning event entity.
+     */
+    eventId: string;
+    /**
+     * Whether the instance was cancelled.
+     */
+    isCancelled: boolean;
+    /**
+     * Stable key within the event.
+     */
+    occurrenceKey: string;
+    /**
+     * Provider recurrence identifier, when applicable.
+     */
+    recurrenceId?: string | null;
+    /**
+     * Instance time.
+     */
+    time: EventTime;
+};
+
 export type CancelBackfillParams = {
     job_id: string;
 };
+
+/**
+ * The conferencing system backing an event's join URL.
+ *
+ * Macro generates only Google Meet conferences, so this distinguishes one it
+ * created from a third party's — Zoom and friends arriving as `addOn`
+ * conference data, or a legacy classic Hangout. Clients use it to label the
+ * conference and to tell whether the Meet toggle reflects a Macro-managed
+ * conference.
+ *
+ * It does not gate mutation. An explicit request replaces or detaches any
+ * conference, third-party included, exactly as deleting the event would;
+ * what protects a conference is that omitting the field leaves it untouched,
+ * so an unrelated edit never disturbs it.
+ */
+export type ConferenceProvider = 'google_meet' | 'other';
 
 export type Contact = {
     email_address?: string | null;
@@ -616,6 +941,93 @@ export type ErrorResponse = {
 };
 
 /**
+ * One reminder: how it alerts and how many minutes before the event start
+ * (before midnight in the calendar's zone for all-day events) it fires.
+ */
+export type EventReminderOverride = {
+    /**
+     * Provider method, stored verbatim; only `popup` fires Macro
+     * notifications.
+     */
+    method: string;
+    /**
+     * Minutes before the event start.
+     */
+    minutes: number;
+};
+
+/**
+ * Per-user reminder configuration for an event, mirroring Google's model:
+ * either the calendar's default reminders apply, or the explicit overrides
+ * replace them entirely.
+ */
+export type EventReminders = {
+    /**
+     * Explicit reminders replacing the defaults when `use_default` is off.
+     */
+    overrides?: Array<EventReminderOverride>;
+    /**
+     * Whether the calendar's default reminders apply.
+     */
+    useDefault: boolean;
+};
+
+/**
+ * Canonical event status.
+ */
+export type EventStatus = 'confirmed' | 'tentative' | 'cancelled';
+
+/**
+ * The mutually exclusive time shape of a calendar event.
+ *
+ * Fields are renamed per variant rather than with `rename_all_fields`
+ * because utoipa only honors variant-level serde renames when it
+ * derives the OpenAPI schema.
+ */
+export type EventTime = {
+    /**
+     * Exclusive end instant.
+     */
+    endsAt: string;
+    kind: 'timed';
+    /**
+     * Inclusive start instant.
+     */
+    startsAt: string;
+    /**
+     * Original IANA time-zone identifier, when supplied.
+     */
+    timeZone?: string | null;
+} | {
+    /**
+     * Exclusive local end date.
+     */
+    endDate: string;
+    kind: 'allDay';
+    /**
+     * Inclusive local start date.
+     */
+    startDate: string;
+};
+
+/**
+ * Whether an event blocks availability.
+ */
+export type EventTransparency = 'opaque' | 'transparent';
+
+/**
+ * Google's event type: ordinary meetings versus the status-style entries
+ * (working location, out of office, focus time, birthdays) Google renders
+ * and notifies differently. Immutable at the provider after creation.
+ */
+export type EventType = 'default' | 'out_of_office' | 'focus_time' | 'working_location' | 'birthday' | 'from_gmail';
+
+/**
+ * Visibility of event details.
+ */
+export type EventVisibility = 'default' | 'public' | 'private' | 'confidential';
+
+/**
  * The response returned from the get backfill job endpoint
  */
 export type GetActiveBackfillJobResponse = {
@@ -694,6 +1106,103 @@ export type InitResponse = {
      * self-link bootstrap and the data-source path it's a freshly upserted row.
      */
     link_id: string;
+};
+
+/**
+ * Preserve date-only and unresolved times without manufacturing UTC instants.
+ */
+export type InvitationDateTime = {
+    kind: 'date';
+    /**
+     * ISO calendar date.
+     */
+    value: string;
+} | {
+    kind: 'zoned';
+    /**
+     * IANA zone of the original TZID, or UTC.
+     */
+    time_zone: string;
+    /**
+     * RFC3339 instant.
+     */
+    value: string;
+} | {
+    kind: 'unresolved';
+    /**
+     * Original TZID if present.
+     */
+    time_zone?: string | null;
+    /**
+     * ISO local wall time, without an offset.
+     */
+    value: string;
+};
+
+/**
+ * Original scheduling method, including methods unsupported for actions.
+ */
+export type InvitationMethod = 'request' | 'reply' | 'cancel' | 'counter' | 'publish' | 'unknown';
+
+/**
+ * Scheduling participant; saved responses are historical, not current RSVP.
+ */
+export type InvitationParticipant = {
+    /**
+     * Participant calendar address.
+     */
+    email: string;
+    /**
+     * Sender-supplied display name.
+     */
+    name?: string | null;
+    /**
+     * Original PARTSTAT, retaining extensions.
+     */
+    participation_status?: string | null;
+};
+
+/**
+ * Refreshable result, distinct from the immutable email contents.
+ */
+export type InvitationResolution = {
+    kind: 'disconnected';
+} | {
+    kind: 'still_syncing';
+} | {
+    kind: 'cancelled';
+} | {
+    kind: 'unavailable';
+} | {
+    kind: 'no_match';
+} | {
+    kind: 'ambiguous';
+} | {
+    /**
+     * Whether the conference link belongs to the reconciled scheduling target.
+     */
+    can_join: boolean;
+    /**
+     * Whether a response is currently allowed.
+     */
+    can_respond: boolean;
+    /**
+     * Current occurrence-specific content.
+     */
+    event: CalendarEvent;
+    /**
+     * Whether the provider projection trails the email revision.
+     */
+    is_stale: boolean;
+    kind: 'resolved';
+    /**
+     * Original occurrence identity and current time.
+     */
+    occurrence: CalendarOccurrence;
+    /**
+     * Connected address that would respond.
+     */
+    responding_email: string;
 };
 
 export type Label = {
@@ -1130,7 +1639,11 @@ export type UpsertEmailFilterResponse = {
 
 export type UpsertScheduledRequest = {
     /**
-     * The time to send the message (ISO 8601 format)
+     * Per-message signature override; absent uses the inbox's send defaults.
+     */
+    include_signature?: boolean | null;
+    /**
+     * The time to send the message (ISO 8601 format).
      */
     send_time: string;
 };
@@ -1437,7 +1950,9 @@ export type UpsertScheduledMessageData = {
 };
 
 export type UpsertScheduledMessageErrors = {
+    400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
 };
@@ -1465,6 +1980,7 @@ export type DeleteScheduledDraftData = {
 export type DeleteScheduledDraftErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
 };
@@ -2248,6 +2764,31 @@ export type GetThreadResponses = {
 };
 
 export type GetThreadResponse2 = GetThreadResponses[keyof GetThreadResponses];
+
+export type GetThreadCalendarInvitationsData = {
+    body?: never;
+    path: {
+        /**
+         * Authorized email thread
+         */
+        thread_id: string;
+    };
+    query?: never;
+    url: '/email/threads/{thread_id}/calendar-invitations';
+};
+
+export type GetThreadCalendarInvitationsErrors = {
+    401: unknown;
+    403: unknown;
+};
+
+export type GetThreadCalendarInvitationsResponses = {
+    200: {
+        [key: string]: InvitationResolution;
+    };
+};
+
+export type GetThreadCalendarInvitationsResponse = GetThreadCalendarInvitationsResponses[keyof GetThreadCalendarInvitationsResponses];
 
 export type UpdateThreadProjectData = {
     body: UpdateThreadProjectRequest;

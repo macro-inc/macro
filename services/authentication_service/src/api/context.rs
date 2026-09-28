@@ -75,6 +75,18 @@ pub(crate) type ChannelServiceType = ChannelServiceImpl<
     PgChannelReferenceSharePermissions<EntityAccessServiceType>,
 >;
 
+/// The AI billing service: plan allowances, prepaid credits, and overage,
+/// resolved through roles + teams and collected through Stripe.
+pub(crate) type AiBillingServiceType = ai_billing::domain::BillingServiceImpl<
+    ai_billing::outbound::RolesTeamsEntitlementSource<
+        UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+        teams::outbound::team_repo::TeamRepositoryImpl,
+    >,
+    ai_billing::outbound::PgUsageReader,
+    ai_billing::outbound::PgBillingRepo,
+    ai_billing::outbound::StripePaymentGateway,
+>;
+
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
@@ -88,6 +100,7 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
         SqsContactsIngress<SqsContactsQueue>,
     >,
     AuthenticationEventBroker,
+    AiBillingServiceType,
 >;
 
 pub(crate) type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
@@ -114,18 +127,6 @@ pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServ
 >;
 
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
-
-/// The AI billing service: plan allowances, prepaid credits, and overage,
-/// resolved through roles + teams and collected through Stripe.
-pub(crate) type AiBillingServiceType = ai_billing::domain::BillingServiceImpl<
-    ai_billing::outbound::RolesTeamsEntitlementSource<
-        UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
-        teams::outbound::team_repo::TeamRepositoryImpl,
-    >,
-    ai_billing::outbound::PgUsageReader,
-    ai_billing::outbound::PgBillingRepo,
-    ai_billing::outbound::StripePaymentGateway,
->;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

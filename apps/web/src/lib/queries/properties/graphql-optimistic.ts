@@ -94,36 +94,68 @@ export function apiValuesToGraphqlPropertyValue(
  * assignment carrying `value`.
  */
 function optimisticPropertyRecord(
-  property: Property,
-  value: GraphqlPropertyValue | null
+  property: Property | PropertyDefinitionDomain,
+  value: GraphqlPropertyValue | null,
+  id: string
 ): SoupPropertyFieldsFragment {
   return {
-    id: property.propertyId,
-    propertyDefinitionId: property.propertyDefinitionId,
+    id,
+    propertyDefinitionId: isInstantiatedProperty(property)
+      ? property.propertyDefinitionId
+      : property.id,
     displayName: property.displayName,
     dataType: property.valueType,
     isMultiSelect: property.isMultiSelect,
     specificEntityType: property.specificEntityType ?? null,
-    isSystem: property.isSystemProperty ?? false,
+    isSystem: isInstantiatedProperty(property)
+      ? (property.isSystemProperty ?? false)
+      : property.isSystem,
     isMetadata: property.isMetadata ?? false,
     value,
   };
 }
 
+const TEMPORARY_PROPERTY_PREFIX = 'optimistic-property:';
+
+/** Temporary assignments must retain a response-derived parent-list recipe. */
+export function isTemporaryGraphqlProperty(id: string): boolean {
+  return id.startsWith(TEMPORARY_PROPERTY_PREFIX);
+}
+
+function hasPersistedAssignment(
+  property: Property | PropertyDefinitionDomain
+): property is Property {
+  return (
+    isInstantiatedProperty(property) &&
+    property.propertyId !== property.propertyDefinitionId &&
+    !property.propertyId.startsWith('pending:') &&
+    !isTemporaryGraphqlProperty(property.propertyId)
+  );
+}
+
 /**
- * Complete optimistic mutation payload for an existing property
- * assignment, or `undefined` when none can be built safely:
- * uninstantiated definitions have no assignment id until the server
- * responds, and inventing one would corrupt the normalized cache.
+ * New assignments use a target-scoped temporary ID, never a shared definition
+ * ID. Callers supplying a target must also install a response-derived list
+ * recipe, so commit replaces the temporary link with the server's assignment.
  */
 export function buildOptimisticSetEntityProperty(
   property: Property | PropertyDefinitionDomain,
-  apiValues: PropertyApiValues
+  apiValues: PropertyApiValues,
+  target?: { entityType: string; entityId: string }
 ): SoupPropertyFieldsFragment | undefined {
-  if (!isInstantiatedProperty(property)) return undefined;
+  const definitionId = isInstantiatedProperty(property)
+    ? property.propertyDefinitionId
+    : property.id;
+  const id = hasPersistedAssignment(property)
+    ? property.propertyId
+    : target
+      ? `${TEMPORARY_PROPERTY_PREFIX}${target.entityType}:${target.entityId}:${definitionId}`
+      : undefined;
+  if (!id) return undefined;
   return optimisticPropertyRecord(
     property,
-    apiValuesToGraphqlPropertyValue(apiValues)
+    apiValuesToGraphqlPropertyValue(apiValues),
+    id
   );
 }
 
@@ -137,7 +169,7 @@ export function buildOptimisticEntityPropertyOptions(
   property: Property | PropertyDefinitionDomain,
   optionIds: readonly string[]
 ): SoupPropertyFieldsFragment | undefined {
-  if (!isInstantiatedProperty(property)) return undefined;
+  if (!hasPersistedAssignment(property)) return undefined;
   return optimisticPropertyRecord(
     property,
     optionIds.length > 0
@@ -145,6 +177,7 @@ export function buildOptimisticEntityPropertyOptions(
           __typename: 'GraphqlSelectOptionPropertyValue',
           optionIds: [...optionIds],
         }
-      : null
+      : null,
+    property.propertyId
   );
 }

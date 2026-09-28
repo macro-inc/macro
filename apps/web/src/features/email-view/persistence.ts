@@ -12,6 +12,7 @@ import {
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
+import { normalizeInboxSelection } from './inbox-selection';
 import type { EmailViewState } from './types';
 
 const EMAIL_ENTRY_STATE_KEY = 'email.view';
@@ -21,7 +22,17 @@ const emailLocalStateStorage = createUserScopedStorage(
 );
 
 const emailTabSchema = z
-  .enum(['important', 'noise', 'sent', 'calendar', 'drafts', 'shared', 'all'])
+  .enum([
+    'important',
+    'noise',
+    'favorites',
+    'sent',
+    'scheduled',
+    'calendar',
+    'drafts',
+    'shared',
+    'all',
+  ])
   .catch('important');
 
 const emailFacetsSchema = z.record(z.string(), z.array(z.string()));
@@ -43,7 +54,11 @@ const emailEntryStateSchema = emailEntryStateSchemaWithDefaults.catch(
 
 // The legacy mail view stores the raw `string[] | undefined` under its key;
 // anything else restores as "every inbox".
-const inboxIdsEntrySchema = z.array(z.string()).optional().catch(undefined);
+const inboxIdsEntrySchema = z
+  .array(z.string())
+  .optional()
+  .catch(undefined)
+  .transform(normalizeInboxSelection);
 
 const emailListStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
@@ -118,7 +133,7 @@ function selectLocalState(state: EmailViewState): EmailLocalState {
   return {
     version: 1,
     tab: state.tab,
-    ...(state.inboxIds === undefined ? {} : { inboxIds: [...state.inboxIds] }),
+    inboxIds: normalizeInboxSelection(state.inboxIds),
     facets: normalizeFacetSelection(state.facets),
   };
 }

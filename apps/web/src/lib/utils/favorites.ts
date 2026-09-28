@@ -1,4 +1,7 @@
+import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { getChannelParams } from '@block-channel/utils/link';
+import { usePrForeignEntityQuery } from '@block-pr/data/queries';
+import { prDisplayName } from '@block-pr/util/prKey';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import { getIconConfig } from '@core/component/EntityIcon';
@@ -14,12 +17,13 @@ import { ChannelTypeEnum } from '@service-storage/client';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createMemo } from 'solid-js';
 
-/** The block to open for a favorite (also its URL type segment). */
+/** Icon and legacy block name for a favorite; hosted details use their own route. */
 export function favoriteBlockName(favorite: Favorite) {
   if (favorite.entityType === 'document') {
     return fileTypeToBlockName(favorite.documentSubType ?? favorite.fileType);
   }
   if (favorite.entityType === 'email_thread') return 'email' as const;
+  if (favorite.entityType === 'foreign_entity') return 'pr' as const;
   // Passes chat/channel/project/call through and remaps channel_message and
   // CRM entity types to their block names.
   return fileTypeToBlockName(favorite.entityType);
@@ -27,9 +31,13 @@ export function favoriteBlockName(favorite: Favorite) {
 
 /**
  * The split content that opens a favorite. Channel-message favorites open
- * their owning channel (hydrated as `channelId`) focused on the message.
+ * their owning channel; PR favorites open the Reviews detail route.
  */
 export function favoriteSplitContent(favorite: Favorite): SplitContent {
+  if (favorite.entityType === 'foreign_entity') {
+    // GitHub PRs are the only foreign-entity favorites exposed by the app today.
+    return reviewsHostedContent({ type: 'pr', id: favorite.entityId })!;
+  }
   if (favorite.entityType === 'channel_message' && favorite.channelId) {
     return {
       type: 'channel',
@@ -131,6 +139,15 @@ export function useFavoriteDmRecipientId(
  * the component's lifetime (favorites lists key rows by entity, so it is).
  */
 export function useFavoriteDisplayName(favorite: Favorite): Accessor<string> {
+  if (favorite.entityType === 'foreign_entity') {
+    const query = usePrForeignEntityQuery(() => favorite.entityId);
+    return () => {
+      const data = query.isPending ? undefined : query.data;
+      return data
+        ? (data.pullRequest.name ?? prDisplayName(data.prRef))
+        : favoriteDisplayName(favorite);
+    };
+  }
   const entity = favoritePreviewEntity(favorite);
   if (!entity) return () => favoriteDisplayName(favorite);
   const [preview] = useItemPreview(() => entity);

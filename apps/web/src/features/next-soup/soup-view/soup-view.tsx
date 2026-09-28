@@ -40,7 +40,7 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/features/next-soup/soup-view/soup-view-tabs';
-import { useIsInboxView } from '@app/features/next-soup/soup-view/use-is-inbox-view';
+import { useIsHomeView } from '@app/features/next-soup/soup-view/use-is-home-view';
 import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
@@ -284,7 +284,7 @@ export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
   const soupView = useSoupView();
-  const isInboxView = useIsInboxView();
+  const isHomeView = useIsHomeView();
   const entryState = panel.handle.currentEntryState();
   const contentId = panel.handle.content().id;
 
@@ -367,7 +367,7 @@ export const SoupView = (props: SoupViewProps) => {
       // persisted back when the control was reachable: honoring it would pin
       // the list to an order the user can no longer change.
       let initialSortIds =
-        contentId === 'inbox'
+        contentId === 'home'
           ? ['updated_at']
           : (initialCrmView?.sort ?? sortPref());
       if (initialSortIds.length === 0) {
@@ -540,6 +540,7 @@ export const SoupView = (props: SoupViewProps) => {
                   <Show when={docsUrl()}>
                     {(url) => (
                       <Button
+                        size="icon-md"
                         variant="ghost"
                         class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
                         label="View documentation"
@@ -640,8 +641,9 @@ export const SoupView = (props: SoupViewProps) => {
                             hotkey={TOKENS.soup.openSearch}
                           >
                             <Button
+                              size="icon-md"
                               variant="outline"
-                              class="p-1 size-7 rounded-lg ml-2 bg-surface"
+                              class="p-1 size-7 rounded-lg ml-2"
                               onClick={() => setNarrowSearchExpanded(true)}
                               depth={2}
                             >
@@ -694,7 +696,7 @@ export const SoupView = (props: SoupViewProps) => {
           when={
             !isTouchDevice() &&
             ENABLE_UNIFIED_LIST_AI_INPUT &&
-            !isInboxView() &&
+            !isHomeView() &&
             !isBoardRendered() &&
             !isComponentListView('search')
           }
@@ -920,7 +922,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // legacy block registry can import Soup while the entity barrel is loading.
   // Keeping component and geometry together prevents mismatched row layouts.
   const rowsByView: Partial<Record<ListView, SoupRowEntry>> = {
-    inbox: { component: InboxListEntity, family: 'card' },
+    home: { component: InboxListEntity, family: 'card' },
     tasks: { component: TaskListEntity, family: 'row' },
     companies: { component: CompanyListEntity, family: 'row' },
   };

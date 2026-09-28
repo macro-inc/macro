@@ -392,18 +392,36 @@ fn normalized_event(
 ///
 /// Not the bot the event names: that is what a subscriber filters on, and a
 /// bot is not an entity anyone holds access to.
-pub(crate) struct TriggerAudience {
-    pub(crate) entity_id: String,
-    pub(crate) entity_type: EntityType,
+pub(crate) enum TriggerAudience {
+    /// Whoever currently holds access to an entity.
+    Entity {
+        entity_id: String,
+        entity_type: EntityType,
+    },
+    /// Named people, when nothing was posted anywhere to hold access to.
+    People(Vec<MacroUserIdStr<'static>>),
 }
 
 impl TriggerAudience {
     /// Whoever may currently read the conversation's parent.
     fn parent(parent: &MessageParent) -> Self {
-        Self {
+        Self::Entity {
             entity_id: parent.entity_id(),
             entity_type: parent.access_entity_type(),
         }
+    }
+
+    /// The one person who asked for a session from the composer: nothing was
+    /// posted, so nobody else's access is in question. Their runtime, or
+    /// their team's, is who serves it.
+    fn requester(owner: &str) -> Result<Self, WebhookEventIngestionError> {
+        let owner = MacroUserIdStr::try_from(owner.to_owned()).map_err(|_| {
+            WebhookEventIngestionError::InvalidEntityId {
+                entity_type: "user",
+                entity_id: owner.to_owned(),
+            }
+        })?;
+        Ok(Self::People(vec![owner]))
     }
 }
 
@@ -420,13 +438,24 @@ pub(crate) fn normalized_agent_trigger_event(
 ) -> Result<(NormalizedWebhookEvent, TriggerAudience), WebhookEventIngestionError> {
     use agent_trigger::domain::broker_events::AgentTriggerEventName;
 
-    let (bot_id, parent) = match &event.event {
-        AgentTriggerTopicEvent::New(new) => new
-            .mention()
-            .map(|mention| (mention.bot_id, mention.message.parent)),
-        AgentTriggerTopicEvent::Existing(existing) => existing
-            .session_message()
-            .map(|message| (message.bot_id, message.message.parent)),
+    let (bot_id, audience) = match &event.event {
+        AgentTriggerTopicEvent::New(new) => match (new.mention(), new.requested()) {
+            (Some(mention), _) => Some((
+                mention.bot_id,
+                TriggerAudience::parent(&mention.message.parent),
+            )),
+            (None, Some(requested)) => Some((
+                requested.bot_id,
+                TriggerAudience::requester(&requested.owner)?,
+            )),
+            (None, None) => None,
+        },
+        AgentTriggerTopicEvent::Existing(existing) => existing.session_message().map(|message| {
+            (
+                message.bot_id,
+                TriggerAudience::parent(&message.message.parent),
+            )
+        }),
     }
     // Both trigger enums are non-exhaustive on purpose; an unknown shape
     // has no bot to route to. Permanent, so the consumer skips it.
@@ -434,7 +463,6 @@ pub(crate) fn normalized_agent_trigger_event(
         entity_type: "bot",
         entity_id: "unrecognized agent-trigger event shape".to_owned(),
     })?;
-    let audience = TriggerAudience::parent(&parent);
     let event_name: &'static str = AgentTriggerEventName::from(&event.event).into();
     let broker_envelope = serde_json::to_value(event)?;
     let bot_id = bot_id.to_string();
@@ -555,9 +583,13 @@ where
         event: Event<AgentTriggerTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         let (event, audience) = normalized_agent_trigger_event(&event)?;
-        let accessors = self
-            .users_with_access(&audience.entity_id, audience.entity_type)
-            .await?;
+        let accessors = match audience {
+            TriggerAudience::Entity {
+                entity_id,
+                entity_type,
+            } => self.users_with_access(&entity_id, entity_type).await?,
+            TriggerAudience::People(people) => people,
+        };
         let workspace_ids = self
             .repository
             .resolve_workspace_ids(accessors)
@@ -583,9 +615,8 @@ where
             } => {
                 let mut accessors = vec![owner];
                 if let Some(parent) = origin_parent {
-                    let audience = TriggerAudience::parent(&parent);
                     accessors.extend(
-                        self.users_with_access(&audience.entity_id, audience.entity_type)
+                        self.users_with_access(&parent.entity_id(), parent.access_entity_type())
                             .await?,
                     );
                 }

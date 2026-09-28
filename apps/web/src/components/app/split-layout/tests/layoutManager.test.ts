@@ -1,18 +1,24 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
 import { CALENDAR_PREFERENCES_KEY } from '@app/features/calendar/calendar-preferences';
+import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { driveDestination } from '@app/features/drive-view/drive-route-navigation';
 import { driveSplitRoute } from '@app/features/drive-view/route';
 import {
   emailSplitRoute,
   emailThreadRoute,
 } from '@app/features/email-view/route';
+import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
+import { reviewsSplitRoute } from '@app/features/reviews-view/route';
 import {
   getListNavigationSource,
   listNavigationSourceId,
   registerListNavigationSource,
   withListNavigationSource,
 } from '@app/features/soup/collection/list-navigation-source';
-import { taskDetailRoute } from '@app/features/tasks-view/route';
+import {
+  taskDetailRoute,
+  tasksSplitRoute,
+} from '@app/features/tasks-view/route';
 import { createMemorySplitRouterLocation } from '@app/lib/split-router/integrations/memory';
 import { createSplitRouter } from '@app/lib/split-router/router';
 import { createRoutesManifest } from '@app/lib/split-router/routes';
@@ -35,6 +41,23 @@ import { createAppSplitRouterMiddleware } from '../split-router/app-middleware';
 import { appSplitRoutes } from '../split-router/app-routes';
 import { createAppSplitRouterLayout } from '../splitRouterLayout';
 
+// Settings UI imports the app route registry and is unrelated to layout behavior.
+vi.mock('@core/constant/SettingsState', () => ({
+  useSettingsState: vi.fn(),
+}));
+
+// The route graph imports websocket clients; jsdom cannot open their sockets.
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: vi.fn() },
 }));
@@ -45,11 +68,6 @@ vi.mock('../componentRegistry', () => ({
     id,
     params,
   })),
-}));
-
-vi.mock('@core/constant/allBlocks', () => ({
-  isBlockAlias: vi.fn(() => false),
-  resolveBlockAlias: vi.fn((type: string) => type),
 }));
 
 beforeAll(() => {
@@ -88,7 +106,7 @@ describe('layoutManager', () => {
       (withBackground) => {
         createRoot((dispose) => {
           const manager = createSplitLayout(createMockOrchestrator(), [
-            { type: 'component', id: 'inbox' },
+            { type: 'component', id: 'home' },
           ]);
           const split = manager.getSplit(manager.splits()[0].id)!;
           const list: SplitContent = {
@@ -115,7 +133,7 @@ describe('layoutManager', () => {
           expect(split.content()).toEqual(list);
           expect(split.canGoForward()).toBe(true);
           split.goBack();
-          expect(split.content()).toEqual({ type: 'component', id: 'inbox' });
+          expect(split.content()).toEqual({ type: 'component', id: 'home' });
           dispose();
         });
       }
@@ -128,7 +146,7 @@ describe('layoutManager', () => {
         ]);
         const split = manager.getSplit(manager.splits()[0].id)!;
         closeSplitOrReturnToList(manager, split);
-        expect(split.content()).toEqual({ type: 'component', id: 'inbox' });
+        expect(split.content()).toEqual({ type: 'component', id: 'home' });
         expect(split.canGoBack()).toBe(false);
         dispose();
       });
@@ -171,7 +189,7 @@ describe('layoutManager', () => {
         const content = { type: 'email', id: 'already-open' } as const;
         const manager = createSplitLayout(createMockOrchestrator(), [
           content,
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const [existing, other] = manager.splits();
         manager.activateSplit(other.id);
@@ -213,7 +231,7 @@ describe('layoutManager', () => {
           const orchestrator = createMockOrchestrator();
           const manager = createSplitLayout(orchestrator, [
             initial,
-            { type: 'component', id: 'inbox' },
+            { type: 'component', id: 'home' },
           ]);
           const [existing, other] = manager.splits();
           const mount = existing.mount;
@@ -253,7 +271,7 @@ describe('layoutManager', () => {
           expect(manager.splits()).toHaveLength(2);
           expect(existing.mount).toBe(mount);
           expect(existing.content).toEqual(initial);
-          expect(other.content).toEqual({ type: 'component', id: 'inbox' });
+          expect(other.content).toEqual({ type: 'component', id: 'home' });
           expect(toast.alert).not.toHaveBeenCalled();
 
           manager.openWithSplit(target);
@@ -268,7 +286,7 @@ describe('layoutManager', () => {
     createRoot((dispose) => {
       const orchestrator = createMockOrchestrator();
       const manager = createSplitLayout(orchestrator, [
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
       ]);
       const release = manager.registerOpenViews(() => [
         {
@@ -334,7 +352,7 @@ describe('layoutManager', () => {
         const orchestrator = createMockOrchestrator();
         const manager = createSplitLayout(orchestrator, [
           { type: 'component', id: 'channels' },
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const [chat, inbox] = manager.splits();
         manager.activateSplit(inbox.id);
@@ -385,7 +403,7 @@ describe('layoutManager', () => {
     createRoot((dispose) => {
       const manager = createSplitLayout(createMockOrchestrator(), [
         { type: 'channel', id: 'channel' },
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
       ]);
       const [channel, inbox] = manager.splits();
       manager.activateSplit(inbox.id);
@@ -407,7 +425,7 @@ describe('layoutManager', () => {
       const content = { type: 'component', id: 'channels' } as const;
       const manager = createSplitLayout(createMockOrchestrator(), [
         content,
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
       ]);
       const [channels, inbox] = manager.splits();
       manager.activateSplit(inbox.id);
@@ -437,7 +455,7 @@ describe('layoutManager', () => {
   it('distinguishes opening new content from reusing content in the source split', () => {
     createRoot((dispose) => {
       const manager = createSplitLayout(createMockOrchestrator(), [
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
       ]);
       const handle = manager.getSplit(manager.splits()[0].id)!;
       const content = { type: 'email', id: 'selected' } as const;
@@ -461,7 +479,7 @@ describe('layoutManager', () => {
   it('restoring occupied content does not focus or notify its owner', () => {
     createRoot((dispose) => {
       const manager = createSplitLayout(createMockOrchestrator(), [
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
       ]);
       const source = manager.splits()[0];
       const content = { type: 'email', id: 'occupied' } as const;
@@ -616,7 +634,7 @@ describe('layoutManager', () => {
   it('navigates and closes adjacent list and detail splits independently', () => {
     createRoot((dispose) => {
       const manager = createSplitLayout(createMockOrchestrator(), [
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
         { type: 'md', id: 'detail' },
       ]);
       const [list, detail] = manager.splits();
@@ -632,7 +650,7 @@ describe('layoutManager', () => {
       expect(manager.splits()).toHaveLength(2);
 
       listHandle.goBack();
-      expect(listHandle.content()).toEqual({ type: 'component', id: 'inbox' });
+      expect(listHandle.content()).toEqual({ type: 'component', id: 'home' });
       expect(detailHandle.content()).toEqual({ type: 'md', id: 'detail' });
       listHandle.close();
       expect(manager.splits().map((split) => split.id)).toEqual([detail.id]);
@@ -643,7 +661,7 @@ describe('layoutManager', () => {
   it('navigates and closes adjacent list and detail splits independently', () => {
     createRoot((dispose) => {
       const manager = createSplitLayout(createMockOrchestrator(), [
-        { type: 'component', id: 'inbox' },
+        { type: 'component', id: 'home' },
         { type: 'md', id: 'detail' },
       ]);
       const [list, detail] = manager.splits();
@@ -659,7 +677,7 @@ describe('layoutManager', () => {
       expect(manager.splits()).toHaveLength(2);
 
       listHandle.goBack();
-      expect(listHandle.content()).toEqual({ type: 'component', id: 'inbox' });
+      expect(listHandle.content()).toEqual({ type: 'component', id: 'home' });
       expect(detailHandle.content()).toEqual({ type: 'md', id: 'detail' });
       listHandle.close();
       expect(manager.splits().map((split) => split.id)).toEqual([detail.id]);
@@ -671,7 +689,7 @@ describe('layoutManager', () => {
     it('swaps adjacent splits and delegates the panel reorder to Resize', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
           { type: 'component', id: 'calendar' },
         ]);
         const [first, second] = manager.splits();
@@ -698,7 +716,7 @@ describe('layoutManager', () => {
     it('uses the retained split id for history ownership after reconciliation', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const handle = manager.getSplit(manager.splits()[0].id)!;
         const content = { type: 'email', id: 'same-entity' } as const;
@@ -716,11 +734,11 @@ describe('layoutManager', () => {
     it('keeps history availability configured after reset', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const handle = manager.getSplit(manager.splits()[0].id)!;
         handle.reset();
-        expect(handle.history()).toEqual([{ type: 'component', id: 'inbox' }]);
+        expect(handle.history()).toEqual([{ type: 'component', id: 'home' }]);
         expect(handle.canGoBack()).toBe(false);
         handle.replace({ next: { type: 'email', id: 'occupied' } });
         handle.replace({ next: { type: 'email', id: 'current' } });
@@ -729,7 +747,7 @@ describe('layoutManager', () => {
         ]);
         expect(handle.canGoBack()).toBe(true);
         handle.goBack();
-        expect(handle.content().id).toBe('inbox');
+        expect(handle.content().id).toBe('home');
         handle.goForward();
         expect(handle.content().id).toBe('current');
         release();
@@ -824,7 +842,7 @@ describe('layoutManager', () => {
     ) {
       return createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const routes = createRoutesManifest(appSplitRoutes);
         const location = createMemorySplitRouterLocation(url);
@@ -882,6 +900,324 @@ describe('layoutManager', () => {
       }
     );
 
+    it('opens the Reviews list on its own component route', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/reviews');
+      await router.settled();
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'reviews',
+      });
+      expect(manager.splits()[0].mount.kind).toBe('component');
+      expect(router.route(manager.splits()[0].id)?.matches[0]?.id).toBe(
+        'view-reviews'
+      );
+      expect(location.read().pathname).toBe('/reviews');
+      router.dispose();
+      dispose();
+    });
+    it('navigates from Tasks to Reviews and back in the same pane', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/tasks');
+      await router.settled();
+      const splitId = manager.splits()[0].id;
+
+      router.navigate(splitId, { route: reviewsSplitRoute, params: {} });
+      await router.settled();
+      expect(manager.splits()[0].id).toBe(splitId);
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'reviews',
+      });
+      expect(location.read().pathname).toBe('/reviews');
+
+      router.navigate(splitId, { route: tasksSplitRoute, params: {} });
+      await router.settled();
+      expect(manager.splits()[0].id).toBe(splitId);
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'tasks',
+      });
+      expect(location.read().pathname).toBe('/tasks');
+      router.dispose();
+      dispose();
+    });
+    it('opens PR details in Reviews and redirects older PR links', async () => {
+      for (const path of ['/pr/pr-1', '/reviews/pr/pr-1']) {
+        const { manager, location, router, dispose } = ingressRouter(path);
+        await router.settled();
+        const split = manager.splits()[0];
+        expect(split.content).toMatchObject({
+          type: 'component',
+          id: 'reviews',
+        });
+        expect(split.mount.kind).toBe('component');
+        expect(router.route(split.id)?.matches).toEqual([
+          { id: 'view-reviews', params: {} },
+          { id: 'reviews-pr', params: { foreignEntityId: 'pr-1' } },
+        ]);
+        expect(location.read().pathname).toBe('/reviews/pr/pr-1');
+        router.dispose();
+        dispose();
+      }
+    });
+
+    it('opens a Reviews PR in a new split without reusing the Reviews list', async () => {
+      const { manager, router, dispose } = ingressRouter('/reviews');
+      await router.settled();
+      const listSplit = manager.splits()[0];
+      const content = reviewsHostedContent({ type: 'pr', id: 'pr-1' });
+      if (!content) throw new Error('Expected hosted PR content');
+
+      const opened = manager.openWithSplit(content, {
+        handle: manager.getSplit(listSplit.id),
+        preferNewSplit: true,
+        allowDuplicate: true,
+      });
+      await router.settled();
+
+      expect(opened.status).toBe('opened');
+      expect(manager.splits()).toHaveLength(2);
+      expect(manager.splits()[0].id).toBe(listSplit.id);
+      if (opened.status === 'opened') {
+        expect(router.route(opened.split.id)?.matches.at(-1)).toEqual({
+          id: 'reviews-pr',
+          params: { foreignEntityId: 'pr-1' },
+        });
+      }
+      router.dispose();
+      dispose();
+    });
+    it('keeps PR details in Reviews on touch', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/pr/pr-1', {
+        touch: true,
+      });
+      await router.settled();
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'reviews',
+      });
+      expect(manager.splits()[0].mount.kind).toBe('component');
+      expect(location.read().pathname).toBe('/reviews/pr/pr-1');
+      router.dispose();
+      dispose();
+    });
+
+    it('uses the Reviews PR route for existing split navigation', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/home');
+      await router.settled();
+      manager.getSplit(manager.splits()[0].id)!.replace({
+        next: { type: 'pr', id: 'pr-2' },
+      });
+      await router.settled();
+      expect(location.read().pathname).toBe('/reviews/pr/pr-2');
+      expect(manager.splits()[0].mount.kind).toBe('component');
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'reviews',
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('upgrades stored PR route metadata to Reviews content', async () => {
+      const { manager, router, dispose } = ingressRouter('/home');
+      await router.settled();
+      const split = manager.getSplit(manager.splits()[0].id)!;
+      split.replace({
+        next: {
+          type: 'pr',
+          id: 'pr-1',
+          entryMetadata: {
+            route: {
+              matches: [
+                { id: 'pr-detail', params: { foreignEntityId: 'pr-1' } },
+              ],
+            },
+          },
+        },
+      });
+      await router.settled();
+      expect(split.content()).toMatchObject({
+        type: 'component',
+        id: 'reviews',
+      });
+      expect(router.route(split.id)?.matches.at(-1)?.id).toBe('reviews-pr');
+      router.dispose();
+      dispose();
+    });
+
+    it.each(['/home/channel', '/not-a-block/example'])(
+      'rejects an invalid legacy pair %s without mounting a block',
+      async (path) => {
+        const { manager, location, router, dispose } = ingressRouter(path);
+        await router.settled();
+        expect(manager.splits()[0].content).toMatchObject({
+          type: 'component',
+          id: 'home',
+        });
+        expect(location.read().pathname).toBe('/home');
+        router.dispose();
+        dispose();
+      }
+    );
+
+    it('opens calls as Drive components and redirects old links', async () => {
+      for (const path of ['/call/call-1', '/drive/call/call-1']) {
+        const { manager, location, router, dispose } = ingressRouter(path);
+        await router.settled();
+        const split = manager.splits()[0];
+        expect(split.content).toMatchObject({
+          type: 'component',
+          id: 'documents',
+        });
+        expect(split.mount.kind).toBe('component');
+        expect(router.route(split.id)?.matches).toEqual([
+          { id: 'drive', params: {} },
+          { id: 'drive-call', params: { callId: 'call-1' } },
+        ]);
+        expect(location.read().pathname).toBe('/drive/call/call-1');
+        router.dispose();
+        dispose();
+      }
+    });
+
+    it('keeps call details in Drive on touch', async () => {
+      const { manager, location, router, dispose } = ingressRouter(
+        '/call/call-1',
+        { touch: true }
+      );
+      await router.settled();
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'documents',
+      });
+      expect(manager.splits()[0].mount.kind).toBe('component');
+      expect(location.read().pathname).toBe('/drive/call/call-1');
+      router.dispose();
+      dispose();
+    });
+
+    it('upgrades old call route metadata without losing transcript search', async () => {
+      const { manager, router, dispose } = ingressRouter('/home');
+      await router.settled();
+      const split = manager.getSplit(manager.splits()[0].id)!;
+      split.replace({
+        next: {
+          type: 'call',
+          id: 'call-1',
+          entryMetadata: {
+            route: {
+              matches: [{ id: 'call-detail', params: { callId: 'call-1' } }],
+            },
+            search: { 'call-detail': { transcriptId: ['segment-1'] } },
+          },
+        },
+      });
+      await router.settled();
+      expect(split.content()).toMatchObject({
+        type: 'component',
+        id: 'documents',
+      });
+      expect(router.route(split.id)?.matches.at(-1)?.id).toBe('drive-call');
+      expect(router.search(split.id, 'call-detail')).toEqual({
+        transcriptId: ['segment-1'],
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('uses the Drive call detail route for existing split navigation', async () => {
+      const { manager, location, router, dispose } = ingressRouter('/home');
+      await router.settled();
+      manager.getSplit(manager.splits()[0].id)!.replace({
+        next: { type: 'call', id: 'call-2' },
+      });
+      await router.settled();
+      expect(location.read().pathname).toBe('/drive/call/call-2');
+      expect(manager.splits()[0].mount.kind).toBe('component');
+      expect(manager.splits()[0].content).toMatchObject({
+        type: 'component',
+        id: 'documents',
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('retains pane-local transcript targeting during call navigation', async () => {
+      const { manager, router, dispose } = ingressRouter('/home');
+      await router.settled();
+      const split = manager.getSplit(manager.splits()[0].id)!;
+      split.replace({
+        next: driveHostedContent(
+          { type: 'call', id: 'call-2' },
+          {
+            allowDocuments: true,
+            search: { 'call-detail': { transcriptId: ['segment-2'] } },
+          }
+        )!,
+      });
+      await router.settled();
+      expect(router.search(split.id, 'call-detail')).toEqual({
+        transcriptId: ['segment-2'],
+      });
+      const mount = manager.splits()[0].mount;
+      split.replace({
+        next: driveHostedContent(
+          { type: 'call', id: 'call-2' },
+          {
+            allowDocuments: true,
+            search: {
+              'call-detail': { transcriptId: ['segment-2'], seek: ['again'] },
+            },
+          }
+        )!,
+        mergeHistory: true,
+      });
+      await router.settled();
+      expect(router.search(split.id, 'call-detail')).toEqual({
+        transcriptId: ['segment-2'],
+        seek: ['again'],
+      });
+      expect(manager.splits()[0].mount).toBe(mount);
+      router.dispose();
+      dispose();
+    });
+
+    it('restores a call transcript target from old and Drive links', async () => {
+      for (const path of [
+        '/call/call-1?call_transcript_id=segment-1',
+        '/drive/call/call-1?call_transcript_id=segment-1',
+      ]) {
+        const { manager, location, router, dispose } = ingressRouter(path);
+        await router.settled();
+        const split = manager.splits()[0];
+        expect(router.search(split.id, 'call-detail')).toEqual({
+          transcriptId: ['segment-1'],
+        });
+        expect(location.read().pathname).toBe('/drive/call/call-1');
+        expect(
+          new URLSearchParams(location.read().search).get('call_transcript_id')
+        ).toBe('segment-1');
+        router.dispose();
+        dispose();
+      }
+    });
+
+    it('preserves canonical transcript search when upgrading an old call link', async () => {
+      const { manager, location, router, dispose } = ingressRouter(
+        '/call/call-1?s0.call-detail.transcriptId=segment-3&referral_code=code#focus'
+      );
+      await router.settled();
+      expect(router.search(manager.splits()[0].id, 'call-detail')).toEqual({
+        transcriptId: ['segment-3'],
+      });
+      expect(location.read().pathname).toBe('/drive/call/call-1');
+      expect(
+        new URLSearchParams(location.read().search).get('referral_code')
+      ).toBe('code');
+      expect(location.read().hash).toBe('#focus');
+      router.dispose();
+      dispose();
+    });
     it('keeps Drive list routes on touch', async () => {
       const { location, router, dispose } = ingressRouter(
         '/drive/~/drive/shared/~/drive/folder/folder',
@@ -935,9 +1271,9 @@ describe('layoutManager', () => {
     });
 
     it.each([
-      ['/component/preview-empty', '/inbox'],
-      ['/component/non-member-channel', '/inbox'],
-      ['/component/inbox', '/inbox'],
+      ['/component/preview-empty', '/home'],
+      ['/component/non-member-channel', '/home'],
+      ['/component/home', '/home'],
       ['/component/documents', '/drive'],
       ['/component/settings', '/settings/account'],
     ])('upgrades the legacy component URL %s', async (incoming, expected) => {
@@ -999,7 +1335,7 @@ describe('layoutManager', () => {
         messageId: ['explicit'],
         extra: ['keep'],
       });
-      expect(router.search(channel.id, 'channel-detail')).toEqual({
+      expect(router.search(channel.id, 'channels')).toEqual({
         messageId: ['first', 'last'],
         threadId: ['thread'],
       });
@@ -1012,6 +1348,100 @@ describe('layoutManager', () => {
       ).toBe('code');
       expect(location.read().hash).toBe('#focus');
       expect(location.history()).toHaveLength(1);
+      router.dispose();
+      dispose();
+    });
+
+    it('migrates legacy channel targets on Inbox preview routes', async () => {
+      const { manager, location, router, dispose } = ingressRouter(
+        '/home/channel/c1?channel_message_id=first&channel_message_id=last&channel_thread_id=thread'
+      );
+      await router.settled();
+      const split = manager.splits()[0];
+      expect(router.search(split.id, 'channels')).toEqual({
+        messageId: ['first', 'last'],
+        threadId: ['thread'],
+      });
+      expect(
+        new URLSearchParams(location.read().search).getAll(
+          's0.channels.messageId'
+        )
+      ).toEqual(['first', 'last']);
+      router.dispose();
+      dispose();
+    });
+
+    it.each([
+      ['md', 'comment_id'],
+      ['task', 'comment_id'],
+      ['pdf', 'pdf_ann_id'],
+      ['spreadsheet', 'comment_id'],
+    ])(
+      'migrates unprefixed %s comments on Inbox document routes',
+      async (type, key) => {
+        const { manager, location, router, dispose } = ingressRouter(
+          `/home/${type}/document-1?${key}=comment-1`
+        );
+        await router.settled();
+        const split = manager.splits()[0];
+        expect(router.search(split.id, 'drive')).toEqual({
+          commentId: ['comment-1'],
+        });
+        expect(
+          new URLSearchParams(location.read().search).get('s0.drive.commentId')
+        ).toBe('comment-1');
+        router.dispose();
+        dispose();
+      }
+    );
+
+    it('prefers an explicit Inbox document comment over an unprefixed key', async () => {
+      const { manager, router, dispose } = ingressRouter(
+        '/home/md/document-1?comment_id=legacy&s0.drive.commentId=explicit'
+      );
+      await router.settled();
+      expect(router.search(manager.splits()[0].id, 'drive')).toEqual({
+        commentId: ['explicit'],
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('preserves Drive facets during comment link migration', async () => {
+      const { manager, router, dispose } = ingressRouter(
+        '/home/md/document-1?comment_id=comment-1&s0.drive.tags=first&s0.drive.tags=second'
+      );
+      await router.settled();
+      expect(router.search(manager.splits()[0].id, 'drive')).toEqual({
+        commentId: ['comment-1'],
+        tags: ['first', 'second'],
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('applies a new-split location when an entity pane is reused', async () => {
+      const { manager, router, dispose } = ingressRouter('/channel/one', {
+        enabled: false,
+      });
+      await router.settled();
+      const split = manager.splits()[0];
+
+      router.navigate(split.id, '/channel/one', {
+        target: 'new-split',
+        allowDuplicate: true,
+        search: {
+          channels: { messageId: ['second'] },
+        },
+      });
+      await router.settled();
+
+      expect(manager.splits()).toHaveLength(1);
+      expect(manager.splits()[0].content.entryMetadata).toMatchObject({
+        search: {
+          channels: { messageId: ['second'] },
+        },
+      });
       router.dispose();
       dispose();
     });
@@ -1073,6 +1503,22 @@ describe('layoutManager', () => {
             (key) => key.startsWith('s0.') || key.startsWith('s1.')
           )
         ).toBe(false);
+        router.dispose();
+        dispose();
+      }
+    );
+
+    it.each(['company', 'contact'])(
+      'keeps a %s discussion link comment for the record page',
+      async (type) => {
+        const { location, router, dispose } = ingressRouter(
+          `/${type}/record-1?comment_id=message-1`
+        );
+        await router.settled();
+        expect(location.read().pathname).toBe(`/${type}/record-1`);
+        expect(
+          new URLSearchParams(location.read().search).get('comment_id')
+        ).toBe('message-1');
         router.dispose();
         dispose();
       }
@@ -1607,7 +2053,7 @@ describe('layoutManager', () => {
     it('marks mergeHistory content changes as replace navigation', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
 
         const split = manager.getSplit(manager.splits()[0].id)!;
@@ -1621,7 +2067,7 @@ describe('layoutManager', () => {
           type: SplitEvent.ContentChange,
           cause: 'replace',
           newContent: { type: 'md', id: 'created-doc' },
-          previousContent: { type: 'component', id: 'inbox' },
+          previousContent: { type: 'component', id: 'home' },
         });
 
         dispose();
@@ -1664,7 +2110,7 @@ describe('layoutManager', () => {
     it('jumps back to the nearest earlier entry matching a predicate', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const split = manager.getSplit(manager.splits()[0].id)!;
 
@@ -1694,7 +2140,7 @@ describe('layoutManager', () => {
       (owner) => {
         createRoot((dispose) => {
           const manager = createSplitLayout(createMockOrchestrator(), [
-            { type: 'component', id: 'inbox' },
+            { type: 'component', id: 'home' },
           ]);
           const handle = manager.getSplit(manager.splits()[0].id)!;
           const occupied = { type: 'email', id: 'occupied' } as const;
@@ -1718,14 +2164,14 @@ describe('layoutManager', () => {
 
           expect(handle.canGoBack()).toBe(true);
           handle.goBack();
-          expect(handle.content().id).toBe('inbox');
+          expect(handle.content().id).toBe('home');
           expect(handle.canGoBack()).toBe(false);
           expect(handle.canGoForward()).toBe(true);
           handle.goForward();
           expect(handle.content().id).toBe('end');
           expect(handle.canGoForward()).toBe(false);
           expect(handle.history().map((entry) => entry.id)).toEqual([
-            'inbox',
+            'home',
             'occupied',
             'end',
           ]);
@@ -1747,7 +2193,7 @@ describe('layoutManager', () => {
           { type: 'email', id: 'before' },
         ]);
         const handle = manager.getSplit(manager.splits()[0].id)!;
-        handle.replace({ next: { type: 'component', id: 'inbox' } });
+        handle.replace({ next: { type: 'component', id: 'home' } });
         handle.replace({ next: { type: 'email', id: 'after' } });
         handle.goBack();
         const canGoBack = createMemo(handle.canGoBack);
@@ -1765,7 +2211,7 @@ describe('layoutManager', () => {
         expect(canGoForward()).toBe(false);
         handle.goBack();
         handle.goForward();
-        expect(handle.content().id).toBe('inbox');
+        expect(handle.content().id).toBe('home');
         setOccupied([]);
         expect(canGoBack()).toBe(true);
         expect(canGoForward()).toBe(true);
@@ -1782,7 +2228,7 @@ describe('layoutManager', () => {
     it('skips history entries another split already displays', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
           { type: 'email', id: 'other' },
         ]);
         const [listSplitState, docSplitState] = manager.splits();
@@ -1818,7 +2264,7 @@ describe('layoutManager', () => {
     it('leaves the split put when nothing earlier matches', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const split = manager.getSplit(manager.splits()[0].id)!;
 
@@ -1840,7 +2286,7 @@ describe('layoutManager', () => {
     it('updates the current mount through a retained split handle', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const handle = manager.getSplit(manager.splits()[0].id)!;
         const inboxMeta = handle.meta()!;
@@ -1876,7 +2322,7 @@ describe('layoutManager', () => {
     it('delivers one-shot params on same-split forward navigation', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
 
         const split = manager.getSplit(manager.splits()[0].id)!;
@@ -1891,7 +2337,7 @@ describe('layoutManager', () => {
     it('delivers one-shot params on mergeHistory navigation', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
 
         const split = manager.getSplit(manager.splits()[0].id)!;
@@ -1906,7 +2352,7 @@ describe('layoutManager', () => {
     it('strips params when re-visiting an entry via history back/forward', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
 
         const split = manager.getSplit(manager.splits()[0].id)!;
@@ -1915,7 +2361,7 @@ describe('layoutManager', () => {
         split.goBack();
         expect(split.content()).toMatchObject({
           type: 'component',
-          id: 'inbox',
+          id: 'home',
         });
 
         split.goForward();
@@ -1929,7 +2375,7 @@ describe('layoutManager', () => {
     it('strips params when removeFromHistory reattaches a prior entry', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
 
         const split = manager.getSplit(manager.splits()[0].id)!;
@@ -1948,7 +2394,7 @@ describe('layoutManager', () => {
     it('keeps params on history navigation when preserveParams is set', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
 
         const split = manager.getSplit(manager.splits()[0].id)!;
@@ -2056,7 +2502,7 @@ describe('layoutManager', () => {
           id: 'documents',
         } satisfies SplitContent;
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
           target,
           { type: 'component', id: 'documents' },
           { type: 'md', id: 'right' },
@@ -2083,7 +2529,7 @@ describe('layoutManager', () => {
     it('keeps the 0th split and replaces it when the target content is not open', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
           { type: 'md', id: 'right' },
         ]);
         const keptSplitId = manager.splits()[0].id;
@@ -2105,7 +2551,7 @@ describe('layoutManager', () => {
         expect(handle.isSpotLight()).toBe(false);
         expect(handle.previousContent()).toEqual({
           type: 'component',
-          id: 'inbox',
+          id: 'home',
         });
 
         dispose();
@@ -2188,14 +2634,14 @@ describe('layoutManager', () => {
           createRoot((dispose) => {
             const manager = createSplitLayout(createMockOrchestrator(), [
               position === 'foreground'
-                ? { type: 'component', id: 'inbox' }
+                ? { type: 'component', id: 'home' }
                 : initial,
             ]);
             const swipe = createMobileSwipeLayout(manager);
             manager.openWithSplit(
               position === 'foreground'
                 ? initial
-                : { type: 'component', id: 'inbox' }
+                : { type: 'component', id: 'home' }
             );
             const owner = manager.findOpenView(target)!.topLevelSplit!;
             const mount = manager
@@ -2217,7 +2663,7 @@ describe('layoutManager', () => {
             swipe.swipeBack();
             expect(
               manager.getSplit(manager.activeSplitId()!)!.content().id
-            ).toBe('inbox');
+            ).toBe('home');
             dispose();
           });
         }
@@ -2250,7 +2696,7 @@ describe('layoutManager', () => {
       (result) => {
         createRoot((dispose) => {
           const manager = createSplitLayout(createMockOrchestrator(), [
-            { type: 'component', id: 'inbox' },
+            { type: 'component', id: 'home' },
           ]);
           const swipe = createMobileSwipeLayout(manager);
           manager.openWithSplit({ type: 'email', id: 'foreground' });
@@ -2303,7 +2749,7 @@ describe('layoutManager', () => {
     it('skips already-mounted history when rebuilding the mobile background', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
+          { type: 'component', id: 'home' },
         ]);
         const handle = manager.getSplit(manager.splits()[0].id)!;
         handle.replace({ next: { type: 'chat', id: 'conversation' } });
@@ -2316,12 +2762,12 @@ describe('layoutManager', () => {
         expect(swipe.slotASplitId()).not.toBe(swipe.slotBSplitId());
         expect(manager.splits().map((split) => split.content.id)).toEqual([
           'conversation',
-          'inbox',
+          'home',
         ]);
         expect(toast.alert).not.toHaveBeenCalled();
         swipe.swipeBack();
         expect(manager.getSplit(manager.activeSplitId()!)!.content().id).toBe(
-          'inbox'
+          'home'
         );
         dispose();
       });

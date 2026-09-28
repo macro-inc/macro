@@ -9,6 +9,7 @@ import {
   useGlobalNotificationSource,
 } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
+import { previewBlockTarget } from '@components/app/previewTarget';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -123,9 +124,16 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
 
   onMount(() => panel.handle.setDisplayName('Agents'));
 
+  let composerFocus: (() => void) | undefined;
   const showComposer = () => {
     if (panel.handle.content().id !== 'agents') {
       panel.handle.replace({ next: { type: 'component', id: 'agents' } });
+      return;
+    }
+    // Already showing the composer: nothing remounts to retrigger autofocus,
+    // so focus it imperatively instead.
+    if (!selected() && page() === 'new') {
+      composerFocus?.();
       return;
     }
     setSelected(undefined);
@@ -257,8 +265,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                 max: 380,
                 preserveDuringResize: false,
               }}
-              breakpoints={{ collapsed: 0 }}
-              layoutBreakpoint="collapsed"
               main={{ min: 280, preferredWidth: 640 }}
             >
               <ViewShell.Aside>
@@ -310,6 +316,10 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                 <NewChatPage
                                   roster={rosterSource.roster()}
                                   rosterLoading={rosterSource.loading()}
+                                  availabilityLoading={rosterSource.availabilityLoading()}
+                                  registerFocus={(focus) => {
+                                    composerFocus = focus;
+                                  }}
                                   onStart={startConversation}
                                   onOpenRoster={openRoster}
                                 />
@@ -347,7 +357,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                 )}
                               >
                                 <PreviewPanel
-                                  selectedEntity={conversation}
+                                  target={previewBlockTarget(conversation)}
                                   orchestrator={orchestrator}
                                   splitPanelContext={panel}
                                   headerLeading={

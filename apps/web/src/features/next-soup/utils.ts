@@ -13,14 +13,17 @@ import {
   CALENDAR_VIEW_ID,
   type CalendarViewTarget,
 } from '@app/features/calendar-view/types';
-import { driveDocumentFromContent } from '@app/features/drive-view/primitives/drive-route';
+import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
+import { projectRouteId } from '@app/features/projects/core/route';
+import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
   type EntityWithRawNotifications,
   getEntityNotifications,
   scopeChannelNotificationsForEntity,
 } from '@app/features/soup/entity-notifications';
+import { isRecord } from '@app/lib/split-router/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
@@ -37,7 +40,6 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
-import { driveSplitContent } from '@components/app/split-layout/split-router/legacy-route';
 import { toast } from '@core/component/Toast/Toast';
 import {
   fileTypeToBlockName,
@@ -55,7 +57,7 @@ import {
 } from '@core/dom-selectors';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
-import type { DateValue } from '@core/util/date';
+import { compareDateDesc, type DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import { openExternalUrl } from '@core/util/url';
@@ -275,7 +277,9 @@ export const openEntityInNewTab = ({
 
   // Build URL for the entity
   let entityPath: string;
-  if (entity.type === 'calendar_event') {
+  if (entity.type === 'initiative') {
+    entityPath = `/app/component/${projectRouteId({ id: entity.id, section: 'overview' })}`;
+  } else if (entity.type === 'calendar_event') {
     entityPath = `/app${calendarPath(getPreferredCalendarPeriodView())}`;
   } else if (entity.type === 'document') {
     const { fileType, subType } = entity;
@@ -428,6 +432,8 @@ interface OpenEntityOptions {
    * opening a channel row. Callers that can open channels must provide it.
    */
   notificationSource?: NotificationSource;
+  /** False for Chat conversations; Inbox rows keep their thread-scoped reads. */
+  scopeChannelThreads?: boolean;
 }
 
 /**
@@ -472,8 +478,55 @@ export type ChannelPreviewSelection = WithNotification<
     >
 >;
 
+/**
+ * Build the route selection a channels-rail click navigates with.
+ *
+ * Takes a plain `id` (capture it before any `await` — store proxies held across
+ * hydration can lose fields) and a resolved `ChannelClickTarget`. Stamps only
+ * `ChannelEntityTarget` fields onto `target` — never `kind`, which belongs on
+ * the click intent, not the route selection.
+ */
+export function channelPreviewSelection(
+  channelId: string,
+  options: {
+    target?: ChannelClickTarget;
+    notifications?: WithNotification<ChannelEntity>['notifications'];
+  } = {}
+): ChannelPreviewSelection {
+  if (!channelId) {
+    throw new Error('Missing channel id for channel preview selection');
+  }
+  const target =
+    options.target?.kind === 'message'
+      ? {
+          messageId: options.target.messageId,
+          ...(options.target.threadId != null
+            ? { threadId: options.target.threadId }
+            : {}),
+        }
+      : undefined;
+  return {
+    type: 'channel',
+    id: channelId,
+    ...(target ? { target } : {}),
+    ...(options.notifications ? { notifications: options.notifications } : {}),
+  };
+}
+
+/** Resolve the path param for a channel preview route, or throw. */
+export function channelIdForPreviewNavigation(
+  channel: ChannelPreviewSelection
+): string {
+  const channelId = channel.type === 'channel' ? channel.id : channel.channelId;
+  if (typeof channelId !== 'string' || channelId.length === 0) {
+    throw new Error('Missing channel id for channel preview navigation');
+  }
+  return channelId;
+}
+
 export function getChannelEntityTarget(
-  entity: EntityData | ChannelPreviewSelection
+  entity: EntityData | ChannelPreviewSelection,
+  options: { scopeChannelThreads?: boolean } = {}
 ): ChannelClickTarget | undefined {
   if (
     entity.type !== 'channel' &&
@@ -502,10 +555,13 @@ export function getChannelEntityTarget(
 
   if (!isWithNotification(entity)) return fallback;
 
-  const scoped = scopeChannelNotificationsForEntity(
-    entity,
-    entity.notifications?.() ?? []
-  );
+  const notifications = entity.notifications?.() ?? [];
+  const scoped =
+    options.scopeChannelThreads === false
+      ? [...notifications].sort((a, b) =>
+          compareDateDesc(a.created_at, b.created_at)
+        )
+      : scopeChannelNotificationsForEntity(entity, notifications);
   for (const notification of scoped) {
     // For a whole-`channel` row, ignore notifications you have already read:
     // the row stands for the entire channel, so once read it should open at
@@ -661,14 +717,16 @@ export const openEntityInSplitFromUnifiedList = async (
 
   if (isGithubPrEntity(entity)) {
     if (USE_MACRO_PR_SUMMARY_BLOCK) {
+      const content = { type: 'pr' as const, id: entity.id };
       const result = splitManager.openWithSplit(
-        { type: 'pr', id: entity.id },
+        reviewsHostedContent(content) ?? content,
         {
           referredFrom: options.referredFrom,
           activate: true,
           preferNewSplit: openInNewSplit,
           handle: splitHandle,
           mergeHistory,
+          allowDuplicate: true,
         }
       );
       if (result.status === 'reused' && result.owner !== result.sourceOwner) {
@@ -710,14 +768,12 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const content = getEntitySplitContent(entity);
 
-  const channelTarget = getChannelEntityTarget(entity);
+  const channelTarget = getChannelEntityTarget(entity, {
+    scopeChannelThreads: options.scopeChannelThreads,
+  });
   const channelMessageTarget =
     channelTarget?.kind === 'message' ? channelTarget : undefined;
   const openChannelAtLatest = channelTarget?.kind === 'latest';
-
-  if (options.notificationSource) {
-    markChannelNotificationsSeenOnOpen(entity, options.notificationSource);
-  }
 
   let params: Record<string, string> | undefined;
   if (entity.type === 'agent_session' && location?.type === 'agent') {
@@ -747,18 +803,34 @@ export const openEntityInSplitFromUnifiedList = async (
       : undefined;
   const referredFrom = options.referredFrom ?? sourceListView;
 
-  // Documents are hosted by Drive. Construct the canonical routed content
-  // before opening the split so the layout manager does not mount a legacy
-  // block and immediately replace it during router feedback.
-  // A comment target opens the document block itself, exactly like a copied
-  // comment link, because Drive-hosted documents cannot take a comment target.
-  const driveDocument =
-    !isTouchDevice() && !commentParams
-      ? driveDocumentFromContent(content)
+  // Construct hosted content before opening the split so details do not mount
+  // legacy blocks. Comment targets keep their document block.
+  const hostedContent =
+    reviewsHostedContent(content) ??
+    driveHostedContent(content, {
+      allowDocuments: !isTouchDevice() && !commentParams,
+    });
+  let splitContent: SplitContent = hostedContent ?? { ...content, params };
+  const callTranscriptId =
+    entity.type === 'call' && location?.type === 'call_record'
+      ? location.transcriptId
       : undefined;
-  let splitContent: SplitContent = driveDocument
-    ? driveSplitContent({ kind: 'tab', tab: 'owned' }, driveDocument)
-    : { ...content, params };
+  if (callTranscriptId) {
+    splitContent = {
+      ...splitContent,
+      entryMetadata: {
+        ...(isRecord(splitContent.entryMetadata)
+          ? splitContent.entryMetadata
+          : {}),
+        search: {
+          'call-detail': {
+            transcriptId: [callTranscriptId],
+            seek: [`${Date.now()}-${Math.random()}`],
+          },
+        },
+      },
+    };
+  }
   if (splitHandle && referredFrom && isListViewID(referredFrom)) {
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
@@ -769,11 +841,8 @@ export const openEntityInSplitFromUnifiedList = async (
     preferNewSplit: openInNewSplit,
     handle: splitHandle,
     mergeHistory,
-    // Each routed document has a distinct Drive location even though all
-    // Drive splits share the same component identity.
-    allowDuplicate:
-      allowDuplicate ||
-      (splitContent.type === 'component' && splitContent.id === 'documents'),
+    // Hosted details have distinct routes even when they share a component identity.
+    allowDuplicate: allowDuplicate || hostedContent !== undefined,
     reopen:
       entity.type === 'channel' && !location && openChannelAtLatest
         ? 'latest'
@@ -783,8 +852,27 @@ export const openEntityInSplitFromUnifiedList = async (
     toast.alert('Content already open');
   }
 
-  // Navigate to specific location if provided
-  if (location) {
+  if (result.status !== 'unavailable' && options.notificationSource) {
+    markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
+      scopeChannelThreads: options.scopeChannelThreads,
+    });
+  }
+
+  // Routed calls have no block handle. Update a reused split's route search
+  // instead of waiting for a legacy block method that will never register.
+  if (location?.type === 'call_record') {
+    if (result.status === 'reused' && result.split && callTranscriptId) {
+      result.split.replace({
+        next: {
+          ...result.split.content(),
+          entryMetadata: splitContent.entryMetadata,
+        },
+        mergeHistory: true,
+      });
+    } else if (result.status === 'reused' && !result.split) {
+      await navigateToLocation(content.id, location, blockOrchestrator);
+    }
+  } else if (location) {
     await navigateToLocation(content.id, location, blockOrchestrator);
   } else if (channelMessageTarget) {
     // NOTE: This will force target message navigation in case the split is already open.
@@ -815,11 +903,13 @@ export const openEntityInSplitFromUnifiedList = async (
  * array (mobile Channels) or a list accessor. Only rows without an edge fall
  * back to the separately paginated global source. Passing these notifications
  * through the source keeps its REST cache and durable seen overrides in sync
- * while the configured mutation updates GraphQL edges.
+ * while the configured mutation updates GraphQL edges. Chat opens the whole
+ * conversation (scopeChannelThreads: false); Inbox opens only the row's stack.
  */
 export function markChannelNotificationsSeenOnOpen(
   entity: EntityWithRawNotifications<EntityData>,
-  notificationSource: NotificationSource
+  notificationSource: NotificationSource,
+  options: { scopeChannelThreads?: boolean } = {}
 ) {
   if (
     entity.type !== 'channel' &&
@@ -830,7 +920,7 @@ export function markChannelNotificationsSeenOnOpen(
   }
 
   const notifications = getEntityNotifications(entity, notificationSource, {
-    scopeChannelThreads: true,
+    scopeChannelThreads: options.scopeChannelThreads !== false,
   }).filter((notification) => !notificationIsRead(notification));
   if (notifications.length === 0) return;
 
@@ -953,6 +1043,10 @@ export function reminderSplitTarget(entity: ReminderPreviewSelection) {
 function getEntitySplitContent(entity: EntityData) {
   return (
     match(entity)
+      .with({ type: 'initiative' }, (entity) => ({
+        type: 'component' as const,
+        id: projectRouteId({ id: entity.id, section: 'overview' }),
+      }))
       .with({ type: 'document' }, (entity) => {
         const { id, fileType, subType } = entity;
         const blockName = fileTypeToBlockName(subType?.type ?? fileType);

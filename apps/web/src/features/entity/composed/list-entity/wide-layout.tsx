@@ -43,6 +43,7 @@ import {
   GithubPullRequestPills,
 } from './foreign';
 import { ReminderWideContent } from './reminder';
+import { RowEnd } from './row-end';
 import { SOUP_ROW_CLASS } from './row-geometry';
 import type { LayoutProps } from './shared';
 
@@ -78,9 +79,15 @@ export function WideLayout(props: LayoutProps) {
         'gap-y-2 gap-x-(--soup-row-column-gap) grid grid-rows-[1fr]',
         // Drop the indicator column entirely when the checkbox is hidden so the
         // content isn't indented by an empty gutter.
-        props.hideCheckbox
-          ? 'grid-cols-[1fr_auto_8ch]'
-          : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_8ch]',
+        // A scheduled send's badge is wider than a date, so it sizes its column.
+        props.actions ||
+          (isEmailEntity(props.entity) && props.entity.scheduledSendTime)
+          ? props.hideCheckbox
+            ? 'grid-cols-[1fr_auto_auto]'
+            : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_auto]'
+          : props.hideCheckbox
+            ? 'grid-cols-[1fr_auto_8ch]'
+            : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_8ch]',
         '[--title-width:10rem]'
       )}
       style={{
@@ -238,7 +245,12 @@ export function WideLayout(props: LayoutProps) {
           <SharedBadge ownerId={props.entity.ownerId} />
         </Show>
         <Show when={isGithubPrEntity(props.entity) && props.entity}>
-          {(entity) => <GithubPullRequestPills entity={entity()} />}
+          {(entity) => (
+            <GithubPullRequestPills
+              entity={entity()}
+              authorDisplayName={props.authorDisplayName}
+            />
+          )}
         </Show>
         <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (
@@ -261,7 +273,10 @@ export function WideLayout(props: LayoutProps) {
                 )}
               </Show>
               <span class="flex w-10 shrink-0 justify-end">
-                <CallParticipants participantIds={entity().participantIds} />
+                <CallParticipants
+                  participantIds={entity().participantIds}
+                  guests={entity().guests}
+                />
               </span>
             </>
           )}
@@ -296,21 +311,23 @@ export function WideLayout(props: LayoutProps) {
         placement="timestamp"
         class="text-xs text-right text-ink-extra-muted font-medium"
       >
-        <Show
-          when={
-            !props.hasNotifications &&
-            !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
-          }
-        >
-          <Switch fallback={<Entity.Timestamp entity={props.entity} />}>
-            {/* The event's own date, not its sync time. */}
-            <Match
-              when={props.entity.type === 'calendar_event' && props.entity}
-            >
-              {(entity) => <CalendarStamp entity={entity()} />}
-            </Match>
-          </Switch>
-        </Show>
+        <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
+          <Show
+            when={
+              !props.hasNotifications &&
+              !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
+            }
+          >
+            <Switch fallback={<Entity.Timestamp entity={props.entity} />}>
+              {/* The event's own date, not its sync time. */}
+              <Match
+                when={props.entity.type === 'calendar_event' && props.entity}
+              >
+                {(entity) => <CalendarStamp entity={entity()} />}
+              </Match>
+            </Switch>
+          </Show>
+        </RowEnd>
       </Entity.Slot>
     </Entity.Layout>
   );

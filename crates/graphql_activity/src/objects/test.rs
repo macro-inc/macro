@@ -95,6 +95,8 @@ fn type_name(action: &GraphqlActivityAction) -> &'static str {
         GraphqlActivityAction::ParticipantAdded(_) => "ParticipantAdded",
         GraphqlActivityAction::ParticipantRemoved(_) => "ParticipantRemoved",
         GraphqlActivityAction::CallStarted(_) => "CallStarted",
+        GraphqlActivityAction::TaskAdded(_) => "TaskAdded",
+        GraphqlActivityAction::TaskRemoved(_) => "TaskRemoved",
         GraphqlActivityAction::Unknown(_) => "Unknown",
     }
 }

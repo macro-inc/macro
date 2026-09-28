@@ -4,15 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { InboxReauthRequiredMetadata } from './inboxReauthRequiredMetadata';
 import type { NotifEventOneOfTwofiveTag } from './notifEventOneOfTwofiveTag';
-import type { TaskAssignedMetadata } from './taskAssignedMetadata';
 
 /**
- * A user was assigned to a task.
+ * A linked inbox's grant died and must be reconnected.
  */
 export type NotifEventOneOfTwofive = {
-  /** A user was assigned to a task. */
-  content: TaskAssignedMetadata;
+  /** A linked inbox's grant died and must be reconnected. */
+  content: InboxReauthRequiredMetadata;
   tag: NotifEventOneOfTwofiveTag;
 };

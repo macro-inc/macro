@@ -8,10 +8,21 @@ import {
   useViewControlHotkeys,
   useViewTabHotkeys,
 } from '@app/components/view-shell';
-import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
+import {
+  type ChannelPreviewSelection,
+  channelPreviewSelection,
+  getChannelEntityTarget,
+  markChannelNotificationsSeenOnOpen,
+  navigateChannelEntityToTarget,
+  openEntityInSplitFromUnifiedList,
+} from '@app/features/next-soup/utils';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { favoriteSplitContent } from '@app/util/favorites';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitPanelOrThrow,
@@ -21,9 +32,14 @@ import { toast } from '@core/component/Toast/Toast';
 import { enableChannelTags } from '@core/constant/featureFlags';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { thrownResultErrorHasCode } from '@core/util/result';
-import { type ChannelEntity, isChannelEntity } from '@entity';
+import {
+  type ChannelEntity,
+  isChannelEntity,
+  type WithNotification,
+} from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
 import { ensureNotificationSourceLoaded } from '@notifications/notification-helpers';
+import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import {
   useChannelLabelsQuery,
   useCreateChannelLabelMutation,
@@ -43,6 +59,7 @@ import {
   createUniqueId,
   getOwner,
   onCleanup,
+  startTransition,
 } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../../channels-view-context';
@@ -128,6 +145,99 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const notificationSource = useGlobalNotificationSource();
+  const orchestrator = useGlobalBlockOrchestrator();
+  let activation = 0;
+  onCleanup(() => activation++);
+
+  const reportActivationError = (error: unknown) => {
+    console.error('Failed to open conversation', error);
+    toast.failure('Unable to open conversation. Please try again.');
+  };
+
+  const selectChannel = async (
+    channel: WithNotification<ChannelEntity>,
+    channelId: string,
+    openInNewSplit: boolean
+  ) => {
+    try {
+      const entity = withEntityNotifications(channel, notificationSource);
+      if (openInNewSplit) {
+        await openEntityInSplitFromUnifiedList(entity, {
+          openInNewSplit: true,
+          referredFrom: 'channels',
+          notificationSource,
+          scopeChannelThreads: false,
+        });
+        return;
+      }
+      const selection = channelPreviewSelection(channelId, {
+        target: getChannelEntityTarget(entity, {
+          scopeChannelThreads: false,
+        }),
+        notifications: entity.notifications,
+      });
+      const previous = selectedChannel();
+      if (!setSelectedChannel(selection)) return;
+      // Mark on every accepted activation, including re-clicks of the same
+      // route. The detail's ready-id effect only handles initial/route opens.
+      if (channel.isParticipant !== false) {
+        markChannelNotificationsSeenOnOpen(entity, notificationSource, {
+          scopeChannelThreads: false,
+        });
+      }
+      // Repeated clicks must navigate even when the route stays the same.
+      if (
+        previous?.id === selection.id &&
+        previous.target?.messageId === selection.target?.messageId &&
+        previous.target?.threadId === selection.target?.threadId
+      ) {
+        await navigateChannelEntityToTarget(selection, orchestrator);
+      }
+    } catch (error) {
+      reportActivationError(error);
+    }
+  };
+
+  const selectHydratedChannel = async (
+    pending: Promise<WithNotification<ChannelEntity>>,
+    request: number,
+    channelId: string,
+    openInNewSplit: boolean
+  ) => {
+    try {
+      const channel = await pending;
+      if (request !== activation) return;
+      // Only fetched selections need to join the browser router's transition.
+      await startTransition(() => {
+        if (request === activation)
+          void selectChannel(channel, channelId, openInNewSplit);
+      });
+    } catch (error) {
+      if (request === activation) reportActivationError(error);
+    }
+  };
+
+  const activateChannel = (channel: ChannelEntity, openInNewSplit: boolean) => {
+    const request = ++activation;
+    // Capture before hydrate/await — store proxies from the list can lose
+    // fields if the query refreshes while notifications are fetched.
+    const channelId = channel.id;
+    if (!channelId) {
+      reportActivationError(new Error('Missing channel id'));
+      return;
+    }
+    const selection = hydrateChannelNotificationSelection(
+      channel,
+      notificationSource.withLocalOverrides
+    );
+    // Telemetry installs ZoneAwarePromise; native async results are not
+    // instances of that constructor. Detect the pending edge structurally.
+    if ('then' in selection) {
+      void selectHydratedChannel(selection, request, channelId, openInNewSplit);
+    } else {
+      void selectChannel(selection, channelId, openInNewSplit);
+    }
+  };
 
   const favoritesData = useFavoritesData({ entityType: ['channel'] });
 
@@ -306,6 +416,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           row.channel.id === initialSelectedChannelId
       )?.id,
       onActivate: ({ item, metadata }) => {
+        activation++;
         previewAfterNavigation.clear();
         const openInNewSplit =
           metadata?.newSplit === true || metadata?.event?.shiftKey === true;
@@ -334,19 +445,17 @@ export function ChannelsRail(props: ChannelsRailProps) {
         const channelId =
           item.kind === 'favorite' ? item.favorite.entityId : item.channel.id;
 
-        if (openInNewSplit) {
+        const channel =
+          item.kind === 'conversation'
+            ? item.channel
+            : channelsById().get(channelId);
+        if (channel) activateChannel(channel, openInNewSplit);
+        else if (openInNewSplit) {
           layout.openWithSplit(
             { type: 'channel', id: channelId },
             { preferNewSplit: true, referredFrom: 'channels' }
           );
-          return;
-        }
-
-        setSelectedChannel(
-          item.kind === 'conversation'
-            ? item.channel
-            : { type: 'channel', id: channelId }
-        );
+        } else setSelectedChannel({ type: 'channel', id: channelId });
       },
     })
   );
@@ -511,6 +620,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       scopeId: panel.splitHotkeyScope,
       scrollHandle: () => scrollHandle,
       enabled: panel.isPanelActive,
+      conditions: {
+        open: () =>
+          !document.activeElement?.closest('[data-live-calls-sidebar]'),
+      },
       navigation: {
         onBeforeMove: ({ direction, current }) => {
           if (props.searchOpen) return true;
@@ -557,6 +670,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           return false;
         },
         onNavigate: (event) => {
+          activation++;
           listRoot()?.focus({ preventScroll: true });
           previewAfterNavigation.clear();
 

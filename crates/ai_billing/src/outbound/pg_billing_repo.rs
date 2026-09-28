@@ -5,9 +5,9 @@
 mod test;
 
 use crate::domain::{
-    BillingError, BillingRepo, BillingSettings, OverageChargeStatus, PendingCharge,
-    PeriodAllowance, PeriodLedger, Result, SeatAllowance, SettlementOutcome, SettlementPolicy,
-    SettlementState, plan_settlement,
+    AllowanceStore, BillingError, BillingRepo, BillingSettings, OpenPeriodStart,
+    OverageChargeStatus, PendingCharge, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
+    SeatGeneration, SettlementOutcome, SettlementPolicy, SettlementState, plan_settlement,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -37,7 +37,7 @@ impl BillingRepo for PgBillingRepo {
         let row = sqlx::query!(
             r#"
             SELECT overage_enabled, overage_limit_cents, overage_suspended_at,
-                   period_start, period_end
+                   period_start, period_end, seat_generation
             FROM ai_billing_account
             WHERE user_id = $1
             "#,
@@ -53,6 +53,7 @@ impl BillingRepo for PgBillingRepo {
                 overage_limit_cents: r.overage_limit_cents,
                 overage_suspended_at: r.overage_suspended_at,
                 period_anchor: r.period_start.zip(r.period_end),
+                seat_generation: SeatGeneration::from_raw(r.seat_generation),
             })
             .unwrap_or_default())
     }
@@ -190,18 +191,51 @@ impl BillingRepo for PgBillingRepo {
         .transpose()
     }
 
-    async fn remember_period_allowance(
+    async fn store_open_allowance(
         &self,
         payer: &MacroUserIdStr<'_>,
-        period_start: DateTime<Utc>,
+        period: OpenPeriodStart,
         seats: &[SeatAllowance],
-    ) -> Result<()> {
+        observed: SeatGeneration,
+    ) -> Result<AllowanceStore> {
         let billed_users: Vec<String> = seats
             .iter()
             .map(|seat| seat.user.as_ref().to_string())
             .collect();
         let included_cents_by_user: Vec<i64> =
             seats.iter().map(|seat| seat.included_cents).collect();
+        let payer = payer.as_ref();
+        let mut tx = self.pool.begin().await.map_err(storage)?;
+
+        // Lock the payer account before the allowance row, same order as release.
+        sqlx::query!(
+            r#"
+            INSERT INTO ai_billing_account (user_id) VALUES ($1)
+            ON CONFLICT (user_id) DO NOTHING
+            "#,
+            payer,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(storage)?;
+        let generation = sqlx::query!(
+            r#"
+            SELECT seat_generation
+            FROM ai_billing_account
+            WHERE user_id = $1
+            FOR UPDATE
+            "#,
+            payer,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(storage)?
+        .seat_generation;
+        if SeatGeneration::from_raw(generation) != observed {
+            tx.rollback().await.map_err(storage)?;
+            return Ok(AllowanceStore::Conflict);
+        }
+
         sqlx::query!(
             r#"
             INSERT INTO ai_billing_period_allowance (
@@ -217,14 +251,78 @@ impl BillingRepo for PgBillingRepo {
                OR ai_billing_period_allowance.included_cents_by_user
                   IS DISTINCT FROM EXCLUDED.included_cents_by_user
             "#,
-            payer.as_ref(),
-            period_start,
+            payer,
+            period.start(),
             &billed_users,
             &included_cents_by_user,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(storage)?;
+        tx.commit().await.map_err(storage)?;
+        Ok(AllowanceStore::Stored)
+    }
+
+    async fn release_open_seat(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        period: OpenPeriodStart,
+        member: &MacroUserIdStr<'_>,
+    ) -> Result<()> {
+        let payer = payer.as_ref();
+        let mut tx = self.pool.begin().await.map_err(storage)?;
+
+        // Lock and bump the payer account before the allowance row, same order as store.
+        sqlx::query!(
+            r#"
+            INSERT INTO ai_billing_account (user_id, seat_generation)
+            VALUES ($1, 1)
+            ON CONFLICT (user_id) DO UPDATE
+            SET seat_generation = ai_billing_account.seat_generation + 1,
+                updated_at = NOW()
+            "#,
+            payer,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(storage)?;
+
+        sqlx::query!(
+            r#"
+            UPDATE ai_billing_period_allowance AS allowance
+            SET billed_users = excised.users,
+                included_cents_by_user = excised.cents,
+                updated_at = NOW()
+            FROM (
+                SELECT
+                    COALESCE(
+                        array_agg(seat.billed_user ORDER BY seat.ordinality)
+                            FILTER (WHERE seat.billed_user IS DISTINCT FROM $3),
+                        ARRAY[]::text[]
+                    )::text[] AS users,
+                    COALESCE(
+                        array_agg(seat.included_cents ORDER BY seat.ordinality)
+                            FILTER (WHERE seat.billed_user IS DISTINCT FROM $3),
+                        ARRAY[]::bigint[]
+                    )::bigint[] AS cents
+                FROM ai_billing_period_allowance AS src
+                CROSS JOIN LATERAL unnest(src.billed_users, src.included_cents_by_user)
+                    WITH ORDINALITY AS seat(billed_user, included_cents, ordinality)
+                WHERE src.user_id = $1
+                  AND src.period_start = $2
+            ) AS excised
+            WHERE allowance.user_id = $1
+              AND allowance.period_start = $2
+              AND $3 = ANY (allowance.billed_users)
+            "#,
+            payer,
+            period.start(),
+            member.as_ref(),
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(storage)?;
+        tx.commit().await.map_err(storage)?;
         Ok(())
     }
 

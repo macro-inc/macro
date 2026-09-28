@@ -310,13 +310,15 @@ describe('Mobile page action row', () => {
     expect(mocks.createMenu).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
   });
-  it('opens the event composer from the calendar New button', () => {
+  it('opens the event composer from the Calendar New menu', async () => {
     mocks.view = 'calendar';
     render(() => <MobilePageActionRow />);
-    const createButton = screen.getByRole('button', { name: 'New event' });
-    expect(createButton.textContent).toBe('Event');
+    const createButton = screen.getByRole('button', { name: 'New' });
+    expect(createButton.textContent).toBe('New');
     fireEvent.click(createButton);
-    expect(mocks.openEvent).toHaveBeenCalledOnce();
+    const menu = await screen.findByRole('dialog', { name: 'Create new' });
+    fireEvent.click(within(menu).getByRole('button', { name: 'Event' }));
+    await waitFor(() => expect(mocks.openEvent).toHaveBeenCalledOnce());
   });
   it('opens the create menu on views without a specific New action', () => {
     mocks.view = undefined;
@@ -325,7 +327,7 @@ describe('Mobile page action row', () => {
     expect(mocks.createMenu).toHaveBeenCalledWith(true);
   });
   it('opens Home’s quick create actions in the requested order and restores focus on dismissal', async () => {
-    mocks.view = 'inbox';
+    mocks.view = 'home';
     render(() => <MobilePageActionRow />);
     const trigger = screen.getByRole('button', { name: 'New' });
     expect(screen.queryByRole('button', { name: 'New message' })).toBeNull();
@@ -346,7 +348,7 @@ describe('Mobile page action row', () => {
   it.each(['Email', 'Message', 'Document', 'Event', 'Task', 'More'])(
     'hands off Home’s %s action after closing the quick menu',
     async (label) => {
-      mocks.view = 'inbox';
+      mocks.view = 'home';
       render(() => <MobilePageActionRow />);
       fireEvent.click(screen.getByRole('button', { name: 'New' }));
       const menu = await screen.findByRole('dialog', { name: 'Create new' });

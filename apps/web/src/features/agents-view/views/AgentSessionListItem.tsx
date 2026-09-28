@@ -70,9 +70,6 @@ export function AgentSessionListItem(props: Props) {
       unread={props.unread}
       onOpen={props.onOpen}
       timestamp={compactAge(conversationTimestamp(props.entity))}
-      detailsLabel={[details()?.repository, details()?.branch]
-        .filter(Boolean)
-        .join(' · ')}
       leading={
         <Show
           when={props.surface === 'home'}

@@ -1,5 +1,6 @@
 use std::{ops::Deref, sync::Arc, sync::LazyLock};
 
+use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     AddParticipantError, CallRecord, CallRecordPreview, CustomSpeakerAssignment,
     EditCallRecordRepoArgs, TranscriptSegmentRequest,
@@ -146,7 +147,7 @@ async fn insert_voice(pool: &Pool<Postgres>, voice_id: Uuid, axis: usize) -> any
     Ok(())
 }
 
-async fn insert_user_mapping(
+pub(super) async fn insert_user_mapping(
     pool: &Pool<Postgres>,
     user_id: &MacroUserIdStr<'_>,
     macro_user_id: Uuid,
@@ -197,7 +198,7 @@ async fn create_call_returns_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
         .expect("should create new call");
 
     assert_eq!(call.id, id);
-    assert_eq!(call.channel_id, CH2);
+    assert_eq!(call.channel_id, Some(CH2));
     assert_eq!(call.room_name, "room-ch2");
     assert_eq!(call.created_by, USER_B.as_ref());
 
@@ -256,7 +257,7 @@ async fn get_call_by_channel_id_found(pool: Pool<Postgres>) -> anyhow::Result<()
 
     let call = call.expect("call should exist for ch1");
     assert_eq!(call.id, CALL1);
-    assert_eq!(call.channel_id, CH1);
+    assert_eq!(call.channel_id, Some(CH1));
     Ok(())
 }
 
@@ -440,7 +441,7 @@ async fn find_active_call_for_user_returns_current_participation(
     let found = repo
         .find_active_call_for_user(USER_A.deref().copied())
         .await?;
-    assert_eq!(found, Some((CALL1, CH1)));
+    assert_eq!(found, Some((CALL1, Some(CH1))));
     Ok(())
 }
 
@@ -646,7 +647,7 @@ async fn archive_call_creates_record_and_deletes_ephemeral(
     .await?;
 
     assert_eq!(archived.call_id, CALL1);
-    assert_eq!(archived.channel_id, CH1);
+    assert_eq!(archived.channel_id, Some(CH1));
     assert_eq!(archived.created_by, USER_A.as_ref());
     assert_eq!(archived.started_at, record.started_at);
     assert_eq!(archived.ended_at, record.ended_at);
@@ -847,7 +848,7 @@ async fn get_call_record_by_egress_id_returns_call_and_channel_context(
 
     let context = repo.get_call_record_by_egress_id("egress-arch-1").await?;
 
-    assert_eq!(context, Some((CALL_ARCHIVED, CH1)));
+    assert_eq!(context, Some((CALL_ARCHIVED, Some(CH1))));
     Ok(())
 }
 
@@ -1423,7 +1424,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
         .expect("active call should be found");
 
     assert_eq!(record.call_id, CALL1);
-    assert_eq!(record.channel_id, CH1);
+    assert_eq!(record.channel_id, Some(CH1));
     assert!(record.is_active);
     // Live calls report the pending toggle (on by default); canonical state
     // is only written when the call is archived.
@@ -1472,7 +1473,7 @@ async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::
         .expect("archived call should be found");
 
     assert_eq!(record.call_id, CALL_ARCHIVED);
-    assert_eq!(record.channel_id, CH1);
+    assert_eq!(record.channel_id, Some(CH1));
     assert!(!record.is_active);
     assert_eq!(record.team_share_access_level, None);
     assert!(!record.share_with_team);
@@ -1558,7 +1559,7 @@ async fn batch_get_call_record_previews_mixes_active_archived_and_missing(
     match &previews[0] {
         CallRecordPreview::Exists(data) => {
             assert_eq!(data.call_id, CALL1);
-            assert_eq!(data.channel_id, CH1);
+            assert_eq!(data.channel_id, Some(CH1));
             assert_eq!(data.channel_name.as_deref(), Some("call-test-channel"));
             assert!(data.ended_at.is_none());
         }
@@ -1569,7 +1570,7 @@ async fn batch_get_call_record_previews_mixes_active_archived_and_missing(
     match &previews[1] {
         CallRecordPreview::Exists(data) => {
             assert_eq!(data.call_id, CALL_ARCHIVED);
-            assert_eq!(data.channel_id, CH1);
+            assert_eq!(data.channel_id, Some(CH1));
             assert!(data.ended_at.is_some());
         }
         other => panic!("expected Exists for archived call, got {other:?}"),
@@ -2922,6 +2923,364 @@ async fn patch_call_transcript_custom_speakers_unknown_diarized_id_is_noop(
     Ok(())
 }
 
+fn standalone_meeting() -> crate::domain::meetings::Meeting {
+    crate::domain::meetings::Meeting {
+        id: Uuid::now_v7(),
+        share_token: crate::domain::meetings::MeetingToken::generate(),
+        title: "Design review".to_string(),
+        scheduled_start: None,
+        scheduled_end: None,
+        channel_id: None,
+        channel_call_id: None,
+        call_id: None,
+        user_id: USER_B.to_string(),
+    }
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn standalone_meeting_archives_guest_names_and_preserves_invitation(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    let repo = repo(pool);
+    let meeting = repo.create_meeting(standalone_meeting()).await?;
+    let (call, created) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await?;
+    assert!(created);
+    assert_eq!(call.channel_id, None);
+    let guest_id = GuestId::generate();
+    repo.add_guest(&call.id, guest_id, "Ada Guest").await?;
+    assert_eq!(repo.get_participant_count(&call.id).await?, 1);
+    assert!(repo.archive_call_if_empty(&call.id).await?.is_none());
+    repo.reconcile_guest(&call.id, guest_id, false).await?;
+    assert_eq!(repo.get_participant_count(&call.id).await?, 0);
+    repo.archive_call(&call.id).await?;
+    let record = repo.get_call_record_by_call_id(&call.id).await?.unwrap();
+    assert_eq!(record.channel_id, None);
+    assert_eq!(record.custom_name.as_deref(), Some("Design review"));
+    // Guests archive as their own rows; participant tables stay Macro-only.
+    assert!(record.participants.is_empty());
+    assert_eq!(record.guests.len(), 1);
+    assert_eq!(record.guests[0].id, guest_id);
+    assert_eq!(record.guests[0].display_name, "Ada Guest");
+    assert!(record.guests[0].left_at.is_some());
+    assert!(
+        repo.get_call_participants_with_team_members(&call.id)
+            .await?
+            .is_empty()
+    );
+    assert_eq!(
+        repo.get_meeting(&meeting.share_token)
+            .await?
+            .unwrap()
+            .call_id,
+        None
+    );
+    assert_eq!(
+        repo.get_meeting_for_call(&call.id, false)
+            .await?
+            .unwrap()
+            .id,
+        meeting.id
+    );
+    let (next, created) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await?;
+    assert!(created);
+    assert_ne!(next.id, call.id);
+    assert_ne!(next.room_name, call.room_name);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn guest_join_racing_archival_fails_instead_of_stranding_a_guest(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    let repo = repo(pool);
+    let meeting = repo.create_meeting(standalone_meeting()).await?;
+    let (call, _) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await?;
+    repo.archive_call(&call.id).await?;
+    // The calls row is gone; the guest insert must fail loudly rather than
+    // write a row for a room that no longer exists.
+    assert!(
+        repo.add_guest(&call.id, GuestId::generate(), "Ada")
+            .await
+            .is_err()
+    );
+    let record = repo.get_call_record_by_call_id(&call.id).await?.unwrap();
+    assert!(record.guests.is_empty());
+    // Late webhook reconciles for unknown guests are harmless no-ops on the
+    // live table (the webhook path never reaches here once the call is gone).
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn concurrent_meeting_joins_allocate_exactly_one_session(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    let repo = repo(pool);
+    let meeting = repo.create_meeting(standalone_meeting()).await?;
+    let first = Uuid::now_v7();
+    let second = Uuid::now_v7();
+    let (one, two) = tokio::join!(
+        repo.get_or_create_meeting_call(&meeting.id, &first),
+        repo.get_or_create_meeting_call(&meeting.id, &second)
+    );
+    let (one, created_one) = one?;
+    let (two, created_two) = two?;
+    assert_eq!(one.id, two.id);
+    assert_ne!(created_one, created_two);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn meeting_cancellation_is_owner_only_and_revokes_join(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    let repo = repo(pool);
+    let meeting = repo.create_meeting(standalone_meeting()).await?;
+    let request = || crate::domain::meetings::UpdateMeetingRequest {
+        clear_schedule: false,
+        title: Some("Updated review".to_string()),
+        scheduled_start: None,
+        scheduled_end: None,
+    };
+    assert!(
+        repo.update_meeting(&meeting.id, USER_A.as_ref(), request())
+            .await?
+            .is_none()
+    );
+    let updated = repo
+        .update_meeting(&meeting.id, USER_B.as_ref(), request())
+        .await?
+        .unwrap();
+    assert_eq!(updated.title, "Updated review");
+    assert_eq!(updated.share_token.as_str(), meeting.share_token.as_str());
+    let start = Utc::now();
+    repo.update_meeting(
+        &meeting.id,
+        USER_B.as_ref(),
+        crate::domain::meetings::UpdateMeetingRequest {
+            title: None,
+            scheduled_start: Some(start),
+            scheduled_end: Some(start + Duration::hours(1)),
+            clear_schedule: false,
+        },
+    )
+    .await?;
+    let cleared = repo
+        .update_meeting(
+            &meeting.id,
+            USER_B.as_ref(),
+            crate::domain::meetings::UpdateMeetingRequest {
+                title: None,
+                scheduled_start: None,
+                scheduled_end: None,
+                clear_schedule: true,
+            },
+        )
+        .await?
+        .unwrap();
+    assert!(cleared.scheduled_start.is_none());
+    assert!(cleared.scheduled_end.is_none());
+    assert!(!repo.cancel_meeting(&meeting.id, USER_A.as_ref()).await?);
+    assert!(repo.get_meeting(&meeting.share_token).await?.is_some());
+    assert!(repo.cancel_meeting(&meeting.id, USER_B.as_ref()).await?);
+    assert!(repo.get_meeting(&meeting.share_token).await?.is_none());
+    assert!(
+        repo.get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+            .await
+            .is_err()
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_invitation_is_pinned_to_original_session(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    let repo = repo(pool);
+    let mut meeting = standalone_meeting();
+    meeting.channel_id = Some(CH1);
+    meeting.channel_call_id = Some(CALL1);
+    meeting.call_id = Some(CALL1);
+    let meeting = repo.create_meeting(meeting).await?;
+    repo.archive_call(&CALL1).await?;
+    let resolved = repo.get_meeting(&meeting.share_token).await?.unwrap();
+    assert_eq!(resolved.call_id, None);
+    assert_eq!(resolved.channel_call_id, Some(CALL1));
+    assert!(
+        repo.get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+            .await
+            .is_err()
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn authenticated_meeting_attendee_gets_only_call_access_and_owner_keeps_owner(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    let attendee = MacroUserIdStr::try_from_email("attendee@test.com")?;
+    insert_user_mapping(&pool, &attendee, Uuid::now_v7()).await?;
+    let repo = repo(pool.clone());
+    let meeting = repo.create_meeting(standalone_meeting()).await?;
+    let (call, _) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await?;
+    repo.add_meeting_participant(&call.id, attendee.copied())
+        .await?;
+    repo.remove_participant(&CALL1, USER_B.deref().copied())
+        .await?;
+    repo.add_meeting_participant(&call.id, USER_B.deref().copied())
+        .await?;
+    for (user, expected) in [
+        (attendee.as_ref(), AccessLevel::View),
+        (USER_B.as_ref(), AccessLevel::Owner),
+    ] {
+        let level = sqlx::query_scalar!(
+            r#"SELECT access_level AS "access_level!: AccessLevel" FROM entity_access WHERE entity_id = $1 AND entity_type = 'call' AND source_id = $2 AND source_type = 'user' AND granted_from_project_id IS NULL"#,
+            call.id, user,
+        ).fetch_one(&pool).await?;
+        assert_eq!(level, expected);
+    }
+    let channel_access = sqlx::query_scalar!(
+        "SELECT EXISTS(SELECT 1 FROM entity_access WHERE entity_type = 'channel' AND source_id = $1) OR EXISTS(SELECT 1 FROM comms_channel_participants WHERE user_id = $1) AS \"exists!\"",
+        attendee.as_ref(),
+    ).fetch_one(&pool).await?;
+    assert!(!channel_access);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn standalone_archive_never_translates_pending_intent_into_team_memory(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    give_user_a_team(&pool, USER_B.as_ref(), &Uuid::now_v7()).await?;
+    let repo = repo(pool.clone());
+    let meeting = repo.create_meeting(standalone_meeting()).await?;
+    let (call, _) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await?;
+    assert!(
+        !repo
+            .get_call_record_by_call_id(&call.id)
+            .await?
+            .unwrap()
+            .share_with_team
+    );
+    // Simulate an old or internal writer; archival must still enforce the policy.
+    repo.patch_call_record(
+        &call.id,
+        &EditCallRecordRepoArgs {
+            share_permission: None,
+            custom_name: None,
+            team_share: None,
+            live_share_with_team: Some(true),
+        },
+    )
+    .await?;
+    repo.archive_call(&call.id).await?;
+
+    let record = repo.get_call_record_by_call_id(&call.id).await?.unwrap();
+    assert!(!record.share_with_team);
+    assert_eq!(record.team_share_access_level, None);
+    assert_eq!(team_entity_access_count(&pool, call.id).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn standalone_call_list_requires_individual_grants_live_and_archived(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use entity_access_db_utils::{EntityAccessSourceType, EntityType, insert_entity_access_row};
+
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    insert_user_mapping(&pool, USER_D.deref(), Uuid::now_v7()).await?;
+    let team_id = Uuid::now_v7();
+    give_user_a_team(&pool, USER_C.as_ref(), &team_id).await?;
+    let repo = repo(pool.clone());
+    let meeting = repo.create_meeting(standalone_meeting()).await?;
+    let (call, _) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await?;
+    repo.add_meeting_participant(&call.id, USER_D.deref().copied())
+        .await?;
+
+    // Neither an old team grant nor sharing to an unrelated channel makes this
+    // standalone call discoverable. Individual owner and attendee access remains.
+    let mut tx = pool.begin().await?;
+    for (source, source_type) in [
+        (team_id, EntityAccessSourceType::Team),
+        (CH1, EntityAccessSourceType::Channel),
+    ] {
+        insert_entity_access_row(
+            &mut tx,
+            &call.id,
+            EntityType::Call,
+            &source.to_string(),
+            source_type,
+            AccessLevel::View,
+        )
+        .await?;
+    }
+    tx.commit().await?;
+
+    for archived in [false, true] {
+        if archived {
+            repo.archive_call(&call.id).await?;
+        }
+        for (user, expected) in [
+            (USER_A.deref(), false),
+            (USER_C.deref(), false),
+            (USER_B.deref(), true),
+            (USER_D.deref(), true),
+        ] {
+            let records = repo
+                .get_call_records_by_user(user.copied(), 10, &None)
+                .await?;
+            assert_eq!(
+                records.iter().any(|record| record.call_id == call.id),
+                expected,
+                "user={user}, archived={archived}"
+            );
+        }
+    }
+    Ok(())
+}
+
 // -- resolve_channel_name_for_viewers -----------------------------------------
 
 const DM_CHANNEL: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000d01);
@@ -3051,5 +3410,29 @@ async fn resolve_channel_name_for_viewers_is_empty_for_unknown_channel_or_no_vie
 
     let no_viewers = repo.resolve_channel_name_for_viewers(&CH1, &[]).await?;
     assert!(no_viewers.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn meeting_schedule_rejects_partial_or_reversed_ranges(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    let repo = repo(pool);
+    let start = chrono::Utc::now();
+    let end = start + chrono::Duration::hours(1);
+    for (scheduled_start, scheduled_end) in [
+        (Some(start), None),
+        (None, Some(end)),
+        (Some(end), Some(start)),
+    ] {
+        let mut meeting = standalone_meeting();
+        meeting.scheduled_start = scheduled_start;
+        meeting.scheduled_end = scheduled_end;
+        assert!(repo.create_meeting(meeting).await.is_err());
+    }
     Ok(())
 }

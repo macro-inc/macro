@@ -73,6 +73,9 @@ const MUTEABLE_ITEM_TYPES = new Set([
   'foreign_entity',
   'project',
   'reminder',
+  'initiative',
+  'crm_company',
+  'crm_contact',
 ]);
 
 /**
@@ -166,7 +169,8 @@ export function isMutedItem(
   return muted.some(
     (entry) =>
       entry.item_id === item.item_id &&
-      normalizeMuteItemType(entry.item_type) === type
+      normalizeMuteItemType(entry.item_type) === type &&
+      (!entry.snoozed_until || Date.parse(entry.snoozed_until) > Date.now())
   );
 }
 
@@ -236,7 +240,8 @@ export function getNotificationActionText(n: Notification): string {
     .with('document_mention', () => 'mentioned')
     .with('mentioned_in_document_comment', () => 'mentioned')
     .with('replied_to_document_comment_thread', () => 'replied')
-    .with('commented_on_document', () => 'commented')
+    .with('initiative_discussion', () => 'commented')
+    .with('commented_on_document', 'crm_discussion', () => 'commented')
     .with('channel_invite', () => 'invited')
     .with('new_email', () => 'emailed')
     .with('invite_to_team', () => 'invited')
@@ -288,7 +293,9 @@ export function extractMessageContent(notification: Notification): string {
       { tag: 'replied_to_document_comment_thread' },
       (m) => m.content.text || ''
     )
+    .with({ tag: 'initiative_discussion' }, (m) => m.content.text || '')
     .with({ tag: 'commented_on_document' }, (m) => m.content.text || '')
+    .with({ tag: 'crm_discussion' }, (m) => m.content.text || '')
     .with({ tag: 'new_email' }, (m) => m.content.subject || '')
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? '')
     .with({ tag: 'ai_response' }, (m) => m.content.summary || '')

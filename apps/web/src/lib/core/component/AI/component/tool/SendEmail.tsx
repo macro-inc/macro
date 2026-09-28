@@ -120,7 +120,7 @@ function DraftPreviewButton(props: {
   );
 }
 
-function SentEmailResponse(props: {
+export function SentEmailResponse(props: {
   args: SendEmail;
   chatId: string;
   messageId: string;
@@ -162,7 +162,7 @@ function SentEmailResponse(props: {
   );
 }
 
-function DraftEmailResponse(props: {
+export function DraftEmailResponse(props: {
   args: SendEmail;
   draftId: string;
   renderContext: Parameters<typeof BaseTool>[0]['renderContext'];

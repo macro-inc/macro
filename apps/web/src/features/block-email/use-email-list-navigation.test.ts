@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   hasMore: false,
   active: true,
   currentId: 'a',
-  viewId: 'mail' as 'mail' | 'inbox',
+  viewId: 'mail' as 'mail' | 'home',
   sourceId: 'email-split',
   handle: {
     id: 'email-split',

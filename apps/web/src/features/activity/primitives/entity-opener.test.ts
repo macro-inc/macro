@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { OpenEntityTarget } from '../context/activity-context';
 import type { ActivityEntityType } from '../core/event';
@@ -76,4 +76,34 @@ describe('createEntityOpener', () => {
 
     expect(onOpen).not.toHaveBeenCalled();
   });
+});
+
+it('opens an authorized native project and stops opening after access is lost', () => {
+  const [projectId, setProjectId] = createSignal<string>();
+  const onOpen = vi.fn();
+  const context = createMockActivityContext({
+    entityDisplay: () => ({
+      name: () => 'Project',
+      icon: () => null,
+      isLoading: () => false,
+      blockOrFileType: () => null,
+      linkParams: () => undefined,
+      nativeProjectId: projectId,
+    }),
+  });
+  const opener = setup(context, 'initiative', onOpen);
+  opener()?.handlers?.onClick(click(false));
+  expect(onOpen).not.toHaveBeenCalled();
+  setProjectId('verified-project');
+  opener()?.handlers?.onClick(click(true));
+  expect(onOpen).toHaveBeenCalledWith({
+    block: 'initiative',
+    id: 'verified-project',
+    params: undefined,
+    newSplit: true,
+  });
+  onOpen.mockClear();
+  setProjectId(undefined);
+  opener()?.handlers?.onClick(click(false));
+  expect(onOpen).not.toHaveBeenCalled();
 });

@@ -247,8 +247,8 @@ fn task_expectations_cover_team_share_and_inheritance() {
     let spec = example();
     let rows = expected_matrix(&spec);
 
-    // ship-tags: alice owns it; the team gets comment via share_with_team;
-    // the project's team view is subsumed by comment; dave/eve see nothing.
+    // ship-tags: alice owns it; the team gets edit via share_with_team;
+    // the project's team view is subsumed by edit; dave/eve see nothing.
     // erin is an assignee, but her edit comes from the direct share, not the
     // assignment.
     assert_eq!(
@@ -257,15 +257,15 @@ fn task_expectations_cover_team_share_and_inheritance() {
     );
     assert_eq!(
         level(&rows, "task:ship-tags", "bob"),
-        Some(AccessLevel::Comment)
+        Some(AccessLevel::Edit)
     );
     assert_eq!(
         level(&rows, "task:ship-tags", "carol"),
-        Some(AccessLevel::Comment)
+        Some(AccessLevel::Edit)
     );
     assert_eq!(level(&rows, "task:ship-tags", "dave"), None);
     assert_eq!(level(&rows, "task:ship-tags", "eve"), None);
-    // erin has a direct edit share, which wins over the team's comment.
+    // erin has a direct edit share, which matches the team's edit.
     assert_eq!(
         level(&rows, "task:ship-tags", "erin"),
         Some(AccessLevel::Edit)
@@ -291,7 +291,7 @@ fn task_expectations_cover_team_share_and_inheritance() {
     );
     assert_eq!(
         level(&rows, "task:write-docs", "carol"),
-        Some(AccessLevel::Comment)
+        Some(AccessLevel::Edit)
     );
     assert_eq!(level(&rows, "task:write-docs", "dave"), None);
     assert_eq!(

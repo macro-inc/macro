@@ -3,7 +3,9 @@
 use crate::domain::{BillingError, Entitlement, EntitlementSource, PayerScope, PlanTier, Result};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
+use teams::domain::model::TeamError;
 use teams::domain::team_repo::TeamRepository;
 
 /// [`EntitlementSource`] over the roles service and the teams repository.
@@ -127,6 +129,15 @@ where
                 }
             },
         })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn team_payer(&self, team_id: Uuid) -> Result<Option<MacroUserIdStr<'static>>> {
+        match self.teams.get_team_owner(&team_id).await {
+            Ok(owner) => Ok(Some(owner)),
+            Err(TeamError::TeamDoesNotExist) => Ok(None),
+            Err(error) => Err(entitlement_err(error)),
+        }
     }
 
     #[tracing::instrument(skip(self), err)]

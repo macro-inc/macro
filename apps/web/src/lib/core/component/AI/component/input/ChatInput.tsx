@@ -10,8 +10,9 @@ import type { ChatSendInput } from '@core/component/AI/component/input/buildRequ
 import { ModelSelector } from '@core/component/AI/component/input/ModelSelector';
 import {
   defaultModelForPlan,
-  Model,
+  type Model,
   modelsForPlan,
+  PAID_MODELS,
   SUPPORTED_ATTACHMENT_EXTENSIONS,
 } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
@@ -83,7 +84,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   // upsell at all.
   const modelOptions = createMemo(() => {
     const allowed = modelsForPlan(hasPaidAccess());
-    return Object.values(Model).map((id) => ({
+    return PAID_MODELS.map((id) => ({
       id,
       available: allowed.includes(id),
     }));

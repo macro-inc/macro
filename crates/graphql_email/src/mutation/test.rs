@@ -252,6 +252,7 @@ struct TestEmailThreadOutput;
 fn deterministic_draft_rejections_do_not_allow_retries() {
     for error in [
         EmailErr::MessageAlreadySent(Uuid::nil()),
+        EmailErr::MessageDeliveryConflict(Uuid::nil()),
         EmailErr::MessageNotFound(Uuid::nil()),
         EmailErr::ThreadNotFound,
         EmailErr::InboxNotFound,
@@ -261,6 +262,16 @@ fn deterministic_draft_rejections_do_not_allow_retries() {
         let mapped = draft_mutation_error(&error);
         assert_eq!(mapped.extensions.as_ref().unwrap().get("retryable"), None);
     }
+}
+
+#[test]
+fn scheduled_draft_conflict_is_a_deterministic_invalid_save() {
+    let mapped = draft_mutation_error(&EmailErr::MessageDeliveryConflict(Uuid::nil()));
+    assert_eq!(
+        mapped.extensions.as_ref().unwrap().get("code"),
+        Some(&async_graphql::Value::from("INVALID")),
+    );
+    assert_eq!(mapped.extensions.as_ref().unwrap().get("retryable"), None);
 }
 
 #[derive(SimpleObject)]

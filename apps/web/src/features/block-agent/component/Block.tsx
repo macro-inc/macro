@@ -25,6 +25,7 @@ import { useAgentSession } from '../context/AgentSessionContext';
 import { forgetPendingSession } from '../context/pending-session';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { AgentComposer } from './AgentComposer';
+import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { AgentSplitHeader } from './AgentSplitHeader';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
@@ -119,6 +120,7 @@ function AgentBlockContent(props: {
               session={session()}
               title={metadata()?.title ?? undefined}
             />
+            <AgentPreviewBanner />
             {/* The Changes pane opens beside the transcript; closed, the
                 transcript keeps the whole width. */}
             <AgentChangesSplit>
@@ -128,7 +130,9 @@ function AgentBlockContent(props: {
               <FloatRegionOrInline region="accessory">
                 {/* Home/chat: re-enable pointer events on the accessory
                     contribution — the float host is pointer-transparent. */}
-                <div class="flex w-full justify-center shrink-0 px-4 pb-4.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
+                {/* pb matches ChannelInputContainer so the composer sits at
+                    the same height as the channel input. */}
+                <div class="flex w-full justify-center shrink-0 px-4 pb-2.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
                   <div class="macro-message-width mx-auto flex flex-col gap-2">
                     <ChangesHandoff />
                     <ReviewNotesDock />

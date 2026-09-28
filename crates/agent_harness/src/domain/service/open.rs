@@ -98,7 +98,7 @@ where
             .sessions
             .create_session(CreateAgentSessionParams {
                 repo_branch: None,
-                id: AgentSessionId::new(),
+                id: request.id.unwrap_or_else(AgentSessionId::new),
                 owner_id: request.owner,
                 bot_id: request.bot_id,
                 thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
@@ -121,17 +121,22 @@ where
         self.inner.publish_opened(&session).await;
 
         if let Some(thread) = request.thread {
-            let announcement = SessionAnnouncement {
-                session_id: session.id,
-                bot_id: request.bot_id,
-                origin_parent: thread.parent,
-                origin_thread_id: thread.thread_id,
-                origin_message_id: thread.message_id,
-                prompted_message_id: MessageId::first(AuthorKind::User),
-                prompted_content: thread.content,
-                triggered_by: owner_user,
+            let announce = async {
+                let persona = self.inner.reply_persona(&session).await?;
+                let announcement = SessionAnnouncement {
+                    session_id: session.id,
+                    bot_id: request.bot_id,
+                    is_coding: persona.is_coding,
+                    origin_parent: thread.parent,
+                    origin_thread_id: thread.thread_id,
+                    origin_message_id: thread.message_id,
+                    prompted_message_id: MessageId::first(AuthorKind::User),
+                    prompted_content: thread.content,
+                    triggered_by: owner_user,
+                };
+                self.inner.announcer.announce(announcement).await
             };
-            if let Err(error) = self.inner.announcer.announce(announcement).await {
+            if let Err(error) = announce.await {
                 tracing::warn!(
                     error = ?error,
                     session = %session.id,
@@ -481,6 +486,12 @@ where
 
         let defaults = self.defaults.for_bot(bot_id);
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
+        // The same profile the create menu snapshots: a mention states nothing
+        // about how the runtime should work, so the bot's configured
+        // instructions are what it opens with, exactly as a dedicated session
+        // would. Blank instructions are "none" stated clumsily.
+        let instructions =
+            Some(runtime.instructions.clone()).filter(|text| !text.trim().is_empty());
 
         // Provisioned before the session exists, because the row is what makes
         // the token mean anything: it carries the hash the proxy recognises.
@@ -514,10 +525,7 @@ where
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
-                // A mention carries no instructions: the prompt is whatever
-                // was said in the channel, and nothing there states how the
-                // runtime should work.
-                instructions: None,
+                instructions,
                 // Snapshotted so the proxy enforces exactly what this attach
                 // advertised, for as long as the session lives.
                 mcp_servers: runtime.mcp_servers.clone(),

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_messages (\n               id, parent_entity_type, parent_entity_id, thread_id, sender_id, content,\n               created_at, updated_at, edited_at, deleted_at, import_metadata\n           )\n           SELECT c.id,\n               CASE WHEN t.contact_id IS NULL THEN 'crm_company' ELSE 'crm_contact' END,\n               COALESCE(t.contact_id, t.company_id)::text,\n               NULLIF(first_value(c.id) OVER (PARTITION BY c.thread_id ORDER BY c.created_at, c.id), c.id),\n               c.owner, c.text, c.created_at, c.updated_at,\n               CASE WHEN c.updated_at > c.created_at THEN c.updated_at AT TIME ZONE 'UTC' END,\n               COALESCE(c.deleted_at, t.deleted_at) AT TIME ZONE 'UTC',\n               jsonb_build_object('source', 'crm_comment', 'legacy_thread_id', c.thread_id)\n           FROM crm_comment c\n           JOIN crm_thread t ON t.id = c.thread_id\n           ON CONFLICT (id) DO UPDATE SET\n               content = EXCLUDED.content,\n               updated_at = EXCLUDED.updated_at,\n               edited_at = EXCLUDED.edited_at,\n               deleted_at = EXCLUDED.deleted_at\n           WHERE comms_messages.import_metadata->>'source' = 'crm_comment'\n             AND comms_messages.updated_at <= EXCLUDED.updated_at\n             AND (comms_messages.content, comms_messages.updated_at, comms_messages.edited_at,\n                  comms_messages.deleted_at)\n                 IS DISTINCT FROM\n                 (EXCLUDED.content, EXCLUDED.updated_at, EXCLUDED.edited_at, EXCLUDED.deleted_at)\n           RETURNING (xmax = 0) AS \"inserted!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "inserted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1135a9b12335dbcf6feaa871d478efff6395e63361552cceca5ca30c9faf3f2d"
+}

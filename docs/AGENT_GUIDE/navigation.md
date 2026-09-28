@@ -15,16 +15,16 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 
 | Route | Surface |
 | --- | --- |
-| `/app` | Redirects to inbox |
+| `/app` | Redirects to Home |
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/inbox/<block-type>/<uuid>` | Home with a heterogeneous item opened inline; target metadata is stored in `sN.inbox-preview.*` query values |
+| `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
+| `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
 | `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
 | `/app/channels` | Channels list |
-| `/app/channels/<uuid>` | Channels with a conversation opened inline; message/thread targets use `sN.channel-detail.*` |
+| `/app/channels/<uuid>` | Channels with a conversation opened inline; message/thread targets use `sN.channels.messageId` and `sN.channels.threadId`, in the same namespace as the Channels tab |
 | `/app/drive` | Files (Drive defaults to My Files) |
 | `/app/drive/<recent-or-shared>` | A Drive tab (`/app/drive/tab/<...>` remains a compatibility alias) |
 | `/app/drive/folder/<uuid>` | A Drive folder; breadcrumbs resolve from current accessible folder data |
@@ -33,14 +33,18 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/tasks` | Tasks table |
 | `/app/tasks/<uuid>` | Tasks with a task document opened inline |
 | `/app/agents` | AI chats / agents list |
+| `/app/tasks/projects` | Projects collection inside Tasks (requires the Projects flag) |
+| `/app/tasks/projects/<uuid>/overview` | Project detail in Tasks, with breadcrumbs, properties, description, and discussions; replace `overview` with `tasks` for the task list |
+| `/app/component/project-compose` | Native project composer, sharing the task composer layout and property controls |
+| `/app/component/new-project` | Alias for the project composer; existing links remain valid |
+| `/app/component/initiative-view~<uuid>~overview` | Compatibility link that opens the project in Tasks |
 | `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
 | `/app/agents/chat/<uuid>` | Legacy AI chat opened in the Agents workspace (`/app/agent-chats/<uuid>` remains a compatibility alias) |
 | `/app/calls` | Calls list |
 | `/app/companies` | Customers (CRM; needs a team) |
 | `/app/activity` | Activity heatmap + feed |
-| `/app/home` | Assistant (AI-first landing) |
-| `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event uses `sN.calendar.eventId` |
+| `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
@@ -49,6 +53,19 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
+| `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
+| `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
+
+When an event opens inline from Home, changing the Calendar period stays under
+`/app/home/calendar/`, updates the period segment, and re-focuses that event.
+Back/Forward restores the period and its event locator from `sN.calendar.*`.
+
+Home uses the shared channel and file details for channel conversations and
+supported documents, with a **Home** breadcrumb that returns to the list. A
+channel message or thread target stays in its conversation. Document comment
+targets, spreadsheets, unknown items, and other unsupported block types retain
+the legacy inline preview so their navigation still works. The URL shape stays
+`/app/home/<block-type>/<uuid>` in either rendering mode.
 
 On touch devices, documents (including tasks) open in legacy blocks rather than
 inline Drive details. Canonical `/app/drive/.../<document-type>/<uuid>` links also
@@ -56,19 +73,45 @@ fall back to legacy document routes. This uses touch detection, not the native-a
 check: in DevTools, enable touch emulation rather than only narrowing the viewport.
 Legacy document URLs upgrade to Drive only when desktop detail rendering is enabled.
 
-Splits: the app is a tiling window manager. Public variable-length routes use
+The outer navigation rail uses 20px icons in 40px buttons with 4px gaps.
+Command and create-menu headers have 20px horizontal and 12px vertical padding.
+
+Splits: the app is a tiling window manager. Active light-theme panes are white;
+inactive desktop panes are slightly darker than the active pane across themes,
+while retaining the theme hue. Public variable-length routes use
 `~` as the boundary between panes
 (`/app/drive/folder/<uuid>/~/mail`). Legacy fixed `type/id`
 pane routes remain accepted. Known app-view URLs under `/app/component/` redirect
 to their canonical paths above; legacy composers keep their existing paths. Split-specific view state uses positionally
 namespaced query parameters such as `s0.drive.sort=created_at`; route identity
 and breadcrumb nesting remain in the path. Home, Email, Tasks, and Channels
-store the selected tab under `sN.inbox.tab`, `sN.mail.tab`, `sN.tasks.tab`,
+store the selected tab under `sN.home.tab`, `sN.mail.tab`, `sN.tasks.tab`,
 and `sN.channels.tab`, respectively. Channels also stores the phone list
 selection as `sN.channels.mobileTab`. Omitted tab keys mean each view's default;
 changing tabs updates the URL, and browser Back/Forward restores the selection
 independently in each pane. Inline detail links preserve these keys. Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
+
+Projects are enabled by default in development; production uses the PostHog
+`enable-projects` flag. `VITE_ENABLE_PROJECTS` overrides either environment.
+When disabled, project navigation,
+creation, assignment, chips, and Cmd+K results are hidden; direct project links
+return to Tasks after flags resolve. Existing Files folders stay available.
+
+Projects open as native detail views within Tasks, preserving its sidebar and
+shared breadcrumb navigation. The Projects breadcrumb returns to the same list,
+filters, groups, and scroll position. Opening a task from a project extends the
+trail so the project remains a return destination. The standard side-panel
+toggle shows project properties. Their URLs preserve the selected section on reload;
+discussion links append `~<message-uuid>` to the project's `overview` route.
+Existing `activity` routes open Overview, preserving a target message when present.
+Cmd+K includes a Projects category, authorized project search results, and
+`New project`. Selecting a project opens its overview; Shift-selection opens a
+new split. The global Create menu also offers `Project` (C, then P), including
+the full mobile Create sheet. Project opens the same popover host as task creation: a dialog
+on desktop and a bottom drawer on touch. It keeps focus in the project-name
+input, and `Continue editing in split` transfers the current draft. Existing
+folders remain available in Files search.
 
 The app views are referred to as **workspaces**. Expanded workspace sidebars start
 at the shared 256px width; manual resizing and narrow layouts can change the
@@ -85,8 +128,9 @@ selection participates in browser Back/Forward independently per pane. Explicit
 return controls navigate to the workspace's list root. Multiple panes navigate
 their child routes and history independently; returning to a list does not
 activate another pane. Opening a resource already displayed in another pane
-still activates its owner through router claim arbitration; the compatibility
-preview guard can instead reject a conflicting embedded preview. On touch, or
+activates its owner through router claim arbitration, preserves the owner's route,
+and applies compatible search targets to that pane. The compatibility preview
+guard can instead reject a conflicting embedded preview. On touch, or
 when the new-app-view flag cannot render the detail, Home, Email, Tasks, and
 Channels detail URLs fall back to the existing full-block surface. Legacy email
 and channel message targets are normalized into per-pane search by ingress
@@ -123,7 +167,10 @@ workspaces reopen navigation as an overlay; the backdrop or **Hide navigation**
 closes it temporarily. Opening or closing the narrow overlay never changes the
 saved wide-layout preference. Widening restores that preference, including in
 Home and Chat: navigation returns unless explicitly hidden at desktop width.
-Shrinking again starts with the overlay closed.
+Shrinking again starts with the overlay closed. Chat is the exception while no
+conversation is selected: its navigation stays docked with no **Hide
+navigation** control, and narrow Chat opens the overlay on its own (see
+[Chat navigation rail](channels.md#chat-navigation-rail)).
 The overlay never contains the split's **Close** button. Mobile keeps
 its existing navigation controls. Block detail panels (including Calendar) have
 **Hide side panel** in their own header and a hamburger **Show side panel** beside
@@ -170,7 +217,7 @@ stay centered and the preview body fills the remaining height below the divider.
   new split, including when Search is already active. This left-click menu shares
   its surface and item styling with the sidebar right-click menus, in both the
   compact rail and expanded sidebar.
-- Nav: `Go to Assistant`, `Go to Getting Started`, `Go to Home`, `Go to Recent`, `Go to Activity`.
+- Nav: `Go to Home`, `Go to Getting Started`, `Go to Recent`, `Go to Activity`.
 - Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
   `Go to Calendar`, `Go to Agents`, `Go to Customers`.
 - Then `Favorites` (pinned items) and `Latest` (recent channels/DMs with an `Unread` switch).
@@ -224,7 +271,7 @@ logical split has no sidebar close button; mobile chrome is unchanged.
 A lone non-list content split still shows a header X labeled **Return to list**,
 which returns that split to the most recent list in its history, preserving
 that list’s state. If there is no prior list, it replaces the current entry with
-inbox. Excluded background panels do not count toward close eligibility.
+Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
@@ -348,7 +395,7 @@ rounded selection highlights. Calendar visibility and Show weekends are checkbox
 rows; period, week start, time format, and month choices show trailing checkmarks.
 
 All popover splits open as bottom drawers on touch devices and dialogs
-on desktop, including task, calendar event, skill, and agent session composers.
+on desktop, including task, project, calendar event, skill, and agent session composers.
 
 Hovering an `@user` mention or a profile picture on desktop opens the user card:
 the person's name and email above Copy email, Copy name, Open contact (CRM teams
@@ -358,8 +405,11 @@ dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touc
 drops in favour of the card's DM action.
 
 `Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
-Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
-Document navigates straight into a new doc; Task and Channel open dialogs.
+Document D, Task T, Project P, Reminder R, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
+Document navigates straight into a new doc; Task, Project, and Channel open dialogs.
+When calls are enabled, `C C` (Create → Call) opens `/app/meet/new`. The call is
+created only after `Start call`; Escape closes the Create menu.
+Project opens the native project composer; Folder remains the Files folder action.
 
 Mobile glass presses animate the enclosing surface over 300ms. Round buttons
 retain roughly 20% growth; wide pills and grouped controls extend their glass
@@ -393,7 +443,7 @@ event trigger with a cron schedule. There is no event-filter composer yet.
 ## Command menu (Ctrl+K)
 
 Opens a dialog with a focused `Search...` textbox and bubble-style category radios
-(All / Command / Agents / Files / Tasks / Channels / People). Type a name, press Enter to open
+(All / Command / Agents / Files / Tasks / Projects / Channels / People). Type a name, press Enter to open
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
 
@@ -405,18 +455,39 @@ Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.
 A failed local refresh keeps displayed rows and their continuation available for
-another pagination attempt. A missing item may still be uncached, but should appear after hydration without retyping. Cmd+K's
+another pagination attempt. Missing items may still be uncached, but should appear
+after hydration without retyping, including channels outside the first cached
+page. Cmd+K's
 local search excludes unsupported email hits before limiting entity results;
 email mentions keep their separate search-service path.
 
+Cmd+K merges cached and locally available items before applying recency order.
+An empty query prefers when an item was last viewed, falling back to its update
+time; equal timestamps have a stable entity-type and ID order. Searching retains the menu's
+relevance/recency ranking and DM boost with GraphQL enabled. Verify that refreshing
+the cache or reopening the menu with unchanged data does not reorder the results.
+
 Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
 must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
-mounted and usable while the optional source loads or fails. A failed background
+mounted and usable while the optional source loads or fails. When no entity rows
+are available yet, the menu shows **Loading results…** while keeping commands
+usable; a settled empty category shows **No results found**. Background history
+or channel refetches alone must not switch settled empty results back to loading,
+including when the active category does not use that source. Cache-update bursts
+must let in-flight history, channel, and menu-search reads publish their results,
+then catch up with one coalesced refresh. Verify with cache reads slower than the
+250 ms update throttle, starting from an empty cache: entities appear without
+waiting for background updates to stop. Changing the query/category or closing
+the menu still discards obsolete search results. A failed background
 refresh retains available history/channel items and recently-viewed ordering.
-Placeholder results also remain usable while replacement data loads. A normal cache-worker
-handoff between tabs preserves backfill cursors and watermarks; only a replacement
-that creates or resets stored cache data discards them. Per-lane full-refresh and
-Shared Mail restart rules still apply.
+Placeholder results also remain usable while replacement data loads. A normal
+cache-worker handoff between tabs preserves backfill cursors and watermarks.
+Hydration checkpoints belong to the stored cache generation: resetting or
+recreating the database starts a full scan even when an old checkpoint survives
+or the page missed the reset notification. Verify that clearing only the cache
+database and reloading recovers older channels as well as recent ones. A reset
+during hydration must also restart the scan. Per-lane full-refresh and Shared Mail
+restart rules still apply.
 
 ## Keyboard model (from the in-app guide; verified partially)
 
@@ -424,8 +495,7 @@ Shared Mail restart rules still apply.
 - `c` then `d`/`t`/`e`/`m`/`a` — create doc / task / email / channel / AI chat.
   Single-letter shortcuts only work when no editor has focus; press `Escape` first.
 - `/` — search everything. `j`/`k` — move in lists. `e` — mark done.
-- `g` then `h` — Home (inbox); `g` then `i` remains an alias. Assistant is
-  available through its sidebar link or the `Go to Assistant` command.
+- `g` then `h` — Home; `g` then `i` remains an alias.
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.
 - Splits: `` ` `` split, `Shift+H`/`Shift+L` move focus, `Shift+Esc` maximize.

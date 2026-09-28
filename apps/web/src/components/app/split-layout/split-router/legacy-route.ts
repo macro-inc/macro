@@ -3,20 +3,19 @@ import {
   agentsRouteSegments,
 } from '@app/features/agents-view/core/route';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
+import { isCalendarRange } from '@app/features/calendar-view/calendar-range';
 import {
   CALENDAR_ROUTE_ID,
   CALENDAR_SEARCH_NAMESPACE,
   calendarSearchCodec,
+  calendarTargetSearch,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
-import type { DriveLocation } from '@app/features/drive-view/core/types';
-import type { DriveDocumentRoute } from '@app/features/drive-view/primitives/drive-route';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import {
   defineRoute,
   routeParams,
   type SplitLocation,
-  type SplitRouteMatch,
   type SplitRouterEntry,
   type UnmatchedSplitPathHandler,
 } from '@app/lib/split-router';
@@ -32,7 +31,13 @@ import { isRecord } from '@app/lib/split-router/utils';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
-import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import {
+  blocks,
+  fileTypeToBlockName,
+  isBlockAlias,
+  resolveBlockAlias,
+} from '@core/constant/allBlocks';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { z } from 'zod';
 import type { SplitContent } from '../layoutManager';
 
@@ -54,14 +59,18 @@ export function decodeLegacyPair(
   }
 
   if (type === 'component') {
-    // Retired Preview Pair placeholders must never reach the view registry.
+    // Preview Pair placeholders must never reach the view registry.
     return {
       type: 'component',
-      id: id === 'preview-empty' || id === 'non-member-channel' ? 'inbox' : id,
+      id: id === 'preview-empty' || id === 'non-member-channel' ? 'home' : id,
     };
   }
 
-  const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);
+  const resolvedType =
+    type === 'write'
+      ? resolveBlockAlias(fileTypeToBlockName(type))
+      : resolveBlockAlias(type as BlockName | BlockAlias);
+  if (!Object.hasOwn(blocks, resolvedType)) return;
 
   if (isBlockAlias(type)) {
     return {
@@ -171,39 +180,6 @@ export function encodeLegacyContent(content: SplitContent): string[] {
   ];
 }
 
-export function driveSplitContent(
-  location: DriveLocation,
-  document?: DriveDocumentRoute
-): SplitContent {
-  const matches: [SplitRouteMatch, ...SplitRouteMatch[]] = [
-    { id: 'drive', params: {} },
-  ];
-  if (location.kind === 'folder') {
-    matches.push({
-      id: 'drive-folder',
-      params: { view: 'folder', folderId: location.id ?? undefined },
-    });
-  } else if (location.tab !== 'owned') {
-    matches.push({ id: 'drive-tab', params: { tab: location.tab } });
-  }
-  if (document) {
-    matches.push({
-      id:
-        location.kind === 'folder'
-          ? 'drive-folder-document'
-          : location.tab === 'owned'
-            ? 'drive-document'
-            : 'drive-tab-document',
-      params: { documentId: document.id, documentType: document.type },
-    });
-  }
-  return {
-    type: 'component',
-    id: 'documents',
-    entryMetadata: { route: { matches } },
-  };
-}
-
 export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
@@ -212,12 +188,22 @@ export function splitLocationFromContent(
     (content.type === 'component' && content.id === CALENDAR_VIEW_ID) ||
     (content.type === 'calendar' && content.id === CALENDAR_BLOCK_ID)
   ) {
-    const rawEventId = isRecord(content.params)
-      ? (content.params as Record<string, unknown>).eventId
-      : undefined;
-    const eventId =
-      typeof rawEventId === 'string' && rawEventId.length > 0 ? rawEventId : '';
-    const search = calendarSearchCodec.serialize({ eventId });
+    const params: Record<string, unknown> = isRecord(content.params)
+      ? content.params
+      : {};
+    const search = calendarSearchCodec.serialize(
+      calendarTargetSearch({
+        eventId:
+          typeof params.eventId === 'string' && params.eventId.length > 0
+            ? params.eventId
+            : undefined,
+        occurrenceKey:
+          typeof params.occurrenceKey === 'string'
+            ? params.occurrenceKey
+            : undefined,
+        range: isCalendarRange(params.range) ? params.range : undefined,
+      })
+    );
     return {
       route: {
         matches: [
@@ -228,6 +214,22 @@ export function splitLocationFromContent(
         ],
       },
       ...(search ? { search: { [CALENDAR_SEARCH_NAMESPACE]: search } } : {}),
+    };
+  }
+
+  if (content.type === 'pr') {
+    return {
+      route: {
+        matches: [{ id: 'pr-detail', params: { foreignEntityId: content.id } }],
+      },
+    };
+  }
+
+  if (content.type === 'call') {
+    return {
+      route: {
+        matches: [{ id: 'call-detail', params: { callId: content.id } }],
+      },
     };
   }
 
@@ -268,9 +270,11 @@ export function resolveContentLocation(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
-  const metadata = isRecord(content.entryMetadata)
-    ? content.entryMetadata
-    : undefined;
+  let metadata: Record<string, unknown> | undefined;
+  if (isRecord(content.entryMetadata)) metadata = content.entryMetadata;
+
+  let metadataLocation = metadata;
+  if (isRecord(metadata?.location)) metadataLocation = metadata.location;
   const resolve = (route: unknown) => {
     assertRouteState(routes, route);
     // Go through the URL representation, not schema validation of schema outputs.
@@ -290,9 +294,9 @@ export function resolveContentLocation(
     return decoded.location.route;
   };
   let route: SplitLocation['route'] | undefined;
-  if (metadata?.route !== undefined) {
+  if (metadataLocation?.route !== undefined) {
     try {
-      route = resolve(metadata.route);
+      route = resolve(metadataLocation.route);
     } catch {
       // Old or malformed metadata falls back to the content's compatibility route.
     }
@@ -301,9 +305,11 @@ export function resolveContentLocation(
   const search = filterRouteSearch(
     routes,
     route,
-    parseSearchState(metadata?.search)
+    parseSearchState(metadataLocation?.search)
   );
-  return search ? { route, search } : { route };
+  const location: SplitLocation = { route };
+  if (search) location.search = search;
+  return location;
 }
 
 export function splitContentFromLocation(
@@ -315,6 +321,20 @@ export function splitContentFromLocation(
     return { type: 'component', id: root.id.slice('view-'.length) };
   if (root.id === 'drive') return { type: 'component', id: 'documents' };
   if (root.id === 'settings') return { type: 'component', id: 'settings' };
+  if (root.id === 'pr-detail') {
+    const { foreignEntityId } = routeParams(location.route);
+    if (typeof foreignEntityId === 'string' && foreignEntityId.length > 0) {
+      return { type: 'pr', id: foreignEntityId };
+    }
+    throw new Error('Invalid PR detail split route');
+  }
+  if (root.id === 'call-detail') {
+    const { callId } = routeParams(location.route);
+    if (typeof callId === 'string' && callId.length > 0) {
+      return { type: 'call', id: callId };
+    }
+    throw new Error('Invalid call detail split route');
+  }
 
   const params = routeParams(location.route);
   if (
@@ -342,11 +362,14 @@ export const legacySplitRoute = defineRoute({
   id: 'legacy-content',
   path: ':type/:id',
   search: '*',
-  params: z.object({ type: z.string().min(1), id: z.string().min(1) }),
+  params: z
+    .object({ type: z.string().min(1), id: z.string().min(1) })
+    .refine(({ type, id }) => decodeLegacyPair(type, id) !== undefined),
   externalSearch: (entry) => {
     const { type } = routeParams(entry.location.route);
     if (type === 'email') return Object.values(EMAIL_URL_PARAMS);
     if (type === 'channel') return Object.values(CHANNEL_URL_PARAMS);
+    if (type === 'company' || type === 'contact') return [COMMENT_LINK_PARAM];
     return [];
   },
   claim: ({ type, id }) => {

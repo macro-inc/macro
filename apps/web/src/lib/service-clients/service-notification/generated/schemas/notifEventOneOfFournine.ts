@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AgentSessionMentionedMetadata } from './agentSessionMentionedMetadata';
+import type { AgentSessionSettledMetadata } from './agentSessionSettledMetadata';
 import type { NotifEventOneOfFournineTag } from './notifEventOneOfFournineTag';
 
 /**
- * The user was named in a prompt to an agent session.
+ * An agent finished a turn with nothing queued behind it.
  */
 export type NotifEventOneOfFournine = {
-  /** The user was named in a prompt to an agent session. */
-  content: AgentSessionMentionedMetadata;
+  /** An agent finished a turn with nothing queued behind it. */
+  content: AgentSessionSettledMetadata;
   tag: NotifEventOneOfFournineTag;
 };

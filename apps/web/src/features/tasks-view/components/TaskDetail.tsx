@@ -10,8 +10,6 @@ export type TaskDetailContext = MarkdownDetailContext;
 
 export type TaskDetailProps = {
   task: TaskDetailTarget;
-  shareOpen: boolean;
-  onShareOpenChange: (open: boolean) => void;
   children?: (context: TaskDetailContext) => JSX.Element;
 };
 
@@ -30,8 +28,6 @@ export function TaskDetail(props: TaskDetailProps) {
       documentId={props.task.id}
       kind="task"
       fallbackName={props.task.fallbackName ?? 'New Task'}
-      shareOpen={props.shareOpen}
-      onShareOpenChange={props.onShareOpenChange}
       children={props.children}
     />
   );

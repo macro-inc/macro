@@ -20,6 +20,7 @@ ai_usage = { path = "../ai_usage" }
 bytes = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
+bot_id = { path = "../bot_id" }
 chat = { path = "../chat", default-features = false }
 dashmap = { workspace = true }
 futures = { workspace = true }

@@ -200,6 +200,17 @@ pub trait EmailRepo: Send + Sync + 'static {
         message_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, Vec<MessageLabel>>, Self::Err>> + Send;
 
+    /// Fetch saved calendar invitation components, keyed by message ID.
+    fn calendar_invitations_by_message_ids(
+        &self,
+        message_ids: &[Uuid],
+    ) -> impl Future<
+        Output = Result<
+            HashMap<Uuid, Vec<crate::domain::models::calendar_invitation::CalendarInvitation>>,
+            Self::Err,
+        >,
+    > + Send;
+
     /// Fetch persisted message timestamps, scoped to the sending inbox.
     fn message_timestamps(
         &self,
@@ -290,21 +301,12 @@ pub trait EmailRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<UpsertedContacts, Self::Err>> + Send;
 
     /// Insert a message within a transaction, including thread insert (if new),
-    /// recipients, scheduled message handling, thread metadata update, user
-    /// history, and any client-handle bindings the input carries (upserted so
-    /// replayed offline saves converge on the final row).
-    ///
-    /// A draft client handle is locked for the transaction and its binding
-    /// re-read under that lock, so concurrent first saves of one handle settle
-    /// on a single message and thread instead of each minting their own. The
-    /// returned IDs are therefore the authoritative ones — a save that adopted
-    /// a concurrent winner's row settled on IDs its own input never named.
-    ///
-    /// Returns `None` (rolling the transaction back) when the upsert's owner
-    /// guard rejected the write: the message ID already exists but belongs to
-    /// another inbox or is no longer an unsent draft. Defense-in-depth behind
-    /// the handle resolution — validation reads can be raced, the guarded
-    /// conflict clause cannot.
+    /// recipients, thread metadata update, and user history. Ordinary drafts never
+    /// schedule delivery; non-drafts may create an immediate-send undo window.
+    /// Lock and re-read client-handle bindings, bind handles to the final rows,
+    /// and return their authoritative IDs. Return None when an owner/sent guard
+    /// rejects the write; reject scheduled/processing identities transactionally.
+    /// If `new_thread` is Some, the thread is created inside the same transaction.
     fn insert_message(
         &self,
         input: &ResolvedDraftInput,
@@ -312,7 +314,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
         is_draft: bool,
-    ) -> impl Future<Output = Result<Option<SettledDraftIds>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<SettledDraftIds>, EmailErr>> + Send;
 
     /// Fetch a label by its database ID and link ID.
     fn get_label_by_id(

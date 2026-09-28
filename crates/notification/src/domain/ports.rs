@@ -20,7 +20,7 @@ use crate::domain::models::device::DeviceType;
 use crate::domain::models::{NotificationStatusPayload, TaggedContent};
 
 use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
-use crate::domain::models::request::NotificationListFilters;
+use crate::domain::models::request::{NotificationListFilters, NotificationStatus};
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationExtEmail, NotificationIdAndCollapseKey,
     SendNotificationRequestBuilder, UserNotificationRow, VoipPushTarget,
@@ -112,11 +112,13 @@ pub trait NotificationRepository: Send + Sync + 'static {
         done: bool,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
 
-    /// Get active user-owned notification IDs associated with any primary or secondary entity.
+    /// Get non-deleted, user-owned notification IDs associated with any primary or secondary
+    /// entity that need the requested status transition or an initial viewing timestamp.
     fn get_notification_ids_for_entities(
         &self,
         user_id: MacroUserIdStr<'_>,
         entities: &[Entity<'_>],
+        status: &NotificationStatus,
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
     /// Get basic notification data (collapse keys) needed for push clearing.

@@ -15,7 +15,6 @@ import {
 } from '@app/features/calendar/utils/time-format';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
-
 import { HoverCard } from '@core/component/HoverCard';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { openExternalUrl } from '@core/util/url';
@@ -308,10 +307,10 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
               aria-label="New event"
               label="New event"
               tooltipPlacement="top"
-              variant="ghost"
+              variant="outline"
               size="icon-md"
               depth={4}
-              class="rounded-lg glass bg-surface"
+              class="rounded-lg bg-surface"
               onClick={() => openEventComposer()}
             >
               <PlusIcon class="size-4" />
@@ -321,10 +320,10 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
                 aria-label="Calendar settings"
                 label="Calendar settings"
                 tooltipPlacement="top"
-                variant="ghost"
+                variant="outline"
                 size="icon-md"
                 depth={4}
-                class="rounded-lg bg-surface shadow-menu ring ring-edge-muted"
+                class="rounded-lg bg-surface"
               >
                 <GearIcon class="size-4" />
               </Dropdown.Trigger>
@@ -455,7 +454,7 @@ export function CalendarSidebarPreview(
         <Surface
           depth={2}
           hideBorder
-          class="h-[min(24rem,calc(100vh-2rem))] w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl shadow-menu ring ring-edge"
+          class="menu-surface h-[min(24rem,calc(100vh-2rem))] w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl"
         >
           <div
             class="size-full"

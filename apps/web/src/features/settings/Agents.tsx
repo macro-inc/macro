@@ -1,3 +1,4 @@
+import { isCoderHarness } from '@app/features/agents-view/core/agent-kind';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
@@ -682,6 +683,16 @@ function AgentEditorPage(props: {
   const autoAcceptPermissions = () =>
     selectedHarness()?.kind === 'builtin' ||
     (allowPermissionBypass() && autoAcceptChoice());
+  // The saved choice, or none: an agent that never chose follows its
+  // harness, so a fresh form and a re-picked runtime both start from there.
+  const [codingChoice, setCodingChoice] = createSignal<boolean | undefined>(
+    props.agent?.is_coding ?? undefined
+  );
+  const harnessCodes = () => {
+    const harness = selectedHarness();
+    return isCoderHarness(harness?.kind === 'macrod' ? 'macrod' : harness?.id);
+  };
+  const isCoding = () => codingChoice() ?? harnessCodes();
   let avatarInputRef: HTMLInputElement | undefined;
   let pageContentRef: HTMLDivElement | undefined;
 
@@ -698,6 +709,7 @@ function AgentEditorPage(props: {
     setHarnessId(id);
     setDefaultModelId(preferredModelId(id));
     setAutoAcceptChoice(false);
+    setCodingChoice(undefined);
   };
 
   const handleAvatarInput = (file: File | undefined) => {
@@ -748,6 +760,7 @@ function AgentEditorPage(props: {
       mcp: mcp(),
       teamId: selectedTeamId(),
       autoAcceptPermissions: autoAcceptPermissions(),
+      isCoding: isCoding(),
     });
     if (saved) close();
   };
@@ -985,6 +998,27 @@ function AgentEditorPage(props: {
                 </Show>
               </div>
             </div>
+            <fieldset class="mt-4 grid gap-2 border-t border-ink/[0.06] pt-4">
+              <legend class="text-xs font-medium text-ink">
+                Answering a mention
+              </legend>
+              <ChoiceRow
+                name="agent-coding"
+                value="coding"
+                title="Coding agent"
+                description="Posts a magic chip you can open into the live session and watch it work in a repository."
+                checked={isCoding()}
+                onChange={() => setCodingChoice(true)}
+              />
+              <ChoiceRow
+                name="agent-coding"
+                value="chat"
+                title="Chat agent"
+                description="Replies in the thread the way a person would, like @macro."
+                checked={!isCoding()}
+                onChange={() => setCodingChoice(false)}
+              />
+            </fieldset>
             <Show when={selectedHarness()?.kind === 'macrod'}>
               <fieldset class="mt-4 grid gap-2 border-t border-ink/[0.06] pt-4">
                 <legend class="text-xs font-medium text-ink">

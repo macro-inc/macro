@@ -120,6 +120,7 @@ struct AgentRow {
     mcp_app_slugs: Vec<String>,
     mcp_server_names: Vec<String>,
     auto_accept_permissions: Option<bool>,
+    is_coding: bool,
 }
 
 impl TryFrom<AgentRow> for Agent {
@@ -170,6 +171,7 @@ impl TryFrom<AgentRow> for Agent {
             channel_ids: row.channel_ids,
             mcp,
             auto_accept_permissions: row.auto_accept_permissions,
+            is_coding: row.is_coding,
         })
     }
 }
@@ -360,9 +362,9 @@ impl BotRepo for PgBotsRepo {
         sqlx::query!(
             r#"
             INSERT INTO agent_configs (
-                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope, auto_accept_permissions
+                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope, auto_accept_permissions, is_coding
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             "#,
             bot_id.as_uuid(),
             &req.instructions,
@@ -372,6 +374,7 @@ impl BotRepo for PgBotsRepo {
             req.channel_scope.as_str(),
             req.mcp.scope_str(),
             req.auto_accept_permissions,
+            req.is_coding,
         )
         .execute(&mut *tx)
         .await
@@ -407,6 +410,7 @@ impl BotRepo for PgBotsRepo {
             default_model: req.default_model,
             channel_scope: req.channel_scope,
             auto_accept_permissions: req.auto_accept_permissions,
+            is_coding: req.is_coding,
             channel_ids: req.channel_ids,
             mcp: req.mcp,
         })
@@ -480,6 +484,7 @@ impl BotRepo for PgBotsRepo {
                 channel_scope = $6,
                 mcp_scope = $7,
                 auto_accept_permissions = $8,
+                is_coding = $9,
                 updated_at = now()
             WHERE bot_id = $1
             "#,
@@ -491,6 +496,7 @@ impl BotRepo for PgBotsRepo {
             req.channel_scope.as_str(),
             req.mcp.scope_str(),
             req.auto_accept_permissions,
+            req.is_coding,
         )
         .execute(&mut *tx)
         .await
@@ -554,6 +560,7 @@ impl BotRepo for PgBotsRepo {
             channel_ids: req.channel_ids,
             mcp: req.mcp,
             auto_accept_permissions: req.auto_accept_permissions,
+            is_coding: req.is_coding,
         }))
     }
 
@@ -584,6 +591,7 @@ impl BotRepo for PgBotsRepo {
                 a.default_model,
                 a.channel_scope,
                 a.auto_accept_permissions,
+                a.is_coding,
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p
@@ -961,6 +969,7 @@ impl BotRepo for PgBotsRepo {
                 a.default_model,
                 a.channel_scope,
                 a.auto_accept_permissions,
+                a.is_coding,
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p

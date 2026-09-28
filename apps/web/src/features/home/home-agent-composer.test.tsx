@@ -43,7 +43,11 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));
 vi.mock('../agents-view/queries/agent-roster-source', () => ({
-  createAgentRosterSource: () => ({ roster: () => [], loading: () => false }),
+  createAgentRosterSource: () => ({
+    roster: () => [],
+    loading: () => false,
+    availabilityLoading: () => false,
+  }),
 }));
 vi.mock('./queries/home-agent-prompt', () => ({
   buildHomeAgentPrompt: mocks.buildPrompt,

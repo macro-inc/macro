@@ -18,6 +18,7 @@ chrono = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ] }
+macro_env = { path = "../macro_env" }
 macro_user_id = { path = "../macro_user_id", features = ["schema"] }
 macro_uuid = { path = "../macro_uuid" }
 roles_and_permissions = { path = "../roles_and_permissions", default-features = false, features = [

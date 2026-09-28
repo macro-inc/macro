@@ -94,6 +94,23 @@ pub trait ActivityAudienceExpander: Send + Sync {
         entity_type: EntityType,
         entity_id: &str,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
+
+    /// Check a particular viewer, including link-based access that cannot be
+    /// enumerated as an audience. The conservative default uses explicit recipients.
+    fn viewer_can_see(
+        &self,
+        entity_type: EntityType,
+        entity_id: &str,
+        viewer: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send {
+        async move {
+            Ok(self
+                .entity_audience(entity_type, entity_id)
+                .await?
+                .iter()
+                .any(|user| user == viewer))
+        }
+    }
 }
 
 /// Publishes an already addressed activity announcement.
@@ -175,4 +192,21 @@ pub trait ActivityReads {
         to: DateTime<Utc>,
         limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityRange, Self::Err>> + Send;
+}
+
+/// Paginated entity history, separate from subject feeds and batched previews.
+/// Callers must hold entity access and verify references embedded in payloads.
+pub trait EntityActivityReads: Send + Sync + 'static {
+    /// Persistence error.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Read one entity in stable `(occurred_at DESC, id DESC)` order. The raw-row
+    /// cursor advances even when a corrupt row cannot be decoded.
+    fn entity_feed(
+        &self,
+        entity_type: EntityType,
+        entity_id: &str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;
 }

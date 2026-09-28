@@ -3,6 +3,7 @@ import {
   optimisticMutationDispositionOf,
 } from '@graphql-cache/exchange/optimistic';
 import type { Client, OperationResult } from '@urql/core';
+import { revalidateNotificationReaders } from '../../queries/notification/revalidation';
 import {
   getChannelListRevalidations,
   revalidateChannelLists,
@@ -152,6 +153,6 @@ export async function executeGraphqlUpdateNotificationsForEntities(
   const result = await client
     .mutation(UpdateNotificationsForEntityDocument, variables)
     .toPromise();
-  if (!result.error) await revalidateChannelLists(client);
+  if (!result.error && result.data) await revalidateNotificationReaders(client);
   return result;
 }

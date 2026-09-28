@@ -24,6 +24,14 @@ const enginePort = {
 } as unknown as MessagePort;
 
 describe('coordinator runtime protocol', () => {
+  it('accepts a durable-generation read without caller parameters', () => {
+    const request = {
+      id: 1,
+      kind: 'current-storage-generation',
+    };
+    expect(isCacheRequest(request)).toBe(true);
+    expect(isCacheRequest({ ...request, unexpected: true })).toBe(false);
+  });
   it('validates the staged startup handshake and rejects the old ungated protocol', () => {
     const progress = {
       ...version,

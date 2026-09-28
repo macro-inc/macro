@@ -7,6 +7,7 @@ import {
 } from '@app/features/agent-changes/agent-changes';
 import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
+import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { AgentSessionReadMarker } from '@app/features/block-agent/component/AgentSessionReadMarker';
 import {
@@ -35,20 +36,17 @@ import {
 import { EntityIcon } from '@core/component/EntityIcon';
 import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { Permissions } from '@core/component/SharePermissions';
-import {
-  ShareDialogContext,
-  ShareModal,
-  ShareTrigger,
-} from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useUserId } from '@core/context/user';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
+import ShareIcon from '@icon/share.svg';
 import type { NotificationSource } from '@notifications/notification-source';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
-import ShareIcon from '@phosphor/share.svg';
 import { EmptyStatePanel } from '@ui';
-import { createSignal, onCleanup, Show, Suspense } from 'solid-js';
+import { onCleanup, Show } from 'solid-js';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
 import { Topbar } from './Topbar';
@@ -79,9 +77,9 @@ function SessionContent(props: {
     retryLoad,
     session,
     sessionId,
+    startupError,
   } = useAgentSession();
   const panel = useSplitPanelOrThrow();
-  const [shareOpen, setShareOpen] = createSignal(false);
   const userId = useUserId();
 
   const title = () => agentSessionTitle(session(), metadata()?.title);
@@ -107,14 +105,21 @@ function SessionContent(props: {
           : current.status.kind,
     };
   };
+  const openShare = useShareModal(() => {
+    const current = session();
+    const id = sessionId();
+    if (!current || !id) return;
+    return {
+      id,
+      name: title(),
+      owner: current.ownerId,
+      itemType: 'agent_session',
+      blockAlias: 'agent',
+      userPermissions: permissions(),
+    };
+  });
   return (
-    <ShareDialogContext.Provider
-      value={{
-        isOpen: shareOpen,
-        open: () => setShareOpen(true),
-        close: () => setShareOpen(false),
-      }}
-    >
+    <>
       <AgentSessionReadMarker
         sessionId={!loadFailed() && session() ? sessionId() : undefined}
         active={panel.isPanelActive()}
@@ -197,7 +202,7 @@ function SessionContent(props: {
                           {
                             label: 'Share',
                             icon: ShareIcon,
-                            action: () => setShareOpen(true),
+                            action: openShare,
                           },
                         ]}
                       />
@@ -214,6 +219,7 @@ function SessionContent(props: {
           <Show when={sessionId()}>
             {(id) => (
               <ShareTrigger
+                onClick={openShare}
                 id={id()}
                 blockType="agent"
                 hotkeyScope={panel.splitHotkeyScope}
@@ -235,22 +241,36 @@ function SessionContent(props: {
                 when={!loadFailed()}
                 fallback={
                   <Show
-                    when={accessDenied()}
+                    when={startupError()}
                     fallback={
-                      <LoadErrorPanel
-                        title="Unable to load this session"
-                        onRetry={loadRetryable() ? retryLoad : undefined}
-                      />
+                      <Show
+                        when={accessDenied()}
+                        fallback={
+                          <LoadErrorPanel
+                            title="Unable to load this session"
+                            onRetry={loadRetryable() ? retryLoad : undefined}
+                          />
+                        }
+                      >
+                        <EmptyStatePanel
+                          centered
+                          title="You don't have access to this session"
+                          description="Ask a participant to share it with you."
+                        />
+                      </Show>
                     }
                   >
-                    <EmptyStatePanel
-                      centered
-                      title="You don't have access to this session"
-                      description="Ask a participant to share it with you."
-                    />
+                    {(error) => (
+                      <EmptyStatePanel
+                        centered
+                        title="The agent could not be started"
+                        description={error()}
+                      />
+                    )}
                   </Show>
                 }
               >
+                <AgentPreviewBanner />
                 <div class="transcript-host">
                   <Transcript />
                 </div>
@@ -270,24 +290,7 @@ function SessionContent(props: {
           </SidePanel.Layout>
         </div>
       </SidePanel.Root>
-
-      <Show when={sessionId() && session()}>
-        {(_) => (
-          <Suspense>
-            <ShareModal
-              id={sessionId() ?? ''}
-              name={title()}
-              owner={session()?.ownerId ?? ''}
-              itemType="agent_session"
-              blockAlias="agent"
-              userPermissions={permissions()}
-              isSharePermOpen={shareOpen()}
-              setIsSharePermOpen={setShareOpen}
-            />
-          </Suspense>
-        )}
-      </Show>
-    </ShareDialogContext.Provider>
+    </>
   );
 }
 

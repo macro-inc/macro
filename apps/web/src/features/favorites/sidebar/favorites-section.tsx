@@ -8,6 +8,7 @@ import {
   useFavoriteDmRecipientId,
 } from '@app/util/favorites';
 import { navigateToChannelMessage } from '@block-channel/utils/link';
+import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { ReadonlyThread } from '@channel/StandaloneThread';
 import type { SidebarState } from '@components/app/app-sidebar/sidebar';
 import {
@@ -398,6 +399,7 @@ const FavoriteRow = (props: {
       referredFrom: 'sidebar',
       activate: true,
       preferNewSplit,
+      allowDuplicate: props.favorite.entityType === 'foreign_entity',
     });
     if (result.status === 'reused' && result.owner !== result.sourceOwner) {
       toast.alert('Content already open');
@@ -445,6 +447,10 @@ const FavoriteRow = (props: {
         />
       </div>
       <span class="min-w-0 truncate">{displayName()}</span>
+      <ChannelMutedIndicator
+        muted={muteAction.isMuted(favoriteAsEntity())}
+        class="size-3.5"
+      />
       <Show when={props.notifications().length > 0}>
         <span class="ml-auto shrink-0 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-medium bg-ink/6 text-ink-muted rounded-md">
           {props.notifications().length}

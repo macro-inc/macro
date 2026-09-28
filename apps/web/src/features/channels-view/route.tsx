@@ -10,19 +10,15 @@ import {
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { lazy, Show } from 'solid-js';
 import { z } from 'zod';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
-import { channelDetailSearch } from './channels-route';
+import { channelsSearch } from './channels-route';
+import { ChannelDetailRouteView, ChannelsView } from './channels-view';
 
 const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
-}));
-const ChannelsView = lazy(async () => ({
-  default: (await import('./channels-view')).ChannelsView,
-}));
-const ChannelDetailRouteView = lazy(async () => ({
-  default: (await import('./channels-view')).ChannelDetailRouteView,
 }));
 
 function LegacyChannelsView() {
@@ -39,7 +35,7 @@ function LegacyChannelsView() {
 
 function ChannelsLegacyRouteView() {
   const params = useParams<{ channelId?: string }>();
-  const [search] = createSearchParams(channelDetailSearch);
+  const [search] = createSearchParams(channelsSearch);
   const legacyChannel = (id: string): SplitContent => {
     const params: Record<string, string> = {};
     if (search.messageId) params[CHANNEL_URL_PARAMS.message] = search.messageId;
@@ -82,6 +78,7 @@ export const channelDetailRoute = defineRoute({
     namespace: 'block',
     id: `channel:${channelId}`,
   }),
+  toReference: ({ channelId }) => uuidRouteReference(channelId, 'channel'),
 });
 
 export const channelsSplitRoute = defineRoute({

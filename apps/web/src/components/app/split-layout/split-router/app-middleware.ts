@@ -5,12 +5,13 @@ import {
   calendarPath,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
-import { CHANNEL_DETAIL_SEARCH_NAMESPACE } from '@app/features/channels-view/channels-route';
+import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
   driveDocumentFromContent,
   drivePath,
 } from '@app/features/drive-view/primitives/drive-route';
 import { driveDocumentBlockType } from '@app/features/drive-view/primitives/drive-route-schema';
+import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import { EMAIL_DETAIL_SEARCH_NAMESPACE } from '@app/features/email-view/email-route';
 import {
@@ -21,7 +22,10 @@ import {
   type SplitRouterMiddlewareResult,
 } from '@app/lib/split-router';
 import { replaceSplitSearchParams } from '@app/lib/split-router/search';
+import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
+import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
+import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
 import { match } from 'ts-pattern';
 import { appSplitRoutes } from './app-routes';
 import { decodeLegacyPair } from './legacy-route';
@@ -55,6 +59,18 @@ function redirectLegacyRoutes(
     }
   }
 
+  if (route.matches[0].id === 'call-detail') {
+    const { callId } = routeParams(route);
+    if (typeof callId === 'string') {
+      return redirect(`/drive/call/${encodeURIComponent(callId)}`);
+    }
+  }
+  if (route.matches[0].id === 'pr-detail') {
+    const { foreignEntityId } = routeParams(route);
+    if (typeof foreignEntityId === 'string') {
+      return redirect(`/reviews/pr/${encodeURIComponent(foreignEntityId)}`);
+    }
+  }
   if (route.matches[0].id !== 'legacy-content') return;
 
   const { type, id } = routeParams(route);
@@ -115,22 +131,61 @@ function migrateLegacySearch({
   if (!externalSearch) return;
 
   const leafId = to.location.route.matches.at(-1)?.id;
+  const homeChannel =
+    leafId === 'home-channel' ||
+    (leafId === 'home-preview' &&
+      routeParams(to.location.route).blockType === 'channel');
+  const homeDocumentType =
+    leafId === 'home-document'
+      ? routeParams(to.location.route).documentType
+      : leafId === 'home-preview'
+        ? routeParams(to.location.route).blockType
+        : undefined;
+  const commentKey = (() => {
+    switch (homeDocumentType) {
+      case 'md':
+      case 'task':
+      case 'skill':
+      case 'snippet':
+      case 'spreadsheet':
+        return MD_URL_PARAMS.commentId;
+      case 'pdf':
+        return PDF_URL_PARAMS.annotationId;
+    }
+  })();
+  const homeDocumentMapping = commentKey
+    ? {
+        namespace: driveSearch.namespace,
+        fields: [[commentKey, 'commentId']] as const,
+      }
+    : undefined;
 
   const mapping = match(leafId)
     .with('mail-thread', () => ({
       namespace: EMAIL_DETAIL_SEARCH_NAMESPACE,
       fields: [[EMAIL_URL_PARAMS.messageId, 'messageId']] as const,
     }))
-    .with('channels-channel', () => ({
-      namespace: CHANNEL_DETAIL_SEARCH_NAMESPACE,
-      fields: [
-        [CHANNEL_URL_PARAMS.message, 'messageId'],
-        [CHANNEL_URL_PARAMS.thread, 'threadId'],
-      ] as const,
-    }))
+    .when(
+      (id) => id === 'channels-channel' || homeChannel,
+      () => ({
+        namespace: channelsSearch.namespace,
+        fields: [
+          [CHANNEL_URL_PARAMS.message, 'messageId'],
+          [CHANNEL_URL_PARAMS.thread, 'threadId'],
+        ] as const,
+      })
+    )
+    .when(
+      (id) => id === 'home-document' || id === 'home-preview',
+      () => homeDocumentMapping
+    )
     .with(CALENDAR_ROUTE_ID, () => ({
       namespace: CALENDAR_SEARCH_NAMESPACE,
       fields: [['eventId', 'eventId']] as const,
+    }))
+    .with('call-detail', 'drive-call', () => ({
+      namespace: 'call-detail',
+      fields: [[CALL_URL_PARAMS.transcriptId, 'transcriptId']] as const,
     }))
     .otherwise(() => undefined);
 

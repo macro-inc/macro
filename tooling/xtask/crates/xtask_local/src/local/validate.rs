@@ -10,6 +10,7 @@ use serde_json::Value;
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::Port;
 use super::inventory::services_for_mode;
+use super::local_env::Tunnels;
 use super::{Mode, arch, env_layer, gen_compose, instance::Instance, workspace_root};
 
 /// Required non-Rust services that must be present in the rendered local
@@ -43,7 +44,15 @@ fn local_compose_flavor(instance: &Instance, mode: Mode, static_frontend: bool) 
     // Resolve first: the gmail_forwarder sidecar is gated on the resolved env
     // exactly as `prepare` gates it, so the validated compose matches what a
     // real bring-up with this env would generate.
-    let resolved = env_layer::resolve(mode, instance, true, None, static_frontend, None, true)?;
+    let resolved = env_layer::resolve(
+        mode,
+        instance,
+        true,
+        None,
+        static_frontend,
+        Tunnels::default(),
+        true,
+    )?;
     let gmail_forwarder = resolved
         .merged
         .get("GMAIL_FORWARDER_SA_KEY")
@@ -183,7 +192,7 @@ fn local_env_flavor(
         no_doppler,
         env_file,
         static_frontend,
-        None,
+        Tunnels::default(),
         true,
     )?;
     let env = &resolved.merged;

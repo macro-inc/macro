@@ -57,7 +57,10 @@ export function InCallParticipantNameRow(props: {
   const label = createMemo(() => {
     props.panel.callCtx.trackVersion();
     const r = profilePictureIdForMember(props.panel, props.member);
-    const displayName = getDisplayName(tryMacroId(r ?? ''));
+    const displayName =
+      (props.member.kind === 'remote'
+        ? props.member.participant.name?.trim()
+        : undefined) || getDisplayName(tryMacroId(r ?? ''));
     return (
       displayName ||
       r ||
@@ -67,7 +70,11 @@ export function InCallParticipantNameRow(props: {
 
   const isRemote = () => props.member.kind === 'remote';
   const allowDm = () => props.allowOpenDm !== false;
-  const isInteractive = () => isRemote() && allowDm();
+  const isInteractive = () =>
+    isRemote() &&
+    allowDm() &&
+    props.member.kind === 'remote' &&
+    !!tryMacroId(props.member.participant.identity);
 
   const openDm = (event: MouseEvent | KeyboardEvent) => {
     if (props.member.kind !== 'remote') return;

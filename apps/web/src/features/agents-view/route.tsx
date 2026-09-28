@@ -1,3 +1,4 @@
+import { changesSearch } from '@app/features/agent-changes/changes-search';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { defineRoute } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -6,6 +7,7 @@ import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
@@ -58,6 +60,12 @@ export const AgentsRouteView = withAuth(() => {
   usePageViewTracking('agents');
   const flag = useFeatureFlag(enableChatV3Agents);
   const enabled = () => flag().enabled && !isTouchDevice();
+  createRenderEffect(() => {
+    if (flag().loading) return;
+    panel.handle.updateMeta?.({
+      splitPanelLayout: enabled() ? 'composable' : 'legacy',
+    });
+  });
   const connectionsRequested = () => {
     const content = panel.handle.content();
     return (
@@ -65,12 +73,6 @@ export const AgentsRouteView = withAuth(() => {
       content.params?.agentPage === 'connections'
     );
   };
-  createRenderEffect(() => {
-    if (!flag().loading)
-      panel.handle.updateMeta?.({
-        splitPanelLayout: enabled() ? 'composable' : 'legacy',
-      });
-  });
   return (
     <Show when={!flag().loading} fallback={<LoadingBlock />}>
       <Show
@@ -111,6 +113,8 @@ export const agentsRoute = defineRoute({
   component: AgentsRouteView,
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
+  search: [changesSearch.namespace],
+  toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
 export const codersRoute = defineRoute({
@@ -120,6 +124,8 @@ export const codersRoute = defineRoute({
   component: AgentsRouteView,
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
+  search: [changesSearch.namespace],
+  toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
 export const agentChatsRoute = defineRoute({
@@ -130,6 +136,8 @@ export const agentChatsRoute = defineRoute({
   component: AgentsRouteView,
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'chat', id }),
+  search: [changesSearch.namespace],
+  toReference: ({ id }) => uuidRouteReference(id, 'chat'),
 });
 
 export const agentsViewRoute = defineRoute({

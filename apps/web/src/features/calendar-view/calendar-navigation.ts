@@ -11,6 +11,7 @@ import {
   CALENDAR_ROUTE_ID,
   CALENDAR_SEARCH_NAMESPACE,
   calendarSearchCodec,
+  calendarTargetSearch,
 } from './calendar-url';
 import { CALENDAR_VIEW_ID, type CalendarViewTarget } from './types';
 
@@ -29,7 +30,13 @@ export function calendarViewContent(
     typeof target.eventId === 'string' && target.eventId.length > 0
       ? target.eventId
       : undefined;
-  const search = calendarSearchCodec.serialize({ eventId: eventId ?? '' });
+  const search = calendarSearchCodec.serialize(
+    calendarTargetSearch({
+      eventId,
+      occurrenceKey: target.occurrenceKey,
+      range: target.range,
+    })
+  );
   const params: CalendarViewTarget | undefined = eventId
     ? {
         eventId,

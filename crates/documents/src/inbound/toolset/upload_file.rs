@@ -133,12 +133,11 @@ where
         let created = service_context
             .creator
             .upload_file(
-                request_context.user_id.clone(),
+                &service_context.creation_principal(request_context.user_id),
                 NewFileUpload {
                     file_name: self.file_name.clone(),
                     bytes,
                     project,
-                    attribution: service_context.attribution(request_context.user_id),
                 },
             )
             .await
