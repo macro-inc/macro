@@ -10,7 +10,6 @@ import type { PropertyDefinitionResponse } from '../../service-clients/service-p
 import type { PropertyScope } from '../../service-clients/service-properties/generated/schemas/propertyScope';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-import { fetchGraphqlPropertyDefinitions } from './graphql/definitions';
 import { propertiesKeys } from './keys';
 
 type ListPropertiesQueryParams = {
@@ -31,12 +30,17 @@ export function useListPropertiesQuery(
         includeOptions,
         forEntityType,
       }).queryKey,
-      queryFn: () =>
-        fetchGraphqlPropertyDefinitions({
-          scope,
-          includeOptions,
-          forEntityType,
-        }),
+      queryFn: async () => {
+        const data = await throwOnErr(
+          async () =>
+            await propertiesServiceClient.listProperties({
+              scope,
+              include_options: includeOptions,
+              for_entity_type: forEntityType,
+            })
+        );
+        return data;
+      },
       enabled: enabled(),
       staleTime: 1000 * 60 * 5, // 5 minutes
     };
@@ -51,8 +55,14 @@ export async function fetchPropertyDefinitionWithOptions(
       scope: 'all',
       includeOptions: true,
     }).queryKey,
-    queryFn: () =>
-      fetchGraphqlPropertyDefinitions({ scope: 'all', includeOptions: true }),
+    queryFn: async () =>
+      await throwOnErr(
+        async () =>
+          await propertiesServiceClient.listProperties({
+            scope: 'all',
+            include_options: true,
+          })
+      ),
     staleTime: 0,
   });
 

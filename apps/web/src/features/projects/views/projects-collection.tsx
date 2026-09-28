@@ -11,6 +11,7 @@ import {
 } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
+import { taskGridColumnCount } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import { EntitySelectionToolbarModal } from '@entity/EntitySelectionToolbarModal';
 import CalendarIcon from '@phosphor/calendar.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -363,6 +364,7 @@ export function ProjectsCollection(props: {
                       {(group) => (
                         <TaskGroupHeader
                           row={group()}
+                          columnCount={taskGridColumnCount(true)}
                           groupBy={collection.groupBy()}
                           expanded={collection.disclosure.isExpanded(
                             group().groupId
@@ -416,7 +418,7 @@ export function ProjectsCollection(props: {
                         <div role="row" id={more().id}>
                           <div
                             role="gridcell"
-                            aria-colspan={8}
+                            aria-colspan={taskGridColumnCount(true)}
                             class="flex justify-center py-2"
                           >
                             <Button

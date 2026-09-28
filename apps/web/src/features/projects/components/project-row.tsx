@@ -1,7 +1,6 @@
 import {
   TASK_GRID_COLUMNS,
-  TASK_GRID_TEMPLATE_AREAS_WIDE,
-  TASK_GRID_TEMPLATE_COLUMNS_WIDE,
+  taskGridTemplate,
 } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import '@app/features/tasks-view/components/task-list/task-list.css';
 import { Entity, MultiSelectCheckbox } from '@entity';
@@ -15,10 +14,8 @@ import { cn } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import type { ProjectRow as ProjectRowData } from '../context/projects-context';
 
-const gridStyle = {
-  'grid-template-columns': TASK_GRID_TEMPLATE_COLUMNS_WIDE,
-  'grid-template-areas': TASK_GRID_TEMPLATE_AREAS_WIDE,
-};
+// Projects reuse the task grid; its project column holds the due date.
+const gridStyle = taskGridTemplate({ indicator: true, project: true });
 const columns = [
   { area: 'content', label: 'Project' },
   ...TASK_GRID_COLUMNS.map((column) => ({

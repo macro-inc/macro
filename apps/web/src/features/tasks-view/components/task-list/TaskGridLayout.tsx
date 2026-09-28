@@ -30,11 +30,8 @@ import { cn } from '@ui/utils/classname';
 import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 import {
   TASK_GRID_COLUMNS,
-  TASK_GRID_TEMPLATE_AREAS_WIDE,
-  TASK_GRID_TEMPLATE_AREAS_WIDE_NO_INDICATOR,
-  TASK_GRID_TEMPLATE_COLUMNS_WIDE,
-  TASK_GRID_TEMPLATE_COLUMNS_WIDE_NO_INDICATOR,
   type TaskGridColumn,
+  taskGridTemplate,
 } from './task-grid-template';
 
 const EPOCH = new Date(0).toISOString();
@@ -130,15 +127,10 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           'task-grid-row w-full min-h-[inherit] items-center text-sm px-2',
           'gap-2 grid grid-rows-[1fr]'
         )}
-        style={{
-          '--task-col-initiative': props.projectSlot ? undefined : '0rem',
-          'grid-template-columns': props.hideCheckbox
-            ? TASK_GRID_TEMPLATE_COLUMNS_WIDE_NO_INDICATOR
-            : TASK_GRID_TEMPLATE_COLUMNS_WIDE,
-          'grid-template-areas': props.hideCheckbox
-            ? TASK_GRID_TEMPLATE_AREAS_WIDE_NO_INDICATOR
-            : TASK_GRID_TEMPLATE_AREAS_WIDE,
-        }}
+        style={taskGridTemplate({
+          indicator: !props.hideCheckbox,
+          project: props.projectSlot !== undefined,
+        })}
       >
         <Show when={!props.hideCheckbox}>
           <Entity.Slot placement="indicator" class="relative size-full group">
@@ -219,9 +211,11 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           )}
         </For>
 
-        <Entity.Slot placement="initiative" class="min-w-0 truncate text-xs">
-          {props.projectSlot}
-        </Entity.Slot>
+        <Show when={props.projectSlot !== undefined}>
+          <Entity.Slot placement="initiative" class="min-w-0 truncate text-xs">
+            {props.projectSlot}
+          </Entity.Slot>
+        </Show>
 
         {/* Created By column - only shown on wide containers (>1220px) */}
         <Entity.Slot

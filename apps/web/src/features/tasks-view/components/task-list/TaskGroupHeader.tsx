@@ -29,6 +29,8 @@ export function TaskGroupHeader(props: {
   groupBy: TaskGroupBy;
   expanded: boolean;
   focused: boolean;
+  /** Grid columns the header row spans. */
+  columnCount: number;
   onToggle: () => void;
   onFocus: () => void;
 }) {
@@ -58,7 +60,7 @@ export function TaskGroupHeader(props: {
 
   return (
     <div id={props.row.id} role="row">
-      <div role="gridcell" aria-colspan={8}>
+      <div role="gridcell" aria-colspan={props.columnCount}>
         <Surface
           depth={3}
           hideBorder

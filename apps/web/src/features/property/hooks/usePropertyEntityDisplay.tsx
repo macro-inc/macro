@@ -68,6 +68,7 @@ export function usePropertyEntityDisplay(
   }
 ): PropertyEntityDisplayResult {
   const projectsFlag = useFeatureFlag(enableProjects);
+  // Until Projects is enabled, a project stays the generic "Project" label.
   const projectSource = createMemo(() => {
     if (entityType() !== 'INITIATIVE' || !projectsFlag().enabled) return;
     return untrack(() => {
@@ -118,7 +119,7 @@ export function usePropertyEntityDisplay(
 
   const isLoading = createMemo(() => {
     if (entityType() === 'INITIATIVE')
-      return projectsFlag().loading || (projectSource()?.isPending ?? false);
+      return projectSource()?.isPending ?? false;
     if (!isPreviewable(entityType())) return false;
     const previewItem = preview();
     return !previewItem || previewItem.loading;
@@ -126,17 +127,12 @@ export function usePropertyEntityDisplay(
 
   const name = createMemo(() =>
     match(entityType())
-      .with('INITIATIVE', () =>
-        !projectsFlag().enabled
-          ? projectsFlag().loading
-            ? 'Loading…'
-            : ''
-          : projectSource()?.isPending
-            ? 'Loading…'
-            : projectSource()?.isError
-              ? 'Project unavailable'
-              : (projectSource()?.data?.name ?? 'Project unavailable')
-      )
+      .with('INITIATIVE', () => {
+        const source = projectSource();
+        if (!source) return 'Project';
+        if (source.isPending) return 'Loading...';
+        return (!source.isError && source.data?.name) || 'Project unavailable';
+      })
       .with('USER', () => userName())
       .with('CHANNEL', () => channelName() || 'Channel')
       .with('COMPANY', () => entityId())
@@ -152,8 +148,9 @@ export function usePropertyEntityDisplay(
 
   const icon = createMemo(() =>
     match(entityType())
-      .with('INITIATIVE', () =>
-        projectsFlag().enabled ? <ProjectIcon class="size-4" /> : null
+      .when(
+        (type) => type === 'INITIATIVE' && projectSource(),
+        () => <ProjectIcon class="size-4" />
       )
       .with('USER', () => <UserIcon id={entityId()} size="sm" />)
       .with('CHANNEL', () => <CoreEntityIcon targetType="channel" size="xs" />)

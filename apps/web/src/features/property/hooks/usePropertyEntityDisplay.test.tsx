@@ -108,21 +108,18 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
     expect(fixture.projectDisposals).toBe(1);
     expect(display.nativeProjectId()).toBeUndefined();
     expect(display.blockOrFileType()).toBeNull();
-    expect(display.name()).toBe('');
-    expect(display.icon()).toBeNull();
+    expect(display.name()).toBe('Project');
   });
 
-  it('reports flag loading without inventing an access error or fetching project identity', () => {
+  it('keeps the generic project label, without fetching, until the rollout enables it', () => {
     const [enabled, setEnabled] = createSignal<boolean | undefined>();
     fixture.projectsEnabled = enabled;
     const display = setup('INITIATIVE');
-    expect(display.isLoading()).toBe(true);
-    expect(display.name()).toBe('Loading…');
-    expect(display.icon()).toBeNull();
-    expect(fixture.projectMounts).toBe(0);
+    expect(display.isLoading()).toBe(false);
+    expect(display.name()).toBe('Project');
     setEnabled(false);
     expect(display.isLoading()).toBe(false);
-    expect(display.name()).toBe('');
+    expect(display.name()).toBe('Project');
     expect(fixture.projectMounts).toBe(0);
   });
 

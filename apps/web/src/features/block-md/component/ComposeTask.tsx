@@ -77,7 +77,6 @@ import {
   saveTaskComposerDraft,
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
-import { runTaskCreatedCallback } from '../util/taskCreatedCallback';
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { InlinePropertyValue } from './InlinePropertyValue';
 import { SimilarTasksSection } from './TaskDuplicateList';
@@ -333,6 +332,7 @@ export type ComposeTaskSuccess = {
 };
 
 export interface ComposeTaskProps {
+  /** Replaces how the task is created, e.g. to also add it to a project. */
   createTask?: typeof createTaskWithProperties;
   onCreateTask?: (title: string, content: string) => void;
   onClose?: () => void;
@@ -340,8 +340,6 @@ export interface ComposeTaskProps {
   initialContent?: string;
   placeholder?: string;
   initialAssigneeIds?: string[];
-  /** Runs after every successful creation, including Continue in split. */
-  onTaskCreated?: (result: ComposeTaskSuccess) => Promise<void> | void;
   /**
    * When provided, replaces the default success behavior (auto-copy link +
    * toast) so the caller can handle the created task however it needs.
@@ -538,6 +536,14 @@ export function ComposeTask(props: ComposeTaskProps) {
     });
   };
 
+  // A retry keeps how this composer creates tasks, not its one-shot callbacks.
+  const reopenForRetry = () =>
+    popoverSplit({
+      type: 'component',
+      id: 'task-compose',
+      params: { createTask: props.createTask },
+    });
+
   const handleCreateTask = async () => {
     if (isCreating()) return;
 
@@ -593,24 +599,11 @@ export function ComposeTask(props: ComposeTaskProps) {
         props.onCreateFailure?.();
         // Restore the draft and re-open so the user can retry
         saveTaskComposerDraft(draftSnapshot);
-        popoverSplit({
-          type: 'component',
-          id: 'task-compose',
-          params: { ...props },
-        });
+        reopenForRetry();
         return;
       }
 
       const { documentId, initialSnapshot } = createdTask;
-      await runTaskCreatedCallback(
-        props.onTaskCreated,
-        {
-          documentId,
-          title: taskTitle,
-          content: taskContent,
-        },
-        (message) => toast.failure(message)
-      );
       if (props.onSuccess) {
         props.onSuccess({ documentId, title: taskTitle, content: taskContent });
       } else {
@@ -641,15 +634,6 @@ export function ComposeTask(props: ComposeTaskProps) {
     // Success: clear draft and notify
     clearTaskComposerDraft();
     const { documentId, initialSnapshot } = createdTask;
-    await runTaskCreatedCallback(
-      props.onTaskCreated,
-      {
-        documentId,
-        title: taskTitle,
-        content: taskContent,
-      },
-      (message) => toast.failure(message)
-    );
     if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
@@ -700,24 +684,11 @@ export function ComposeTask(props: ComposeTaskProps) {
     if (!createdTask) {
       split?.goBack();
       saveTaskComposerDraft(draftSnapshot);
-      popoverSplit({
-        type: 'component',
-        id: 'task-compose',
-        params: { ...props },
-      });
+      reopenForRetry();
       return;
     }
 
     const { documentId, initialSnapshot } = createdTask;
-    await runTaskCreatedCallback(
-      props.onTaskCreated,
-      {
-        documentId,
-        title: taskTitle,
-        content: taskContent,
-      },
-      (message) => toast.failure(message)
-    );
     const snapshotParams = initialSnapshot
       ? {
           params: { optimisticSnapshot: initialSnapshot },

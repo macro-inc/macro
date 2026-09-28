@@ -94,12 +94,17 @@ export function useTasksDataSource(
     enabled: facetOptionsReady(),
     networkPaused: options.networkPaused?.(),
     keepPreviousData: Boolean(options.taskIds),
-    meta: {
-      insertFilter: (item) => {
-        const entity = mapApiSoupItemToEntity(item);
-        return isTaskEntity(entity) && taskMatchesView(entity, viewContext());
-      },
-    },
+    // Project lists admit optimistic rows only where this view shows them.
+    meta: options.taskIds
+      ? {
+          insertFilter: (item) => {
+            const entity = mapApiSoupItemToEntity(item);
+            return (
+              isTaskEntity(entity) && taskMatchesView(entity, viewContext())
+            );
+          },
+        }
+      : undefined,
   }));
 
   const viewContext = (): TaskViewContext => ({

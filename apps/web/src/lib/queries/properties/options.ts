@@ -8,7 +8,6 @@ import type { PropertyOption } from '../../service-clients/service-properties/ge
 import type { UpdatePropertyOptionRequest } from '../../service-clients/service-properties/generated/schemas/updatePropertyOptionRequest';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-import { fetchGraphqlPropertyOptions } from './graphql/definitions';
 import { propertiesKeys } from './keys';
 
 // Stable empty default so `data` is never undefined: a shared query that errors
@@ -24,7 +23,15 @@ export function usePropertyOptionsQuery(
     return {
       queryKey: propertiesKeys.options({ propertyDefinitionId: defId })
         .queryKey,
-      queryFn: () => fetchGraphqlPropertyOptions(defId),
+      queryFn: async () => {
+        const result = await throwOnErr(
+          async () =>
+            await propertiesServiceClient.getPropertyOptions({
+              definition_id: defId,
+            })
+        );
+        return result;
+      },
       enabled: enabled(),
       staleTime: 1000 * 60 * 5, // 5 minutes
       placeholderData: EMPTY_OPTIONS,

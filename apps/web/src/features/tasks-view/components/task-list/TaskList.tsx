@@ -59,6 +59,7 @@ import {
 import { TaskGroupHeader } from './TaskGroupHeader';
 import { TaskListEntity } from './TaskListEntity';
 import { TaskListHeader } from './TaskListHeader';
+import { taskGridColumnCount } from './task-grid-template';
 import './task-list.css';
 import { ProjectChip } from '@app/features/projects/components/project-chip';
 import { openProject } from '@app/features/projects/open-project';
@@ -228,6 +229,7 @@ export function TaskList(props: TaskListProps) {
     )
   );
   const projectLayout = useSplitLayout();
+  const columnCount = () => taskGridColumnCount(projectsEnabled());
   const [assigningProjectTasks, setAssigningProjectTasks] =
     createSignal<string[]>();
   const tasksById = createMemo(() => {
@@ -475,6 +477,7 @@ export function TaskList(props: TaskListProps) {
                         {(group) => (
                           <TaskGroupHeader
                             row={group()}
+                            columnCount={columnCount()}
                             groupBy={state.groupBy}
                             expanded={isGroupExpanded(group().groupId)}
                             focused={list.focus.key() === group().id}
@@ -509,7 +512,7 @@ export function TaskList(props: TaskListProps) {
                           >
                             <TaskListEntity
                               projectSlot={
-                                projectsEnabled() && (
+                                projectsEnabled() ? (
                                   <ProjectChip
                                     reference={projectReferences
                                       .references()
@@ -520,7 +523,7 @@ export function TaskList(props: TaskListProps) {
                                       })
                                     }
                                   />
-                                )
+                                ) : undefined
                               }
                               rowId={entityRow().id}
                               entity={entityRow().entity}
@@ -583,7 +586,7 @@ export function TaskList(props: TaskListProps) {
                           <div id={section().id} role="row">
                             <div
                               role="gridcell"
-                              aria-colspan={8}
+                              aria-colspan={columnCount()}
                               class="flex h-8 items-end px-3 pb-1 text-xs font-semibold text-ink-extra-muted"
                             >
                               {section().label}
@@ -611,7 +614,7 @@ export function TaskList(props: TaskListProps) {
                             <div id={loadMore().id} role="row">
                               <div
                                 role="gridcell"
-                                aria-colspan={8}
+                                aria-colspan={columnCount()}
                                 aria-busy={loadMore().isLoading}
                                 onMouseMove={() =>
                                   list.focus.set(loadMore().id, {
