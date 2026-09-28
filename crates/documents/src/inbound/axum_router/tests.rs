@@ -701,11 +701,22 @@ impl EntityAccessService for FakeEntityAccessService {
 
     async fn get_access_level(
         &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        panic!("unexpected get_access_level call")
+        if let Some(user_id) = user_id {
+            self.document_access_calls
+                .lock()
+                .expect("document access calls lock poisoned")
+                .push(DocumentAccessCall {
+                    user_id: user_id.as_ref().to_string(),
+                    organization_id: None,
+                    entity_id: entity_id.to_string(),
+                    entity_type,
+                });
+        }
+        Ok(Some(AccessLevel::Owner))
     }
 
     async fn check_access(
