@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createServer as createHttpServer } from 'node:http';
+import { createServer as createHttpServer, get as httpGet } from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 import { createServer } from 'vite';
 import { expect, it } from 'vitest';
@@ -70,6 +70,30 @@ it('proxies real HTTP and WebSocket requests through Vite without rewriting path
       forwardedHost: new URL(origin).host,
     });
     expect(response.headers.get('set-cookie')).toContain('proxy-test=ok');
+    // Use Node HTTP: fetch does not reliably preserve an explicit Host header.
+    for (const host of ['wolf-macro-google', 'arbitrary-host.example']) {
+      const request = (path: string) =>
+        new Promise<{ status: number | undefined; body: string }>(
+          (resolve, reject) => {
+            httpGet(`${origin}${path}`, { headers: { host } }, (res) => {
+              let body = '';
+              res.setEncoding('utf8');
+              res.on('data', (chunk) => {
+                body += chunk;
+              });
+              res.on('end', () => resolve({ status: res.statusCode, body }));
+              res.on('error', reject);
+            }).on('error', reject);
+          }
+        );
+      expect(await request('/app/')).toEqual({ status: 200, body: 'frontend' });
+      const proxied = await request('/auth/health');
+      expect(proxied.status).toBe(200);
+      expect(JSON.parse(proxied.body)).toMatchObject({
+        host: new URL(target).host,
+        forwardedHost: host,
+      });
+    }
     const telemetry = await fetch(`${origin}/i/otlp/v1/traces`, {
       method: 'POST',
       body: 'fixture',

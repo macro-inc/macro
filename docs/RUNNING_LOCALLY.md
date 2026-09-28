@@ -258,6 +258,8 @@ instance's frontend with `ssh -N -L 3000:127.0.0.1:20110 your-dev-host`, then op
 `http://localhost:3000/app/`. A WebSocket-capable reverse proxy can instead expose
 that frontend under a different hostname/port, including HTTPS. Vite HMR follows
 the page's origin; no separate HMR or backend port forward is needed.
+With the local-stack proxy configured, Vite accepts any hostname, including
+machine names and private tunnel domains, without a separate host allowlist.
 
 The launcher sets `VITE_LOCAL_BACKEND_ORIGIN=same-origin` and supplies Vite's
 server-only `MACRO_LOCAL_BACKEND_PROXY` and `MACRO_LOCAL_BACKEND_ROUTES` from the

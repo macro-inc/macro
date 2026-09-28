@@ -23,5 +23,6 @@ e.g. the `lgtm` instance uses 27910 / 27909 / 27908).
 
 For remote browser testing, open an HTTPS URL that forwards to the instance's
 Vite port. Vite trusts the backend proxy CA automatically and forwards API and
-WebSocket requests. Plain HTTP on a remote hostname cannot retain secure login
+WebSocket requests. Stack-managed Vite accepts any hostname. Plain HTTP on a
+remote hostname cannot retain secure login
 cookies. Direct proxy access still requires trusting the checked-in CA.
