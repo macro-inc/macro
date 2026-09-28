@@ -25103,23 +25103,23 @@
           }
         }
       },
-      "GithubAuthorFacet": {
+      "GithubLabelFacet": {
         "type": "object",
-        "description": "An author among the visible GitHub pull requests.",
-        "required": ["githubUserId", "count"],
+        "description": "A label among the visible GitHub pull requests. Labels with the same name in different\nrepositories count together.",
+        "required": ["name", "count"],
         "properties": {
+          "color": {
+            "type": ["string", "null"],
+            "description": "The label's most recently synced color, as six hex digits without `#`."
+          },
           "count": {
             "type": "integer",
             "format": "int64",
-            "description": "Number of visible pull requests the author opened."
+            "description": "Number of visible pull requests with the label."
           },
-          "githubUserId": {
+          "name": {
             "type": "string",
-            "description": "The author's numeric GitHub user id."
-          },
-          "login": {
-            "type": ["string", "null"],
-            "description": "The author's most recently synced GitHub login, when known."
+            "description": "The label's name."
           }
         }
       },
@@ -25314,15 +25314,29 @@
       },
       "GithubPullRequestFacets": {
         "type": "object",
-        "description": "Repositories and authors among the GitHub pull requests a caller can see, each with the\nnumber of pull requests it covers.",
-        "required": ["repositories", "authors"],
+        "description": "Repositories, authors, assignees, and labels among the GitHub pull requests a caller can see,\neach with the number of pull requests it covers.",
+        "required": ["repositories", "authors", "assignees", "labels"],
         "properties": {
+          "assignees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubUserFacet"
+            },
+            "description": "Assignees, most pull requests first."
+          },
           "authors": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/GithubAuthorFacet"
+              "$ref": "#/components/schemas/GithubUserFacet"
             },
             "description": "Authors, most pull requests first."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubLabelFacet"
+            },
+            "description": "Labels, most pull requests first."
           },
           "repositories": {
             "type": "array",
@@ -25364,6 +25378,26 @@
           "repositoryId": {
             "type": "string",
             "description": "The numeric GitHub repository id, which survives renames and transfers."
+          }
+        }
+      },
+      "GithubUserFacet": {
+        "type": "object",
+        "description": "A GitHub user among the visible pull requests, as an author or an assignee.",
+        "required": ["githubUserId", "count"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of visible pull requests the user opened, or is assigned to."
+          },
+          "githubUserId": {
+            "type": "string",
+            "description": "The user's numeric GitHub user id."
+          },
+          "login": {
+            "type": ["string", "null"],
+            "description": "The user's most recently synced GitHub login, when known."
           }
         }
       },

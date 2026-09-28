@@ -9811,26 +9811,74 @@ export const getForeignEntityResponse = zod
  */
 export const getGithubPullRequestFacetsResponse = zod
   .object({
+    assignees: zod
+      .array(
+        zod
+          .object({
+            count: zod
+              .number()
+              .describe(
+                'Number of visible pull requests the user opened, or is assigned to.'
+              ),
+            githubUserId: zod
+              .string()
+              .describe("The user's numeric GitHub user id."),
+            login: zod
+              .string()
+              .nullish()
+              .describe(
+                "The user's most recently synced GitHub login, when known."
+              ),
+          })
+          .describe(
+            'A GitHub user among the visible pull requests, as an author or an assignee.'
+          )
+      )
+      .describe('Assignees, most pull requests first.'),
     authors: zod
       .array(
         zod
           .object({
             count: zod
               .number()
-              .describe('Number of visible pull requests the author opened.'),
+              .describe(
+                'Number of visible pull requests the user opened, or is assigned to.'
+              ),
             githubUserId: zod
               .string()
-              .describe("The author's numeric GitHub user id."),
+              .describe("The user's numeric GitHub user id."),
             login: zod
               .string()
               .nullish()
               .describe(
-                "The author's most recently synced GitHub login, when known."
+                "The user's most recently synced GitHub login, when known."
               ),
           })
-          .describe('An author among the visible GitHub pull requests.')
+          .describe(
+            'A GitHub user among the visible pull requests, as an author or an assignee.'
+          )
       )
       .describe('Authors, most pull requests first.'),
+    labels: zod
+      .array(
+        zod
+          .object({
+            color: zod
+              .string()
+              .nullish()
+              .describe(
+                "The label's most recently synced color, as six hex digits without `#`."
+              ),
+            count: zod
+              .number()
+              .describe('Number of visible pull requests with the label.'),
+            name: zod.string().describe("The label's name."),
+          })
+          .describe(
+            'A label among the visible GitHub pull requests. Labels with the same name in different\nrepositories count together.'
+          )
+      )
+      .describe('Labels, most pull requests first.'),
     repositories: zod
       .array(
         zod
@@ -9854,7 +9902,7 @@ export const getGithubPullRequestFacetsResponse = zod
       .describe('Repositories, most pull requests first.'),
   })
   .describe(
-    'Repositories and authors among the GitHub pull requests a caller can see, each with the\nnumber of pull requests it covers.'
+    'Repositories, authors, assignees, and labels among the GitHub pull requests a caller can see,\neach with the number of pull requests it covers.'
   );
 
 /**

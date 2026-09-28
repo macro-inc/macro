@@ -4,16 +4,22 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { GithubAuthorFacet } from './githubAuthorFacet';
+
+import type { GithubLabelFacet } from './githubLabelFacet';
 import type { GithubRepositoryFacet } from './githubRepositoryFacet';
+import type { GithubUserFacet } from './githubUserFacet';
 
 /**
- * Repositories and authors among the GitHub pull requests a caller can see, each with the
-number of pull requests it covers.
+ * Repositories, authors, assignees, and labels among the GitHub pull requests a caller can see,
+each with the number of pull requests it covers.
  */
 export interface GithubPullRequestFacets {
+  /** Assignees, most pull requests first. */
+  assignees: GithubUserFacet[];
   /** Authors, most pull requests first. */
-  authors: GithubAuthorFacet[];
+  authors: GithubUserFacet[];
+  /** Labels, most pull requests first. */
+  labels: GithubLabelFacet[];
   /** Repositories, most pull requests first. */
   repositories: GithubRepositoryFacet[];
 }

@@ -3040,6 +3040,44 @@ input GraphqlGithubPullRequestLiteral @oneOf {
 	The draft option.
 	"""
 	draft: Boolean
+	"""
+	The numeric GitHub user id of an assignee.
+	"""
+	assignee: String
+	"""
+	The label name option.
+	"""
+	label: String
+	"""
+	The review status option.
+	"""
+	reviewStatus: GraphqlGithubPullRequestReviewStatus
+	"""
+	The numeric GitHub user id of someone who submitted a review.
+	"""
+	reviewedBy: String
+}
+
+"""
+GraphQL input representing a GitHub pull request review status.
+"""
+enum GraphqlGithubPullRequestReviewStatus {
+	"""
+	The no reviews option.
+	"""
+	NONE
+	"""
+	The review required option.
+	"""
+	REQUIRED
+	"""
+	The approved option.
+	"""
+	APPROVED
+	"""
+	The changes requested option.
+	"""
+	CHANGES_REQUESTED
 }
 
 """

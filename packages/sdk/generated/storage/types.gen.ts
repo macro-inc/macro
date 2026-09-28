@@ -6243,21 +6243,22 @@ export type GetUserHistoryResponse = {
 };
 
 /**
- * An author among the visible GitHub pull requests.
+ * A label among the visible GitHub pull requests. Labels with the same name in different
+ * repositories count together.
  */
-export type GithubAuthorFacet = {
+export type GithubLabelFacet = {
     /**
-     * Number of visible pull requests the author opened.
+     * The label's most recently synced color, as six hex digits without `#`.
+     */
+    color?: string | null;
+    /**
+     * Number of visible pull requests with the label.
      */
     count: number;
     /**
-     * The author's numeric GitHub user id.
+     * The label's name.
      */
-    githubUserId: string;
-    /**
-     * The author's most recently synced GitHub login, when known.
-     */
-    login?: string | null;
+    name: string;
 };
 
 /**
@@ -6416,14 +6417,22 @@ export type GithubPullRequestComment = {
 };
 
 /**
- * Repositories and authors among the GitHub pull requests a caller can see, each with the
- * number of pull requests it covers.
+ * Repositories, authors, assignees, and labels among the GitHub pull requests a caller can see,
+ * each with the number of pull requests it covers.
  */
 export type GithubPullRequestFacets = {
     /**
+     * Assignees, most pull requests first.
+     */
+    assignees: Array<GithubUserFacet>;
+    /**
      * Authors, most pull requests first.
      */
-    authors: Array<GithubAuthorFacet>;
+    authors: Array<GithubUserFacet>;
+    /**
+     * Labels, most pull requests first.
+     */
+    labels: Array<GithubLabelFacet>;
     /**
      * Repositories, most pull requests first.
      */
@@ -6456,6 +6465,24 @@ export type GithubRepositoryFacet = {
      * The numeric GitHub repository id, which survives renames and transfers.
      */
     repositoryId: string;
+};
+
+/**
+ * A GitHub user among the visible pull requests, as an author or an assignee.
+ */
+export type GithubUserFacet = {
+    /**
+     * Number of visible pull requests the user opened, or is assigned to.
+     */
+    count: number;
+    /**
+     * The user's numeric GitHub user id.
+     */
+    githubUserId: string;
+    /**
+     * The user's most recently synced GitHub login, when known.
+     */
+    login?: string | null;
 };
 
 /**

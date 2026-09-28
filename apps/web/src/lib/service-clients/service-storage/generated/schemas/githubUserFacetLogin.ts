@@ -6,6 +6,6 @@
  */
 
 /**
- * The author's most recently synced GitHub login, when known.
+ * The user's most recently synced GitHub login, when known.
  */
-export type GithubAuthorFacetLogin = string | null;
+export type GithubUserFacetLogin = string | null;
