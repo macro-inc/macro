@@ -44,14 +44,18 @@ Sources checked September 21, 2026:
 
 ## Session lifecycle
 
-- POST /agent-capabilities/discover accepts a selected model for Cursor and
-  in-memory. The existing /agent-models/load API remains available.
-- External ACP runtimes do not advertise model-specific preflight capabilities.
+- `POST /agent-capabilities/discover` accepts a selected model for Cursor and
+  in-memory. The existing `/agent-models/load` API remains available.
+- Capability cache identity includes the harness and model. External harnesses
+  expose controls after opening a session; model-specific preflight is not guessed.
 - New/resumed sessions and setting changes return the complete configuration.
   Clients replace their previous options, including removing unsupported controls.
 - In-memory rejects unsupported models and effort values. A model change resets
   an incompatible effort to Default. Replay restores confirmed snapshots only;
   failed or unanswered requests do not become session settings.
+
+The [ACP configuration contract](https://agentclientprotocol.com/protocol/v1/session-config-options)
+documents full snapshots, semantic categories, and opaque values.
 
 ## Probe evidence and limits
 
@@ -78,3 +82,17 @@ and `session/set_config_option` using the returned session id and advertised
 config ids/values. Re-read the full `configOptions` after every model change.
 Record harness and adapter versions. Never infer a native provider profile from
 an external harness result.
+
+## Model menu interaction
+
+Effort is a submenu of each model in running-session selectors.
+Discovery runs when the submenu opens, scoped to that model and harness;
+the current session's advertised options take precedence for its selected model.
+The trigger displays the model and selected effort together. Keyboard Right Arrow
+and touch taps open the same submenu. Loading, discovery errors, and models with
+no effort options keep ordinary model selection available.
+
+A combined running-session selection waits for the model's correlated ACP
+confirmation, validates effort against the new snapshot, then confirms effort.
+A model rejection prevents the effort request. An effort rejection leaves the
+accepted model in place and reports the failure.
