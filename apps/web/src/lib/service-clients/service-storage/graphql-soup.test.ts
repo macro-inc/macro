@@ -11,7 +11,7 @@ import type {
   SoupItemFieldsFragment,
 } from './graphql/generated/graphql';
 
-it('omits opt-in initiatives until the Projects renderer is available', async () => {
+it('preserves initiative identity, properties, and metadata separately from folders', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   expect(
     mapGraphqlSoupItem({
@@ -19,12 +19,34 @@ it('omits opt-in initiatives until the Projects renderer is available', async ()
       id: 'initiative',
       entityType: 'INITIATIVE',
       displayName: 'Launch',
+      descriptionDocumentId: 'description',
+      metadata: {
+        ownerId: 'owner',
+        createdAt: '2026-09-01',
+        updatedAt: '2026-09-26',
+        viewedAt: null,
+      },
+      viewerPermission: {
+        __typename: 'GraphqlAccessLevelPermission',
+        accessLevel: 'EDIT',
+      },
+      properties: [],
+      notifications: [],
       isFavorited: false,
       frecencyScore: null,
-      notifications: [],
       cacheProjection: null,
     })
-  ).toBeNull();
+  ).toMatchObject({
+    tag: 'initiative',
+    data: {
+      id: 'initiative',
+      name: 'Launch',
+      ownerId: 'owner',
+      descriptionDocumentId: 'description',
+      properties: [],
+      updatedAt: '2026-09-26',
+    },
+  });
 });
 
 it('maps agent sessions without discarding persona, favorites or notifications', async () => {
@@ -493,7 +515,10 @@ describe('GraphQL Soup document sub types', () => {
       { type: 'task', is_completed: true },
     ],
     [{ __typename: 'GraphqlSkillSubType' }, { type: 'skill' }],
-    [{ __typename: 'GraphqlInitiativeDescriptionSubType' }, undefined],
+    [
+      { __typename: 'GraphqlInitiativeDescriptionSubType' },
+      { type: 'initiative_description' },
+    ],
   ] as const)(
     'maps %j to the shared soup sub type %j',
     async (subType, expected) => {

@@ -92,6 +92,17 @@ impl RustService {
 /// The full service inventory of the local service binaries.
 pub const RUST_SERVICES: &[RustService] = &[
     RustService {
+        compose_name: "preview_gateway",
+        cargo_bin: "preview_gateway",
+        package: "preview_gateway",
+        host_port: Some(Port::PreviewControl),
+        path_prefix: Some("/preview"),
+        is_websocket: false,
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
         compose_name: "authentication-service",
         cargo_bin: "authentication_service",
         package: "authentication_service",

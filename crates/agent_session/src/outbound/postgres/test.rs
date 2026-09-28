@@ -19,8 +19,8 @@ fn user_id(value: &str) -> MacroUserIdStr<'static> {
 /// The fixed owner every [`new_session`] fixture uses.
 const OWNER: &str = "macro|agent-session-owner@example.com";
 
-/// Insert a `"User"` row (and its `macro_user` parent) so the id can satisfy
-/// `agent_session.owner_id`'s foreign key.
+/// Insert a `"User"` row (and its `macro_user` parent) for user-owned sessions
+/// and their user history.
 async fn insert_user(pool: &PgPool, user_id: &str) {
     let email = user_id.strip_prefix("macro|").unwrap_or(user_id);
     // The no-op update makes the existing row's id come back when the user
@@ -56,9 +56,8 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
 }
 
 pub(super) async fn create_test_bot(pool: &PgPool) -> BotId {
-    // Every session fixture is owned by the same user, and
-    // `agent_session.owner_id` references `"User"(id)` - so seed the
-    // row here, where every session-creating test already passes through.
+    // Seed the shared owner here so every session-creating test has a user
+    // row for history and other user-specific relations.
     insert_user(pool, OWNER).await;
     let owner = user_id("macro|agent-session-test-bot-owner@example.com");
     let bot = PgBotsRepo::new(pool.clone())
@@ -1079,6 +1078,39 @@ async fn create_records_the_session_in_the_owners_history(pool: PgPool) {
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].user_id, OWNER);
     assert_eq!(history[0].item_type, "agent_session");
+}
+
+/// Inline `@macro` (the agent-session Macro bot, born on a thread) starts
+/// hidden from lists. The same bot started with no thread, and any other
+/// bot, is listed immediately.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn inline_macro_sessions_start_hidden(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    create_test_bot(&pool).await;
+    let (_channel_id, thread_id, originating_message_id) =
+        insert_originating_thread_fixture(&pool).await;
+
+    let inline = create_session(
+        &repo,
+        new_session(
+            bot_id::MACRO_NEW_BOT_ID,
+            Some(thread_id),
+            Some(originating_message_id),
+        ),
+    )
+    .await;
+    let composer = create_session(&repo, new_session(bot_id::MACRO_NEW_BOT_ID, None, None)).await;
+
+    let hidden = sqlx::query!(
+        "SELECT id, list_hidden FROM agent_session WHERE id = ANY($1) ORDER BY list_hidden DESC",
+        &[inline.id.as_uuid(), composer.id.as_uuid()] as &[Uuid],
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read list visibility");
+    assert!(hidden[0].list_hidden, "the thread session starts hidden");
+    assert_eq!(hidden[0].id, inline.id.as_uuid());
+    assert!(!hidden[1].list_hidden, "a composer session is listed");
 }
 
 /// A preview reports every existing id with whether the viewer holds a grant:

@@ -47,6 +47,10 @@ pub enum MessageParent {
     Document(DocumentId),
     /// An initiative, presented as a project in the application.
     Initiative(Uuid),
+    /// A CRM company.
+    CrmCompany(Uuid),
+    /// A CRM contact.
+    CrmContact(Uuid),
 }
 
 impl MessageParent {
@@ -56,6 +60,12 @@ impl MessageParent {
             "channel" => Ok(Self::Channel(entity_id.parse().map_err(|_| InvalidParent)?)),
             "document" => Ok(Self::Document(entity_id.to_owned().try_into()?)),
             "initiative" => Ok(Self::Initiative(
+                entity_id.parse().map_err(|_| InvalidParent)?,
+            )),
+            "crm_company" => Ok(Self::CrmCompany(
+                entity_id.parse().map_err(|_| InvalidParent)?,
+            )),
+            "crm_contact" => Ok(Self::CrmContact(
                 entity_id.parse().map_err(|_| InvalidParent)?,
             )),
             _ => Err(InvalidParent),
@@ -68,13 +78,18 @@ impl MessageParent {
             Self::Channel(_) => "channel",
             Self::Document(_) => "document",
             Self::Initiative(_) => "initiative",
+            Self::CrmCompany(_) => "crm_company",
+            Self::CrmContact(_) => "crm_contact",
         }
     }
 
     /// Canonical parent identifier.
     pub fn entity_id(&self) -> String {
         match self {
-            Self::Channel(id) | Self::Initiative(id) => id.to_string(),
+            Self::Channel(id)
+            | Self::Initiative(id)
+            | Self::CrmCompany(id)
+            | Self::CrmContact(id) => id.to_string(),
             Self::Document(id) => id.0.clone(),
         }
     }
@@ -91,6 +106,8 @@ impl MessageParent {
             Self::Channel(_) => entity_access::domain::models::EntityType::Channel,
             Self::Document(_) => entity_access::domain::models::EntityType::Document,
             Self::Initiative(_) => entity_access::domain::models::EntityType::Initiative,
+            Self::CrmCompany(_) => entity_access::domain::models::EntityType::CrmCompany,
+            Self::CrmContact(_) => entity_access::domain::models::EntityType::CrmContact,
         }
     }
 }

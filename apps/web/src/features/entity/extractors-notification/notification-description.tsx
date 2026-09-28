@@ -2,6 +2,10 @@ import type { NotificationType } from '@core/types';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import type { NotificationStack } from '@notifications';
 import {
+  entityDiscussionVerb,
+  isEntityDiscussionEvent,
+} from '@notifications/entity-discussion';
+import {
   getNotificationAgentSender,
   getUniqueAgentSenders,
 } from '@notifications/notification-sender';
@@ -70,7 +74,7 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
     if (props.notification) {
       const metadata = props.notification.notification_metadata;
       if (
-        metadata.tag === 'initiative_discussion' &&
+        isEntityDiscussionEvent(metadata) &&
         metadata.content.senderDisplayName
       )
         return [metadata.content.senderDisplayName];
@@ -86,13 +90,16 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
       return agent ? [agent.name] : [];
     }
     if (props.stack) {
-      if (props.stack.type === 'initiative_discussion') {
+      if (
+        props.stack.type === 'initiative_discussion' ||
+        props.stack.type === 'crm_discussion'
+      ) {
         return [
           ...new Set(
             props.stack.notifications.flatMap((notification) => {
               const meta = notification.notification_metadata;
               if (
-                meta.tag === 'initiative_discussion' &&
+                isEntityDiscussionEvent(meta) &&
                 meta.content.senderDisplayName
               )
                 return [meta.content.senderDisplayName];
@@ -131,14 +138,9 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
     if (isSingleNotification()) {
       const metadata = (props.notification ?? props.stack?.notifications[0])
         ?.notification_metadata;
-      const action =
-        metadata?.tag === 'initiative_discussion'
-          ? metadata.content.reason === 'mention'
-            ? 'mentioned you'
-            : metadata.content.reason === 'reply'
-              ? 'replied'
-              : 'commented'
-          : getActionVerb(type);
+      const action = isEntityDiscussionEvent(metadata)
+        ? entityDiscussionVerb(metadata)
+        : getActionVerb(type);
       if (sender && type !== 'ai_response') {
         return `${sender} ${action}`;
       }

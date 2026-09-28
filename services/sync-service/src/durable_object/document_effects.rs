@@ -1,6 +1,5 @@
 //! Worker notification adapter for the document update use case.
 
-use bebop::{Record, SubRecord};
 use macro_sync_service_jwt::session::SessionKind;
 use tracing::{error, warn};
 use worker::Env;
@@ -67,15 +66,10 @@ fn notification_error(error: impl std::fmt::Debug) -> DocumentError {
 
 impl DocumentUpdateEffects for WorkerDocumentEffects<'_> {
     fn broadcast(&self, update: &[u8]) -> Result<(), DocumentError> {
-        let message = crate::generated::schema::FromRemote::RemoteUpdate {
-            update: bebop::SliceWrapper::Raw(update),
-        };
-        let mut message_bytes = Vec::with_capacity(message.serialized_size());
-        message
-            .serialize(&mut message_bytes)
-            .map_err(notification_error)?;
-        for socket in self.session.get_websockets() {
-            if let Err(error) = socket.send_with_bytes(&message_bytes) {
+        for socket in self.session.get_sockets() {
+            if let Err(error) = socket.send(crate::generated::schema::FromRemote::RemoteUpdate {
+                update: bebop::SliceWrapper::Raw(update),
+            }) {
                 warn!(error = ?error, "failed to broadcast document update; continuing");
             }
         }

@@ -951,6 +951,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 source_document_id: SOURCE_DOCUMENT_ID.to_string(),
                 source_version_id: Some(7),
                 owner,
+                actor: None,
+                on_behalf_of: None,
                 document_name: "Copied document".to_string(),
                 file_type: Some(FileType::Pdf),
                 project_id: Some(PROJECT_ID.to_string()),

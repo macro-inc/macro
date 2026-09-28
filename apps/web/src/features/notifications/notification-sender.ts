@@ -46,6 +46,7 @@ export function getNotificationSenderFallbackName(
       'commented_on_document',
       'mentioned_in_document_comment',
       'replied_to_document_comment_thread',
+      'crm_discussion',
       () => content?.senderDisplayName ?? undefined
     )
     .with(
@@ -79,6 +80,7 @@ export function getNotificationAgentSender(
       'commented_on_document',
       'mentioned_in_document_comment',
       'replied_to_document_comment_thread',
+      'crm_discussion',
       () => {
         const name = getNotificationSenderFallbackName(notification)?.trim();
         if (!name) return undefined;

@@ -10,6 +10,7 @@ import {
   SidePanel,
   useSidePanel,
 } from '@components/app/side-panel';
+import { EntityDetailsGrid } from '@components/app/side-panel/EntityDetailsGrid';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
@@ -22,7 +23,6 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
-import { UserIcon } from '@core/component/UserIcon';
 import {
   enableHistoryComponent,
   isFeatureEnabled,
@@ -31,13 +31,11 @@ import {
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import type { Entity } from '@core/types';
-import { getDisplayName, tryMacroId } from '@core/user';
-import { type DateValue, formatDate } from '@core/util/date';
+import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { useNotificationsForEntity } from '@notifications';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import ClockIcon from '@phosphor/clock.svg';
 import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
@@ -371,14 +369,11 @@ function DetailsGrid(props: {
   updatedAt: () => DateValue | null | undefined;
 }) {
   return (
-    <SidePanel.Grid>
-      <Show when={props.owner()}>
-        {(ownerId) => (
-          <SidePanel.Row label="Owner">
-            <OwnerValue ownerId={ownerId()} />
-          </SidePanel.Row>
-        )}
-      </Show>
+    <EntityDetailsGrid
+      ownerId={props.owner()}
+      createdAt={props.createdAt()}
+      updatedAt={props.updatedAt()}
+    >
       <Show when={props.folder()}>
         {(folder) => (
           <SidePanel.Row label="Folder">
@@ -386,21 +381,7 @@ function DetailsGrid(props: {
           </SidePanel.Row>
         )}
       </Show>
-      <Show when={props.createdAt()}>
-        {(created) => (
-          <SidePanel.Row label="Created">
-            <DateValueDisplay value={created()} />
-          </SidePanel.Row>
-        )}
-      </Show>
-      <Show when={props.updatedAt()}>
-        {(updated) => (
-          <SidePanel.Row label="Last updated">
-            <DateValueDisplay value={updated()} />
-          </SidePanel.Row>
-        )}
-      </Show>
-    </SidePanel.Grid>
+    </EntityDetailsGrid>
   );
 }
 
@@ -421,27 +402,6 @@ function FolderLink(props: { projectId: string; projectName: string }) {
         {props.projectName}
       </span>
     </span>
-  );
-}
-
-function OwnerValue(props: { ownerId: string }) {
-  const displayName = () => getDisplayName(tryMacroId(props.ownerId));
-  return (
-    <SidePanel.Pill>
-      <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
-      <span class="truncate">{displayName()}</span>
-    </SidePanel.Pill>
-  );
-}
-
-function DateValueDisplay(props: { value: DateValue }) {
-  return (
-    <SidePanel.Pill>
-      <ClockIcon class="size-3 shrink-0" />
-      <span class="truncate">
-        {formatDate(props.value, { showTime: true })}
-      </span>
-    </SidePanel.Pill>
   );
 }
 

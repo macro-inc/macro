@@ -7,6 +7,7 @@ import type {
   InferSplitRouteParams,
   InferSplitRoutePathParams,
   InferSplitRouteState,
+  SplitReference,
   SplitRouteClaim,
   SplitRouteDefinition,
   SplitRouteMatch,
@@ -31,6 +32,7 @@ type SplitRouteDefinitionConstraint = {
   state?: StandardSchemaV1;
   serializeParams?: unknown;
   claim?: unknown;
+  toReference?: unknown;
   search?: readonly string[] | '*';
   externalSearch?: SplitRouteDefinition['externalSearch'];
   remountKey?: unknown;
@@ -39,6 +41,7 @@ type SplitRouteDefinitionConstraint = {
 type RouteParamCallbacks<TParams> = {
   serializeParams?: (params: TParams) => SplitRouteRawParams;
   claim?: (params: TParams) => SplitRouteClaim | undefined;
+  toReference?: (params: TParams) => SplitReference | undefined;
   remountKey?: (params: TParams) => string | number | undefined;
 };
 
@@ -160,6 +163,22 @@ type RouteDefinitionsParamsSchemaConstraint<
       readonly 'ERROR: route params schema keys and optionality must match paths and aliases': RouteDefinitionsParamsSchemaIssues<TDefinitions>;
     };
 
+/** Attach the builder in place so declarations retain their route identity. */
+function attachRouteBuilders(
+  definitions: readonly SplitRouteDefinitionConstraint[]
+): void {
+  for (const definition of definitions) {
+    if (!Object.hasOwn(definition, 'to')) {
+      Object.defineProperty(definition, 'to', {
+        value: (params: SplitRouteParams = {}) => ({
+          route: definition,
+          params,
+        }),
+      });
+    }
+    attachRouteBuilders(definition.children ?? []);
+  }
+}
 export function defineRoute<
   const TPath extends string,
   const TAliases extends readonly string[] | undefined,
@@ -219,7 +238,7 @@ export function defineRoute<
 export function defineRoute(
   definition: SplitRouteDefinitionConstraint
 ): unknown {
-  // The overloads add phantom ancestry; runtime declarations remain untouched.
+  attachRouteBuilders([definition]);
   return definition;
 }
 
@@ -233,6 +252,7 @@ export function defineRoutes<
     (NoInfer<TRoutes> extends SplitRoutes ? unknown : SplitRoutes) &
     RouteDefinitionsParamsSchemaConstraint<NoInfer<TRoutes>['definitions']>
 ): DefinedSplitRoutes<TRoutes> {
+  attachRouteBuilders(routes.definitions);
   return routes as DefinedSplitRoutes<TRoutes>;
 }
 

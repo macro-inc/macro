@@ -36,6 +36,7 @@ axum = [
   "dep:axum",
   "dep:axum-extra",
   "dep:base64",
+  "dep:entity_registry",
   "dep:jsonwebtoken",
   "dep:lexical_client",
   "dep:macro_authorization",
@@ -69,6 +70,7 @@ outbound = [
   "dep:aws-sdk-s3",
   "dep:base64",
   "dep:entity_access_db_utils",
+  "dep:entity_registry",
   "dep:entity_registry_db_utils",
   "dep:hex",
   "dep:redis",
@@ -148,6 +150,7 @@ base64 = { workspace = true, optional = true }
 cloudfront_sign = { workspace = true }
 comms_db_client = { path = "../comms_db_client", optional = true }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_registry = { path = "../entity_registry/entity_registry", optional = true }
 entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
 model_owner = { path = "../model_owner" }
 futures = { workspace = true }

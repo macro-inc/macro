@@ -80,26 +80,24 @@ function setup() {
 }
 
 describe('createChangesModel', () => {
-  it('derives the state, tree, and entries once the patch arrives', () => {
+  it('derives the state and files, and reads the patch once the pane shows', () => {
     // Mutations run outside the root body, as event handlers would, so
     // every derived value settles synchronously before it is read.
     const { model, setSummary, setPatchText, setVisible, dispose } = createRoot(
       (dispose) => ({ ...setup(), dispose })
     );
     expect(model.state().kind).toBe('loading');
-    expect(model.entries()).toEqual([]);
+    expect(model.patch()).toBe('');
 
     setSummary(summaryWith(['a.ts']));
     expect(model.state().kind).toBe('ready');
-    expect(model.tree().map((node) => node.name)).toEqual(['a.ts']);
-    // Closed pane: no patch, so no entries yet.
-    expect(model.entries()).toBeUndefined();
+    expect(model.files().map((file) => file.path)).toEqual(['a.ts']);
+    // Closed pane: the patch is not read yet.
+    expect(model.patch()).toBeUndefined();
 
     setVisible(true);
     setPatchText(PATCH);
-    const entries = model.entries();
-    expect(entries).toHaveLength(1);
-    expect(entries?.[0]?.diff?.name).toBe('a.ts');
+    expect(model.patch()).toBe(PATCH);
     dispose();
   });
 
@@ -108,9 +106,7 @@ describe('createChangesModel', () => {
       const { model, setSummary, setVisible } = setup();
       setVisible(true);
       setSummary(summaryWith(['img.png'], 0));
-      const entries = model.entries();
-      expect(entries).toHaveLength(1);
-      expect(entries?.[0]?.note).toBe('No diff text for this file');
+      expect(model.patch()).toBe('');
       dispose();
     });
   });

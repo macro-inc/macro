@@ -1,0 +1,325 @@
+use bebop::{Record, SliceWrapper};
+use loro::{VersionVector, awareness::EphemeralStore};
+use tracing::trace;
+use worker::Result;
+
+use crate::{
+    durable_object::{DocumentSyncSession, Wsm},
+    error::ResultExt,
+    generated::schema::{FromPeer, FromRemote},
+    socket::Socket,
+    state::DocumentState,
+    storage::SessionStorage,
+};
+
+/// Decodes an inbound WebSocket payload once, before its trace span is created.
+pub fn deserialize_message(message: &[u8]) -> Result<FromPeer<'_>> {
+    if message.len() > MAX_MESSAGE_SIZE {
+        tracing::warn!("received message might be too large {}", message.len());
+    }
+    FromPeer::deserialize(message).context(format!(
+        "failed to deserialize message, message length {}",
+        message.len()
+    ))
+}
+
+/// Returns the protocol-level type of an inbound WebSocket message.
+pub fn message_type(message: &FromPeer<'_>) -> &'static str {
+    match message {
+        FromPeer::PeerRegisterId { .. } => "register_id",
+        FromPeer::PeerUpdate { .. } => "update",
+        FromPeer::PeerAwareness { .. } => "awareness",
+        FromPeer::PeerRequestSince { .. } => "request_since",
+        FromPeer::PeerRequestSnapshot { .. } => "request_snapshot",
+        FromPeer::Unknown => "unknown",
+    }
+}
+
+/// Diagnostic fields collected while handling an inbound WebSocket message.
+pub struct InboundMessageTelemetry {
+    document_id: Option<String>,
+    ws_id: Option<String>,
+    message_type: &'static str,
+    message_bytes: usize,
+    error_stage: &'static str,
+    op_id: Option<String>,
+    peer_id: Option<u64>,
+    update_bytes: Option<usize>,
+    response_bytes: Option<usize>,
+    broadcast_targets: Option<usize>,
+}
+
+impl InboundMessageTelemetry {
+    /// Start collecting diagnostics without creating a span.
+    pub fn new(message_bytes: usize) -> Self {
+        Self {
+            document_id: None,
+            ws_id: None,
+            message_type: "unknown",
+            message_bytes,
+            error_stage: "unknown",
+            op_id: None,
+            peer_id: None,
+            update_bytes: None,
+            response_bytes: None,
+            broadcast_targets: None,
+        }
+    }
+
+    /// Record identifiers available from the Durable Object callback.
+    pub fn record_context(&mut self, document_id: &str, ws_id: Option<String>) {
+        self.document_id = Some(document_id.to_string());
+        self.ws_id = ws_id;
+    }
+
+    /// Record the decoded protocol message type.
+    pub fn record_message_type(&mut self, message_type: &'static str) {
+        self.message_type = message_type;
+    }
+
+    /// Record which stage of message handling failed.
+    pub fn record_error_stage(&mut self, error_stage: &'static str) {
+        self.error_stage = error_stage;
+    }
+
+    /// Create the only span emitted for this message, after handling fails.
+    pub fn error_span(&self) -> tracing::Span {
+        let span = tracing::error_span!(
+            "ws.message.error",
+            document.id = tracing::field::Empty,
+            ws.id = tracing::field::Empty,
+            message.type = self.message_type,
+            message.bytes = self.message_bytes,
+            error.stage = self.error_stage,
+            op.id = tracing::field::Empty,
+            peer.id = tracing::field::Empty,
+            update.bytes = tracing::field::Empty,
+            response.bytes = tracing::field::Empty,
+            broadcast.targets = tracing::field::Empty,
+        );
+
+        if let Some(document_id) = &self.document_id {
+            span.record("document.id", document_id.as_str());
+        }
+        if let Some(ws_id) = &self.ws_id {
+            span.record("ws.id", ws_id.as_str());
+        }
+        if let Some(op_id) = &self.op_id {
+            span.record("op.id", op_id.as_str());
+        }
+        if let Some(peer_id) = self.peer_id {
+            span.record("peer.id", peer_id);
+        }
+        if let Some(update_bytes) = self.update_bytes {
+            span.record("update.bytes", update_bytes);
+        }
+        if let Some(response_bytes) = self.response_bytes {
+            span.record("response.bytes", response_bytes);
+        }
+        if let Some(broadcast_targets) = self.broadcast_targets {
+            span.record("broadcast.targets", broadcast_targets);
+        }
+
+        span
+    }
+}
+
+/// Sends the initial sync message to a single peer.
+/// The initial sync message contains the snapshot of the current state of the document
+pub fn send_initial_sync(socket: &Socket, snapshot: &[u8], awareness: &[u8]) -> Result<()> {
+    socket.send(FromRemote::RemoteInitialSync {
+        snapshot: SliceWrapper::Raw(snapshot),
+        awareness: SliceWrapper::Raw(awareness),
+    })
+}
+
+/// Broadcasts an awareness update to every connected peer except `from`.
+pub fn broadcast_awareness(
+    dss: &DocumentSyncSession,
+    from: &Socket,
+    awareness: &[u8],
+) -> Result<()> {
+    for socket in dss.get_sockets() {
+        if socket == *from {
+            continue;
+        }
+        // A dead peer socket must not abort delivery to the remaining peers.
+        if let Err(e) = socket.send(FromRemote::RemoteAwareness {
+            awareness: SliceWrapper::Raw(awareness),
+        }) {
+            tracing::warn!(error = ?e, "failed to send awareness to a peer; continuing");
+        }
+    }
+    Ok(())
+}
+
+// Max receiving websocket message is 1Mb
+const MAX_MESSAGE_SIZE: usize = 1000 * 1000;
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "lots of args lets us avoid having multiple mutable refs to same object"
+)]
+pub async fn process_message(
+    sender: &Socket,
+    document_id: &str,
+    document_state: &DocumentState,
+    session_storage: &SessionStorage,
+    awareness: &EphemeralStore,
+    message: FromPeer<'_>,
+    dss: &DocumentSyncSession,
+    telemetry: &mut InboundMessageTelemetry,
+) -> Result<()> {
+    // Loading the document after hibernation can yield to a revocation. Check
+    // the surface grant again immediately before handling any protocol message.
+    if !dss
+        .validate_surface_sockets(Some(sender.websocket()))
+        .await?
+    {
+        return Ok(());
+    }
+    trace!(
+        message = tracing::field::display(&message),
+        "process websocket message"
+    );
+    match message {
+        // Handle peer id registration
+        // This registers a peer id to the owner of the current websocket
+        FromPeer::PeerRegisterId { peerid } => {
+            telemetry.peer_id = Some(peerid);
+            Wsm::new(dss, sender.websocket())
+                .add_new_peerid(peerid, document_id)
+                .await?;
+        }
+        // Handle an incoming update from a peer
+        // Should extract binary update and broadcast it to all other connected peers
+        // Should also store the update in the operation log to be applied to the remote doc
+        FromPeer::PeerUpdate { updates, id } => {
+            telemetry.op_id = Some(id.to_string());
+            telemetry.update_bytes = Some(updates.iter().map(|u| u.len()).sum());
+            if !Wsm::new(dss, sender.websocket()).can_edit().await? {
+                tracing::warn!("received update from peer without edit permission");
+                return Ok(());
+            }
+
+            let attribution = match Wsm::new(dss, sender.websocket()).edit_attribution().await {
+                Ok(attribution) => attribution,
+                Err(error) => {
+                    tracing::warn!(error = ?error, "failed to resolve optional edit attribution");
+                    None
+                }
+            };
+            let peer_ids = Wsm::new(dss, sender.websocket())
+                .get_peer_ids()
+                .await
+                .unwrap_or_default();
+            let peer_id = peer_ids.first().copied();
+            telemetry.peer_id = peer_id;
+            let now_ms = web_time::SystemTime::now()
+                .duration_since(web_time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+            for update in &updates {
+                let imported = session_storage
+                    .append_pending_operation(update, document_state)
+                    .await?;
+                if imported.changed {
+                    dss.record_editor(attribution.as_ref());
+                }
+                if !imported.touched_nodes.is_empty()
+                    && let Some(peer_id) = peer_id
+                {
+                    dss.push_blame_events(
+                        imported
+                            .touched_nodes
+                            .into_iter()
+                            .map(|node_id| crate::d1::BlameEvent {
+                                document_id: document_id.to_string(),
+                                node_id,
+                                peer_id,
+                                timestamp_ms: now_ms,
+                            })
+                            .collect(),
+                    );
+                }
+            }
+
+            // ACK only after the update is durably stored.
+            sender
+                .send(FromRemote::RemoteUpdateAck { id })
+                .inspect_err(|error| {
+                    tracing::error!(error = ?error, op.id = %id, "failed to send update ack");
+                })
+                .context("failed to send update ack")?;
+
+            let sockets = dss.get_sockets();
+            let targets: Vec<&Socket> = sockets.iter().filter(|socket| *socket != sender).collect();
+            telemetry.broadcast_targets = Some(targets.len());
+            for update in &updates {
+                for socket in &targets {
+                    if let Err(error) = socket.send(FromRemote::RemoteUpdate {
+                        update: SliceWrapper::Raw(update),
+                    }) {
+                        tracing::warn!(error = ?error, "failed to send update to a peer; continuing");
+                    }
+                }
+            }
+        }
+        // Handle an incoming awareness update from a peer
+        // Should apply the update to the local epehemeral awareness strore
+        FromPeer::PeerAwareness {
+            awareness: awareness_update,
+        } => {
+            if let Err(e) = awareness.apply(*awareness_update) {
+                tracing::warn!(error = ?e, "failed to apply awareness update; ignoring it");
+                return Ok(());
+            }
+            let encodede = awareness.encode_all();
+            let sockets = dss.get_sockets();
+            telemetry.broadcast_targets =
+                Some(sockets.iter().filter(|socket| *socket != sender).count());
+            broadcast_awareness(dss, sender, &encodede).context("failed to broadcast awareness")?;
+        }
+        // Handle a peer requesting a specific set of updates from the document.
+        // The client sends a version vector (not frontiers) so unknown peers
+        // — e.g. a peer that made offline edits the server hasn't seen yet —
+        // don't cause a panic in `frontiersToVV` lookup.
+        FromPeer::PeerRequestSince { vv } => {
+            let decoded = VersionVector::decode(*vv).context("failed to decode version vector")?;
+
+            let update = document_state
+                .export_updates_since(&decoded)
+                .context("failed to export updates")?;
+            // Server end of the client's `doc.sync.catchup` span.
+            telemetry.response_bytes = Some(update.len());
+
+            // Echo the client's *original* vv bytes back, not a re-encoded copy.
+            // The client correlates the response by byte-exact match on the vv it
+            // sent; `decode(vv).encode()` is not guaranteed to reproduce the same
+            // bytes for a multi-peer version vector, which would make the client
+            // discard a perfectly good response and time out.
+            sender
+                .send(FromRemote::RemoteUpdateSince {
+                    update: SliceWrapper::Raw(&update),
+                    vv,
+                })
+                .context("failed to send update")?;
+        }
+        // Peer is requesting a snapshot from the remote
+        FromPeer::PeerRequestSnapshot {} => {
+            let snapshot = document_state.export_shallow_snapshot()?;
+            telemetry.response_bytes = Some(snapshot.len());
+
+            sender
+                .send(FromRemote::RemoteSnapshot {
+                    snapshot: SliceWrapper::Raw(&snapshot),
+                })
+                .context("failed to send snapshot")?;
+        }
+        FromPeer::Unknown => {
+            return Err(worker::Error::from("unknown message type"));
+        }
+    };
+
+    Ok(())
+}

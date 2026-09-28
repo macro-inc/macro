@@ -1,6 +1,7 @@
 use crate::domain::{
     delivery::{DiscussionContext, DiscussionContextReader},
     models::MessageParent,
+    ports::CrmParentReader,
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -19,6 +20,7 @@ impl PgDiscussionContext {
         ParentDiscussionContext {
             documents: self,
             initiatives,
+            crm: None,
             properties,
         }
     }
@@ -41,10 +43,11 @@ impl PgDiscussionContext {
     }
 }
 
-/// Parent context composed with the initiative and properties domain services.
+/// Parent context composed with the initiative, CRM and properties domain services.
 pub struct ParentDiscussionContext<I, P> {
     documents: PgDiscussionContext,
     initiatives: I,
+    crm: Option<std::sync::Arc<dyn CrmParentReader>>,
     properties: std::sync::Arc<P>,
 }
 
@@ -53,34 +56,35 @@ impl<I: Clone, P> Clone for ParentDiscussionContext<I, P> {
         Self {
             documents: self.documents.clone(),
             initiatives: self.initiatives.clone(),
+            crm: self.crm.clone(),
             properties: self.properties.clone(),
         }
+    }
+}
+
+impl<I, P> ParentDiscussionContext<I, P> {
+    /// Add company and contact identity through the owning CRM service.
+    /// Unconfigured compositions reject CRM discussion context.
+    pub fn with_crm(mut self, crm: impl CrmParentReader) -> Self {
+        self.crm = Some(std::sync::Arc::new(crm));
+        self
     }
 }
 
 impl<
     I: initiative::domain::lookup::InitiativeReader,
     P: properties::domain::service::PropertiesService,
-> DiscussionContextReader for ParentDiscussionContext<I, P>
+> ParentDiscussionContext<I, P>
 {
-    async fn sender_profile_picture(
+    async fn initiative_context(
         &self,
-        actor: &str,
-    ) -> Result<Option<String>, rootcause::Report> {
-        self.documents.sender_profile_picture(actor).await
-    }
-
-    async fn context(
-        &self,
+        id: Uuid,
         parent: &MessageParent,
         root: Uuid,
     ) -> Result<DiscussionContext, rootcause::Report> {
-        let MessageParent::Initiative(id) = parent else {
-            return self.documents.context(parent, root).await;
-        };
         let basic = self
             .initiatives
-            .read_basic(initiative::domain::models::InitiativeId::from_uuid(*id))
+            .read_basic(initiative::domain::models::InitiativeId::from_uuid(id))
             .await?
             .ok_or_else(|| rootcause::report!("initiative no longer exists"))?;
         // This machine-only read selects notification candidates. Delivery separately
@@ -106,7 +110,7 @@ impl<
         };
         Ok(DiscussionContext {
             name: basic.name,
-            owner: basic.owner_id.to_string(),
+            owner: Some(basic.owner_id.to_string()),
             file_type: None,
             is_task: false,
             participants: self.documents.participants(parent, root).await?,
@@ -114,6 +118,79 @@ impl<
             sender_profile_picture: None,
             link_share_access: None,
         })
+    }
+
+    async fn crm_context(
+        &self,
+        parent: &MessageParent,
+        root: Uuid,
+    ) -> Result<DiscussionContext, rootcause::Report> {
+        let crm = self
+            .crm
+            .as_ref()
+            .ok_or_else(|| rootcause::report!("crm context service is not configured"))?;
+        let record = crm
+            .read_crm_parent(parent)
+            .await?
+            .ok_or_else(|| rootcause::report!("crm record no longer exists"))?;
+        // Contacts have no owner property: a contact's discussion reaches its
+        // company's owner. This machine-only read selects notification
+        // candidates; delivery rechecks each candidate's current access.
+        let access = properties::domain::model::ViewReceipt::dangerously_assert_internal_user(
+            &record.company_id.to_string(),
+            entity_access::domain::models::EntityType::CrmCompany,
+        );
+        let owner = match self
+            .properties
+            .get_system_property_value(&access, system_properties::SystemPropertyKey::CompanyOwner)
+            .await?
+        {
+            Some(models_properties::service::property_value::PropertyValue::EntityRef(refs)) => {
+                refs.into_iter()
+                    .find(|reference| reference.entity_type == models_properties::EntityType::User)
+                    .map(|reference| reference.entity_id)
+            }
+            _ => None,
+        };
+        Ok(DiscussionContext {
+            name: record.name,
+            owner,
+            file_type: None,
+            is_task: false,
+            participants: self.documents.participants(parent, root).await?,
+            assignees: vec![],
+            sender_profile_picture: None,
+            link_share_access: None,
+        })
+    }
+}
+
+impl<
+    I: initiative::domain::lookup::InitiativeReader,
+    P: properties::domain::service::PropertiesService,
+> DiscussionContextReader for ParentDiscussionContext<I, P>
+{
+    async fn sender_profile_picture(
+        &self,
+        actor: &str,
+    ) -> Result<Option<String>, rootcause::Report> {
+        self.documents.sender_profile_picture(actor).await
+    }
+
+    async fn context(
+        &self,
+        parent: &MessageParent,
+        root: Uuid,
+    ) -> Result<DiscussionContext, rootcause::Report> {
+        match parent {
+            MessageParent::Initiative(id) => self.initiative_context(*id, parent, root).await,
+            MessageParent::CrmCompany(_) | MessageParent::CrmContact(_) => {
+                self.crm_context(parent, root).await
+            }
+            MessageParent::Channel(_) | MessageParent::Document(_) => {
+                self.documents.context(parent, root).await
+            }
+        }
     }
 }
 
@@ -141,7 +218,7 @@ impl DiscussionContextReader for PgDiscussionContext {
                     .fetch_one(&self.0).await?;
                 DiscussionContext {
                     name: row.name,
-                    owner: row.owner,
+                    owner: Some(row.owner),
                     file_type: row.file_type,
                     is_task: row.is_task,
                     participants: vec![],
@@ -157,6 +234,9 @@ impl DiscussionContextReader for PgDiscussionContext {
                 return Err(rootcause::report!(
                     "initiative context service is not configured"
                 ));
+            }
+            MessageParent::CrmCompany(_) | MessageParent::CrmContact(_) => {
+                return Err(rootcause::report!("crm context service is not configured"));
             }
         };
         context.participants = self.participants(parent, root).await?;

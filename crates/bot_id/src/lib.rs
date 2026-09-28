@@ -224,6 +224,23 @@ pub fn is_system_bot(id: BotId) -> bool {
     system_bot(id).is_some()
 }
 
+/// A bot id that is not in [`SYSTEM_BOTS`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NonSystemBotId(BotId);
+
+impl NonSystemBotId {
+    /// Accept `id` only when it is not a first-party bot.
+    #[must_use]
+    pub fn new(id: BotId) -> Option<Self> {
+        (!is_system_bot(id)).then_some(Self(id))
+    }
+
+    /// Return the underlying bot id.
+    pub const fn get(self) -> BotId {
+        self.0
+    }
+}
+
 /// A bot id UUID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

@@ -132,7 +132,7 @@ where
                             session_id,
                             attachment
                                 .permission_policy(permission_policy)
-                                .mcp_servers(vec![egress.sandbox.internal_mcp_server()]),
+                                .mcp_servers(self.egress.external_mcp_servers(&egress.sandbox)),
                         )
                         .await?;
                     self.restore_queue(session_id).await?;

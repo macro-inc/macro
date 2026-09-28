@@ -76,6 +76,7 @@ import { readChatHandler } from './ReadChat';
 import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
 import { readProjectHandler } from './ReadProject';
+import { readSkillHandler } from './ReadSkill';
 import { readThreadHandler } from './ReadThread';
 import {
   createReminderHandler,
@@ -173,6 +174,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
   ReadProject: readProjectHandler,
+  ReadSkill: readSkillHandler,
   RenameChannel: renameChannelHandler,
   RenameDocument: renameDocumentHandler,
   CommentOnDocumentText: commentOnDocumentTextHandler,

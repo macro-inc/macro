@@ -914,6 +914,18 @@ export type MessageParent = {
      */
     id: string;
     type: 'initiative';
+} | {
+    /**
+     * A CRM company.
+     */
+    id: string;
+    type: 'crm_company';
+} | {
+    /**
+     * A CRM contact.
+     */
+    id: string;
+    type: 'crm_contact';
 };
 
 /**

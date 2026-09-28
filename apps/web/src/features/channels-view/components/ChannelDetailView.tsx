@@ -31,7 +31,9 @@ export function ChannelDetailView(props: { channel: ChannelEntity }) {
     }`;
     if (lastTargetKey !== undefined && key === lastTargetKey) return previous;
     lastTargetKey = key;
-    const clickTarget = getChannelEntityTarget(props.channel);
+    const clickTarget = getChannelEntityTarget(props.channel, {
+      scopeChannelThreads: false,
+    });
     if (!clickTarget) return undefined;
     return clickTarget.kind === 'latest'
       ? { kind: 'latest' }

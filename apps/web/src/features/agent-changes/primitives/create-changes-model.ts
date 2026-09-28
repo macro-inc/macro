@@ -1,7 +1,7 @@
 /**
  * What the pane shows, derived from the source: the capture state, the
  * changeset on screen (the latest good one, even while a newer capture runs
- * or has failed), its files as a tree, and the parsed diff for each file.
+ * or has failed), its files, and the patch behind them.
  */
 
 import { type Accessor, createMemo, createSignal } from 'solid-js';
@@ -15,21 +15,17 @@ import {
   type ChangesState,
   changesState,
 } from '../core/changeset';
-import { buildFileTree, type FileTreeNode } from '../core/file-tree';
-import {
-  type FileDiffEntry,
-  matchFilesToDiffs,
-  parsePatch,
-} from '../core/patch';
 
 export type ChangesModel = {
   state: Accessor<ChangesState>;
   /** The changeset on screen, if any. */
   changeset: Accessor<Changeset | undefined>;
   files: Accessor<ChangedFile[]>;
-  tree: Accessor<FileTreeNode[]>;
-  /** Files paired with their diffs; undefined until the patch has loaded. */
-  entries: Accessor<FileDiffEntry[] | undefined>;
+  /**
+   * The patch behind `files`: empty when no file has diff text, so there is
+   * nothing to wait for; undefined until it has loaded.
+   */
+  patch: Accessor<string | undefined>;
   patchStatus: Accessor<QueryStatus>;
   retryPatch: () => void;
   refresh: () => Promise<void>;
@@ -63,7 +59,6 @@ export function createChangesModel(options: {
     }
   });
   const files = createMemo(() => changeset()?.files ?? []);
-  const tree = createMemo(() => buildFileTree(files()));
 
   const hasPatch = () => {
     const current = changeset();
@@ -73,21 +68,6 @@ export function createChangesModel(options: {
     () => changeset()?.id,
     () => options.changesVisible() && hasPatch()
   );
-  const diffs = createMemo(() => {
-    const text = patch.text();
-    return text === undefined ? undefined : parsePatch(text);
-  });
-  const entries = createMemo((): FileDiffEntry[] | undefined => {
-    const current = files();
-    if (current.length === 0) return [];
-    // An empty patch body means every file is binary or omitted; there is
-    // nothing to wait for.
-    if (!hasPatch()) return matchFilesToDiffs(current, new Map());
-    const parsed = diffs();
-    return parsed === undefined
-      ? undefined
-      : matchFilesToDiffs(current, parsed);
-  });
 
   const [refreshing, setRefreshing] = createSignal(false);
   const [refreshError, setRefreshError] = createSignal<string>();
@@ -108,8 +88,7 @@ export function createChangesModel(options: {
     state,
     changeset,
     files,
-    tree,
-    entries,
+    patch: () => (hasPatch() ? patch.text() : ''),
     patchStatus: patch.status,
     retryPatch: patch.retry,
     refresh,

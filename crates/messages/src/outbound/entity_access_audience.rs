@@ -20,6 +20,8 @@ impl<A: EntityAccessService> MessageAudienceAccess for EntityAccessMessageAudien
             MessageParent::Channel(_) => EntityType::Channel,
             MessageParent::Document(_) => EntityType::Document,
             MessageParent::Initiative(_) => EntityType::Initiative,
+            MessageParent::CrmCompany(_) => EntityType::CrmCompany,
+            MessageParent::CrmContact(_) => EntityType::CrmContact,
         };
         let mut viewers = HashSet::new();
         for candidate in candidates {

@@ -206,6 +206,7 @@ type ToolParserMap = {
     response: types.ReadMetadataResponse;
   };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
+  ReadSkill: { call: types.ReadSkill; response: types.ReadSkillResponse };
   ReadSpreadsheet: {
     call: types.ReadSpreadsheet;
     response: types.SpreadsheetResponse;
@@ -514,6 +515,7 @@ const toolParserMap = {
     call: schemas.ReadProject,
     response: schemas.ReadProjectResponse,
   },
+  ReadSkill: { call: schemas.ReadSkill, response: schemas.ReadSkillResponse },
   ReadSpreadsheet: {
     call: schemas.ReadSpreadsheet,
     response: schemas.SpreadsheetResponse,
@@ -815,6 +817,7 @@ type ToolDataMap = {
     response: types.ReadMetadataResponse;
   };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
+  ReadSkill: { call: types.ReadSkill; response: types.ReadSkillResponse };
   ReadSpreadsheet: {
     call: types.ReadSpreadsheet;
     response: types.SpreadsheetResponse;

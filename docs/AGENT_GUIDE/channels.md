@@ -10,6 +10,20 @@
 Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a channel between two users.
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
 
+## Collapsed reply chains
+
+Collapsed threads show the first three complete message groups. Consecutive
+replies from the same sender within the five-minute avatar-grouping window count
+as one group, so a run of short messages stays together. A different sender or a
+longer gap starts another group; returning to an earlier sender also starts a new
+group. Deleted replies and agent replies triggered by different users keep the
+same group boundaries as their avatar display.
+
+The `N more replies` control counts individual hidden replies and expands the
+whole thread. Check a thread with more than three consecutive replies from one
+sender (all remain visible), then one with four groups (the first three groups
+remain visible in full). Standalone thread previews follow the same rule.
+
 ## Agent session entities
 
 The Agents list includes owned and shared sessions. Rows show the shared agent
@@ -22,9 +36,9 @@ session-specific.
 
 A session transcript shows each tool call as a collapsible row (consecutive calls
 fold into a `Called N tools` group; click it to see the rows). A tool reached over
-an MCP server - Macro's own (`ReadContent · macro`) from a Cursor, Claude, or
-Codex session, or a third-party server (`ask_question · deepwiki`) - is titled by
-the tool's name with the server as its subtitle, never by the harness's dispatcher
+an MCP server - Macro's own (`ReadContent`) from a Cursor, Claude, or
+Codex session, or a third-party server (`ask_question`) - is titled by
+the tool's own name, without a server or workspace label, never by the harness's dispatcher
 (`mcp`). Clicking the row expands the exchange: a `Request` section with the
 tool's own arguments and a `Response` section with what it returned, both as
 syntax-lit, pretty-printed JSON (prose results show as text), each with a copy
@@ -500,17 +514,41 @@ Channels, and DMs section headers.
 
 On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
 their own loaded pages and load more as their active list approaches the end.
+The mobile dock search filters the selected tab by conversation name as you type:
+`DMs` searches people, `Channels` searches non-DM channels, and `Recent` searches
+both. Loaded matches appear immediately; queries of at least three characters
+also search the server, including conversations beyond the loaded page. Changing
+tabs keeps the query and changes its scope. Closing search restores the ordinary
+list. Verify `Channels` → `DMs` → type a person's name with GraphQL enabled:
+unrelated rows disappear, no matches shows **No results**, and switching to
+Channels never keeps DM search hits. Changing the query resets list scroll
+without blurring the dock input. While a background browse-list refresh is still
+pending, scroll near the end of search results: the next search page should load
+without waiting for that refresh or requiring another scroll. Clearing search
+restores the browse list's own pagination and fetching state. A failed browse
+request must not show a load-error message over valid search hits or replace
+**No results**, including during debounce and short local-only queries. Search
+failures still show their own error; clearing search restores the browse error.
 With `enable-graphql-soup` enabled, open an unread conversation from each tab
-and return to the list: its top-level notifications should be read, including
-ones older than the global notification feed's loaded page. Notifications for
-separate thread stacks remain unread until that thread is opened.
+and return to the list: all its message notifications should be read, including
+mentions, replies, and ones older than the global notification feed's loaded page.
+Chat opens the whole conversation; opening a parent channel row in Inbox still
+leaves separate thread-stack notifications unread.
 
 On desktop, each click on a conversation in the Chat rail opens its most recent
 currently unread notification, including replies in threads. Read notifications
 are not retained as click targets: once a channel has no unread
 notifications, clicking it opens the latest message. Explicit search hits still
-open their matched message. Verify repeated clicks after read-state updates and
-after a new notification arrives; previously read targets must not loop around.
+open their matched message. Each accepted click marks the complete loaded channel
+edge read, even when the same conversation is already selected. Shift-clicks use
+the same channel-wide read behavior, but mark notifications only after the split
+opens or reuses an existing conversation. Route opens, reloads, and uncached
+favorites also target the newest unread notification across the channel,
+including thread replies; an explicit message target still wins. Verify repeated
+clicks after read-state updates, a failed read, and a new notification; previously
+read targets must not loop around. A rejected selection or unavailable split must
+not mark the conversation read. Hydrating an unread non-participant row must
+preserve its membership status and must not mark its notifications read.
 
 With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
 channel IDs and at most one unread notification ID/state per channel, with a
@@ -532,7 +570,8 @@ per channel through an aliased, filtered `notifications` edge. An empty edge mea
 no unread messages; invites and call notifications do not light the dot. Recent
 cards still use the latest-message preview. Full notification edges load only for
 an opened unread conversation, so mark-read and message targeting retain their
-complete thread-scoped inputs. Reopening a conversation must refresh that full
+complete channel-wide inputs in Chat and thread-scoped inputs in Inbox. Reopening
+a conversation must refresh that full
 edge even within 30 seconds; mark-read waits for the refresh rather than using
 older cached notifications. Failed lookups and successful lookups with no matching
 channel show **Conversation unavailable** with **Retry**, never permanent loading.

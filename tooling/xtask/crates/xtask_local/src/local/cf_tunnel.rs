@@ -1,7 +1,7 @@
 //! Cloudflare quick tunnels: opt-in public ingress into a local stack.
 //!
 //! Nothing here runs unless `--with-cf-tunnel` is passed — a plain `run_local`
-//! never dials out. With the flag, two tunnels open:
+//! never dials out. With the flag, three tunnels open:
 //!
 //! - **egress**: a `@cursor` session runs on cursor.com, not in the compose
 //!   network, and the MCP servers the harness hands it point at
@@ -18,6 +18,10 @@
 //!   share therefore serves the headless static bundle through the proxy,
 //!   built against the `same-origin` sentinel, so every API and WebSocket call
 //!   follows whatever hostname the visitor loaded the page from.
+//! - **preview-ssh**: the preview gateway's SSH listener, so an agent that is
+//!   not on this machine can tunnel a dev server in for `SharePreview`. Its
+//!   origin is `tcp://`, not `http://` — see [`open_tcp`] for what that costs
+//!   the client.
 //!
 //! *Quick* tunnels deliberately: no account, no DNS record, a fresh random
 //! hostname per run — which is fine because the env is regenerated per run
@@ -56,6 +60,14 @@ pub struct QuickTunnel {
     pub url: String,
 }
 
+impl QuickTunnel {
+    /// The minted hostname without its scheme, for clients that dial the name
+    /// rather than fetch the URL (`cloudflared access ssh --hostname …`).
+    pub fn hostname(&self) -> &str {
+        self.url.strip_prefix("https://").unwrap_or(&self.url)
+    }
+}
+
 impl Drop for QuickTunnel {
     fn drop(&mut self) {
         let _ = self.child.kill();
@@ -73,14 +85,25 @@ fn pid_path(instance: &Instance, name: &str) -> PathBuf {
 /// Reaps a same-named tunnel leaked by a previous run first, so at most one
 /// per (instance, name) exists.
 pub fn open(instance: &Instance, name: &str, port: u16) -> Result<QuickTunnel> {
+    open_origin(instance, name, &format!("http://localhost:{port}"))
+}
+
+/// Open a quick tunnel whose origin is a raw TCP service rather than a web
+/// server — an SSH listener, here.
+///
+/// Cloudflare's edge only proxies HTTP ports, so nothing can dial the minted
+/// hostname on port 22 directly; a client reaches it by wrapping the stream in
+/// a WebSocket, which `cloudflared access ssh --hostname <host>` does as an
+/// OpenSSH `ProxyCommand`. The hostname is still minted and logged exactly as
+/// for an HTTP origin.
+pub fn open_tcp(instance: &Instance, name: &str, port: u16) -> Result<QuickTunnel> {
+    open_origin(instance, name, &format!("tcp://localhost:{port}"))
+}
+
+fn open_origin(instance: &Instance, name: &str, origin: &str) -> Result<QuickTunnel> {
     reap_stale(instance, name);
     let mut child = Command::new("cloudflared")
-        .args([
-            "tunnel",
-            "--no-autoupdate",
-            "--url",
-            &format!("http://localhost:{port}"),
-        ])
+        .args(["tunnel", "--no-autoupdate", "--url", origin])
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()

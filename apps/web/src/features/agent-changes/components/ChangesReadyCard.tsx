@@ -1,3 +1,4 @@
+import { DiffCounts } from '@app/components/diff-view';
 import GitBranchIcon from '@phosphor/git-branch.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
 import RowsIcon from '@phosphor/rows.svg';
@@ -6,7 +7,6 @@ import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { describeFileCount } from '../core/changeset';
 import { pullRequestNumber } from '../core/pull-request';
-import { DiffCounts } from './DiffCounts';
 
 /** The transcript's hand-off card into the Changes pane. */
 export function ChangesReadyCard(props: {

@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { match, P } from 'ts-pattern';
+import { isEntityDiscussionEvent } from './entity-discussion';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import type { UnifiedNotification } from './types';
 
@@ -28,16 +29,16 @@ export function getNotificationAction(n: UnifiedNotification): string {
         'replied_to_document_comment_thread',
         () => 'replied to a comment on'
       )
-      .with('initiative_discussion', () => {
+      .with('commented_on_document', () => 'commented on')
+      .with(P.union('initiative_discussion', 'crm_discussion'), () => {
         const meta = n.notification_metadata;
-        if (meta.tag !== 'initiative_discussion') return 'commented on';
+        if (!isEntityDiscussionEvent(meta)) return 'commented on';
         return meta.content.reason === 'mention'
           ? 'mentioned you in a comment on'
           : meta.content.reason === 'reply'
             ? 'replied to a comment on'
             : 'commented on';
       })
-      .with('commented_on_document', () => 'commented on')
       .with('channel_message_send', () => 'sent a message in')
       .with('ai_response', () => 'AI responded')
       .with('channel_message_reply', () => 'replied in')
@@ -94,6 +95,7 @@ export function getNotificationTargetName(
       )
       .with({ tag: 'initiative_discussion' }, (m) => m.content.projectName)
       .with({ tag: 'commented_on_document' }, (m) => m.content.documentName)
+      .with({ tag: 'crm_discussion' }, (m) => m.content.recordName)
       .with({ tag: 'invite_to_team' }, (m) => m.content.teamName)
       .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
       .with(
@@ -147,6 +149,7 @@ export function getNotificationContent(
       )
       .with({ tag: 'initiative_discussion' }, (m) => m.content.text)
       .with({ tag: 'commented_on_document' }, (m) => m.content.text)
+      .with({ tag: 'crm_discussion' }, (m) => m.content.text)
       .with({ tag: 'new_email' }, (m) => m.content.subject)
       .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
       .with(
@@ -236,6 +239,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'replied_to_document_comment_thread' }, () => true)
       .with({ tag: 'initiative_discussion' }, () => true)
       .with({ tag: 'commented_on_document' }, () => true)
+      .with({ tag: 'crm_discussion' }, () => true)
       .with({ tag: 'channel_invite' }, () => true)
       .with({ tag: 'invite_to_team' }, () => true)
       // Shown so "Reminder" reads as being about something; a standalone

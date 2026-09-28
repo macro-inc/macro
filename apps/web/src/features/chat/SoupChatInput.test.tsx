@@ -22,7 +22,13 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { replace: mocks.replace } }),
 }));
 vi.mock('@core/component/AI/component/input/buildChatEditor', () => ({
-  buildChatEditor: () => ({ withMentions: () => ({}) }),
+  buildChatEditor: () => {
+    const builder = {
+      withAppLinkResolver: () => builder,
+      withMentions: () => ({}),
+    };
+    return builder;
+  },
 }));
 vi.mock('@core/component/AI/component/input/ChatInput', () => ({
   ChatInput: (props: {

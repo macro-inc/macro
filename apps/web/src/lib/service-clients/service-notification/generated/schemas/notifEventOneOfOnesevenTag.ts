@@ -10,5 +10,5 @@ export type NotifEventOneOfOnesevenTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfOnesevenTag = {
-  channel_message_reply: 'channel_message_reply',
+  channel_message_send: 'channel_message_send',
 } as const;

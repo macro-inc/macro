@@ -19,6 +19,7 @@ import {
   SplitRouter,
   useCanGo,
   useNavigate,
+  useOwnsSearchNamespace,
   useParams,
   useRouteParams,
   useRouteState,
@@ -482,6 +483,30 @@ describe('Solid split router hooks', () => {
     unsubscribe();
     await vi.runAllTimersAsync();
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('reports which search namespaces the split route owns', () => {
+    const Harness = () => {
+      const drive = useOwnsSearchNamespace('drive');
+      const other = useOwnsSearchNamespace('other');
+      return <div>{`${drive()}:${other()}`}</div>;
+    };
+    const view = render(() => (
+      <SplitRouter.Root
+        layout={createLayout()}
+        routes={routes}
+        location={createMemorySplitRouterLocation('/drive/folder/one')}
+      >
+        <SplitRouter.Scope splitId="split">
+          <Harness />
+        </SplitRouter.Scope>
+        <span data-testid="outside">
+          {`${useOwnsSearchNamespace('drive')()}`}
+        </span>
+      </SplitRouter.Root>
+    ));
+    expect(view.getByText('true:false')).toBeTruthy();
+    expect(view.getByTestId('outside').textContent).toBe('false');
   });
 
   it.each(['invalid', 'updated_at'])(
