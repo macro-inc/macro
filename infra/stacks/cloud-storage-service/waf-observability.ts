@@ -85,11 +85,6 @@ export class WafObservability extends pulumi.ComponentResource {
     const datadogForwarderArn = config.require('waf_datadog_forwarder_arn');
 
     const childOptions = { parent: this, protect: true };
-    const adoptedOptions = {
-      parent: this,
-      protect: true,
-    };
-
     const messagePostPaths = new aws.wafv2.RegexPatternSet(
       `${name}-message-post-paths`,
       {
@@ -209,10 +204,7 @@ export class WafObservability extends pulumi.ComponentResource {
         ],
         visibilityConfig: visibilityConfig(webAclName),
       },
-      {
-        ...adoptedOptions,
-        import: `${webAclId}/${webAclName}/REGIONAL`,
-      }
+      childOptions
     );
 
     const existingLogGroup = aws.cloudwatch.getLogGroupOutput(
@@ -225,10 +217,7 @@ export class WafObservability extends pulumi.ComponentResource {
         name: logGroupName,
         retentionInDays: existingLogGroup.retentionInDays,
       },
-      {
-        ...adoptedOptions,
-        import: logGroupName,
-      }
+      childOptions
     );
 
     const loggingConfiguration = new aws.wafv2.WebAclLoggingConfiguration(
@@ -255,10 +244,7 @@ export class WafObservability extends pulumi.ComponentResource {
           { uriPath: {} },
         ],
       },
-      {
-        ...adoptedOptions,
-        import: webAclArn,
-      }
+      childOptions
     );
 
     const forwarderPermission = new aws.lambda.Permission(

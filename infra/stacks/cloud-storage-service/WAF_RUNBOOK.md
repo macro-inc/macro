@@ -1,6 +1,6 @@
 # Cloud Storage WAF Adoption
 
-The production WAF component adopts the existing Web ACL, CloudWatch log group, and WAF logging configuration through Pulumi resource `import` options. These resources are also protected. The existing Datadog Forwarder and `ip_safety` rule group are referenced by ARN rather than duplicated. ALB associations are outside this component.
+The production WAF component manages the existing Web ACL, CloudWatch log group, and WAF logging configuration. They were adopted, with their parent component, in [production update #336](https://app.pulumi.com/macro-inc/cloud-storage-service/prod/updates/336) on 2026-09-28 and are protected from deletion. The existing Datadog Forwarder and `ip_safety` rule group are referenced by ARN rather than duplicated. ALB associations are outside this component.
 
 ## Current Coverage
 
@@ -20,17 +20,17 @@ Browser telemetry must be enabled for the affected user (`enable-browser-otel` o
 
 WAF configuration is read only when the production component is instantiated; other stacks do not need these keys.
 
-## First Deployment
+## Deployment After Adoption
 
 1. Run `pulumi preview --stack prod` from `infra/stacks/cloud-storage-service` with credentials for the configured `waf_account_id` and Datadog US5.
-2. Confirm the Web ACL, log group, and logging configuration are imports followed only by in-place updates. Do not proceed if Pulumi proposes a replacement or deletion for any of them.
+2. Confirm the Web ACL, log group, and logging configuration have only in-place updates or no changes. Do not proceed if Pulumi proposes a replacement or deletion for any of them.
 3. Confirm the Web ACL is still attached to the intended ALBs using `aws wafv2 list-resources-for-web-acl`. This stack does not create or change associations.
 4. Confirm the existing Lambda policy has no statement named `AllowCloudWatchLogsAwsWafProd`. If it does, import that permission before deployment or rename the statement only after determining ownership.
 5. Confirm the log group has capacity for another subscription filter and no existing filter already sends these events to the same Forwarder. CloudWatch subscriptions process only events written after the filter is created; this configuration does not replay retained logs.
 6. Review the intended in-place policy changes explicitly: request bodies, sensitive headers, and query strings receive data protection; URI paths, query strings, and sensitive headers are redacted in the logging configuration; sampled requests are disabled; both `CategoryHttpLibrary` and `SignalNonBrowserUserAgent` become non-terminating counts; and `SQLi_BODY` becomes a label that is blocked everywhere except the exact channel-message POST route. Non-body SQLi rules remain active on that route.
 7. Confirm CloudWatch log retention is unchanged. The component reads and preserves the existing log group retention instead of imposing a new retention period.
 
-Do not run a separate `pulumi import`: the configuration-derived import IDs in `waf-observability.ts` perform adoption on the first update and remain harmless after the resources are in stack state.
+The one-time `import` options have been removed now that the resources are in production state. The Web ACL importer accepts `id/name/scope`, but stores only the UUID as the resource ID; retaining that composite import option after CLI adoption makes Pulumi propose a replacement. Existing resources must retain their current logical names and component parent.
 
 ## Datadog Pipeline Order
 
