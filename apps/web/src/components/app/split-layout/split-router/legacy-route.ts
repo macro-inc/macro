@@ -307,7 +307,10 @@ export function resolveContentLocation(
   // In-app message opens carry block params, not external URL query keys.
   // Preserve the target before middleware upgrades the block to Chat, where
   // the legacy block (and its imperative navigation handle) is replaced.
-  const channelParams = content.type === 'channel' ? content.params : undefined;
+  const channelParams: Record<string, unknown> | undefined =
+    content.type === 'channel' && isRecord(content.params)
+      ? content.params
+      : undefined;
   const messageId = channelParams?.[CHANNEL_URL_PARAMS.message];
   const threadId = channelParams?.[CHANNEL_URL_PARAMS.thread];
   const channelSearch =
