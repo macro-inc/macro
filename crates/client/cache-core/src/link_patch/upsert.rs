@@ -2,6 +2,9 @@
 
 use super::*;
 
+#[cfg(test)]
+mod test;
+
 pub(super) fn resolve_field(
     selections: &[Selection],
     type_name: &str,
@@ -87,10 +90,10 @@ pub(super) fn apply(
     let mut retained = Vec::with_capacity(links.len() + 1);
     for link in links.iter() {
         if let CacheValue::Ref(key) = link {
-            let record = effective
-                .get(key)
-                .ok_or_else(|| LinkPatchError::MissingParent(key.clone()))?;
             if key.as_ref().split_once(':').map(|(name, _)| name) == typename {
+                let record = effective
+                    .get(key)
+                    .ok_or_else(|| LinkPatchError::MissingParent(key.clone()))?;
                 let value =
                     record
                         .fields
