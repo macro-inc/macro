@@ -751,12 +751,12 @@ impl MessageRepository for PgMessageRepository {
         user: &str,
         emoji: &str,
         add: bool,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<ReactionResult, MessageError> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         Self::lock_message(&mut tx, parent, id).await?;
-        if add {
+        let result = if add {
             sqlx::query!("INSERT INTO comms_reactions(message_id, user_id, emoji) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING", id, user, emoji)
-                .execute(&mut *tx).await.map_err(database_error)?;
+                .execute(&mut *tx).await.map_err(database_error)?
         } else {
             sqlx::query!(
                 "DELETE FROM comms_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3",
@@ -766,11 +766,14 @@ impl MessageRepository for PgMessageRepository {
             )
             .execute(&mut *tx)
             .await
-            .map_err(database_error)?;
-        }
+            .map_err(database_error)?
+        };
         let message = Self::require_message_in(&mut tx, parent, id).await?;
         tx.commit().await.map_err(database_error)?;
-        Ok(message)
+        Ok(ReactionResult {
+            message,
+            changed: result.rows_affected() > 0,
+        })
     }
 
     async fn patch_thread(

@@ -51,12 +51,16 @@ function refreshEmailThread(notification: UnifiedNotification) {
  */
 export function handleNotificationUpdate(notification: UnifiedNotification) {
   match(notification.notification_metadata)
-    .with({ tag: 'channel_mention' }, ({ content }) => {
-      refreshChannel(
-        notification,
-        (content.threadId ?? content.messageId)?.toString()
-      );
-    })
+    .with(
+      { tag: 'channel_mention' },
+      { tag: 'channel_message_reaction' },
+      ({ content }) => {
+        refreshChannel(
+          notification,
+          (content.threadId ?? content.messageId)?.toString()
+        );
+      }
+    )
     .with({ tag: 'document_mention' }, ({ content }) => {
       refreshChannel(notification, content.threadId?.toString());
     })
@@ -99,9 +103,6 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     })
     .with({ tag: 'channel_message_send' }, () => {
       refreshChannel(notification);
-    })
-    .with({ tag: 'channel_message_reaction' }, ({ content }) => {
-      refreshChannel(notification, content.threadId?.toString());
     })
     .with({ tag: 'channel_message_reply' }, ({ content }) => {
       refreshChannel(notification, content.threadId?.toString());

@@ -376,10 +376,15 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
         }
-        let message = self
+        let ReactionResult { message, changed } = self
             .repo
             .react(&parent, id, actor.as_ref(), &emoji, add)
             .await?;
+        // Idempotent retries still return the current message to the caller,
+        // but must not publish another change or notify the author again.
+        if !changed {
+            return Ok(message);
+        }
         self.publish_message(
             actor,
             nonce,

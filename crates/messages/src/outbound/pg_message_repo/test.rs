@@ -307,15 +307,30 @@ async fn reactions_attachments_and_resolution_use_shared_message_data(pool: PgPo
     });
     let root = repo.create(create).await.unwrap();
     assert_eq!(root.attachments.len(), 1);
-    repo.react(&root.parent, root.id, USER, "👍", true)
+    let added = repo
+        .react(&root.parent, root.id, USER, "👍", true)
         .await
         .unwrap();
+    assert!(added.changed);
     let reacted = repo
         .react(&root.parent, root.id, USER, "👍", true)
         .await
         .unwrap();
-    assert_eq!(reacted.reactions.len(), 1);
-    assert_eq!(reacted.reactions[0].users, vec![USER]);
+    assert!(!reacted.changed);
+    assert_eq!(reacted.message.reactions.len(), 1);
+    assert_eq!(reacted.message.reactions[0].users, vec![USER]);
+    let removed = repo
+        .react(&root.parent, root.id, USER, "👍", false)
+        .await
+        .unwrap();
+    assert!(removed.changed);
+    assert!(removed.message.reactions.is_empty());
+    let removed_again = repo
+        .react(&root.parent, root.id, USER, "👍", false)
+        .await
+        .unwrap();
+    assert!(!removed_again.changed);
+    assert!(removed_again.message.reactions.is_empty());
     assert!(
         repo.patch_thread(
             &root.parent,
