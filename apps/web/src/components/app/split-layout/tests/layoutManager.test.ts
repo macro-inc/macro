@@ -939,6 +939,7 @@ describe('layoutManager', () => {
       async ({ type, target, namespace, fields, path }) => {
         const { manager, router, location, dispose } = ingressRouter('/search');
         await router.settled();
+        const onApplied = vi.fn();
         const source = manager.getSplit(manager.splits()[0].id)!;
         const sourceRoute = router.route(source.id);
         manager.openWithSplit(
@@ -947,6 +948,7 @@ describe('layoutManager', () => {
             handle: source,
             preferNewSplit: true,
             search: searchLocationUpdates('entity', target),
+            onApplied,
           }
         );
         await router.settled();
@@ -957,6 +959,7 @@ describe('layoutManager', () => {
           seek: [expect.any(String)],
         });
         expect(location.read().pathname).toContain(path);
+        expect(onApplied).toHaveBeenCalledOnce();
         const firstRequest = router.search(owner.id, namespace)?.seek;
         manager.openWithSplit(
           { type, id: 'entity' },
@@ -964,6 +967,7 @@ describe('layoutManager', () => {
             handle: source,
             preferNewSplit: true,
             search: searchLocationUpdates('entity', target),
+            onApplied,
           }
         );
         await router.settled();
@@ -974,6 +978,7 @@ describe('layoutManager', () => {
           firstRequest
         );
         expect(manager.activeSplitId()).toBe(owner.id);
+        expect(onApplied).toHaveBeenCalledTimes(2);
         router.dispose();
         dispose();
       }

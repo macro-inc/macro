@@ -126,6 +126,8 @@ export type SplitNavigateOptions<
   /** Host opening policy, invoked after middleware accepts a new destination.
    * Existing claim owners are updated in place without invoking this callback. */
   open?: SplitRouterLayout<TSplitId>['open'];
+  /** Runs after the destination is applied or an existing owner is activated. */
+  onApplied?: () => void;
   replace?: boolean;
   target?: 'current' | 'new-split' | TSplitId;
   search?: Record<string, SplitSearchUpdate>;

@@ -1182,7 +1182,7 @@ describe('getChannelEntityTarget', () => {
 
   it.each(
     [false, true].flatMap((openInNewSplit) =>
-      ['opened', 'reused', 'unavailable'].map((status) => ({
+      ['opened', 'reused', 'unavailable', 'navigating'].map((status) => ({
         openInNewSplit,
         status,
       }))
@@ -1223,13 +1223,42 @@ describe('getChannelEntityTarget', () => {
           preferNewSplit: openInNewSplit,
         })
       );
-      if (status === 'unavailable') {
+      if (status === 'unavailable' || status === 'navigating') {
         expect(bulkMarkAsRead).not.toHaveBeenCalled();
       } else {
         expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread, reply]);
       }
     }
   );
+
+  it('marks routed channel notifications only after the destination is applied', async () => {
+    const reply = replyNotification('deferred', 'reply-message', 'root');
+    const bulkMarkAsRead = vi.fn(async () => {});
+    let onApplied: (() => void) | undefined;
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({})),
+      openWithSplit: (
+        ...[_content, options]: Parameters<SplitManager['openWithSplit']>
+      ) => {
+        onApplied = options?.onApplied;
+        return { status: 'navigating' };
+      },
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      channelRow({ notifications: [reply] }),
+      {
+        notificationSource:
+          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+        scopeChannelThreads: false,
+      }
+    );
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    expect(onApplied).toBeDefined();
+    onApplied!();
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([reply]);
+  });
 
   it('chooses the unread reply target before marking a Chat conversation read', async () => {
     const reply = replyNotification('reply-target', 'reply-message', 'root');

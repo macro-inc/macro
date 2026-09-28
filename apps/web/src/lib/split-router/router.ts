@@ -77,6 +77,7 @@ type EntryTransition<TSplitId> = {
   allowDuplicate?: boolean;
   apply: (entry: SplitRouterEntry) => boolean;
   onReuse?: (splitId: TSplitId, entry: SplitRouterEntry) => boolean;
+  onApplied?: () => void;
 };
 
 const GLOBAL_TRANSITION = Symbol('split-router-global-transition');
@@ -514,6 +515,7 @@ export function createSplitRouter<TSplitId>(
   ) => {
     const changed = transition.apply(entry);
     if (changed) notify(transition.splitId);
+    if (changed) transition.onApplied?.();
     return changed;
   };
 
@@ -561,6 +563,7 @@ export function createSplitRouter<TSplitId>(
           throwIfAborted(controller.signal);
           const changed = config.apply(entry);
           if (changed && splitId === undefined) notify();
+          if (changed) config.onApplied?.();
         } finally {
           finish();
         }
@@ -600,6 +603,7 @@ export function createSplitRouter<TSplitId>(
       const updated = config.onReuse?.(owner.splitId, entry) ?? false;
       layout.activate(owner.splitId);
       if (hadPending || updated) notify(owner.splitId);
+      config.onApplied?.();
     };
     const waitForClaim = async (
       turn: Promise<void>,
@@ -835,6 +839,7 @@ export function createSplitRouter<TSplitId>(
         from: targetEntry,
         cause: 'navigate',
         allowDuplicate: navigateOptions.allowDuplicate,
+        onApplied: navigateOptions.onApplied,
         onReuse(ownerId, entry) {
           const owner = acceptedById().get(ownerId);
           if (!owner) return false;

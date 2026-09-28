@@ -155,10 +155,19 @@ describe('split router', () => {
     const open = vi.fn((request: Parameters<Layout['open']>[0]) =>
       layout.open({ ...request, target: 'new-split' })
     );
-    router.navigate(source, '/drive/folder/slow', { open });
+    const cancelled = vi.fn();
+    const applied = vi.fn();
+    router.navigate(source, '/drive/folder/slow', {
+      open,
+      onApplied: cancelled,
+    });
     await settle();
     expect(open).not.toHaveBeenCalled();
-    router.navigate(source, '/drive/folder/accepted', { open });
+    expect(cancelled).not.toHaveBeenCalled();
+    router.navigate(source, '/drive/folder/accepted', {
+      open,
+      onApplied: applied,
+    });
     await settle();
     expect(open).toHaveBeenCalledOnce();
     expect(layout.snapshot().entries).toHaveLength(2);
@@ -166,6 +175,8 @@ describe('split router', () => {
     gate.resolve();
     await router.settled();
     expect(open).toHaveBeenCalledOnce();
+    expect(applied).toHaveBeenCalledOnce();
+    expect(cancelled).not.toHaveBeenCalled();
     router.dispose();
   });
 
@@ -179,8 +190,10 @@ describe('split router', () => {
     await router.settled();
     const [source, owner] = layout.snapshot().entries;
     const open = vi.fn(layout.open);
+    const onApplied = vi.fn();
     router.navigate(source.splitId, '/drive/folder/owned', {
       open,
+      onApplied,
       search: { drive: { query: ['new target'] } },
     });
     await router.settled();
@@ -189,6 +202,30 @@ describe('split router', () => {
       query: ['new target'],
     });
     expect(router.route(source.splitId)?.matches).toHaveLength(1);
+    expect(onApplied).toHaveBeenCalledOnce();
+    router.dispose();
+  });
+
+  it('does not report navigation applied when the host cannot open a pane', async () => {
+    const layout = createLayout();
+    const router = createSplitRouter({
+      layout,
+      routes,
+      location: createMemorySplitRouterLocation('/drive'),
+    });
+    await router.settled();
+    const onApplied = vi.fn();
+    router.navigate(
+      layout.snapshot().entries[0].splitId,
+      '/drive/folder/missing',
+      {
+        open: () => ({ status: 'unavailable' }),
+        onApplied,
+      }
+    );
+    await router.settled();
+    expect(onApplied).not.toHaveBeenCalled();
+    expect(layout.snapshot().entries).toHaveLength(1);
     router.dispose();
   });
 
@@ -2007,15 +2044,18 @@ describe('split router', () => {
     await router.settled();
     const splitId = layout.snapshot().entries[0]!.splitId;
 
-    router.navigate(splitId, 'folder/two', { target: 'new-split' });
+    const onApplied = vi.fn();
+    router.navigate(splitId, 'folder/two', { target: 'new-split', onApplied });
 
     expect(layout.snapshot().entries).toHaveLength(1);
+    expect(onApplied).not.toHaveBeenCalled();
 
     release();
     await router.settled();
 
     expect(layout.snapshot().entries).toHaveLength(2);
     expect(location.read().pathname).toBe('/drive/~/drive/folder/two');
+    expect(onApplied).toHaveBeenCalledOnce();
   });
 
   it('retains declared global search and drops unowned keys', async () => {

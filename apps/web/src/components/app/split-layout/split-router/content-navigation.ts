@@ -33,6 +33,7 @@ export function createContentNavigator(
           : 'current',
       replace: options.mergeHistory,
       search: options.search,
+      onApplied: options.onApplied,
       open: (request) =>
         openAppSplitLocation(manager, routes, request, content, options),
     });

@@ -171,6 +171,8 @@ export type CreateNewSplitOptions = {
 export type OpenWithSplitOptions = {
   /** Route-owned targets must pass through middleware and content claims before opening. */
   search?: Record<string, SplitSearchUpdate>;
+  /** For routed opens, runs only after the router applies or reuses a destination. */
+  onApplied?: () => void;
   mergeHistory?: boolean;
   activate?: boolean;
   referredFrom?: ReferredFrom;

@@ -760,8 +760,16 @@ export const openEntityInSplitFromUnifiedList = async (
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
 
+  const markNotificationsSeen = () => {
+    if (options.notificationSource) {
+      markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
+        scopeChannelThreads: options.scopeChannelThreads,
+      });
+    }
+  };
   const result = splitManager.openWithSplit(splitContent, {
     search: target ? searchLocationUpdates(content.id, target) : undefined,
+    onApplied: target ? markNotificationsSeen : undefined,
     referredFrom,
     activate: true,
     preferNewSplit: openInNewSplit,
@@ -778,10 +786,8 @@ export const openEntityInSplitFromUnifiedList = async (
     toast.alert('Content already open');
   }
 
-  if (result.status !== 'unavailable' && options.notificationSource) {
-    markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
-      scopeChannelThreads: options.scopeChannelThreads,
-    });
+  if (result.status === 'opened' || result.status === 'reused') {
+    markNotificationsSeen();
   }
 
   if (commentParams && entity.type === 'document') {
