@@ -4,7 +4,7 @@ const RETURN_LAYOUT_KEY = 'macro:inbox-link:return-layout';
 export type InboxLinkReturn = {
   /**
    * The base-relative layout URL the flow started from — path plus query and
-   * hash, so the `preview` param encoding Controller/Viewer Preview Pairs
+   * hash, so content location state
    * survives with it.
    */
   url: string;

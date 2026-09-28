@@ -18,6 +18,11 @@ const mocks = vi.hoisted(() => ({
   openSettings: vi.fn(),
   attachments: [] as InputAttachmentData[],
   recentIds: [] as string[],
+  recentUrls: [] as string[],
+  preferredInmemModel: undefined as string | undefined,
+  rememberInmemModel: vi.fn((id: string) => {
+    mocks.preferredInmemModel = id;
+  }),
   repositories: [] as { url: string; defaultBranch?: string }[],
 }));
 vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
@@ -36,11 +41,28 @@ vi.mock('@app/features/block-agent/context/recent-agent-selections', () => ({
   }),
 }));
 vi.mock('../primitives/recent-repositories', () => ({
-  createRecentRepositories: () => ({ urls: () => [], remember: vi.fn() }),
+  createRecentRepositories: () => ({
+    urls: () => mocks.recentUrls,
+    remember: vi.fn(),
+  }),
+}));
+vi.mock('../primitives/preferred-inmem-model', () => ({
+  createPreferredInmemModel: () => ({
+    model: () => mocks.preferredInmemModel,
+    remember: mocks.rememberInmemModel,
+  }),
 }));
 vi.mock('../queries/reachable-repositories', () => ({
   createReachableRepositories: () => ({
     repositories: () => mocks.repositories,
+    loading: () => false,
+    error: () => false,
+    retry: vi.fn(),
+  }),
+}));
+vi.mock('../queries/repository-branches', () => ({
+  createRepositoryBranches: () => ({
+    branches: () => ['main', 'develop', 'feature/home'],
     loading: () => false,
     error: () => false,
     retry: vi.fn(),
@@ -69,6 +91,10 @@ vi.mock('@queries/agents/models', () => ({
               : [
                   { id: 'chat-default', name: 'Chat default' },
                   { id: 'claude-sonnet-4', name: 'Sonnet 4' },
+                  {
+                    id: 'anthropic/claude-fable-5-1',
+                    name: 'Fable 5.1',
+                  },
                   {
                     id: 'anthropic/claude-sonnet-5',
                     name: 'anthropic/claude-sonnet-5',
@@ -115,7 +141,11 @@ vi.mock('../components/ChatComposer', () => ({
   ),
 }));
 
-function page(connected = true, agents: PersistedAgentLike[] = []) {
+function page(
+  connected = true,
+  agents: PersistedAgentLike[] = [],
+  availabilityLoading = false
+) {
   const onStart = vi.fn();
   render(() => (
     <NewChatPage
@@ -128,6 +158,7 @@ function page(connected = true, agents: PersistedAgentLike[] = []) {
         cursorDefaultModel: 'cursor-default',
       })}
       rosterLoading={false}
+      availabilityLoading={availabilityLoading}
       onStart={onStart}
       onOpenRoster={vi.fn()}
     />
@@ -164,10 +195,15 @@ describe('agent-led new conversation', () => {
   beforeEach(() => {
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
+    mocks.recentUrls = [];
+    mocks.preferredInmemModel = undefined;
     mocks.repositories = [
       { url: 'https://github.com/macro-inc/macro', defaultBranch: 'develop' },
     ];
     vi.clearAllMocks();
+    mocks.rememberInmemModel.mockImplementation((id: string) => {
+      mocks.preferredInmemModel = id;
+    });
     motionStyles = document.createElement('style');
     motionStyles.textContent =
       '[role="menu"] { animation-name: none; transition-duration: 0s; }';
@@ -218,10 +254,7 @@ describe('agent-led new conversation', () => {
       screen.getByRole('button', { name: 'Branch' }).textContent
     ).toContain('develop');
     fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
-    fireEvent.input(screen.getByRole('textbox', { name: 'Starting branch' }), {
-      target: { value: 'feature/home' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Use branch' }));
+    fireEvent.click(screen.getByRole('option', { name: 'feature/home' }));
     await selectAgent(/^Chat default$/);
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
     expect(
@@ -244,7 +277,24 @@ describe('agent-led new conversation', () => {
       repoBranch: 'feature/home',
     });
   });
-  it('starts a typed repository on main and a listed one on its default branch', async () => {
+  it('starts a new conversation on Choose repository, not the last used one', async () => {
+    mocks.recentIds = [CURSOR_BOT_ID];
+    mocks.recentUrls = ['https://github.com/macro-inc/macro'];
+    const send = page();
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).toContain('Choose repository');
+    expect(
+      screen.getByRole('button', { name: 'Repository' }).textContent
+    ).not.toContain('macro-inc/macro');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      prompt: 'Prompt',
+      repoUrl: undefined,
+    });
+  });
+  it('refuses an unlisted repository and starts a listed one on its default branch', async () => {
     const send = page();
     await selectAgent(/Cursor/);
     fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
@@ -254,39 +304,29 @@ describe('agent-led new conversation', () => {
         target: { value: 'macro-inc/other' },
       }
     );
-    expect(
-      screen.queryByRole('option', { name: 'Choose automatically' })
-    ).toBeNull();
-    fireEvent.click(
-      screen.getByRole('option', { name: 'Use macro-inc/other' })
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(screen.getByText(/No repositories match/).textContent).toContain(
+      'macro-inc/other'
     );
-    expect(
-      screen.getByRole('button', { name: 'Branch' }).textContent
-    ).toContain('main');
-    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
-    fireEvent.input(screen.getByRole('textbox', { name: 'Starting branch' }), {
-      target: { value: 'feature/other' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Use branch' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    expect(send).toHaveBeenLastCalledWith({
-      botId: CURSOR_BOT_ID,
-      prompt: 'Prompt',
-      repoUrl: 'https://github.com/macro-inc/other',
-      repoBranch: 'feature/other',
-    });
-    // Another repository drops the chosen branch for its own default.
-    fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
+    fireEvent.input(
+      screen.getByRole('combobox', { name: 'Search repositories' }),
+      { target: { value: '' } }
+    );
     fireEvent.click(screen.getByRole('option', { name: 'macro-inc/macro' }));
     expect(
       screen.getByRole('button', { name: 'Branch' }).textContent
     ).toContain('develop');
+    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+    fireEvent.input(screen.getByRole('combobox', { name: 'Search branches' }), {
+      target: { value: 'feature/other' },
+    });
+    fireEvent.click(screen.getByRole('option', { name: 'Use feature/other' }));
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
       botId: CURSOR_BOT_ID,
       prompt: 'Prompt',
       repoUrl: 'https://github.com/macro-inc/macro',
-      repoBranch: 'develop',
+      repoBranch: 'feature/other',
     });
   });
   it('uses a saved agent without sending a per-session model override', async () => {
@@ -433,18 +473,35 @@ describe('agent-led new conversation', () => {
     );
   });
   it('groups by kind and selects direct models through Macro with readable names and icons', async () => {
-    const send = page();
+    const send = page(true, [
+      {
+        bot: { id: 'saved-agent', name: 'Reviewer', handle: 'reviewer' },
+        harness: 'in-memory',
+        default_model: 'saved-default',
+      },
+    ]);
     await selectAgent(/Cursor/);
     openAgents();
-    const coding = within(screen.getByRole('group', { name: 'Coding agents' }));
-    expect(screen.queryByRole('group', { name: 'Agents' })).toBeNull();
-    const models = within(screen.getByRole('group', { name: 'Models' }));
+    const modelsGroup = screen.getByRole('group', { name: 'Models' });
+    const agentsGroup = screen.getByRole('group', { name: 'Agents' });
+    const codingGroup = screen.getByRole('group', { name: 'Coding agents' });
+    expect(
+      modelsGroup.compareDocumentPosition(agentsGroup) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      agentsGroup.compareDocumentPosition(codingGroup) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const coding = within(codingGroup);
+    const models = within(modelsGroup);
     expect(coding.getByRole('menuitem', { name: /Cursor/ })).toBeTruthy();
     expect(coding.queryByRole('menuitem', { name: /Macro/ })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: /Macro/ })).toBeNull();
     expect(
       models.queryByRole('menuitem', { name: /Cursor default|GPT-5/ })
     ).toBeNull();
+    expect(models.queryByRole('menuitem', { name: /Fable 5.1/ })).toBeNull();
     const sonnet = models.getByRole('menuitem', { name: 'Sonnet 5' });
     expect(
       sonnet.querySelector('[data-ai-provider="anthropic"] svg')
@@ -452,6 +509,9 @@ describe('agent-led new conversation', () => {
     expect(screen.queryByText('anthropic/claude-sonnet-5')).toBeNull();
     fireEvent.keyDown(sonnet, { key: 'Enter' });
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(mocks.rememberInmemModel).toHaveBeenCalledWith(
+      'anthropic/claude-sonnet-5'
+    );
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
       'Sonnet 5'
     );
@@ -468,6 +528,21 @@ describe('agent-led new conversation', () => {
       repoUrl: undefined,
       modelOverride: 'anthropic/claude-sonnet-5',
     });
+    // Macro Models picks stick: a second send still uses the preferred model.
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
+      'Sonnet 5'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send.mock.calls[1][0]).toMatchObject({
+      modelOverride: 'anthropic/claude-sonnet-5',
+    });
+  });
+  it('restores a preferred Macro model on a fresh composer', () => {
+    mocks.preferredInmemModel = 'anthropic/claude-sonnet-5';
+    page();
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
+      'Sonnet 5'
+    );
   });
   it('restores the most recently used supported agent', async () => {
     mocks.recentIds = [CURSOR_BOT_ID];
@@ -475,6 +550,14 @@ describe('agent-led new conversation', () => {
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
       'Cursor'
     );
+    expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
+  });
+  it('keeps the most recent agent while its connection status loads', () => {
+    mocks.recentIds = [CURSOR_BOT_ID];
+    page(false, [], true);
+    expect(
+      screen.getByRole('heading', { name: 'What should we build?' })
+    ).toBeTruthy();
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
   });
   it('offers Cursor setup when disconnected without switching to an unavailable agent', async () => {

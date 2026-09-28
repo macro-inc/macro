@@ -196,7 +196,7 @@ fn a_speculated_answer_resolves_the_question_and_unblocks_the_turn() {
         }
     );
     assert!(pending, "the message holding the question is unconfirmed");
-    assert!(fold.metadata().pending_elicitation.is_none());
+    assert!(fold.metadata().pending_elicitation().is_none());
     assert_eq!(fold.metadata().turn, TurnState::Running);
     // The answer resolves a part; it mints no message of its own.
     assert_eq!(fold.messages().len(), before);
@@ -237,7 +237,7 @@ fn retracting_an_answer_restores_the_question() {
 
     assert!(is_replace(&events));
     assert_eq!(question(&fold), (ElicitationOutcome::Pending, false));
-    assert!(fold.metadata().pending_elicitation.is_some());
+    assert!(fold.metadata().pending_elicitation().is_some());
     assert_eq!(fold.metadata().turn, TurnState::Blocked);
 }
 
@@ -804,4 +804,60 @@ fn a_confirmed_prompt_behind_a_stop_predicts_nothing() {
         .find(|message| message.id == TurnId(0) && matches!(message.author, Author::Agent))
         .expect("agent message");
     assert_eq!(first_agent.stop, None);
+}
+
+#[test]
+fn permission_answers_speculate_once_and_promote_on_the_agents_request_id() {
+    use crate::domain::model::PermissionOutcome;
+    use agent_client_protocol::schema::v1::RequestId;
+    use agent_runtime_protocol::domain::action::PermissionAnswer;
+
+    let mut log: Vec<&str> = TURN.lines().take(5).collect();
+    log.push(r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":7,"method":"session/request_permission","params":{"sessionId":"s1","toolCall":{"toolCallId":"t1"},"options":[{"optionId":"once","name":"Allow once","kind":"allow_once"}]}}}"#);
+    let mut fold = SpeculativeFold::new(test_session());
+    fold.push(FoldInput::Snapshot(rows(parse_log(&log.join("\n")))))
+        .unwrap();
+    assert_eq!(fold.metadata().turn, TurnState::Blocked);
+    assert_eq!(fold.metadata().pending_interactions.len(), 1);
+    let answer = AgentAction::RespondToPermission(
+        agent_runtime_protocol::domain::action::AgentPermissionAction {
+            request_id: RequestId::Number(7),
+            answer: PermissionAnswer::Selected {
+                option_id: "once".into(),
+            },
+        },
+    );
+    let id = AgentActionId::mint();
+    fold.push(speculation(answer.clone(), id)).unwrap();
+    assert!(fold.metadata().pending_interactions.is_empty());
+    assert_eq!(fold.metadata().turn, TurnState::Running);
+    fold.push(FoldInput::Retracted(id)).unwrap();
+    assert_eq!(fold.metadata().pending_interactions.len(), 1);
+    assert_eq!(fold.metadata().turn, TurnState::Blocked);
+    fold.push(speculation(answer.clone(), id)).unwrap();
+    fold.push(speculation(answer.clone(), AgentActionId::mint()))
+        .unwrap();
+    assert_eq!(fold.pending().collect::<Vec<_>>(), vec![id]);
+    assert!(fold.messages().iter().flat_map(|message| message.parts.iter()).any(|part|
+        matches!(part, MessagePart::Permission { outcome: PermissionOutcome::Selected { option_id }, .. } if option_id == "once")
+    ));
+    fold.push(FoldInput::Confirmed(
+        cursor(99),
+        logged(&answer, AgentActionId::mint()),
+    ))
+    .unwrap();
+    assert_eq!(fold.pending().count(), 0);
+
+    // A later request can reuse an answered id. Its live identity takes
+    // precedence over an older outcome when deduplicating speculation.
+    fold.push(FoldInput::Confirmed(
+        cursor(100),
+        parse_log(log.last().unwrap()).remove(0),
+    ))
+    .unwrap();
+    assert_eq!(fold.metadata().turn, TurnState::Blocked);
+    fold.push(speculation(answer, AgentActionId::mint()))
+        .unwrap();
+    assert!(fold.metadata().pending_interactions.is_empty());
+    assert_eq!(fold.metadata().turn, TurnState::Running);
 }

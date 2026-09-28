@@ -12,6 +12,26 @@ use serde::{Deserialize, Serialize};
 
 pub use agent_session::domain::model::AgentSessionId;
 
+/// A captured branch together with the repository it belongs to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CapturedBranch {
+    /// The repository of the linked pull request when the diff was captured.
+    pub repository_url: String,
+    /// The captured head branch, never the selected starting branch.
+    pub branch: String,
+}
+
+impl CapturedBranch {
+    /// Use a historical fact only while it still describes the current repository.
+    pub fn for_repository(&self, repository_url: &str) -> Option<&str> {
+        let current = RepositorySlug::parse(repository_url)?;
+        let captured = RepositorySlug::parse(&self.repository_url)?;
+        (current.owner.eq_ignore_ascii_case(&captured.owner)
+            && current.name.eq_ignore_ascii_case(&captured.name))
+        .then_some(self.branch.as_str())
+    }
+}
+
 /// Identity of one capture. Minted per capture (UUIDv7), so the patch blob's
 /// key changes every time and a reader never sees half of a newer capture
 /// under an older summary.

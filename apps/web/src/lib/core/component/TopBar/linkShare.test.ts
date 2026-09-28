@@ -15,14 +15,14 @@ import {
 } from './linkShare';
 
 describe('isTeamShareSupportedForItem', () => {
-  it.each(['document', 'chat', 'call', 'project'] as const)(
+  it.each(['document', 'chat', 'call', 'project', 'agent_session'] as const)(
     'supports %s',
     (itemType) => {
       expect(isTeamShareSupportedForItem(itemType)).toBe(true);
     }
   );
 
-  it.each(['email', 'agent_session'] as const)(
+  it.each(['email'] as const)(
     'does not offer team access for %s',
     (itemType) => {
       expect(isTeamShareSupportedForItem(itemType)).toBe(false);

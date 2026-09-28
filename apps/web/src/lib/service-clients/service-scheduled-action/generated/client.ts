@@ -10,7 +10,8 @@ import type {
   CreateScheduledAction,
   EmptyResponse,
   InProgressExecution,
-  ScheduledAction,
+  ListScheduledActionsParams,
+  ScheduledActionResponse,
   UpdateScheduledAction,
 } from './schemas';
 
@@ -52,8 +53,13 @@ export const scheduledActionHealth = async (
 };
 
 export type listScheduledActionsResponse200 = {
-  data: ScheduledAction[];
+  data: ScheduledActionResponse[];
   status: 200;
+};
+
+export type listScheduledActionsResponse400 = {
+  data: string;
+  status: 400;
 };
 
 export type listScheduledActionsResponse401 = {
@@ -71,6 +77,7 @@ export type listScheduledActionsResponseSuccess =
     headers: Headers;
   };
 export type listScheduledActionsResponseError = (
+  | listScheduledActionsResponse400
   | listScheduledActionsResponse401
   | listScheduledActionsResponse500
 ) & {
@@ -81,14 +88,29 @@ export type listScheduledActionsResponse =
   | listScheduledActionsResponseSuccess
   | listScheduledActionsResponseError;
 
-export const getListScheduledActionsUrl = () => {
-  return `/scheduled-actions`;
+export const getListScheduledActionsUrl = (
+  params?: ListScheduledActionsParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/scheduled-actions?${stringifiedParams}`
+    : `/scheduled-actions`;
 };
 
 export const listScheduledActions = async (
+  params?: ListScheduledActionsParams,
   options?: RequestInit
 ): Promise<listScheduledActionsResponse> => {
-  const res = await fetch(getListScheduledActionsUrl(), {
+  const res = await fetch(getListScheduledActionsUrl(params), {
     ...options,
     method: 'GET',
   });
@@ -106,8 +128,13 @@ export const listScheduledActions = async (
 };
 
 export type createScheduledActionResponse201 = {
-  data: ScheduledAction;
+  data: ScheduledActionResponse;
   status: 201;
+};
+
+export type createScheduledActionResponse400 = {
+  data: string;
+  status: 400;
 };
 
 export type createScheduledActionResponse401 = {
@@ -125,6 +152,7 @@ export type createScheduledActionResponseSuccess =
     headers: Headers;
   };
 export type createScheduledActionResponseError = (
+  | createScheduledActionResponse400
   | createScheduledActionResponse401
   | createScheduledActionResponse500
 ) & {
@@ -163,8 +191,13 @@ export const createScheduledAction = async (
 };
 
 export type updateScheduledActionResponse200 = {
-  data: ScheduledAction;
+  data: ScheduledActionResponse;
   status: 200;
+};
+
+export type updateScheduledActionResponse400 = {
+  data: string;
+  status: 400;
 };
 
 export type updateScheduledActionResponse401 = {
@@ -177,6 +210,11 @@ export type updateScheduledActionResponse404 = {
   status: 404;
 };
 
+export type updateScheduledActionResponse409 = {
+  data: string;
+  status: 409;
+};
+
 export type updateScheduledActionResponse500 = {
   data: string;
   status: 500;
@@ -187,8 +225,10 @@ export type updateScheduledActionResponseSuccess =
     headers: Headers;
   };
 export type updateScheduledActionResponseError = (
+  | updateScheduledActionResponse400
   | updateScheduledActionResponse401
   | updateScheduledActionResponse404
+  | updateScheduledActionResponse409
   | updateScheduledActionResponse500
 ) & {
   headers: Headers;
@@ -292,6 +332,11 @@ export type executeScheduledActionNowResponse200 = {
   status: 200;
 };
 
+export type executeScheduledActionNowResponse400 = {
+  data: string;
+  status: 400;
+};
+
 export type executeScheduledActionNowResponse401 = {
   data: string;
   status: 401;
@@ -317,6 +362,7 @@ export type executeScheduledActionNowResponseSuccess =
     headers: Headers;
   };
 export type executeScheduledActionNowResponseError = (
+  | executeScheduledActionNowResponse400
   | executeScheduledActionNowResponse401
   | executeScheduledActionNowResponse404
   | executeScheduledActionNowResponse409

@@ -1,5 +1,5 @@
 import type { Accessor } from 'solid-js';
-import { createEffect, createMemo, createSignal, untrack } from 'solid-js';
+import { createEffect, createMemo, createSignal, on } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { EmailRecipient } from '../../email-compose/core/email-recipient';
 import type { ReplyType } from '../../email-compose/core/reply-type';
@@ -16,6 +16,9 @@ import { hiddenMessagesControl } from './scroll-to-message';
 import { createThreadDrafts } from './thread-drafts';
 import { createThreadRecipients } from './thread-recipients';
 import { createThreadSnapshot } from './thread-snapshot';
+
+type NavigationTarget = { threadId: string; messageId: string | undefined };
+
 export type EmailThreadState = {
   isScrollingToMessage: Accessor<boolean>;
   setIsScrollingToMessage: (value: boolean) => void;
@@ -37,7 +40,7 @@ export type EmailThreadState = {
     unfiltered: Accessor<EmailMessage[]>;
     list: Accessor<EmailMessage[]>;
     targetMessageId: Accessor<string | undefined>;
-    setTargetMessageId: (id: string | undefined) => void;
+    clearTargetMessage: () => void;
     focusedId: Accessor<string | undefined>;
     setFocused: (messageId: string | undefined) => void;
     hiddenChipFocused: Accessor<boolean>;
@@ -98,7 +101,10 @@ export type EmailThreadState = {
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
   initialLoadComplete: Accessor<boolean>;
-  onInitialDataLoad: (callback: () => boolean) => void;
+  onInitialDataLoad: (
+    callback: () => void,
+    onTargetChange: (target: NavigationTarget) => void
+  ) => void;
 };
 
 export function createEmailThreadState(
@@ -127,13 +133,26 @@ export function createEmailThreadState(
   const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
     Record<string, boolean>
   >({});
-  const [targetMessageId, setTargetMessageId] = createSignal<string>();
-  const [hasHandledTarget, setHasHandledTarget] = createSignal(false);
-  createEffect(() => {
-    const target = host.targetMessageId?.();
-    setTargetMessageId(target);
-    setHasHandledTarget(false);
-  });
+  // Identity distinguishes returning to a previously cleared deep link from
+  // continuing to display it after its highlight has expired.
+  const navigationTarget = createMemo(
+    () => ({
+      threadId: threadContext.source.id(),
+      messageId: host.targetMessageId?.(),
+    }),
+    undefined,
+    {
+      equals: (a, b) =>
+        a.threadId === b.threadId && a.messageId === b.messageId,
+    }
+  );
+  const [clearedTarget, setClearedTarget] = createSignal<NavigationTarget>();
+  const [handledTarget, setHandledTarget] = createSignal<NavigationTarget>();
+  const targetMessageId = () =>
+    clearedTarget() === navigationTarget()
+      ? undefined
+      : navigationTarget().messageId;
+  const hasHandledTarget = () => handledTarget() === navigationTarget();
 
   const drafts = createThreadDrafts(selected);
 
@@ -163,18 +182,33 @@ export function createEmailThreadState(
     setFocusedMessageId(messageId);
   };
 
-  const onInitialDataLoad = (callback: () => boolean) => {
-    createEffect(() => {
-      if (hasHandledTarget() || threadContext.source.isFetching()) return;
-      if (!messagesListRef()) return;
-      if (
-        (!messagesContainerRef() || !untrack(selected)?.db_id) &&
-        threadContext.source.hasMore()
+  const onInitialDataLoad: EmailThreadState['onInitialDataLoad'] = (
+    callback,
+    onTargetChange
+  ) => {
+    let previousTarget: NavigationTarget | undefined;
+    const ready = () =>
+      !threadContext.source.isFetching() &&
+      (!threadContext.isTouch() || host.isActive?.() !== false) &&
+      !!messagesListRef() &&
+      ((!!messagesContainerRef() && !!selected()?.db_id) ||
+        !threadContext.source.hasMore());
+    // One boundary from reactive route/query/DOM readiness into navigation.
+    // Cancel the previous target even while fetching or hidden on mobile.
+    createEffect(
+      on(
+        [navigationTarget, hasHandledTarget, ready],
+        ([target, handled, ready]) => {
+          if (target !== previousTarget) {
+            previousTarget = target;
+            onTargetChange(target);
+          }
+          if (handled || !ready) return;
+          callback();
+          setHandledTarget(target);
+        }
       )
-        return;
-
-      setHasHandledTarget(callback());
-    });
+    );
   };
 
   return {
@@ -202,8 +236,8 @@ export function createEmailThreadState(
       setHiddenChipFocused,
       hovered: hoveredStop,
       setHovered: setHoveredStop,
-      targetMessageId: targetMessageId,
-      setTargetMessageId: setTargetMessageId,
+      targetMessageId,
+      clearTargetMessage: () => setClearedTarget(navigationTarget()),
       list: createMemo(() => selected()?.filtered ?? []),
       unfiltered: createMemo(() => selected()?.messages ?? []),
       // Google's CATEGORY_PERSONAL classification is inconsistent across

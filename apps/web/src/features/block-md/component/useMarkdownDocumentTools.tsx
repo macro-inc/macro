@@ -5,17 +5,20 @@ import {
 } from '@app/features/chat/ChatWithAgentButton';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
+import { Permissions } from '@core/component/SharePermissions';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import Download from '@phosphor/download.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
+import { queryReadyGate } from '@queries/gate';
+import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import {
   DispatchAgentButton,
@@ -24,11 +27,38 @@ import {
 import { useMarkdownName } from './MarkdownNameProvider';
 import { useDownloadDocumentAsMarkdownText } from './useMarkdownDocumentDownload';
 
+function useMarkdownShareModal() {
+  const { documentId, kind, permissions } = useMarkdownDocument();
+  const { displayName } = useMarkdownName();
+  const metadataQuery = useDocumentMetadataQuery(documentId);
+
+  const userPermissions = () => {
+    if (permissions.isOwner()) return Permissions.OWNER;
+    if (permissions.canEdit()) return Permissions.CAN_EDIT;
+    if (permissions.canComment()) return Permissions.CAN_COMMENT;
+    return Permissions.CAN_VIEW;
+  };
+
+  return useShareModal(() => {
+    const documentKind = kind();
+    return {
+      id: documentId(),
+      blockAlias: documentKind === 'document' ? 'md' : documentKind,
+      itemType: 'document',
+      name: displayName() ?? '',
+      userPermissions: userPermissions(),
+      owner: queryReadyGate(metadataQuery)
+        ? metadataQuery.data.owner
+        : undefined,
+    };
+  });
+}
+
 export function useMarkdownDocumentTools() {
   const { documentId, kind } = useMarkdownDocument();
   const { displayName } = useMarkdownName();
   const downloadAsMarkdownText = useDownloadDocumentAsMarkdownText();
-  const shareDialog = useShareDialogContext();
+  const openShare = useMarkdownShareModal();
   const dispatchAgentActions = useDispatchAgentSplitFileActions();
   const isTask = kind() === 'task';
 
@@ -81,8 +111,8 @@ export function useMarkdownDocumentTools() {
       group: 'sharing',
       label: 'Share',
       icon: IconLink,
-      action: () => shareDialog.open(),
-      buttonComponent: () => <ShareTrigger />,
+      action: openShare,
+      buttonComponent: () => <ShareTrigger onClick={openShare} />,
       focusTarget: getShareDrawerRecipientInput,
     },
   ];

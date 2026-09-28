@@ -85,6 +85,7 @@ type SoupEntity =
 type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
   data: {
     notifications?: Notification[] | null;
+    unreadNotifications?: ChannelEntity['unreadNotifications'];
   };
 };
 
@@ -643,7 +644,7 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem => Boolean(item);
+): item is DisplayableSoupItem => Boolean(item) && item.tag !== 'initiative';
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
@@ -666,6 +667,33 @@ function withRawNotifications<T extends SoupEntity>(
     .notifications;
   if (!Array.isArray(notifications)) return entity;
   return { ...entity, notifications } as T;
+}
+
+function calendarReminderTimestamp(
+  item: Extract<DisplayableSoupItem, { tag: 'calendarEvent' }>
+): string | undefined {
+  let latest: string | undefined;
+  let latestMs = -Infinity;
+  const include = (timestamp: string | null | undefined) => {
+    const ms = timestamp ? Date.parse(timestamp) : NaN;
+    if (ms > latestMs) {
+      latest = timestamp ?? undefined;
+      latestMs = ms;
+    }
+  };
+
+  include(item.data.lastReminderFiredAt);
+  const notifications = (item as SoupItemWithOptionalNotifications).data
+    .notifications;
+  for (const notification of notifications ?? []) {
+    if (
+      !notification.deleted_at &&
+      notification.notification_metadata.tag === 'calendar_event_reminder'
+    ) {
+      include(notification.created_at);
+    }
+  }
+  return latest;
 }
 
 type ReferencedEntityType = NonNullable<
@@ -718,6 +746,11 @@ export const mapApiSoupItemToEntity = (
   item: DisplayableSoupItem
 ): SoupEntity => {
   const entity = match(item)
+    // Initiatives are opt-in on the server. Their frontend adapter lands with
+    // the Projects UI; existing lists exclude them via isDisplayableSoupItem.
+    .with({ tag: 'initiative' }, () => {
+      throw new Error('Initiative Soup rendering is not enabled');
+    })
     .with({ tag: 'agentSession' }, (item) => ({
       ...item.data,
       type: 'agent_session' as const,
@@ -811,6 +844,7 @@ export const mapApiSoupItemToEntity = (
         attended: status === 'ATTENDED',
         durationMs: item.data.durationMs ?? undefined,
         participantIds: item.data.participants.map((p) => p.userId),
+        guests: item.data.guests,
         summary: item.data.summary ?? undefined,
         properties: item.data.properties,
       } satisfies CallEntity;
@@ -850,6 +884,8 @@ export const mapApiSoupItemToEntity = (
 
       const out: ChannelEntity = {
         type: 'channel',
+        unreadNotifications: (item as SoupItemWithOptionalNotifications).data
+          .unreadNotifications,
         id: item.data.channel.id,
         name: item.data.channel.name || 'Unknown Channel',
         channelType: item.data.channel.channel_type,
@@ -1015,13 +1051,21 @@ export const mapApiSoupItemToEntity = (
   // activity consumer can't move a freshly-touched row back down.
   const touchedAt = resolveOwnTouch(entity.id, item.touched_at ?? null);
   const touched = touchedAt ? { ...entity, touchedAt } : entity;
-  // Likewise only notified_at pages carry this one; the inbox sorts and
-  // date-buckets on it. Resolved through the notified floor so a page that
-  // was in flight when a notification landed can't move the row back down.
-  const notifiedAt = resolveNotifiedAt(entity.id, item.notified_at ?? null);
+  // Calendar sync can update old events long after their reminders fired.
+  // Without the server's notified_at sort, use the attached reminder's
+  // delivery time (or REST delivery stamp) rather than that metadata update.
+  // The explicit server stamp and newer websocket floor still take priority.
+  const notifiedAt = resolveNotifiedAt(
+    entity.id,
+    item.notified_at ??
+      (item.tag === 'calendarEvent' ? calendarReminderTimestamp(item) : null)
+  );
   const notified = notifiedAt ? { ...touched, notifiedAt } : touched;
 
-  return withRawNotifications(notified, item);
+  return withRawNotifications(
+    { ...notified, isFavorited: item.is_favorited },
+    item
+  );
 };
 
 const toCalendarEventTime = (

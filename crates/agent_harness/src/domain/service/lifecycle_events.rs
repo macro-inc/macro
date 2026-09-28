@@ -6,8 +6,10 @@ use agent_session::domain::events::{
 };
 use agent_session::domain::lifecycle::session_identity;
 
+use crate::domain::model::{ReplyPersona, is_coding_agent};
 use crate::domain::notifications::plan;
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 
 use super::*;
 
@@ -53,13 +55,48 @@ where
         self.identity_of(&session).await
     }
 
+    /// [`Self::identity`], with whether the session's bot is a coding agent -
+    /// read together because the notifications a fact warrants depend on
+    /// both.
+    pub(super) async fn identity_and_coding(
+        &self,
+        session_id: AgentSessionId,
+    ) -> Result<(SessionIdentity, bool)> {
+        let session = self.sessions.get_session(session_id).await?;
+        let (identity, persona) =
+            tokio::try_join!(self.identity_of(&session), self.reply_persona(&session))?;
+        Ok((identity, persona.is_coding))
+    }
+
+    /// The persona a session's thread replies speak as: its bot's name, and
+    /// the bot's choice of being a coding agent applied to the runtime the
+    /// row names.
+    pub(super) async fn reply_persona(&self, session: &AgentSession) -> Result<ReplyPersona> {
+        let (bot, choice) = tokio::try_join!(
+            async { Ok::<_, HarnessError>(self.sessions.session_bot(session.bot_id).await?) },
+            async {
+                self.coding_agents
+                    .coding_agent_choice(session.bot_id)
+                    .await
+                    .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))
+            },
+        )?;
+        Ok(ReplyPersona {
+            name: bot.name,
+            is_coding: is_coding_agent(
+                choice,
+                AgentKind::for_session(session.bot_id, &session.harness),
+            ),
+        })
+    }
+
     /// The identity block for a session whose row is already in hand.
     pub(super) async fn identity_of(&self, session: &AgentSession) -> Result<SessionIdentity> {
         let (bot, participants) = tokio::try_join!(
             self.sessions.session_bot(session.bot_id),
             self.sessions.session_participants(session.id),
         )?;
-        Ok(session_identity(session, &bot, participants))
+        Ok(session_identity(session, &bot, participants)?)
     }
 
     /// Publish one fact about `session_id`, built once its identity is known,
@@ -74,10 +111,10 @@ where
         session_id: AgentSessionId,
         build: impl FnOnce(SessionIdentity) -> AgentSessionLifecycleEvent,
     ) {
-        match self.identity(session_id).await {
-            Ok(identity) => {
+        match self.identity_and_coding(session_id).await {
+            Ok((identity, is_coding)) => {
                 let event = build(identity);
-                let notifications = plan(&event);
+                let notifications = plan(&event, is_coding);
                 self.lifecycle_publisher.publish(event).await;
                 for notification in notifications {
                     self.notifier.notify(notification).await;
@@ -98,12 +135,18 @@ where
     /// every lifecycle publish, a failure to resolve the mentions is logged
     /// and the prompt goes on regardless - the mention is a courtesy to
     /// whoever was named, not part of delivering the prompt.
+    ///
+    /// `origin_message_id` names the channel or document message the prompt
+    /// was posted as, when there is one. The fact carries it so the
+    /// notification plan can tell a prompt whose mentions the message service
+    /// already announced from one typed into the session view.
     pub(super) async fn publish_mentions(
         &self,
         session_id: AgentSessionId,
         action_id: AgentActionId,
         actor: Option<MacroUserIdStr<'static>>,
         prompt_markdown: &str,
+        origin_message_id: Option<Uuid>,
     ) {
         let mentioned = match self
             .mentions
@@ -133,6 +176,7 @@ where
                 action_id,
                 mentioned_by: actor,
                 mentioned,
+                origin_message_id,
             })
         })
         .await;

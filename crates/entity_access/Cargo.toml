@@ -59,6 +59,7 @@ axum = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 model = { path = "../model", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
+model_owner = { path = "../model_owner" }
 
 # OpenAPI schema (optional)
 utoipa = { workspace = true, optional = true }

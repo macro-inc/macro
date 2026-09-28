@@ -22,6 +22,7 @@ export const PropertyTargetEntityType = {
   CHAT: 'CHAT',
   COMPANY: 'COMPANY',
   DOCUMENT: 'DOCUMENT',
+  INITIATIVE: 'INITIATIVE',
   PROJECT: 'PROJECT',
   THREAD: 'THREAD',
   USER: 'USER',

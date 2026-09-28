@@ -8,9 +8,10 @@ use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
-    ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence,
-    ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
-    SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, ThreadSession,
+    ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LeaseView, LogAppended,
+    ManagerFence, ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
+    SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, StoredQueuedAction,
+    ThreadSession,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -26,12 +27,35 @@ use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod working_branch;
+
 /// One session's lease state: the holding replica (if any) and the fence,
 /// which outlives the holder as in the real schema.
 type Lease = (Option<ReplicaId>, i64);
 
 /// One replica's row: its last heartbeat and published forwarding address.
-type ReplicaRow = (std::time::Instant, Option<ReplicaAddress>);
+/// A replica's heartbeat row: when it last beat, where peers reach it, and
+/// whether it has said it is going away.
+#[derive(Debug, Clone)]
+struct ReplicaRow {
+    beat: std::time::Instant,
+    address: Option<ReplicaAddress>,
+    draining: bool,
+}
+
+impl ReplicaRow {
+    fn beating() -> Self {
+        Self {
+            beat: std::time::Instant::now(),
+            address: None,
+            draining: false,
+        }
+    }
+
+    fn live(&self) -> bool {
+        self.beat.elapsed() < REPLICA_STALE_AFTER
+    }
+}
 
 /// An in-memory [`AgentSessionRepo`] and [`AgentSessionLogRepo`].
 ///
@@ -47,6 +71,8 @@ pub struct InMemoryAgentSessionRepo {
     logs: Arc<Mutex<HashMap<AgentSessionId, Vec<StoredAgentSessionLog>>>>,
     log_transaction: Arc<Mutex<()>>,
     history_boundaries: Arc<Mutex<HashMap<AgentSessionId, macro_uuid::Uuid>>>,
+    turn_states: Arc<Mutex<HashMap<AgentSessionId, agent_fold::domain::model::TurnState>>>,
+    working_branches: Arc<Mutex<HashMap<AgentSessionId, String>>>,
     user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
     log_reads: Arc<AtomicUsize>,
     session_reads: Arc<AtomicUsize>,
@@ -55,6 +81,8 @@ pub struct InMemoryAgentSessionRepo {
     /// Session -> lease, mirroring the lease columns: release clears the
     /// holder and leaves the counter.
     leases: Arc<Mutex<HashMap<AgentSessionId, Lease>>>,
+    /// Session -> waiting actions, mirroring `agent_session_queue`.
+    queues: Arc<Mutex<HashMap<AgentSessionId, Vec<StoredQueuedAction>>>>,
 }
 
 impl InMemoryAgentSessionRepo {
@@ -71,6 +99,21 @@ impl InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory session store is not poisoned")
             .insert(session.id, session);
+    }
+
+    /// The activity projection last committed with this session's log.
+    #[must_use]
+    pub fn turn_state(
+        &self,
+        session: AgentSessionId,
+    ) -> Option<agent_fold::domain::model::TurnState> {
+        self.turn_states.lock().unwrap().get(&session).copied()
+    }
+
+    /// The last runtime branch accepted for the session's repository.
+    #[must_use]
+    pub fn working_branch(&self, session: AgentSessionId) -> Option<String> {
+        self.working_branches.lock().unwrap().get(&session).cloned()
     }
 
     /// How many times a session's whole log has been read back.
@@ -187,7 +230,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
                     created_at: session.created_at,
                     modified_at: session.modified_at,
                 },
-                has_grant: session.owner_id == *viewer,
+                has_grant: session.owner_id.is_user(viewer),
                 thread_parent: session.thread_parent.clone(),
             })
             .collect())
@@ -268,7 +311,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory session store is not poisoned")
             .values()
-            .filter(|session| session.owner_id.as_ref() == owner.as_ref())
+            .filter(|session| session.owner_id.is_user(owner))
             .cloned()
             .collect();
         found.sort_by(|a, b| {
@@ -325,8 +368,11 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let session = sessions.get_mut(&id).ok_or_else(|| {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
-        session.repo_url = repo_url;
-        session.modified_at = chrono::Utc::now();
+        if session.repo_url != repo_url {
+            session.repo_url = repo_url;
+            self.working_branches.lock().unwrap().remove(&id);
+            session.modified_at = chrono::Utc::now();
+        }
         Ok(())
     }
 
@@ -413,6 +459,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         let _transaction = self.log_transaction.lock().unwrap();
         self.history_boundaries.lock().unwrap().remove(&id);
+        self.turn_states.lock().unwrap().remove(&id);
         self.sessions
             .lock()
             .expect("in-memory session store is not poisoned")
@@ -421,6 +468,37 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory log store is not poisoned")
             .remove(&id);
+        self.queues
+            .lock()
+            .expect("in-memory queue store is not poisoned")
+            .remove(&id);
+        Ok(())
+    }
+
+    async fn list_queued_actions(&self, id: AgentSessionId) -> Result<Vec<StoredQueuedAction>> {
+        Ok(self
+            .queues
+            .lock()
+            .expect("in-memory queue store is not poisoned")
+            .get(&id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
+    ) -> Result<()> {
+        let mut queues = self
+            .queues
+            .lock()
+            .expect("in-memory queue store is not poisoned");
+        if entries.is_empty() {
+            queues.remove(&id);
+        } else {
+            queues.insert(id, entries.to_vec());
+        }
         Ok(())
     }
 }
@@ -442,16 +520,19 @@ impl SessionOwnership for InMemoryAgentSessionRepo {
             .replicas
             .lock()
             .expect("in-memory replica store is not poisoned");
-        replicas.entry(replica).or_insert((now, None)).0 = now;
+        replicas
+            .entry(replica)
+            .or_insert_with(ReplicaRow::beating)
+            .beat = now;
         let mut leases = self
             .leases
             .lock()
             .expect("in-memory lease store is not poisoned");
         let (holder, fence) = leases.entry(session).or_insert((None, 0));
         let holder_is_live = holder.filter(|holder| *holder != replica).filter(|holder| {
-            replicas
-                .get(holder)
-                .is_some_and(|(beat, _)| now.duration_since(*beat) < REPLICA_STALE_AFTER)
+            replicas.get(holder).is_some_and(|row| {
+                now.duration_since(row.beat) < REPLICA_STALE_AFTER && !row.draining
+            })
         });
         if let Some(holder) = holder_is_live {
             return Ok(ClaimOutcome::ManagedElsewhere(holder));
@@ -484,37 +565,52 @@ impl SessionOwnership for InMemoryAgentSessionRepo {
             .replicas
             .lock()
             .expect("in-memory replica store is not poisoned");
-        let entry = replicas
-            .entry(replica)
-            .or_insert((std::time::Instant::now(), None));
-        entry.0 = std::time::Instant::now();
+        let entry = replicas.entry(replica).or_insert_with(ReplicaRow::beating);
+        entry.beat = std::time::Instant::now();
         // As in the real adapter: a beat carrying no address keeps the one
         // already published.
         if let Some(address) = address {
-            entry.1 = Some(address.clone());
+            entry.address = Some(address.clone());
         }
         Ok(())
     }
 
-    async fn manager_of(&self, session: AgentSessionId) -> Result<Option<SessionManager>> {
+    async fn lease_view(&self, session: AgentSessionId, replica: ReplicaId) -> Result<LeaseView> {
         let leases = self
             .leases
             .lock()
             .expect("in-memory lease store is not poisoned");
-        let Some((Some(holder), _)) = leases.get(&session) else {
-            return Ok(None);
-        };
         let replicas = self
             .replicas
             .lock()
             .expect("in-memory replica store is not poisoned");
-        Ok(replicas
-            .get(holder)
-            .filter(|(beat, _)| beat.elapsed() < REPLICA_STALE_AFTER)
-            .map(|(_, address)| SessionManager {
-                replica: *holder,
-                address: address.clone(),
-            }))
+        let holder = match leases.get(&session) {
+            Some((Some(holder), _)) => {
+                replicas
+                    .get(holder)
+                    .filter(|row| row.live())
+                    .map(|row| SessionManager {
+                        replica: *holder,
+                        address: row.address.clone(),
+                        draining: row.draining,
+                    })
+            }
+            _ => None,
+        };
+        Ok(LeaseView {
+            holder,
+            asking_replica_draining: replicas.get(&replica).is_some_and(|row| row.draining),
+        })
+    }
+
+    async fn begin_draining(&self, replica: ReplicaId) -> Result<()> {
+        self.replicas
+            .lock()
+            .expect("in-memory replica store is not poisoned")
+            .entry(replica)
+            .or_insert_with(ReplicaRow::beating)
+            .draining = true;
+        Ok(())
     }
 }
 
@@ -569,10 +665,49 @@ impl InMemoryAgentSessionRepo {
     }
 }
 
+impl crate::domain::turn_state::SessionTurnProjectionRepo for InMemoryAgentSessionRepo {
+    async fn unprojected_sessions(&self, limit: NonZeroUsize) -> Result<Vec<AgentSessionId>> {
+        let sessions = self.sessions.lock().unwrap();
+        let turns = self.turn_states.lock().unwrap();
+        let mut ids: Vec<_> = sessions
+            .keys()
+            .filter(|id| !turns.contains_key(id))
+            .copied()
+            .collect();
+        ids.sort_by_key(|id| id.as_uuid());
+        ids.truncate(limit.get());
+        Ok(ids)
+    }
+
+    async fn initialize_turn_state(
+        &self,
+        session: AgentSessionId,
+        last_log_id: Option<Uuid>,
+        turn_state: agent_fold::domain::model::TurnState,
+    ) -> Result<bool> {
+        let _transaction = self.log_transaction.lock().unwrap();
+        if !self.sessions.lock().unwrap().contains_key(&session) {
+            return Ok(false);
+        }
+        let logs = self.logs.lock().unwrap();
+        let current = logs
+            .get(&session)
+            .into_iter()
+            .flatten()
+            .max_by_key(|row| (row.created_at, row.id))
+            .map(|row| row.id);
+        let mut turns = self.turn_states.lock().unwrap();
+        if current != last_log_id || turns.contains_key(&session) {
+            return Ok(false);
+        }
+        turns.insert(session, turn_state);
+        Ok(true)
+    }
+}
+
 impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
-        let _transaction = self.log_transaction.lock().unwrap();
-        self.create_log(log)
+        self.create_projected(log, None, None, None).await
     }
 
     async fn participants(
@@ -602,20 +737,78 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
         self.create_fenced_with_boundary(log, claim, None).await
     }
 
+    async fn create_batch_fenced(
+        &self,
+        entries: Vec<StoredAgentSessionLog>,
+        claim: &SessionClaim,
+    ) -> Result<Vec<StoredAgentSessionLog>> {
+        if entries.is_empty() {
+            return Ok(entries);
+        }
+        if entries
+            .iter()
+            .any(|stored| stored.entry.agent_session_id != claim.session)
+        {
+            return Err(AgentSessionError::FencedOut(claim.session));
+        }
+        let _transaction = self.log_transaction.lock().unwrap();
+        let session = claim.session;
+        {
+            let leases = self.leases.lock().unwrap();
+            if !matches!(
+                leases.get(&session), Some((holder, fence))
+                    if *holder == Some(claim.replica) && *fence == claim.fence.0
+            ) || !self.sessions.lock().unwrap().contains_key(&session)
+            {
+                return Err(AgentSessionError::FencedOut(session));
+            }
+        }
+        // Consecutive microseconds from one instant, as the Postgres store
+        // does, so a batch orders by `(created_at, id)` in append order.
+        let now = chrono::Utc::now();
+        let mut stored_entries = Vec::with_capacity(entries.len());
+        for (index, stored) in entries.into_iter().enumerate() {
+            let mut created = self.create_log(stored.entry)?;
+            created.id = stored.id;
+            created.created_at = now + chrono::Duration::microseconds(index as i64);
+            let mut logs = self.logs.lock().unwrap();
+            let rows = logs.get_mut(&session).expect("create_log inserted the row");
+            let row = rows.last_mut().expect("create_log inserted the row");
+            *row = created.clone();
+            stored_entries.push(created);
+        }
+        Ok(stored_entries)
+    }
+
     async fn create_fenced_with_boundary(
         &self,
         log: AgentSessionLog,
         claim: &SessionClaim,
         boundary: Option<crate::domain::model::HistoryBoundary>,
     ) -> Result<StoredAgentSessionLog> {
+        self.create_projected(log, Some(claim), boundary, None)
+            .await
+    }
+
+    async fn create_projected(
+        &self,
+        log: AgentSessionLog,
+        claim: Option<&SessionClaim>,
+        boundary: Option<crate::domain::model::HistoryBoundary>,
+        turn_state: Option<agent_fold::domain::model::TurnState>,
+    ) -> Result<StoredAgentSessionLog> {
+        if boundary.is_some() && claim.is_none() {
+            return Err(AgentSessionError::FencedOut(log.agent_session_id));
+        }
         let _transaction = self.log_transaction.lock().unwrap();
         let leases = self.leases.lock().unwrap();
-        if claim.session != log.agent_session_id
-            || !matches!(
-                leases.get(&log.agent_session_id), Some((holder, fence))
-                    if *holder == Some(claim.replica) && *fence == claim.fence.0
-            )
-        {
+        if claim.is_some_and(|claim| {
+            claim.session != log.agent_session_id
+                || !matches!(
+                    leases.get(&log.agent_session_id), Some((holder, fence))
+                        if *holder == Some(claim.replica) && *fence == claim.fence.0
+                )
+        }) {
             return Err(AgentSessionError::FencedOut(log.agent_session_id));
         }
         if !self
@@ -644,6 +837,9 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
                 .lock()
                 .unwrap()
                 .insert(session, boundary.initialization_log_id);
+        }
+        if let Some(turn_state) = turn_state {
+            self.turn_states.lock().unwrap().insert(session, turn_state);
         }
         Ok(stored)
     }
@@ -696,8 +892,10 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         pull_request_url: None,
         id,
         name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
-        owner_id: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
-            .expect("valid macro user id"),
+        owner_id: model_owner::Owner::User(
+            macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
+                .expect("valid macro user id"),
+        ),
         thread_id: None,
         thread_parent: None,
         originating_message_id: None,
@@ -873,7 +1071,7 @@ impl crate::domain::pull_request::SessionPullRequestRepo for InMemoryAgentSessio
         let mut sessions = self.sessions.lock().unwrap();
         let stored = sessions
             .get_mut(&session)
-            .filter(|stored| &stored.owner_id == owner)
+            .filter(|stored| stored.owner_id.is_user(owner))
             .ok_or(AgentSessionError::Forbidden)?;
         if stored.pull_request_url.as_deref() == Some(url) {
             return Ok(false);

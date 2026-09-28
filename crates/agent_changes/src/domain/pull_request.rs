@@ -31,7 +31,12 @@ impl<Reader: PullRequestDiffReader> ChangesetExtractor for PullRequestChanges<Re
         let pull_request = PullRequestRef::parse(url).ok_or_else(|| {
             ExtractError::NotReady("The linked URL is not a GitHub pull request.".to_owned())
         })?;
-        let diff = self.reader.read(&session.owner_id, &pull_request).await.map_err(|error| match error {
+        // The diff is read through the GitHub App on the owner's behalf, so
+        // the owner has to be a person.
+        let owner = session
+            .owner_user()
+            .map_err(|error| ExtractError::Failed(rootcause::report!(error).into()))?;
+        let diff = self.reader.read(owner, &pull_request).await.map_err(|error| match error {
             CompareError::NotFound => ExtractError::NotReady("The linked pull request is not available on GitHub.".to_owned()),
             CompareError::TooLarge => ExtractError::NotReady("This pull request is too large to load here. Review it on GitHub.".to_owned()),
             CompareError::Unavailable => ExtractError::NotReady("Macro's GitHub App cannot read this pull request. Check its repository access.".to_owned()),

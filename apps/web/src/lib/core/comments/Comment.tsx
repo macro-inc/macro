@@ -1,5 +1,4 @@
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
-import { useMaybeBlockAliasedName } from '@core/block';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { useAuthor } from '@core/context/user';
@@ -75,7 +74,6 @@ export function Comment(
     actionsDropdown?: boolean;
   }>
 ) {
-  const maybeBlockName = useMaybeBlockAliasedName();
   const commentsContext = useContext(CommentsContext);
 
   const {
@@ -112,24 +110,21 @@ export function Comment(
   // drawer paging to another thread with an edit open).
   onCleanup(() => setMessageEditing?.(props.comment.id, false));
 
-  const copyLink = () => {
-    if (!maybeBlockName) return;
-    return async () => {
-      const params: Record<string, string> = {};
-      if (maybeBlockName === 'task' || maybeBlockName === 'md') {
-        params[MD_URL_PARAMS.commentId] = props.comment.id.toString();
-      }
-      try {
-        const url = buildSimpleEntityUrl(
-          { type: maybeBlockName, id: commentsContext.documentId },
-          params
-        );
-        await navigator.clipboard.writeText(url);
-        toast.success('Link copied to clipboard');
-      } catch (_) {
-        toast.failure('Could not copy link');
-      }
-    };
+  const copyLink = async () => {
+    const params: Record<string, string> = {};
+    if (commentsContext.documentType !== 'pdf') {
+      params[MD_URL_PARAMS.commentId] = props.comment.id.toString();
+    }
+    try {
+      const url = buildSimpleEntityUrl(
+        { type: commentsContext.documentType, id: commentsContext.documentId },
+        params
+      );
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied to clipboard');
+    } catch (_) {
+      toast.failure('Could not copy link');
+    }
   };
 
   const mentionsSignal = useContext(ThreadContext).mentionsSignal;
@@ -164,7 +159,7 @@ export function Comment(
               setActiveThread(props.comment.threadId);
               setIsEditing(true);
             }}
-            copyLink={copyLink()}
+            copyLink={copyLink}
           />
           <CommentText text={props.comment.text} />
           {props.children}
@@ -228,32 +223,29 @@ export function CommentReply(
     getCommentById,
     highlightedCommentId,
     documentId,
+    documentType,
     setMessageEditing,
   } = useContext(CommentsContext);
-  const maybeBlockName = useMaybeBlockAliasedName();
   const reply = createMemo(() => getCommentById(props.replyId));
   const isHighlighted = createMemo(
     () => highlightedCommentId() === props.replyId
   );
 
-  const copyLink = () => {
-    if (!maybeBlockName) return;
-    return async () => {
-      const params: Record<string, string> = {};
-      if (maybeBlockName === 'task' || maybeBlockName === 'md') {
-        params[MD_URL_PARAMS.commentId] = props.replyId.toString();
-      }
-      try {
-        const url = buildSimpleEntityUrl(
-          { type: maybeBlockName, id: documentId },
-          params
-        );
-        await navigator.clipboard.writeText(url);
-        toast.success('Link copied to clipboard');
-      } catch (_) {
-        toast.failure('Could not copy link');
-      }
-    };
+  const copyLink = async () => {
+    const params: Record<string, string> = {};
+    if (documentType !== 'pdf') {
+      params[MD_URL_PARAMS.commentId] = props.replyId.toString();
+    }
+    try {
+      const url = buildSimpleEntityUrl(
+        { type: documentType, id: documentId },
+        params
+      );
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied to clipboard');
+    } catch (_) {
+      toast.failure('Could not copy link');
+    }
   };
 
   const [isEditing, setIsEditingSignal] = createSignal<boolean>(false);
@@ -292,7 +284,7 @@ export function CommentReply(
               isResolved={false}
               deleteMessage={props.deleteReply}
               enableEditing={() => setIsEditing(true)}
-              copyLink={copyLink()}
+              copyLink={copyLink}
               hideBottomMargin
               isOwned={props.isOwned}
               isActive={props.isActive}

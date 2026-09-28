@@ -1,0 +1,24 @@
+# Sidebar presence only. Never use this witness as the complete mark-read input.
+query ChannelUnreadPresence($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				__typename
+				id
+				... on GraphqlSoupChannel {
+					unreadNotifications: notifications(
+						filter: {
+							states: [UNSEEN]
+							eventTypes: ["channel_mention", "channel_message_send", "channel_message_reply", "document_mention"]
+						}
+						limit: 1
+					) {
+						id
+						state
+					}
+				}
+			}
+		}
+	}
+}

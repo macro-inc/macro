@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_messages (id, sender_id, content, parent_entity_type, parent_entity_id)\n            VALUES ($1, 'macro|typed-teamless@example.com', 'attachment', 'document', $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5945fa9d910fb96c378548d1ecbfa70afe5c760ad115d1d652a562e7d4258b35"
+}

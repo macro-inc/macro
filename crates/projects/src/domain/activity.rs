@@ -8,9 +8,18 @@ mod test;
 
 use ::activity::{Activity, ActivitySource, Actor, CommonAction, EntityType, Ingest, event_time};
 use chrono::{DateTime, Utc};
+use model_owner::Owner;
 use uuid::Uuid;
 
 use super::events::ProjectTopicEvent;
+
+fn actor_from_owner(owner: &Owner) -> Option<Actor<'static>> {
+    match owner {
+        Owner::User(user) => Some(Actor::new_from_user(user.clone())),
+        Owner::Bot(bot_id) => Some(Actor::new_from_bot(*bot_id)),
+        Owner::Team(_) => None,
+    }
+}
 
 impl ActivitySource for ProjectTopicEvent {
     /// Maps one `macro.projects` event to its ingest outcome.
@@ -34,12 +43,10 @@ impl ActivitySource for ProjectTopicEvent {
             };
 
         match self {
-            ProjectTopicEvent::Created(m) => single(
-                Actor::new_from_user(m.owner.clone()),
-                CommonAction::Created,
-                &m.project_id,
-                now(),
-            ),
+            ProjectTopicEvent::Created(m) => match actor_from_owner(&m.owner) {
+                Some(actor) => single(actor, CommonAction::Created, &m.project_id, now()),
+                None => Ingest::Ignore,
+            },
             ProjectTopicEvent::Updated(m) => match &m.actor_user_id {
                 Some(actor) => single(
                     Actor::new_from_user(actor.clone()),

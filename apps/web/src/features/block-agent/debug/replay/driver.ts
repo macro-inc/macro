@@ -119,7 +119,7 @@ export function createReplayDriver(options: ReplayDriverOptions): ReplayDriver {
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const emit = (entry: AgentSessionLogEntryDto) => {
-    AgentSession.ingest({ agentSessionId, ...entry });
+    AgentSession.ingest({ agentSessionId, entries: [entry] });
   };
 
   const pause = () => {

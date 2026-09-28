@@ -354,8 +354,24 @@ impl SpeculativeFold {
         match &speculation.action {
             AgentAction::Stop => self.tier().stop_requested(),
             AgentAction::RespondElicitation(answer) => {
-                self.tier().elicitation_answered(&answer.request_id)
+                !self.tier().metadata().pending_elicitation().is_some_and(|pending| pending.request_id == answer.request_id)
+                    && self.tier().elicitation_answered(&answer.request_id)
             }
+            AgentAction::RespondToPermission(answer) => !self.tier().metadata().pending_interactions.iter().any(|pending| {
+                matches!(pending, super::model::PendingInteraction::Permission(permission)
+                    if permission.request_id == super::model::AgentRequestId::from(&answer.request_id))
+            }) && self
+                .tier()
+                .messages()
+                .iter()
+                .flat_map(|message| message.parts.iter())
+                .any(|part| {
+                    matches!(part,
+                        super::model::MessagePart::Permission { request_id, outcome, .. }
+                            if *request_id == super::model::AgentRequestId::from(&answer.request_id)
+                                && !matches!(outcome, super::model::PermissionOutcome::Pending)
+                    )
+                }),
             AgentAction::Prompt(_) | AgentAction::Compact | AgentAction::SetModel(_) => self
                 .committed
                 .machine

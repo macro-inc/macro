@@ -32,7 +32,7 @@ fn params(id: AgentSessionId) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
         repo_branch: None,
         id,
-        owner_id: owner(),
+        owner_id: model_owner::Owner::User(owner()),
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
         thread_id: None,
         originating_message_id: None,

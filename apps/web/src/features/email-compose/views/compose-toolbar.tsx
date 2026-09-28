@@ -1,7 +1,10 @@
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@app/features/email-compose/core/constants';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
 import { defaultSelectionData } from '@core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,
@@ -12,10 +15,11 @@ import { plural } from '@core/util/string';
 import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
-import { Button, SendButton, Tooltip } from '@ui';
+import { Button, SendButton } from '@ui';
 import { FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import { createSignal, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
+import { EmailScheduleSummary } from '../components/email-schedule-summary';
 import { useCompose } from '../context/compose-context';
 
 export function EmailComposeToolbar(props: {
@@ -23,7 +27,6 @@ export function EmailComposeToolbar(props: {
 }) {
   const ctx = useCompose();
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
-
   const handleAddAttachments = (files: File[]) => {
     const currentAttachments = ctx.attachments();
 
@@ -77,62 +80,67 @@ export function EmailComposeToolbar(props: {
           />
         </div>
       </Show>
-      <div class="mt-2 flex items-center justify-end gap-1">
-        <Show when={ctx.hasDraft()}>
+      <div class="mt-2 flex min-w-0 justify-end">
+        <div class="flex shrink-0 items-center gap-1">
+          <Show when={ctx.hasDraft()}>
+            <Button
+              onClick={ctx.onDelete}
+              tooltip="Delete draft"
+              size="icon-composer"
+              disabled={ctx.disabled()}
+            >
+              <Trash />
+            </Button>
+          </Show>
+          <Show when={!ctx.hideAttachments}>
+            <Button
+              ref={(el) =>
+                fileSelector(el, () => ({
+                  multiple: true,
+                  onSelect: handleAddAttachments,
+                }))
+              }
+              tooltip="Attach"
+              size="icon-composer"
+              disabled={ctx.disabled()}
+            >
+              <PaperclipIcon />
+            </Button>
+          </Show>
           <Button
-            onClick={ctx.onDelete}
-            tooltip="Delete draft"
-            size="icon-composer"
-          >
-            <Trash />
-          </Button>
-        </Show>
-        <Show when={!ctx.hideAttachments}>
-          <Button
-            ref={(el) =>
-              fileSelector(el, () => ({
-                multiple: true,
-                onSelect: handleAddAttachments,
-              }))
-            }
-            tooltip="Attach"
+            tooltip="Format"
             size="icon-composer"
             disabled={ctx.disabled()}
+            onClick={() => setShowFormatRibbon(!showFormatRibbon())}
           >
-            <PaperclipIcon />
+            <TextAa />
           </Button>
-        </Show>
-        <Button
-          tooltip="Format"
-          size="icon-composer"
-          disabled={ctx.disabled()}
-          onClick={() => setShowFormatRibbon(!showFormatRibbon())}
-        >
-          <TextAa />
-        </Button>
-        <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
-          <EmailDateSelector
-            mobile={false}
-            sendTime={ctx.sendTime()}
-            onSendTimeChange={ctx.onSendTimeChange}
-            disabled={ctx.scheduleSendDisabled?.()}
-          />
-        </Show>
-        <Tooltip label={ctx.sendTime() ? 'Send time is scheduled' : ''}>
+          <Show when={ctx.scheduleEnabled}>
+            <div class="shrink-0">
+              <EmailDateSelector
+                mobile={false}
+                compact
+                state={ctx.schedule.state()}
+                selectedTime={ctx.schedule.selectedTime()}
+                onSelectTime={ctx.schedule.onSelect}
+                onCancelSchedule={ctx.schedule.onCancel}
+                operation={ctx.schedule.operation()}
+                disabled={ctx.schedule.pickerDisabled()}
+              />
+            </div>
+          </Show>
           <SendButton
             appearance="composer"
             onClick={() => ctx.onSend()}
-            disabled={
-              ctx.isSavingDraft?.() ||
-              !!ctx.sendTime() ||
-              ctx.isSending() ||
-              ctx.disabled()
-            }
+            disabled={ctx.isSavingDraft?.() || ctx.primaryActionDisabled()}
             pending={ctx.isSending()}
-            tooltip="Send email"
+            tooltip={
+              ctx.sendUnavailableReason?.() ?? ctx.schedule.actionLabel()
+            }
+            aria-label={ctx.schedule.actionLabel()}
             shortcut="cmd+enter"
           />
-        </Tooltip>
+        </div>
       </div>
     </Show>
   );
@@ -142,48 +150,67 @@ function MobileToolbar(props: {
   handleAddAttachments: (files: File[]) => void;
 }) {
   const ctx = useCompose();
+  const hasScheduleSummary = () => {
+    const state = ctx.schedule.state();
+    return state.type === 'scheduled' || state.intent.type === 'later';
+  };
 
   return (
-    <SplitHeaderRight>
-      <HeaderIsland class="h-(--mobile-chrome-button-size) p-[5px]">
-        <Show when={!ctx.hideAttachments}>
-          <div class="relative">
-            <Button
-              ref={(el) =>
-                fileSelector(el, () => ({
-                  multiple: true,
-                  onSelect: props.handleAddAttachments,
-                }))
-              }
-              size="icon-sm"
-              disabled={ctx.disabled()}
-            >
-              <PaperclipIcon />
-            </Button>
-          </div>
+    <>
+      <SplitHeaderLeft>
+        <Show when={hasScheduleSummary()}>
+          <HeaderIsland class="max-w-[55cqw] shrink px-2">
+            <EmailScheduleSummary
+              state={ctx.schedule.state()}
+              operation={ctx.schedule.operation()}
+              onSelectTime={ctx.schedule.onSelect}
+              onCancelSchedule={ctx.schedule.onCancel}
+            />
+          </HeaderIsland>
         </Show>
+      </SplitHeaderLeft>
+      <SplitHeaderRight>
+        <HeaderIsland class="h-(--mobile-chrome-button-size) p-[5px]">
+          <Show when={!ctx.hideAttachments}>
+            <div class="relative">
+              <Button
+                ref={(el) =>
+                  fileSelector(el, () => ({
+                    multiple: true,
+                    onSelect: props.handleAddAttachments,
+                  }))
+                }
+                size="icon-sm"
+                disabled={ctx.disabled()}
+              >
+                <PaperclipIcon />
+              </Button>
+            </div>
+          </Show>
 
-        <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
-          <EmailDateSelector
-            mobile={ctx.isMobile()}
-            sendTime={ctx.sendTime()}
-            onSendTimeChange={ctx.onSendTimeChange}
-            disabled={ctx.scheduleSendDisabled?.()}
-            compact
+          <Show when={ctx.scheduleEnabled}>
+            <EmailDateSelector
+              mobile={ctx.isMobile()}
+              state={ctx.schedule.state()}
+              selectedTime={ctx.schedule.selectedTime()}
+              onSelectTime={ctx.schedule.onSelect}
+              onCancelSchedule={ctx.schedule.onCancel}
+              operation={ctx.schedule.operation()}
+              disabled={ctx.schedule.pickerDisabled()}
+              compact
+            />
+          </Show>
+          <SendButton
+            tooltip={
+              ctx.sendUnavailableReason?.() ?? ctx.schedule.actionLabel()
+            }
+            aria-label={ctx.schedule.actionLabel()}
+            disabled={ctx.isSavingDraft?.() || ctx.primaryActionDisabled()}
+            pending={ctx.isSending()}
+            onClick={() => ctx.onSend()}
           />
-        </Show>
-        <SendButton
-          tooltip="Send email"
-          disabled={
-            ctx.isSending() ||
-            ctx.isSavingDraft?.() ||
-            ctx.disabled() ||
-            !!ctx.sendTime()
-          }
-          pending={ctx.isSending()}
-          onClick={() => ctx.onSend()}
-        />
-      </HeaderIsland>
-    </SplitHeaderRight>
+        </HeaderIsland>
+      </SplitHeaderRight>
+    </>
   );
 }

@@ -65,7 +65,7 @@ import { useTagFilter } from './tag-filter';
 export type { FilterCategory, FilterOption } from './filter-categories';
 
 // Filter categories by view
-const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
+const HOME_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'type',
     label: 'Type',
@@ -117,7 +117,7 @@ const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
 ];
 
 const isInboxTypeFilterId = (id: string) => {
-  for (const category of INBOX_FILTER_CATEGORIES) {
+  for (const category of HOME_FILTER_CATEGORIES) {
     if (category.options.find((o) => o.id === id)) return true;
   }
 
@@ -361,7 +361,7 @@ export function buildContactLabel(
 }
 
 export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
-  inbox: INBOX_FILTER_CATEGORIES,
+  home: HOME_FILTER_CATEGORIES,
   // No refinements yet: the touched-by-me query rejects channel/email
   // filter trees, so the inbox categories can't be offered wholesale.
   recent: [],
@@ -451,9 +451,9 @@ export const UnifiedFilterDropdown = (
     return content.id;
   });
 
-  const isInboxView = () => currentView() === 'inbox';
+  const isHomeView = () => currentView() === 'home';
   const githubLinkStatus = useGithubLinkStatusQuery({
-    enabled: () => currentView() === 'inbox',
+    enabled: () => currentView() === 'home',
   });
 
   const categories = createMemo(() => {
@@ -465,7 +465,7 @@ export const UnifiedFilterDropdown = (
     // inapplicable there.
     if (view === 'documents' && activeTab() === 'folders') return [];
 
-    if (view !== 'inbox') return viewCategories;
+    if (view !== 'home') return viewCategories;
 
     return filterInboxGithubPrOption(
       viewCategories,
@@ -506,8 +506,8 @@ export const UnifiedFilterDropdown = (
     const query =
       typeof filter.query === 'function' ? filter.query(ctx) : filter.query;
 
-    if (currentView() === 'inbox' && isInboxTypeFilterId(optionId)) {
-      const baseQuery = getViewPreset('inbox', activeTab())?.filters;
+    if (currentView() === 'home' && isInboxTypeFilterId(optionId)) {
+      const baseQuery = getViewPreset('home', activeTab())?.filters;
 
       if (!baseQuery) {
         return;
@@ -806,7 +806,7 @@ export const UnifiedFilterDropdown = (
         categories().length > 0 ||
         isTasksView() ||
         isCompaniesView() ||
-        isInboxView() ||
+        isHomeView() ||
         showTagsFilter()
       }
     >
@@ -837,7 +837,7 @@ export const UnifiedFilterDropdown = (
 
         <Dropdown.Content class={cn('min-w-32')}>
           <Dropdown.Group>
-            <Show when={isInboxView()}>
+            <Show when={isHomeView()}>
               <ReadStatusSubmenu
                 value={readFilter()}
                 onChange={setReadFilter}
@@ -849,7 +849,7 @@ export const UnifiedFilterDropdown = (
                 !isDocumentsView() &&
                 !isTasksView() &&
                 !isCompaniesView() &&
-                !isInboxView()
+                !isHomeView()
               }
               fallback={
                 <>

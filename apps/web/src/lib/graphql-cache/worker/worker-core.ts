@@ -18,7 +18,7 @@ import type {
   SearchCachePage,
   WriteResult,
 } from '../protocol';
-import { parseCacheRevision } from '../protocol';
+import { parseCacheRevision, parseStorageGeneration } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
   classifyCacheError,
@@ -75,6 +75,7 @@ const CACHE_WRITE_PRIORITY = 2;
 function isOrderingBarrier(request: CacheRequest): boolean {
   return (
     request.kind === 'init' ||
+    request.kind === 'current-storage-generation' ||
     request.kind === 'teardown' ||
     request.kind === 'clear'
   );
@@ -428,6 +429,11 @@ export class CacheWorkerCore {
       .with({ kind: 'current-revision' }, async () => {
         return parseCacheRevision(await this.requireEngine().currentRevision());
       })
+      .with({ kind: 'current-storage-generation' }, async () => {
+        return parseStorageGeneration(
+          await this.requireEngine().currentStorageGeneration()
+        );
+      })
       .with({ kind: 'read' }, async (request) => {
         const engine = this.requireEngine();
         const result: ReadResult = await engine.readQuery(
@@ -490,11 +496,13 @@ export class CacheWorkerCore {
           request.identity
         );
         result.revision = parseCacheRevision(result.revision);
-        // Hydration is background cache warming. Keep its revision advancement
-        // for coherent reads, but do not publish foreground invalidations that
-        // would make mounted Soup views switch authority mid-backfill. An
-        // identity change is a real cache reset and must still be broadcast.
+        // Only cache-only consumers opt into hydration. Do not invalidate
+        // foreground Soup queries or switch their authority mid-backfill.
+        // Identity changes remain ordinary cache resets for every subscriber.
         if (result.reset) this.fanOut(result, true);
+        else if (result.revisionAdvanced) {
+          this.push({ kind: 'cache-hydrated', revision: result.revision });
+        }
         const hydration: HydrationResult & Pick<WriteResult, 'reset'> =
           result.data === null
             ? { kind: 'void', revision: result.revision, reset: result.reset }
@@ -684,7 +692,7 @@ export class CacheWorkerCore {
       .with({ kind: 'clear' }, async () => {
         const result: CacheRevisionResult = await this.requireEngine().clear();
         const revision = parseCacheRevision(result.revision);
-        this.push({ kind: 'cache-changed', revision });
+        this.push({ kind: 'cache-changed', revision, reset: true });
         return revision;
       })
       .exhaustive();
@@ -935,7 +943,11 @@ export class CacheWorkerCore {
       });
     }
     if (cacheChanged && result.revisionAdvanced) {
-      this.push({ kind: 'cache-changed', revision: result.revision });
+      this.push({
+        kind: 'cache-changed',
+        revision: result.revision,
+        ...(result.reset ? { reset: true } : {}),
+      });
     }
   }
 

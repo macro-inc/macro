@@ -9,6 +9,8 @@ publish = false
 [features]
 default = ["bebop-owned-all", "do-sqlite-snapshot-storage", "search-service"]
 no-network-deps = []
+# Test-only persistence fault injection; never enable in deployed workers.
+migration-test-hooks = []
 do-sqlite-snapshot-storage = []
 kv-snapshot-storage = []
 r2-snapshot-storage = []
@@ -39,11 +41,12 @@ time = { workspace = true, features = ['wasm-bindgen'] }
 bebop.workspace = true
 sync_service_bebop_schema = { path = "bebop-schema" }
 serde_json.workspace = true
+sha2.workspace = true
 serde.workspace = true
 getrandom = { workspace = true, features = ["wasm_js"] }
 wasm-bindgen.workspace = true
 uuid = { workspace = true, features = ["js"] }
-loro = "1.13"
+loro = "1.16.2"
 macro_sync_service_jwt = { path = "../../crates/macro_sync_service_jwt" }
 matchit =  "0.8.4"
 worker-rs-otel = { path = "../../crates/worker-rs-otel" }

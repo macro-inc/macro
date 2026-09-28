@@ -5,12 +5,12 @@ import type {
   MessageParent,
   MessageThread,
 } from '@service-storage/messages';
-import { entityMessagesClient } from '@service-storage/messages';
 import { queryClient } from '../client';
 import { consumeNonce } from '../nonce';
 import { MessageNonceKeys, messageKeys } from './keys';
 import { normalizeMessageSender } from './message-sender';
 import {
+  getCachedThreadState,
   getTargetMessage,
   insertMessageIntoTargetCaches,
   patchTargetMessage,
@@ -19,7 +19,7 @@ import {
   softInvalidateTargetCaches,
   topLevelMessageHasReplies,
 } from './reconcile';
-import { getThreadRepliesQueryKey } from './thread-replies';
+import { fetchMessageThread, getThreadRepliesQueryKey } from './thread-replies';
 import {
   getMessageTimelineQueryKey,
   getMessageTimelineQueryKeyPrefix,
@@ -99,6 +99,33 @@ export function applyMessage(
   softInvalidateTargetCaches(parent, target);
 }
 
+/**
+ * Deleting the root of a discussion deletes the discussion, and the response
+ * carries only the root's own tombstone. Apply the committed teardown so the
+ * margin and the document mark clear without waiting on the live event, using
+ * the thread state `cached` before the optimistic delete dropped the root from
+ * the caches; the refetch it triggers reconciles the rest. With no state to
+ * build on, only that refetch can report the teardown.
+ */
+export function applyRootDeletion(
+  message: Message,
+  cached?: MessageThread['state']
+) {
+  const parent = message.parent;
+  if (parent.type === 'channel' || message.thread_id) return;
+  const state = cached ?? getCachedThreadState(parent, message.id);
+  if (!state) {
+    void queryClient.invalidateQueries({
+      queryKey: getMessageTimelineQueryKeyPrefix(parent),
+    });
+    return;
+  }
+  applyThreadState(parent, {
+    ...state,
+    deleted_at: message.deleted_at ?? new Date().toISOString(),
+  });
+}
+
 /** One live message protocol for channel screens, document discussions, and linked drawers. */
 export function handleMessageEvent(
   event: MessageEvent,
@@ -161,10 +188,15 @@ function refetchTimelineAwaitingFirstPage(parent: MessageParent): boolean {
   return true;
 }
 
-/** A live document root arrives without its anchor; its thread state carries it. */
+/**
+ * A live document root arrives without its anchor; its thread state carries
+ * it. The fetched thread replaces what the timeline seeded for this root, so
+ * it must carry the same derived senders or an agent's comment loses its name
+ * until the next full load.
+ */
 async function loadDocumentRootState(parent: MessageParent, rootId: string) {
   try {
-    const thread = await entityMessagesClient.thread(parent, rootId);
+    const thread = await fetchMessageThread(parent, rootId);
     queryClient.setQueryData<MessageThread>(
       getThreadRepliesQueryKey(parent, rootId),
       thread

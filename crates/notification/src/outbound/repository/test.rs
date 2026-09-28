@@ -461,7 +461,7 @@ async fn test_get_notification_ids_for_entities_matches_multiple_primary_and_sec
         EntityType::Project.with_entity_str("entity-1"),
     ];
     let notification_ids = pool
-        .get_notification_ids_for_entities(&user, &entities)
+        .get_notification_ids_for_entities(&user, &entities, &NotificationStatus::Seen)
         .await
         .unwrap()
         .into_iter()
@@ -500,6 +500,7 @@ async fn test_get_notification_ids_for_entities_matches_task_entity(pool: Pool<P
         .get_notification_ids_for_entities(
             &user,
             &[EntityType::Document.with_entity_str(task_entity_id)],
+            &NotificationStatus::Seen,
         )
         .await
         .unwrap();
@@ -528,6 +529,7 @@ async fn test_get_notification_ids_for_entities_matches_message_entity(pool: Poo
         .get_notification_ids_for_entities(
             &user,
             &[EntityType::ChannelMessage.with_entity_str(&message_id)],
+            &NotificationStatus::Seen,
         )
         .await
         .unwrap();
@@ -584,6 +586,7 @@ async fn test_get_notification_ids_for_entities_matches_foreign_entities_includi
         .get_notification_ids_for_entities(
             &user,
             &[EntityType::ForeignEntity.with_entity_str(&foreign_entity_id)],
+            &NotificationStatus::Seen,
         )
         .await
         .unwrap();
@@ -941,7 +944,11 @@ async fn test_get_entity_notifications_batch_matches_channel_thread_secondary_en
     let thread_ref = EntityType::ChannelMessage.with_entity_string(thread_id);
     let other_thread_ref = EntityType::ChannelMessage.with_entity_string(other_thread_id);
     let result = pool
-        .get_entity_notifications_batch(user, vec![thread_ref.clone(), other_thread_ref.clone()])
+        .get_entity_notifications_batch(
+            user,
+            vec![thread_ref.clone(), other_thread_ref.clone()],
+            Default::default(),
+        )
         .await
         .unwrap();
 
@@ -1027,7 +1034,11 @@ async fn test_get_entity_notifications_batch_preserves_canonical_entity_identity
     .unwrap();
 
     let result = pool
-        .get_entity_notifications_batch(user, vec![task_entity.clone(), foreign_entity.clone()])
+        .get_entity_notifications_batch(
+            user,
+            vec![task_entity.clone(), foreign_entity.clone()],
+            Default::default(),
+        )
         .await
         .unwrap();
 

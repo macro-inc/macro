@@ -1,5 +1,5 @@
-import type { CalendarBlockEventTime } from '@block-calendar/calendar-range';
-import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
+import type { CalendarEventTime } from '@app/features/calendar-view/calendar-range';
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 
 /** The event shape the create and update calendar tools return. */
@@ -16,10 +16,10 @@ type OpenToolCalendarEventOptions = {
    * call returns the refreshed series, whose start is the master's rather
    * than the occurrence's.
    */
-  time?: CalendarBlockEventTime;
+  time?: CalendarEventTime;
 };
 
-function eventTime(event: ToolCalendarEvent): CalendarBlockEventTime {
+function eventTime(event: ToolCalendarEvent): CalendarEventTime {
   return event.isAllDay
     ? { kind: 'allDay', startDate: event.start, endDate: event.end }
     : { kind: 'timed', startsAt: event.start, endsAt: event.end };
@@ -28,7 +28,7 @@ function eventTime(event: ToolCalendarEvent): CalendarBlockEventTime {
 /** Time fields of a tool time input, as calendar navigation expects them. */
 export function toolInputOpenTime(
   time: NonNullable<NamedTool<'UpdateCalendarEvent', 'call'>['data']['time']>
-): CalendarBlockEventTime {
+): CalendarEventTime {
   return time.kind === 'allDay'
     ? { kind: 'allDay', startDate: time.startDate, endDate: time.endDate }
     : { kind: 'timed', startsAt: time.startsAt, endsAt: time.endsAt };

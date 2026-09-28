@@ -43,6 +43,7 @@ import type {
 import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
 import { ItemBin } from './components/ItemBin';
 import { MentionsMenuItem } from './components/MentionsMenuItem';
+import { createMentionPageLoader } from './hooks/createMentionPageLoader';
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import {
   useEntityMention,
@@ -503,6 +504,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     });
   });
 
+  const maybeLoadMentionPage = createMentionPageLoader();
   createEffect(() => {
     const items = controller.combinedItems();
     if (!items) return;
@@ -511,13 +513,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const activeBucket = viewAllMode
       ? controller.getBucket(viewAllMode)
       : undefined;
-    if (
-      controller.selectedIndex() >= items.length - 5 &&
-      activeBucket?.hasMore?.() &&
-      !activeBucket.isLoadingMore?.()
-    ) {
-      void activeBucket.loadMore?.();
-    }
+    maybeLoadMentionPage({
+      bucket: activeBucket,
+      query: activeSearchTerm(),
+      selectedIndex: controller.selectedIndex(),
+      itemCount: items.length,
+    });
     if (controller.selectedIndex() >= items.length) {
       controller.selectItem(items.length - 1);
     }

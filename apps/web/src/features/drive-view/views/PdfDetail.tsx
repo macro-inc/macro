@@ -12,34 +12,99 @@ import {
   type LocationSearchParams,
   URL_PARAMS,
 } from '@block-pdf/signal/location';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useHasModificationData } from '@block-pdf/signal/save';
+import { useHasComments } from '@block-pdf/store/comments/commentStore';
+import {
+  downloadDocxDocument,
+  downloadPdfDocument,
+  printPdfDocument,
+} from '@block-pdf/util/pdf-file-actions';
+import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
+import { useIsAuthenticated } from '@core/auth';
 import {
   getPermissions,
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
+import { openLoginModal } from '@core/component/TopBar/LoginButton';
+import DownloadIcon from '@phosphor/download-simple.svg';
+import Printer from '@phosphor/printer.svg';
 import { useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import { Show } from 'solid-js';
-import {
-  FileDetailLayout,
-  FileDetailLoadGate,
-  type FileDetailShareProps,
-} from '../components/FileDetail';
+import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
 import { loadPdfDocument, type PdfDocumentData } from '../queries/pdf-document';
+import type { FileDetailContext } from '../util/file-detail-context';
 
-export type PdfDetailContext = {
+export type PdfDetailContext = FileDetailContext<PdfDocumentData>;
+
+function PdfDetailContent(props: {
   data: PdfDocumentData;
-};
-
-function PdfDetailContent() {
+  children?: (context: PdfDetailContext) => JSX.Element;
+}) {
+  const isAuth = useIsAuthenticated();
   const pdf = usePdfDocument();
-  const [documentProxy] = pdf.state.signals.documentProxy;
-  const [showTabBar] = pdf.state.signals.showTabBar;
+  const hasModificationData = useHasModificationData();
+  const hasComments = useHasComments();
+  const fileName =
+    props.data.documentMetadata.documentName ?? 'Unknown Filename';
+  const auth = () => ({
+    isAuthenticated: !!isAuth(),
+    openLogin: openLoginModal,
+  });
+  const operations: FileOperation[] = [
+    {
+      label: 'Print',
+      icon: Printer,
+      action: () => {
+        void printPdfDocument({
+          ...auth(),
+          documentProxy: pdf.documentProxy(),
+        });
+      },
+    },
+    {
+      group: 'file',
+      label: 'Download',
+      icon: DownloadIcon,
+      action: () => {
+        void downloadPdfDocument({
+          ...auth(),
+          documentProxy: pdf.documentProxy(),
+          hasModifications: hasModificationData(),
+          hasComments: hasComments(),
+          documentId: pdf.documentId(),
+          fileName,
+        });
+      },
+    },
+    ...(props.data.documentMetadata.fileType === 'docx'
+      ? [
+          {
+            group: 'file' as const,
+            label: 'Download DOCX',
+            icon: DownloadIcon,
+            action: () => {
+              void downloadDocxDocument({
+                ...auth(),
+                documentId: pdf.documentId(),
+                fileName,
+              });
+            },
+          },
+        ]
+      : []),
+  ];
 
   return (
     <>
-      <Show when={documentProxy()}>
+      {props.children?.({
+        data: props.data,
+        documentMetadata: props.data.documentMetadata,
+        userAccessLevel: props.data.userAccessLevel,
+        operations,
+      })}
+      <Show when={pdf.documentProxy()}>
         <div class="flex min-h-11 shrink-0 items-center gap-2 border-edge-muted border-b px-2">
           <PdfToolbarControls />
           <div class="ml-auto">
@@ -48,7 +113,7 @@ function PdfDetailContent() {
         </div>
       </Show>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <Show when={showTabBar()}>
+        <Show when={pdf.tabs.isVisible()}>
           <div class="flex min-h-11 items-center justify-between gap-2 px-2">
             <div class="customScrollbar w-0 grow overflow-x-auto overflow-y-hidden">
               <Tabs />
@@ -61,14 +126,11 @@ function PdfDetailContent() {
   );
 }
 
-export function PdfDetailDocument(
-  props: FileDetailShareProps & {
-    documentId: string;
-    data: PdfDocumentData;
-    children?: (context: PdfDetailContext) => JSX.Element;
-  }
-) {
-  const panel = useSplitPanelOrThrow();
+export function PdfDetailDocument(props: {
+  documentId: string;
+  data: PdfDocumentData;
+  children?: (context: PdfDetailContext) => JSX.Element;
+}) {
   const [searchParams] = useSearchParams();
   const permissions = () => getPermissions(props.data.userAccessLevel);
 
@@ -77,11 +139,7 @@ export function PdfDetailDocument(
       documentId={props.documentId}
       documentMetadata={props.data.documentMetadata}
       userAccessLevel={props.data.userAccessLevel}
-      blockType="pdf"
-      shareOpen={props.shareOpen}
-      onShareOpenChange={props.onShareOpenChange}
     >
-      {props.children?.({ data: props.data })}
       <PdfDocument
         documentId={props.documentId}
         documentVersionId={props.data.documentMetadata.documentVersionId}
@@ -91,7 +149,6 @@ export function PdfDetailDocument(
         documentProxy={props.data.documentProxy}
         viewLocation={props.data.viewLocation}
         modificationData={props.data.documentMetadata.modificationData}
-        hotkeyScope={panel.splitHotkeyScope}
         portalScope="split"
         permissions={{
           canComment: hasPermissions(permissions(), Permissions.CAN_COMMENT),
@@ -100,18 +157,16 @@ export function PdfDetailDocument(
         }}
         locationParams={getLocationParams(searchParams)}
       >
-        <PdfDetailContent />
+        <PdfDetailContent data={props.data} children={props.children} />
       </PdfDocument>
     </FileDetailLayout>
   );
 }
 
-export function PdfDetail(
-  props: FileDetailShareProps & {
-    documentId: string;
-    children?: (context: PdfDetailContext) => JSX.Element;
-  }
-) {
+export function PdfDetail(props: {
+  documentId: string;
+  children?: (context: PdfDetailContext) => JSX.Element;
+}) {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
@@ -122,8 +177,6 @@ export function PdfDetail(
         <PdfDetailDocument
           documentId={props.documentId}
           data={data}
-          shareOpen={props.shareOpen}
-          onShareOpenChange={props.onShareOpenChange}
           children={props.children}
         />
       )}

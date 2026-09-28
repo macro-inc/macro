@@ -85,6 +85,7 @@ document_sub_type = { path = "../../crates/document_sub_type" }
 documents = { path = "../../crates/documents", default-features = false, optional = true }
 doppler-config = { workspace = true }
 model = { path = "../../crates/model" }
+model_owner = { path = "../../crates/model_owner" }
 s3_key = { path = "../../crates/s3_key" }
 models_email = { path = "../../crates/models_email" }
 model_file_type = { path = "../../crates/model_file_type" }

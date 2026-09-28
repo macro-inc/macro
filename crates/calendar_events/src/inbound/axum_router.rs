@@ -384,7 +384,8 @@ pub struct CalendarMentionPreviewRequest {
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CalendarMentionPreviewKind {
-    /// The requester holds a copy of the meeting on a visible calendar.
+    /// The requester holds a copy of the meeting on a visible calendar, or
+    /// sees the mentioned copy read-only through a channel share.
     Access,
     /// The event exists but is on no calendar the requester can see.
     NoAccess,
@@ -401,7 +402,8 @@ pub struct CalendarMentionPreviewItem {
     /// Visibility of the mentioned event to the requester.
     #[serde(rename = "type")]
     kind: CalendarMentionPreviewKind,
-    /// Preview of the requester's own copy, present only with access.
+    /// Preview of the requester's own copy, or of the channel-shared copy,
+    /// present only with access.
     #[serde(skip_serializing_if = "Option::is_none")]
     event: Option<CalendarMentionEvent>,
 }

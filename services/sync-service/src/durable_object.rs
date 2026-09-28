@@ -7,6 +7,7 @@ use std::{
 
 use bebop::Record;
 use loro::{ExportMode, awareness::EphemeralStore};
+use macro_sync_service_jwt::session::SessionKind;
 use matchit::Router;
 use serde::{Deserialize, Serialize};
 use tracing::{Instrument, debug, error, info, instrument, trace, warn};
@@ -18,10 +19,11 @@ use worker::{
 
 use crate::{
     ai_peer::is_ai_peer,
-    auth::{AccessLevel, TokenFrom, decode_jwt},
+    auth::{AccessLevel, TokenFrom, decode_jwt, socket_access},
     constants::USER_PEER_D1_BINDING,
     d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
-    dss_internal::{DssInternal, DssInternalClient, InteractionReason},
+    domain::document::DocumentAttribution,
+    dss_internal::InteractionReason,
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
@@ -46,8 +48,13 @@ pub mod status_codes {
 
 const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 
-mod spreadsheet_api;
-mod spreadsheet_effects;
+mod document_api;
+mod document_effects;
+mod surface_api;
+pub(crate) mod surface_migration;
+
+use document_effects::{report_interaction, report_new_doc_state};
+use surface_api::{SurfaceLifecycle, session_kind_from_storage_key};
 
 mod path {
     pub const CONNECT: &str = "connect";
@@ -55,8 +62,8 @@ mod path {
     pub const INITIALIZE: &str = "initialize";
     pub const RAW: &str = "raw";
     pub const SNAPSHOT: &str = "snapshot";
-    pub const SPREADSHEET_SNAPSHOT: &str = "spreadsheet-snapshot";
-    pub const SPREADSHEET_UPDATE: &str = "spreadsheet-update";
+    pub const STATE: &str = "state";
+    pub const UPDATE: &str = "update";
     pub const ACTIVE_PEERS_MARKER: &str = "active_peers";
     pub const PEER: &str = "peer";
     pub const METADATA: &str = "metadata";
@@ -108,70 +115,13 @@ pub struct WebSocketMetadata {
     pub actor: Option<String>,
     #[serde(with = "u64_serde_strings")]
     pub peer_ids: BTreeSet<u64>,
+    #[serde(default = "surface_api::document_kind")]
+    pub session_kind: SessionKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<usize>,
 }
 
 pub type WsMetaMap = BTreeMap<String, WebSocketMetadata>;
-
-/// Who a published snapshot's edits are attributed to: the non-human peer that
-/// wrote them and, when its token carried one, the user it acted for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EditAttribution {
-    pub actor: String,
-    pub on_behalf_of: Option<String>,
-}
-
-/// Attribution from currently-connected websocket metadata only.
-///
-/// Closed sockets must not contribute an `actor`: the isolate stays warm while
-/// anyone is connected, so a disconnected AI peer would otherwise keep
-/// attributing later human edits.
-fn edit_attribution_from_meta<'a>(
-    metas: impl IntoIterator<Item = &'a WebSocketMetadata>,
-) -> Option<EditAttribution> {
-    metas.into_iter().find_map(|meta| {
-        meta.actor.clone().map(|actor| EditAttribution {
-            actor,
-            on_behalf_of: meta.user_id.clone(),
-        })
-    })
-}
-
-/// Why a snapshot is published from `websocket_close`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CloseFlush {
-    /// The last peer left; the pre-attribution snapshot-on-idle behaviour.
-    LastLeave,
-    /// The attributed peer left while humans stay. Its pending edits must
-    /// publish now, while its metadata still supplies the actor; the next
-    /// alarm would publish them unattributed.
-    ActorLeft,
-}
-
-impl CloseFlush {
-    /// A human leaving while the actor stays never flushes: the next alarm
-    /// still has the actor, and flushing here would `mark_exported` and then
-    /// republish the same content on last-leave.
-    fn decide(
-        is_last_leave: bool,
-        leaving_socket_has_actor: bool,
-        should_save: bool,
-    ) -> Option<Self> {
-        if is_last_leave {
-            Some(Self::LastLeave)
-        } else if leaving_socket_has_actor && should_save {
-            Some(Self::ActorLeft)
-        } else {
-            None
-        }
-    }
-
-    fn interaction_reason(self) -> InteractionReason {
-        match self {
-            Self::LastLeave => InteractionReason::LastLeave,
-            Self::ActorLeft => InteractionReason::Edited,
-        }
-    }
-}
 
 #[durable_object]
 pub struct DocumentSyncSession {
@@ -189,6 +139,13 @@ pub struct DocumentSyncSession {
     msg_buffer: Arc<Mutex<Vec<u8>>>,
     /// Buffered blame events. Flushed via D1 batch on each alarm tick.
     pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
+    /// Distinct editors since the last snapshot notification.
+    pending_editors: Arc<Mutex<BTreeSet<DocumentAttribution>>>,
+    surface_lifecycle: Mutex<Option<SurfaceLifecycle>>,
+    source_migration: Mutex<Option<surface_migration::SourceState>>,
+    // Serialize whole callbacks, including persistence awaits. A freeze must
+    // drain every in-flight mutation before it exports or closes writers.
+    mutation_barrier: futures::lock::Mutex<()>,
 }
 
 mod u64_serde_strings {
@@ -229,70 +186,6 @@ mod u64_serde_strings {
             assert_eq!(result.set, data);
             Ok(())
         }
-    }
-}
-
-#[cfg(test)]
-mod actor_attribution_test {
-    use super::{
-        AccessLevel, CloseFlush, EditAttribution, WebSocketMetadata, edit_attribution_from_meta,
-    };
-
-    fn meta(actor: Option<&str>, user_id: Option<&str>) -> WebSocketMetadata {
-        WebSocketMetadata {
-            user_id: user_id.map(str::to_string),
-            access_level: AccessLevel::Edit,
-            actor: actor.map(str::to_string),
-            peer_ids: Default::default(),
-        }
-    }
-
-    #[test]
-    fn ignores_sockets_without_an_actor() {
-        let human = meta(None, Some("macro|user@example.com"));
-        assert_eq!(edit_attribution_from_meta([&human]), None);
-    }
-
-    #[test]
-    fn uses_the_connected_actor_and_its_user() {
-        let stale = meta(Some("bot|stale"), Some("macro|first@example.com"));
-        let human = meta(None, Some("macro|user@example.com"));
-        assert_eq!(
-            edit_attribution_from_meta([&human]),
-            None,
-            "closed AI metadata must not be consulted"
-        );
-        assert_eq!(
-            edit_attribution_from_meta([&stale, &human]),
-            Some(EditAttribution {
-                actor: "bot|stale".to_string(),
-                on_behalf_of: Some("macro|first@example.com".to_string()),
-            })
-        );
-    }
-
-    #[test]
-    fn close_flushes_on_last_leave_or_when_the_actor_leaves_with_pending_edits() {
-        assert_eq!(
-            CloseFlush::decide(false, true, true),
-            Some(CloseFlush::ActorLeft),
-            "AI leave while a human stays must flush pending edits"
-        );
-        assert_eq!(
-            CloseFlush::decide(false, false, true),
-            None,
-            "human leave while the AI stays must not flush"
-        );
-        assert_eq!(
-            CloseFlush::decide(true, true, true),
-            Some(CloseFlush::LastLeave),
-            "last-leave publishes one attributed snapshot"
-        );
-        assert_eq!(
-            CloseFlush::decide(true, false, false),
-            Some(CloseFlush::LastLeave)
-        );
-        assert_eq!(CloseFlush::decide(false, true, false), None);
     }
 }
 
@@ -354,6 +247,15 @@ impl<'a> Wsm<'a> {
             .collect())
     }
 
+    pub async fn edit_attribution(&mut self) -> Result<Option<DocumentAttribution>> {
+        self.maybe_update_ws_meta_map().await?;
+        let ws_id = self.get_ws_id()?.to_string();
+        let map = self.dss.ws_meta_map.lock("Wsm::edit_attribution");
+        let meta = map.get(&ws_id).context("missing ws metadata")?;
+        DocumentAttribution::from_session_claims(meta.actor.clone(), meta.user_id.clone())
+            .context("invalid signed websocket attribution")
+    }
+
     pub async fn can_edit(&mut self) -> Result<bool> {
         self.maybe_update_ws_meta_map().await?;
         let ws_id = self.get_ws_id()?.to_string();
@@ -363,7 +265,6 @@ impl<'a> Wsm<'a> {
             .lock("Wsm::can_edit get")
             .get(&ws_id)
             .ok_or(Error::from("missing ws metadata"))?
-            .access_level
             .can_edit())
     }
 
@@ -400,43 +301,6 @@ pub fn get_ws_id(state: &State, ws: &WebSocket) -> Result<String> {
     get_ws_id_from_tags(&tags)
 }
 
-/// send a shallow snapshot to cache and search service
-/// we should eagerly call this from tiem to time to keep our backend up to date on
-/// the status of the document:
-/// - every few seconds
-/// - on creation
-/// - on everyone being disconnected
-async fn report_new_doc_state(
-    document_id: &str,
-    snapshot: &[u8],
-    has_markdown_content: bool,
-    env: &Env,
-    attribution: Option<EditAttribution>,
-) {
-    if let Err(err) = DssInternalClient::new(env)
-        .publish_shallow_snapshot(document_id, snapshot)
-        .await
-    {
-        warn!(error=?err, "failed to push snapshot to DSS");
-    }
-    #[cfg(feature = "search-service")]
-    if has_markdown_content
-        && let Err(err) = crate::sps::update(document_id, env, attribution).await
-    {
-        warn!(error=?err, "failed to update search index");
-    }
-}
-
-/// Report an interaction (join/leave/periodic edit) to DSS.
-async fn report_interaction(document_id: &str, env: &Env, reason: InteractionReason) {
-    if let Err(err) = DssInternalClient::new(env)
-        .publish_interaction(document_id, reason)
-        .await
-    {
-        warn!(error=?err, "failed to push interaction to DSS");
-    }
-}
-
 /// Schedule an alarm 5 seconds from now.
 async fn bump_alarm(state: &State) -> Result<()> {
     let current_alarm = state.storage().get_alarm().await?;
@@ -452,32 +316,23 @@ async fn bump_alarm(state: &State) -> Result<()> {
     Ok(())
 }
 
+fn take_editors(editors: &Mutex<BTreeSet<DocumentAttribution>>) -> Vec<DocumentAttribution> {
+    std::mem::take(&mut *editors.lock("take document editors"))
+        .into_iter()
+        .collect()
+}
+
 impl DocumentSyncSession {
     pub fn get_websockets(&self) -> Vec<WebSocket> {
-        self.state.get_websockets()
+        self.active_websockets()
     }
 
-    fn edit_attribution(&self) -> Option<EditAttribution> {
-        let connected: BTreeSet<String> = self
-            .state
-            .get_websockets()
-            .iter()
-            .filter_map(|ws| get_ws_id(&self.state, ws).ok())
-            .collect();
-        let map = self
-            .ws_meta_map
-            .lock("DocumentSyncSession::edit_attribution");
-        edit_attribution_from_meta(connected.iter().filter_map(|ws_id| map.get(ws_id)))
-    }
-
-    fn websocket_has_actor(&self, ws: &WebSocket) -> bool {
-        let Ok(ws_id) = get_ws_id(&self.state, ws) else {
-            return false;
-        };
-        self.ws_meta_map
-            .lock("DocumentSyncSession::websocket_has_actor")
-            .get(&ws_id)
-            .is_some_and(|meta| meta.actor.is_some())
+    pub(crate) fn record_editor(&self, attribution: Option<&DocumentAttribution>) {
+        if let Some(attribution) = attribution {
+            self.pending_editors
+                .lock("record document editor")
+                .insert(attribution.clone());
+        }
     }
 
     async fn forget_websocket_metadata(&self, ws: &WebSocket) {
@@ -522,6 +377,16 @@ impl DocumentSyncSession {
     }
     async fn inner_fetch(&self, req: Request) -> Result<Response> {
         let url = req.url()?;
+        if url.path().starts_with("/surface/") {
+            return self.surface_handler(req).await;
+        }
+        let segments: Vec<_> = url.path().split('/').collect();
+        if let ["", "document", id, "migration", operation] = segments.as_slice() {
+            return self.source_migration_handler(req, id, operation).await;
+        }
+        if self.source_blocked().await? {
+            return Ok(response(status_codes::FORBIDDEN));
+        }
         let matched = ROUTER
             .at(url.path())
             .with_context(|| format!("Failed to route url: [{url}]"))?;
@@ -537,8 +402,10 @@ impl DocumentSyncSession {
             (path::CONNECT, Some(document_id)) => {
                 return self.connect_handler(req, document_id).await;
             }
-            (path::SPREADSHEET_SNAPSHOT | path::SPREADSHEET_UPDATE, Some(document_id)) => {
-                return self.spreadsheet_handler(req, document_id).await;
+            (operation @ (path::STATE | path::UPDATE), Some(document_id)) => {
+                return self
+                    .document_handler(req, document_id, operation == path::UPDATE)
+                    .await;
             }
 
             // EXIST, PEER, and WAKEUP don't require auth
@@ -628,7 +495,11 @@ impl DocumentSyncSession {
                 .put(DOCUMENT_ID_KEY, document_id.to_string())
                 .await?;
             let dkv_storage = DurableKVStorage::new(self.state.storage());
-            let session_storage = Rc::new(SessionStorage::new(storage, dkv_storage));
+            let session_storage = Rc::new(SessionStorage::new(
+                storage,
+                dkv_storage,
+                SessionKind::Document,
+            ));
             *self
                 .session_storage
                 .lock("DocumentSyncSession::session_storage set within initialize_handler") =
@@ -655,17 +526,8 @@ impl DocumentSyncSession {
             }
             let document_id_owned = document_id.to_string();
             let env = self.env.clone();
-            let attribution = self.edit_attribution();
-            let has_markdown_content = state.has_markdown_content();
             self.state.wait_until(async move {
-                report_new_doc_state(
-                    &document_id_owned,
-                    &snapshot,
-                    has_markdown_content,
-                    &env,
-                    attribution,
-                )
-                .await;
+                report_new_doc_state(&document_id_owned, &snapshot, &env, Vec::new()).await;
             });
         }
 
@@ -675,8 +537,11 @@ impl DocumentSyncSession {
     /// Active peer ids. With `include_ai = false`, AI editors (peer ids from the
     /// reserved AI block) are filtered out so callers see only human collaborators.
     async fn active_peer_ids_handler(&self, include_ai: bool) -> Result<Response> {
+        if !self.state.get_websockets().is_empty() {
+            self.validate_surface_sockets(None).await?;
+        }
         let mut peer_ids: BTreeSet<u64> = BTreeSet::new();
-        for ws in self.state.get_websockets() {
+        for ws in self.get_websockets() {
             let new_peer_ids = Wsm::new(self, &ws).get_peer_ids().await?;
             peer_ids.extend(
                 new_peer_ids
@@ -828,8 +693,7 @@ impl DocumentSyncSession {
 
     async fn connect_handler(&self, req: Request, document_id: &str) -> Result<Response> {
         let (res, elap) = timeit!({
-            let claims = or_unauth!(decode_jwt(&req, &self.env, TokenFrom::QueryParams).ok());
-            or_unauth!(claims.has_document_id_access(document_id).then_some(()));
+            let claims = or_unauth!(socket_access(&req, &self.env, document_id).ok());
             if self.maybe_set_document_id(document_id).await? {
                 trace!("init document_id={document_id}");
             } else {
@@ -855,12 +719,22 @@ impl DocumentSyncSession {
                 access_level: claims.access_level,
                 actor: claims.actor,
                 peer_ids: Default::default(),
+                session_kind: claims.session_kind,
+                expires_at: claims.expires_at,
             };
 
             self.state.storage().put(&ws_id, &ws_meta).await?;
             self.ws_meta_map
                 .lock("DocumentSyncSession::ws_meta_map insert in connect_handler")
                 .insert(ws_id, ws_meta);
+
+            // A surface may have been revoked while socket metadata was being
+            // persisted. Recheck before sending any initial content.
+            if claims.session_kind == SessionKind::Surface
+                && !self.validate_surface_sockets(Some(&pair.server)).await?
+            {
+                return Ok(response(status_codes::FORBIDDEN));
+            }
 
             // If the snapshot is already in storage, send the initial sync now.
             // Otherwise accept the WS without sending — initialize_handler will
@@ -900,6 +774,9 @@ impl DocumentSyncSession {
                 });
             }
 
+            if claims.session_kind == SessionKind::Surface {
+                bump_alarm(&self.state).await?;
+            }
             Response::from_websocket(pair.client).context("failed to create websocket response")?
         });
 
@@ -948,7 +825,11 @@ impl DocumentSyncSession {
             self.maybe_set_document_id(document_id).await?;
             // set up session storage
             let dkv_storage = DurableKVStorage::new(self.state.storage());
-            let session_storage = Rc::new(SessionStorage::new(snapshot_storage, dkv_storage));
+            let session_storage = Rc::new(SessionStorage::new(
+                snapshot_storage,
+                dkv_storage,
+                session_kind_from_storage_key(document_id),
+            ));
             *self
                 .session_storage
                 .lock("DocumentSyncSession::session_storage set within exists") =
@@ -1006,7 +887,11 @@ impl DocumentSyncSession {
             let id = self.document_id().await?.to_string();
             let snapshot_storage = get_snapshot_storage(&self.env, &self.state, id.clone())?;
             let dkv_storage = DurableKVStorage::new(self.state.storage());
-            let ss = Rc::new(SessionStorage::new(snapshot_storage, dkv_storage));
+            let ss = Rc::new(SessionStorage::new(
+                snapshot_storage,
+                dkv_storage,
+                session_kind_from_storage_key(&id),
+            ));
             *self
                 .session_storage
                 .lock("DocumentSyncSession::session_storage set within main session_storage fn") =
@@ -1058,16 +943,10 @@ pub static ROUTER: LazyLock<Router<&str>> = LazyLock::new(|| {
         .insert("/document/{document_id}/snapshot", path::SNAPSHOT)
         .unwrap();
     router
-        .insert(
-            "/document/{document_id}/spreadsheet-snapshot",
-            path::SPREADSHEET_SNAPSHOT,
-        )
+        .insert("/document/{document_id}/state", path::STATE)
         .unwrap();
     router
-        .insert(
-            "/document/{document_id}/spreadsheet-update",
-            path::SPREADSHEET_UPDATE,
-        )
+        .insert("/document/{document_id}/update", path::UPDATE)
         .unwrap();
     router
         .insert("/document/{document_id}/peer/{peer_id}", path::PEER)
@@ -1114,12 +993,17 @@ impl DurableObject for DocumentSyncSession {
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
             msg_buffer: Arc::new(Mutex::new(vec![])),
             pending_blame: Arc::new(Mutex::new(Vec::new())),
+            pending_editors: Arc::new(Mutex::new(Default::default())),
+            surface_lifecycle: Mutex::new(None),
+            source_migration: Mutex::new(None),
+            mutation_barrier: futures::lock::Mutex::new(()),
         }
     }
 
     /// Fetch the durable object
     /// Upgrades the request to a websocket request connected to the document session
     async fn fetch(&self, req: Request) -> Result<Response> {
+        let _barrier = self.mutation_barrier.lock().await;
         let set_allow_origin = if let Some(origin) = req
             .headers()
             .get("Origin")
@@ -1163,6 +1047,14 @@ impl DurableObject for DocumentSyncSession {
     }
 
     async fn websocket_message(&self, ws: WebSocket, msg: WebSocketIncomingMessage) -> Result<()> {
+        let _barrier = self.mutation_barrier.lock().await;
+        if self.source_blocked().await? {
+            ws.close(Some(1008), Some("session frozen or retired"))?;
+            return Ok(());
+        }
+        if !self.validate_surface_sockets(Some(&ws)).await? {
+            return Ok(());
+        }
         const PONG: &str = "pong";
         const PING: &str = "ping";
         let binary_message = match msg {
@@ -1240,6 +1132,11 @@ impl DurableObject for DocumentSyncSession {
 
     /// Save document if needed
     async fn alarm(&self) -> Result<Response> {
+        let _barrier = self.mutation_barrier.lock().await;
+        if self.source_blocked().await? {
+            return Response::empty();
+        }
+        self.validate_surface_sockets(None).await?;
         let span = tracing::info_span!("do.alarm");
         worker_rs_otel::scope(&self.env, &self.state, async {
             let state = match self
@@ -1280,13 +1177,14 @@ impl DurableObject for DocumentSyncSession {
             state.mark_exported();
 
             let document_id = self.document_id().await.ok();
+            let pending_editors = self.pending_editors.clone();
             let env = self.env.clone();
-            let attribution = self.edit_attribution();
             self.state.wait_until(async move {
                 if let Some(document_id) = document_id
                     && let Ok(snapshot) = doc_state.export_shallow_snapshot()
                 {
-                    report_new_doc_state(&document_id, &snapshot, doc_state.has_markdown_content(), &env, attribution).await;
+                    let editors = take_editors(&pending_editors);
+                    report_new_doc_state(&document_id, &snapshot, &env, editors).await;
                     report_interaction(&document_id, &env, InteractionReason::Edited).await;
                 }
             });
@@ -1320,7 +1218,13 @@ impl DurableObject for DocumentSyncSession {
         _reason: String,
         _was_clean: bool,
     ) -> Result<()> {
+        let _barrier = self.mutation_barrier.lock().await;
+        if self.source_blocked().await? {
+            self.forget_websocket_metadata(&ws).await;
+            return Ok(());
+        }
         worker_rs_otel::scope(&self.env, &self.state, async {
+            self.validate_surface_sockets(None).await?;
             let peer_ids = Wsm::new(self, &ws).get_peer_ids().await?;
             for peer_id in peer_ids {
                 self.awareness.delete(&peer_id.to_string());
@@ -1329,42 +1233,23 @@ impl DurableObject for DocumentSyncSession {
                 // Don't silently discard the error
                 websocket::broadcast_awareness(
                     &ws,
-                    self.state.get_websockets().as_slice(),
+                    self.get_websockets().as_slice(),
                     update.as_slice(),
                     self.msg_buffer.clone(),
                 )
                 .context("failed to broadcast awareness")?;
             }
 
-            // The closing socket still counts as connected here, so its actor
-            // is still part of the attribution.
-            let state = self.document_state().await.ok();
-            let flush = CloseFlush::decide(
-                self.state.get_websockets().len() == 1,
-                self.websocket_has_actor(&ws),
-                state.as_ref().is_some_and(|s| s.should_save()),
-            );
-            if let Some(flush) = flush
-                && let Some(state) = state
+            if self.state.get_websockets().len() == 1
+                && let Ok(state) = self.document_state().await
                 && let Ok(document_id) = self.document_id().await
                 && let Ok(snapshot) = state.export_shallow_snapshot()
             {
-                if flush == CloseFlush::ActorLeft {
-                    state.mark_exported();
-                }
-                let attribution = self.edit_attribution();
+                let editors = take_editors(&self.pending_editors);
                 let env = self.env.clone();
-                let has_markdown_content = state.has_markdown_content();
                 self.state.wait_until(async move {
-                    report_new_doc_state(
-                        &document_id,
-                        &snapshot,
-                        has_markdown_content,
-                        &env,
-                        attribution,
-                    )
-                    .await;
-                    report_interaction(&document_id, &env, flush.interaction_reason()).await;
+                    report_new_doc_state(&document_id, &snapshot, &env, editors).await;
+                    report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
                 });
             }
             self.forget_websocket_metadata(&ws).await;

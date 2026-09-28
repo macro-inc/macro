@@ -36,6 +36,10 @@ use call::{
         s3_recording_storage::{RecordingCloudFrontConfig, S3RecordingStorage},
     },
 };
+use channel_labels::{
+    domain::service::ChannelLabelsServiceImpl, inbound::axum_router::ChannelLabelsRouterState,
+    outbound::pg_channel_labels_repo::PgChannelLabelsRepo,
+};
 use channels::{
     domain::{
         list_service::ChannelListServiceImpl,
@@ -73,6 +77,8 @@ use email::{
     outbound::EmailPgRepo,
 };
 use embedding::embedding_provider::openai::TextEmbedding3Small;
+use entity_registry::{NonUserOwners, OwnerGrantPolicy};
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use favorites::{
     domain::{mutation_service::FavoritesMutationServiceImpl, service::FavoritesServiceImpl},
     inbound::axum_router::FavoritesRouterState,
@@ -436,15 +442,15 @@ async fn run() -> anyhow::Result<()> {
             Some(permission_checker),
             Some(notification_service),
         )
-        .with_event_broker(macro_event_broker.clone()),
+        .with_event_broker(macro_event_broker.clone())
+        .with_initiative_assignees(Arc::new(
+            initiative::domain::assignees::InitiativeAssignees::new(PgInitiativeRepo::new(
+                db.clone(),
+            )),
+        )),
     );
 
     // Create the channel list service used by soup.
-    let channel_service_for_soup = ChannelListServiceImpl::new(
-        PgChannelsRepo::new(readonly_db.clone()),
-        PgChannelsRepo::new(readonly_db.clone()),
-        frecency_storage.clone(),
-    );
     // Create the legacy channel list router state for routes mounted under /comms.
     let channel_list_state = ChannelListRouterState::new(
         ChannelListServiceImpl::new(
@@ -463,7 +469,9 @@ async fn run() -> anyhow::Result<()> {
     ));
     let system_properties_service = Arc::new(system_properties_service);
 
-    let document_repo = PgDocumentRepo::new(db.clone());
+    let owned_entity_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
+    let document_repo = PgDocumentRepo::new(db.clone(), owned_entity_registrar.clone());
     let cloudfront_config = CloudFrontConfig {
         distribution_url: config
             .document_storage_service_cloudfront_distribution_url
@@ -509,7 +517,7 @@ async fn run() -> anyhow::Result<()> {
         ));
 
     let project_service = Arc::new(ProjectServiceImpl::new(
-        PgProjectRepo::new(db.clone()),
+        PgProjectRepo::new(db.clone(), owned_entity_registrar),
         S3ProjectUploadAdapter::new(
             macro_aws_config::s3_client().await,
             config.document_storage_bucket.as_ref(),
@@ -656,8 +664,7 @@ async fn run() -> anyhow::Result<()> {
                     .document_storage_service_cloudfront_signer_private_key
                     .as_ref()
                     .to_string(),
-                presigned_url_expiry_seconds: config
-                    .document_storage_service_presigned_url_expiry_seconds,
+                presigned_url_expiry_seconds: config::CALL_RECORDING_PRESIGNED_URL_EXPIRY_SECONDS,
             };
             Some(S3RecordingStorage::new(egress_config.bucket.clone(), cloudfront_config).await)
         }
@@ -726,12 +733,30 @@ async fn run() -> anyhow::Result<()> {
             .with_event_broker(macro_event_broker.clone()),
     );
 
+    consumer_tracker.spawn({
+        let service = call_service.clone();
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            cancellation_token
+                .run_until_cancelled(call::inbound::stale_call_sweeper::run_stale_call_sweeper(
+                    service,
+                    call::inbound::stale_call_sweeper::SWEEP_INTERVAL,
+                ))
+                .await;
+        }
+    });
+
     let call_state = CallRouterState::new(
         call_service.clone(),
         entity_access_service.clone(),
         authorization_state.clone(),
     );
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
+    let call_public_rate_limiter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client.clone(),
+        },
+    };
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
     let webhook_endpoint_scheme_policy = if matches!(env, Environment::Local) {
@@ -873,15 +898,36 @@ async fn run() -> anyhow::Result<()> {
     });
 
     let activity_consumer_brokers = config.kafka_brokers.as_ref().to_string();
+    let editing_activity = Arc::new(
+        documents_hex::outbound::editing_activity::RedisEditingActivityStore::new(
+            redis_client.clone(),
+        ),
+    );
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
         let activity_repo = activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone());
+        let activity_realtime = activity::domain::announcements::ActivityAnnouncements::new(
+            activity::KafkaActivityRealtimePublisher::new(macro_event_broker.clone()),
+            crate::service::activity::EntityAccessActivityAudience::new(
+                entity_access_service.clone(),
+            ),
+        );
         async move {
             let consumer = activity::inbound::kafka_consumer::ActivityConsumer::<
                 _,
                 crate::service::activity::ActivitySourceEvent,
                 _,
-            >::new(activity_repo, crate::service::activity::ingest);
+                _,
+            >::new(
+                activity_repo,
+                move |event| {
+                    let editing_activity = editing_activity.clone();
+                    async move {
+                        crate::service::activity::ingest(event, editing_activity.as_ref()).await
+                    }
+                },
+                activity_realtime,
+            );
             loop {
                 if cancellation_token.is_cancelled() {
                     break;
@@ -923,28 +969,33 @@ async fn run() -> anyhow::Result<()> {
         config.queue_wait_time_seconds,
     );
 
-    let call_record_query_service = call::domain::service::CallRecordQueryServiceImpl::new(
-        PgCallRepo::new(readonly_db.clone()),
-    );
-    let foreign_entity_service_for_soup =
-        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone()));
-
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
 
-    // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
-    // (resolved from the `openai-key` secret at deploy time by the infra stack),
-    // the same way `document_cognition_service` consumes it. Fail fast if it's
-    // empty so the service never starts with a broken task-dedup embedder.
+    // MacroConfig reads the shared OPENAI_API_KEY from Doppler's APP_SECRETS_JSON
+    // or the local environment. Validate once before constructing consumers.
     let openai_api_key = config.openai_api_key.as_ref().to_owned();
     anyhow::ensure!(
         !openai_api_key.trim().is_empty(),
-        "OpenAI API key is required for task dedup embeddings",
+        "OpenAI API key is required for task dedup embeddings and dictation",
     );
     let cohere_api_key = config.cohere_api_key.as_ref().to_owned();
     anyhow::ensure!(
         !cohere_api_key.trim().is_empty(),
         "Cohere API key is required for task dedup reranking",
+    );
+    let dictation_state = dictation::inbound::axum_router::DictationRouterState::new(
+        dictation::domain::DictationServiceImpl::new(
+            dictation::outbound::WhisperTranscriber::new(&config.openai_api_key)?,
+            dictation::outbound::SymphoniaRecordingInspector,
+            ai_usage::pg_recorder(db.clone()),
+        ),
+        RateLimitServiceImpl {
+            repo: RedisRateLimitAdapter {
+                redis: redis_client.clone(),
+            },
+        },
+        authorization_state.clone(),
     );
     let task_dedup_service = Arc::new(TaskDedupService::new(
         TextEmbedding3Small::new(openai_api_key),
@@ -999,7 +1050,13 @@ async fn run() -> anyhow::Result<()> {
         conn_gateway_client.clone(),
     );
     let discussion_delivery = messages::domain::delivery::DiscussionDelivery::new(
-        messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()),
+        messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone())
+            .with_initiatives(
+                initiative::domain::lookup::InitiativeLookup::new(
+                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                ),
+                properties_service.clone(),
+            ),
         messages::outbound::entity_access_audience::EntityAccessMessageAudience(
             (*entity_access_service).clone(),
         ),
@@ -1017,7 +1074,10 @@ async fn run() -> anyhow::Result<()> {
     );
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(
-            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
+                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                )),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
                 channel_bots::outbound::conversation::LocalBotPublisher::new(bot_trigger_sender),
@@ -1140,6 +1200,9 @@ async fn run() -> anyhow::Result<()> {
                 calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
             )),
         )),
+        Arc::new(channel_bots::outbound::LexicalCommentMarks::new(
+            (*lexical_client).clone(),
+        )),
     );
     bot_trigger_router.spawn(bot_trigger_receiver);
 
@@ -1164,15 +1227,33 @@ async fn run() -> anyhow::Result<()> {
             lexical_client.clone(),
         ),
     );
-    let initiative_service = Arc::new(InitiativeServiceImpl::new(
-        PgInitiativeRepo::new(db.clone()),
-        outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter::new(
-            document_creator.clone(),
-            db.clone(),
-            sqs_client.clone(),
-            macro_event_broker.clone(),
-        ),
-    ));
+    let initiative_service = Arc::new(
+        InitiativeServiceImpl::new(
+            PgInitiativeRepo::new(db.clone()),
+            initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
+                document_creator.clone(),
+                documents_hex::domain::purge::DocumentPurger::new(
+                    documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(
+                        db.clone(),
+                    ),
+                    documents_hex::outbound::document_purge::SqsDocumentPurgeQueue::new(
+                        sqs_client.clone(),
+                    ),
+                    macro_event_broker.clone(),
+                ),
+            ),
+            Arc::new(initiative::outbound::resources::ProjectResources::new(
+                properties_service.clone(),
+                system_properties_service.clone(),
+                entity_access_service.clone(),
+            )),
+        )
+        .with_event_publisher(Arc::new(
+            initiative::outbound::event_publisher::BrokerInitiativeEventPublisher::new(
+                macro_event_broker.clone(),
+            ),
+        )),
+    );
 
     let collab_surface_service = CollabSurfaceServiceImpl::new(
         Arc::new(PgCollabSurfaceRepo::new(db.clone())),
@@ -1183,16 +1264,57 @@ async fn run() -> anyhow::Result<()> {
         config.document_permission_jwt.as_ref().to_string(),
     );
 
-    let soup_service = Arc::new(SoupImpl::new(
-        PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
-        frecency_service,
-        readonly_email_service,
-        channel_service_for_soup,
-        call_record_query_service,
-        crm_service.clone(),
-        foreign_entity_service_for_soup,
-        reminders_service.clone(),
-    ));
+    // Individual initiative reads preserve read-after-write consistency when a
+    // newly created project opens immediately. Lists retain the replica reader.
+    // Reuse Soup hydration so detail and mutation metadata include viewer history.
+    let initiative_entity_soup = Arc::new(
+        SoupImpl::new(
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
+            frecency_service.clone(),
+            ReadonlyEmailPreviewAdapter(email_service.clone()),
+            ChannelListServiceImpl::new(
+                PgChannelsRepo::new(db.clone()),
+                PgChannelsRepo::new(db.clone()),
+                frecency_storage.clone(),
+            ),
+            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
+            crm_service.clone(),
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+            reminders_service.clone(),
+        )
+        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
+            db.clone(),
+        )),
+    );
+
+    let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
+
+    // Keep the replica-backed Soup reader alongside the primary-backed email
+    // writer in SoupRouterState. REST, GraphQL lists, and realtime hydration
+    // share this reader; only email mutations and their reply loader use the
+    // writer service, so normal list traffic never switches to the primary.
+    let soup_service = Arc::new(
+        SoupImpl::new(
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+            frecency_service,
+            readonly_email_service,
+            ChannelListServiceImpl::new(
+                PgChannelsRepo::new(readonly_db.clone()),
+                PgChannelsRepo::new(readonly_db.clone()),
+                frecency_storage.clone(),
+            ),
+            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                readonly_db.clone(),
+            )),
+            crm_service.clone(),
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
+            reminders_service.clone(),
+        )
+        .with_favorites(favorites_service.clone())
+        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
+            readonly_db.clone(),
+        )),
+    );
 
     let websocket_notification_consumer_service =
         Arc::new(WebSocketNotificationConsumerService::new(
@@ -1222,6 +1344,42 @@ async fn run() -> anyhow::Result<()> {
                     tracing::error!(
                         error = ?error,
                         "WebSocket notification consumer stopped"
+                    );
+                });
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
+            }
+        }
+    });
+
+    let activity_realtime_service = Arc::new(activity::ActivityRealtimeConsumerService::new(
+        activity::ActivityTopicConsumer::from_env(config.kafka_brokers.as_ref()).map_err(
+            |error| anyhow::anyhow!("failed to create realtime activity topic consumer: {error:?}"),
+        )?,
+    ));
+    consumer_tracker.spawn({
+        let service = Arc::clone(&activity_realtime_service);
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = service.run() => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                let _ = result.inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        "realtime activity subscription consumer stopped"
                     );
                 });
 
@@ -1332,7 +1490,6 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
-    let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
     let favorites_mutation_service = Arc::new(FavoritesMutationServiceImpl::new(
         favorites_service.clone(),
         entity_access_service.clone(),
@@ -1427,10 +1584,11 @@ async fn run() -> anyhow::Result<()> {
         ));
 
     let api_context = ApiContext {
+        dictation_state,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),
-            email_service,
+            email_service.clone(),
             entity_access_service.clone(),
             authorization_state.clone(),
         )
@@ -1444,6 +1602,13 @@ async fn run() -> anyhow::Result<()> {
         ),
         favorites_service,
         favorites_mutation_service,
+        channel_labels_state: ChannelLabelsRouterState::new(
+            Arc::new(ChannelLabelsServiceImpl::new(PgChannelLabelsRepo::new(
+                db.clone(),
+            ))),
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
         user_api_key_state: UserApiKeyRouterState::new(
             user_api_key_service,
             authorization_state.clone(),
@@ -1452,6 +1617,13 @@ async fn run() -> anyhow::Result<()> {
             Arc::new(reminders_service),
             entity_access_service.clone(),
             authorization_state.clone(),
+        ),
+        graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader(
+            graphql_soup::soup_item_loader(initiative_entity_soup, Arc::new(email_service.clone())),
+        ),
+        graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
+            initiative_service.clone(),
+            entity_access_service.clone(),
         ),
         initiative_state: InitiativeRouterState::new(
             initiative_service,
@@ -1467,12 +1639,16 @@ async fn run() -> anyhow::Result<()> {
             soup_service,
             soup_realtime_service,
             websocket_notification_consumer_service,
+            activity_realtime_service,
         ),
         graphql_notification_reader,
         // GraphQL reads the activity log through the readonly pool; the
         // Kafka consumer's writer-pool repo above is separate on purpose.
         activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
-            activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+            initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+                activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+                entity_access_service.clone(),
+            ),
         )),
         graphql_entity_mutation_service,
         github_sync_service: Arc::new(github_sync_service_impl),
@@ -1513,6 +1689,11 @@ async fn run() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
+            non_user_owners: if config.enable_non_user_owners {
+                NonUserOwners::Enabled
+            } else {
+                NonUserOwners::Disabled
+            },
         },
         config: Arc::new(config),
         channel_service: channels_service.clone(),
@@ -1535,6 +1716,7 @@ async fn run() -> anyhow::Result<()> {
         channel_bot_webhook_state,
         call_state,
         call_webhook_state,
+        call_public_rate_limiter,
         webhook_state,
         sse_stream_state,
         call_internal_state,

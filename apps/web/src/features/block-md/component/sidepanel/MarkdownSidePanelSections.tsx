@@ -42,6 +42,7 @@ import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
+import { queryReadyGate } from '@queries/gate';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import {
@@ -606,7 +607,7 @@ function ReferencesSectionConditional(props: { documentId: string }) {
     () => 'document'
   );
 
-  const count = createMemo(() => references.data?.length ?? 0);
+  const count = () => (queryReadyGate(references) ? references.data.length : 0);
 
   return (
     <Show when={count() > 0}>

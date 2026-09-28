@@ -1,4 +1,5 @@
-use super::ports::ConversationAccess;
+use super::models::MarkedPassage;
+use super::ports::{CommentMarks, ConversationAccess};
 use async_trait::async_trait;
 use entity_access::domain::models::{
     AccessLevel, BotReceiptScope, EntityAccessReceipt, EntityPermission, EntityType,
@@ -8,7 +9,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::MockMessageServiceApi,
     events::MessagePostedMetadata,
-    models::{Message, MessageParent, MessageThread, ThreadState},
+    models::{Message, MessageParent, MessageThread, ThreadAnchor, ThreadState},
     service::MessageWrite,
 };
 use std::sync::{
@@ -60,6 +61,15 @@ pub(super) fn thread(root: Message, replies: Vec<Message>) -> MessageThread {
         replies,
     }
 }
+/// A discussion anchored to marked document text, as the editor records it.
+pub(super) fn marked_thread(root: Message, marked_text: Option<&str>) -> MessageThread {
+    let mut thread = thread(root, vec![]);
+    thread.state.anchor = Some(ThreadAnchor::Markdown {
+        mark_id: Uuid::from_u128(0xaa),
+        marked_text: marked_text.map(ToOwned::to_owned),
+    });
+    thread
+}
 pub(super) fn configure_reads(
     api: &mut MockMessageServiceApi,
     trigger: &Message,
@@ -77,6 +87,24 @@ pub(super) fn configure_reads(
         Ok(history.clone())
     });
 }
+/// Live mark lookups answering one fixed result.
+pub(super) struct Marks(pub Result<Option<MarkedPassage>, &'static str>);
+impl Marks {
+    pub fn none() -> Arc<Self> {
+        Arc::new(Self(Ok(None)))
+    }
+}
+#[async_trait]
+impl CommentMarks for Marks {
+    async fn resolve(
+        &self,
+        document_id: &str,
+        _mark_id: Uuid,
+    ) -> anyhow::Result<Option<MarkedPassage>> {
+        assert_eq!(document_id, "discussion-document");
+        self.0.clone().map_err(|error| anyhow::anyhow!(error))
+    }
+}
 #[derive(Default)]
 pub(super) struct Access {
     pub revoked: Arc<AtomicBool>,
@@ -93,9 +121,9 @@ impl Access {
             return Err(rootcause::report!("document access revoked"));
         }
         Ok(match parent {
-            MessageParent::Document(_) => (
+            MessageParent::Document(_) | MessageParent::Initiative(_) => (
                 entity_access::domain::models::Entity {
-                    entity_type: EntityType::Document,
+                    entity_type: parent.access_entity_type(),
                     entity_id: parent.entity_id(),
                 },
                 EntityPermission::AccessLevel {

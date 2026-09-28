@@ -11,7 +11,7 @@ async fn view_router() -> Router {
     repo.create(CreateAgentSessionParams {
         repo_branch: None,
         id: AgentSessionId::TEST_A,
-        owner_id: MacroUserIdStr::try_from(OWNER.to_owned()).unwrap(),
+        owner_id: Owner::User(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
         bot_id: BotId::TEST_A,
         thread_id: None,
         originating_message_id: None,
@@ -50,12 +50,14 @@ async fn view_router() -> Router {
     ))
 }
 #[tokio::test]
-async fn unauthorized_view_cannot_read_saved_session() {
+async fn invalid_credentials_cannot_read_saved_session() {
     let response = view_router()
         .await
         .oneshot(
             Request::builder()
                 .uri(format!("/{}", AgentSessionId::TEST_A))
+                .header(BOT_TOKEN_HEADER, "invalid-token")
+                .header(BOT_SCOPE_HEADER, "user")
                 .body(Body::empty())
                 .unwrap(),
         )

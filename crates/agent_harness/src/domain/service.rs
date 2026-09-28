@@ -36,8 +36,10 @@ use agent_session::domain::ports::{
     AgentSessionQueueChanged, ControlDisposition, ControlEvent, QueuedControl,
 };
 use agent_session::domain::service::AgentSessionService;
+use agent_session::domain::session::PermissionPolicy;
 use bot_id::BotId;
 use dashmap::DashMap;
+use dashmap::DashSet;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
@@ -47,19 +49,67 @@ use tracing::instrument::WithSubscriber as _;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, CommandOutcome, DeclinedMention, DeliverAction,
-    HarnessCommand, HarnessDefaults, OpenSession, SessionAnnouncement, SpawnContainer,
-    is_macro_staff,
+    HarnessCommand, HarnessDefaults, OpenSession, ReplyOutcome, ResolvedReply, SessionAnnouncement,
+    SpawnContainer, is_macro_staff,
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
-    AgentPromptComposer, AgentSessionNotifier, CommandForwarder, ContainerManager,
-    MessagePromptContext, PromptMentions, RuntimeConnections, SandboxEgressProvisioner,
-    SessionAnnouncer,
+    AgentPromptComposer, AgentSessionNotifier, CodingAgentSource, CommandForwarder,
+    ContainerManager, MessagePromptContext, PermissionPolicySource, PromptMentions,
+    RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
 
 use self::queue::{ErasedForwarder, SessionWorkers};
+
+/// [`PermissionPolicySource`], object-safe, erased for the same reason as
+/// [`ErasedForwarder`].
+trait ErasedPermissionPolicySource: Send + Sync + 'static {
+    fn permission_policy<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = anyhow::Result<crate::domain::model::PermissionPolicyConfig>>
+                + Send
+                + 'a,
+        >,
+    >;
+}
+
+impl<S: PermissionPolicySource> ErasedPermissionPolicySource for S {
+    fn permission_policy<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = anyhow::Result<crate::domain::model::PermissionPolicyConfig>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(PermissionPolicySource::permission_policy(self, bot))
+    }
+}
+
+/// [`CodingAgentSource`], object-safe, erased like
+/// [`ErasedPermissionPolicySource`].
+trait ErasedCodingAgentSource: Send + Sync + 'static {
+    fn coding_agent_choice<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<bool>>> + Send + 'a>>;
+}
+
+impl<S: CodingAgentSource> ErasedCodingAgentSource for S {
+    fn coding_agent_choice<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Option<bool>>> + Send + 'a>> {
+        Box::pin(CodingAgentSource::coding_agent_choice(self, bot))
+    }
+}
 
 struct AgentHarnessInner<
     Sessions,
@@ -81,10 +131,16 @@ struct AgentHarnessInner<
     prompt_composer: PromptComposer,
     egress: Egress,
     forwarder: Box<dyn ErasedForwarder>,
+    permission_policies: Box<dyn ErasedPermissionPolicySource>,
+    coding_agents: Box<dyn ErasedCodingAgentSource>,
     defaults: HarnessDefaults,
     /// Turn-occupying actions waiting for their session's running turn to
-    /// end. In-memory beside the live actors this replica manages.
+    /// end. In-memory working copy; the session store is the durable source.
     queues: SessionQueues,
+    /// Sessions whose durable queue has been loaded into [`Self::queues`]
+    /// in this process. A restart starts empty; resume and the first local
+    /// command restore from the session store.
+    hydrated: DashSet<AgentSessionId>,
     /// The sessions with a command admitted and not yet resolved, and which
     /// turn it opened once dispatch names one. Marked the moment a
     /// turn-occupying action is admitted (queue.rs's `enqueue_then_dispatch`),
@@ -251,6 +307,8 @@ where
         prompt_composer: PromptComposer,
         egress: Egress,
         forwarder: impl CommandForwarder,
+        permission_policies: impl PermissionPolicySource,
+        coding_agents: impl CodingAgentSource,
         defaults: impl Into<HarnessDefaults>,
         lifecycle_publisher: Lifecycle,
         pending: PendingCommands,
@@ -267,8 +325,11 @@ where
                 prompt_composer,
                 egress,
                 forwarder: Box::new(forwarder),
+                permission_policies: Box::new(permission_policies),
+                coding_agents: Box::new(coding_agents),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
+                hydrated: DashSet::new(),
                 busy: pending,
                 lifecycle_publisher,
                 mentions,
@@ -348,11 +409,13 @@ where
             return Ok(());
         }
 
+        let persona = self.inner.reply_persona(&session).await?;
         self.inner
             .announcer
             .announce(SessionAnnouncement {
                 session_id,
                 bot_id: session.bot_id,
+                is_coding: persona.is_coding,
                 origin_parent: prompt.origin.parent,
                 origin_thread_id: prompt.origin.thread_id,
                 origin_message_id: prompt.origin.message_id,

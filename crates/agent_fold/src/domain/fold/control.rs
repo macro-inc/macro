@@ -1,7 +1,5 @@
 //! Control operations the user issues on the session.
 
-use std::collections::HashMap;
-
 use crate::domain::model::{Author, Control, ControlOutcome, FoldedMessage, MessagePart, TurnId};
 use agent_client_protocol::schema::v1::RequestId;
 use agent_runtime_protocol::domain::action::AgentActionId;
@@ -41,7 +39,6 @@ impl FoldState {
             stop_requested: false,
             prompt_id: Some(prompt_id.clone()),
             agent: None,
-            permission_positions: HashMap::new(),
             plan_position: None,
             expects_reply: false,
         });

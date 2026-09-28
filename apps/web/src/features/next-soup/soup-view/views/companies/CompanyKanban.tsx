@@ -3,10 +3,7 @@ import { NO_STAGE } from '@app/features/next-soup/filters/configs/';
 import { EmptyState } from '@app/features/next-soup/soup-view/empty-states';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import {
-  openEntityInSplitFromUnifiedList,
-  preventDuplicatePreviewEntityOpen,
-} from '@app/features/next-soup/utils';
+import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useDealStages } from '@companies/crm/deal-stages';
@@ -265,23 +262,10 @@ export function CompanyKanban(props: {
       props.onOpenEntity?.(entity)
     )
       return;
-    // Shift+click always opens a fresh split; opt+click replaces the whole
-    // Preview Pair; a plain click while engaged as a Controller previews into
-    // the Viewer and shouldn't re-open an entity already shown elsewhere.
-    // Matches the list view's onEntityClick.
-    if (
-      !event.shiftKey &&
-      !event.altKey &&
-      panel.handle.isControllerSplit() &&
-      preventDuplicatePreviewEntityOpen(entity, panel.handle)
-    ) {
-      return;
-    }
     soup.focus.set(entity.id);
 
     void openEntityInSplitFromUnifiedList(entity, {
       openInNewSplit: event.shiftKey,
-      replacePreview: !event.shiftKey && event.altKey,
       splitHandle: panel.handle,
       referredFrom: 'companies',
     });

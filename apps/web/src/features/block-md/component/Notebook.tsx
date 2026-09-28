@@ -18,13 +18,20 @@ import { useIsMacroTeam } from '@core/context/team';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import {
+  captureScrollAnchor,
+  restoreScrollAnchor,
+  type ScrollAnchor,
+} from '@core/util/scrollAnchor';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
 import {
+  createComputed,
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -135,14 +142,48 @@ export function Notebook(props: {
   // comment drawer is the only comment surface. CommentMargin stays mounted
   // inside the hidden wrapper — it hosts the drawer.
   const showComments = () => hasComment() && !history.isOpen() && !isMobile();
-  const layoutMode = (): CommentLayoutMode => {
+  const layoutMode = createMemo((): CommentLayoutMode => {
     if (!showComments() || width() === undefined) {
       return CommentLayoutMode.none;
     }
     if (commentBreakpoints.lg()) return CommentLayoutMode.lg;
     if (commentBreakpoints.md()) return CommentLayoutMode.md;
     return CommentLayoutMode.xs;
-  };
+  });
+
+  // Switching layout mode resizes the text column and reflows the document
+  // under an unchanged scrollTop; the first comment on a document would
+  // otherwise scroll its own anchor text out of view. Browser scroll anchoring
+  // is suppressed because the switch changes the column's padding and margins.
+  // The computed captures the anchor before the new classes are applied, the
+  // effect restores it after.
+  let scrollAnchor: ScrollAnchor | undefined;
+  createComputed(
+    on(
+      layoutMode,
+      () => {
+        const scroller = md.scrollContainer;
+        const editorRoot = md.editor?.getRootElement();
+        scrollAnchor =
+          scroller && editorRoot
+            ? captureScrollAnchor(scroller, editorRoot)
+            : undefined;
+      },
+      { defer: true }
+    )
+  );
+  createEffect(
+    on(
+      layoutMode,
+      () => {
+        const anchor = scrollAnchor;
+        const scroller = md.scrollContainer;
+        scrollAnchor = undefined;
+        if (anchor && scroller) restoreScrollAnchor(scroller, anchor);
+      },
+      { defer: true }
+    )
+  );
 
   const currentEditorState = () => {
     const editor = md.editor;
@@ -259,7 +300,9 @@ export function Notebook(props: {
 
   const contentDivClasses = createMemo(() => {
     const mode = layoutMode();
-    const shared = 'grow max-w-3xl pt-12 touch:pt-6 min-w-0';
+    // A zero basis keeps WebKit from sizing the column by the max-content width
+    // of its text, which it recomputes slowly for long unbroken runs.
+    const shared = 'grow basis-0 max-w-3xl pt-12 touch:pt-6 min-w-0';
     switch (mode) {
       case CommentLayoutMode.lg:
         return `${shared} mx-auto`;

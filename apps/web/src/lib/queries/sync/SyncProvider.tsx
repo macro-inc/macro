@@ -1,4 +1,5 @@
 import { AgentSession } from '@core/agent-session/AgentSession';
+import { noteSessionActivity } from '@core/agent-session/session-turn';
 import {
   enableGraphqlSoup,
   isFeatureEnabled,
@@ -116,7 +117,12 @@ export function QuerySyncProvider(props: SyncProviderProps) {
         withParsedWebsocketPayload<AgentSessionLogEvent>(
           data.type,
           data.data,
-          (event) => AgentSession.ingest(event)
+          (event) => {
+            AgentSession.ingest(event);
+            if (!AgentSession.get(event.agentSessionId)) {
+              noteSessionActivity(event.agentSessionId);
+            }
+          }
         );
       })
       .with({ type: AGENT_SESSION_UPDATED_EVENT }, () => {

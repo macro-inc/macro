@@ -195,6 +195,15 @@ impl InfraEnv {
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
         );
+        // Account deletion awaits both owning services from the auth container.
+        env.insert(
+            "OVERRIDE_AGENT_HARNESS_SERVICE_URL".into(),
+            "http://agent-harness-service:8101".into(),
+        );
+        env.insert(
+            "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL".into(),
+            "http://scheduled-action-service:8080".into(),
+        );
         // Lexical has the same host-vs-container split. The plain
         // `LEXICAL_SERVICE_URL` value does not affect `LexicalServiceUrl`,
         // which only reads the `OVERRIDE_` form.
@@ -216,6 +225,14 @@ impl InfraEnv {
             "OVERRIDE_EMAIL_SERVICE_URL".into(),
             "http://email-service:8080".into(),
         );
+        // Same host-vs-container split for calendar: `CalendarServiceUrl`'s
+        // Local default is http://localhost:8088, which inside a container is
+        // the caller itself. In-network callers (the agent calendar tools point
+        // at calendar_service) reach it through this override instead.
+        env.insert(
+            "OVERRIDE_CALENDAR_SERVICE_URL".into(),
+            "http://calendar-service:8080".into(),
+        );
         env.insert(
             "OVERRIDE_AUTH_SERVICE_URL".into(),
             "http://authentication-service:8080".into(),
@@ -227,6 +244,15 @@ impl InfraEnv {
         env.insert(
             "OVERRIDE_STATIC_FILE_SERVICE_URL".into(),
             "http://static-file-service:8080".into(),
+        );
+        // Same split for the AI editing worker: `AiEditingWorkerUrl`'s Local
+        // default is http://localhost:8933, the worker's host port. Every
+        // container hosting the document tools (document cognition, the agent
+        // harness's in-process agent, the MCP server) calls EditDocument
+        // through this, so without it an agent's edit dials the caller itself.
+        env.insert(
+            "OVERRIDE_AI_EDITING_WORKER_URL".into(),
+            "http://ai-editing-worker:8933".into(),
         );
         // The alias LocalStack provisions for the Cursor API key CMK. Named by
         // alias rather than key id because `CreateKey` mints a random id every
@@ -690,6 +716,14 @@ impl BootStubEnv {
         env.insert("LIVEKIT_API_KEY".into(), "local-livekit-key".into());
         env.insert("LIVEKIT_API_SECRET".into(), "local-livekit-secret".into());
         env.insert("OPENAI_API_KEY".into(), "local-openai-key".into());
+        // Required by the agent router. Present so it builds on a stack with no
+        // Doppler; real provider calls still fail on the dummy keys.
+        // Doppler's shared_ai name is singular: FIREWORK_API_KEY.
+        env.insert("FIREWORK_API_KEY".into(), "local-firework-key".into());
+        env.insert(
+            "GOOGLE_GENERATIVE_AI_API_KEY".into(),
+            "local-google-generative-ai-key".into(),
+        );
         env.insert("COHERE_API_KEY".into(), "local-cohere-key".into());
         env.insert(
             "CAL_WEBHOOK_SECRET_KEY".into(),

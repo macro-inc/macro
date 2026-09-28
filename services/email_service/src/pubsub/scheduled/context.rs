@@ -11,3 +11,18 @@ pub struct ScheduledContext {
     pub attachment_bucket: String,
     pub macro_event_broker: PubSubEventBroker,
 }
+
+impl ScheduledContext {
+    /// Compose the worker's persistence/provider adapter without holding a DB transaction.
+    pub fn delivery_adapter(
+        &self,
+    ) -> crate::outbound::scheduled_delivery::ScheduledDeliveryAdapter {
+        crate::outbound::scheduled_delivery::ScheduledDeliveryAdapter {
+            db: self.db.clone(),
+            email_api: self.email_api.clone(),
+            s3_client: self.s3_client.clone(),
+            attachment_bucket: self.attachment_bucket.clone(),
+            macro_event_broker: self.macro_event_broker.clone(),
+        }
+    }
+}

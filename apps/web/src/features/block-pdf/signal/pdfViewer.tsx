@@ -1,5 +1,5 @@
 import { createContext, type ParentComponent, useContext } from 'solid-js';
-import { usePdfDocument } from '../context/pdf-document-context';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 import { PDFViewer } from '../PdfViewer';
 
 type PageViewportWithScale = {
@@ -30,13 +30,11 @@ export const initializePdfViewer = (popupViewer?: PDFViewer) => {
 };
 
 export const useGetRootViewer = () => {
-  const [viewer] = usePdfDocument().state.signals.rootViewer;
-  return () => viewer();
+  return usePdfViewer().root.instance;
 };
 
 export const useGetPopupViewer = () => {
-  const [viewer] = usePdfDocument().state.signals.popupViewer;
-  return () => viewer();
+  return usePdfViewer().popup.instance;
 };
 
 export const useGetPopupContextViewer = () => {
@@ -48,13 +46,10 @@ export const useGetPopupContextViewer = () => {
 
 // NOTE: this fires off on every change because the isEqual function is not working
 export const useVisiblePages = () => {
-  const { visiblePagesChanged, visiblePagesChangedPopup } =
-    usePdfDocument().state.signals;
+  const viewer = usePdfViewer();
   const isPopup = useIsPopup();
-  const [visiblePages] = isPopup
-    ? visiblePagesChangedPopup
-    : visiblePagesChanged;
-  return () => visiblePages()?.visiblePages;
+  const viewArea = isPopup ? viewer.popup.viewArea : viewer.root.viewArea;
+  return () => viewArea()?.visiblePages;
 };
 
 const PopupContext = createContext<boolean>();
@@ -75,39 +70,38 @@ export function useIsPopup() {
 }
 
 export const useOverlayViewsChanged = () => {
-  const { overlayViewsChanged, overlayViewsChangedPopup } =
-    usePdfDocument().state.signals;
+  const viewer = usePdfViewer();
   const isPopup = useIsPopup();
-  return () =>
-    isPopup ? overlayViewsChangedPopup[0]() : overlayViewsChanged[0]();
+  return isPopup ? viewer.popup.overlayViews : viewer.root.overlayViews;
 };
 
 export const useCurrentPageNumber = () => {
-  const currentPageNumber = usePdfDocument().state.derived.currentPageNumber;
-  return () => currentPageNumber() ?? 1;
+  return usePdfViewer().root.currentPageNumber;
 };
 
 // /** reactive values based on current page dimensions */
 export const useCurrentPageViewport = () => {
-  const pdf = usePdfDocument();
+  const viewerRuntime = usePdfViewer();
   const isPopup = useIsPopup();
   const getViewer = useGetPopupContextViewer();
-  const { currentPageNumber, popupCurrentPageNumber, viewerReady } =
-    pdf.state.derived;
+  const currentPageNumber = isPopup
+    ? viewerRuntime.popup.currentPageNumber
+    : viewerRuntime.root.currentPageNumber;
 
   return () => {
-    const curPage = isPopup ? popupCurrentPageNumber() : currentPageNumber();
+    const curPage = currentPageNumber();
     const viewer = getViewer();
-    if (!viewerReady() || !viewer || curPage == null || curPage < 1)
+    if (!viewerRuntime.root.isReady() || !viewer || curPage < 1)
       return PAGE_VIEWPORT_DEFAULT;
     return viewer.pageViewport(curPage - 1) ?? PAGE_VIEWPORT_DEFAULT;
   };
 };
 
 export const useCurrentScale = () => {
-  const { currentScale, popupCurrentScale } = usePdfDocument().state.derived;
+  const viewer = usePdfViewer();
   const isPopup = useIsPopup();
-  return () => {
-    return (isPopup ? popupCurrentScale() : currentScale()) ?? 1;
-  };
+  const currentScale = isPopup
+    ? viewer.popup.currentScale
+    : viewer.root.currentScale;
+  return () => currentScale() ?? 1;
 };

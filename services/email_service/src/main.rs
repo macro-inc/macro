@@ -2,7 +2,10 @@
 use crate::api::context::{ApiContext, AuthorizationService};
 use anyhow::Context;
 use calendar_events::{
-    domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
+    domain::{
+        invitations::CalendarInvitationResolver, mutations::CalendarMutationServiceImpl,
+        service::CalendarService,
+    },
     outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
 };
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -16,11 +19,11 @@ use email::{
 };
 use email_api_client::GmailApiClientRepository;
 use email_service::calendar_refresh::ConnectionGatewayCalendarRefresh;
+use email_service::calendar_request_gate::RedisCalendarRequestGate;
 use email_service::calendar_tokens::CalendarTokenProviderAdapter;
 use email_service::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisProviderRateLimiter,
 };
-use email_service::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -227,6 +230,11 @@ async fn main() -> anyhow::Result<()> {
         ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
     ));
     let api_result = api::setup_and_serve(ApiContext {
+        invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
+        // calendar_service's sync kill switch rejects RSVP writes itself.
+        invitation_resolver: Arc::new(CalendarInvitationResolver::new(PgCalendarRepository::new(
+            db.clone(),
+        ))),
         db,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),

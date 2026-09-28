@@ -4,7 +4,7 @@ use crm::domain::service::NoOpCrmService;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_event_broker::NoopMacroEventBroker;
 
-fn service(
+pub(super) fn service(
     pool: Pool<Postgres>,
 ) -> EmailServiceImpl<
     EmailPgRepo,

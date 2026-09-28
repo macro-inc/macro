@@ -8,8 +8,14 @@ use macro_event_broker::Event;
 use super::*;
 use crate::domain::events::{ProjectDeletedMetadata, ProjectPermanentlyDeletedMetadata};
 
+use model_owner::Owner;
+
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
+}
+
+fn owner(id: &str) -> Owner {
+    Owner::from_principal_str(id).expect("valid owner")
 }
 
 fn envelope(event: ProjectTopicEvent) -> Event<ProjectTopicEvent> {
@@ -20,7 +26,7 @@ fn envelope(event: ProjectTopicEvent) -> Event<ProjectTopicEvent> {
 fn attributed_delete_maps_and_unattributed_is_dropped() {
     let attributed = envelope(ProjectTopicEvent::Deleted(ProjectDeletedMetadata {
         project_id: "proj-1".to_string(),
-        owner: user("macro|owner@example.com"),
+        owner: owner("macro|owner@example.com"),
         actor_user_id: Some(user("macro|teo@example.com")),
         parent_project_id: None,
         deleted_project_ids: vec!["proj-2".to_string()],
@@ -36,7 +42,7 @@ fn attributed_delete_maps_and_unattributed_is_dropped() {
 
     let unattributed = envelope(ProjectTopicEvent::Deleted(ProjectDeletedMetadata {
         project_id: "proj-1".to_string(),
-        owner: user("macro|owner@example.com"),
+        owner: owner("macro|owner@example.com"),
         actor_user_id: None,
         parent_project_id: None,
         deleted_project_ids: vec![],
@@ -54,7 +60,7 @@ fn permanent_delete_purges_the_whole_cascade() {
     let event = envelope(ProjectTopicEvent::PermanentlyDeleted(
         ProjectPermanentlyDeletedMetadata {
             project_id: "proj-1".to_string(),
-            owner: user("macro|owner@example.com"),
+            owner: owner("macro|owner@example.com"),
             actor_user_id: None,
             parent_project_id: None,
             purged_project_ids: vec!["proj-2".to_string()],

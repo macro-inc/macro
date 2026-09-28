@@ -46,8 +46,7 @@ function SingleSelectDropdown<TId extends string>(
         variant="outline"
         size="md"
         square
-        depth={2}
-        class={cn('rounded-lg bg-surface', props.class)}
+        class={props.class}
         label={props.label}
       >
         {props.icon}
@@ -185,8 +184,7 @@ export function ListFilterDropdown<
             variant="outline"
             size="md"
             square
-            depth={2}
-            class={cn('rounded-lg bg-surface', props.class)}
+            class={props.class}
             label={props.label ?? 'Filter list'}
           >
             <FilterIcon />

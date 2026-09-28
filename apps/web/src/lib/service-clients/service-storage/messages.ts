@@ -3,15 +3,18 @@ import { dssFetch } from './client';
 import type { Message as StoredMessage } from './generated/schemas/message';
 import type { MessageCursor } from './generated/schemas/messageCursor';
 import type { MessageParent } from './generated/schemas/messageParent';
-import type { MessageThread } from './generated/schemas/messageThread';
+import type { MessageThread as StoredMessageThread } from './generated/schemas/messageThread';
 import type { PostMessage } from './generated/schemas/postMessage';
-import type { ReferencedThreadPage } from './generated/schemas/referencedThreadPage';
 import type { ThreadPatch } from './generated/schemas/threadPatch';
 import type { ThreadState } from './generated/schemas/threadState';
 
-export type { MessageParent, MessageThread, PostMessage, ThreadPatch };
+export type { MessageParent, PostMessage, ThreadPatch };
 export type Message = StoredMessage & {
   sender?: import('./generated/schemas/apiMessageSender').ApiMessageSender;
+};
+export type MessageThread = Omit<StoredMessageThread, 'root' | 'replies'> & {
+  root: Message;
+  replies: Message[];
 };
 export type { MessagePatch } from './generated/schemas/messagePatch';
 export type { MessageCursor };
@@ -51,14 +54,6 @@ export const entityMessagesClient = {
     return request<MessageTimelinePage>(
       `${path(parent)}?${new URLSearchParams({ selection: JSON.stringify(selection) })}`
     );
-  },
-  references(parent: MessageParent, cursor?: MessageCursor | null) {
-    const query = new URLSearchParams({ limit: '100' });
-    if (cursor) {
-      query.set('created_at', cursor.created_at);
-      query.set('cursor_id', cursor.id);
-    }
-    return request<ReferencedThreadPage>(`${path(parent)}/references?${query}`);
   },
   get(parent: MessageParent, id: string) {
     return request<Message>(`${path(parent)}/items/${encodeURIComponent(id)}`);

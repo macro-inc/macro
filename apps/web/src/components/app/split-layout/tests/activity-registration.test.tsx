@@ -7,12 +7,23 @@ const state = vi.hoisted(() => ({
   authenticated: (): boolean => true,
   enabled: (): boolean => false,
   flagsLoaded: (): boolean => true,
+  touch: (): boolean => false,
   replace: vi.fn(),
   pageView: vi.fn(),
   track: vi.fn(),
   mountActivity: vi.fn(),
 }));
 
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
 vi.mock('@core/auth', () => ({
   useIsAuthenticated: () => () => state.authenticated(),
 }));
@@ -29,6 +40,11 @@ vi.mock('../layoutUtils', () => ({
 vi.mock('@core/component/LoadingBlock', () => ({
   LoadingBlock: () => <div>Authenticating</div>,
 }));
+vi.mock('@core/constant/allBlocks', () => ({
+  fileTypeToBlockName: (type: string) => type,
+  isBlockAlias: () => false,
+  resolveBlockAlias: (type: string) => type,
+}));
 vi.mock('@app/features/activity/views/my-activity-view', () => ({
   MyActivityView: () => {
     state.mountActivity();
@@ -39,27 +55,45 @@ vi.mock('@app/features/activity/open-entity-in-split', () => ({
   openEntityInSplit: vi.fn(),
 }));
 
+vi.mock('@app/features/home/components/HomeEntityDetailRouteView', () => ({
+  HomeEntityDetailRouteView: () => null,
+}));
+
 // Quarantine unrelated registered views and their module-load side effects.
+// Route/preview codecs otherwise pull the full block-definition graph into this test.
+vi.mock('@app/features/home/home-route', () => ({}));
 vi.mock('@app/features/agents-view/views/AgentsView', () => ({}));
-vi.mock('@app/features/channels-view/channels-view', () => ({}));
+vi.mock('@app/features/channels-view/channels-view', () => ({
+  ChannelDetailRouteView: () => null,
+}));
 vi.mock('@app/features/drive-view/drive-view', () => ({}));
+vi.mock('@app/features/drive-view/components/DriveDetailView', () => ({
+  DriveDetailView: () => null,
+}));
 vi.mock('@app/features/email-compose/email-compose', () => ({}));
 vi.mock('@app/features/email-view/email-view', () => ({}));
+vi.mock('@app/features/email-view/components/EmailDetailView', () => ({
+  EmailDetailRouteView: () => null,
+}));
 vi.mock('@app/features/getting-started', () => ({}));
-vi.mock('@app/features/home', () => ({}));
-vi.mock('@app/features/inbox-view/inbox-view', () => ({}));
+vi.mock('@app/features/home/home-view', () => ({
+  HomeDetailRouteView: () => null,
+  HomeCalendarRouteView: () => null,
+}));
 vi.mock('@app/features/next-soup/filters/filter-store', () => ({}));
 vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
 vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({}));
-vi.mock(
-  '@app/features/next-soup/soup-view/non-member-channel-preview',
-  () => ({})
-);
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => ({}));
 vi.mock('@app/features/next-soup/use-recent-view-flag', () => ({}));
 vi.mock('@app/features/reminders/ReminderEditorSplit', () => ({}));
-vi.mock('@app/features/settings/Settings', () => ({}));
+vi.mock('@app/features/settings/Settings', () => ({
+  SettingsPanelComponentWrapper: () => null,
+}));
+vi.mock('@app/features/settings/McpConnections', () => ({}));
 vi.mock('@app/features/tasks-view/tasks-view', () => ({}));
+vi.mock('@app/features/tasks-view/components/TasksDetailView', () => ({
+  TasksDetailRouteView: () => null,
+}));
 vi.mock('@app/signal/splitLayout', () => ({}));
 vi.mock('@block-calendar/components/EventComposerSplit', () => ({}));
 vi.mock('@block-channel/component/Compose', () => ({}));
@@ -67,16 +101,20 @@ vi.mock('@block-md/component/ComposeSkill', () => ({}));
 vi.mock('@block-md/component/ComposeTask', () => ({}));
 vi.mock('@companies/crm/saved-views', () => ({}));
 vi.mock('@core/context/user', () => ({}));
-vi.mock('@core/mobile/isTouchDevice', () => ({}));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => state.touch(),
+}));
 vi.mock('@queries/agent-schedule/entities', () => ({}));
-vi.mock('@ui', () => ({}));
-vi.mock('../previewController', () => ({}));
+vi.mock('@ui', () => ({
+  createVariants: () => () => '',
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
   state.authenticated = () => true;
   state.enabled = () => false;
   state.flagsLoaded = () => true;
+  state.touch = () => false;
 });
 afterEach(cleanup);
 
@@ -84,13 +122,22 @@ function renderActivity() {
   const activity = resolveComponent('activity');
   return render(() => <Suspense>{activity.element()}</Suspense>);
 }
+describe('calendar layout registration', () => {
+  it('owns desktop chrome but keeps the floating split header on touch', () => {
+    expect(resolveComponent('calendar').initialMeta).toMatchObject({
+      splitPanelLayout: 'composable',
+    });
+    state.touch = () => true;
+    expect(resolveComponent('calendar').initialMeta).toBeUndefined();
+  });
+});
 
 describe('activity registration', () => {
   it('redirects a disabled feed to inbox without mounting or tracking it', () => {
     renderActivity();
 
     expect(state.replace).toHaveBeenCalledExactlyOnceWith({
-      next: { type: 'component', id: 'inbox' },
+      next: { type: 'component', id: 'home' },
     });
     expect(state.mountActivity).not.toHaveBeenCalled();
     expect(state.pageView).not.toHaveBeenCalled();
@@ -118,7 +165,7 @@ describe('activity registration', () => {
         expect(state.pageView).toHaveBeenCalledExactlyOnceWith('activity');
       } else {
         expect(state.replace).toHaveBeenCalledExactlyOnceWith({
-          next: { type: 'component', id: 'inbox' },
+          next: { type: 'component', id: 'home' },
         });
         expect(state.mountActivity).not.toHaveBeenCalled();
         expect(state.pageView).not.toHaveBeenCalled();

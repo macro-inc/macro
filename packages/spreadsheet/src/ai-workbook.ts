@@ -17,6 +17,7 @@ import type {
   WorkbookCalculation,
 } from './calculation';
 import { fillCopies } from './cell-copy';
+import { validateSpreadsheetDocument } from './document-validation';
 import {
   type CellSelection,
   selectionAddresses,
@@ -546,6 +547,7 @@ export function prepareSpreadsheetEdit(
       });
     }
     fork.commit({ origin: 'spreadsheet-ai-edit' });
+    validateSpreadsheetDocument(fork);
     const workbook = readSpreadsheetWorkbook(fork);
     const results = calculate(workbook, calculator);
     const sheets = summaries(workbook, results);

@@ -1,0 +1,85 @@
+//! Composition of project workflows from owning domain ports and adapters.
+
+use super::*;
+use documents::domain::{ports::mentions::NoOpDocumentMentionTracker, purge::DocumentPurger};
+use documents::outbound::{
+    document_bytes_upload::ReqwestDocumentBytesUploader,
+    document_purge::{LegacyDocumentPurgeRepository, SqsDocumentPurgeQueue},
+    markdown_init::LexicalSyncMarkdownInitializer,
+};
+use initiative::{
+    domain::{
+        history::InitiativeHistory, resources::InitiativeResources, service::InitiativeServiceImpl,
+    },
+    inbound::toolset::InitiativeToolContext,
+    outbound::{PgInitiativeRepo, resources::ProjectResources},
+};
+
+type ToolDescriptionDocuments = initiative_documents::InitiativeDescriptionDocumentsAdapter<
+    Arc<ToolDocumentService>,
+    LexicalSyncMarkdownInitializer,
+    ReqwestDocumentBytesUploader,
+    NoOpDocumentMentionTracker,
+    DocumentPurger<LegacyDocumentPurgeRepository, SqsDocumentPurgeQueue, ToolEventBroker>,
+>;
+
+/// Production initiative service with the same document lifecycle as DSS.
+pub type ToolInitiativeService = InitiativeServiceImpl<PgInitiativeRepo, ToolDescriptionDocuments>;
+
+/// Native project workflow context for every AI/MCP host.
+pub type ToolInitiativeToolContext = InitiativeToolContext<
+    ToolInitiativeService,
+    ToolEntityAccessService,
+    activity::outbound::pg_activity_repo::PgActivityRepo,
+>;
+
+/// Compose project lifecycle tools with document cleanup and activity publication.
+pub fn build_initiative_tool_context(
+    pool: sqlx::PgPool,
+    documents: &ToolDocumentToolContext,
+    properties: Arc<ToolPropertiesService>,
+    access: Arc<ToolEntityAccessService>,
+    sqs: aws_sdk_sqs::Client,
+    event_broker: ToolEventBroker,
+) -> ToolInitiativeToolContext {
+    let document_queue = Arc::new(
+        sqs_client::SQS::new(sqs)
+            .document_delete_queue(macro_queues::DocumentDeleteQueue::new().as_ref()),
+    );
+    let purger = DocumentPurger::new(
+        LegacyDocumentPurgeRepository::new(pool.clone()),
+        SqsDocumentPurgeQueue::new(document_queue),
+        event_broker.clone(),
+    );
+    let description = initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
+        documents.creator.clone(),
+        purger,
+    );
+    let resources: Arc<dyn InitiativeResources> = Arc::new(ProjectResources::new(
+        properties,
+        Arc::new(SystemPropertiesServiceImpl::new(
+            PgSystemPropertiesRepository::new(pool.clone()),
+        )),
+        access.clone(),
+    ));
+    let service = InitiativeServiceImpl::new(
+        PgInitiativeRepo::new(pool.clone()),
+        description,
+        resources.clone(),
+    )
+    .with_event_publisher(Arc::new(
+        initiative::outbound::event_publisher::BrokerInitiativeEventPublisher::new(
+            event_broker.clone(),
+        ),
+    ));
+    InitiativeToolContext {
+        service: Arc::new(service),
+        access: access.clone(),
+        history: Arc::new(InitiativeHistory::new(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(pool.clone()),
+            access.clone(),
+        )),
+        resources,
+        actor: bot_id::MACRO_AI_BOT_ID,
+    }
+}

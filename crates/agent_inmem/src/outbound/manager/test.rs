@@ -17,6 +17,7 @@ use agent_session::domain::service::{AgentSessionService, AgentSessionServiceImp
 use agent_session::testing::InMemoryAgentSessionRepo;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 
 use super::*;
 use crate::domain::engine::AgentIdentity;
@@ -101,7 +102,7 @@ fn manager(repo: &InMemoryAgentSessionRepo, engine: Arc<ScriptedEngine>) -> InMe
 fn facts(id: AgentSessionId) -> SessionFacts {
     SessionFacts {
         id,
-        owner: owner(),
+        owner: Owner::User(owner()),
         model: "test-model".to_owned(),
         identity: None,
         instructions: None,
@@ -120,6 +121,7 @@ fn facts_with_instructions(id: AgentSessionId, instructions: &str) -> SessionFac
 fn facts_with_identity(id: AgentSessionId, name: &str, handle: &str) -> SessionFacts {
     SessionFacts {
         identity: Some(AgentIdentity {
+            bot: BotId::TEST_A,
             name: name.to_owned(),
             handle: handle.to_owned(),
         }),
@@ -169,7 +171,7 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
         .create_session(CreateAgentSessionParams {
             repo_branch: None,
             id,
-            owner_id: owner(),
+            owner_id: Owner::User(owner()),
             bot_id: BotId::TEST_A,
             thread_id: None,
             originating_message_id: None,
@@ -309,7 +311,7 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
         .create_session(CreateAgentSessionParams {
             repo_branch: None,
             id,
-            owner_id: owner(),
+            owner_id: Owner::User(owner()),
             bot_id: BotId::TEST_A,
             thread_id: None,
             originating_message_id: None,
@@ -456,7 +458,7 @@ async fn instructions_reach_every_turn_including_after_a_reattach() {
         .create_session(CreateAgentSessionParams {
             repo_branch: None,
             id,
-            owner_id: owner(),
+            owner_id: Owner::User(owner()),
             bot_id: BotId::TEST_A,
             thread_id: None,
             originating_message_id: None,
@@ -531,7 +533,7 @@ async fn a_session_without_instructions_hands_the_engine_none() {
         .create_session(CreateAgentSessionParams {
             repo_branch: None,
             id,
-            owner_id: owner(),
+            owner_id: Owner::User(owner()),
             bot_id: BotId::TEST_A,
             thread_id: None,
             originating_message_id: None,
@@ -591,7 +593,7 @@ async fn identity_reaches_every_turn_including_after_a_reattach() {
         .create_session(CreateAgentSessionParams {
             repo_branch: None,
             id,
-            owner_id: owner(),
+            owner_id: Owner::User(owner()),
             bot_id: BotId::TEST_A,
             thread_id: None,
             originating_message_id: None,

@@ -2,6 +2,7 @@ import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
 import {
   deriveMagicChipPresentation,
+  flattenToLine,
   presentationStatus,
 } from './presentation';
 
@@ -171,6 +172,7 @@ describe('deriveMagicChipPresentation', () => {
       kind: 'working',
       activity: {
         label: 'Running command',
+        tone: 'tool',
         detail: 'cargo test',
         busy: true,
       },
@@ -202,6 +204,7 @@ describe('deriveMagicChipPresentation', () => {
             },
             {
               kind: 'permission',
+              requestId: 'perm-1',
               toolCall: 'tool',
               options: [],
               outcome: { kind },
@@ -223,7 +226,7 @@ describe('deriveMagicChipPresentation', () => {
       response: response({
         parts: [
           {
-            kind: 'elicitation',
+            kind: 'elicitation' as const,
             requestId: 0,
             toolCall: 'tool',
             message: 'Which approach?',
@@ -302,6 +305,7 @@ describe('deriveMagicChipPresentation', () => {
       markdown: 'Let me check the tests.',
       activity: {
         label: 'Running command',
+        tone: 'tool',
         detail: 'cargo test',
         busy: true,
       },
@@ -320,7 +324,40 @@ describe('deriveMagicChipPresentation', () => {
     expect(presentation).toEqual({
       kind: 'answering',
       markdown: 'Half an ans',
-      activity: { label: 'Stopped', busy: false },
+      activity: { label: 'Stopped', busy: false, tone: 'stopped' },
+    });
+  });
+
+  it("shows a classified failure in the runtime's words for the person", () => {
+    const presentation = deriveMagicChipPresentation({
+      persistedStatus: 'acp_ready',
+      response: response({
+        parts: [],
+        stop: {
+          kind: 'failed',
+          message: 'Cursor usage limit reached. Raise the limit.',
+          notice: {
+            kind: 'provider_usage_limit',
+            title: 'Cursor usage limit reached',
+            body: 'Raise the spending limit in your Cursor dashboard, then send it again.',
+            link: {
+              label: 'Manage Cursor usage',
+              url: 'https://www.cursor.com/dashboard?tab=settings',
+            },
+          },
+        },
+      }),
+    });
+
+    expect(presentation).toEqual({
+      kind: 'working',
+      activity: {
+        label: 'Cursor usage limit reached',
+        tone: 'failure',
+        detail:
+          'Raise the spending limit in your Cursor dashboard, then send it again.',
+        busy: false,
+      },
     });
   });
 
@@ -341,6 +378,7 @@ describe('deriveMagicChipPresentation', () => {
       kind: 'working',
       activity: {
         label: "Agent couldn't answer",
+        tone: 'failure',
         detail:
           "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again.",
         busy: false,
@@ -362,7 +400,8 @@ describe('deriveMagicChipPresentation', () => {
 
   describe('a question the agent is waiting on', () => {
     const asking = {
-      question: {
+      request: {
+        kind: 'elicitation' as const,
         requestId: 9,
         turn: 0,
         toolCall: 'toolu_evt',
@@ -380,6 +419,7 @@ describe('deriveMagicChipPresentation', () => {
         },
       },
       canAnswer: true,
+      answering: false,
     };
 
     it('outranks whatever else the open turn is doing, keeping the answer so far', () => {
@@ -478,7 +518,8 @@ describe('presentationStatus', () => {
     busy: true,
   };
   const question = {
-    question: {
+    request: {
+      kind: 'elicitation' as const,
       requestId: 1,
       turn: 0,
       toolCall: null,
@@ -499,14 +540,14 @@ describe('presentationStatus', () => {
       presentationStatus({
         kind: 'asking',
         markdown: '',
-        asking: { ...question, canAnswer: true },
+        asking: { ...question, canAnswer: true, answering: false },
       })
     ).toEqual({ label: 'Waiting for you', busy: false });
     expect(
       presentationStatus({
         kind: 'asking',
         markdown: '',
-        asking: { ...question, canAnswer: false },
+        asking: { ...question, canAnswer: false, answering: false },
       })
     ).toEqual({ label: 'Waiting for an editor', busy: false });
   });
@@ -515,5 +556,25 @@ describe('presentationStatus', () => {
     expect(presentationStatus({ kind: 'settled', markdown: 'Fixed.' })).toEqual(
       { label: 'Done', busy: false }
     );
+  });
+});
+
+describe('flattenToLine', () => {
+  it('collapses block structure onto one line', () => {
+    expect(
+      flattenToLine('## Fixed\n\n- The **batch** fold now\n  buffers it.')
+    ).toBe('Fixed The batch fold now buffers it.');
+  });
+
+  it('keeps snake_case identifiers whole but drops emphasis', () => {
+    expect(flattenToLine('It buffers `turn_ended` _before_ the replay.')).toBe(
+      'It buffers turn_ended before the replay.'
+    );
+  });
+
+  it('keeps code content when flattening fences', () => {
+    expect(
+      flattenToLine('Run it:\n\n```sh\ncargo test\n```\n\nThen look.')
+    ).toBe('Run it: cargo test Then look.');
   });
 });

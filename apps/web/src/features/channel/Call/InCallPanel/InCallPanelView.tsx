@@ -47,6 +47,14 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
     onLeaveCall: props.onLeaveCall,
     onJoinCall: props.onJoinCall,
   });
+
+  async function handleLeave() {
+    try {
+      await panel.controls.leaveCall();
+    } catch (error) {
+      console.error('Failed to leave call from panel', error);
+    }
+  }
   const channelsCtx = useChannelsContext();
   const [nowMs, setNowMs] = createSignal(Date.now());
   const durationTimer = globalThis.setInterval(
@@ -252,7 +260,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
           <CallControls
             variant={controlsVariant()}
             when={props.showCallControls}
-            onLeave={() => panel.controls.leaveCall()}
+            onLeave={handleLeave}
           />
         </div>
 
@@ -260,7 +268,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
           <div class="flex items-center justify-center px-1 py-1">
             <button
               class="flex items-center justify-center size-5 shrink-0 rounded-md transition-colors text-failure hover:bg-failure/10"
-              onClick={() => void panel.controls.leaveCall()}
+              onClick={handleLeave}
               aria-label="Leave call"
               type="button"
             >

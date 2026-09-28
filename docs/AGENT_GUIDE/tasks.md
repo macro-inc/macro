@@ -27,6 +27,47 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
+## Reviews view
+
+With `enable-tasks-reviews` enabled (on by default in development), a
+`Reviews` shortcut appears above `My Tasks` in the Tasks sidebar and mobile tabs.
+It opens a separate `/app/reviews` shell with `Involving me` first and selected
+by default, followed by `All PRs` and `Authored by me`. The selected tab is
+stored in the URL and survives opening a PR and returning through the breadcrumb.
+The list contains accessible GitHub pull requests of any status. `Involving me`
+uses the server's participant filter for your linked GitHub account: author,
+requested reviewer, assignee, commenter, or reviewer. Participant IDs are retained
+across partial GitHub refreshes, so this is not strictly a list of current
+review requests.
+`Authored by me` matches the linked GitHub login or user ID. If the link-status
+endpoint has no identity, the list explains why Authored by me is unavailable.
+Search, repository and author filters, and Updated/Created sort controls appear
+above the list. PR rows use the shared entity layout with selection checkboxes,
+author avatars and names, and a context menu. The current user's Macro display
+name appears when their linked GitHub identity matches the PR author; other
+authors fall back to GitHub names. The virtualized list fetches more pages as
+you scroll, including when local filtering removes most fetched rows.
+
+PR rows can be added to or removed from Favorites through their context menu or
+bulk entity actions. When at least one accessible PR is favorited, Reviews shows
+a collapsible Favorites section below the views; the section is hidden otherwise.
+Favorite rows open the PR in Reviews (Shift-click opens another split), and their
+context menu can remove the favorite. PR favorites also open in Reviews from the
+global Favorites sidebar or command menu.
+
+Select a PR to open `/app/reviews/pr/<foreignEntityId>` in the Reviews shell.
+Its breadcrumb returns to the Reviews list. Old `/app/pr/<id>` links redirect
+to the Reviews detail. When the flag is off, the Reviews shortcut is hidden,
+but copied PR detail links still work.
+
+Check all three tab URLs, author avatars and display names, row selection and
+context menu, favorites add/remove and collapse/empty visibility, filters, sort,
+illustrated empty states, loading, errors, and pagination after filtering. Use
+Open in new split from a PR row's context menu; verify the Reviews list stays in
+the original split and the PR appears beside it. Open a favorite from the global
+sidebar, return through the breadcrumb, and open a copied link in a second split.
+Use existing PRs and do not modify hosted data.
+
 ## Create a task
 
 On touch devices, task creation opens in a bottom sheet with a drag handle and
@@ -90,6 +131,25 @@ mentions and document references also show the same three pills in their hover-c
 including properties that do not have a value yet. Click a preview pill to edit it without
 opening the task; the property picker keeps the preview open while you make a selection.
 Users with view or comment access see the same pills read-only.
+
+Selecting Status or Priority dismisses the picker immediately, without waiting
+for the save request. With the GraphQL cache active, the pill updates
+optimistically while the request is pending. To verify, delay `SetEntityProperty`
+on a disposable task: the picker should close before the response, and reopening
+it during that delay should not let the earlier save close the new picker.
+A failed save uses the mutation's rollback/error handling; it must not reopen
+the picker or trigger a success refresh.
+
+For multi-tab status checks, open the same task in several browser tabs
+and change status repeatedly in the visible tab. Hidden tabs defer cache-change
+refreshes for Quick Access searches, its channel list, and history, plus
+cache-triggered GraphQL query rereads. Switching back catches up each affected
+reader once against the latest cache state; closed readers must not restart.
+Existing rows remain available while hidden. Initial loads, explicit requests,
+saves, realtime cache writes, worker recovery, and the shared cache worker still
+run. A query already fetching from the server must finish normally rather than
+be canceled/reissued on return. Verify task status, mention search, and history
+catch up after switching tabs, including when the cache-owning tab is hidden.
 
 ## Messages as tasks
 

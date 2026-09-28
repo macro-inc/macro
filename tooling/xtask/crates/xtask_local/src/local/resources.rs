@@ -225,6 +225,17 @@ pub const QUEUES: &[Queue] = &[
             Url,
         )],
     },
+    Queue {
+        // calendar_service's backfill queue, consumed by its always-on backfill
+        // workers (which tight-loop on receive errors if the queue is absent).
+        // Bound through the queue's own override var in URL form so the service
+        // dials the full LocalStack URL rather than the bare name.
+        name: macro_queues::CalendarServiceBackfillQueue::LOCAL,
+        bindings: &[(
+            macro_queues::CalendarServiceBackfillQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
 ];
 
 /// Every local S3 bucket and the env var that references it.

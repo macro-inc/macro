@@ -1,7 +1,14 @@
 import { analytics } from '@app/lib/analytics';
+import { useChannelsContext } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
 import type { KrispNoiseFilter } from '@livekit/krisp-noise-filter';
 import type { BackgroundProcessorWrapper } from '@livekit/track-processors';
-import type { CallTokenResponse } from '@service-call/client';
+import {
+  fetchActiveCall,
+  invalidateActiveCallQueries,
+  requestCallToken,
+  useLeaveCallMutation,
+} from '@queries/call/call';
 import { makePersisted } from '@solid-primitives/storage';
 import type {
   AudioCaptureOptions,
@@ -21,24 +28,33 @@ import {
 import { createStore } from 'solid-js/store';
 import { CallAudioSink } from './CallAudioSink';
 import {
-  type CallSessionConnectMetadata,
-  type CallSessionDisconnectOptions,
+  type CallPrejoinTracks,
+  type CallSessionController,
   createCallSessionController,
+  stopPrejoinTracks,
 } from './CallSessionController';
+import { createCallLifecycle } from './call-lifecycle';
+import { publishCallResolution } from './call-resolution';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
 import {
   getKrisp,
   getLivekit,
   isKrispSupported,
   LK_CONNECTION_STATE,
+  LK_ROOM_EVENT,
   LK_TRACK_SOURCE,
   loadKrisp,
   loadLivekit,
 } from './livekit-loader';
+import { bindNativeCallLifecycle } from './native-call-lifecycle';
 import {
   type NativeCallConnectionState,
   useMaybeNativeCallState,
 } from './native-call-state';
+import {
+  isNativeIosCallKitEnabled,
+  registerCallKitCallEndedHandler,
+} from './use-callkit';
 
 type LivekitJsCallController = ReturnType<
   typeof import('./LivekitJsCallController')['createLivekitJsCallController']
@@ -342,6 +358,13 @@ const [persistedNoiseSuppressionMode, setPersistedNoiseSuppressionMode] =
   });
 
 export type CallState = {
+  /** Media connection owned by the meeting session; channel calls use callLifecycle. */
+  meetingSession: Pick<
+    CallSessionController,
+    'connectWithToken' | 'disconnect'
+  >;
+  /** Shared join, leave, and recovery lifecycle, with a reactive snapshot. */
+  callLifecycle: ReturnType<typeof createCallLifecycle>;
   /** The LiveKit Room instance, null when not in a call */
   room: () => Room | null;
   /** Current connection state */
@@ -378,15 +401,6 @@ export type CallState = {
   activeAudioOutputDeviceId: () => string | null;
   /** Currently active video input device ID */
   activeVideoInputDeviceId: () => string | null;
-  /** Whether joining this channel needs a fresh call token */
-  shouldRequestSessionToken: (channelId: string) => boolean;
-  /** Connect the active call session using the right platform controller */
-  connectSession: (
-    tokenResponse: CallTokenResponse,
-    metadata?: CallSessionConnectMetadata
-  ) => Promise<void>;
-  /** Disconnect the active call session using the right platform controller */
-  disconnectSession: (options?: CallSessionDisconnectOptions) => Promise<void>;
   /** Toggle local audio */
   toggleAudio: () => Promise<void>;
   /** Toggle local video */
@@ -405,16 +419,10 @@ export type CallState = {
   isNoiseSuppressed: () => boolean;
   /** Toggle mic noise suppression on/off */
   toggleNoiseSuppression: () => Promise<void>;
-  /** Begin an optimistic join to a channel */
-  beginOptimisticJoin: (channelId: string) => void;
-  /** Rollback an optimistic join to a channel */
-  rollbackOptimisticJoin: () => void;
   /** Whether we're in the optimistic join window */
   isConnecting: () => boolean;
   /** Error message from a failed join attempt */
   joinError: () => string | null;
-  /** Set the join error message */
-  setJoinError: (error: string | null) => void;
   /**
    * Which channel has the Call tab focused in a channel split. `null` when no
    * channel block reports the Call tab.
@@ -457,6 +465,9 @@ export function useCallContextOptional(): CallState | undefined {
  * and all readonly call state. Returns reactive state + mutation actions.
  */
 function createCallState() {
+  const channels = useChannelsContext();
+  const userId = useUserId();
+  const leaveMutation = useLeaveCallMutation();
   const nativeCall = useMaybeNativeCallState();
   const [room, setRoom] = createSignal<Room | null>(null);
   const [store, setStore] = createStore<CallStoreState>({
@@ -1107,22 +1118,105 @@ function createCallState() {
     currentConnectionState() === LK_CONNECTION_STATE.Reconnecting ||
     currentConnectionState() === LK_CONNECTION_STATE.SignalReconnecting;
 
-  const currentJoinError = () =>
-    currentNativeCallSnapshot() ? null : store.joinError;
-
   // --- mutations ---
 
-  async function finishLocalMediaSetup(targetRoom: Room, setupVersion: number) {
+  /** Adopt prejoin tracks so LiveKit can release and reacquire their devices. */
+  async function publishPrejoinTrack(
+    targetRoom: Room,
+    source: keyof CallPrejoinTracks,
+    mediaStreamTrack: MediaStreamTrack
+  ) {
+    const livekit = getLivekit();
+    if (!livekit) throw new Error('LiveKit is not loaded');
+    const track =
+      source === 'microphone'
+        ? new livekit.LocalAudioTrack(
+            mediaStreamTrack,
+            currentMicrophoneCaptureOptions() as MediaTrackConstraints,
+            false
+          )
+        : new livekit.LocalVideoTrack(
+            mediaStreamTrack,
+            mediaStreamTrack.getConstraints(),
+            false
+          );
+    track.source =
+      LK_TRACK_SOURCE[source === 'microphone' ? 'Microphone' : 'Camera'];
+    try {
+      await targetRoom.localParticipant.publishTrack(track, {
+        source: track.source,
+      });
+    } catch (error) {
+      track.stop();
+      throw error;
+    }
+  }
+
+  /** Reuse the prejoin track, falling back to device capture if it fails. */
+  async function enablePrejoinOrDevice(
+    targetRoom: Room,
+    source: keyof CallPrejoinTracks,
+    prejoinTrack: MediaStreamTrack | undefined,
+    enableDevice: () => Promise<unknown>
+  ) {
+    if (prejoinTrack?.readyState === 'live') {
+      try {
+        await publishPrejoinTrack(targetRoom, source, prejoinTrack);
+        return;
+      } catch (e) {
+        console.error(`failed to publish prejoin ${source} track`, e);
+      }
+    }
+    prejoinTrack?.stop();
+    await enableDevice();
+  }
+
+  async function finishLocalMediaSetup(
+    targetRoom: Room,
+    setupVersion: number,
+    prejoinTracks?: CallPrejoinTracks
+  ) {
+    // Each step claims its track; anything left unclaimed is stopped.
+    const unclaimed = { ...prejoinTracks };
+    const claim = (source: keyof CallPrejoinTracks) => {
+      const track = unclaimed[source];
+      delete unclaimed[source];
+      return track;
+    };
+    try {
+      await setUpLocalMedia(targetRoom, setupVersion, claim);
+    } finally {
+      stopPrejoinTracks(unclaimed);
+    }
+  }
+
+  async function setUpLocalMedia(
+    targetRoom: Room,
+    setupVersion: number,
+    claim: (source: keyof CallPrejoinTracks) => MediaStreamTrack | undefined
+  ) {
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
 
-    // Enable microphone by default.
+    // Respect the pre-join microphone preference before opening a device.
     try {
-      await targetRoom.localParticipant.setMicrophoneEnabled(
-        true,
-        currentMicrophoneCaptureOptions()
-      );
+      if (store.isAudioMuted) {
+        await targetRoom.localParticipant.setMicrophoneEnabled(false);
+      } else {
+        await enablePrejoinOrDevice(
+          targetRoom,
+          'microphone',
+          claim('microphone'),
+          () =>
+            targetRoom.localParticipant.setMicrophoneEnabled(
+              true,
+              currentMicrophoneCaptureOptions()
+            )
+        );
+      }
     } catch (e) {
       console.error('failed to enable microphone', e);
+      if (isCurrentMediaSetup(targetRoom, setupVersion))
+        setStore('isAudioMuted', true);
     }
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
     if (store.isAudioMuted) {
@@ -1137,6 +1231,25 @@ function createCallState() {
       // Attach Krisp when supported; otherwise use one browser-native layer.
       // ensureNoiseSuppressionOnMicTrack is a no-op when the user's pref is off.
       await ensureNoiseSuppressionOnMicTrack(targetRoom);
+    }
+    if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
+
+    if (!store.isVideoMuted) {
+      try {
+        await enablePrejoinOrDevice(targetRoom, 'camera', claim('camera'), () =>
+          targetRoom.localParticipant.setCameraEnabled(true)
+        );
+        if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
+        if (store.isVideoMuted) {
+          await targetRoom.localParticipant.setCameraEnabled(false);
+        } else {
+          await ensureBackgroundEffectOnCameraTrack(targetRoom, true);
+        }
+      } catch (error) {
+        console.error('failed to enable camera', error);
+        if (isCurrentMediaSetup(targetRoom, setupVersion))
+          setStore('isVideoMuted', true);
+      }
     }
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
 
@@ -1201,9 +1314,9 @@ function createCallState() {
       setStore('optimisticJoinChannelId', null);
       setStore('joinError', null);
     },
-    setInitialMediaState: () => {
-      setStore('isAudioMuted', false);
-      setStore('isVideoMuted', true);
+    setInitialMediaState: (preferences) => {
+      setStore('isAudioMuted', preferences?.microphoneEnabled === false);
+      setStore('isVideoMuted', preferences?.cameraEnabled !== true);
     },
     setRemoteParticipants: (participants) => {
       setStore('remoteParticipants', participants);
@@ -1219,15 +1332,21 @@ function createCallState() {
 
   const callSession = createCallSessionController({
     nativeCall,
-    jsConnect: async (tokenResponse) => {
+    jsConnect: async (tokenResponse, metadata) => {
       const generation = ++browserConnectGeneration;
-      const controller = await getLivekitJsController();
-      if (disposed || generation !== browserConnectGeneration) return;
-      return controller.connect(tokenResponse);
+      let handedOff = false;
+      try {
+        const controller = await getLivekitJsController();
+        if (disposed || generation !== browserConnectGeneration) return;
+        handedOff = true;
+        return await controller.connect(tokenResponse, metadata);
+      } finally {
+        if (!handedOff) stopPrejoinTracks(metadata?.localTracks);
+      }
     },
     jsDisconnect: async () => {
       // Cancel a connect that is still waiting on its dynamic import. This is
-      // also reached by timeout/error recovery in useCall.
+      // also reached by timeout/error recovery in the call lifecycle.
       browserConnectGeneration += 1;
       if (!livekitJsPromise) return;
       const controller = await getLivekitJsController();
@@ -1359,7 +1478,7 @@ function createCallState() {
 
   function beginOptimisticJoin(channelId: string) {
     // Do not clear joinError here — retries should keep the error panel visible
-    // with `isJoining` until LiveKit connects (see useCall join mutation).
+    // with `isJoining` until LiveKit connects.
     setStore('optimisticJoinChannelId', channelId);
   }
 
@@ -1400,6 +1519,72 @@ function createCallState() {
     }
   }
 
+  const lifecycle = createCallLifecycle({
+    shouldRequestToken: callSession.shouldRequestToken,
+    requestToken: requestCallToken,
+    connect: (token) =>
+      callSession.connectWithToken(token, {
+        channelTitle: token.channelId
+          ? (channels.channelsById()[token.channelId]?.name ?? null)
+          : null,
+      }),
+    disconnect: callSession.disconnect,
+    leave: (id) => leaveMutation.mutateAsync(id),
+    lookup: fetchActiveCall,
+    currentCall: () => {
+      const channelId = currentActiveChannelId();
+      return channelId
+        ? { channelId, callId: currentActiveCallId() }
+        : undefined;
+    },
+    beginJoin: beginOptimisticJoin,
+    rollbackJoin: rollbackOptimisticJoin,
+    setError: setJoinError,
+    watch: (_call, disconnected, nativeEnded) => {
+      // Capture the room: its own disconnect handler resets the store first.
+      const currentRoom = room();
+      currentRoom?.on(LK_ROOM_EVENT.Disconnected, disconnected);
+      const unregister = registerCallKitCallEndedHandler(nativeEnded);
+      return () => {
+        currentRoom?.off(LK_ROOM_EVENT.Disconnected, disconnected);
+        unregister();
+      };
+    },
+    onJoined: (call) => {
+      const answeringUserId = userId();
+      if (answeringUserId && call.callId) {
+        publishCallResolution({
+          type: 'answered',
+          callId: call.callId,
+          answeredBy: answeringUserId,
+        });
+      }
+      void invalidateActiveCallQueries();
+      analytics.track('call_action', {
+        action: 'joined',
+        channelId: call.channelId,
+      });
+    },
+    onLeft: (channelId) =>
+      analytics.track('call_action', {
+        action: 'left',
+        channelId,
+        leaveReason: 'user_initiated',
+      }),
+    reportError: (error) => console.error('call lifecycle failed', error),
+  });
+  const [lifecycleSnapshot, setLifecycleSnapshot] = createSignal(
+    lifecycle.getState()
+  );
+  const unsubscribeLifecycle = lifecycle.subscribe((state) =>
+    setLifecycleSnapshot(state)
+  );
+
+  const unsubscribeNative =
+    isNativeIosCallKitEnabled() && nativeCall
+      ? bindNativeCallLifecycle(nativeCall, lifecycle)
+      : undefined;
+
   // --- cleanup ---
 
   const handleBeforeUnload = () => {
@@ -1408,6 +1593,9 @@ function createCallState() {
   window.addEventListener('beforeunload', handleBeforeUnload);
 
   onCleanup(() => {
+    unsubscribeNative?.();
+    unsubscribeLifecycle();
+    lifecycle.dispose();
     disposed = true;
     browserConnectGeneration += 1;
     window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -1421,6 +1609,17 @@ function createCallState() {
   // --- public API ---
 
   const state: CallState = {
+    meetingSession: {
+      connectWithToken: callSession.connectWithToken,
+      disconnect: callSession.disconnect,
+    },
+    callLifecycle: {
+      ...lifecycle,
+      getState: () => {
+        lifecycleSnapshot();
+        return lifecycle.getState();
+      },
+    },
     // readonly state
     room,
     connectionState: currentConnectionState,
@@ -1451,9 +1650,6 @@ function createCallState() {
     isConnecting: currentIsConnecting,
 
     // mutations
-    shouldRequestSessionToken: callSession.shouldRequestToken,
-    connectSession: callSession.connectWithToken,
-    disconnectSession: callSession.disconnect,
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
@@ -1464,10 +1660,7 @@ function createCallState() {
     isNoiseSuppressed: () =>
       isNoiseSuppressionEnabled(store.noiseSuppressionMode),
     toggleNoiseSuppression,
-    beginOptimisticJoin,
-    rollbackOptimisticJoin,
-    joinError: currentJoinError,
-    setJoinError,
+    joinError: () => store.joinError,
     callPageChannelId: () => store.callPageChannelId,
     syncCallPageTab,
     isCallPage: () => {

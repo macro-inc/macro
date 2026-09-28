@@ -1,4 +1,7 @@
-/** The Connection Gateway event type for one appended agent-session frame. */
+/**
+ * The Connection Gateway event type for a run of appended agent-session
+ * frames - everything the harness flushed to the log at once.
+ */
 export const AGENT_SESSION_LOG_EVENT = 'agent_session_log';
 
 /** The Connection Gateway event type for a persisted session-name change. */
@@ -16,14 +19,17 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 
 /**
- * One persisted log entry, addressed by session for realtime delivery.
+ * A run of persisted log entries, in log order, addressed by session for
+ * realtime delivery. Each entry is the exact row `GET /agent-sessions/{id}/log`
+ * serves, so the socket and the fetched log fold through one code path.
  *
  * This mirrors `AgentSessionLogEvent` in
  * `crates/agent_session/src/outbound/connection_gateway_realtime.rs`.
  */
 export type AgentSessionLogEvent = {
   agentSessionId: string;
-} & AgentSessionLogEntryDto;
+  entries: AgentSessionLogEntryDto[];
+};
 
 /** Mirrors `AgentSessionRenamedEvent` in the backend realtime adapter. */
 export type AgentSessionRenamedEvent = {
@@ -44,12 +50,6 @@ export type AgentSessionQueueEvent = {
   agentSessionId: string;
   entries: QueuedActionDto[];
 };
-
-/** Remove the realtime address, leaving the exact persisted entry shape. */
-export function entryOf(event: AgentSessionLogEvent): AgentSessionLogEntryDto {
-  const { agentSessionId: _agentSessionId, ...entry } = event;
-  return entry;
-}
 
 /** A persisted session changed; consumers reload its current metadata. */
 export const AGENT_SESSION_UPDATED_EVENT = 'agent_session_updated';

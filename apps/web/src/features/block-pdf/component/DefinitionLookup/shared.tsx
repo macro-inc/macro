@@ -5,22 +5,8 @@ export const AccordionText = styled('span')`
   line-height: 18px;
 `;
 
-export const MAX_LINES = 14;
 export const FONT_SIZE = 16;
 export const LINE_HEIGHT = 1.1;
-
-/**
- * Convert HTML string into text
- */
-export function decodeString(e: Element): string {
-  var lineBreaks = /<br\/>/g;
-  var endBreak = /(?<=.)(<br\/>)$/g;
-  if (!e.innerHTML) return '';
-  const decodedString = e.innerHTML
-    ?.replaceAll(endBreak, '')
-    .replaceAll(lineBreaks, '\r\n\n');
-  return decodedString;
-}
 
 export function parseDefinitionMetadata(element: Element): {
   className: string;

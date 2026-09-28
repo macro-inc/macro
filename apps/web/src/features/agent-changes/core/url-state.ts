@@ -1,5 +1,13 @@
 import type { DiffStyle, PaneLayout } from './layout';
 
+/**
+ * The query key the viewer stores its state under. One key holds every host's
+ * entry, so the split router owns it globally rather than per route: the
+ * viewer mounts wherever an agent session does, and a pane that navigates
+ * elsewhere must not drop a neighbouring pane's entry.
+ */
+export const DIFF_SEARCH_PARAM = 'diff';
+
 export type DiffUrlState = { layout: PaneLayout; diffStyle: DiffStyle };
 
 export const DEFAULT_DIFF_URL_STATE: DiffUrlState = {

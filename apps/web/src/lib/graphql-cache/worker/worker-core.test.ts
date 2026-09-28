@@ -16,6 +16,33 @@ describe('CacheWorkerCore', () => {
     vi.useRealTimers();
   });
 
+  it('obtains durable generations from the engine on every request', async () => {
+    const before = '00000000-0000-4000-8000-000000000001';
+    const after = '00000000-0000-4000-8000-000000000002';
+    const currentStorageGeneration = vi
+      .fn()
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(after);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ currentStorageGeneration }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'current-storage-generation',
+    });
+    await core.handleRequest(port, {
+      id: 3,
+      kind: 'current-storage-generation',
+    });
+    expect(messages).toContainEqual({ id: 2, ok: true, result: before });
+    expect(messages).toContainEqual({ id: 3, ok: true, result: after });
+    expect(currentStorageGeneration).toHaveBeenCalledTimes(2);
+  });
+
   it('dispatches explicit-key projection to the wasm engine', async () => {
     const records = [
       {
@@ -477,6 +504,63 @@ describe('CacheWorkerCore', () => {
     expect(hydrateQuery).toHaveBeenCalledBefore(writeQuery);
   });
 
+  it('checks storage generation after earlier hydration before later foreground reads', async () => {
+    const order: string[] = [];
+    const blocker = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const generation = '00000000-0000-4000-8000-000000000001';
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async (opId: string) => {
+          order.push(opId);
+          if (opId === 'blocker') {
+            started.resolve();
+            await blocker.promise;
+          }
+          return { kind: 'miss' };
+        },
+        hydrateQuery: async () => {
+          order.push('hydrate');
+          return { changed: [], affectedOps: [], reset: false, data: null };
+        },
+        currentStorageGeneration: async () => {
+          order.push('generation');
+          return generation;
+        },
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await started.promise;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query Backfill { backfill }',
+      data: { backfill: true },
+    });
+    const proof = core.handleRequest(port, {
+      id: 4,
+      kind: 'current-storage-generation',
+    });
+    const visible = core.handleRequest(port, {
+      id: 5,
+      kind: 'read',
+      opId: 'visible',
+      query: 'query Visible { visible }',
+      priority: 'user-visible',
+    });
+    blocker.resolve();
+    await Promise.all([running, hydration, proof, visible]);
+    expect(order).toEqual(['blocker', 'hydrate', 'generation', 'visible']);
+  });
+
   it('coalesces queued affected rereads and runs them ahead of incidental reads', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;
@@ -923,52 +1007,70 @@ describe('CacheWorkerCore', () => {
     });
   });
 
-  it('keeps revision-advancing background hydration silent', async () => {
-    const hydrateQuery = vi.fn().mockResolvedValue({
-      revision: INITIAL_CACHE_REVISION,
-      revisionAdvanced: true,
-      changed: ['GraphqlSoupDocument:doc-1'],
-      affectedOps: ['client:7'],
-      reset: false,
-      data: { cursor: 'next' },
-    });
-    loadCacheWasmMock.mockResolvedValue({
-      openCache: vi.fn().mockResolvedValue({ hydrateQuery }),
-    });
-    const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
-    const core = new CacheWorkerCore();
-    core.addPort(port);
-
-    await core.handleRequest(port, {
-      id: 1,
-      kind: 'init',
-      scope: 'scope-1',
-    });
-    await core.handleRequest(port, {
-      id: 2,
-      kind: 'hydrate',
-      query: 'query Backfill { cursor }',
-      data: { cursor: 'next' },
-    });
-
-    expect(messages).not.toContainEqual(
-      expect.objectContaining({ kind: 'ops-affected' })
-    );
-    expect(messages).not.toContainEqual(
-      expect.objectContaining({ kind: 'cache-changed' })
-    );
-    expect(messages.at(-1)).toEqual({
-      id: 2,
-      ok: true,
-      result: {
-        kind: 'data',
-        data: { cursor: 'next' },
+  it.each([true, false])(
+    'notifies only hydration listeners when its revision advances (%s)',
+    async (revisionAdvanced) => {
+      const hydrateQuery = vi.fn().mockResolvedValue({
         revision: INITIAL_CACHE_REVISION,
+        changed: ['GraphqlSoupDocument:doc-1'],
+        affectedOps: ['client:7'],
         reset: false,
-      },
-    });
-  });
+        data: { cursor: 'next' },
+        revisionAdvanced,
+      });
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ hydrateQuery }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+
+      await core.handleRequest(port, {
+        id: 1,
+        kind: 'init',
+        scope: 'scope-1',
+      });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'hydrate',
+        query: 'query Backfill { cursor }',
+        data: { cursor: 'next' },
+      });
+
+      expect(messages).not.toContainEqual(
+        expect.objectContaining({ kind: 'ops-affected' })
+      );
+      expect(messages).not.toContainEqual(
+        expect.objectContaining({ kind: 'cache-changed' })
+      );
+      expect(
+        messages.filter(
+          (message) =>
+            typeof message === 'object' &&
+            message !== null &&
+            'kind' in message &&
+            message.kind === 'cache-hydrated'
+        )
+      ).toEqual(
+        revisionAdvanced
+          ? [{ kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION }]
+          : []
+      );
+      expect(messages.at(-1)).toEqual({
+        id: 2,
+        ok: true,
+        result: {
+          kind: 'data',
+          data: { cursor: 'next' },
+          revision: INITIAL_CACHE_REVISION,
+          reset: false,
+        },
+      });
+    }
+  );
 
   it('drains earlier request responses before consuming close and rejects later admission', async () => {
     const order: string[] = [];
@@ -1443,6 +1545,7 @@ describe('CacheWorkerCore', () => {
     expect(port.postMessage).toHaveBeenCalledWith({
       kind: 'cache-changed',
       revision: INITIAL_CACHE_REVISION,
+      reset: true,
     });
     expect(port.postMessage).toHaveBeenLastCalledWith({
       id: 2,

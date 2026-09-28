@@ -8,6 +8,7 @@ import {
   readSpreadsheetForAi,
 } from '@macro-inc/spreadsheet/ai-workbook';
 import type { SpreadsheetCalculator } from '@macro-inc/spreadsheet/calculation';
+import { validateSpreadsheetDocument } from '@macro-inc/spreadsheet/document-validation';
 import { LoroDoc } from 'loro-crdt';
 import { nextAiPeerId } from '../ai-editing/awareness/ai-peer';
 
@@ -160,12 +161,12 @@ export function createSpreadsheetStorage(
   else if (base.protocol === 'ws:') base.protocol = 'http:';
   if (base.protocol !== 'http:' && base.protocol !== 'https:')
     throw new Error('Invalid sync service URL.');
-  const endpoint = `${base.toString().replace(/\/$/, '')}/document/${encodeURIComponent(documentId)}/spreadsheet`;
+  const endpoint = `${base.toString().replace(/\/$/, '')}/document/${encodeURIComponent(documentId)}`;
   const headers = { Authorization: `Bearer ${documentToken}` };
   return {
     async load(signal) {
       const data = await responseJson(
-        await fetcher(`${endpoint}-snapshot`, { headers, signal }),
+        await fetcher(`${endpoint}/state`, { headers, signal }),
         'read'
       );
       if (typeof data.revision !== 'string' || !data.revision)
@@ -177,7 +178,7 @@ export function createSpreadsheetStorage(
     },
     async commit(expectedRevision, update, signal) {
       const data = await responseJson(
-        await fetcher(`${endpoint}-update`, {
+        await fetcher(`${endpoint}/update`, {
           method: 'POST',
           headers: { ...headers, 'Content-Type': 'application/json' },
           body: JSON.stringify({ expectedRevision, update: encode(update) }),
@@ -222,6 +223,7 @@ export async function runSpreadsheetRequest(
   const doc = new LoroDoc();
   try {
     doc.import(snapshot);
+    validateSpreadsheetDocument(doc);
     if (request.action === 'read') {
       const response = readSpreadsheetForAi(doc, revision, request, calculator);
       checkDeadline();

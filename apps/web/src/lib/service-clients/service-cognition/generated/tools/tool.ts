@@ -20,6 +20,10 @@ type ToolParserMap = {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
   };
+  CommentOnDocumentText: {
+    call: types.CommentOnDocumentText;
+    response: types.CommentOnDocumentTextResponse;
+  };
   ConfigureBot: {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
@@ -45,6 +49,10 @@ type ToolParserMap = {
     call: types.CreateImportEntity;
     response: types.CreateImportEntityResponse;
   };
+  CreateInitiative: {
+    call: types.CreateInitiative;
+    response: types.ProjectDetails;
+  };
   CreateProject: {
     call: types.CreateProject;
     response: types.CreateProjectResponse;
@@ -59,6 +67,10 @@ type ToolParserMap = {
   DeleteImportEntity: {
     call: types.DeleteImportEntity;
     response: types.DeleteImportEntityResponse;
+  };
+  DeleteInitiative: {
+    call: types.DeleteInitiative;
+    response: types.ProjectOperationComplete;
   };
   DeleteReminder: {
     call: types.DeleteReminder;
@@ -118,6 +130,10 @@ type ToolParserMap = {
     response: types.ListImportEntitiesResponse;
   };
   ListInboxes: { call: types.ListInboxes; response: types.ListInboxesResponse };
+  ListInitiatives: {
+    call: types.ListInitiatives;
+    response: types.ProjectListResult;
+  };
   ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
   ListNotifications: {
     call: types.ListNotifications;
@@ -177,6 +193,14 @@ type ToolParserMap = {
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
+  ReadInitiative: {
+    call: types.ReadInitiative;
+    response: types.ProjectReadResult;
+  };
+  ReadInitiativeActivity: {
+    call: types.ReadInitiativeActivity;
+    response: types.ProjectActivityResult;
+  };
   ReadMetadata: {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
@@ -186,6 +210,10 @@ type ToolParserMap = {
     call: types.ReadSpreadsheet;
     response: types.SpreadsheetResponse;
   };
+  ReadTaskInitiatives: {
+    call: types.ReadTaskInitiatives;
+    response: types.TaskProjectReferences;
+  };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
   RenameChannel: {
     call: types.RenameChannel;
@@ -194,6 +222,14 @@ type ToolParserMap = {
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
+  };
+  ReplyToDocumentComment: {
+    call: types.ReplyToDocumentComment;
+    response: types.ReplyToDocumentCommentResponse;
+  };
+  ResolveDocumentComment: {
+    call: types.ResolveDocumentComment;
+    response: types.ResolveDocumentCommentResponse;
   };
   SearchSkills: {
     call: types.SearchSkills;
@@ -208,6 +244,10 @@ type ToolParserMap = {
     call: types.SendChannelMessage;
     response: types.SendChannelMessageResponse;
   };
+  SendConfirmedEmail: {
+    call: types.SendConfirmedEmail;
+    response: types.SendEmailResponse;
+  };
   SendEmail: {
     call: types.SendEmail;
     response: types.UserToolResponseForSendEmailResponse;
@@ -220,6 +260,10 @@ type ToolParserMap = {
     call: types.SetSenderPolicy;
     response: types.SetSenderPolicyResponse;
   };
+  SetTaskInitiative: {
+    call: types.SetTaskInitiative;
+    response: types.TaskProjectOutcomes;
+  };
   Subagent: { call: types.Subagent; response: types.SubagentResponse };
   TextEditorCodeExecution: {
     call: types.TextEditorCodeExecution;
@@ -229,11 +273,20 @@ type ToolParserMap = {
     call: types.UpdateCalendarEvent;
     response: types.ToolCalendarEvent;
   };
+  UpdateInitiative: {
+    call: types.UpdateInitiative;
+    response: types.ProjectDetails;
+  };
+  UpdateInitiativeSharing: {
+    call: types.UpdateInitiativeSharing;
+    response: types.ProjectDetails;
+  };
   UpdateReminder: { call: types.UpdateReminder; response: types.ToolReminder };
   UpdateThreadLabels: {
     call: types.UpdateThreadLabels;
     response: types.UpdateThreadLabelsResponse;
   };
+  UploadFile: { call: types.UploadFile; response: types.UploadFileResponse };
   WebFetch: { call: types.WebFetch; response: types.WebFetchResponse };
   WebSearch: { call: types.WebSearch; response: types.WebSearchResponse };
 };
@@ -250,6 +303,10 @@ const toolParserMap = {
   CalculateSpreadsheet: {
     call: schemas.CalculateSpreadsheet,
     response: schemas.SpreadsheetResponse,
+  },
+  CommentOnDocumentText: {
+    call: schemas.CommentOnDocumentText,
+    response: schemas.CommentOnDocumentTextResponse,
   },
   ConfigureBot: {
     call: schemas.ConfigureBot,
@@ -276,6 +333,10 @@ const toolParserMap = {
     call: schemas.CreateImportEntity,
     response: schemas.CreateImportEntityResponse,
   },
+  CreateInitiative: {
+    call: schemas.CreateInitiative,
+    response: schemas.ProjectDetails,
+  },
   CreateProject: {
     call: schemas.CreateProject,
     response: schemas.CreateProjectResponse,
@@ -293,6 +354,10 @@ const toolParserMap = {
   DeleteImportEntity: {
     call: schemas.DeleteImportEntity,
     response: schemas.DeleteImportEntityResponse,
+  },
+  DeleteInitiative: {
+    call: schemas.DeleteInitiative,
+    response: schemas.ProjectOperationComplete,
   },
   DeleteReminder: {
     call: schemas.DeleteReminder,
@@ -357,6 +422,10 @@ const toolParserMap = {
   ListInboxes: {
     call: schemas.ListInboxes,
     response: schemas.ListInboxesResponse,
+  },
+  ListInitiatives: {
+    call: schemas.ListInitiatives,
+    response: schemas.ProjectListResult,
   },
   ListLabels: {
     call: schemas.ListLabels,
@@ -429,6 +498,14 @@ const toolParserMap = {
     call: schemas.ReadContent,
     response: schemas.ReadContentResponse,
   },
+  ReadInitiative: {
+    call: schemas.ReadInitiative,
+    response: schemas.ProjectReadResult,
+  },
+  ReadInitiativeActivity: {
+    call: schemas.ReadInitiativeActivity,
+    response: schemas.ProjectActivityResult,
+  },
   ReadMetadata: {
     call: schemas.ReadMetadata,
     response: schemas.ReadMetadataResponse,
@@ -441,6 +518,10 @@ const toolParserMap = {
     call: schemas.ReadSpreadsheet,
     response: schemas.SpreadsheetResponse,
   },
+  ReadTaskInitiatives: {
+    call: schemas.ReadTaskInitiatives,
+    response: schemas.TaskProjectReferences,
+  },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
   RenameChannel: {
     call: schemas.RenameChannel,
@@ -449,6 +530,14 @@ const toolParserMap = {
   RenameDocument: {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
+  },
+  ReplyToDocumentComment: {
+    call: schemas.ReplyToDocumentComment,
+    response: schemas.ReplyToDocumentCommentResponse,
+  },
+  ResolveDocumentComment: {
+    call: schemas.ResolveDocumentComment,
+    response: schemas.ResolveDocumentCommentResponse,
   },
   SearchSkills: {
     call: schemas.SearchSkills,
@@ -466,6 +555,10 @@ const toolParserMap = {
     call: schemas.SendChannelMessage,
     response: schemas.SendChannelMessageResponse,
   },
+  SendConfirmedEmail: {
+    call: schemas.SendConfirmedEmail,
+    response: schemas.SendEmailResponse,
+  },
   SendEmail: {
     call: schemas.SendEmail,
     response: schemas.UserToolResponseForSendEmailResponse,
@@ -478,6 +571,10 @@ const toolParserMap = {
     call: schemas.SetSenderPolicy,
     response: schemas.SetSenderPolicyResponse,
   },
+  SetTaskInitiative: {
+    call: schemas.SetTaskInitiative,
+    response: schemas.TaskProjectOutcomes,
+  },
   Subagent: { call: schemas.Subagent, response: schemas.SubagentResponse },
   TextEditorCodeExecution: {
     call: schemas.TextEditorCodeExecution,
@@ -487,6 +584,14 @@ const toolParserMap = {
     call: schemas.UpdateCalendarEvent,
     response: schemas.ToolCalendarEvent,
   },
+  UpdateInitiative: {
+    call: schemas.UpdateInitiative,
+    response: schemas.ProjectDetails,
+  },
+  UpdateInitiativeSharing: {
+    call: schemas.UpdateInitiativeSharing,
+    response: schemas.ProjectDetails,
+  },
   UpdateReminder: {
     call: schemas.UpdateReminder,
     response: schemas.ToolReminder,
@@ -494,6 +599,10 @@ const toolParserMap = {
   UpdateThreadLabels: {
     call: schemas.UpdateThreadLabels,
     response: schemas.UpdateThreadLabelsResponse,
+  },
+  UploadFile: {
+    call: schemas.UploadFile,
+    response: schemas.UploadFileResponse,
   },
   WebFetch: { call: schemas.WebFetch, response: schemas.WebFetchResponse },
   WebSearch: { call: schemas.WebSearch, response: schemas.WebSearchResponse },
@@ -520,6 +629,10 @@ type ToolDataMap = {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
   };
+  CommentOnDocumentText: {
+    call: types.CommentOnDocumentText;
+    response: types.CommentOnDocumentTextResponse;
+  };
   ConfigureBot: {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
@@ -545,6 +658,10 @@ type ToolDataMap = {
     call: types.CreateImportEntity;
     response: types.CreateImportEntityResponse;
   };
+  CreateInitiative: {
+    call: types.CreateInitiative;
+    response: types.ProjectDetails;
+  };
   CreateProject: {
     call: types.CreateProject;
     response: types.CreateProjectResponse;
@@ -559,6 +676,10 @@ type ToolDataMap = {
   DeleteImportEntity: {
     call: types.DeleteImportEntity;
     response: types.DeleteImportEntityResponse;
+  };
+  DeleteInitiative: {
+    call: types.DeleteInitiative;
+    response: types.ProjectOperationComplete;
   };
   DeleteReminder: {
     call: types.DeleteReminder;
@@ -618,6 +739,10 @@ type ToolDataMap = {
     response: types.ListImportEntitiesResponse;
   };
   ListInboxes: { call: types.ListInboxes; response: types.ListInboxesResponse };
+  ListInitiatives: {
+    call: types.ListInitiatives;
+    response: types.ProjectListResult;
+  };
   ListLabels: { call: types.ListLabels; response: types.ListLabelsResponse };
   ListNotifications: {
     call: types.ListNotifications;
@@ -677,6 +802,14 @@ type ToolDataMap = {
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
+  ReadInitiative: {
+    call: types.ReadInitiative;
+    response: types.ProjectReadResult;
+  };
+  ReadInitiativeActivity: {
+    call: types.ReadInitiativeActivity;
+    response: types.ProjectActivityResult;
+  };
   ReadMetadata: {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
@@ -686,6 +819,10 @@ type ToolDataMap = {
     call: types.ReadSpreadsheet;
     response: types.SpreadsheetResponse;
   };
+  ReadTaskInitiatives: {
+    call: types.ReadTaskInitiatives;
+    response: types.TaskProjectReferences;
+  };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
   RenameChannel: {
     call: types.RenameChannel;
@@ -694,6 +831,14 @@ type ToolDataMap = {
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
+  };
+  ReplyToDocumentComment: {
+    call: types.ReplyToDocumentComment;
+    response: types.ReplyToDocumentCommentResponse;
+  };
+  ResolveDocumentComment: {
+    call: types.ResolveDocumentComment;
+    response: types.ResolveDocumentCommentResponse;
   };
   SearchSkills: {
     call: types.SearchSkills;
@@ -708,6 +853,10 @@ type ToolDataMap = {
     call: types.SendChannelMessage;
     response: types.SendChannelMessageResponse;
   };
+  SendConfirmedEmail: {
+    call: types.SendConfirmedEmail;
+    response: types.SendEmailResponse;
+  };
   SendEmail: {
     call: types.SendEmail;
     response: types.UserToolResponseForSendEmailResponse;
@@ -720,6 +869,10 @@ type ToolDataMap = {
     call: types.SetSenderPolicy;
     response: types.SetSenderPolicyResponse;
   };
+  SetTaskInitiative: {
+    call: types.SetTaskInitiative;
+    response: types.TaskProjectOutcomes;
+  };
   Subagent: { call: types.Subagent; response: types.SubagentResponse };
   TextEditorCodeExecution: {
     call: types.TextEditorCodeExecution;
@@ -729,11 +882,20 @@ type ToolDataMap = {
     call: types.UpdateCalendarEvent;
     response: types.ToolCalendarEvent;
   };
+  UpdateInitiative: {
+    call: types.UpdateInitiative;
+    response: types.ProjectDetails;
+  };
+  UpdateInitiativeSharing: {
+    call: types.UpdateInitiativeSharing;
+    response: types.ProjectDetails;
+  };
   UpdateReminder: { call: types.UpdateReminder; response: types.ToolReminder };
   UpdateThreadLabels: {
     call: types.UpdateThreadLabels;
     response: types.UpdateThreadLabelsResponse;
   };
+  UploadFile: { call: types.UploadFile; response: types.UploadFileResponse };
   WebFetch: { call: types.WebFetch; response: types.WebFetchResponse };
   WebSearch: { call: types.WebSearch; response: types.WebSearchResponse };
 };

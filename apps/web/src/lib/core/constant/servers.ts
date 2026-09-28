@@ -11,6 +11,10 @@ const serverHostLocal: Servers = {
   'unfurl-service': 'http://localhost:8095',
   contacts: 'http://localhost:8083',
   'email-service': 'http://localhost:8087',
+  // calendar_service owns calendar locally on 8088. No gateway locally, so the
+  // client hits the service port directly; it drops the /calendar segment, so
+  // that prefix is carried here.
+  'calendar-service': 'http://localhost:8088/calendar',
   'image-proxy-service': 'http://localhost:8097',
   'scheduled-action': 'http://localhost:8099',
   'agent-harness': 'http://localhost:8101',
@@ -41,6 +45,7 @@ const serverHostRemote = {
   'unfurl-service': `${gatewayHost}/unfurl`,
   contacts: `${gatewayHost}/contacts`,
   'email-service': `${gatewayHost}/email`,
+  'calendar-service': `${gatewayHost}/calendar`,
   'image-proxy-service': `${gatewayHost}/image-proxy`,
   'scheduled-action': `${gatewayHost}/scheduled-action`,
   'agent-harness': `${gatewayHost}/agent-harness`,
@@ -104,6 +109,10 @@ function proxyServers(): Servers | undefined {
     'agent-harness': `${proxyOrigin}/agent-harness`,
     contacts: `${proxyOrigin}/contacts`,
     'email-service': `${proxyOrigin}/email`,
+    // calendar_service is in the local inventory, so the proxy has a /calendar
+    // route to it (Caddy strips the prefix); the client drops /calendar and
+    // re-appends it via this host.
+    'calendar-service': `${proxyOrigin}/calendar`,
     'image-proxy-service': `${proxyOrigin}/image-proxy`,
     'scheduled-action': `${proxyOrigin}/scheduled-action`,
   };

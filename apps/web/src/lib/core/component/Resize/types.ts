@@ -18,8 +18,6 @@ export type Panel = {
   minSize: number;
   maxSize: number;
   redistributionPreferredSize?: number;
-  /** Panels with the same key form one layout unit for automatic sizing. */
-  shareGroup?: string;
   share: number;
   target: PanelSizeSpec;
 };
@@ -29,7 +27,6 @@ export type PanelConfig = {
   minSize?: number;
   maxSize?: number;
   redistributionPreferredSize?: number;
-  shareGroup?: string;
   target?: PanelSizeSpec;
 };
 
@@ -49,7 +46,6 @@ export type ResizeZoneCtx = {
       minSize?: number;
       maxSize?: number;
       redistributionPreferredSize?: number;
-      shareGroup?: string;
     }
   ) => void;
   gutterSize: () => number;

@@ -195,11 +195,16 @@ export function modelFamilyHint(
   return family === option.label ? undefined : family;
 }
 
-/** Whether a search query hits this model by name or by its heading. */
+/**
+ * Whether a search query hits this model by name, by its heading, or by its
+ * id — a name displayed as "Sonnet 5" should still be findable by typing the
+ * vendor out of its `anthropic/claude-sonnet-5` slug.
+ */
 export function matchesModelQuery(option: CatalogModelOption, query: string) {
   const family = option.group ?? inferModelFamily(option.label);
   return (
     option.label.toLowerCase().includes(query) ||
-    family.toLowerCase().includes(query)
+    family.toLowerCase().includes(query) ||
+    option.id.toLowerCase().includes(query)
   );
 }

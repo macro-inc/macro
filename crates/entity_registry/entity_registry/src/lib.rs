@@ -28,8 +28,12 @@ pub mod domain;
 #[cfg(feature = "postgres")]
 pub mod outbound;
 
+pub use domain::creation_principal::{
+    CreationPrincipalError, NonUserOwners, resolve_creation_principal,
+};
 pub use domain::models::{EntityRecord, EntityTypeCount};
-pub use domain::ports::{EntityRegistryRepository, EntityRegistryService};
+pub use domain::owner_grant_policy::OwnerGrantPolicy;
+pub use domain::ports::{BotFacts, EntityRegistryRepository, EntityRegistryService};
 pub use domain::service::EntityRegistryServiceImpl;
 pub use shared_entity_registry::{
     EntityRegistryError, EntityRegistryResult, InsertOutcome, NewEntityRecord, Owner,

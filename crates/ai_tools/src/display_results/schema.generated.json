@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "view": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "widgets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
+        }
+      },
+      "required": [
+        "widgets"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "view"
+  ],
+  "additionalProperties": false,
+  "title": "DisplayResults",
+  "description": "Present results as a rich, interactive view (lists, timelines, channel messages) directly in the conversation. Prefer this tool when answering questions about workspace data: summaries of tasks/docs/activity, lists of entities, and information that would otherwise need a markdown table or long bulleted list. The user does not need to ask for a dashboard. Typical triggers: \"what did I get done this week?\", \"what is a teammate working on?\", \"show my open tasks\", \"summarize this project\", and \"what happened in this channel?\". ReadActivity already renders a complete activity timeline: do not call DisplayResults to repeat its events; add at most one short textual takeaway. The view is the answer. Keep accompanying prose to a one-line lead-in at most and do not restate the same data. Entity-backed widgets take real workspace entity ids obtained from other tools such as ListEntities or search; never invent ids. Prefer list sources with kind \"items\" and those entity references. The frontend renders the view from the tool arguments immediately; this tool only acknowledges it.",
+  "$defs": {
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "md"
+            },
+            "markdown": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "markdown"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "timeline"
+            },
+            "title": {
+              "type": "string"
+            },
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "time": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "entity": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "chat",
+                          "channel",
+                          "channel_message",
+                          "document",
+                          "project",
+                          "email_thread",
+                          "calendar_event",
+                          "team",
+                          "call",
+                          "foreign_entity",
+                          "static_file",
+                          "crm_company",
+                          "crm_contact",
+                          "reminder",
+                          "skill",
+                          "agent_session",
+                          "scheduled_action",
+                          "initiative",
+                          "email",
+                          "automation",
+                          "channel_thread"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "type"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "future": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "time",
+                  "title"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "type",
+            "events"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "list"
+            },
+            "title": {
+              "type": "string"
+            },
+            "source": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "query"
+                    },
+                    "query": {}
+                  },
+                  "required": [
+                    "kind",
+                    "query"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "items"
+                    },
+                    "entities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "chat",
+                              "channel",
+                              "channel_message",
+                              "document",
+                              "project",
+                              "email_thread",
+                              "calendar_event",
+                              "team",
+                              "call",
+                              "foreign_entity",
+                              "static_file",
+                              "crm_company",
+                              "crm_contact",
+                              "reminder",
+                              "skill",
+                              "agent_session",
+                              "scheduled_action",
+                              "initiative",
+                              "email",
+                              "automation",
+                              "channel_thread"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "entities"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "groupBy": {
+              "type": "string",
+              "enum": [
+                "date",
+                "entity_type",
+                "project"
+              ]
+            },
+            "limit": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "type",
+            "source"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "channelMessage"
+            },
+            "channelId": {
+              "type": "string"
+            },
+            "messageId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "channelId",
+            "messageId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "container"
+            },
+            "direction": {
+              "type": "string",
+              "enum": [
+                "row",
+                "col"
+              ]
+            },
+            "gap": {
+              "type": "number"
+            },
+            "wrap": {
+              "type": "boolean"
+            },
+            "align": {
+              "type": "string",
+              "enum": [
+                "start",
+                "center",
+                "end",
+                "stretch"
+              ]
+            },
+            "justify": {
+              "type": "string",
+              "enum": [
+                "start",
+                "center",
+                "end",
+                "between"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "children": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "children"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

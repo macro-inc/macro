@@ -80,8 +80,10 @@ impl AgentSessionRepo for StubSessions {
         Ok(AgentSession {
             repo_branch: self.repo_branch.clone(),
             id,
-            owner_id: MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
-                .expect("valid user id"),
+            owner_id: model_owner::Owner::User(
+                MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
+                    .expect("valid user id"),
+            ),
             thread_id: None,
             thread_parent: None,
             originating_message_id: None,
@@ -195,6 +197,21 @@ impl AgentSessionRepo for StubSessions {
         _size: SandboxSize,
     ) -> SessionResult<()> {
         unimplemented!("resizing is the harness service's job")
+    }
+
+    async fn list_queued_actions(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<Vec<agent_session::domain::model::StoredQueuedAction>> {
+        unimplemented!("the manager never reads the queue")
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        _id: AgentSessionId,
+        _entries: &[agent_session::domain::model::StoredQueuedAction],
+    ) -> SessionResult<()> {
+        unimplemented!("the manager never writes the queue")
     }
 }
 

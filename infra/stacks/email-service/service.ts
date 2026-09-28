@@ -104,6 +104,7 @@ export class EmailService extends pulumi.ComponentResource {
         containerPort: serviceContainerPort,
         service: GatewayService.EMAIL_SERVICE,
         healthCheckPath,
+        // `/calendar` belongs to calendar-service (its own rule, priority 140).
         pathPatterns: ['/email', '/email/*'],
         serviceSecurityGroupId: this.serviceSg.id,
         albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,

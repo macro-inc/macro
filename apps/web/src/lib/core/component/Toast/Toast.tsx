@@ -337,6 +337,9 @@ function ToastContent(props: {
   onDismiss?: () => void;
 }) {
   const styles = () => (props.toastType ? TOAST_STYLES[props.toastType] : null);
+  // Two actions beside the title squeeze it to a few characters; like the
+  // stacked custom layout, they get their own row under the description.
+  const stackActions = () => (props.actions?.length ?? 0) > 1;
 
   const accentColor = () => {
     if (props.custom?.color) return props.custom.color;
@@ -527,7 +530,7 @@ function ToastContent(props: {
                   >
                     {props.message}
                   </Toast.Title>
-                  <Show when={props.actions?.length}>
+                  <Show when={props.actions?.length && !stackActions()}>
                     <ActionButtons
                       actions={props.actions!}
                       mobile={props.mobile}
@@ -541,10 +544,20 @@ function ToastContent(props: {
                     </Toast.CloseButton>
                   </Show>
                 </div>
-                <Show when={props.subtext && !props.mobile}>
-                  <Toast.Description class="text-sm text-ink-extra-muted ml-7">
+                <Show when={props.subtext && (!props.mobile || stackActions())}>
+                  <Toast.Description
+                    class={cn(
+                      'ml-7 text-ink-extra-muted',
+                      props.mobile ? 'text-xs' : 'text-sm'
+                    )}
+                  >
                     {props.subtext}
                   </Toast.Description>
+                </Show>
+                <Show when={stackActions()}>
+                  <div class="mt-2 ml-7 flex flex-wrap gap-2">
+                    <ActionButtons actions={props.actions!} mobile />
+                  </div>
                 </Show>
               </>
             )}

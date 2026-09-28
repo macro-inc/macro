@@ -43,6 +43,7 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
 
 fn new_pairing(code: &str, secret: &str) -> NewPairing {
     NewPairing {
+        requested_allow_permission_bypass: None,
         id: Uuid::new_v4(),
         code: code.to_owned(),
         device_secret_hash: harness_token::hash_token(secret),
@@ -55,6 +56,7 @@ fn new_pairing(code: &str, secret: &str) -> NewPairing {
 
 fn new_harness() -> NewHarness {
     NewHarness {
+        allow_permission_bypass: false,
         id: HarnessId::new_from_uuid(Uuid::new_v4()),
         name: "erics-macbook".to_owned(),
         owner: HarnessOwner::User {
@@ -343,8 +345,8 @@ async fn bound_agents_lists_only_live_agents_of_this_harness(pool: PgPool) {
     .unwrap();
     sqlx::query!(
         r#"
-        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id)
-        VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2)
+        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id, is_coding)
+        VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2, true)
         "#,
         bot_id,
         harness_id,
@@ -369,8 +371,8 @@ async fn bound_agents_lists_only_live_agents_of_this_harness(pool: PgPool) {
     .unwrap();
     sqlx::query!(
         r#"
-        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope)
-        VALUES ($1, 'prompt', 'in-memory', 'default', 'all')
+        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, is_coding)
+        VALUES ($1, 'prompt', 'in-memory', 'default', 'all', false)
         "#,
         other_bot,
     )
@@ -420,8 +422,8 @@ async fn sessions_list_only_this_harness_newest_first(pool: PgPool) {
     .unwrap();
     sqlx::query!(
         r#"
-        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id)
-        VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2)
+        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id, is_coding)
+        VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2, true)
         "#,
         bot_id,
         harness_id,
@@ -470,8 +472,8 @@ async fn sessions_list_only_this_harness_newest_first(pool: PgPool) {
     .unwrap();
     sqlx::query!(
         r#"
-        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope)
-        VALUES ($1, 'prompt', 'in-memory', 'default', 'all')
+        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, is_coding)
+        VALUES ($1, 'prompt', 'in-memory', 'default', 'all', false)
         "#,
         other_bot,
     )
@@ -500,4 +502,56 @@ async fn sessions_list_only_this_harness_newest_first(pool: PgPool) {
     assert_eq!(sessions[1].status, "no_messages");
     assert_eq!(sessions[0].bot_name, "Bound agent");
     assert_eq!(sessions[0].owner_id, OWNER_ID);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn permission_bypass_survives_registration_and_listing(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    insert_user(&pool, OWNER_ID).await;
+    for (code, allowed) in [("AAAA-BBBB", false), ("CCCC-DDDD", true)] {
+        repo.insert_pairing(new_pairing(code, "secret"))
+            .await
+            .unwrap();
+        let mut registration = new_harness();
+        registration.allow_permission_bypass = allowed;
+        let harness = repo
+            .approve_pairing(code, registration)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(harness.allow_permission_bypass, allowed);
+        assert_eq!(
+            repo.get_harness(harness.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .allow_permission_bypass,
+            allowed
+        );
+        let listed = repo.list_visible_harnesses(caller()).await.unwrap();
+        assert_eq!(
+            listed
+                .iter()
+                .find(|item| item.id == harness.id)
+                .unwrap()
+                .allow_permission_bypass,
+            allowed
+        );
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pairing_permission_ceiling_roundtrips(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool);
+    for (code, allowed) in [
+        ("AAAA-AAAA", None),
+        ("BBBB-BBBB", Some(false)),
+        ("CCCC-CCCC", Some(true)),
+    ] {
+        let mut pairing = new_pairing(code, "device-secret");
+        pairing.requested_allow_permission_bypass = allowed;
+        assert!(repo.insert_pairing(pairing).await.unwrap());
+        let stored = repo.get_pairing(code).await.unwrap().unwrap();
+        assert_eq!(stored.details.requested_allow_permission_bypass, allowed);
+    }
 }

@@ -1,6 +1,6 @@
 use chrono::Utc;
 use document_sub_type::DocumentSubType;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use models_properties::EntityType;
 use uuid::Uuid;
 
@@ -62,7 +62,7 @@ pub struct SoupDocument<T = ()> {
 
     /// The owner of the document
     #[cfg_attr(feature = "schema", schema(value_type = String))]
-    pub owner_id: MacroUserIdStr<'static>,
+    pub owner_id: Owner,
 
     /// The name of the document
     pub name: String,

@@ -1,7 +1,7 @@
 use crate::model::PredefinedModel;
 use crate::model::router::*;
 use crate::model::types::Model;
-use rig_core::providers::{anthropic, openai};
+use rig_core::providers::{anthropic, gemini, openai};
 
 fn test_router() -> ModelRouter {
     let anthropic = anthropic::Client::builder()
@@ -72,4 +72,41 @@ fn registered_openai_compatible_provider_routes_to_chat_completions() {
         router.route("local/llama-3.3-70b").unwrap(),
         RoutedModel::OpenAiChatCompletions(_)
     ));
+}
+
+#[test]
+fn fireworks_provider_routes_to_chat_completions() {
+    let router = test_router().with_openai_client(
+        "fireworks",
+        openai::CompletionsClient::builder()
+            .api_key("test-fireworks-key")
+            .base_url("https://api.fireworks.ai/inference/v1")
+            .build()
+            .unwrap(),
+    );
+
+    let routed = router.route("fireworks/kimi-k3").unwrap();
+    assert!(matches!(routed, RoutedModel::OpenAiChatCompletions(_)));
+    assert_eq!(routed.provider(), "fireworks");
+    assert_eq!(routed.model_name(), "kimi-k3");
+}
+
+#[test]
+fn google_provider_routes_to_native_gemini() {
+    let router = test_router().with_gemini_client(
+        gemini::Client::builder()
+            .api_key("test-google-key")
+            .build()
+            .unwrap(),
+    );
+
+    let routed = router.route("google/gemini-3.8-flash").unwrap();
+    assert!(matches!(routed, RoutedModel::Gemini(_)));
+    assert_eq!(routed.provider(), "google");
+    assert_eq!(routed.model_name(), "gemini-3.8-flash");
+}
+
+#[test]
+fn google_provider_without_a_client_is_unroutable() {
+    assert!(test_router().route("google/gemini-3.8-flash").is_err());
 }

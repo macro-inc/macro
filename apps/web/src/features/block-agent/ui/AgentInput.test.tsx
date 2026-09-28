@@ -58,7 +58,9 @@ vi.mock(
 );
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
-  MarkdownShell: () => <div data-testid="agent-input-editor" />,
+  MarkdownShell: (props: { disabled?: boolean }) => (
+    <div data-testid="agent-input-editor" data-disabled={props.disabled} />
+  ),
 }));
 
 // The channel composer's chips and drop zone reach the block registry (and
@@ -112,6 +114,38 @@ beforeEach(() => {
 });
 
 describe('queued message advancement', () => {
+  it('keeps view-only drafts, stop, and queue advancement inert', () => {
+    const onSend = vi.fn();
+    const onStop = vi.fn();
+    const onSendNext = vi.fn();
+    render(() => (
+      <AgentInput
+        readOnly
+        busy
+        hasQueuedMessages
+        onSend={onSend}
+        onStop={onStop}
+        onSendNext={onSendNext}
+      />
+    ));
+
+    expect(
+      screen.getByTestId('agent-input-editor').getAttribute('data-disabled')
+    ).toBe('true');
+    const stop = screen.getByRole('button', {
+      name: 'Stop',
+    }) as HTMLButtonElement;
+    expect(stop.disabled).toBe(true);
+    fireEvent.click(stop);
+    editor.enter?.();
+    editor.change?.('Cannot send this');
+    editor.enter?.();
+
+    expect(onSend).not.toHaveBeenCalled();
+    expect(onStop).not.toHaveBeenCalled();
+    expect(onSendNext).not.toHaveBeenCalled();
+  });
+
   it('shows a pressable Enter action that advances the next queued message', () => {
     const onStop = vi.fn();
 

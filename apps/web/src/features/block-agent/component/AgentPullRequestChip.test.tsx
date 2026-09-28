@@ -16,6 +16,10 @@ import { Suspense } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
 
+vi.mock('@queries/agent-session/list-sync', () => ({
+  refreshAgentSessionLists: vi.fn(async () => {}),
+}));
+
 const { openWithSplit } = vi.hoisted(() => {
   class FakeWebSocket {
     url: string;

@@ -11,6 +11,7 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
+import { localDevServer } from './scripts/local-dev-server';
 
 function readShortSha(): string {
   try {
@@ -199,10 +200,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         port: Number(process.env.PORT || 3000),
         host: '0.0.0.0',
         strictPort: true,
-        hmr: {
-          protocol: 'ws',
-          host: process.env.TAURI_DEV_HOST || 'localhost',
-        },
+        ...localDevServer(process.env),
         cors: true,
         watch: {
           usePolling: true,

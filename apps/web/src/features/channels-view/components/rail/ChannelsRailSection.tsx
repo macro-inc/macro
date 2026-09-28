@@ -3,6 +3,7 @@ import {
   CollapsibleSection as WorkspaceSection,
 } from '@app/components/view-shell';
 import { CollapseTransition } from '@app/components/view-shell/CollapseTransition';
+import { DebugSuspense } from '@channel/DebugSuspense';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -15,7 +16,6 @@ import {
   type JSX,
   Match,
   Show,
-  Suspense,
   Switch,
   useContext,
 } from 'solid-js';
@@ -48,7 +48,11 @@ function SectionScrollArea(props: {
         }}
       >
         <div role="group" class={props.class}>
-          <Suspense>{props.children}</Suspense>
+          <DebugSuspense
+            name={`ChannelsView.rail-section.${props.activityLabel ?? props.activityTargetId ?? 'unknown'}`}
+          >
+            {props.children}
+          </DebugSuspense>
         </div>
       </Scroll>
       <Show when={activity.direction()}>
@@ -135,10 +139,12 @@ function CollapsibleSectionHeader(props: {
   focused: boolean;
   focusWithin: boolean;
   class?: string;
+  ref?: (element: HTMLElement) => void;
   children: JSX.Element;
 }) {
   return (
     <WorkspaceSection.Header
+      ref={props.ref}
       class={cn(
         'w-full rounded-lg text-xs leading-5 font-medium text-ink-muted transition-colors group-hover/sidebar-section:text-ink',
         props.focused && 'bg-hover text-ink-muted',

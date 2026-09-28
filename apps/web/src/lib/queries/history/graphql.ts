@@ -49,17 +49,14 @@ function historyItemFromSearchDocument(
   if (separator < 0) return undefined;
   const typename = document.recordKey.slice(0, separator);
   const id = document.recordKey.slice(separator + 1);
-  const date = new Date(document.timestampMs);
-  const updatedAt = Number.isNaN(date.getTime())
-    ? undefined
-    : date.toISOString();
   const base = {
     id,
     name: record.name,
     rawName: record.name,
     ownerId: record.ownerId,
     createdAt: record.createdAt,
-    updatedAt,
+    updatedAt: record.updatedAt,
+    viewedAt: record.viewedAt,
     deletedAt: null,
   };
   switch (typename) {
@@ -85,7 +82,7 @@ function historyItemFromSearchDocument(
       return {
         ...base,
         type: 'document',
-        fileType: markdown ? 'md' : undefined,
+        fileType: record.fileType ?? (markdown ? 'md' : undefined),
         subType,
       } as HistoryItem;
     }

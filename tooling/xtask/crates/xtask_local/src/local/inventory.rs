@@ -200,6 +200,21 @@ pub const RUST_SERVICES: &[RustService] = &[
         no_default_features: false,
     },
     RustService {
+        compose_name: "calendar_service",
+        cargo_bin: "calendar_service",
+        package: "calendar_service",
+        host_port: Some(Port::Calendar),
+        path_prefix: Some("/calendar"),
+        is_websocket: false,
+        // Local-only: the backfill SQS workers spawn unconditionally (not gated
+        // on CALENDAR_SYNC_ENABLED), so running the binary under `run-dev`
+        // against shared-dev resources would race the deployed calendar-service
+        // for its backfill queue — the same reason scheduled_action is local-only.
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
         compose_name: "notification_service",
         cargo_bin: "notification_service",
         package: "notification_service",

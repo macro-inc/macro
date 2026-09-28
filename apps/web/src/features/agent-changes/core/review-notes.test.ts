@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  describeNoteLines,
   formatNotesForAgent,
   notesForFile,
   queuedNotes,
   type ReviewNote,
+  sendableNotes,
 } from './review-notes';
 
 function note(overrides: Partial<ReviewNote> = {}): ReviewNote {
@@ -24,6 +26,30 @@ describe('queuedNotes', () => {
     expect(
       queuedNotes([note(), note({ id: 'n2', sentAt: 't' })]).map((n) => n.id)
     ).toEqual(['n1']);
+  });
+});
+
+describe('sendableNotes', () => {
+  it('drops sent and empty notes and orders by file then line', () => {
+    expect(
+      sendableNotes([
+        note({ id: 'b', path: 'b.ts', text: 'Keep' }),
+        note({ id: 'empty', text: '   ' }),
+        note({ id: 'sent', sentAt: 't' }),
+        note({ id: 'a', lineNumber: 3, endLineNumber: 3 }),
+      ]).map((n) => n.id)
+    ).toEqual(['a', 'b']);
+  });
+});
+
+describe('describeNoteLines', () => {
+  it('names a single line and a range on each side', () => {
+    expect(describeNoteLines(note())).toBe('line 10 (new)');
+    expect(
+      describeNoteLines(
+        note({ side: 'deletions', lineNumber: 3, endLineNumber: 6 })
+      )
+    ).toBe('lines 3–6 (old)');
   });
 });
 

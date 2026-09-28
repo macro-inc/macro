@@ -1,17 +1,19 @@
 use utoipa::OpenApi;
 
-#[allow(
+#[expect(
     unused_imports,
     reason = "utoipa path macros require these generated symbols in scope"
 )]
 use crate::inbound::axum_router::{
     __path_create_action, __path_delete_action, __path_execute_action, __path_health,
-    __path_list_actions, __path_list_history, __path_update_action,
+    __path_list_actions, __path_list_history, __path_update_action, ScheduledActionResponse,
 };
 
+use crate::domain::event_trigger::{ActionTrigger, EventFilter, EventFilters, EventName};
 use crate::domain::models::{
-    ActionExecutionRecord, ActionKind, AgentTask, CreateScheduledAction, InProgressExecution,
-    Schedule, ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
+    ActionConfiguration, ActionExecutionRecord, ActionKind, AgentTask, CreateScheduledAction,
+    InProgressExecution, LegacyActionConfiguration, Schedule, ScheduledAction,
+    ScheduledActionUpdate, UpdateScheduledAction,
 };
 use model::response::EmptyResponse;
 
@@ -34,6 +36,13 @@ use model::response::EmptyResponse;
     components(
         schemas(
             ScheduledAction,
+            ScheduledActionResponse,
+            ActionConfiguration,
+            LegacyActionConfiguration,
+            ActionTrigger,
+            EventFilter,
+            EventFilters,
+            EventName,
             CreateScheduledAction,
             UpdateScheduledAction,
             Schedule,

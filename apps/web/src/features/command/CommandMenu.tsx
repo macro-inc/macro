@@ -5,6 +5,7 @@ import { getSearchSplit } from '@app/features/next-soup/soup-view/search-control
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
@@ -156,6 +157,8 @@ export function CommandMenuInner(props: {
       });
   const filteredItems = props.items ?? defaultCommandItems!.items;
   const pagination = defaultCommandItems?.pagination;
+  const isLoadingEntities = () =>
+    defaultCommandItems?.isLoadingEntities() ?? false;
   const listController = createCommandListController({
     items: filteredItems,
     selectedIndex: CommandState.selectedIndex,
@@ -282,10 +285,19 @@ export function CommandMenuInner(props: {
     if (isEntityItem(item)) {
       if (isGithubPrEntity(item.data)) {
         if (USE_MACRO_PR_SUMMARY_BLOCK) {
-          openWithSplit(
+          const result = openWithSplit(
             { type: 'pr', id: item.data.id },
-            { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
+            {
+              referredFrom: 'kommand-menu',
+              preferNewSplit: openInNewSplit,
+            }
           );
+          if (
+            result.status === 'reused' &&
+            result.owner !== result.sourceOwner
+          ) {
+            toast.alert('Content already open');
+          }
         } else {
           openExternalUrl(item.data.metadata.url);
         }
@@ -297,7 +309,7 @@ export function CommandMenuInner(props: {
       if (item.data.type !== 'foreign') {
         const blockName = itemToBlockName(item.data);
         if (blockName) {
-          openWithSplit(
+          const result = openWithSplit(
             { type: blockName, id: item.id },
             {
               referredFrom: 'kommand-menu',
@@ -305,6 +317,12 @@ export function CommandMenuInner(props: {
               reopen: blockName === 'channel' ? 'latest' : undefined,
             }
           );
+          if (
+            result.status === 'reused' &&
+            result.owner !== result.sourceOwner
+          ) {
+            toast.alert('Content already open');
+          }
         }
       }
       CommandState.close();
@@ -560,7 +578,7 @@ export function CommandMenuInner(props: {
 
   return (
     <CommandMenuShell
-      class={cn('max-h-[75vh] rounded-xl', props.class)}
+      class={cn('max-h-[75vh]', props.class)}
       ref={setCommandMenuRef}
       depth={props.depth}
     >
@@ -622,6 +640,11 @@ export function CommandMenuInner(props: {
       </Show>
 
       <CommandMenuShell.Body>
+        <Show when={isLoadingEntities() && filteredItems().length > 0}>
+          <div role="status" class="px-4 py-2 text-xs text-ink-muted">
+            Loading results…
+          </div>
+        </Show>
         <div
           class="overflow-hidden transition-[height] duration-60 ease-out p-2"
           style={{ height: `${resultsHeight()}px` }}
@@ -629,7 +652,11 @@ export function CommandMenuInner(props: {
           <Show
             when={filteredItems().length > 0}
             fallback={
-              <CommandMenuEmptyState>No results found</CommandMenuEmptyState>
+              <CommandMenuEmptyState>
+                <Show when={isLoadingEntities()} fallback="No results found">
+                  <span role="status">Loading results…</span>
+                </Show>
+              </CommandMenuEmptyState>
             }
           >
             <VirtualizedCommandList

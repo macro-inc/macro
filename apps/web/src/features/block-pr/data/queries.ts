@@ -102,19 +102,20 @@ function prForeignEntityDataFromForeignEntity(
   });
 }
 
+export function prForeignEntityQueryOptions(id: string) {
+  return {
+    queryKey: prForeignEntityQueryKey(id),
+    queryFn: async (): Promise<PrForeignEntityData> => {
+      const entity = await throwOnErr(() =>
+        storageServiceClient.getForeignEntity({ id })
+      );
+      return prForeignEntityDataFromForeignEntity(entity);
+    },
+    staleTime: PR_STALE_TIME,
+    retry: 1,
+  };
+}
+
 export function usePrForeignEntityQuery(id: Accessor<string>) {
-  return useQuery(() => {
-    const currentId = id();
-    return {
-      queryKey: prForeignEntityQueryKey(currentId),
-      queryFn: async (): Promise<PrForeignEntityData> => {
-        const entity = await throwOnErr(() =>
-          storageServiceClient.getForeignEntity({ id: currentId })
-        );
-        return prForeignEntityDataFromForeignEntity(entity);
-      },
-      staleTime: PR_STALE_TIME,
-      retry: 1,
-    };
-  });
+  return useQuery(() => prForeignEntityQueryOptions(id()));
 }

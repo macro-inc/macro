@@ -19,6 +19,24 @@ pub fn url(instance: &Instance) -> String {
     format!("http://localhost:{}", instance.port(Port::Proxy))
 }
 
+/// Vite forwards only backend routes, leaving assets, SPA navigation and HMR
+/// with the frontend. Keep inventoried service paths sourced from the same
+/// inventory as Caddy; the remaining paths are this module's special routes.
+pub fn frontend_path_prefixes() -> Vec<&'static str> {
+    inventory::RUST_SERVICES
+        .iter()
+        .filter_map(|svc| svc.path_prefix)
+        .chain([
+            "/websocket",
+            "/sync",
+            "/i",
+            "/lexical",
+            "/ai-editing",
+            "/static-file",
+        ])
+        .collect()
+}
+
 /// Write the instance Caddyfile and return its path. Both local and dev keep a
 /// single frontend origin; Local fans every inventory prefix to a local
 /// container, while Dev fans Local-only prefixes (services that must not run

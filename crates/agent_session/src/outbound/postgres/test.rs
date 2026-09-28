@@ -1,5 +1,8 @@
 use super::*;
+mod queue;
 mod search;
+mod user_cleanup;
+mod working_branch;
 use crate::domain::model::{AgentMcpServer, DEFAULT_AGENT_SESSION_NAME};
 use crate::domain::ports::AgentSessionRepo;
 use agent_client_protocol::RawJsonRpcMessage;
@@ -16,8 +19,8 @@ fn user_id(value: &str) -> MacroUserIdStr<'static> {
 /// The fixed owner every [`new_session`] fixture uses.
 const OWNER: &str = "macro|agent-session-owner@example.com";
 
-/// Insert a `"User"` row (and its `macro_user` parent) so the id can satisfy
-/// `agent_session.owner_id`'s foreign key.
+/// Insert a `"User"` row (and its `macro_user` parent) for user-owned sessions
+/// and their user history.
 async fn insert_user(pool: &PgPool, user_id: &str) {
     let email = user_id.strip_prefix("macro|").unwrap_or(user_id);
     // The no-op update makes the existing row's id come back when the user
@@ -52,10 +55,9 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
     .expect("insert User");
 }
 
-async fn create_test_bot(pool: &PgPool) -> BotId {
-    // Every session fixture is owned by the same user, and
-    // `agent_session.owner_id` references `"User"(id)` - so seed the
-    // row here, where every session-creating test already passes through.
+pub(super) async fn create_test_bot(pool: &PgPool) -> BotId {
+    // Seed the shared owner here so every session-creating test has a user
+    // row for history and other user-specific relations.
     insert_user(pool, OWNER).await;
     let owner = user_id("macro|agent-session-test-bot-owner@example.com");
     let bot = PgBotsRepo::new(pool.clone())
@@ -78,7 +80,7 @@ async fn create_test_bot(pool: &PgPool) -> BotId {
     bot.id
 }
 
-fn new_session(
+pub(super) fn new_session(
     bot_id: BotId,
     thread_id: Option<Uuid>,
     originating_message_id: Option<Uuid>,
@@ -86,7 +88,7 @@ fn new_session(
     CreateAgentSessionParams {
         repo_branch: None,
         id: AgentSessionId::new(),
-        owner_id: user_id(OWNER),
+        owner_id: Owner::User(user_id(OWNER)),
         bot_id,
         thread_id,
         originating_message_id,
@@ -101,7 +103,7 @@ fn new_session(
     }
 }
 
-async fn create_session(
+pub(super) async fn create_session(
     repo: &PgAgentSessionRepo,
     params: CreateAgentSessionParams,
 ) -> AgentSession {
@@ -129,7 +131,7 @@ async fn append_system_event(
     .expect("append system event log entry");
 }
 
-async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) {
+pub(super) async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) {
     let channel_id = macro_uuid::generate_uuid_v7();
     let thread_id = macro_uuid::generate_uuid_v7();
     let originating_message_id = macro_uuid::generate_uuid_v7();
@@ -212,6 +214,30 @@ fn acp_notification() -> AcpMessage {
         RawJsonRpcMessage::notification("test/notify".to_string(), serde_json::json!({}))
             .expect("valid notification"),
     )
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_refuses_an_owner_that_is_not_a_user(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let params = CreateAgentSessionParams {
+        owner_id: Owner::Bot(bot_id),
+        ..new_session(bot_id, None, None)
+    };
+    let id = params.id;
+
+    // Refused by type before the row's user foreign key, user access row, or
+    // user history could say it less clearly - and before any of them is
+    // written.
+    let error = AgentSessionRepo::create(&repo, params)
+        .await
+        .expect_err("a bot cannot own a session row");
+
+    assert!(matches!(
+        error,
+        AgentSessionError::OwnerNotUser(model_owner::OwnerType::Bot)
+    ));
+    assert_eq!(entity_row_count(&pool, id).await, 0);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -845,7 +871,7 @@ async fn recent_for_owner_returns_the_owners_newest_sessions(pool: PgPool) {
     let someone_else = create_session(
         &repo,
         CreateAgentSessionParams {
-            owner_id: user_id(OTHER_OWNER),
+            owner_id: Owner::User(user_id(OTHER_OWNER)),
             ..new_session(bot_id, None, None)
         },
     )
@@ -1099,7 +1125,7 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
                 id: from_channel.id,
                 bot: None,
                 name: DEFAULT_AGENT_SESSION_NAME.to_string(),
-                owner_id: user_id(OWNER),
+                owner_id: Owner::User(user_id(OWNER)),
                 bot_id,
                 status: SessionStatus::NoMessages,
                 created_at: from_channel.created_at,
@@ -1113,7 +1139,7 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
                 id: private.id,
                 bot: None,
                 name: DEFAULT_AGENT_SESSION_NAME.to_string(),
-                owner_id: user_id(OWNER),
+                owner_id: Owner::User(user_id(OWNER)),
                 bot_id,
                 status: SessionStatus::Event(SystemEvent::AcpReady),
                 created_at: private.created_at,
@@ -1425,6 +1451,88 @@ async fn a_stale_holder_is_superseded(pool: PgPool) {
 
     let takeover = claimed(repo.claim(session.id, successor).await.expect("takeover"));
     assert_eq!(takeover.fence, ManagerFence(2));
+}
+
+/// A rolling deploy's outgoing task heartbeats normally for its whole drain
+/// window, so liveness alone keeps pointing every command at the replica that
+/// is leaving. Its published drain is what takes it out of the lease: peers
+/// stop reading it as the live manager and claim the session instead, without
+/// waiting out the heartbeat it is still sending.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_draining_holder_stops_managing_and_can_be_taken_over(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let leaving = ReplicaId::mint();
+    let staying = ReplicaId::mint();
+
+    claimed(repo.claim(session.id, leaving).await.expect("claim"));
+    repo.heartbeat(leaving, None).await.expect("fresh beat");
+    let before = repo
+        .lease_view(session.id, staying)
+        .await
+        .expect("read the lease");
+    assert_eq!(
+        before.holder.as_ref().map(|holder| holder.replica),
+        Some(leaving)
+    );
+    assert!(before.holder.is_some_and(|holder| !holder.draining));
+
+    repo.begin_draining(leaving).await.expect("publish drain");
+
+    let leaving_view = repo
+        .lease_view(session.id, leaving)
+        .await
+        .expect("read the lease");
+    assert!(
+        leaving_view.asking_replica_draining,
+        "the replica leaving can tell that it is"
+    );
+    assert!(
+        leaving_view.holder.is_some_and(|holder| holder.draining),
+        "it still holds the lease, marked as leaving"
+    );
+    let staying_view = repo
+        .lease_view(session.id, staying)
+        .await
+        .expect("read the lease");
+    assert!(!staying_view.asking_replica_draining);
+
+    let takeover = claimed(repo.claim(session.id, staying).await.expect("takeover"));
+    assert_eq!(takeover.fence, ManagerFence(2));
+}
+
+/// The drain is a one-way door, and a replica that never beat can still
+/// announce it: the row it creates is stale from birth, which is exactly what
+/// a process on its way out is.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn draining_is_idempotent_and_needs_no_prior_heartbeat(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let replica = ReplicaId::mint();
+
+    repo.begin_draining(replica).await.expect("first drain");
+    let first = drained_at(&pool, replica).await;
+    repo.begin_draining(replica).await.expect("second drain");
+    let second = drained_at(&pool, replica).await;
+    assert_eq!(first, second, "the first drain's moment is the one kept");
+    assert!(
+        repo.lease_view(session.id, replica)
+            .await
+            .expect("read the lease")
+            .asking_replica_draining
+    );
+}
+
+async fn drained_at(pool: &PgPool, replica: ReplicaId) -> Option<chrono::DateTime<chrono::Utc>> {
+    sqlx::query_scalar!(
+        r#"SELECT draining_at FROM harness_replica WHERE id = $1"#,
+        replica.as_uuid(),
+    )
+    .fetch_one(pool)
+    .await
+    .expect("the replica row exists")
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1870,15 +1978,16 @@ async fn history_boundary_range_uses_order_index_and_uuid_tie_break(pool: PgPool
         let dto = crate::inbound::axum_router::AgentSessionLogEntryDto::from(stored.clone());
         let event = crate::outbound::connection_gateway_realtime::AgentSessionLogEvent::new(
             crate::domain::model::LogAppended {
+                turn_state: None,
                 agent_session_id: session.id,
-                entry: stored.clone(),
+                entries: vec![stored.clone()],
             },
         );
         let dto = serde_json::to_value(dto).unwrap();
         let event = serde_json::to_value(event).unwrap();
         assert_eq!(dto["id"], stored.id.to_string());
-        assert_eq!(dto["id"], event["id"]);
-        assert_eq!(dto["createdAt"], event["createdAt"]);
+        assert_eq!(dto["id"], event["entries"][0]["id"]);
+        assert_eq!(dto["createdAt"], event["entries"][0]["createdAt"]);
     }
 
     // Explain the production query itself so this check cannot drift from the reader.
@@ -1971,8 +2080,8 @@ async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let url = "https://github.com/org/repo/pull/123";
     let (first, second) = tokio::join!(
-        repo.record_pull_request(session.id, &session.owner_id, url, None),
-        repo.record_pull_request(session.id, &session.owner_id, url, None),
+        repo.record_pull_request(session.id, session.owner_user().unwrap(), url, None),
+        repo.record_pull_request(session.id, session.owner_user().unwrap(), url, None),
     );
     assert_eq!(
         usize::from(first.unwrap()) + usize::from(second.unwrap()),
@@ -2014,7 +2123,7 @@ async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
     );
     assert!(
         !repo
-            .record_pull_request(session.id, &session.owner_id, url, None)
+            .record_pull_request(session.id, session.owner_user().unwrap(), url, None)
             .await
             .unwrap()
     );
@@ -2067,13 +2176,23 @@ async fn pull_request_waiting_on_takeover_cannot_overwrite_successor(pool: PgPoo
     };
     let original_url = "https://github.com/org/repo/pull/1";
     assert!(
-        repo.record_pull_request(session.id, &session.owner_id, original_url, Some(old))
-            .await
-            .unwrap()
+        repo.record_pull_request(
+            session.id,
+            session.owner_user().unwrap(),
+            original_url,
+            Some(old)
+        )
+        .await
+        .unwrap()
     );
     assert!(
         !repo
-            .record_pull_request(session.id, &session.owner_id, original_url, Some(old))
+            .record_pull_request(
+                session.id,
+                session.owner_user().unwrap(),
+                original_url,
+                Some(old)
+            )
             .await
             .unwrap()
     );
@@ -2082,7 +2201,7 @@ async fn pull_request_waiting_on_takeover_cannot_overwrite_successor(pool: PgPoo
     sqlx::query!("UPDATE agent_session SET manager_fence = manager_fence + 1, pull_request_url = $2 WHERE id = $1", session.id.as_uuid(), "https://github.com/org/repo/pull/2")
         .execute(&mut *takeover).await.unwrap();
     let stale_repo = repo.clone();
-    let owner = session.owner_id.clone();
+    let owner = session.owner_user().unwrap().clone();
     let mut stale = tokio::spawn(async move {
         stale_repo
             .record_pull_request(
@@ -2114,7 +2233,7 @@ async fn pull_request_waiting_on_takeover_cannot_overwrite_successor(pool: PgPoo
     assert!(matches!(
         repo.record_pull_request(
             session.id,
-            &session.owner_id,
+            session.owner_user().unwrap(),
             "https://github.com/org/repo/pull/2",
             Some(old)
         )
@@ -2143,6 +2262,7 @@ async fn a_document_session_preserves_its_origin_and_inherits_live_document_acce
             actor: OWNER.to_owned().try_into().unwrap(),
             triggered_by: None,
             input: PostMessage {
+                id: None,
                 attribution: Default::default(),
                 notification_policy: Default::default(),
                 content: "@agent investigate".into(),
@@ -2295,4 +2415,243 @@ impl crate::domain::audience::SessionSubscriptions for DocumentSubscriptions {
         );
         Ok(self.candidates.clone())
     }
+}
+
+/// A batch lands in one write: every frame under the id it arrived with, in
+/// append order by `(created_at, id)` even though one transaction has one
+/// clock.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_batch_fenced_writes_in_order_under_the_given_ids(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
+    let before = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+
+    let streamed = |text: &str| AgentSessionLog {
+        agent_session_id: session.id,
+        user_id: None,
+        content: Message::ToServer(ToServerMessage::Acp(AcpMessage(
+            RawJsonRpcMessage::notification(
+                "session/update".to_owned(),
+                serde_json::json!({ "sessionId": "acp-1", "update": { "text": text } }),
+            )
+            .unwrap(),
+        ))),
+    };
+    let frames: Vec<AgentSessionLog> = ["one", "two", "three"].into_iter().map(streamed).collect();
+    let ids: Vec<Uuid> = (0..frames.len())
+        .map(|_| macro_uuid::generate_uuid_v7())
+        .collect();
+    let entries = ids
+        .iter()
+        .zip(frames.iter().cloned())
+        .map(|(id, entry)| StoredAgentSessionLog {
+            id: *id,
+            created_at: chrono::Utc::now(),
+            entry,
+        })
+        .collect();
+
+    let stored = repo.create_batch_fenced(entries, &claim).await.unwrap();
+    assert_eq!(
+        stored.iter().map(|row| row.id).collect::<Vec<_>>(),
+        ids,
+        "the store keeps the ids the writer handed out"
+    );
+    assert!(
+        stored
+            .windows(2)
+            .all(|pair| pair[0].created_at < pair[1].created_at),
+        "one transaction, one clock, yet strictly increasing stamps"
+    );
+    let after = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+
+    let history = AgentSessionLogRepo::list_by_session(&repo, session.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        history.iter().map(|row| row.id).collect::<Vec<_>>(),
+        std::iter::once(before.id)
+            .chain(ids.iter().copied())
+            .chain(std::iter::once(after.id))
+            .collect::<Vec<_>>(),
+        "a batch reads back in append order between single-frame writes"
+    );
+    assert_eq!(
+        history[1..4]
+            .iter()
+            .map(|row| serde_json::to_value(&row.entry.content).unwrap())
+            .collect::<Vec<_>>(),
+        frames
+            .iter()
+            .map(|entry| serde_json::to_value(&entry.content).unwrap())
+            .collect::<Vec<_>>(),
+    );
+}
+
+/// The batch is fenced like every other write: a superseded claim appends
+/// nothing, and a frame from another session is refused before anything is
+/// touched.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_batch_fenced_refuses_stale_claims_and_foreign_frames(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let other = create_session(&repo, new_session(bot, None, None)).await;
+    // Re-claiming bumps the fence, so the first claim is the superseded one.
+    let replica = ReplicaId::mint();
+    let stale = claimed(repo.claim(session.id, replica).await.unwrap());
+    let current = claimed(repo.claim(session.id, replica).await.unwrap());
+    let entry = |log: AgentSessionLog| StoredAgentSessionLog {
+        id: macro_uuid::generate_uuid_v7(),
+        created_at: chrono::Utc::now(),
+        entry: log,
+    };
+
+    assert!(matches!(
+        repo.create_batch_fenced(vec![entry(fenced_log(session.id))], &stale)
+            .await,
+        Err(AgentSessionError::FencedOut(id)) if id == session.id
+    ));
+    assert!(matches!(
+        repo.create_batch_fenced(
+            vec![entry(fenced_log(session.id)), entry(fenced_log(other.id))],
+            &current,
+        )
+        .await,
+        Err(AgentSessionError::FencedOut(id)) if id == session.id
+    ));
+    assert!(
+        repo.create_batch_fenced(Vec::new(), &current)
+            .await
+            .unwrap()
+            .is_empty(),
+        "an empty batch is a no-op"
+    );
+    assert!(
+        AgentSessionLogRepo::list_by_session(&repo, session.id)
+            .await
+            .unwrap()
+            .is_empty(),
+        "nothing landed from a refused batch"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn turn_projection_is_atomic_fenced_and_backfill_cannot_overwrite_live_state(pool: PgPool) {
+    use crate::domain::turn_state::SessionTurnProjectionRepo;
+    use agent_fold::domain::model::TurnState;
+
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let replica = ReplicaId::mint();
+    let claim = claimed(repo.claim(session.id, replica).await.unwrap());
+    let first = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    let second = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    assert!(
+        !repo
+            .initialize_turn_state(session.id, Some(first.id), TurnState::Idle)
+            .await
+            .unwrap()
+    );
+    assert!(
+        repo.initialize_turn_state(session.id, Some(second.id), TurnState::Running)
+            .await
+            .unwrap()
+    );
+
+    repo.create_projected(
+        fenced_log(session.id),
+        Some(&claim),
+        None,
+        Some(TurnState::Blocked),
+    )
+    .await
+    .unwrap();
+    let current = claimed(repo.claim(session.id, replica).await.unwrap());
+    assert!(matches!(
+        repo.create_projected(
+            fenced_log(session.id),
+            Some(&claim),
+            None,
+            Some(TurnState::Idle)
+        )
+        .await,
+        Err(AgentSessionError::FencedOut(_))
+    ));
+    assert!(
+        !repo
+            .initialize_turn_state(session.id, Some(second.id), TurnState::Idle)
+            .await
+            .unwrap()
+    );
+    let logs = repo.list_by_session(session.id).await.unwrap();
+    assert_eq!(
+        logs.len(),
+        3,
+        "a rejected projection cannot append its frame"
+    );
+    let turn = sqlx::query_scalar!(
+        "SELECT turn_state FROM agent_session WHERE id = $1",
+        session.id.as_uuid()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(turn.as_deref(), Some("blocked"));
+    repo.release(&current).await.unwrap();
+}
+
+#[test]
+fn log_json_drops_null_bytes_before_it_reaches_postgres() {
+    let message = Message::ToServer(ToServerMessage::Acp(AcpMessage(
+        RawJsonRpcMessage::notification(
+            "session/update".to_owned(),
+            serde_json::json!({
+                "update": {
+                    "content": {"type": "text", "text": "before\0after"},
+                    "k\0": ["v\0", "plain"]
+                }
+            }),
+        )
+        .expect("notification"),
+    )));
+
+    let (direction, content) = message_columns(&message).expect("columns");
+
+    assert_eq!(direction, "to_server");
+    let encoded = serde_json::to_string(&content).expect("encode");
+    assert!(
+        !encoded.contains("\\u0000"),
+        "jsonb would reject this payload: {encoded}"
+    );
+    assert_eq!(
+        content
+            .pointer("/params/update/content/text")
+            .and_then(|value| value.as_str()),
+        Some("beforeafter")
+    );
+    assert_eq!(
+        content
+            .pointer("/params/update/k")
+            .and_then(|value| value.as_array()),
+        Some(&vec![
+            serde_json::Value::String("v".to_owned()),
+            serde_json::Value::String("plain".to_owned()),
+        ])
+    );
 }

@@ -1,11 +1,13 @@
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import type { MagicChipStatus } from '@macro-inc/lexical-core';
+import { markdownToPlainText } from '@macro-inc/lexical-core/utils/parsers';
 import type {
   FoldedMessage,
   MessagePart,
-  PendingElicitation,
+  PendingInteraction,
   ToolName,
 } from '@service-agent-fold/generated/types';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 
 /** The tool's own name, without its MCP server namespace. */
 function toolLabel(name: ToolName): string {
@@ -16,6 +18,14 @@ export type MagicChipActivity = {
   label: string;
   detail?: string;
   busy: boolean;
+  tone?:
+    | 'neutral'
+    | 'active'
+    | 'tool'
+    | 'attention'
+    | 'success'
+    | 'failure'
+    | 'stopped';
 };
 
 /** Who is answering, for the chip's header: the persona and its model. */
@@ -29,12 +39,15 @@ export type MagicChipHeader = {
 };
 
 /**
- * A question the agent is waiting on, as the chip offers it: the live slot
+ * A permission or question the agent is waiting on: the live interaction
  * from the session's metadata, and whether this viewer may answer (edit
  * access on the session) or is watching someone else be asked.
  */
-export type MagicChipQuestion = {
-  question: PendingElicitation;
+export type MagicChipInteraction = {
+  request: PendingInteraction;
+  answering: boolean;
+  action?: string;
+  detail?: string;
   canAnswer: boolean;
 };
 
@@ -50,17 +63,17 @@ export type MagicChipQuestion = {
 export type MagicChipPresentation =
   | { kind: 'working'; activity: MagicChipActivity }
   | { kind: 'answering'; markdown: string; activity: MagicChipActivity }
-  | { kind: 'asking'; markdown: string; asking: MagicChipQuestion }
+  | { kind: 'asking'; markdown: string; asking: MagicChipInteraction }
   | { kind: 'settled'; markdown: string };
 
 export type MagicChipPresentationInput = {
   persistedStatus: MagicChipStatus;
   /**
-   * The question the session is blocked on, when it belongs to this chip's
-   * turn. The chip is a turn's surface, so a question asked in a later turn
+   * The interaction the session is blocked on, when it belongs to this chip's
+   * turn. The chip is a turn's surface, so a request made in a later turn
    * is that turn's chip's to show.
    */
-  asking?: MagicChipQuestion;
+  asking?: MagicChipInteraction;
   /**
    * Freshest lifecycle event seen on the live log stream, as its wire string.
    * A stopgap for {@link persistedStatus} being a snapshot from when the chip
@@ -166,7 +179,10 @@ function partActivity(part: MessagePart): MagicChipActivity {
         detail: text.trim() || undefined,
         busy: true,
       }))
-      .with({ kind: 'tool_use' }, toolActivity)
+      .with({ kind: 'tool_use' }, (part) => ({
+        ...toolActivity(part),
+        tone: 'tool' as const,
+      }))
       .with({ kind: 'permission', outcome: { kind: 'cancelled' } }, () => ({
         label: 'Permission cancelled',
         busy: false,
@@ -178,6 +194,7 @@ function partActivity(part: MessagePart): MagicChipActivity {
       .with({ kind: 'permission', outcome: { kind: 'pending' } }, () => ({
         label: 'Permission needed',
         busy: false,
+        tone: 'attention' as const,
       }))
       .with({ kind: 'permission', outcome: { kind: 'errored' } }, () => ({
         label: 'Permission failed',
@@ -189,7 +206,7 @@ function partActivity(part: MessagePart): MagicChipActivity {
       }))
       .with({ kind: 'control', control: { kind: 'set_model' } }, (part) => ({
         label: 'Model changed',
-        detail: part.control.model,
+        detail: modelLabel(part.control.model),
         busy: false,
       }))
       .with({ kind: 'control', control: { kind: 'compact' } }, () => ({
@@ -203,6 +220,7 @@ function partActivity(part: MessagePart): MagicChipActivity {
       .with({ kind: 'elicitation', outcome: { kind: 'pending' } }, () => ({
         label: 'Waiting for your input',
         busy: false,
+        tone: 'attention' as const,
       }))
       .with({ kind: 'elicitation', outcome: { kind: 'accepted' } }, () => ({
         label: 'Resuming work',
@@ -249,38 +267,49 @@ function turnEndedActivity(
 ): MagicChipActivity | undefined {
   const stop = response?.stop;
   if (!stop) return undefined;
-  return (
-    match(stop)
-      .with({ kind: 'end_turn' }, () => ({
-        // A clean end with prose settles before activity is consulted, so
-        // reaching this arm means the agent closed the turn empty-handed.
-        label: 'Agent finished without a response',
-        busy: false,
-      }))
-      .with({ kind: 'cancelled' }, () => ({ label: 'Stopped', busy: false }))
-      .with({ kind: 'refusal' }, () => ({
-        label: 'Request refused',
-        busy: false,
-      }))
-      .with({ kind: 'max_tokens' }, () => ({
-        label: 'Response limit reached',
-        busy: false,
-      }))
-      .with({ kind: 'max_turn_requests' }, () => ({
-        label: 'Turn limit reached',
-        busy: false,
-      }))
-      .with({ kind: 'other' }, ({ reason }) => ({ label: reason, busy: false }))
-      // The runtime errored the prompt. The label says that much; the
-      // runtime's own message goes in the detail line, because some of these
-      // are the user's to act on — a repository Cursor cannot reach, say.
-      .with({ kind: 'failed' }, ({ message }) => ({
-        label: "Agent couldn't answer",
-        detail: message,
-        busy: false,
-      }))
-      .exhaustive()
-  );
+  const activity = match(stop)
+    .with({ kind: 'end_turn' }, () => ({
+      // A clean end with prose settles before activity is consulted, so
+      // reaching this arm means the agent closed the turn empty-handed.
+      label: 'Agent finished without a response',
+      busy: false,
+    }))
+    .with({ kind: 'cancelled' }, () => ({ label: 'Stopped', busy: false }))
+    .with({ kind: 'refusal' }, () => ({
+      label: 'Request refused',
+      busy: false,
+    }))
+    .with({ kind: 'max_tokens' }, () => ({
+      label: 'Response limit reached',
+      busy: false,
+    }))
+    .with({ kind: 'max_turn_requests' }, () => ({
+      label: 'Turn limit reached',
+      busy: false,
+    }))
+    .with({ kind: 'other' }, ({ reason }) => ({ label: reason, busy: false }))
+    // A failure the runtime wrote in the person's terms — a spent Cursor
+    // budget — is shown in those terms; the link lives in the session,
+    // which the chip opens.
+    .with({ kind: 'failed', notice: P.nonNullable }, ({ notice }) => ({
+      label: notice.title,
+      detail: notice.body,
+      busy: false,
+    }))
+    // The runtime errored the prompt. The label says that much; the
+    // runtime's own message goes in the detail line, because some of these
+    // are the user's to act on — a repository Cursor cannot reach, say.
+    .with({ kind: 'failed' }, ({ message }) => ({
+      label: "Agent couldn't answer",
+      detail: message,
+      busy: false,
+    }))
+    .exhaustive();
+  const tone = match(stop.kind)
+    .with('end_turn', () => 'success' as const)
+    .with('cancelled', () => 'stopped' as const)
+    .otherwise(() => 'failure' as const);
+  return { ...activity, tone };
 }
 
 /**
@@ -314,7 +343,11 @@ function turnInFlightActivity(
 /** The session's persisted lifecycle, when the fold has nothing livelier. */
 function statusActivity(status: MagicChipStatus): MagicChipActivity {
   return match(status)
-    .with('no_messages', () => ({ label: 'Starting session', busy: false }))
+    .with('no_messages', () => ({
+      label: 'Queued',
+      busy: false,
+      tone: 'neutral' as const,
+    }))
     .with('booting', () => ({
       label: 'Booting agent',
       detail: 'Preparing workspace',
@@ -325,6 +358,7 @@ function statusActivity(status: MagicChipStatus): MagicChipActivity {
     .with('disconnected', () => ({
       label: 'Session disconnected',
       busy: false,
+      tone: 'stopped' as const,
     }))
     .exhaustive();
 }
@@ -358,14 +392,70 @@ function latestChunk(response: FoldedMessage | undefined): string {
   );
 }
 
-/** The one line the chip's header reads for the turn. */
+/**
+ * Markdown flattened to the single line the console's output row shows.
+ *
+ * The row is one line of prose, so the block structure goes: fences, list
+ * bullets, heading hashes and quote marks are dropped and every run of
+ * whitespace becomes one space. Emphasis and inline code markers go too -
+ * the row has no formatting to carry them. Macro's own `<m-*>` tags are
+ * resolved first, so a mention reads as its name rather than its JSON.
+ *
+ * An underscore between two word characters is left alone: agents write
+ * about `turn_ended` and `agent_fold` far more often than they emphasise a
+ * word, and stripping those would rename the thing being discussed.
+ */
+export function flattenToLine(markdown: string): string {
+  return markdownToPlainText(markdown)
+    .replace(/^\s*```[^\n]*$/gm, ' ')
+    .replace(/^\s{0,3}(?:[-*+]|\d+[.)])\s+/gm, '')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/[*~`]/g, '')
+    .replace(/_+/g, (run, at: number, text: string) =>
+      isWordChar(text[at - 1]) && isWordChar(text[at + run.length]) ? run : ''
+    )
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isWordChar(character: string | undefined): boolean {
+  return character !== undefined && /[A-Za-z0-9]/.test(character);
+}
+
+/**
+ * The one line the console's output row shows, or `undefined` when the turn
+ * has written nothing yet and the row should say so itself.
+ *
+ * A turn that has stopped to ask shows the question rather than the prose
+ * before it: the question is why the chip is sitting there.
+ */
+export function presentationLine(
+  presentation: MagicChipPresentation
+): string | undefined {
+  if (presentation.kind === 'asking') {
+    const { request, action } = presentation.asking;
+    const asked =
+      request.kind === 'elicitation'
+        ? request.message
+        : action || 'Open session to respond';
+    return asked || undefined;
+  }
+  if (presentation.kind === 'working') return undefined;
+  return flattenToLine(presentation.markdown) || undefined;
+}
+
 export function presentationStatus(
   presentation: MagicChipPresentation
 ): MagicChipActivity {
   return match(presentation)
     .with({ kind: 'working' }, { kind: 'answering' }, (p) => p.activity)
     .with({ kind: 'asking' }, ({ asking }) => ({
-      label: asking.canAnswer ? 'Waiting for you' : 'Waiting for an editor',
+      label: asking.answering
+        ? 'Sending answer'
+        : asking.canAnswer
+          ? 'Waiting for you'
+          : 'Waiting for an editor',
       busy: false,
     }))
     .with({ kind: 'settled' }, () => ({ label: 'Done', busy: false }))
@@ -395,7 +485,9 @@ export function deriveMagicChipPresentation(
     turnEndedActivity(response) ??
     liveEventActivity(latestEvent, 'disconnected') ??
     turnInFlightActivity(response) ??
-    (prompt ? { label: 'Waiting for agent', busy: true } : undefined) ??
+    (prompt
+      ? { label: 'Waiting for agent', busy: true, tone: 'neutral' as const }
+      : undefined) ??
     liveEventActivity(latestEvent, 'acp_ready') ??
     statusActivity(persistedStatus);
 

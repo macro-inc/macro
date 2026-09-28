@@ -196,6 +196,11 @@ pub async fn process_message(
     dss: &DocumentSyncSession,
     telemetry: &mut InboundMessageTelemetry,
 ) -> Result<()> {
+    // Loading the document after hibernation can yield to a revocation. Check
+    // the surface grant again immediately before handling any protocol message.
+    if !dss.validate_surface_sockets(Some(ws)).await? {
+        return Ok(());
+    }
     trace!(
         message = tracing::field::display(&message),
         "process websocket message"
@@ -220,6 +225,13 @@ pub async fn process_message(
                 return Ok(());
             }
 
+            let attribution = match Wsm::new(dss, ws).edit_attribution().await {
+                Ok(attribution) => attribution,
+                Err(error) => {
+                    tracing::warn!(error = ?error, "failed to resolve optional edit attribution");
+                    None
+                }
+            };
             let peer_ids = Wsm::new(dss, ws).get_peer_ids().await.unwrap_or_default();
             let peer_id = peer_ids.first().copied();
             telemetry.peer_id = peer_id;
@@ -228,14 +240,18 @@ pub async fn process_message(
                 .map(|d| d.as_millis() as i64)
                 .unwrap_or(0);
             for update in &updates {
-                let touched_nodes = session_storage
+                let imported = session_storage
                     .append_pending_operation(update, document_state)
                     .await?;
-                if !touched_nodes.is_empty()
+                if imported.changed {
+                    dss.record_editor(attribution.as_ref());
+                }
+                if !imported.touched_nodes.is_empty()
                     && let Some(peer_id) = peer_id
                 {
                     dss.push_blame_events(
-                        touched_nodes
+                        imported
+                            .touched_nodes
                             .into_iter()
                             .map(|node_id| crate::d1::BlameEvent {
                                 document_id: document_id.to_string(),

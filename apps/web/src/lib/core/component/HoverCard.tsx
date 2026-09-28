@@ -114,6 +114,12 @@ export type HoverCardComponentProps = {
    * real pointer movement first.
    */
   requirePointerMovement?: boolean;
+  /**
+   * Keep the card open when a pointer-down lands on its own trigger. Use
+   * when clicking the trigger shows the card instead of navigating away;
+   * otherwise the pointer-down dismisses it and the click reopens it.
+   */
+  keepOpenOnTriggerPress?: boolean;
   /** Callback when open state changes */
   onOpenChange?: (open: boolean) => void;
   /**
@@ -316,6 +322,20 @@ export function HoverCard(props: HoverCardComponentProps) {
     });
   });
 
+  // Kobalte forwards these to the content's DismissableLayer but leaves them
+  // out of the hover-card content types.
+  const dismissableLayerProps = {
+    onPointerDownOutside: (e: Event) => {
+      if (
+        props.keepOpenOnTriggerPress &&
+        e.target instanceof Node &&
+        entry.trigger?.contains(e.target)
+      ) {
+        e.preventDefault();
+      }
+    },
+  };
+
   return (
     <KobalteHoverCard
       getAnchorRect={
@@ -355,6 +375,7 @@ export function HoverCard(props: HoverCardComponentProps) {
             contentEl = el;
             props.contentRef?.(el);
           }}
+          {...dismissableLayerProps}
           class={cn(
             props.contentZIndexClass ?? 'z-tool-tip',
             props.contentClass

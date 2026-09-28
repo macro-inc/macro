@@ -27,6 +27,7 @@ import {
   EXTERNAL_TRANSFORMERS,
   INITIALIZE_LOCAL_STATUS,
   INTERNAL_TRANSFORMERS,
+  stripDraftCommentMarks,
 } from '@macro-inc/lexical-core';
 import { SKIP_SCROLL_INTO_VIEW_TAG } from '@macro-inc/lexical-core/constants';
 import {
@@ -171,7 +172,7 @@ export function initializeEditorWithState(
 ) {
   if (!state || state.root.children?.length === 0) return;
   try {
-    const parsed = editor.parseEditorState(state);
+    const parsed = editor.parseEditorState(stripDraftCommentMarks(state));
     editor.setEditorState(parsed);
     editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
     editor.dispatchCommand(INITIALIZE_DOCUMENT_IDS, undefined);
@@ -837,7 +838,7 @@ function transformSerializedEditorState(
  * NOTE: this is no longer true for loro. but is being used for legacy DSS save.
  */
 function cleanState(state: SerializedEditorState): SerializedEditorState {
-  return transformSerializedEditorState(state, [
+  return transformSerializedEditorState(stripDraftCommentMarks(state), [
     // custom code nodes must have no children.
     (node) => {
       if (node.type === 'custom-code') {
@@ -871,13 +872,16 @@ export function loroSyncState(state: EditorState): SerializedEditorState {
   } else {
     serializedState = state.toJSON();
   }
-  return transformSerializedEditorState(serializedState, [
-    // completion nodes should not be saved.
-    (node) => {
-      if (node.type === 'completion') return null;
-      return node;
-    },
-  ]);
+  return transformSerializedEditorState(
+    stripDraftCommentMarks(serializedState),
+    [
+      // completion nodes should not be saved.
+      (node) => {
+        if (node.type === 'completion') return null;
+        return node;
+      },
+    ]
+  );
 }
 
 function serializedSateWithSearchText(

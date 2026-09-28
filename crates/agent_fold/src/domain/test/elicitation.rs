@@ -121,8 +121,7 @@ fn a_form_request_becomes_a_pending_part_and_the_live_slot() {
 
     let pending = machine
         .metadata()
-        .pending_elicitation
-        .as_ref()
+        .pending_elicitation()
         .expect("the slot is filled");
     assert_eq!(pending.request_id, ElicitationRequestId::Number(7));
     assert_eq!(pending.turn, 0);
@@ -282,7 +281,7 @@ fn accept_resolves_the_part_with_its_content_and_frees_the_slot() {
             ],
         }
     );
-    assert_eq!(machine.metadata().pending_elicitation, None);
+    assert_eq!(machine.metadata().pending_elicitation(), None);
 }
 
 /// Multi-select answers resolve to the titles they were offered under, and a
@@ -361,7 +360,7 @@ fn decline_cancel_and_error_each_resolve_and_free_the_slot() {
             unreachable!()
         };
         assert_eq!(*outcome, expected);
-        assert_eq!(machine.metadata().pending_elicitation, None);
+        assert_eq!(machine.metadata().pending_elicitation(), None);
     }
 }
 
@@ -379,8 +378,7 @@ fn a_second_request_gets_a_part_but_never_the_slot() {
     assert_eq!(
         machine
             .metadata()
-            .pending_elicitation
-            .as_ref()
+            .pending_elicitation()
             .map(|pending| pending.request_id.clone()),
         Some(ElicitationRequestId::Number(7)),
         "the first question still owns the slot"
@@ -394,7 +392,7 @@ fn the_turn_ending_clears_the_slot_but_leaves_the_part_pending() {
     // Turn opened, slot filled, then the turn ending clears the slot and
     // closes the turn in one step.
     assert_eq!(metadata_events, 3);
-    assert_eq!(machine.metadata().pending_elicitation, None);
+    assert_eq!(machine.metadata().pending_elicitation(), None);
     let parts = elicitations(&machine);
     let MessagePart::Elicitation { outcome, .. } = parts[0] else {
         unreachable!()
@@ -416,7 +414,7 @@ fn a_late_answer_after_the_turn_ended_still_resolves_the_part() {
 fn a_reconnect_forgets_the_question_because_its_id_died_with_the_connection() {
     let (machine, _) = drive(&lines(&[PROMPT, FORM, ACP_READY, &answer(7, "decline")]));
 
-    assert_eq!(machine.metadata().pending_elicitation, None);
+    assert_eq!(machine.metadata().pending_elicitation(), None);
     let parts = elicitations(&machine);
     let MessagePart::Elicitation { outcome, .. } = parts[0] else {
         unreachable!()
@@ -594,7 +592,7 @@ fn claude_code_recording_streams_the_slot_open_then_closed() {
         metadata_events >= 2,
         "the slot filled and cleared: {metadata_events}"
     );
-    assert_eq!(machine.metadata().pending_elicitation, None);
+    assert_eq!(machine.metadata().pending_elicitation(), None);
 }
 
 /// Hand-shaped from `claude-agent-acp` 0.64's `askUserQuestionsToCreateRequest`:
@@ -768,8 +766,7 @@ fn a_question_asked_under_a_subagent_takes_the_nested_calls_place() {
     assert_eq!(
         machine
             .metadata()
-            .pending_elicitation
-            .as_ref()
+            .pending_elicitation()
             .map(|pending| pending.turn),
         Some(0)
     );
@@ -880,8 +877,7 @@ fn a_form_scoped_to_a_user_tool_call_is_that_tools_review() {
 
     let pending = machine
         .metadata()
-        .pending_elicitation
-        .as_ref()
+        .pending_elicitation()
         .expect("the review is the live question");
     assert_eq!(
         pending.request, *request,
@@ -927,7 +923,7 @@ fn a_reviewed_tools_own_result_lands_on_the_question() {
         "the created event, read as the tool's user-tool response"
     );
     assert!(
-        machine.metadata().pending_elicitation.is_none(),
+        machine.metadata().pending_elicitation().is_none(),
         "answered and the turn over: nothing to offer"
     );
 }

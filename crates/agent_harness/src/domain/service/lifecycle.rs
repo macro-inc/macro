@@ -46,6 +46,33 @@ where
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
+    async fn delete_user_sessions(
+        &self,
+        owner: MacroUserIdStr<'static>,
+    ) -> agent_session::domain::error::Result<()> {
+        loop {
+            let sessions = self
+                .inner
+                .sessions
+                .sessions_for_user_cleanup(&owner)
+                .await?;
+            if sessions.is_empty() {
+                return Ok(());
+            }
+            for session in sessions {
+                // Fail closed if a repository ever returns another principal's row.
+                if !session.owner_id.is_user(&owner) {
+                    return Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                        "account cleanup returned a session owned by another principal"
+                    )));
+                }
+                // Includes replica forwarding and the per-session command queue.
+                // Teardown failure leaves the durable row available for a retry.
+                self.session_deleted(session.id).await?;
+            }
+        }
+    }
+
     async fn session_deleted(
         &self,
         id: AgentSessionId,
@@ -76,14 +103,20 @@ where
         })
     }
 
-    /// A local read on purpose: the queue lives beside the session's live
-    /// actor, and this replica answers for what it holds. A reader landing on
-    /// a non-managing replica sees an empty queue rather than an error.
+    /// The durable queue, so any replica can answer. Waiting actions live in
+    /// the session store; the managing replica's in-memory copy is a cache.
     async fn queued_controls(
         &self,
         id: AgentSessionId,
     ) -> agent_session::domain::error::Result<Vec<QueuedControl>> {
-        Ok(self.inner.queues.list(id))
+        Ok(self
+            .inner
+            .sessions
+            .list_queued_actions(id)
+            .await?
+            .iter()
+            .map(QueuedControl::from)
+            .collect())
     }
 
     async fn edit_queued_control(
@@ -235,6 +268,14 @@ where
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
+    /// Resolve current permission policy, failing closed if lookup fails.
+    pub(super) async fn permission_policy_for(&self, bot: BotId) -> PermissionPolicy {
+        self.permission_policies.permission_policy(bot).await.inspect_err(|error| {
+            tracing::warn!(error = ?error, %bot, "could not resolve permission policy; prompting");
+        }).map(crate::domain::model::PermissionPolicyConfig::resolve)
+            .unwrap_or(PermissionPolicy::Prompt)
+    }
+
     /// The MCP servers to advertise when reattaching to an existing container.
     ///
     /// The raw session token exists in exactly one place after spawn - the
@@ -286,6 +327,9 @@ where
         size: SandboxSize,
     ) -> Result<()> {
         let session = self.sessions.get_session(session_id).await?;
+        // The size is remembered as the owner's preference, so this is a
+        // person's operation: asked first, before anything is closed.
+        let owner = session.owner_user()?;
         let effect = self.containers.resize_effect(session.sandbox_size, size);
         // Only a sandboxed coder has a sandbox to act on: a Cursor session
         // runs in Cursor's cloud, the in-memory bot has no sandbox, and an
@@ -301,17 +345,22 @@ where
             if effect == SandboxResizeEffect::Restart {
                 let container = self.containers.resume(session_id).await?;
                 let mcp_servers = self
-                    .resumed_mcp_servers(session_id, &session.owner_id, &session.mcp_servers)
+                    .resumed_mcp_servers(session_id, owner, &session.mcp_servers)
                     .await?;
+                let permission_policy = self.permission_policy_for(session.bot_id).await;
                 self.sessions
-                    .attach_session(session_id, container.mcp_servers(mcp_servers))
+                    .attach_session(
+                        session_id,
+                        container
+                            .mcp_servers(mcp_servers)
+                            .permission_policy(permission_policy),
+                    )
                     .await?;
+                self.restore_queue(session_id).await?;
             }
         }
         self.sessions.set_sandbox_size(session_id, size).await?;
-        self.sessions
-            .set_user_sandbox_size(&session.owner_id, size)
-            .await?;
+        self.sessions.set_user_sandbox_size(owner, size).await?;
         Ok(())
     }
 }

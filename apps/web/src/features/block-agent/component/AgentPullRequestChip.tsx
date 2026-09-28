@@ -129,14 +129,9 @@ function EntityChip(props: {
   const { openWithSplit } = useSplitLayout();
   const status = () => pullRequestStatus(props.entity);
   const title = () => pullRequestTitle(props.entity);
-  const open = (event: MouseEvent | KeyboardEvent) => {
-    event.stopPropagation();
-    openWithSplit(
-      { type: 'pr', id: props.entity.id },
-      { preferNewSplit: openInNewSplitForMention(event.shiftKey, true) }
-    );
-  };
-  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>(open);
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) =>
+    openPullRequestEntity(openWithSplit, props.entity.id, event)
+  );
 
   return (
     <HoverCard
@@ -176,14 +171,15 @@ function useLinkedPullRequest(url: Accessor<string>) {
   return { reference, entity };
 }
 
-/** Leading list icon, with the same PR status as the chip. */
-export function AgentPullRequestIcon(props: { url: string }): JSX.Element {
-  const { entity } = useLinkedPullRequest(() => props.url);
-  return (
-    <GithubPullRequestStatusIcon
-      status={pullRequestStatus(entity())}
-      class="size-4"
-    />
+function openPullRequestEntity(
+  openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'],
+  entityId: string,
+  event: MouseEvent | KeyboardEvent
+) {
+  event.stopPropagation();
+  openWithSplit(
+    { type: 'pr', id: entityId },
+    { preferNewSplit: openInNewSplitForMention(event.shiftKey, true) }
   );
 }
 

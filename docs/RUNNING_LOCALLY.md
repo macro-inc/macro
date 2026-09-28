@@ -248,6 +248,28 @@ The generated files for an instance live here:
 infra/local/generated/<instance>
 ```
 
+### Access a remote dev server through one URL
+
+`run_local` and `run_dev` serve API requests and backend WebSockets through Vite,
+so the browser needs only the frontend port. For example, forward a remote
+instance's frontend with `ssh -N -L 3000:127.0.0.1:20110 your-dev-host`, then open
+`http://localhost:3000/app/`. A WebSocket-capable reverse proxy can instead expose
+that frontend under a different hostname/port, including HTTPS. Vite HMR follows
+the page's origin; no separate HMR or backend port forward is needed.
+
+The launcher sets `VITE_LOCAL_BACKEND_ORIGIN=same-origin` and supplies Vite's
+server-only `MACRO_LOCAL_BACKEND_PROXY` and `MACRO_LOCAL_BACKEND_ROUTES` from the
+selected instance and backend inventory. The proxy preserves paths, query
+strings, cookies, streaming responses and WebSocket upgrades. AI-editing and
+enabled browser telemetry also use same-origin paths. Bare `bun run dev` without
+these variables still uses hosted services; `TAURI_DEV_HOST` remains an explicit
+native HMR override. Keep local dev stacks private: same-origin routing does not
+add authentication or make passwordless local login safe to publish.
+
+The stack launches Vite directly with Node (available in the Nix shell), because
+Bun's Node HTTP compatibility currently hangs on Vite's proxied WebSocket
+upgrades. Bun is still used for dependency installation and builds.
+
 ## Port Conflicts (macOS)
 
 The default instance binds a fixed set of host ports. macOS reserves some of them

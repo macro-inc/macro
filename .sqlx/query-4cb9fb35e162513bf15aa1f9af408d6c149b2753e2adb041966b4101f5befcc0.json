@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO channel_label_channel (scope_key, channel_id, label_id)\n                   VALUES ($1, $2, $3)\n                   ON CONFLICT (scope_key, channel_id) DO UPDATE SET label_id = EXCLUDED.label_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4cb9fb35e162513bf15aa1f9af408d6c149b2753e2adb041966b4101f5befcc0"
+}

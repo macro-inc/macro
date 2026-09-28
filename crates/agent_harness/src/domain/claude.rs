@@ -51,7 +51,7 @@ impl<P: CloudProvider, Repo: AgentSessionRepo, External: ExternalSessionRepo>
     ) -> Result<String> {
         let row = self.repo.get(id).await?;
         let egress = provisioner
-            .provision(id, &row.owner_id, &row.mcp_servers)
+            .provision(id, row.owner_user()?, &row.mcp_servers)
             .await?;
         self.repo
             .set_egress_token_hash(id, &egress.session_token_hash)
@@ -81,7 +81,7 @@ impl<P: CloudProvider, Repo: AgentSessionRepo, External: ExternalSessionRepo>
         }
         let row = AgentSessionRepo::get(&self.repo, id).await?;
         self.provider
-            .connect(row.owner_id.as_ref())
+            .connect(row.owner_user()?.as_ref())
             .await
             .map_err(cloud_error)?
             .archive(&SessionId::parse(&external.external_id).map_err(cloud_error)?)
@@ -98,7 +98,7 @@ impl<P: CloudProvider, Repo: AgentSessionRepo, External: ExternalSessionRepo>
             claude_cloud_agents::domain::models::Model::parse(&row.model).map_err(cloud_error)?;
         let client = self
             .provider
-            .connect(row.owner_id.as_ref())
+            .connect(row.owner_user()?.as_ref())
             .await
             .map_err(cloud_error)?;
         let external = ExternalSessionRepo::get(&self.external, id).await?;

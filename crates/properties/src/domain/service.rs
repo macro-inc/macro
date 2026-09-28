@@ -205,6 +205,15 @@ pub trait PropertiesService: Send + Sync + 'static {
         team: Option<&TeamReceipt>,
     ) -> impl Future<Output = Result<Vec<PropertyOption>, PropertiesErr>> + Send;
 
+    /// Batch options for requested definitions readable by the caller.
+    /// Missing or inaccessible definitions are omitted, including their options.
+    fn get_property_options_batch(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, Vec<PropertyOption>>, PropertiesErr>> + Send;
+
     /// Add a new option to a select property owned by the caller.
     /// Validates the request against the property's data type, including the
     /// tag color rules.

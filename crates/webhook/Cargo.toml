@@ -73,6 +73,7 @@ agent_trigger = { path = "../agent_trigger", optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
 chrono = { workspace = true }
 documents = { path = "../documents", default-features = false, optional = true }
+model_owner = { path = "../model_owner" }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "ports",
 ], optional = true }

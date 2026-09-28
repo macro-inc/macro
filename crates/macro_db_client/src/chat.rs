@@ -1,5 +1,5 @@
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::chat::ChatBasic;
+use model_owner::Owner;
 use sqlx::{Pool, Postgres};
 use std::collections::HashSet;
 
@@ -30,9 +30,8 @@ pub async fn get_basic_chat(db: &Pool<Postgres>, chat_id: &str) -> Result<ChatBa
         Ok(ChatBasic {
             id: r.id,
             name: r.name,
-            user_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
+            user_id: Owner::from_principal_str(&r.user_id)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             project_id: r.project_id,
             deleted_at: r.deleted_at,
         })

@@ -32,6 +32,7 @@ function submitValues(
     guestEmails: [],
     location: '',
     description: '',
+    conferenceChoice: 'none',
     ...overrides,
   };
 }
@@ -41,6 +42,7 @@ describe('createCalendarEventToEditorInitialValues', () => {
     const values = createCalendarEventToEditorInitialValues(event({}));
     expect(values.eventType).toBeUndefined();
     expect(values.outOfOffice).toBeUndefined();
+    expect(values.conference).toBe('none');
   });
 
   it('maps the tool decline modes onto the editor names', () => {

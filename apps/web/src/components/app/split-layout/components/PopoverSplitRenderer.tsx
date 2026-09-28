@@ -1,10 +1,10 @@
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
+import { ContentLoading } from '@components/app/ContentLoading';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog, Panel } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   type SplitFileMenuActionGroups,
@@ -20,7 +20,7 @@ import type {
 } from '../layoutManager';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 
-false && clickOutside;
+false;
 
 type PopoverSplitData = {
   id: string;
@@ -40,10 +40,12 @@ export function PopoverSplitRenderer(props: {
   return (
     <For each={activePopovers()}>
       {(popover) => (
-        <PopoverSplitModal
-          popover={popover}
-          onClose={() => props.onClosePopover?.(popover.id)}
-        />
+        <Suspense>
+          <PopoverSplitModal
+            popover={popover}
+            onClose={() => props.onClosePopover?.(popover.id)}
+          />
+        </Suspense>
       )}
     </For>
   );
@@ -83,18 +85,15 @@ function PopoverSplitModal(props: {
     toggleSpotlight: () => {},
     isSpotLight: () => false,
     isPopover: () => true,
-    isViewerSplit: () => false,
-    isControllerSplit: () => false,
     replace: () => {},
-    // A popover has no URL and no history to rewrite.
+    // A popover has no history to rewrite.
     adoptContentId: () => {},
+    updateCurrentEntry: () => {},
     removeFromHistory: () => {},
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
     previousContent: () => null,
     history: () => [],
-    getUrlSegments: () => [],
-    getUrl: () => '',
     meta: () =>
       props.popover.mount.kind === 'component'
         ? props.popover.mount.meta
@@ -108,11 +107,6 @@ function PopoverSplitModal(props: {
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},
     currentEntryState: () => undefined,
-    canEngagePreview: () => false,
-    engagePreview: () => {},
-    disengagePreview: () => {},
-    resetPreview: () => {},
-    viewerId: () => undefined,
   };
 
   const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(
@@ -166,7 +160,9 @@ function PopoverSplitModal(props: {
       <SoupContextProvider>
         <Show when={props.popover.mount}>
           <Panel.Body>
-            <Dynamic component={props.popover.mount.element} />
+            <Suspense fallback={<ContentLoading />}>
+              <Dynamic component={props.popover.mount.element} />
+            </Suspense>
           </Panel.Body>
         </Show>
       </SoupContextProvider>
@@ -182,7 +178,10 @@ function PopoverSplitModal(props: {
           onOpenChange={onOpenChange}
           contentRef={attachPanel}
         >
-          <Panel depth={2} class="rounded-xl bg-dialog *:max-h-[75vh]">
+          <Panel
+            hideBorder
+            class="bg-transparent rounded-[inherit] *:max-h-[75vh]"
+          >
             <Content />
           </Panel>
         </Dialog>

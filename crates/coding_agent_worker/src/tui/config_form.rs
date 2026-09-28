@@ -39,6 +39,8 @@ pub enum Setting {
     Name,
     /// Private or team ownership requested during pairing.
     Scope,
+    /// Whether the next pairing may enable permission bypass.
+    PermissionBypass,
 }
 
 impl Setting {
@@ -49,6 +51,7 @@ impl Setting {
             Self::Workspace => "Workspace",
             Self::Name => "Name",
             Self::Scope => "Access",
+            Self::PermissionBypass => "Full Access",
         }
     }
 }
@@ -59,6 +62,7 @@ pub const SETTINGS: &[Setting] = &[
     Setting::Workspace,
     Setting::Name,
     Setting::Scope,
+    Setting::PermissionBypass,
 ];
 
 /// The config document being viewed and edited.
@@ -129,6 +133,13 @@ impl ConfigForm {
                 .name
                 .clone()
                 .unwrap_or_else(|| "Hostname default".to_owned()),
+            Setting::PermissionBypass => {
+                if config.identity.allow_permission_bypass {
+                    "Allowed at next pairing".to_owned()
+                } else {
+                    "Always prompt at next pairing".to_owned()
+                }
+            }
             Setting::Scope => match config.identity.scope {
                 crate::config::IdentityScope::Private => "Private".to_owned(),
                 crate::config::IdentityScope::Team => "Team".to_owned(),
@@ -141,7 +152,7 @@ impl ConfigForm {
         match setting {
             Setting::Workspace => self.string("workspace", "path").unwrap_or_default(),
             Setting::Name => self.string("identity", "name").unwrap_or_default(),
-            Setting::Agent | Setting::Scope => String::new(),
+            Setting::Agent | Setting::Scope | Setting::PermissionBypass => String::new(),
         }
     }
 
@@ -168,7 +179,7 @@ impl ConfigForm {
                     self.set_string("identity", "name", input);
                 }
             }
-            Setting::Agent | Setting::Scope => {
+            Setting::Agent | Setting::Scope | Setting::PermissionBypass => {
                 return Err(format!("{} is selected rather than typed", setting.label()));
             }
         }
@@ -184,6 +195,19 @@ impl ConfigForm {
         }
         let section = self.doc["harness"].or_insert(toml_edit::table());
         section["args"] = value(args);
+        // Replaced, not merged: the previous agent's variables name its CLI,
+        // not this one's.
+        if agent.launch.env.is_empty() {
+            if let Some(table) = section.as_table_like_mut() {
+                table.remove("env");
+            }
+        } else {
+            let mut env = toml_edit::InlineTable::new();
+            for (name, path) in &agent.launch.env {
+                env.insert(name, path.as_str().into());
+            }
+            section["env"] = value(env);
+        }
     }
 
     /// Apply Quickstart values to this document without replacing other settings.
@@ -214,6 +238,12 @@ impl ConfigForm {
             IdentityScope::Team => "team",
         };
         self.set_string("identity", "scope", scope);
+    }
+
+    /// Set the permission bypass ceiling for the next pairing.
+    pub fn set_permission_bypass(&mut self, allowed: bool) {
+        let identity = self.doc["identity"].or_insert(toml_edit::table());
+        identity["allow_permission_bypass"] = value(allowed);
     }
 
     /// Persist the credential minted by pairing in this config document.

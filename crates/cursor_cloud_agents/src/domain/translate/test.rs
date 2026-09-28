@@ -97,4 +97,24 @@ fn a_result_with_a_pull_request_announces_it_once() {
 fn a_result_without_a_pull_request_announces_nothing() {
     let mut machine = TranslateMachine::new();
     assert!(machine.push(result(None)).is_empty());
+    assert_eq!(
+        machine
+            .working_branches()
+            .get("https://github.com/macro-inc/macro")
+            .map(String::as_str),
+        Some("cursor/fix-1234"),
+    );
+    let mut without_branch = result(None);
+    if let CursorEvent::Result { git: Some(git), .. } = &mut without_branch {
+        git.branches[0].branch = None;
+    }
+    machine.push(without_branch);
+    assert_eq!(
+        machine
+            .working_branches()
+            .get("https://github.com/macro-inc/macro")
+            .map(String::as_str),
+        Some("cursor/fix-1234"),
+        "missing provider facts must not erase the latest known branch",
+    );
 }

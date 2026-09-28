@@ -1,9 +1,18 @@
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
+import { ItemPreview } from '@core/component/ItemPreview';
+import type { ItemEntity } from '@queries/preview';
 import { Button, Tooltip } from '@ui';
 import { createSignal, createUniqueId, For, Show } from 'solid-js';
 import { EntitySelectionBadge } from '../../components/EntitySelectionBadge';
 import { EntityTitle } from '../../extractors/entity-title';
 import type { EntityData } from '../../types/entity';
+
+/** Preview identity for a selected row. Reminders are not storage items. */
+function previewEntity(entity: EntityData): ItemEntity | undefined {
+  if (entity.type === 'reminder') return undefined;
+  if (entity.type === 'channel') return { id: entity.id, type: 'channel' };
+  return { id: entity.id, type: entity.type };
+}
 
 export function EntityActionSelection(props: {
   entities: EntityData[];
@@ -16,7 +25,16 @@ export function EntityActionSelection(props: {
       <div class="min-w-0">
         <div class="flex min-w-0 items-center gap-1.5">
           <For each={props.entities.slice(0, 2)}>
-            {(entity) => <EntitySelectionBadge entity={entity} />}
+            {(entity) => (
+              <Show
+                when={previewEntity(entity)}
+                fallback={<EntitySelectionBadge entity={entity} />}
+              >
+                {(item) => (
+                  <ItemPreview {...item()} class="min-w-0 max-w-48 shrink" />
+                )}
+              </Show>
+            )}
           </For>
           <Show when={props.entities.length > 2}>
             <Button

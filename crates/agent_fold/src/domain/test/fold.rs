@@ -2,8 +2,9 @@ use super::util::{CapturedFields, TURN, capturing_warnings, parse_log};
 use crate::domain::fold::fold;
 use crate::domain::log::{AgentSessionLog, Message};
 use crate::domain::model::{
-    Author, Control, ControlOutcome, FoldedMessage, MessagePart, PermissionOutcome, StopReason,
-    ToolDetail, ToolName, ToolStatus, ToolUseId, TurnId,
+    AgentRequestId, Author, Control, ControlOutcome, FailureLink, FailureNotice, FailureNoticeKind,
+    FoldedMessage, MessagePart, PermissionOutcome, StopReason, ToolDetail, ToolName, ToolStatus,
+    ToolUseId, TurnId,
 };
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -94,6 +95,7 @@ fn folds_a_complete_turn() {
     );
 
     let MessagePart::Permission {
+        request_id,
         tool_call,
         options,
         outcome,
@@ -101,6 +103,11 @@ fn folds_a_complete_turn() {
     else {
         panic!("third part is the permission prompt: {:?}", parts[2]);
     };
+    assert_eq!(
+        *request_id,
+        AgentRequestId::Str("perm-1".to_owned()),
+        "the agent's id is exposed for an answer to echo"
+    );
     assert_eq!(tool_call, run_id);
     assert_eq!(options.len(), 2);
     assert_eq!(
@@ -672,9 +679,70 @@ fn a_prompt_answered_with_an_error_ends_its_turn() {
         Some(StopReason::Failed {
             message: "Internal error: Bad Request: bad request: Authorization header is badly \
                       formatted"
-                .to_owned()
+                .to_owned(),
+            notice: None,
         }),
         "the runtime's own words, carried verbatim"
+    );
+}
+
+/// A runtime that classified the failure as the person's to act on says so
+/// in the error's `data`, and the fold carries that through as the notice a
+/// reader shows instead of the runtime's message.
+#[test]
+fn a_prompt_error_carrying_a_notice_fails_its_turn_with_the_notice() {
+    let (prompt, _) = FAILED_PROMPT
+        .split_once('\n')
+        .expect("the fixture has two frames");
+    let error = concat!(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","error":{"code":-32603,"#,
+        r#""message":"Cursor has no budget left.","#,
+        r#""data":{"kind":"provider_usage_limit","title":"Cursor usage limit reached","#,
+        r#""body":"Raise the limit, then send your message again.","#,
+        r#""link":{"label":"Manage Cursor usage","url":"https://www.cursor.com/dashboard?tab=settings"}}}}}"#,
+    );
+
+    let messages = fold(parse_log(&format!("{prompt}\n{error}")));
+
+    let agent = messages.last().expect("an agent message");
+    assert_eq!(
+        agent.stop,
+        Some(StopReason::Failed {
+            message: "Cursor has no budget left.".to_owned(),
+            notice: Some(FailureNotice {
+                kind: FailureNoticeKind::ProviderUsageLimit,
+                title: "Cursor usage limit reached".to_owned(),
+                body: "Raise the limit, then send your message again.".to_owned(),
+                link: Some(FailureLink {
+                    label: "Manage Cursor usage".to_owned(),
+                    url: "https://www.cursor.com/dashboard?tab=settings".to_owned(),
+                }),
+            }),
+        })
+    );
+}
+
+/// Error `data` that is not a notice - another runtime's debugging payload -
+/// leaves the failure opaque rather than half-parsed.
+#[test]
+fn a_prompt_error_with_unrelated_data_fails_its_turn_without_a_notice() {
+    let (prompt, _) = FAILED_PROMPT
+        .split_once('\n')
+        .expect("the fixture has two frames");
+    let error = concat!(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","error":{"code":-32603,"#,
+        r#""message":"boom","data":{"details":"stack trace here"}}}}"#,
+    );
+
+    let messages = fold(parse_log(&format!("{prompt}\n{error}")));
+
+    let agent = messages.last().expect("an agent message");
+    assert_eq!(
+        agent.stop,
+        Some(StopReason::Failed {
+            message: "boom".to_owned(),
+            notice: None,
+        })
     );
 }
 

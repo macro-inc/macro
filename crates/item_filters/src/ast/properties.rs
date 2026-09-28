@@ -25,6 +25,8 @@ pub enum PropertyEntityType {
     Company,
     /// Document entity
     Document,
+    /// Initiative entity
+    Initiative,
     /// Project entity
     Project,
     /// Task entity
@@ -49,6 +51,7 @@ impl FromStr for PropertyEntityType {
             "CHAT" => Ok(Self::Chat),
             "COMPANY" => Ok(Self::Company),
             "DOCUMENT" => Ok(Self::Document),
+            "INITIATIVE" => Ok(Self::Initiative),
             "PROJECT" => Ok(Self::Project),
             "TASK" => Ok(Self::Task),
             "THREAD" => Ok(Self::Thread),
@@ -66,6 +69,7 @@ impl fmt::Display for PropertyEntityType {
             Self::Chat => write!(f, "CHAT"),
             Self::Company => write!(f, "COMPANY"),
             Self::Document => write!(f, "DOCUMENT"),
+            Self::Initiative => write!(f, "INITIATIVE"),
             Self::Project => write!(f, "PROJECT"),
             Self::Task => write!(f, "TASK"),
             Self::Thread => write!(f, "THREAD"),

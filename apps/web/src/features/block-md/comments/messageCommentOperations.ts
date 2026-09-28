@@ -5,6 +5,7 @@ import {
   type ThreadId,
 } from '@core/comments/commentType';
 import { COMMIT_COMMENT_MARK_COMMAND } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
+import { $getCommentMarkText } from '@macro-inc/lexical-core';
 import { createCallback } from '@solid-primitives/rootless';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useDeleteNewComments } from './commentOperations';
@@ -44,9 +45,15 @@ export function useCreateMessageComment(): MessageCommentOperations['createComme
       return null;
     }
 
+    // Read the mark now rather than when the draft was made: what the comment
+    // is about is whatever it still covers as the comment is posted.
+    const markedText =
+      editor?.read(() => $getCommentMarkText(draft.anchorId)) || undefined;
+
     const response = await createMarkedMessage(
       message.content,
       draft.anchorId,
+      markedText,
       message.mentions,
       message.attachments
     );

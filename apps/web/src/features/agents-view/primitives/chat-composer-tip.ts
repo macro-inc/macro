@@ -1,7 +1,7 @@
 import { type Accessor, createSignal, onCleanup, onMount } from 'solid-js';
 
 const TIPS = [
-  'Connect your apps in Settings → Connections',
+  'Connect your apps in Agents → Connections',
   'Type / to add a skill',
   'Type @ to mention docs, people, or channels',
   'Choose an agent to change who helps',

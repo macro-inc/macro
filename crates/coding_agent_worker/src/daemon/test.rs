@@ -13,6 +13,10 @@ async fn stop_does_not_wait_for_in_flight_work() {
 }
 
 #[tokio::test]
+#[expect(
+    clippy::result_large_err,
+    reason = "the handshake callback's error type is fixed by tungstenite's Callback trait"
+)]
 async fn startup_without_agents_serves_model_probes_and_stop_closes_the_runtime() {
     use agent_runtime_protocol::domain::schema::v0::{
         ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,

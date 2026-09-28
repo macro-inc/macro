@@ -642,6 +642,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bot_id"
+version = "0.1.0"
+dependencies = [
+ "cowlike",
+ "nom",
+ "serde",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "branches"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2459,6 +2470,7 @@ dependencies = [
  "item_filters",
  "macro_user_id",
  "model_file_type",
+ "model_owner",
  "notification_state",
  "serde",
  "serde_json",
@@ -3101,6 +3113,7 @@ dependencies = [
  "filter_ast",
  "macro_user_id",
  "model_file_type",
+ "model_owner",
  "nom",
  "non_empty",
  "notification_state",
@@ -3681,6 +3694,17 @@ dependencies = [
  "serde_json",
  "strum 0.27.2",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "model_owner"
+version = "0.1.0"
+dependencies = [
+ "bot_id",
+ "macro_user_id",
+ "serde",
+ "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]

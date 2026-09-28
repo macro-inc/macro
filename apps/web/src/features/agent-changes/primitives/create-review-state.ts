@@ -37,6 +37,7 @@ export type ReviewController = {
   openNote: (anchor: NoteAnchor) => void;
   cancelNote: () => void;
   addNote: (anchor: NoteAnchor, text: string) => void;
+  updateNote: (id: string, text: string) => void;
   removeNote: (id: string) => void;
   /** Stamp every queued note as sent, returning what was sent. */
   markQueuedSent: () => ReviewNote[];
@@ -181,6 +182,13 @@ export function createReviewState(options: {
         ],
       }));
     },
+    updateNote: (id, text) =>
+      setStored((previous) => ({
+        ...previous,
+        notes: previous.notes.map((note) =>
+          note.id === id && note.sentAt === undefined ? { ...note, text } : note
+        ),
+      })),
     removeNote: (id) =>
       setStored((previous) => ({
         ...previous,

@@ -38,8 +38,8 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::artifact::{ArtifactListing, CollectedArtifact, mime_type};
-use crate::domain::error::SessionError;
+use crate::domain::artifact::{ArtifactListing, CollectedArtifact, inline_text, mime_type};
+use crate::domain::error::{PromptRefusal, SessionError};
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput, ReplayMachine};
 use crate::domain::model::{
@@ -59,12 +59,54 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-/// How often the fallback poll asks after a run's outcome.
+/// How often a wait that is not about the run's outcome asks again: the
+/// busy-agent queue, and a poll retried after a transport error.
 const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
-/// Polls before a turn is abandoned — fifteen minutes, comfortably past any
-/// run in the recorded corpus while still an ending.
-const POLL_ATTEMPTS: usize = 450;
+/// The fallback poll's cadence: quick at first, when a run that has just gone
+/// quiet is most likely about to end, then settling at [`POLL_INTERVAL_CEILING`].
+///
+/// Two facts from the journals set the shape. `GET /v1/agents/{id}/runs/{run}`
+/// is limited to 300 requests a minute per API key, shared by every session
+/// this deployment drives, and a two-second poll from a dozen stalled
+/// sessions was enough to draw a 429 (dev, 2026-09-19). And a run's record
+/// carries no liveness signal while it is `RUNNING` — `updatedAt` moves only
+/// on status transitions — so asking more often learns nothing sooner.
+const POLL_DELAYS: [std::time::Duration; 11] = [
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(3),
+    std::time::Duration::from_secs(5),
+    std::time::Duration::from_secs(8),
+    std::time::Duration::from_secs(12),
+    std::time::Duration::from_secs(20),
+    std::time::Duration::from_secs(30),
+];
+
+/// Where the poll cadence settles: two requests a minute per waiting session.
+const POLL_INTERVAL_CEILING: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Polls before a turn stops waiting — about two hours along [`POLL_DELAYS`].
+///
+/// This is a ceiling for a run that Cursor still calls `RUNNING`, not an
+/// estimate of how long one takes. The old fifteen-minute budget was sized
+/// to a recorded corpus of short runs; live, a run that opened its pull
+/// request at 19:55 had its turn abandoned at 19:54, and every "gave up
+/// waiting" in three days of production logs was a run that was merely
+/// slow. A turn that stops waiting cannot be resumed, so the budget errs
+/// long: the chip shows the session working the whole time.
+const POLL_ATTEMPTS: usize = 250;
+
+/// How long the fallback poll sleeps before its `attempt`-th ask.
+fn poll_delay(attempt: usize) -> std::time::Duration {
+    POLL_DELAYS
+        .get(attempt)
+        .copied()
+        .unwrap_or(POLL_INTERVAL_CEILING)
+}
 
 /// Consecutive poll failures tolerated before the turn takes the error.
 const POLL_ERROR_TOLERANCE: usize = 5;
@@ -73,10 +115,28 @@ const POLL_ERROR_TOLERANCE: usize = 5;
 /// final text arrives and the stream then hangs open, its terminal `result`
 /// minutes behind — and the client shows a turn still "writing" long after
 /// the answer is on screen. Long enough to never fire during ordinary
-/// streaming; short enough that a finished run closes its turn promptly. A
-/// still-running run (quiet tool work) just costs one status read per
-/// interval.
+/// streaming; short enough that a finished run closes its turn promptly.
 const STREAM_QUIET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How long a stream that has already been found quiet waits between the
+/// next checks of its run's record. Slower than the first check on purpose:
+/// the record endpoint's rate limit is shared by every session (see
+/// [`POLL_DELAYS`]), and a run that was still going ten seconds ago is most
+/// likely still going now.
+const STREAM_QUIET_RECHECK: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Silence on an open stream before its connection is replaced.
+///
+/// Cursor does not heartbeat an open stream: the journals show runs saying
+/// nothing for many minutes while their record stays `RUNNING` — a tool call
+/// waiting on CI (`await`, `blockUntilMs: 120000`), a long build — and every
+/// reconnect in that window resumed zero records. So silence on a run the
+/// record still calls live is the agent working, and the connection is
+/// kept. Only silence this long buys a fresh connection, as insurance
+/// against a socket that died without saying so, and it costs nothing
+/// from the reconnect budget: that budget is for a transport that is
+/// failing, and this one merely has nothing to say.
+const STREAM_SILENCE_BEFORE_RECONNECT: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// Backoff before each reconnect of an interrupted stream.
 ///
@@ -156,6 +216,25 @@ async fn sleep_unless_cancelled(
     }
 }
 
+/// Why a stream connection ended without the run's outcome.
+struct Interruption {
+    reason: String,
+    /// Whether a fresh connection could still deliver the run.
+    recoverable: bool,
+    /// The connection was replaced for saying nothing, not for failing.
+    quiet: bool,
+}
+
+impl Interruption {
+    fn failed(reason: String) -> Self {
+        Self {
+            reason,
+            recoverable: true,
+            quiet: false,
+        }
+    }
+}
+
 /// The run's content records already durable in this session's journal.
 ///
 /// What a stream read from the beginning is reconciled against: every record
@@ -180,30 +259,41 @@ fn captured_content(
         .collect()
 }
 
-/// Restate a repository rejection as something the person who prompted can
-/// act on, leaving every other failure exactly as it arrived.
+/// Restate a rejection the person who prompted can act on - a repository
+/// Cursor cannot reach, a Cursor account out of budget - in their terms,
+/// leaving every other failure exactly as it arrived.
 ///
 /// The result is a [`SessionError::Rejected`], so it takes the same path a
 /// [`PromptRejected`](crate::domain::error::PromptRejected) already takes:
-/// the prompt is journalled as aborted and the message travels to the client
+/// the prompt is journalled as aborted and the refusal travels to the client
 /// as the `session/prompt` error. Cursor's own body stays in the tracing event —
 /// it names codes and ids that mean nothing to a reader of the chip.
-fn explain_repository_rejection(error: SessionError) -> SessionError {
+fn explain_rejection(error: SessionError) -> SessionError {
     let SessionError::Cursor(report) = &error else {
         return error;
     };
-    let Some(unavailable) =
+    if let Some(unavailable) =
         report.downcast_current_context::<crate::domain::error::RepositoryUnavailable>()
-    else {
-        return error;
-    };
-    tracing::warn!(
-        repo = %unavailable.repo,
-        reason = %unavailable.reason,
-        detail = %unavailable.detail,
-        "cursor rejected the prompt: it could not use the session's repository"
-    );
-    SessionError::Rejected(unavailable.user_message())
+    {
+        tracing::warn!(
+            repo = %unavailable.repo,
+            reason = %unavailable.reason,
+            detail = %unavailable.detail,
+            "cursor rejected the prompt: it could not use the session's repository"
+        );
+        return SessionError::Rejected(PromptRefusal::plain(unavailable.user_message()));
+    }
+    if let Some(exceeded) =
+        report.downcast_current_context::<crate::domain::error::UsageLimitExceeded>()
+    {
+        tracing::warn!(
+            code = %exceeded.code,
+            detail = %exceeded.detail,
+            "cursor rejected the prompt: the account's usage limit is exhausted"
+        );
+        return SessionError::Rejected(exceeded.refusal());
+    }
+    error
 }
 
 /// Whether a failed create is a definite refusal — the prompt never ran, so
@@ -339,15 +429,6 @@ struct SessionState {
 struct Session {
     /// ACP working directory, used by the standalone repository chooser.
     cwd: PathBuf,
-    /// The model id this session was using before the process restarted, when
-    /// it was restored and had one. An id rather than a [`ModelChoice`]: only
-    /// the id is persisted, and its params must be re-resolved against the
-    /// live model table anyway, which can have drifted across the restart.
-    ///
-    /// May also be a value that was never a Cursor id at all — the harness
-    /// seeds its session records with a deployment slug like `claude` — so
-    /// resolution tolerates a miss instead of trusting this.
-    restored_model_id: Option<String>,
     /// Serializes turns against background foreign-run syncs, so a mirror of
     /// cursor.com activity never interleaves its frames with a live turn's.
     /// A prompt waits on it; a sync skips its tick instead. Never held by
@@ -372,6 +453,14 @@ pub struct CursorSessionService<Cursor, Notifier, Chooser, Store> {
     /// A model id this deployment pins, applied to every new session. `None`
     /// leaves the choice to Cursor's own default resolution.
     default_model_id: Option<String>,
+    /// The model this one session runs on, from the host's own session record:
+    /// what its owner picked for it, or the slug the host seeded it with.
+    /// Outranks [`Self::default_model_id`], which is only what a session gets
+    /// when nobody said otherwise.
+    ///
+    /// A whole service per session is how the hosted deployment serves them,
+    /// so this sits beside the deployment default rather than on [`Session`].
+    host_model_id: Option<String>,
     /// `GET /v1/models`, fetched once. The table is static for the life of a
     /// process and every `session/new` would otherwise re-fetch it.
     models: tokio::sync::Mutex<Option<Vec<CursorModel>>>,
@@ -401,6 +490,7 @@ where
             sessions: Mutex::new(HashMap::new()),
             next_session: Mutex::new(0),
             default_model_id: None,
+            host_model_id: None,
             models: tokio::sync::Mutex::new(None),
         }
     }
@@ -416,6 +506,20 @@ where
         self
     }
 
+    /// Pin the model this session runs on, by id, ahead of the deployment
+    /// default.
+    ///
+    /// The host's session record, which holds the model its owner chose for
+    /// this session - before it ever ran, or by selecting one mid-session -
+    /// and otherwise whatever slug the host seeded the record with. Resolved
+    /// like any other id, so a value that is not a Cursor model is no opinion
+    /// and the deployment default still answers.
+    #[must_use]
+    pub fn with_host_model(mut self, model_id: Option<String>) -> Self {
+        self.host_model_id = model_id;
+        self
+    }
+
     /// Open a session.
     ///
     /// No repository is chosen here: a session's repository follows from what
@@ -425,7 +529,6 @@ where
     pub fn new_session(&self, cwd: &Path, mcp_servers: Vec<McpServer>) -> SessionId {
         let session = Arc::new(Session {
             cwd: cwd.to_path_buf(),
-            restored_model_id: None,
             turn_gate: Arc::new(tokio::sync::Mutex::new(())),
             state: Mutex::new(SessionState {
                 mcp_servers,
@@ -532,36 +635,40 @@ where
         {
             return Ok(Some(model));
         }
-        // The restored id outranks the deployment default: it is what this
-        // session was actually using before the restart, and the default is
-        // what a session gets when nobody ever said otherwise.
-        let fallback_id = session
-            .restored_model_id
-            .as_deref()
-            .or(self.default_model_id.as_deref());
-        let Some(fallback_id) = fallback_id else {
-            return Ok(None);
-        };
-        // A failure to *fetch* the model table degrades like a failed lookup
-        // in it: the fallback is a preference, and Cursor being unreachable
-        // for `GET /v1/models` must cost the preference, never the prompt —
-        // the run itself may well still work.
-        let choice = match self.resolve_model_id(fallback_id).await {
-            Ok(choice) => choice,
-            Err(error) => {
-                tracing::warn!(
-                    fallback_id,
-                    %error,
-                    "could not resolve the fallback model; using Cursor's default"
-                );
-                None
-            }
-        };
-        let Some(choice) = choice else {
-            return Ok(None);
-        };
-        session.state.lock().expect("session state poisoned").model = Some(choice.clone());
-        Ok(Some(choice))
+        // Session before deployment: the session's own id is what its owner
+        // chose for it (or was using before a restart), and the default is
+        // what a session gets when nobody ever said otherwise. Each is only a
+        // preference, so one that resolves to nothing hands the question to
+        // the next rather than answering it with silence.
+        for fallback_id in [
+            self.host_model_id.as_deref(),
+            self.default_model_id.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            // A failure to *fetch* the model table degrades like a failed
+            // lookup in it: the fallback is a preference, and Cursor being
+            // unreachable for `GET /v1/models` must cost the preference, never
+            // the prompt — the run itself may well still work.
+            let choice = match self.resolve_model_id(fallback_id).await {
+                Ok(choice) => choice,
+                Err(error) => {
+                    tracing::warn!(
+                        fallback_id,
+                        %error,
+                        "could not resolve the fallback model; using Cursor's default"
+                    );
+                    None
+                }
+            };
+            let Some(choice) = choice else {
+                continue;
+            };
+            session.state.lock().expect("session state poisoned").model = Some(choice.clone());
+            return Ok(Some(choice));
+        }
+        Ok(None)
     }
 
     /// The id resolved to a choice Cursor will accept, or `None` for an id
@@ -829,15 +936,14 @@ where
                     // request there, which no later correction undoes.
                     Err(error) => {
                         tracing::warn!(error = ?error, "could not choose a repository for this session");
-                        Err(SessionError::Rejected(
-                            "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection."
-                                .to_owned(),
-                        ))
+                        Err(SessionError::Rejected(PromptRefusal::plain(
+                            "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection.",
+                        )))
                     }
                 }
             }
         };
-        let (agent, run) = match created.map_err(explain_repository_rejection) {
+        let (agent, run) = match created.map_err(explain_rejection) {
             Ok(created) => created,
             Err(error) => {
                 if is_prompt_rejection(&error) {
@@ -857,7 +963,7 @@ where
                     // the agent can see.
                     if creating_agent {
                         let reason = match &error {
-                            SessionError::Rejected(message) => Some(message.clone()),
+                            SessionError::Rejected(refusal) => Some(refusal.message.clone()),
                             _ => None,
                         };
                         session
@@ -933,7 +1039,7 @@ where
         // up on a run still going, not a prompt refused before it ran.
         let interrupted = match &outcome {
             Err(SessionError::Cursor(error)) => Some(error.to_string()),
-            Err(SessionError::Rejected(message)) => Some(message.clone()),
+            Err(SessionError::Rejected(refusal)) => Some(refusal.message.clone()),
             _ => None,
         };
         if let Some(interrupted) = interrupted {
@@ -1105,9 +1211,8 @@ where
         id: SessionId,
         agent: Option<CursorAgentId>,
         repo: Option<RepoUrl>,
-        model_id: Option<String>,
     ) {
-        self.restore_session_with_watermark(id, agent, repo, model_id, None);
+        self.restore_session_with_watermark(id, agent, repo, None);
     }
 
     /// Restore a session together with its durable run-delivery checkpoint.
@@ -1116,7 +1221,6 @@ where
         id: SessionId,
         agent: Option<CursorAgentId>,
         repo: Option<RepoUrl>,
-        model_id: Option<String>,
         last_run: Option<CursorRunId>,
     ) {
         // No MCP servers here on purpose: the host never had the truth to
@@ -1124,7 +1228,6 @@ where
         // restates it on `session/load`, which is where it re-enters.
         let session = Arc::new(Session {
             cwd: PathBuf::new(),
-            restored_model_id: model_id,
             turn_gate: Arc::new(tokio::sync::Mutex::new(())),
             state: Mutex::new(SessionState {
                 repo,
@@ -1293,8 +1396,12 @@ where
                 }
                 // Past the retention window there is no stream left to resume,
                 // so the run record is the only remaining account of the run.
-                Err(StreamConnectError::Expired(detail)) => Some((detail, false)),
-                Err(error) => Some((error.to_string(), true)),
+                Err(StreamConnectError::Expired(detail)) => Some(Interruption {
+                    reason: detail,
+                    recoverable: false,
+                    quiet: false,
+                }),
+                Err(error) => Some(Interruption::failed(error.to_string())),
                 Ok(connected) => {
                     let resumed = resuming.is_some();
                     ever_connected = true;
@@ -1304,20 +1411,31 @@ where
                     let mut received = 0usize;
                     let mut received_content = 0usize;
                     let mut sticky_status_pending = resumed;
+                    // How long this connection has said nothing, across the
+                    // record checks that found its run still going.
+                    let mut silence = std::time::Duration::ZERO;
                     let interruption = loop {
-                        let record = match tokio::time::timeout(
-                            STREAM_QUIET_TIMEOUT,
-                            records.next(),
-                        )
-                        .await
+                        let quiet_timeout = if silence.is_zero() {
+                            STREAM_QUIET_TIMEOUT
+                        } else {
+                            STREAM_QUIET_RECHECK
+                        };
+                        let record = match tokio::time::timeout(quiet_timeout, records.next()).await
                         {
-                            Ok(Some(Ok(record))) => record,
-                            Ok(Some(Err(error))) => break Some((error.to_string(), true)),
+                            Ok(Some(Ok(record))) => {
+                                silence = std::time::Duration::ZERO;
+                                record
+                            }
+                            Ok(Some(Err(error))) => {
+                                break Some(Interruption::failed(error.to_string()));
+                            }
                             // Cursor closes the stream after `done`, which
                             // breaks below with an outcome. Reaching here
                             // without one is a close mid-run.
                             Ok(None) if terminal.is_some() => break None,
-                            Ok(None) => break Some(("stream closed".to_owned(), true)),
+                            Ok(None) => {
+                                break Some(Interruption::failed("stream closed".to_owned()));
+                            }
                             Err(_) if strict => break None,
                             Err(_) => {
                                 // Quiet streams are checked through the exact same raw
@@ -1332,17 +1450,18 @@ where
                                 if cancel.is_cancelled() {
                                     break None;
                                 }
-                                // Cursor heartbeats an open stream, so a
-                                // gap this long on a run that has not
-                                // ended is a connection that stopped
-                                // delivering rather than an agent thinking.
-                                break Some((
-                                    format!(
-                                        "no records for {} seconds",
-                                        STREAM_QUIET_TIMEOUT.as_secs()
-                                    ),
-                                    true,
-                                ));
+                                silence += quiet_timeout;
+                                if silence < STREAM_SILENCE_BEFORE_RECONNECT {
+                                    // The run is going and the connection is
+                                    // open: an agent at work, not a stream
+                                    // that stopped delivering.
+                                    continue;
+                                }
+                                break Some(Interruption {
+                                    reason: format!("no records for {} seconds", silence.as_secs()),
+                                    recoverable: true,
+                                    quiet: true,
+                                });
                             }
                         };
                         if let Some(id) = &record.id {
@@ -1451,7 +1570,12 @@ where
                     interruption
                 }
             };
-            let Some((reason, recoverable)) = interruption else {
+            let Some(Interruption {
+                reason,
+                recoverable,
+                quiet,
+            }) = interruption
+            else {
                 break;
             };
             fell_back_to_poll = true;
@@ -1488,7 +1612,11 @@ where
             .await?;
             // Hydration verifies the whole captured prefix against a stream it
             // reads from the beginning, which a resumed stream cannot offer.
-            let resumable = recoverable && !strict && attempt <= STREAM_RECONNECT_ATTEMPTS as u32;
+            // A connection replaced for silence alone spends nothing: the
+            // budget rations a transport that is failing, and this one is
+            // still the only thing that can deliver the run live.
+            let resumable =
+                recoverable && !strict && (quiet || attempt <= STREAM_RECONNECT_ATTEMPTS as u32);
             if !resumable {
                 tracing::warn!(
                     cursor.run.id = %run,
@@ -1511,7 +1639,9 @@ where
             if sleep_unless_cancelled(cancel, delay).await {
                 break;
             }
-            reconnects = attempt;
+            if !quiet {
+                reconnects = attempt;
+            }
             resume_from = last_event_id.clone();
             fell_back_to_poll = false;
         }
@@ -1558,7 +1688,7 @@ where
                         return Err(error);
                     }
                 }
-                sleep_unless_cancelled(cancel, POLL_INTERVAL).await;
+                sleep_unless_cancelled(cancel, poll_delay(attempt)).await;
             }
         }
         let Some(status) = terminal else {
@@ -1571,11 +1701,12 @@ where
                 attempts = POLL_ATTEMPTS,
                 "gave up waiting; Cursor still reports a non-terminal status"
             );
-            return Err(SessionError::Rejected(
-                "Cursor has not reported a result for this run, and has stopped saying \
-                 anything about it. Prompting again starts fresh and abandons this run."
-                    .into(),
-            ));
+            return Err(SessionError::Rejected(PromptRefusal::plain(
+                "Cursor has been working on this for over two hours and Macro stopped \
+                 waiting. Send another message to continue: if Cursor has finished by \
+                 then, that message picks up what it did, and if not, the run is \
+                 cancelled and the conversation starts fresh from there.",
+            )));
         };
         if strict
             && !session
@@ -1617,7 +1748,7 @@ where
     /// heartbeat a Cursor turn has, and a turn that stops polling is the
     /// first evidence that something took it down.
     ///
-    /// `debug` because the loop runs every [`POLL_INTERVAL`]; the turn span
+    /// `debug` because the loop runs as often as [`POLL_DELAYS`] says; the turn span
     /// above carries the outcome, this carries the liveness.
     #[tracing::instrument(
         name = "cursor.run.poll",
@@ -2006,6 +2137,7 @@ where
                 }
             };
             let mime_type = mime_type(listing.name(), fetched.content_type.as_deref());
+            let text = inline_text(listing.name(), &mime_type, &fetched.bytes);
             match self
                 .artifacts
                 .store(listing.name(), &mime_type, fetched.bytes)
@@ -2017,6 +2149,7 @@ where
                     mime_type,
                     uri,
                     size_bytes: listing.size_bytes,
+                    text,
                 }),
                 Err(error) => tracing::warn!(
                     artifact.path = %listing.path,
@@ -2153,9 +2286,10 @@ where
                 state.ready_for_sync = false;
                 SessionError::Journal(error)
             })?;
-        let (updates, completion, pull_request) = {
+        let (updates, completion, pull_request, working_branches) = {
             let mut state = session.state.lock().expect("session state poisoned");
             let previous_pr = state.machine.pull_request_url().map(str::to_owned);
+            let previous_branches = state.machine.working_branches().clone();
             let before = run.and_then(|run| state.machine.terminal_status(run));
             state.journal_entries.push(entry.clone());
             let SessionState {
@@ -2184,9 +2318,27 @@ where
                 .pull_request_url()
                 .filter(|url| Some(*url) != previous_pr.as_deref())
                 .map(str::to_owned);
-            (updates, completion, pull_request)
+            let working_branches: Vec<_> = state
+                .machine
+                .working_branches()
+                .iter()
+                .filter(|(repository, branch)| previous_branches.get(*repository) != Some(*branch))
+                .map(|(repository, branch)| (repository.clone(), branch.clone()))
+                .collect();
+            (updates, completion, pull_request, working_branches)
         };
         if emit {
+            for (repository, branch) in working_branches {
+                self.notifier
+                    .set_working_branch(id, &repository, &branch)
+                    .await
+                    .map_err(|error| {
+                        let mut state = session.state.lock().expect("session state poisoned");
+                        state.capture_failed = true;
+                        state.ready_for_sync = false;
+                        SessionError::Journal(error)
+                    })?;
+            }
             if let Some(url) = pull_request {
                 self.notifier
                     .set_pull_request(id, &url)
@@ -2399,6 +2551,11 @@ where
         // to a disconnected session by loading it, so a load that refuses is
         // also every future prompt refused as disconnected, with no way back.
         let (machine, updates) = history_projection(&entries, HistoryGap::IsServedAnyway)?;
+        for (repository, branch) in machine.working_branches() {
+            self.notifier
+                .set_working_branch(id, repository, branch)
+                .await?;
+        }
         if let Some(url) = machine.pull_request_url() {
             self.notifier.set_pull_request(id, url).await?;
         }

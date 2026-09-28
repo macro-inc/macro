@@ -2,11 +2,12 @@
  * @vitest-environment jsdom
  *
  * What an attached file renders as is decided by its media type: images and
- * videos as media, everything else as a chip that opens the file.
+ * videos as media that open the channel lightbox, everything else as a chip
+ * that opens the file.
  */
 
 import type { MessagePart } from '@service-agent-fold/generated/types';
-import { render } from '@solidjs/testing-library';
+import { fireEvent, render } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import { AttachmentPart, attachmentMedium } from './AttachmentPart';
 
@@ -31,6 +32,16 @@ vi.mock('@channel/Media/MediaVideo', () => ({
     ),
     PlayOverlay: () => null,
   },
+}));
+vi.mock('@channel/Media/MediaViewerDialog', () => ({
+  MediaViewerDialog: (props: {
+    items: () => { id: string; fullSrc: string; kind: string }[];
+    open: boolean;
+  }) => (
+    <div data-open={String(props.open)} data-testid="media-viewer">
+      {props.items()[0]?.kind}:{props.items()[0]?.fullSrc}
+    </div>
+  ),
 }));
 // The block registry eagerly imports every block's definition, which drags
 // the chat input's storage module into jsdom; the extension-to-icon mapping
@@ -84,8 +95,8 @@ describe('attachmentMedium', () => {
 });
 
 describe('AttachmentPart', () => {
-  it('renders an image as a sized thumbnail linking to the original', () => {
-    const { getByTestId, container } = render(() => (
+  it('renders an image as a sized thumbnail that opens the media viewer', () => {
+    const { getByLabelText, getByTestId, container } = render(() => (
       <AttachmentPart
         part={attachment({ name: 'shot.png', mimeType: 'image/png' })}
       />
@@ -93,19 +104,32 @@ describe('AttachmentPart', () => {
     expect(getByTestId('media-image').getAttribute('src')).toBe(
       'https://static.example/file/1?size=1080'
     );
-    expect(container.querySelector('a')?.getAttribute('href')).toBe(
-      'https://static.example/file/1'
+    expect(container.querySelector('a')).toBeNull();
+    expect(getByTestId('media-viewer').getAttribute('data-open')).toBe('false');
+
+    fireEvent.click(getByLabelText('Open image viewer'));
+    expect(getByTestId('media-viewer').getAttribute('data-open')).toBe('true');
+    expect(getByTestId('media-viewer').textContent).toBe(
+      'image:https://static.example/file/1'
     );
   });
 
-  it('renders a video as a preview', () => {
-    const { getByTestId } = render(() => (
+  it('renders a video as a preview that opens the media viewer', () => {
+    const { getByLabelText, getByTestId, container } = render(() => (
       <AttachmentPart
         part={attachment({ name: 'clip.mp4', mimeType: 'video/mp4' })}
       />
     ));
     expect(getByTestId('media-video').getAttribute('src')).toBe(
       'https://static.example/file/1'
+    );
+    expect(container.querySelector('a')).toBeNull();
+    expect(getByTestId('media-viewer').getAttribute('data-open')).toBe('false');
+
+    fireEvent.click(getByLabelText('Open video viewer'));
+    expect(getByTestId('media-viewer').getAttribute('data-open')).toBe('true');
+    expect(getByTestId('media-viewer').textContent).toBe(
+      'video:https://static.example/file/1'
     );
   });
 

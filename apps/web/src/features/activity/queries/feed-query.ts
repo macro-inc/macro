@@ -4,7 +4,8 @@ import {
   type MyActivityQuery,
   type MyActivityQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { registerActivityRevalidator } from '../../../lib/queries/activity/push-registry';
 import type { ActivityContext } from '../context/activity-context';
 import type { ActivityEvent } from '../core/event';
 import { decodeActivityEvent } from './decode';
@@ -20,14 +21,15 @@ export function createMyActivityQuery(
   context: Pick<ActivityContext, 'graphql'>,
   options: { enabled: Accessor<boolean> }
 ) {
-  return createUrqlInfiniteQuery<
+  const client = createMemo(context.graphql);
+  const result = createUrqlInfiniteQuery<
     MyActivityQuery,
     MyActivityQueryVariables,
     string | null,
     ActivityEvent[]
   >(() => ({
     query: MyActivityDocument,
-    client: context.graphql(),
+    client: client(),
     initialPageParam: null,
     variables: (cursor) => ({
       input: { limit: ACTIVITY_FEED_PAGE_LIMIT, cursor },
@@ -42,4 +44,14 @@ export function createMyActivityQuery(
         .flatMap((page) => page.user.activity.items)
         .map(decodeActivityEvent),
   }));
+  onCleanup(
+    registerActivityRevalidator({
+      client,
+      refresh: () => {
+        if (options.enabled())
+          return result.refetch({ requestPolicy: 'network-only' });
+      },
+    })
+  );
+  return result;
 }

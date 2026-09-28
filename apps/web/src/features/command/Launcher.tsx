@@ -5,6 +5,7 @@ import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
 import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
+import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
@@ -50,6 +51,7 @@ import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { createProject } from '@queries/storage/projects';
 import { makePersisted } from '@solid-primitives/storage';
+import { useNavigate } from '@solidjs/router';
 import {
   CommandMenuHotkeyHint,
   CommandMenuList,
@@ -72,6 +74,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { createCallCommand } from './create-call-command';
 import { MobileCreateSheet } from './mobile/MobileCreateSheet';
 import type { CreatableBlock, CreatableName } from './types';
 
@@ -165,20 +168,15 @@ const createBlock = async (spec: {
 
   setCreateMenuOpen(false, false);
 
-  // WORKAROUND: On mobile, the navigation interceptor in createMobileSwipeLayout
-  // consumes openWithSplit calls and returns undefined instead of a SplitHandle.
-  // This means we can't show a loading spinner then replace it via split.replace(),
-  // because we never get a handle back. Instead, on mobile we skip the loading state
-  // and navigate directly to the created block after the async creation completes.
-  // If the mobile navigation interceptor is refactored to return handles, this
-  // workaround can be removed and both paths can use the loading-then-replace flow.
+  // On mobile, navigate directly after creation instead of showing an
+  // intermediate loading pane during the swipe transition.
   const showLoadingFirst = loading && !isMobile();
 
   const split = showLoadingFirst
     ? openWithSplit(
         { type: 'component', id: 'loading' },
         { referredFrom: 'launcher', preferNewSplit: spec.shouldInsert }
-      )
+      ).split
     : undefined;
 
   const id = await createFn();
@@ -706,6 +704,20 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
 ];
 
+/** Router-backed commands are bound once in each host's component owner. */
+export function useCreateCommands(): CreatableBlock[] {
+  const navigate = useNavigate();
+  const quickCalls = useQuickCallsFlag();
+  return [
+    ...CREATABLE_BLOCKS,
+    createCallCommand({
+      navigate,
+      close: () => setCreateMenuOpen(false, false),
+      enabled: () => quickCalls().enabled,
+    }),
+  ];
+}
+
 /**
  * The creatable-block entries a create menu renders, with feature gating
  * applied — the single source of truth shared by the desktop menus and the
@@ -714,8 +726,9 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
  * run it through the same gating.
  */
 export function useCreateMenuBlocks(
-  source: () => CreatableBlock[] = () => CREATABLE_BLOCKS
+  source: () => CreatableBlock[] | undefined = () => undefined
 ): Accessor<CreatableBlock[]> {
+  const commands = useCreateCommands();
   const spreadsheets = useSpreadsheetAccess();
   const snippetsFlag = useFeatureFlag(enableSnippets);
   // Subscribed to rather than left to the block's own `enabled`, which reads
@@ -726,7 +739,7 @@ export function useCreateMenuBlocks(
   return createMemo(() => {
     remindersFlag();
     agentsFlag();
-    return source().filter((block) => {
+    return (source() ?? commands).filter((block) => {
       if (block.blockName === 'spreadsheet') return spreadsheets();
       if (block.blockName === 'snippet') return snippetsFlag().enabled;
       return block.enabled?.() ?? true;
@@ -809,9 +822,9 @@ type LauncherInnerProps = {
 
 export const LauncherInner = (props: LauncherInnerProps) => {
   const hkGroup = createHotkeyGroup();
-  const availableBlocks = useCreateMenuBlocks(
-    () => props.blocks ?? CREATABLE_BLOCKS
-  );
+  const commands = useCreateCommands();
+  const candidates = () => props.blocks ?? commands;
+  const availableBlocks = useCreateMenuBlocks(candidates);
   const sortedBlocks = createMemo(() => sortLauncherBlocks(availableBlocks()));
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchMode = launcherSearchMode;
@@ -841,7 +854,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     item: CreatableBlock | undefined,
     shouldReturnFocus?: boolean
   ) => {
-    if (!item) return false;
+    if (!item || !availableBlocks().includes(item)) return false;
 
     trackLauncherItemUsage(item);
     item.keyDownHandler();
@@ -873,12 +886,15 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     setFocusedIndex(0);
   });
 
-  availableBlocks().forEach((item) => {
+  candidates().forEach((item) => {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
       scopeId: launcherScope,
       description: item.description,
+      condition: () => availableBlocks().includes(item),
+      registrationType: item.registrationType,
+      runWithInputFocused: item.runWithInputFocused,
       keyDownHandler: () => {
         return runLauncherItem(item, false);
       },
@@ -890,6 +906,9 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         hotkey: `shift+${item.hotkey}` as ValidHotkey,
         scopeId: launcherScope,
         description: `${item.description} in new split`,
+        condition: () => availableBlocks().includes(item),
+        registrationType: item.registrationType,
+        runWithInputFocused: item.runWithInputFocused,
         keyDownHandler: () => {
           return runLauncherItem(item);
         },
@@ -901,7 +920,10 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     hotkey: 'c',
     scopeId: launcherScope,
     description: 'Close Launcher',
-    condition: createMenuOpen,
+    condition: () =>
+      createMenuOpen() &&
+      !availableBlocks().some((item) => item.hotkey === 'c'),
+    registrationType: 'add',
     keyDownHandler: () => {
       setCreateMenuOpen(false);
       return true;
@@ -1003,7 +1025,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   return (
     // The shared shell stopped painting its own pane (cmd+k gets one from the
     // app Dialog wrapper); this raw-Kobalte dialog carries it here.
-    <div class="create-menu-pane w-200 max-w-[calc(100vw-16px)] rounded-xl touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)] glass bg-menu-glass [--color-dialog:var(--color-menu-glass)]">
+    <div class="elevated-surface create-menu-pane w-200 max-w-[calc(100vw-16px)] touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)]">
       <div
         aria-hidden="true"
         class="hidden touch:flex h-5 shrink-0 items-center justify-center"
@@ -1017,7 +1039,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         ref={ref}
         tabindex={-1}
       >
-        <CommandMenuShell.Header class="gap-2 px-4 my-1 border-b-0">
+        <CommandMenuShell.Header class="border-b-0">
           <Show
             when={searchMode()}
             fallback={

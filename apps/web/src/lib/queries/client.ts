@@ -44,7 +44,7 @@ if (isPlatform('ios')) {
 
 const buster = import.meta.env.__APP_VERSION__ ?? 'dev';
 
-setupQueryPersistence({
+export const queryPersistence = setupQueryPersistence({
   queryClient,
   scopes: createQueryPersistenceScopes(buster),
 });

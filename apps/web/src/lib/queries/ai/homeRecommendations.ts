@@ -17,7 +17,6 @@ export const recommendedActions = [
   'review',
   'discuss',
 ] as const;
-export type RecommendedAction = (typeof recommendedActions)[number];
 
 /** Surface at most this many items — keep the list short and high-signal. */
 export const MAX_RECOMMENDATIONS = 3;

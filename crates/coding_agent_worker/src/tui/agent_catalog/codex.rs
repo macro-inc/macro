@@ -1,7 +1,13 @@
-use super::{AgentKind, AgentPreset, Availability, CommandLookup, is_launch, npm_adapter};
+use super::npm_adapter::NpmAdapter;
+use super::{AgentKind, AgentPreset, Availability, CommandLookup};
 use crate::config::Harness;
 
-const ADAPTER: &str = "@agentclientprotocol/codex-acp@1.8.0";
+const ADAPTER: NpmAdapter = NpmAdapter {
+    package: "@agentclientprotocol/codex-acp@1.8.0",
+    bin: "codex-acp",
+    cli: "codex",
+    cli_path_env: "CODEX_PATH",
+};
 
 pub(super) struct Codex;
 
@@ -15,10 +21,10 @@ impl AgentPreset for Codex {
     }
 
     fn detect(&self, commands: &dyn CommandLookup) -> Availability {
-        npm_adapter(self, commands, "codex", ADAPTER)
+        ADAPTER.detect(self, commands)
     }
 
     fn recognizes(&self, harness: &Harness) -> bool {
-        is_launch(harness, "npx", &["-y", ADAPTER])
+        ADAPTER.recognizes(harness)
     }
 }

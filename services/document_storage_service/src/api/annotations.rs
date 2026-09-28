@@ -24,6 +24,7 @@ use model_notifications::{
     CommentedOnDocumentMetadata, MentionedInDocumentCommentMetadata, NotificationDocumentSubType,
     RepliedToDocumentCommentThreadMetadata,
 };
+use model_owner::Owner;
 use notification::domain::models::SendNotificationRequestBuilder;
 use tower::ServiceBuilder;
 
@@ -148,7 +149,7 @@ pub(crate) fn compute_notification_recipients(
     mentioned_user_ids: &[String],
     thread_participant_ids: &[String],
     task_assignee_ids: &[String],
-    document_owner: &MacroUserIdStr<'_>,
+    document_owner: &Owner,
     is_reply: bool,
 ) -> NotificationRecipients {
     let mut notified: HashSet<String> = HashSet::new();
@@ -191,13 +192,17 @@ pub(crate) fn compute_notification_recipients(
         }
     }
 
-    // 4. Document owner — only if not sender and not already notified
-    let owner_normalized = document_owner.as_ref().to_string();
-    let owner_is_sender = sender_id.is_some_and(|s| s.as_ref() == owner_normalized);
-    let doc_owner_recipient = if !owner_is_sender && !notified.contains(&owner_normalized) {
-        Some(owner_normalized)
-    } else {
-        None
+    let doc_owner_recipient = match document_owner {
+        Owner::User(user) => {
+            let owner_normalized = user.as_ref().to_string();
+            let owner_is_sender = sender_id.is_some_and(|s| s.as_ref() == owner_normalized);
+            if !owner_is_sender && !notified.contains(&owner_normalized) {
+                Some(owner_normalized)
+            } else {
+                None
+            }
+        }
+        Owner::Bot(_) | Owner::Team(_) => None,
     };
 
     NotificationRecipients {
@@ -255,7 +260,7 @@ pub(crate) struct CommentNotifContext {
     pub thread_id: i64,
     pub document_name: String,
     pub document_id: String,
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     pub file_type: Option<String>,
     pub sub_type: Option<NotificationDocumentSubType>,
     pub sender_id: Option<MacroUserIdStr<'static>>,
@@ -346,7 +351,9 @@ impl CommentNotifContext {
         &self,
     ) -> SendNotificationRequestBuilder<'static, CommentedOnDocumentMetadata> {
         let mut recipient_ids = HashSet::new();
-        recipient_ids.insert(self.owner.clone());
+        if let Owner::User(owner) = &self.owner {
+            recipient_ids.insert(owner.clone());
+        }
 
         SendNotificationRequestBuilder {
             notification_entity: EntityType::Document.with_entity_string(self.document_id.clone()),

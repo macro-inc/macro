@@ -31,6 +31,7 @@ macro_uuid = { path = "../../crates/macro_uuid" }
 mockall = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
+model_owner = { path = "../../crates/model_owner" }
 models_email = { path = "../../crates/models_email" }
 models_permissions = { path = "../../crates/models_permissions" }
 models_properties = { path = "../../crates/models_properties" }

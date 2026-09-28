@@ -29,7 +29,7 @@ use crate::domain::harness::{HarnessReader, ToolFrame};
 use crate::domain::model::{
     AnsweredChoice, AnsweredField, AnsweredValue, ElicitationOption, ElicitationOutcome,
     ElicitationProperty, ElicitationPropertySchema, ElicitationRequest, ElicitationRequestId,
-    ElicitationSchema, MessagePart, PendingElicitation, ToolUseId,
+    ElicitationSchema, MessagePart, PendingElicitation, PendingInteraction, ToolUseId,
 };
 
 impl FoldState {
@@ -120,14 +120,16 @@ impl FoldState {
         // by refusing a second create; the fold mirrors it by never letting a
         // second one take the slot, so a refused request still gets its part
         // (and its `Errored` outcome) without ever being offered to the user.
-        let metadata_changed = if self.metadata.pending_elicitation.is_none() {
-            self.metadata.pending_elicitation = Some(PendingElicitation {
-                request_id: id,
-                turn: self.messages[at.message].id.0,
-                tool_call,
-                message: message_text,
-                request: elicitation_request,
-            });
+        let metadata_changed = if self.metadata.pending_elicitation().is_none() {
+            self.metadata
+                .pending_interactions
+                .push(PendingInteraction::Elicitation(PendingElicitation {
+                    request_id: id,
+                    turn: self.messages[at.message].id.0,
+                    tool_call,
+                    message: message_text,
+                    request: elicitation_request,
+                }));
             true
         } else {
             false
@@ -315,25 +317,13 @@ impl FoldState {
     /// Returns whether the metadata moved.
     pub(super) fn clear_pending_elicitation_if(
         &mut self,
-        matches: impl FnOnce(&PendingElicitation) -> bool,
+        matches: impl Fn(&PendingElicitation) -> bool,
     ) -> bool {
-        match &self.metadata.pending_elicitation {
-            Some(pending) if matches(pending) => {
-                self.metadata.pending_elicitation = None;
-                true
-            }
-            _ => false,
-        }
-    }
-
-    /// After a prompt response: if no turn is open any more, the agent has
-    /// moved past whatever it asked, and nothing should still offer the form.
-    /// The part keeps its `Pending` outcome; only the live pointer clears.
-    pub(super) fn turn_ended_clears_elicitation(&mut self) -> bool {
-        if self.turn.is_some() {
-            return false;
-        }
-        self.clear_pending_elicitation_if(|_| true)
+        let before = self.metadata.pending_interactions.len();
+        self.metadata.pending_interactions.retain(|pending| {
+            !matches!(pending, PendingInteraction::Elicitation(question) if matches(question))
+        });
+        before != self.metadata.pending_interactions.len()
     }
 
     /// Whether the question asked under `request_id` has an outcome. See
@@ -343,14 +333,6 @@ impl FoldState {
             .iter()
             .flat_map(|message| message.parts.iter())
             .any(|part| answered(part, request_id))
-    }
-
-    /// Forget everything about outstanding elicitations: the connection that
-    /// asked is gone and its request ids with it.
-    pub(super) fn forget_elicitations(&mut self) -> bool {
-        self.pending_elicitations.clear();
-        self.completable_elicitations.clear();
-        self.clear_pending_elicitation_if(|_| true)
     }
 }
 

@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/features/block-agent/context/pending-session', () => ({
   startPendingSession: mocks.start,
 }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'viewer-1',
+}));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { replace: mocks.replace } }),
 }));
@@ -40,7 +43,11 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));
 vi.mock('../agents-view/queries/agent-roster-source', () => ({
-  createAgentRosterSource: () => ({ roster: () => [], loading: () => false }),
+  createAgentRosterSource: () => ({
+    roster: () => [],
+    loading: () => false,
+    availabilityLoading: () => false,
+  }),
 }));
 vi.mock('./queries/home-agent-prompt', () => ({
   buildHomeAgentPrompt: mocks.buildPrompt,
@@ -80,7 +87,8 @@ it('forwards the shared composer selection into the common session flow', () => 
     repoBranch: 'feature/home',
   };
   mocks.onStart?.(start);
-  expect(mocks.start).toHaveBeenCalledWith(start);
+  // The viewer rides along so the first prompt is attributed as the log will.
+  expect(mocks.start).toHaveBeenCalledWith({ ...start, userId: 'viewer-1' });
   expect(mocks.replace).toHaveBeenCalledWith({
     next: { type: 'component', id: 'agents-session~agents~pending-session' },
   });

@@ -3,7 +3,7 @@ use std::str::FromStr;
 use super::file_type::FileType;
 use crate::document::FileTypeExt;
 use document_sub_type::DocumentSubType;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use utoipa::ToSchema;
 
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
@@ -97,7 +97,7 @@ pub struct DocumentBasic {
     pub document_id: String,
     pub document_name: String,
     #[schema(value_type = String)]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_type: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

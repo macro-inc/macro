@@ -64,6 +64,10 @@
     "stacks/bulk-upload": {
       "name": "bulk-upload-stack",
     },
+    "stacks/calendar-service": {
+      "name": "calendar-service-stack",
+      "version": "0.0.0",
+    },
     "stacks/call-recording": {
       "name": "call-recording-stack",
       "version": "0.0.0",
@@ -498,6 +502,8 @@
     "bulk-upload-stack": ["bulk-upload-stack@workspace:stacks/bulk-upload"],
 
     "cacache": ["cacache@20.0.4", "", { "dependencies": { "@npmcli/fs": "^5.0.0", "fs-minipass": "^3.0.0", "glob": "^13.0.0", "lru-cache": "^11.1.0", "minipass": "^7.0.3", "minipass-collect": "^2.0.1", "minipass-flush": "^1.0.5", "minipass-pipeline": "^1.2.4", "p-map": "^7.0.2", "ssri": "^13.0.0" } }, "sha512-M3Lab8NPYlZU2exsL3bMVvMrMqgwCnMWfdZbK28bn3pK6APT/Te/I8hjRPNu1uwORY9a1eEQoifXbKPQMfMTOA=="],
+
+    "calendar-service-stack": ["calendar-service-stack@workspace:stacks/calendar-service"],
 
     "call-recording-stack": ["call-recording-stack@workspace:stacks/call-recording"],
 
