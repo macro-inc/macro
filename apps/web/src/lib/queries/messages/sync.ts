@@ -4,6 +4,7 @@ import type {
   MessageListItem,
   MessageParent,
   MessageThread,
+  TimelineActivity,
 } from '@service-storage/messages';
 import { entityMessagesClient } from '@service-storage/messages';
 import { queryClient } from '../client';
@@ -23,40 +24,26 @@ import { getThreadRepliesQueryKey } from './thread-replies';
 import {
   getMessageTimelineQueryKey,
   getMessageTimelineQueryKeyPrefix,
+  insertActivitiesIntoMessageTimeline,
   type MessageTimelineData,
   setMessageTimelineData,
 } from './timeline';
 import { handleCommsTyping } from './typing';
 
-const awaitingInitialActivityRead = new WeakSet<object>();
-
-/** A committed activity must also refresh windows whose initial response is in flight. */
-export function handleTimelineActivityUpdated(parent: MessageParent) {
-  const queries = queryClient.getQueryCache().findAll({
-    queryKey: getMessageTimelineQueryKeyPrefix(parent),
-  });
-  for (const query of queries) {
-    const refetch = () =>
-      queryClient.invalidateQueries({ queryKey: query.queryKey, exact: true });
-    const inFlight = query.promise;
-    if (query.state.data || !inFlight) {
-      void refetch();
-      continue;
-    }
-    if (awaitingInitialActivityRead.has(query)) continue;
-    awaitingInitialActivityRead.add(query);
-    async function afterInitialRead() {
-      try {
-        await inFlight;
-      } catch {
-        // The query owns its error state; the committed event still needs a fresh read.
-      } finally {
-        awaitingInitialActivityRead.delete(query);
-      }
-      await refetch();
-    }
-    void afterInitialRead();
-  }
+/** Committed channel activity, delivered whole so loaded history needs no re-read. */
+export function handleTimelineActivity(event: {
+  channel_id: string;
+  activities: TimelineActivity[];
+}) {
+  queryClient.setQueriesData<MessageTimelineData>(
+    {
+      queryKey: getMessageTimelineQueryKeyPrefix({
+        type: 'channel',
+        id: event.channel_id,
+      }),
+    },
+    (data) => insertActivitiesIntoMessageTimeline(data, event.activities)
+  );
 }
 
 type ThreadStateListener = (

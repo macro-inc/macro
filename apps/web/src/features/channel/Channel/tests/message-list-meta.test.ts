@@ -36,21 +36,39 @@ function createMessage(
   };
 }
 
+const entries = (messages: MessageListItem[]) =>
+  messages.map((message) => ({ type: 'message' as const, message }));
+
 describe('buildChannelMessageListMeta', () => {
-  it('breaks sender grouping and thread rails at system activity', () => {
+  it('counts activity rows and breaks sender runs and rails at them', () => {
     const first = createMessage('m1', '2026-02-20T09:00:00.000Z');
     const second = createMessage('m2', '2026-02-20T09:01:00.000Z');
     second.thread.reply_count = 1;
     const meta = buildChannelMessageListMeta(
-      [first, second],
+      [
+        { type: 'message', message: first },
+        {
+          type: 'activity',
+          activity: { id: 'a1', occurred_at: '2026-02-20T09:00:30.000Z' },
+        },
+        { type: 'message', message: second },
+      ],
       () => false,
-      true,
-      undefined,
-      (m) => m.id === 'm2'
+      true
     );
-    expect(meta.m2.isGroupedWithPrevious).toBe(false);
+    expect(meta['activity:a1']).toMatchObject({
+      index: 1,
+      previousTopLevelCreatedAt: '2026-02-20T09:00:00.000Z',
+      isGroupedWithPrevious: false,
+    });
+    expect(meta.m2).toMatchObject({
+      index: 2,
+      previousTopLevelCreatedAt: '2026-02-20T09:00:30.000Z',
+      isGroupedWithPrevious: false,
+    });
     expect(meta.m1.threadRailBelow).toBeUndefined();
   });
+
   it('sets list index and previous top-level timestamp in order', () => {
     const messages = [
       createMessage('m1', '2026-02-20T09:00:00.000Z'),
@@ -58,7 +76,11 @@ describe('buildChannelMessageListMeta', () => {
       createMessage('m3', '2026-02-21T09:00:00.000Z'),
     ];
 
-    const meta = buildChannelMessageListMeta(messages, () => false, true);
+    const meta = buildChannelMessageListMeta(
+      entries(messages),
+      () => false,
+      true
+    );
 
     expect(meta.m1).toEqual({
       index: 0,
@@ -80,7 +102,7 @@ describe('buildChannelMessageListMeta', () => {
     ];
 
     const meta = buildChannelMessageListMeta(
-      messages,
+      entries(messages),
       (message) => message.id === 'm2' || message.id === 'm3',
       true
     );
@@ -99,7 +121,11 @@ describe('buildChannelMessageListMeta', () => {
       createMessage('m3', '2026-02-20T09:05:01.000Z'),
     ];
 
-    const meta = buildChannelMessageListMeta(messages, () => false, true);
+    const meta = buildChannelMessageListMeta(
+      entries(messages),
+      () => false,
+      true
+    );
 
     expect(meta.m1.isGroupedWithPrevious).toBe(false);
     expect(meta.m2.isGroupedWithPrevious).toBe(true);
@@ -121,7 +147,11 @@ describe('buildChannelMessageListMeta', () => {
       createMessage('m4', '2026-02-20T10:30:00.000Z'),
     ];
 
-    const meta = buildChannelMessageListMeta(messages, () => false, true);
+    const meta = buildChannelMessageListMeta(
+      entries(messages),
+      () => false,
+      true
+    );
 
     // m3 is grouped into the run but owns a thread: the rail passes down
     // through m1 (run header) and m2 to reach it.
@@ -164,7 +194,11 @@ describe('buildChannelMessageListMeta', () => {
       ),
     ];
 
-    const meta = buildChannelMessageListMeta(messages, () => false, true);
+    const meta = buildChannelMessageListMeta(
+      entries(messages),
+      () => false,
+      true
+    );
 
     expect(meta.m2.isGroupedWithPrevious).toBe(false);
     expect(meta.m3.isGroupedWithPrevious).toBe(true);

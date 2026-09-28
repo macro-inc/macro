@@ -24,7 +24,7 @@ import {
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
-import { MessageNonceKeys, messageMutationKey } from './keys';
+import { MessageNonceKeys } from './keys';
 import { senderFromStorageId } from './message-sender';
 import {
   captureDeleteSnapshotForTarget,
@@ -419,7 +419,6 @@ export function useSendMessageMutation(
   const analytics = useAnalytics();
 
   return useMutation(() => ({
-    mutationKey: messageMutationKey,
     gcTime: 0,
     mutationFn: async (vars: SendMessageParams) => {
       // Use optimisticId as nonce - allows server to echo it back for correlation
@@ -487,8 +486,7 @@ export function useSendMessageMutation(
               attachmentsLength: variables.message.attachments?.length ?? 0,
               isThreadReply: threadId !== undefined,
             });
-          // The optimistic post may have fallen outside the loaded window.
-          applyMessage(data, 'posted');
+          applyMessage(data, 'edited');
         },
         onError(error, vars, context) {
           console.error('failed to send message', error);
@@ -539,7 +537,6 @@ export function useDeleteMessageMutation(
   >
 ) {
   return useMutation(() => ({
-    mutationKey: messageMutationKey,
     gcTime: 0,
     mutationFn: async (vars: DeleteMessageParams) => {
       await entityMessagesClient.delete(
@@ -613,7 +610,6 @@ export function usePatchMessageMutation(
   >
 ) {
   return useMutation(() => ({
-    mutationKey: messageMutationKey,
     gcTime: 0,
     mutationFn: async (vars: PatchMessageParams) => {
       return entityMessagesClient.patch(vars.parent, vars.messageID, {

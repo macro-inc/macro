@@ -1,19 +1,25 @@
 import { compareTimelinePositions } from '@core/util/message-timeline';
 import type {
+  MessageCursor,
   MessageListItem,
   MessageTimelineEntry,
   MessageTimelinePage,
 } from '@service-storage/messages';
 import { match } from 'ts-pattern';
 
-export function timelineEntryKey(entry: MessageTimelineEntry): string {
+type KeyedEntry =
+  | { type: 'message'; message: { id: string } }
+  | { type: 'activity'; activity: { id: string } };
+
+/** Row identity; activity ids live in their own namespace. */
+export function timelineEntryKey(entry: KeyedEntry): string {
   return match(entry)
     .with({ type: 'message' }, ({ message }) => message.id)
     .with({ type: 'activity' }, ({ activity }) => `activity:${activity.id}`)
     .exhaustive();
 }
 
-export function timelineEntryPosition(entry: MessageTimelineEntry) {
+function timelineEntryPosition(entry: MessageTimelineEntry) {
   return match(entry)
     .with({ type: 'message' }, ({ message }) => ({
       id: message.id,
@@ -35,7 +41,7 @@ export function timelineMessages(
   );
 }
 
-/** Reconcile live/optimistic entries with a server window; incoming facts win. */
+/** Merge entries newest-first, deduplicated by key; incoming entries win. */
 export function reconcileTimelineEntries(
   existing: MessageTimelineEntry[],
   incoming: MessageTimelineEntry[]
@@ -51,36 +57,28 @@ export function reconcileTimelineEntries(
   );
 }
 
-/** Server reads replace old facts; changes made while reading remain authoritative. */
-export function reconcileTimelineRefresh(
-  before: MessageTimelineEntry[],
-  fresh: MessageTimelineEntry[],
-  live: MessageTimelineEntry[],
-  pending: ReadonlySet<string>
-): MessageTimelineEntry[] {
-  const original = new Map(
-    before.map((entry) => [timelineEntryKey(entry), entry])
-  );
-  const current = new Map(
-    live.map((entry) => [timelineEntryKey(entry), entry])
-  );
-  const removed = new Set(
-    [...original.keys(), ...pending].filter((key) => !current.has(key))
-  );
-  const changed = live.filter((entry) => {
-    const key = timelineEntryKey(entry);
-    const previous = original.get(key);
-    const unchanged =
-      previous?.type === entry.type &&
-      (entry.type === 'message' && previous.type === 'message'
-        ? previous.message === entry.message
-        : entry.type === 'activity' &&
-          previous.type === 'activity' &&
-          previous.activity === entry.activity);
-    return pending.has(key) || !unchanged;
-  });
-  return reconcileTimelineEntries(
-    fresh.filter((entry) => !removed.has(timelineEntryKey(entry))),
-    changed
+function cursorPosition(cursor: MessageCursor) {
+  return { id: cursor.id, createdAt: cursor.created_at };
+}
+
+/** The loaded page whose bounds contain the entry, or -1 outside the loaded span. */
+export function pageIndexForEntry(
+  pages: MessageTimelinePage[],
+  entry: MessageTimelineEntry
+) {
+  const position = timelineEntryPosition(entry);
+  if (
+    !pages.length ||
+    (pages[0].previous_cursor &&
+      compareTimelinePositions(
+        position,
+        cursorPosition(pages[0].previous_cursor)
+      ) > 0)
+  )
+    return -1;
+  return pages.findIndex(
+    (page) =>
+      !page.next_cursor ||
+      compareTimelinePositions(position, cursorPosition(page.next_cursor)) >= 0
   );
 }

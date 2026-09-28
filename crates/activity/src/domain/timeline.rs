@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::models::EntityType;
+use super::models::{Activity, EntityType};
 
 /// A displayable fact returned together with a message page.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,6 +21,20 @@ pub struct TimelineActivity {
     pub action: String,
     /// The action's stored payload.
     pub payload: Option<serde_json::Value>,
+}
+
+impl From<&Activity> for TimelineActivity {
+    /// The same projection a timeline read returns for the stored row.
+    fn from(activity: &Activity) -> Self {
+        let (action, payload) = activity.action.to_columns();
+        Self {
+            id: activity.id,
+            actor_id: activity.actor.as_ref().to_owned(),
+            occurred_at: activity.occurred_at,
+            action: action.to_owned(),
+            payload,
+        }
+    }
 }
 
 /// Selection authorized by the owning timeline's domain service.

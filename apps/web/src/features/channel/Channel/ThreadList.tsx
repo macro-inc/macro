@@ -74,8 +74,6 @@ type ScrollInsets = {
 
 type ThreadListProps = {
   keys: Accessor<string[]>;
-  /** Exact sizes for fixed-height rows before they mount. */
-  estimateSize?: (key: string) => number | undefined;
   children: (item: { id: string }) => JSX.Element;
   initialPosition?: ThreadListInitialPosition;
   onScrollNearTop?: () => void;
@@ -219,8 +217,7 @@ export function ThreadList(props: ThreadListProps) {
     get getItemKey() {
       return getItemKey();
     },
-    estimateSize: (index) =>
-      props.estimateSize?.(props.keys()[index]) ?? BASE_ITEM_SIZE,
+    estimateSize: () => BASE_ITEM_SIZE,
     overscan: OVERSCAN,
     // A restored snapshot or a newly remounted message can have a different
     // height. The default sync path returns cached sizes, exposing the old
@@ -261,10 +258,7 @@ export function ThreadList(props: ThreadListProps) {
               .keys()
               .reduce(
                 (total, key) =>
-                  total +
-                  (initialSizes.get(key) ??
-                    props.estimateSize?.(key) ??
-                    BASE_ITEM_SIZE),
+                  total + (initialSizes.get(key) ?? BASE_ITEM_SIZE),
                 insets().start + insets().end
               )
           : 0,

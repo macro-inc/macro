@@ -20,7 +20,5 @@ export const MessageNonceKeys = {
   MESSAGE: 'message',
   REACTION: 'message-reaction',
 } as const;
-/** Identifies optimistic writes whose cached state a timeline refresh must retain. */
-export const messageMutationKey = ['messages', 'write'] as const;
 export const parentKey = (parent: MessageParent) =>
   `${parent.type}:${parent.id}`;

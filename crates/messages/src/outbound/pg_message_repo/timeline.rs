@@ -6,7 +6,7 @@ impl PgMessageRepository {
         &self,
         parent: &MessageParent,
         query: MessageTimelineQuery,
-    ) -> Result<MessageRootPage, MessageError> {
+    ) -> Result<MessagePage, MessageError> {
         let limit = usize::from(query.limit.unwrap_or(50).clamp(1, 100));
         let (mut rows, more_older, more_newer) = if let Some(id) = query.around {
             // Resolve the root once; message content and references are hydrated
@@ -87,8 +87,9 @@ impl PgMessageRepository {
                 id: r.id,
             });
         let items = self.hydrate_root_rows(rows).await?;
-        Ok(MessageRootPage {
+        Ok(MessagePage {
             items,
+            activity: Vec::new(),
             next_cursor,
             previous_cursor,
         })

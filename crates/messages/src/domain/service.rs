@@ -191,10 +191,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             }
             return self.activity_timeline(&parent, query).await;
         }
-        self.repo
-            .timeline(&parent, query)
-            .await
-            .map(MessagePage::from)
+        self.repo.timeline(&parent, query).await
     }
 
     /// Read a message and its canonical root for navigation.

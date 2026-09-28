@@ -6902,13 +6902,18 @@ export type MessageListItem = Message & {
 };
 
 /**
- * A bounded, newest-first chronological window with shared pagination boundaries.
+ * Bidirectional, bounded timeline page, ordered newest first.
  */
 export type MessagePage = {
     /**
-     * Messages and selected system activity in server-defined order.
+     * System activity within the same window when requested, newest first.
+     * Clients merge it with `items` by `(created_at | occurred_at, id)`.
      */
-    entries: Array<MessageTimelineEntry>;
+    activity?: Array<TimelineActivity>;
+    /**
+     * Root messages with bounded previews.
+     */
+    items: Array<MessageListItem>;
     next_cursor?: null | MessageCursor;
     previous_cursor?: null | MessageCursor;
 };
@@ -6986,23 +6991,6 @@ export type MessageThreadPreview = {
      * Total live reply count.
      */
     reply_count: number;
-};
-
-/**
- * One chronological entry in a parent timeline.
- */
-export type MessageTimelineEntry = {
-    /**
-     * The message and thread state.
-     */
-    message: MessageListItem;
-    type: 'message';
-} | {
-    /**
-     * The recorded activity fact.
-     */
-    activity: TimelineActivity;
-    type: 'activity';
 };
 
 /**

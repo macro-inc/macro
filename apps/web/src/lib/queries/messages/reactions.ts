@@ -9,7 +9,7 @@ import {
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce } from '../nonce';
-import { MessageNonceKeys, messageMutationKey } from './keys';
+import { MessageNonceKeys } from './keys';
 import {
   type MessageTarget,
   patchTargetMessage,
@@ -215,7 +215,6 @@ export function useAddReactionMutation(
   >
 ) {
   return useMutation(() => ({
-    mutationKey: messageMutationKey,
     gcTime: 0,
     mutationFn: async (vars: ReactionParams) => {
       return entityMessagesClient.react(
@@ -286,7 +285,6 @@ export function useRemoveReactionMutation(
   >
 ) {
   return useMutation(() => ({
-    mutationKey: messageMutationKey,
     gcTime: 0,
     mutationFn: async (vars: ReactionParams) => {
       return entityMessagesClient.react(

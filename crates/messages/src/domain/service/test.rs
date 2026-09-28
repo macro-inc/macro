@@ -63,7 +63,7 @@ impl MessageRepository for Repo {
         &self,
         parent: &MessageParent,
         query: MessageTimelineQuery,
-    ) -> Result<MessageRootPage, MessageError> {
+    ) -> Result<MessagePage, MessageError> {
         let included = self.message.parent == *parent
             && (query.ids.is_empty() || query.ids.contains(&self.message.id))
             && query.cursor.as_ref().is_none_or(|cursor| {
@@ -74,7 +74,8 @@ impl MessageRepository for Repo {
                     MessageDirection::Newer => key > boundary,
                 }
             });
-        Ok(MessageRootPage {
+        Ok(MessagePage {
+            activity: vec![],
             items: if included {
                 vec![MessageListItem {
                     message: self.message.clone(),
@@ -1081,7 +1082,7 @@ impl MessageRepository for StrictRepo {
         &self,
         parent: &MessageParent,
         query: MessageTimelineQuery,
-    ) -> Result<MessageRootPage, MessageError> {
+    ) -> Result<MessagePage, MessageError> {
         self.inner.timeline(parent, query).await
     }
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
@@ -1413,14 +1414,14 @@ async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
         )
         .await
         .unwrap();
-    assert_eq!(center.entries.len(), 3);
+    assert_eq!(center.items[0].message.id, repo.message.id);
     assert_eq!(
         center
-            .entries
+            .activity
             .iter()
-            .map(|e| e.position().1)
+            .map(|fact| fact.id)
             .collect::<Vec<_>>(),
-        [facts[2].id, repo.message.id, facts[1].id]
+        [facts[2].id, facts[1].id]
     );
     let older = service
         .timeline(
@@ -1434,8 +1435,15 @@ async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
         )
         .await
         .unwrap();
-    assert_eq!(older.entries.len(), 1);
-    assert_eq!(older.entries[0].position().1, facts[0].id);
+    assert!(older.items.is_empty());
+    assert_eq!(
+        older
+            .activity
+            .iter()
+            .map(|fact| fact.id)
+            .collect::<Vec<_>>(),
+        [facts[0].id]
+    );
     assert!(older.next_cursor.is_none());
     let newer = service
         .timeline(
@@ -1450,7 +1458,7 @@ async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
         )
         .await
         .unwrap();
-    assert_eq!(newer.entries[0].position().1, facts[3].id);
+    assert_eq!(newer.activity[0].id, facts[3].id);
     assert!(newer.previous_cursor.is_none());
     let anchor = service
         .timeline(
@@ -1464,11 +1472,8 @@ async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
         )
         .await
         .unwrap();
-    assert_eq!(anchor.entries.len(), 1);
-    assert!(matches!(
-        anchor.entries[0],
-        MessageTimelineEntry::Message { .. }
-    ));
+    assert_eq!(anchor.items.len(), 1);
+    assert!(anchor.activity.is_empty());
     assert!(anchor.next_cursor.is_some() && anchor.previous_cursor.is_some());
 }
 
@@ -1501,9 +1506,6 @@ async fn system_timeline_rejects_message_filters_and_keeps_discussions_message_o
         )
         .await
         .unwrap();
-    assert_eq!(result.entries.len(), 1);
-    assert!(matches!(
-        result.entries[0],
-        MessageTimelineEntry::Message { .. }
-    ));
+    assert_eq!(result.items.len(), 1);
+    assert!(result.activity.is_empty());
 }

@@ -5,16 +5,20 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { MessageListItem } from './messageListItem';
 import type { MessagePageNextCursor } from './messagePageNextCursor';
 import type { MessagePagePreviousCursor } from './messagePagePreviousCursor';
-import type { MessageTimelineEntry } from './messageTimelineEntry';
+import type { TimelineActivity } from './timelineActivity';
 
 /**
- * A bounded, newest-first chronological window with shared pagination boundaries.
+ * Bidirectional, bounded timeline page, ordered newest first.
  */
 export interface MessagePage {
-  /** Messages and selected system activity in server-defined order. */
-  entries: MessageTimelineEntry[];
+  /** System activity within the same window when requested, newest first.
+Clients merge it with `items` by `(created_at | occurred_at, id)`. */
+  activity?: TimelineActivity[];
+  /** Root messages with bounded previews. */
+  items: MessageListItem[];
   next_cursor?: MessagePageNextCursor;
   previous_cursor?: MessagePagePreviousCursor;
 }

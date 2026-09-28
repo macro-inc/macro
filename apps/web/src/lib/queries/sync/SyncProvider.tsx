@@ -33,7 +33,7 @@ import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
 import {
   handleMessageEvent,
-  handleTimelineActivityUpdated,
+  handleTimelineActivity,
 } from '@queries/messages/sync';
 import {
   applyNotificationStatusUpdate,
@@ -46,7 +46,6 @@ import {
   invalidatePullRequestMentions,
 } from '@queries/storage/pr-mention-sync';
 import { handleTaskDuplicateMatchesUpdated } from '@queries/storage/task-duplicates';
-import type { MessageParent } from '@service-storage/messages';
 import { handleRefreshCalendar } from '../calendar/sync';
 // Side-effect import: registers the scheduled-action live-update websocket
 // listener. Must be imported somewhere that always loads on app start — this
@@ -100,15 +99,11 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       .with({ type: 'contacts_invalidation' }, () => {
         invalidateContacts();
       })
-      .with({ type: 'timeline_activity_updated' }, () => {
-        withParsedWebsocketPayload<MessageParent>(
+      .with({ type: 'timeline_activity' }, () => {
+        withParsedWebsocketPayload(
           data.type,
           data.data,
-          (parent) => {
-            if (parent.type === 'channel' && typeof parent.id === 'string') {
-              handleTimelineActivityUpdated(parent);
-            }
-          }
+          handleTimelineActivity
         );
       })
       .with({ type: 'message_update' }, () => {

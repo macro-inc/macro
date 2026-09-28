@@ -871,8 +871,10 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
-    let (timeline_observer, timeline_delivery) =
-        crate::service::activity::TimelineObserver::new(conn_gateway_client.clone());
+    let (timeline_observer, timeline_delivery) = crate::service::activity::TimelineObserver::new(
+        conn_gateway_client.clone(),
+        PgChannelsRepo::new(db.clone()),
+    );
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
         async move {

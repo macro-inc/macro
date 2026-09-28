@@ -1,20 +1,27 @@
 import { analytics } from '@app/lib/analytics';
 import { compareTimelinePositions } from '@core/util/message-timeline';
 import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
+import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import type {
   Message as EntityMessage,
   MessageListItem,
   MessageParent,
   MessageTimelineEntry,
   MessageTimelinePage,
+  TimelineActivity,
 } from '@service-storage/messages';
 import {
   entityMessagesClient,
   type MessageCursor,
 } from '@service-storage/messages';
-import { useInfiniteQuery, useQuery } from '@tanstack/solid-query';
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/solid-query';
 import { type Accessor, createEffect, on } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
+import { channelKeys } from '../channel/keys';
 import { queryClient } from '../client';
 import { messageKeys } from './keys';
 import {
@@ -30,20 +37,16 @@ import {
   restoreReplyToThreadPreview,
 } from './thread-preview';
 import {
+  pageIndexForEntry,
   reconcileTimelineEntries,
   timelineEntryKey,
   timelineMessages,
 } from './timeline-entries';
 
-import {
-  createChannelTimelineReader,
-  distributeTimelineEntries,
-  type MessageTimelineData,
-  type MessageTimelinePageParam,
-  pageIndexForEntry,
-} from './timeline-refresh';
-
-export type { MessageTimelineData } from './timeline-refresh';
+export type MessageTimelineData = InfiniteData<
+  MessageTimelinePage,
+  MessageTimelinePageParam | null
+>;
 
 type MessageTimelineQueryKey = ReturnType<
   typeof messageKeys.messages
@@ -56,6 +59,11 @@ export type TopLevelMessageSnapshot = {
 export type ThreadPreviewReplySnapshot = {
   previewIndex: number;
   reply: EntityMessage;
+};
+
+type MessageTimelinePageParam = {
+  next_cursor: MessageCursor | null;
+  previous_cursor: MessageCursor | null;
 };
 
 export function isMissingMessageError(error: unknown): boolean {
@@ -99,15 +107,23 @@ export function fetchResolvedChannelMessage(
   });
 }
 
-type MessageTimelineLoadReason = 'activity_refresh' | 'load_around';
+export type MessageTimelineLoadReason =
+  | 'watermark'
+  | 'list_ahead'
+  | 'no_cache'
+  | 'cache_not_at_latest'
+  | 'load_around'
+  | 'delta_overflow'
+  | 'catch_up_error';
 
-type DocumentTimelineWatermark =
+export type MessageTimelineWatermark =
   | { kind: 'no_cache' }
   | { kind: 'cache_not_at_latest' }
   | {
       kind: 'ready';
       after: MessageCursor;
       firstPage: MessageTimelinePage;
+      listAhead: boolean;
     };
 
 function newestRoot(items: MessageListItem[]): MessageListItem | null {
@@ -130,9 +146,9 @@ function newestRoot(items: MessageListItem[]): MessageListItem | null {
  * Describes what a reconnecting timeline can reuse. A cache sitting at the
  * bottom of the conversation only needs the roots newer than its newest one.
  */
-function readDocumentTimelineWatermark(
+export function readMessageTimelineWatermark(
   parent: MessageParent
-): DocumentTimelineWatermark {
+): MessageTimelineWatermark {
   const cached = queryClient.getQueryData<MessageTimelineData>(
     getMessageTimelineQueryKey(parent, null)
   );
@@ -143,14 +159,25 @@ function readDocumentTimelineWatermark(
   if (cached.pageParams[0] != null || firstPage.previous_cursor) {
     return { kind: 'cache_not_at_latest' };
   }
-  const newest = newestRoot(cached.pages.flatMap(timelineMessages));
+  const messages = cached.pages.flatMap(timelineMessages);
+  const newest = newestRoot(messages);
   if (!newest) {
     return { kind: 'no_cache' };
   }
+  const cachedIds = new Set(messages.map((item) => item.id));
+  const list =
+    parent.type === 'channel'
+      ? queryClient.getQueryData<ApiChannelWithLatest[]>(
+          channelKeys.listChannels.queryKey
+        )
+      : undefined;
+  const latestId = list?.find((channel) => channel.id === parent.id)
+    ?.latest_non_thread_message?.message_id;
   return {
     kind: 'ready',
     after: { created_at: newest.created_at, id: newest.id },
     firstPage,
+    listAhead: latestId != null && !cachedIds.has(latestId),
   };
 }
 
@@ -167,13 +194,16 @@ export function mergeCatchUpPage(
 
 function trackMessageTimelineLoad(
   parent: MessageParent,
-  reason: MessageTimelineLoadReason
+  payload: {
+    path: 'catch_up' | 'full';
+    reason: MessageTimelineLoadReason;
+    after?: string;
+  }
 ) {
   if (parent.type !== 'channel') return;
   analytics.track('channel_messages_load', {
     channelId: parent.id,
-    path: 'full',
-    reason,
+    ...payload,
   });
 }
 
@@ -199,73 +229,111 @@ export function messageTimelineQueryOptions(
   parent: MessageParent,
   loadAroundMessageId: string | null
 ) {
-  const channelReader = createChannelTimelineReader(
-    parent,
-    loadAroundMessageId,
-    fetchMessageTimelinePage
-  );
   return {
     queryKey: messageKeys.messages(parent, loadAroundMessageId).queryKey,
-    persister: parent.type === 'channel' ? channelReader.persister : undefined,
     queryFn: async ({
       pageParam,
     }: {
       pageParam: MessageTimelinePageParam | null;
     }) => {
-      if (parent.type === 'channel') {
-        const page = await channelReader.queryFn({ pageParam });
-        trackMessageTimelineLoad(
+      if (pageParam) {
+        return fetchMessageTimelinePage(parent, pageParam, null);
+      }
+      if (loadAroundMessageId) {
+        const page = await fetchMessageTimelinePage(
           parent,
-          loadAroundMessageId ? 'load_around' : 'activity_refresh'
+          null,
+          loadAroundMessageId
         );
+        trackMessageTimelineLoad(parent, {
+          path: 'full',
+          reason: 'load_around',
+        });
         return page;
       }
-      if (pageParam || loadAroundMessageId)
-        return fetchMessageTimelinePage(parent, pageParam, loadAroundMessageId);
-      const watermark = readDocumentTimelineWatermark(parent);
-      if (watermark.kind !== 'ready')
-        return fetchMessageTimelinePage(parent, null, null);
+      const watermark = readMessageTimelineWatermark(parent);
+      if (watermark.kind !== 'ready') {
+        const page = await fetchMessageTimelinePage(parent, null, null);
+        trackMessageTimelineLoad(parent, {
+          path: 'full',
+          reason: watermark.kind,
+        });
+        return page;
+      }
       try {
         const delta = normalizeMessageTimelinePageSenders(
           await entityMessagesClient.list(parent, {
             cursor: watermark.after,
             direction: 'newer',
             limit: 50,
-            include_deleted_threads: true,
+            include_deleted_threads: parent.type === 'document',
+            include_activity: parent.type === 'channel',
           })
         );
-        if (delta.previous_cursor)
-          return fetchMessageTimelinePage(parent, null, null);
+        if (delta.previous_cursor) {
+          const page = await fetchMessageTimelinePage(parent, null, null);
+          trackMessageTimelineLoad(parent, {
+            path: 'full',
+            reason: 'delta_overflow',
+            after: watermark.after.created_at,
+          });
+          return page;
+        }
         const liveFirstPage = queryClient.getQueryData<MessageTimelineData>(
           getMessageTimelineQueryKey(parent, null)
         )?.pages[0];
-        return mergeCatchUpPage(delta, liveFirstPage ?? watermark.firstPage);
+        const merged = mergeCatchUpPage(
+          delta,
+          liveFirstPage ?? watermark.firstPage
+        );
+        trackMessageTimelineLoad(parent, {
+          path: 'catch_up',
+          reason: watermark.listAhead ? 'list_ahead' : 'watermark',
+          after: watermark.after.created_at,
+        });
+        return merged;
       } catch (error) {
         if (
           thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
           thrownResultErrorHasCode(error, 'FORBIDDEN')
-        )
+        ) {
           throw error;
-        return fetchMessageTimelinePage(parent, null, null);
+        }
+        const page = await fetchMessageTimelinePage(parent, null, null);
+        trackMessageTimelineLoad(parent, {
+          path: 'full',
+          reason: 'catch_up_error',
+          after: watermark.after.created_at,
+        });
+        return page;
       }
     },
     initialPageParam: null as MessageTimelinePageParam | null,
     getNextPageParam: (lastPage: MessageTimelinePage) =>
       lastPage.next_cursor
-        ? { next_cursor: lastPage.next_cursor, previous_cursor: null }
+        ? {
+            next_cursor: lastPage.next_cursor,
+            previous_cursor: null,
+          }
         : null,
     getPreviousPageParam: (firstPage: MessageTimelinePage) =>
       firstPage.previous_cursor
-        ? { next_cursor: null, previous_cursor: firstPage.previous_cursor }
+        ? {
+            next_cursor: null,
+            previous_cursor: firstPage.previous_cursor,
+          }
         : null,
     staleTime: Infinity,
     retry: (failureCount: number, error: Error) => {
-      if (loadAroundMessageId && isMissingMessageError(error)) return false;
+      if (loadAroundMessageId && isMissingMessageError(error)) {
+        return false;
+      }
       if (
         thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
         thrownResultErrorHasCode(error, 'FORBIDDEN')
-      )
+      ) {
         return false;
+      }
       return failureCount < 1;
     },
   };
@@ -379,43 +447,22 @@ export function mapMessageTimelineItems(
   updater: (message: MessageListItem) => MessageListItem
 ): MessageTimelineData {
   let didChange = false;
-  let positionChanged = false;
 
   const pages = data.pages.map((page) => {
     let pageChanged = false;
     const entries = page.entries.map((entry) => {
       if (entry.type !== 'message') return entry;
-      const message = entry.message;
-      const nextMessage = updater(message);
-      if (nextMessage !== message) {
-        didChange = true;
-        pageChanged = true;
-        positionChanged ||=
-          nextMessage.id !== message.id ||
-          nextMessage.created_at !== message.created_at;
-      }
-      return nextMessage === message
-        ? entry
-        : { ...entry, message: nextMessage };
+      const message = updater(entry.message);
+      if (message === entry.message) return entry;
+      didChange = true;
+      pageChanged = true;
+      return { ...entry, message };
     });
 
     return pageChanged ? { ...page, entries } : page;
   });
 
-  return didChange
-    ? {
-        ...data,
-        pages: positionChanged
-          ? distributeTimelineEntries(
-              pages,
-              reconcileTimelineEntries(
-                [],
-                pages.flatMap((page) => page.entries)
-              )
-            )
-          : pages,
-      }
-    : data;
+  return didChange ? { ...data, pages } : data;
 }
 
 function filterMessageTimelineItems(
@@ -444,7 +491,6 @@ export function insertTopLevelMessageIntoMessageTimeline(
   message: MessageListItem
 ): MessageTimelineData | undefined {
   if (!data?.pages.length) return data;
-  if (data.pages[0].previous_cursor) return data;
   if (
     data.pages.some((page) =>
       timelineMessages(page).some((item) => item.id === message.id)
@@ -453,21 +499,47 @@ export function insertTopLevelMessageIntoMessageTimeline(
     return data;
   }
 
-  const entry: MessageTimelineEntry = { type: 'message', message };
-  const index = pageIndexForEntry(data.pages, entry);
-  if (index === -1) return data;
+  const [newestPage, ...olderPages] = data.pages;
+
+  // Only insert into cache entries that represent the bottom of the
+  // conversation. If the newest page has a previous_cursor, we're viewing
+  // a mid-conversation slice (e.g. load-around) and prepending here would
+  // place the message in the wrong position — and cause duplicates when
+  // fetchPreviousPage later fetches the same message from the server.
+  if (newestPage.previous_cursor) {
+    return data;
+  }
 
   return {
     ...data,
-    pages: data.pages.map((page, pageIndex) =>
-      pageIndex === index
-        ? {
-            ...page,
-            entries: reconcileTimelineEntries(page.entries, [entry]),
-          }
-        : page
-    ),
+    pages: [
+      {
+        ...newestPage,
+        entries: [{ type: 'message', message }, ...newestPage.entries],
+      },
+      ...olderPages,
+    ],
   };
+}
+
+/** Place live activity within the loaded span; later pages bring the rest. */
+export function insertActivitiesIntoMessageTimeline(
+  data: MessageTimelineData | undefined,
+  activities: TimelineActivity[]
+): MessageTimelineData | undefined {
+  if (!data?.pages.length) return data;
+  let pages = data.pages;
+  for (const activity of activities) {
+    const entry: MessageTimelineEntry = { type: 'activity', activity };
+    const index = pageIndexForEntry(pages, entry);
+    if (index === -1) continue;
+    pages = pages.map((page, pageIndex) =>
+      pageIndex === index
+        ? { ...page, entries: reconcileTimelineEntries(page.entries, [entry]) }
+        : page
+    );
+  }
+  return pages === data.pages ? data : { ...data, pages };
 }
 
 export function removeTopLevelMessageFromMessageTimeline(
@@ -526,29 +598,20 @@ export function restoreTopLevelMessageInMessageTimeline(
     return data;
   }
 
-  const pageIndex = pageIndexForEntry(data.pages, {
+  const entry: MessageTimelineEntry = {
     type: 'message',
     message: snapshot.message,
-  });
-  const page = data.pages[pageIndex];
-  if (!page) return data;
-
-  const entries = reconcileTimelineEntries(page.entries, [
-    {
-      type: 'message',
-      message: snapshot.message,
-    },
-  ]);
-
-  const pages = [...data.pages];
-  pages[pageIndex] = {
-    ...page,
-    entries,
   };
+  const pageIndex = pageIndexForEntry(data.pages, entry);
+  if (pageIndex === -1) return data;
 
   return {
     ...data,
-    pages,
+    pages: data.pages.map((page, index) =>
+      index === pageIndex
+        ? { ...page, entries: reconcileTimelineEntries(page.entries, [entry]) }
+        : page
+    ),
   };
 }
 
@@ -714,55 +777,58 @@ export function softInvalidateMessageTimelineByIds(parent: MessageParent) {
 }
 
 /**
- * Build a single oldest-first message index for display and lookup.
- * Pages arrive newest-first, items within each page are newest-first,
+ * Build a single oldest-first timeline index for display and lookup.
+ * Pages arrive newest-first, entries within each page are newest-first,
  * so we reverse both layers in one pass.
  */
 export function createMessageIndex(
   data: Accessor<MessageTimelineData | undefined>
 ) {
   const buildIndex = () => {
-    const data_ = data();
+    const pages = data()?.pages;
 
-    const pages = data_?.pages;
-
-    const items: MessageListItem[] = [];
     const entries: MessageTimelineEntry[] = [];
+    /** Every rendered row, messages and activity. */
+    const entryKeys: string[] = [];
+    /** Message ids only: selection and navigation skip activity. */
     const keys: string[] = [];
     const byId = new Map<string, MessageListItem>();
+    const activityByKey = new Map<string, TimelineActivity>();
 
-    if (!pages?.length) return { items, entries, keys, byId };
+    if (!pages?.length)
+      return { entries, entryKeys, keys, byId, activityByKey };
 
     const seen = new Set<string>();
     for (let i = pages.length - 1; i >= 0; i--) {
-      const pageItems = pages[i].entries;
-      for (let j = pageItems.length - 1; j >= 0; j--) {
-        const entry = pageItems[j];
+      const pageEntries = pages[i].entries;
+      for (let j = pageEntries.length - 1; j >= 0; j--) {
+        const entry = pageEntries[j];
         const key = timelineEntryKey(entry);
         if (seen.has(key)) continue;
         seen.add(key);
         entries.push(entry);
-        if (entry.type !== 'message') continue;
-        const message = entry.message;
-        items.push(message);
-        keys.push(message.id);
-        byId.set(message.id, message);
+        entryKeys.push(key);
+        if (entry.type === 'activity') {
+          activityByKey.set(key, entry.activity);
+          continue;
+        }
+        keys.push(key);
+        byId.set(key, entry.message);
       }
     }
 
-    return { items, entries, keys, byId };
+    return { entries, entryKeys, keys, byId, activityByKey };
   };
 
   const [messageIndex, setMessageIndex] = createStore(buildIndex());
 
   createEffect(
     on(data, () => {
-      const next = buildIndex();
       // The underlying query can briefly emit undefined data during a refetch
       if (!data()) {
         return;
       }
-      setMessageIndex(reconcile(next));
+      setMessageIndex(reconcile(buildIndex()));
     })
   );
 

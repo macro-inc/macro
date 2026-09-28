@@ -3,14 +3,16 @@ use activity::domain::ports::ActivityObserver;
 use activity::{Activity, Actor};
 use channels::domain::activity::{ChannelAction, ChannelActivity};
 
-fn picture(channel: &str) -> Activity {
+const CHANNEL: Uuid = Uuid::from_u128(10);
+
+fn picture(channel: Uuid, ordinal: u32) -> Activity {
     Activity::from_domain(
-        uuid::Uuid::from_u128(1),
-        0,
+        Uuid::from_u128(1),
+        ordinal,
         Actor::new_from_user("macro|test@example.com".to_owned().try_into().unwrap()),
         None,
         ChannelActivity {
-            channel_id: channel.to_owned(),
+            channel_id: channel.to_string(),
             action: ChannelAction::PictureChanged,
         },
         chrono::Utc::now(),
@@ -18,23 +20,31 @@ fn picture(channel: &str) -> Activity {
 }
 
 #[tokio::test]
-async fn queue_coalesces_one_channels_facts_and_ignores_non_timeline_activity() {
+async fn queue_groups_one_channels_facts_and_ignores_non_timeline_activity() {
     let (sender, mut receiver) = mpsc::channel(QUEUE_CAPACITY);
     let observer = TimelineObserver(sender);
     let ignored = Activity::common(
-        uuid::Uuid::from_u128(2),
+        Uuid::from_u128(2),
         0,
         Actor::new_from_user("macro|test@example.com".to_owned().try_into().unwrap()),
         None,
         activity::EntityType::Channel,
-        "ignored",
+        &CHANNEL.to_string(),
         activity::CommonAction::Edited,
         chrono::Utc::now(),
     );
+    let (first, second) = (picture(CHANNEL, 0), picture(CHANNEL, 1));
     observer
-        .persisted(&[picture("channel"), picture("channel"), ignored])
+        .persisted(&[first.clone(), second.clone(), ignored])
         .await;
-    assert_eq!(receiver.try_recv().unwrap(), "channel");
+    let (channel_id, activities) = receiver.try_recv().unwrap();
+    assert_eq!(channel_id, CHANNEL);
+    assert_eq!(
+        activities.iter().map(|a| a.id).collect::<Vec<_>>(),
+        [first.id, second.id]
+    );
+    assert_eq!(activities[0].action, "picture_changed");
+    assert_eq!(activities[0].actor_id, "macro|test@example.com");
     assert!(receiver.try_recv().is_err());
 }
 
@@ -42,17 +52,17 @@ async fn queue_coalesces_one_channels_facts_and_ignores_non_timeline_activity() 
 async fn full_or_closed_delivery_queue_never_blocks_persistence() {
     let (sender, receiver) = mpsc::channel(1);
     let observer = TimelineObserver(sender);
-    observer.persisted(&[picture("first")]).await;
+    observer.persisted(&[picture(CHANNEL, 0)]).await;
     tokio::time::timeout(
         std::time::Duration::from_millis(100),
-        observer.persisted(&[picture("overflow")]),
+        observer.persisted(&[picture(Uuid::from_u128(11), 0)]),
     )
     .await
     .unwrap();
     drop(receiver);
     tokio::time::timeout(
         std::time::Duration::from_millis(100),
-        observer.persisted(&[picture("closed")]),
+        observer.persisted(&[picture(Uuid::from_u128(12), 0)]),
     )
     .await
     .unwrap();

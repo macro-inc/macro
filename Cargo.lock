@@ -10873,6 +10873,7 @@ dependencies = [
  "chrono",
  "connection_gateway_client",
  "entity_access",
+ "futures",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",

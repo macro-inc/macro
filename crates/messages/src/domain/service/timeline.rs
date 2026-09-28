@@ -1,27 +1,65 @@
 //! Merge independently owned, bounded sources under one chronological cursor.
 use super::*;
 use activity::domain::timeline::{ActivityTimelineQuery, TimelineActivity};
+use chrono::{DateTime, Utc};
 
 #[cfg(test)]
 mod test;
 
-fn page(mut entries: Vec<MessageTimelineEntry>, more_older: bool, more_newer: bool) -> MessagePage {
+/// A message or activity positioned on the shared `(timestamp, id)` keyset.
+enum Entry {
+    Message(Box<MessageListItem>),
+    Activity(TimelineActivity),
+}
+
+impl Entry {
+    fn position(&self) -> (DateTime<Utc>, Uuid) {
+        match self {
+            Self::Message(message) => (message.message.created_at, message.message.id),
+            Self::Activity(activity) => (activity.occurred_at, activity.id),
+        }
+    }
+
+    fn cursor(&self) -> MessageCursor {
+        let (created_at, id) = self.position();
+        MessageCursor { created_at, id }
+    }
+}
+
+fn entries(page: MessagePage) -> Vec<Entry> {
+    page.items
+        .into_iter()
+        .map(|message| Entry::Message(Box::new(message)))
+        .chain(page.activity.into_iter().map(Entry::Activity))
+        .collect()
+}
+
+fn page(mut entries: Vec<Entry>, more_older: bool, more_newer: bool) -> MessagePage {
     entries.sort_by_key(|entry| std::cmp::Reverse(entry.position()));
     let next_cursor = more_older
-        .then(|| entries.last().map(MessageTimelineEntry::cursor))
+        .then(|| entries.last().map(Entry::cursor))
         .flatten();
     let previous_cursor = more_newer
-        .then(|| entries.first().map(MessageTimelineEntry::cursor))
+        .then(|| entries.first().map(Entry::cursor))
         .flatten();
+    let mut items = Vec::new();
+    let mut activity = Vec::new();
+    for entry in entries {
+        match entry {
+            Entry::Message(message) => items.push(*message),
+            Entry::Activity(fact) => activity.push(fact),
+        }
+    }
     MessagePage {
-        entries,
+        items,
+        activity,
         next_cursor,
         previous_cursor,
     }
 }
 
 fn merge(
-    messages: MessageRootPage,
+    messages: MessagePage,
     activities: Vec<TimelineActivity>,
     query: &MessageTimelineQuery,
 ) -> MessagePage {
@@ -32,13 +70,9 @@ fn merge(
     } else {
         messages.next_cursor.is_some()
     };
-    let mut merged = MessagePage::from(messages).entries;
-    merged.extend(
-        activities
-            .into_iter()
-            .map(|activity| MessageTimelineEntry::Activity { activity }),
-    );
-    merged.sort_by_key(MessageTimelineEntry::position);
+    let mut merged = entries(messages);
+    merged.extend(activities.into_iter().map(Entry::Activity));
+    merged.sort_by_key(Entry::position);
     if !newer {
         merged.reverse();
     }
@@ -82,16 +116,24 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 id: anchor.message.id,
             };
             query.cursor = Some(cursor);
-            query.direction = MessageDirection::Older;
-            let before = self.activity_side(parent, query.clone()).await?;
-            query.direction = MessageDirection::Newer;
-            let after = self.activity_side(parent, query.clone()).await?;
+            let older = MessageTimelineQuery {
+                direction: MessageDirection::Older,
+                ..query.clone()
+            };
+            let newer = MessageTimelineQuery {
+                direction: MessageDirection::Newer,
+                ..query.clone()
+            };
+            let (before, after) = futures::try_join!(
+                self.activity_side(parent, older),
+                self.activity_side(parent, newer)
+            )?;
             let before_more = before.next_cursor.is_some();
             let after_more = after.previous_cursor.is_some();
-            let mut before = before.entries;
-            let mut after = after.entries;
+            let mut before = entries(before);
+            let mut after = entries(after);
             before.sort_by_key(|entry| std::cmp::Reverse(entry.position()));
-            after.sort_by_key(MessageTimelineEntry::position);
+            after.sort_by_key(Entry::position);
             let remaining = usize::from(query.limit.unwrap_or(50)) - 1;
             let take_before = before.len().min(remaining / 2);
             let take_after = after.len().min(remaining - take_before);
@@ -100,9 +142,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             let more_newer = after_more || after.len() > take_after;
             before.truncate(take_before);
             after.truncate(take_after);
-            before.push(MessageTimelineEntry::Message {
-                message: Box::new(anchor),
-            });
+            before.push(Entry::Message(Box::new(anchor)));
             before.extend(after);
             return Ok(page(before, more_older, more_newer));
         }
@@ -126,10 +166,14 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             newer: matches!(query.direction, MessageDirection::Newer),
             limit: query.limit.unwrap_or(50) + 1,
         };
-        let messages = self.repo.timeline(parent, query.clone()).await?;
-        let activities = activity.read(activity_query).await.map_err(|error| {
-            MessageError::Repository(rootcause::report!("activity timeline read failed: {error}"))
-        })?;
+        let (messages, activities) =
+            futures::try_join!(self.repo.timeline(parent, query.clone()), async {
+                activity.read(activity_query).await.map_err(|error| {
+                    MessageError::Repository(rootcause::report!(
+                        "activity timeline read failed: {error}"
+                    ))
+                })
+            })?;
         Ok(merge(messages, activities, &query))
     }
 }

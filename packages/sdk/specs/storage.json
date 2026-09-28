@@ -24824,15 +24824,22 @@
       },
       "MessagePage": {
         "type": "object",
-        "description": "A bounded, newest-first chronological window with shared pagination boundaries.",
-        "required": ["entries"],
+        "description": "Bidirectional, bounded timeline page, ordered newest first.",
+        "required": ["items"],
         "properties": {
-          "entries": {
+          "activity": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/MessageTimelineEntry"
+              "$ref": "#/components/schemas/TimelineActivity"
             },
-            "description": "Messages and selected system activity in server-defined order."
+            "description": "System activity within the same window when requested, newest first.\nClients merge it with `items` by `(created_at | occurred_at, id)`."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageListItem"
+            },
+            "description": "Root messages with bounded previews."
           },
           "next_cursor": {
             "oneOf": [
@@ -24964,41 +24971,6 @@
             "description": "Total live reply count."
           }
         }
-      },
-      "MessageTimelineEntry": {
-        "oneOf": [
-          {
-            "type": "object",
-            "description": "A root message with its bounded thread preview.",
-            "required": ["message", "type"],
-            "properties": {
-              "message": {
-                "$ref": "#/components/schemas/MessageListItem",
-                "description": "The message and thread state."
-              },
-              "type": {
-                "type": "string",
-                "enum": ["message"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A system event from the activity owner.",
-            "required": ["activity", "type"],
-            "properties": {
-              "activity": {
-                "$ref": "#/components/schemas/TimelineActivity",
-                "description": "The recorded activity fact."
-              },
-              "type": {
-                "type": "string",
-                "enum": ["activity"]
-              }
-            }
-          }
-        ],
-        "description": "One chronological entry in a parent timeline."
       },
       "MessageTimelineQuery": {
         "type": "object",

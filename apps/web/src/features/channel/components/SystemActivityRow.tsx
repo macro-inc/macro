@@ -22,7 +22,7 @@ const ACTIVITY_ICONS = {
   unknown: PencilIcon,
 } satisfies Record<SystemActivity['action']['kind'], typeof PencilIcon>;
 
-/** Names and durations can settle without changing this row's reserved height. */
+/** One-line system activity; long descriptions truncate with a tooltip. */
 export function SystemActivityRow(props: {
   event: SystemActivity;
   actorName: string;
@@ -34,7 +34,7 @@ export function SystemActivityRow(props: {
     `${props.actorName} ${describeSystemActivity(props.event, props.participantName)}`;
   return (
     <div
-      class="h-9 min-h-9 flex items-center gap-2 pl-(--message-padding-x) pr-2 text-sm text-ink-muted"
+      class="h-9 flex items-center gap-2 pl-(--message-padding-x) pr-2 text-sm text-ink-muted"
       data-system-activity={props.event.id}
     >
       <span

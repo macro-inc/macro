@@ -578,7 +578,7 @@ impl MessageRepository for PgMessageRepository {
         &self,
         parent: &MessageParent,
         query: MessageTimelineQuery,
-    ) -> Result<MessageRootPage, MessageError> {
+    ) -> Result<MessagePage, MessageError> {
         self.read_timeline(parent, query).await
     }
 

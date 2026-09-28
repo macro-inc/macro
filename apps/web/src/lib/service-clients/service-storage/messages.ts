@@ -1,13 +1,16 @@
+import { compareTimelinePositions } from '@core/util/message-timeline';
 import { throwOnErr } from '@core/util/result';
 import { dssFetch } from './client';
 import type { Message as StoredMessage } from './generated/schemas/message';
 import type { MessageCursor } from './generated/schemas/messageCursor';
+import type { MessagePage } from './generated/schemas/messagePage';
 import type { MessageParent } from './generated/schemas/messageParent';
 import type { MessageThread } from './generated/schemas/messageThread';
 import type { PostMessage } from './generated/schemas/postMessage';
 import type { ReferencedThreadPage } from './generated/schemas/referencedThreadPage';
 import type { ThreadPatch } from './generated/schemas/threadPatch';
 import type { ThreadState } from './generated/schemas/threadState';
+import type { TimelineActivity } from './generated/schemas/timelineActivity';
 
 export type { MessageParent, MessageThread, PostMessage, ThreadPatch };
 export type Message = StoredMessage & {
@@ -21,21 +24,15 @@ export type MessageListItem =
   import('./generated/schemas/messageListItem').MessageListItem & {
     sender?: import('./generated/schemas/apiMessageSender').ApiMessageSender;
   };
-export type MessageTimelinePage = Omit<
-  import('./generated/schemas/messagePage').MessagePage,
-  'entries'
-> & { entries: MessageTimelineEntry[] };
 export type MessageTimelineEntry =
-  | (Extract<
-      import('./generated/schemas/messageTimelineEntry').MessageTimelineEntry,
-      { type: 'message' }
-    > & { message: MessageListItem })
-  | Extract<
-      import('./generated/schemas/messageTimelineEntry').MessageTimelineEntry,
-      { type: 'activity' }
-    >;
+  | { type: 'message'; message: MessageListItem }
+  | { type: 'activity'; activity: TimelineActivity };
+/** A page as the app reads it: messages and activity in one newest-first list. */
+export type MessageTimelinePage = Omit<MessagePage, 'items' | 'activity'> & {
+  entries: MessageTimelineEntry[];
+};
 export type { MessageTimelineQuery } from './generated/schemas/messageTimelineQuery';
-export type { TimelineActivity } from './generated/schemas/timelineActivity';
+export type { TimelineActivity };
 
 import type { MessageTimelineQuery } from './generated/schemas/messageTimelineQuery';
 
@@ -56,10 +53,39 @@ async function request<T extends object>(
   );
 }
 
+/** Interleave the page's two newest-first lists by timeline position. */
+export function toTimelinePage({
+  items,
+  activity = [],
+  ...cursors
+}: MessagePage): MessageTimelinePage {
+  const messages = items.map(
+    (message): MessageTimelineEntry => ({ type: 'message', message })
+  );
+  const entries: MessageTimelineEntry[] = [];
+  let next = 0;
+  for (const fact of activity) {
+    const position = { id: fact.id, createdAt: fact.occurred_at };
+    while (
+      next < messages.length &&
+      compareTimelinePositions(
+        { id: items[next].id, createdAt: items[next].created_at },
+        position
+      ) > 0
+    )
+      entries.push(messages[next++]);
+    entries.push({ type: 'activity', activity: fact });
+  }
+  entries.push(...messages.slice(next));
+  return { ...cursors, entries };
+}
+
 export const entityMessagesClient = {
-  list(parent: MessageParent, selection: MessageTimelineQuery = {}) {
-    return request<MessageTimelinePage>(
-      `${path(parent)}?${new URLSearchParams({ selection: JSON.stringify(selection) })}`
+  async list(parent: MessageParent, selection: MessageTimelineQuery = {}) {
+    return toTimelinePage(
+      await request<MessagePage>(
+        `${path(parent)}?${new URLSearchParams({ selection: JSON.stringify(selection) })}`
+      )
     );
   },
   references(parent: MessageParent, cursor?: MessageCursor | null) {

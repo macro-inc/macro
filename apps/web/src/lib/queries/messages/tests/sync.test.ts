@@ -32,7 +32,7 @@ import {
   applyMessage,
   applyThreadState,
   handleMessageEvent,
-  handleTimelineActivityUpdated,
+  handleTimelineActivity,
 } from '../sync';
 import {
   getThreadRepliesQueryKey,
@@ -692,35 +692,62 @@ describe.each(['channel', 'document'] as const)(
   }
 );
 
-describe('activity arriving during initial reads', () => {
-  it.each([null, 'anchor'])(
-    'refreshes after the pending window resolves (%s)',
-    async (around) => {
-      const parent: MessageParent = { type: 'channel', id: 'pending-activity' };
-      const key = getMessageTimelineQueryKey(parent, around);
-      let resolveFetch!: (data: MessageTimelineData) => void;
-      const fetching = testQueryClient.fetchQuery({
-        queryKey: key,
-        queryFn: () =>
-          new Promise<MessageTimelineData>((resolve) => {
-            resolveFetch = resolve;
-          }),
-      });
-      const invalidate = vi.spyOn(testQueryClient, 'invalidateQueries');
-      handleTimelineActivityUpdated(parent);
-      handleTimelineActivityUpdated(parent);
-      expect(invalidate).not.toHaveBeenCalled();
-      resolveFetch({
-        pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
-        pageParams: [null],
-      });
-      await fetching;
-      await vi.waitFor(() =>
-        expect(invalidate).toHaveBeenCalledExactlyOnceWith({
-          queryKey: key,
-          exact: true,
-        })
+describe('live timeline activity', () => {
+  const parent: MessageParent = { type: 'channel', id: 'live-activity' };
+  const root = (id: string, created_at: string) => ({
+    type: 'message' as const,
+    message: { ...item(parent), id, created_at },
+  });
+  const activity = {
+    id: 'renamed',
+    actor_id: 'macro|a@example.com',
+    occurred_at: '2026-09-09T00:00:01Z',
+    action: 'renamed',
+    payload: { to: 'Planning' },
+  };
+  const keys = (key: readonly unknown[]) =>
+    testQueryClient
+      .getQueryData<MessageTimelineData>(key)!
+      .pages.flatMap((page) =>
+        page.entries.map((entry) =>
+          entry.type === 'message'
+            ? entry.message.id
+            : `activity:${entry.activity.id}`
+        )
       );
-    }
-  );
+
+  it('places activity by position in windows that contain it', () => {
+    const latest = getMessageTimelineQueryKey(parent);
+    const history = getMessageTimelineQueryKey(parent, 'older');
+    testQueryClient.setQueryData<MessageTimelineData>(latest, {
+      pageParams: [null],
+      pages: [
+        {
+          entries: [
+            root('newer', '2026-09-09T00:00:02Z'),
+            root('older', '2026-09-09T00:00:00Z'),
+          ],
+          next_cursor: null,
+          previous_cursor: null,
+        },
+      ],
+    });
+    // A load-around window whose newest loaded row predates the activity.
+    testQueryClient.setQueryData<MessageTimelineData>(history, {
+      pageParams: [null],
+      pages: [
+        {
+          entries: [root('older', '2026-09-09T00:00:00Z')],
+          next_cursor: null,
+          previous_cursor: { id: 'older', created_at: '2026-09-09T00:00:00Z' },
+        },
+      ],
+    });
+
+    handleTimelineActivity({ channel_id: parent.id, activities: [activity] });
+    handleTimelineActivity({ channel_id: parent.id, activities: [activity] });
+
+    expect(keys(latest)).toEqual(['newer', 'activity:renamed', 'older']);
+    expect(keys(history)).toEqual(['older']);
+  });
 });
