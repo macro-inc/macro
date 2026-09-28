@@ -8,8 +8,8 @@ use axum::{
 };
 use entity_registry::{NonUserOwners, resolve_creation_principal};
 use macro_authorization::{
-    MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationRejection,
-    MacroAuthorizationService, MacroAuthorizationState, UserOrBot, UserOrBotAuthorization,
+    AnyPrincipal, MacroAuthorizationExtractor, MacroAuthorizationRejection,
+    MacroAuthorizationService, MacroAuthorizationState,
 };
 use model_owner::CreationPrincipal;
 
@@ -34,20 +34,17 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let caller =
-            MacroAuthorizationExtractor::<Auth, UserOrBot>::from_request_parts(parts, state)
+            MacroAuthorizationExtractor::<Auth, AnyPrincipal>::from_request_parts(parts, state)
                 .await?;
-        let authorization = match caller.authorization {
-            UserOrBotAuthorization::User(user) => MacroAuthorization::User(user),
-            UserOrBotAuthorization::Bot(bot) => MacroAuthorization::Bot(bot),
-        };
-        let principal = resolve_creation_principal(&authorization, NonUserOwners::from_ref(state))
-            .map_err(|error| {
-                tracing::info!(%error, "caller cannot create documents");
-                MacroAuthorizationRejection {
-                    status: StatusCode::FORBIDDEN,
-                    message: "forbidden".into(),
-                }
-            })?;
+        let principal =
+            resolve_creation_principal(&caller.authorization, NonUserOwners::from_ref(state))
+                .map_err(|error| {
+                    tracing::info!(%error, "caller cannot create documents");
+                    MacroAuthorizationRejection {
+                        status: StatusCode::FORBIDDEN,
+                        message: "forbidden".into(),
+                    }
+                })?;
         Ok(Self {
             principal,
             _auth: PhantomData,
