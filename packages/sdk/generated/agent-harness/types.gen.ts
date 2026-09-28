@@ -476,7 +476,7 @@ export type ChangedFileDto = {
 };
 
 /**
- * One capture of a session's changes.
+ * One changeset: the files a patch touches and what happened to each.
  *
  * Clients deserialize this, so both derives are used.
  */
@@ -506,11 +506,11 @@ export type ChangesetDto = {
      */
     head: GitRefDto;
     /**
-     * The capture's id; changes with every capture.
+     * The changeset's id; a different id means different changes.
      */
     id: string;
     /**
-     * Size of the patch `GET .../changes/patch` serves; zero when nothing
+     * Size of the patch the matching patch route serves; zero when nothing
      * changed.
      */
     patchBytes: number;
@@ -529,7 +529,7 @@ export type ChangesetDto = {
 };
 
 /**
- * The source of the captured diff, on the wire.
+ * The source of a changeset's diff, on the wire.
  */
 export type ChangesetSourceDto = 'github_pull_request';
 

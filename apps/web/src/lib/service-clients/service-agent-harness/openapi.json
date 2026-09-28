@@ -2398,7 +2398,7 @@
       },
       "ChangesetDto": {
         "type": "object",
-        "description": "One capture of a session's changes.\n\nClients deserialize this, so both derives are used.",
+        "description": "One changeset: the files a patch touches and what happened to each.\n\nClients deserialize this, so both derives are used.",
         "required": [
           "id",
           "source",
@@ -2447,12 +2447,12 @@
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "The capture's id; changes with every capture."
+            "description": "The changeset's id; a different id means different changes."
           },
           "patchBytes": {
             "type": "integer",
             "format": "int64",
-            "description": "Size of the patch `GET .../changes/patch` serves; zero when nothing\nchanged.",
+            "description": "Size of the patch the matching patch route serves; zero when nothing\nchanged.",
             "minimum": 0
           },
           "repository": {
@@ -2471,7 +2471,7 @@
       },
       "ChangesetSourceDto": {
         "type": "string",
-        "description": "The source of the captured diff, on the wire.",
+        "description": "The source of a changeset's diff, on the wire.",
         "enum": ["github_pull_request"]
       },
       "ChannelSharePermission": {
