@@ -12,7 +12,6 @@ import { useBlockId } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
-import { whenSettled } from '@core/util/whenSettled';
 import { formatDateAndTime } from '@entity';
 import CopyIcon from '@phosphor/copy.svg';
 import RenameIcon from '@phosphor/pencil-line.svg';
@@ -28,17 +27,20 @@ import {
 } from '@queries/agent-schedule/schedules';
 import { getCronTrigger } from '@queries/agent-schedule/triggers';
 import { useChatQuery } from '@queries/chat';
-import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
 import {
+  createEffect,
   createMemo,
   createSignal,
   For,
   Match,
+  on,
   onMount,
   Show,
   Switch,
 } from 'solid-js';
+import { createRoutineAutosave } from '../primitives/routine-autosave';
+import { RoutineExecutionPicker } from '../routine-execution-picker';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
 import { AutomationRenameModal } from './AutomationRenameModal';
 import { AutomationTimePicker } from './AutomationTimePicker';
@@ -55,6 +57,10 @@ import {
   WEEKDAY_OPTIONS,
 } from './automationUtils';
 import type { ScheduleDraft } from './types';
+
+type SaveIntent =
+  | { type: 'edit'; draft: ScheduleDraft }
+  | { type: 'pause'; draft: ScheduleDraft };
 
 type HistoryRecord = {
   id?: string | null;
@@ -145,7 +151,7 @@ export function Automation() {
 
   const schedulesQuery = useSchedulesQuery(() => true);
   const schedule = createMemo(() =>
-    !schedulesQuery.isPending
+    schedulesQuery.isSuccess || schedulesQuery.isError
       ? schedulesQuery.data?.find((item) => item.id === scheduleId)
       : undefined
   );
@@ -183,35 +189,69 @@ export function Automation() {
     return null;
   });
 
-  const updateMutation = useUpdateScheduleMutation({
-    onError: (error) =>
-      toast.alert('Failed to update automation', {
-        subtext: getErrorMessage(error),
-      }),
+  const updateMutation = useUpdateScheduleMutation();
+  const autosave = createRoutineAutosave<SaveIntent>(async (intent) => {
+    const previous = schedule();
+    if (!previous || !getCronTrigger(previous)) {
+      throw new Error('This routine is no longer editable.');
+    }
+    const body =
+      intent.type === 'pause'
+        ? {
+            name: previous.name,
+            trigger: previous.trigger,
+            kind: previous.kind,
+            task: previous.task,
+            enabled: false,
+          }
+        : draftToUpdateBody(intent.draft, previous);
+    if (!body) throw new Error('Choose a valid execution target.');
+    if (intent.type === 'pause' && state() === intent.draft) {
+      // A preceding write may have changed the saved configuration while queued.
+      setRawState(draftFromSchedule({ ...previous, enabled: false }));
+    }
+    await updateMutation.mutateAsync({ scheduleId, body });
   });
 
-  const save = () => {
-    if (formError()) return;
-    const d = state();
-    const previous = schedule();
-    if (!d || !previous) return;
-    const body = draftToUpdateBody(d, previous);
-    if (!body) return;
-    updateMutation.mutate({ scheduleId, body });
-  };
-
-  const debouncedSave = debounce(save, 300);
-
-  const setState = (update: (prev: ScheduleDraft) => ScheduleDraft) => {
+  function setState(update: (prev: ScheduleDraft) => ScheduleDraft): void {
     const current = state();
-    if (!current || !cronTrigger()) return;
+    if (!current || !cronTrigger() || isRunning()) return;
     const next = update(current);
     setRawState(next);
     if (next.name !== current.name) {
       panel.handle.setDisplayName(next.name);
     }
-    debouncedSave();
-  };
+    autosave.queue(formError() ? undefined : { type: 'edit', draft: next });
+  }
+
+  function toggleEnabled(): void {
+    const previous = schedule();
+    if (!previous || !cronTrigger()) return;
+    if (!isRunning()) {
+      setState((current) => ({ ...current, enabled: !current.enabled }));
+      return;
+    }
+    // A running action only accepts disabling with its exact saved configuration.
+    const saved = draftFromSchedule(previous);
+    if (!saved || !previous.enabled) return;
+    const paused = { ...saved, enabled: false };
+    setRawState(paused);
+    autosave.queue({ type: 'pause', draft: paused });
+  }
+
+  function runNow(): void {
+    if (
+      !cronTrigger() ||
+      !state() ||
+      formError() ||
+      autosave.dirty() ||
+      autosave.saving() ||
+      runNowMutation.isPending ||
+      isRunning()
+    )
+      return;
+    runNowMutation.mutate({ scheduleId });
+  }
 
   function initializeDraft(): void {
     const current = schedule();
@@ -220,7 +260,15 @@ export function Automation() {
     panel.handle.setDisplayName(current.name);
   }
 
-  whenSettled(schedulesQuery, initializeDraft, initializeDraft);
+  // Only entering/leaving cron editing resets the draft, never save responses.
+  const cronEditable = createMemo(() => Boolean(cronTrigger()));
+  createEffect(
+    on(cronEditable, (editable) => {
+      autosave.cancel();
+      if (editable) initializeDraft();
+      else setRawState(undefined);
+    })
+  );
 
   const historyQuery = useScheduleHistoryQuery(
     () => scheduleId,
@@ -389,8 +437,14 @@ export function Automation() {
                   variant="accent"
                   size="sm"
                   class="cursor-default"
-                  disabled={runNowMutation.isPending || isRunning()}
-                  onClick={() => runNowMutation.mutate({ scheduleId })}
+                  disabled={
+                    runNowMutation.isPending ||
+                    isRunning() ||
+                    autosave.dirty() ||
+                    autosave.saving() ||
+                    Boolean(formError())
+                  }
+                  onClick={runNow}
                 >
                   Run Now
                 </Button>
@@ -398,12 +452,8 @@ export function Automation() {
                   variant="outline"
                   size="sm"
                   class="cursor-default"
-                  onClick={() =>
-                    setState((current) => ({
-                      ...current,
-                      enabled: !current.enabled,
-                    }))
-                  }
+                  disabled={isRunning() && !d().enabled}
+                  onClick={toggleEnabled}
                 >
                   {d().enabled ? 'Pause' : 'Resume'}
                 </Button>
@@ -429,6 +479,21 @@ export function Automation() {
                     </span>
                   </Show>
                 </div>
+              </div>
+
+              <div class="grid gap-1.5">
+                <h1 class="text-sm font-semibold">Execution target</h1>
+                <RoutineExecutionPicker
+                  target={d().target}
+                  onChange={(target) =>
+                    setState((current) => ({ ...current, target }))
+                  }
+                />
+                <Show when={isRunning()}>
+                  <p class="text-xs text-ink-muted">
+                    Configuration cannot be changed while running.
+                  </p>
+                </Show>
               </div>
 
               <div class="grid gap-1.5">
@@ -552,6 +617,19 @@ export function Automation() {
                   }
                 />
               </div>
+
+              <Show when={autosave.error()}>
+                <div role="alert" class="text-xs text-failure">
+                  Changes not saved. {getErrorMessage(autosave.error())}
+                  <button
+                    type="button"
+                    class="ml-2 underline"
+                    onClick={autosave.retry}
+                  >
+                    Retry save
+                  </button>
+                </div>
+              </Show>
 
               <Show when={formError()}>
                 {(message) => (

@@ -2,6 +2,7 @@ import type { ScheduledAction } from '@service-scheduled-action/generated/schema
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type JSX, type Setter } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RoutineTarget } from '../core/routine-target';
 import { Automation } from './Automation';
 
 const mocks = vi.hoisted(() => ({
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   openWithSplit: vi.fn(),
   setDisplayName: vi.fn(),
   changePrompt: (_value: string): void => {},
+  changeTarget: (_target: RoutineTarget): void => {},
   rename: (_value: string): void => {},
   duplicate: (): void => {},
 }));
@@ -84,6 +86,19 @@ vi.mock('./AutomationPromptEditor', () => ({
     );
   },
 }));
+vi.mock('../routine-execution-picker', () => ({
+  RoutineExecutionPicker: (props: {
+    target: RoutineTarget;
+    onChange: (target: RoutineTarget) => void;
+  }) => {
+    mocks.changeTarget = props.onChange;
+    return (
+      <output aria-label="Execution target">
+        {JSON.stringify(props.target)}
+      </output>
+    );
+  },
+}));
 vi.mock('./AutomationTimePicker', () => ({ AutomationTimePicker: () => null }));
 vi.mock('@ui', () => ({
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
@@ -124,7 +139,7 @@ vi.mock('@queries/agent-schedule/schedules', () => ({
       },
     ],
   }),
-  useUpdateScheduleMutation: () => ({ mutate: mocks.update }),
+  useUpdateScheduleMutation: () => ({ mutateAsync: mocks.update }),
   useCreateScheduleMutation: () => ({ mutate: mocks.create, isPending: false }),
   useRunScheduleNowMutation: () => ({ mutate: mocks.run, isPending: false }),
   invalidateSchedules: vi.fn(),
@@ -160,6 +175,7 @@ let setSchedules: Setter<ScheduledAction[]>;
 let setStatus: Setter<string>;
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.update.mockReset().mockResolvedValue(cron);
   vi.useFakeTimers();
   [mocks.status, setStatus] = createSignal('success');
   [mocks.readSchedules, setSchedules] = createSignal([cron]);
@@ -167,6 +183,249 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+});
+
+const agentTarget: RoutineTarget = {
+  kind: 'agent',
+  agentId: '0195dbd2-6539-7000-8000-000000000001',
+  modelOverride: 'runtime-model',
+};
+
+function runButton(): HTMLButtonElement {
+  return screen.getByRole('button', { name: 'Run Now' });
+}
+
+function selectedTarget(): RoutineTarget {
+  return JSON.parse(screen.getByLabelText('Execution target').textContent!);
+}
+
+function deferredSave(): {
+  promise: Promise<ScheduledAction>;
+  resolve: (schedule: ScheduledAction) => void;
+  reject: (error: Error) => void;
+} {
+  let resolve!: (schedule: ScheduledAction) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<ScheduledAction>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+describe('automation execution target autosave', () => {
+  it('initializes the stored agent and duplicates its full saved configuration', () => {
+    const saved = {
+      ...cron,
+      task: {
+        agent: { bot_id: agentTarget.agentId },
+        model: 'runtime-model',
+        prompt: 'System instructions',
+        user_prompt: 'Task',
+        extra: { retained: true },
+      },
+    };
+    setSchedules([saved]);
+    render(() => <Automation />);
+    expect(selectedTarget()).toEqual(agentTarget);
+    fireEvent.click(screen.getByText('Duplicate'));
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({ task: saved.task })
+    );
+  });
+
+  it('disables immediate Run Now until the latest target has saved', async () => {
+    const save = deferredSave();
+    mocks.update.mockReturnValueOnce(save.promise);
+    render(() => <Automation />);
+    mocks.changeTarget({ kind: 'model', model: 'first-choice' });
+    mocks.changeTarget(agentTarget);
+    expect(runButton().disabled).toBe(true);
+    fireEvent.click(runButton());
+    expect(mocks.run).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: cron.id,
+      body: expect.objectContaining({
+        task: {
+          ...(cron.task as object),
+          agent: { bot_id: agentTarget.agentId },
+          model: 'runtime-model',
+        },
+      }),
+    });
+    expect(runButton().disabled).toBe(true);
+    save.resolve(cron);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(runButton().disabled).toBe(false);
+    fireEvent.click(runButton());
+    expect(mocks.run).toHaveBeenCalledExactlyOnceWith({ scheduleId: cron.id });
+  });
+
+  it('serializes slow saves and ignores stale responses/refetches for the displayed selection', async () => {
+    const first = deferredSave();
+    const last = deferredSave();
+    mocks.update
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(last.promise);
+    render(() => <Automation />);
+    mocks.changeTarget(agentTarget);
+    await vi.advanceTimersByTimeAsync(300);
+    mocks.changeTarget({ kind: 'model', model: 'intermediate' });
+    mocks.changeTarget({ kind: 'model', model: 'latest' });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    const firstSaved = {
+      ...cron,
+      task: {
+        ...(cron.task as object),
+        agent: { bot_id: agentTarget.agentId },
+        model: 'runtime-model',
+      },
+    };
+    setSchedules([firstSaved]);
+    first.resolve(firstSaved);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(selectedTarget()).toEqual({ kind: 'model', model: 'latest' });
+    expect(mocks.update).toHaveBeenLastCalledWith({
+      scheduleId: cron.id,
+      body: expect.objectContaining({
+        task: expect.objectContaining({ agent: null, model: 'latest' }),
+      }),
+    });
+    expect(runButton().disabled).toBe(true);
+    last.resolve(cron);
+    await vi.advanceTimersByTimeAsync(0);
+    setSchedules([cron]);
+    expect(selectedTarget()).toEqual({ kind: 'model', model: 'latest' });
+    expect(runButton().disabled).toBe(false);
+  });
+
+  it('keeps a failed target visibly unsaved and blocks Run Now until retry succeeds', async () => {
+    mocks.update.mockRejectedValueOnce(new Error('Agent unavailable'));
+    render(() => <Automation />);
+    mocks.changeTarget(agentTarget);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(selectedTarget()).toEqual(agentTarget);
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Changes not saved. Agent unavailable'
+    );
+    expect(runButton().disabled).toBe(true);
+    fireEvent.click(runButton());
+    expect(mocks.run).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Retry save'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(runButton().disabled).toBe(false);
+  });
+
+  it('invalid edits cancel a queued valid save and keep Run Now disabled', async () => {
+    render(() => <Automation />);
+    mocks.changeTarget(agentTarget);
+    mocks.changePrompt('');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(runButton().disabled).toBe(true);
+  });
+
+  it('pauses a running action with only its saved configuration, discarding queued changes', async () => {
+    render(() => <Automation />);
+    mocks.changeTarget(agentTarget);
+    const running = {
+      ...cron,
+      claimed: new Date().toISOString(),
+      task: {
+        ...(cron.task as object),
+        prompt: 'Keep system prompt',
+        future: true,
+      },
+    };
+    setSchedules([running]);
+    mocks.changeTarget({ kind: 'model', model: 'ignored-while-running' });
+    fireEvent.click(screen.getByText('Pause'));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: cron.id,
+      body: {
+        name: cron.name,
+        kind: cron.kind,
+        trigger: cron.trigger,
+        task: running.task,
+        enabled: false,
+      },
+    });
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', { name: 'Resume' }).disabled
+    ).toBe(true);
+  });
+
+  it('keeps a queued target through a cached-data refetch error', async () => {
+    render(() => <Automation />);
+    mocks.changeTarget(agentTarget);
+    setStatus('error');
+    expect(selectedTarget()).toEqual(agentTarget);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledWith({
+      scheduleId: cron.id,
+      body: expect.objectContaining({
+        task: expect.objectContaining({
+          agent: { bot_id: agentTarget.agentId },
+        }),
+      }),
+    });
+  });
+
+  it('builds a queued pause from the configuration saved by an in-flight edit', async () => {
+    const first = deferredSave();
+    mocks.update.mockReturnValueOnce(first.promise);
+    render(() => <Automation />);
+    mocks.changeTarget(agentTarget);
+    await vi.advanceTimersByTimeAsync(300);
+    setSchedules([{ ...cron, claimed: new Date().toISOString() }]);
+    fireEvent.click(screen.getByText('Pause'));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    const saved = {
+      ...cron,
+      claimed: new Date().toISOString(),
+      task: {
+        ...(cron.task as object),
+        agent: { bot_id: agentTarget.agentId },
+        model: 'runtime-model',
+      },
+    };
+    setSchedules([saved]);
+    first.resolve(saved);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.update).toHaveBeenLastCalledWith({
+      scheduleId: cron.id,
+      body: {
+        name: saved.name,
+        kind: saved.kind,
+        trigger: saved.trigger,
+        task: saved.task,
+        enabled: false,
+      },
+    });
+    expect(selectedTarget()).toEqual(agentTarget);
+  });
+
+  it.each(['events', 'unmount'])(
+    'drops queued target changes on %s even during an in-flight save',
+    async (transition) => {
+      const first = deferredSave();
+      mocks.update.mockReturnValueOnce(first.promise);
+      const { unmount } = render(() => <Automation />);
+      mocks.changeTarget(agentTarget);
+      await vi.advanceTimersByTimeAsync(300);
+      mocks.changeTarget({ kind: 'model', model: 'queued' });
+      if (transition === 'events') setSchedules([events]);
+      else unmount();
+      first.resolve(cron);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+    }
+  );
 });
 
 describe('automation editor trigger guards', () => {
@@ -238,6 +497,19 @@ describe('automation editor trigger guards', () => {
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();
     expect(mocks.setDisplayName).not.toHaveBeenCalledWith('Stale rename');
+  });
+
+  it('does not resurrect queued saves when returning from an event to a cron action', async () => {
+    render(() => <Automation />);
+    mocks.changeTarget(agentTarget);
+    setSchedules([events]);
+    setSchedules([cron]);
+    expect(selectedTarget()).toEqual({
+      kind: 'model',
+      model: 'claude-sonnet-4-6',
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it('cancels pending saves when the editor unmounts', async () => {
