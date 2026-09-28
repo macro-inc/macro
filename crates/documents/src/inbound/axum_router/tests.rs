@@ -1036,7 +1036,7 @@ fn with_internal_caller(builder: Builder) -> Builder {
 
 type Authenticate = fn(Builder) -> Builder;
 
-fn creating_callers() -> [(Authenticate, NonUserOwners, CreationPrincipal); 3] {
+fn creating_callers() -> [(Authenticate, NonUserOwners, CreationPrincipal); 4] {
     [
         (
             with_jwt,
@@ -1052,6 +1052,11 @@ fn creating_callers() -> [(Authenticate, NonUserOwners, CreationPrincipal); 3] {
             },
         ),
         (with_team_bot, NonUserOwners::Enabled, team_bot()),
+        (
+            with_internal_caller,
+            NonUserOwners::Disabled,
+            CreationPrincipal::User(user(STANDARD_INTERNAL_USER_ID)),
+        ),
     ]
 }
 
@@ -1458,11 +1463,7 @@ async fn copy_records_the_resolved_creation_principal() {
 
 #[tokio::test]
 async fn create_routes_reject_callers_that_cannot_create_before_reading_the_body() {
-    let callers: [Authenticate; 3] = [
-        with_team_bot,
-        with_user_bot_without_acting_user,
-        with_internal_caller,
-    ];
+    let callers: [Authenticate; 2] = [with_team_bot, with_user_bot_without_acting_user];
 
     for path in [
         "/",
@@ -1489,6 +1490,32 @@ async fn create_routes_reject_callers_that_cannot_create_before_reading_the_body
             assert!(document_service.create_calls().is_empty());
             assert!(document_service.copy_calls().is_empty());
         }
+    }
+}
+
+#[tokio::test]
+async fn internal_create_routes_reach_body_extraction() {
+    for path in [
+        "/",
+        "/create_markdown",
+        "/create_task",
+        "/create_snippet",
+        "/create_skill",
+        "/copy-source/copy",
+    ] {
+        let (router, document_service, _access_service, _authorization_service) = test_router();
+        let request =
+            with_internal_caller(Request::post(path).header("content-type", "application/json"))
+                .body(Body::from("not json"))
+                .expect("request should build");
+
+        assert_eq!(
+            send_status(&router, request).await,
+            StatusCode::BAD_REQUEST,
+            "{path}"
+        );
+        assert!(document_service.create_calls().is_empty());
+        assert!(document_service.copy_calls().is_empty());
     }
 }
 
