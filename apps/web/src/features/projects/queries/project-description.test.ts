@@ -34,10 +34,10 @@ import {
 } from './project-description';
 
 function transport(
-  getToken: () => Promise<string>
-): ProjectDescriptionTransport {
+  authorize: () => Promise<string>
+): ProjectDescriptionTransport<string> {
   return {
-    getToken,
+    authorize,
     connect: vi.fn(() => ({
       source: {
         ...createNoopLiveSyncSource('description'),

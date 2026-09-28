@@ -1,19 +1,14 @@
 import { throwOnErr } from '@core/util/result';
-import { storageServiceClient } from '@service-storage/client';
+import { fetchSyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context';
 import { createSyncServiceSource } from '@service-sync/source';
 import { createProjectDescriptionSession } from './project-description';
 
-/** Join the backing document using its existing authorized collaboration transport. */
+/** Open the backing document the way Markdown detail does, without its block. */
 export function createProductionProjectDescriptionSession(documentId: string) {
   return createProjectDescriptionSession(documentId, {
-    getToken: async (documentId) =>
-      (
-        await throwOnErr(() =>
-          storageServiceClient.permissionsTokens.createPermissionToken({
-            document_id: documentId,
-          })
-        )
-      ).token,
-    connect: createSyncServiceSource,
+    authorize: (documentId) =>
+      throwOnErr(() => fetchSyncDocumentOpenContext(documentId)),
+    connect: (documentId, { token, authorization }) =>
+      createSyncServiceSource(documentId, token, authorization),
   });
 }

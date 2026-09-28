@@ -1,3 +1,4 @@
+import { ingestLocalSnapshot } from '@core/collab-surface/createCollabSurface';
 import type { CollabMarkdownSession } from '@core/collab-surface/types';
 import { createLoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
@@ -18,11 +19,11 @@ import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-sche
 import type { ResultAsync } from 'neverthrow';
 import { createSignal, getOwner, runWithOwner } from 'solid-js';
 
-export type ProjectDescriptionTransport = {
-  getToken(documentId: string): Promise<string>;
+export type ProjectDescriptionTransport<Access> = {
+  authorize(documentId: string): Promise<Access>;
   connect(
     documentId: string,
-    token: string
+    access: Access
   ): {
     source: LiveSyncSource;
     doInitialSync(): ResultAsync<InitialSync, SyncError>;
@@ -30,9 +31,9 @@ export type ProjectDescriptionTransport = {
 };
 
 /** Join the existing backing document; fresh authorization precedes local snapshot reads. */
-export function createProjectDescriptionSession(
+export function createProjectDescriptionSession<Access>(
   documentId: string,
-  transport: ProjectDescriptionTransport
+  transport: ProjectDescriptionTransport<Access>
 ): CollabMarkdownSession & { dispose(): void; loaded: Promise<void> } {
   const owner = getOwner();
   const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, { documentId });
@@ -41,46 +42,18 @@ export function createProjectDescriptionSession(
   let disposed = false;
   const loaded = (async () => {
     try {
-      const token = await transport.getToken(documentId);
+      const access = await transport.authorize(documentId);
       if (disposed) return;
-      const snapshotStore = new IDBSnapshotStore<RawUpdate>(
-        LORO_SNAPSHOT_DB_NAME,
-        documentId
-      );
-      const walStore = new BrowserWALStore<RawUpdate>(
-        LORO_WAL_DB_NAME,
-        documentId
-      );
-      const local = async () => {
-        const snapshot = await snapshotStore.load();
-        if (!snapshot || disposed) return;
-        const entries = await walStore.getAll();
-        if (disposed) return;
-        await loroManager.ingest({
-          kind: 'local',
-          snapshot,
-          walUpdates: entries.map((entry) => entry.update),
-        });
-        if (entries.length && !disposed) {
-          const doc = loroManager.doc;
-          await snapshotStore.save(
-            doc.export({
-              mode: 'shallow-snapshot',
-              frontiers: doc.oplogFrontiers(),
-            })
-          );
-        }
-      };
       // Local cache failures must not prevent a fresh server snapshot.
-      void local().catch(() => {});
+      void ingestLocalSnapshot(
+        loroManager,
+        new IDBSnapshotStore<RawUpdate>(LORO_SNAPSHOT_DB_NAME, documentId),
+        new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, documentId)
+      ).catch(() => {});
       const connection = runWithOwner(owner, () =>
-        transport.connect(documentId, token)
+        transport.connect(documentId, access)
       );
       if (!connection) throw new Error('Could not start description session.');
-      if (disposed) {
-        connection.source.cleanup();
-        return;
-      }
       setSyncSource(connection.source);
       const initial = await connection.doInitialSync();
       if (disposed) return;
