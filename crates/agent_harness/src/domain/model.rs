@@ -116,15 +116,15 @@ pub struct OpenSession {
 /// session so resume and teardown keep routing correctly after a restart.
 ///
 /// A session's instructions are stored on its row whichever kind serves it,
-/// but only [`Self::InMemory`] and [`Self::ClaudeCloud`] read them today -
-/// the first builds its system prompt in this process, the second passes
-/// them to Claude at create. The rest need a transport, and
-/// ACP supplies none: `session/new` carries a working directory, MCP servers
-/// and `_meta`, and nothing else. [`Self::SandboxedCoder`] will get a
+/// but only [`Self::InMemory`], [`Self::ClaudeCloud`] and macrod sessions
+/// read them today - the first builds its system prompt in this process, the
+/// second passes them to Claude at create, and macrod gets them folded into
+/// the prompt body's hidden agent-context node. The rest need a transport,
+/// and ACP supplies none: `session/new` carries a working directory, MCP
+/// servers and `_meta`, and nothing else. [`Self::SandboxedCoder`] will get a
 /// per-session file listed alongside `SYSTEM.md` in `container/opencode.json`,
-/// [`Self::External`] `_meta` on `session/new` for macrod to translate, and
-/// [`Self::Cursor`] - whose API takes a prompt and nothing more - has to fold
-/// them into the prompt body's hidden agent-context node.
+/// and [`Self::Cursor`] - whose API takes a prompt and nothing more - has to
+/// fold them in the way macrod does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AgentKind {
     /// A sandbox this deployment provisions (Daytona, or local Docker when

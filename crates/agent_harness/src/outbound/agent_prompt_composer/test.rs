@@ -211,7 +211,7 @@ async fn the_thread_channel_and_reply_target_reach_the_lexical_service() {
         let context = context(target);
         async move {
             composer
-                .compose("Raw prompt", None, Some(&context))
+                .compose("Raw prompt", None, None, Some(&context))
                 .await
                 .unwrap();
             received.lock().unwrap().clone().unwrap()

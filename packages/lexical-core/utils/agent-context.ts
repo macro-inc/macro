@@ -403,8 +403,7 @@ export function composeAgentContextPrompt(input: AgentContextPrompt): string {
 
       const context = $createAgentContextNode({
         version: 1,
-        text: sections.join('
-'),
+        text: sections.join('\n'),
       });
       const firstChild = $getRoot().getFirstChild();
       if (firstChild) firstChild.insertBefore(context);

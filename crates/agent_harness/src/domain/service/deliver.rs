@@ -164,8 +164,9 @@ where
         };
         let raw_prompt = prompt.prompt.clone();
         let session = self.sessions.get_session(session_id).await?;
-        let instructions = (AgentKind::for_session(session.bot_id, &session.harness)
-            == AgentKind::External)
+        // macrod's ACP transport carries no system prompt, so its agent's
+        // instructions ride in the hidden context node instead.
+        let instructions = (session.harness == harness_id::MACROD_HARNESS_SLUG)
             .then_some(session.instructions.as_deref())
             .flatten();
         let context = if let Some(origin) = announce {

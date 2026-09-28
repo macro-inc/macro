@@ -328,13 +328,18 @@ describe('composeAgentContextPrompt', () => {
       parent: { type: 'channel', id: 'channel-1' },
     });
 
-    expect(text?.indexOf('<instructions>Always speak in all caps.</instructions>')).toBe(0);
+    expect(
+      text?.indexOf('<instructions>Always speak in all caps.</instructions>')
+    ).toBe(0);
     expect(text).toContain('<conversation type="channel" id="channel-1">');
   });
 
   it('ignores blank session instructions', () => {
     expect(
-      composeAgentContextPrompt({ promptMarkdown: 'original', instructions: '  ' })
+      composeAgentContextPrompt({
+        promptMarkdown: 'original',
+        instructions: '  ',
+      })
     ).toBe('original');
   });
 
