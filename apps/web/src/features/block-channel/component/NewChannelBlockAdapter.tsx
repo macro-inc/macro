@@ -254,11 +254,16 @@ function NewTop(props: { channelId: string }) {
         />
       </SplitTitleFileMenu>
       <SplitHeaderRight>
-        <ChannelInviteButton
-          channelId={props.channelId}
-          channelName={channelName() ?? 'New Channel'}
-          channelType={channelType()}
-        />
+        {/* On mobile the split header is pointer-events-none; only islands
+            take taps. `empty:hidden` drops the pill when the button is not
+            rendered (DMs, non-participants, flag off). */}
+        <HeaderIsland class="px-1">
+          <ChannelInviteButton
+            channelId={props.channelId}
+            channelName={channelName() ?? 'New Channel'}
+            channelType={channelType()}
+          />
+        </HeaderIsland>
       </SplitHeaderRight>
       {/* Desktop only: on mobile the action lives in the title drawer above. */}
       <Show when={!isMobile() && askMacroEntity()}>
