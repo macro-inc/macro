@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO github_pull_request (\n                github_key,\n                repository_id,\n                number,\n                owner,\n                repo,\n                title,\n                status,\n                draft,\n                author_github_user_id,\n                author_login,\n                requested_reviewer_github_user_ids,\n                participant_github_user_ids,\n                github_updated_at,\n                assignees,\n                labels,\n                reviews,\n                review_decision\n            )\n            VALUES (\n                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,\n                $14::jsonb, $15::jsonb, $16::jsonb, $17\n            )\n            ON CONFLICT (github_key) DO UPDATE SET\n                repository_id = COALESCE(EXCLUDED.repository_id, github_pull_request.repository_id),\n                number = EXCLUDED.number,\n                owner = EXCLUDED.owner,\n                repo = EXCLUDED.repo,\n                title = EXCLUDED.title,\n                status = EXCLUDED.status,\n                draft = EXCLUDED.draft,\n                author_github_user_id = EXCLUDED.author_github_user_id,\n                author_login = EXCLUDED.author_login,\n                requested_reviewer_github_user_ids = EXCLUDED.requested_reviewer_github_user_ids,\n                participant_github_user_ids = EXCLUDED.participant_github_user_ids,\n                github_updated_at = EXCLUDED.github_updated_at,\n                assignees = EXCLUDED.assignees,\n                labels = EXCLUDED.labels,\n                reviews = EXCLUDED.reviews,\n                review_decision = EXCLUDED.review_decision,\n                updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Text",
+        "Text",
+        "TextArray",
+        "TextArray",
+        "Timestamptz",
+        "Jsonb",
+        "Jsonb",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "36b056b1d74f20890ead60b884ac428583a1608344356dbc7d2f6e50eede6102"
+}
