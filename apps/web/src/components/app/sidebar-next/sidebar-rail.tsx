@@ -42,7 +42,6 @@ export const SidebarRail = () => {
     navigateToSidebarView({
       viewId: 'home',
       shiftKey: event.shiftKey,
-      activeSplit: globalSplitManager()?.activeSplit(),
       openWithSplit: layout.openWithSplit,
       referredFrom: 'sidebar',
     });

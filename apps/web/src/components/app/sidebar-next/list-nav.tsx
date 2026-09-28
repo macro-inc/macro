@@ -141,7 +141,6 @@ export const ListNav = (props: ListNavProps) => {
           viewId: props.item.id,
           params: props.item.params,
           shiftKey,
-          activeSplit: globalSplitManager()?.activeSplit(),
           openWithSplit: layout.openWithSplit,
           referredFrom: 'sidebar',
         });

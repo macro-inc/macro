@@ -6,7 +6,6 @@ import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { CommandState } from '@app/features/command';
 import { useGettingStartedEnabled } from '@app/features/getting-started/account-gate';
-import { getDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import {
@@ -159,15 +158,6 @@ const SIDEBAR_LINKS = [
 
 type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
 
-const isMarkdownDocumentsParams = (
-  params: SidebarItem['params'] | undefined
-): boolean => {
-  const facets = params?.initialFacets as
-    | { type?: readonly unknown[] }
-    | undefined;
-  return facets?.type?.includes('doc-markdown') ?? false;
-};
-
 export function sidebarContent(
   viewId: SidebarItem['id'],
   params?: SidebarItem['params']
@@ -188,28 +178,10 @@ export function navigateToSidebarView(args: {
   viewId: SidebarItem['id'];
   params?: SidebarItem['params'];
   shiftKey: boolean;
-  activeSplit: SplitHandle | undefined;
   openWithSplit: OpenWithSplitFn;
   referredFrom?: ReferredFrom;
 }): SplitHandle | undefined {
-  const { viewId, params, shiftKey, activeSplit, openWithSplit, referredFrom } =
-    args;
-
-  const activeContent = activeSplit?.content();
-  if (
-    !shiftKey &&
-    isMarkdownDocumentsParams(params) &&
-    activeContent?.type === 'component' &&
-    activeContent.id === 'documents'
-  ) {
-    const controller = activeSplit
-      ? getDocumentsFilterSplit(activeSplit.id)
-      : undefined;
-    if (controller) {
-      controller.toggleMarkdownFilter();
-      return activeSplit;
-    }
-  }
+  const { viewId, params, shiftKey, openWithSplit, referredFrom } = args;
 
   return openWithSplit(sidebarContent(viewId, params), {
     preferNewSplit: shiftKey,
@@ -358,7 +330,6 @@ export const GoToHotkeys = () => {
           viewId: link.id,
           params: link.params,
           shiftKey: !!e?.shiftKey,
-          activeSplit: globalSplitManager()?.activeSplit(),
           openWithSplit,
         });
         if (link.id === 'search' && handle) {
