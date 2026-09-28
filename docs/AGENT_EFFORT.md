@@ -46,8 +46,12 @@ Sources checked September 21, 2026:
 
 - `POST /agent-capabilities/discover` accepts a selected model for Cursor and
   in-memory. The existing `/agent-models/load` API remains available.
-- Capability cache identity includes the harness and model. External harnesses
-  expose controls after opening a session; model-specific preflight is not guessed.
+- Preflight capability cache identity includes the harness and model. A selection
+  from another target is discarded. External harnesses expose controls after
+  opening a session; model-specific preflight is not guessed.
+- Startup waits for the correlated ACP acceptance of the model, checks the
+  resulting effort choices, then confirms effort before sending the prompt.
+  HTTP queue acceptance alone is insufficient. Rejection or timeout stops startup.
 - New/resumed sessions and setting changes return the complete configuration.
   Clients replace their previous options, including removing unsupported controls.
 - In-memory rejects unsupported models and effort values. A model change resets
@@ -85,7 +89,7 @@ an external harness result.
 
 ## Model menu interaction
 
-Effort is a submenu of each model in running-session selectors.
+Effort is a submenu of each model in new-chat and running-session selectors.
 Discovery runs when the submenu opens, scoped to that model and harness;
 the current session's advertised options take precedence for its selected model.
 The trigger displays the model and selected effort together. Keyboard Right Arrow
@@ -95,4 +99,6 @@ no effort options keep ordinary model selection available.
 A combined running-session selection waits for the model's correlated ACP
 confirmation, validates effort against the new snapshot, then confirms effort.
 A model rejection prevents the effort request. An effort rejection leaves the
-accepted model in place and reports the failure.
+accepted model in place and reports the failure. New-chat choices remain bound
+to their model while discovery refreshes, so immediately sending cannot silently
+drop a selected effort.
