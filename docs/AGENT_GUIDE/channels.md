@@ -525,7 +525,10 @@ Channels never keeps DM search hits. Changing the query resets list scroll
 without blurring the dock input. While a background browse-list refresh is still
 pending, scroll near the end of search results: the next search page should load
 without waiting for that refresh or requiring another scroll. Clearing search
-restores the browse list's own pagination and fetching state.
+restores the browse list's own pagination and fetching state. A failed browse
+request must not show a load-error message over valid search hits or replace
+**No results**, including during debounce and short local-only queries. Search
+failures still show their own error; clearing search restores the browse error.
 With `enable-graphql-soup` enabled, open an unread conversation from each tab
 and return to the list: its top-level notifications should be read, including
 ones older than the global notification feed's loaded page. Notifications for

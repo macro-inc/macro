@@ -90,7 +90,11 @@ export function useMobileChannelSearch(options: {
         ? serviceLoading() || (serviceEnabled() && query.isFetching)
         : options.source().isFetching(),
     error: () =>
-      (serviceEnabled() ? query.error : undefined) ?? options.source().error(),
+      searching()
+        ? serviceEnabled()
+          ? query.error
+          : undefined
+        : options.source().error(),
     hasMore: () =>
       searching()
         ? serviceEnabled() && !query.isPlaceholderData && query.hasNextPage

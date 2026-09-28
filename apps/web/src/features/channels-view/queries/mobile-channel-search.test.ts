@@ -50,6 +50,7 @@ function setup(initialText = '') {
       createSignal<ChannelsQueryScope>('direct_messages');
     const [rows, setRows] = createSignal<ChannelEntity[]>([julia, hutch]);
     const [sourceFetching, setSourceFetching] = createSignal(false);
+    const [sourceError, setSourceError] = createSignal<Error>();
     const [state, setState] = createStore({
       isSuccess: false,
       isLoading: false,
@@ -107,7 +108,7 @@ function setup(initialText = '') {
       isFetching: sourceFetching,
       isLoadingMore: () => false,
       hasMore: () => true,
-      error: () => undefined,
+      error: sourceError,
       loadMore: vi.fn(async () => {}),
       refresh: vi.fn(async () => {}),
     };
@@ -123,6 +124,7 @@ function setup(initialText = '') {
       setScope,
       setRows,
       setSourceFetching,
+      setSourceError,
       setState,
       fetchNextPage,
       refetch,
@@ -304,6 +306,60 @@ describe('mobile channel search', () => {
     expect(test.result.hasMore()).toBe(false);
     test.setText('  ');
     expect(test.result.isFetching()).toBe(true);
+  });
+
+  it.each([
+    { name: 'no hits', hits: [] },
+    { name: 'remote hits', hits: [julia] },
+  ])(
+    'does not report a browse failure after a successful search with $name',
+    ({ hits }) => {
+      const test = setup('Julia');
+      test.setRows([]);
+      test.setSourceError(new Error('browse failed'));
+      test.setState({ isSuccess: true, data: hits });
+
+      expect(test.result.items()).toEqual(hits);
+      expect(test.result.error()).toBeNull();
+    }
+  );
+
+  it('hides browse errors during debounce and pending search, restoring them on clear', async () => {
+    const test = setup();
+    const browseError = new Error('browse failed');
+    test.setSourceError(browseError);
+    expect(test.result.error()).toBe(browseError);
+
+    test.setText('Julia');
+    expect(test.enabled()).toBe(false);
+    expect(test.result.error()).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(300);
+    test.setState('isFetching', true);
+    expect(test.enabled()).toBe(true);
+    expect(test.result.error()).toBeNull();
+
+    test.setText('');
+    expect(test.result.error()).toBe(browseError);
+  });
+
+  it('reports only the active source error and suppresses errors for local-only queries', () => {
+    const test = setup('Julia');
+    const browseError = new Error('browse failed');
+    const searchError = new Error('search failed');
+    test.setSourceError(browseError);
+    test.setState('error', searchError);
+    expect(test.result.error()).toBe(searchError);
+
+    test.setText('Ju');
+    expect(test.result.items()).toEqual([julia]);
+    expect(test.result.error()).toBeUndefined();
+    test.setText('Other query');
+    expect(test.enabled()).toBe(false);
+    expect(test.result.error()).toBeUndefined();
+    test.setText('  ');
+    expect(test.result.error()).toBe(browseError);
+    test.setSourceError(undefined);
+    expect(test.result.error()).toBeUndefined();
   });
 
   it('reports search failures without losing local hits and retries only valid searches', async () => {
