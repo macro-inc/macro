@@ -201,10 +201,9 @@ async function selectTarget(
       const row = screen.getByRole('menuitem', { name: /^Researcher/ });
       row.focus();
       fireEvent.keyDown(row, { key: 'ArrowRight' });
-      const search = await screen.findByRole('textbox', {
-        name: 'Search models',
-      });
-      menu = search.closest<HTMLElement>('[role="menu"]')!;
+      // Do not select the same model from the root Macro catalog.
+      menu = await screen.findByRole('menu', { name: /^Researcher/ });
+      await within(menu).findByRole('textbox', { name: 'Search models' });
     }
     const item = (menu ? within(menu) : screen).getByRole('menuitem', {
       name: 'Custom model',

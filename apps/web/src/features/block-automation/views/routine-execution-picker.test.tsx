@@ -148,9 +148,12 @@ async function openModels(name: string) {
   const row = screen.getByRole('menuitem', { name: new RegExp(`^${name}`) });
   row.focus();
   fireEvent.keyDown(row, { key: 'ArrowRight' });
-  const search = await screen.findByRole('textbox', { name: 'Search models' });
-  const menu = search.closest<HTMLElement>('[role="menu"]')!;
+  // The root Macro catalog also has a search box; wait for the agent submenu.
+  const menu = await screen.findByRole('menu', {
+    name: new RegExp(`^${name}`),
+  });
   expect(menu.getAttribute('aria-label')).toBe(`Models for ${name}`);
+  await within(menu).findByRole('textbox', { name: 'Search models' });
   return { trigger, menu: within(menu) };
 }
 
