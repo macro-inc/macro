@@ -16,6 +16,7 @@ const create = vi.hoisted(() => ({
   autoConfirm: true,
   confirm: undefined as ((error?: string) => void) | undefined,
   release: vi.fn(),
+  attribution: vi.fn(),
 }));
 
 vi.mock('@service-agent-harness/client', () => ({
@@ -24,7 +25,10 @@ vi.mock('@service-agent-harness/client', () => ({
       (request: { id: string }) =>
         new Promise((resolve) => {
           create.resolve = (id: string = request.id) =>
-            resolve({ isErr: () => false, value: { session: { id } } });
+            resolve({
+              isErr: () => false,
+              value: { session: { id, ownerId: 'session-owner' } },
+            });
           create.reject = () =>
             resolve({
               isErr: () => true,
@@ -55,7 +59,8 @@ vi.mock('@core/agent-session/AgentSession', () => ({
       };
       return {
         load: async () => {},
-        issue: async (action: AgentAction) => {
+        issue: async (action: AgentAction, options: unknown) => {
+          create.attribution(options);
           const result = await create.control(id, action);
           if (!result.isErr()) {
             requestId = result.value.actionId;
@@ -391,6 +396,23 @@ it.each(['Describe this', ''])(
       type: 'prompt',
       prompt,
       attachments,
+    });
+  }
+);
+
+it.each([undefined, 'explicit-user'])(
+  'attributes the first prompt when userId is %s',
+  async (userId) => {
+    create.attribution.mockClear();
+    create.control.mockResolvedValue({
+      isErr: () => false,
+      value: { actionId: 'prompt-id' },
+    });
+    startPendingSession({ prompt: 'Hello', userId });
+    create.resolve?.();
+    await flush();
+    expect(create.attribution).toHaveBeenCalledWith({
+      userId: userId ?? 'session-owner',
     });
   }
 );

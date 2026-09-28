@@ -307,7 +307,7 @@ function MenuItem(props: MenuItemProps) {
   );
 }
 
-function MenuContent(props: { projectId: string }) {
+function MenuContent(props: { projectId: string; name: string }) {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
   const spreadsheetAccess = useSpreadsheetAccess();
@@ -323,7 +323,7 @@ function MenuContent(props: { projectId: string }) {
           void openChatWithAgent({
             type: 'project',
             id: props.projectId,
-            name: 'Folder',
+            name: props.name,
           });
           return;
         }
@@ -374,7 +374,7 @@ export function useProjectCreateTools(
   return { tools, CreateDialog };
 }
 
-export function ProjectCreateMenu(props: { id: string }) {
+export function ProjectCreateMenu(props: { id: string; name: string }) {
   const [open, setOpen] = createSignal(false);
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
@@ -390,7 +390,7 @@ export function ProjectCreateMenu(props: { id: string }) {
           <CaretDown />
         </Dropdown.Trigger>
       </div>
-      <MenuContent projectId={props.id} />
+      <MenuContent projectId={props.id} name={props.name} />
     </Dropdown>
   );
 }

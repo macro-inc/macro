@@ -122,6 +122,12 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   );
 }
 
+function hasAgentsBackFallback(content: SplitContent) {
+  return (
+    content.type === 'agent' || (isTouchDevice() && content.type === 'chat')
+  );
+}
+
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return null;
@@ -133,15 +139,19 @@ function SplitBackButton() {
       label="Go Back"
       hotkey={TOKENS.split.go.back}
       disabled={
-        !context.handle.canGoBack() && context.handle.content().type !== 'agent'
+        !context.handle.canGoBack() &&
+        !hasAgentsBackFallback(context.handle.content())
       }
       onClick={() => {
         if (splitBackInterceptor()?.()) return;
         if (
           !context.handle.canGoBack() &&
-          context.handle.content().type === 'agent'
+          hasAgentsBackFallback(context.handle.content())
         ) {
-          context.handle.replace({ next: { type: 'component', id: 'agents' } });
+          context.handle.replace({
+            next: { type: 'component', id: 'agents' },
+            mergeHistory: true,
+          });
         } else context.handle.goBack();
       }}
     >
@@ -610,7 +620,7 @@ export function SplitHeader(props: {
               class={cn(
                 'relative gap-0 px-1',
                 ((!panel.handle.canGoBack() &&
-                  panel.handle.content().type !== 'agent') ||
+                  !hasAgentsBackFallback(panel.handle.content())) ||
                   isListViewID(panel.handle.content().id)) &&
                   'hidden'
               )}

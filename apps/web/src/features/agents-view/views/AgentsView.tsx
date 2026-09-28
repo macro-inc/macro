@@ -137,14 +137,10 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       panel.handle.replace({ next: { type: 'component', id: 'agents' } });
       return;
     }
-    // Already showing the composer: nothing remounts to retrigger autofocus,
-    // so focus it imperatively instead.
-    if (!selected() && page() === 'new') {
-      composerFocus?.();
-      return;
-    }
     setSelected(undefined);
     setPage('new');
+    // The preflight page stays mounted when navigating through management.
+    composerFocus?.();
   };
   // A launcher navigation can target this already-mounted workspace.
   createEffect(
