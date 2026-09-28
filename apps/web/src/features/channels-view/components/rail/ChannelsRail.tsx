@@ -237,7 +237,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
       channel,
       notificationSource.withLocalOverrides
     );
-    if (selection instanceof Promise) {
+    // Telemetry installs ZoneAwarePromise; native async results are not
+    // instances of that constructor. Detect the pending edge structurally.
+    if ('then' in selection) {
       void selectHydratedChannel(selection, request, channelId, openInNewSplit);
     } else {
       void selectChannel(selection, channelId, openInNewSplit);

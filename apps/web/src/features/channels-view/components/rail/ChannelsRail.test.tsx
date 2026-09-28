@@ -229,6 +229,37 @@ describe('explicit channel activation read marking', () => {
     expect(mocks.navigate).toHaveBeenCalledTimes(2);
   });
 
+  it('awaits native async hydration when telemetry replaces the global Promise constructor', async () => {
+    const NativePromise = globalThis.Promise;
+    let resolve!: (channel: WithNotification<ChannelEntity>) => void;
+    const pending = (async () =>
+      await new NativePromise<WithNotification<ChannelEntity>>((done) => {
+        resolve = done;
+      }))();
+    class InstrumentedPromise<T> extends NativePromise<T> {}
+    vi.stubGlobal('Promise', InstrumentedPromise);
+    mocks.hydrate.mockReturnValue(pending);
+    try {
+      expect(pending instanceof Promise).toBe(false);
+      mount();
+      fireEvent.click(screen.getByRole('button'));
+      expect(mocks.select).not.toHaveBeenCalled();
+      expect(mocks.markRead).not.toHaveBeenCalled();
+      resolve(hydrated);
+      await waitFor(() =>
+        expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(
+          hydrated,
+          mocks.source,
+          { scopeChannelThreads: false }
+        )
+      );
+    } finally {
+      resolve(hydrated);
+      await pending;
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('does not mark a rejected selection or a non-participant channel', () => {
     mount();
     mocks.select.mockReturnValue(false);
