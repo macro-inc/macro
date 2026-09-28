@@ -62,6 +62,10 @@ context), `agent-detail` (turn/author), and `call-detail` (transcript segment).
 A `seek` value identifies each click so selecting the same hit again scrolls again.
 Markdown and PDF targets also name their document so navigation to another file in
 the same workspace cannot apply the previous file's target.
+Channel-message @mentions and AI-generated channel mentions also preserve their
+message/thread target when opening a channel or reusing its existing pane.
+Returning to Home's list clears the prior target, so reopening an item without
+a specific location does not replay the previous search hit.
 
 When an event opens inline from Home, changing the Calendar period stays under
 `/app/home/calendar/`, updates the period segment, and re-focuses that event.

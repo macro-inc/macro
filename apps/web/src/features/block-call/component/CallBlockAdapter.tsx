@@ -46,7 +46,10 @@ export function CallBlockAdapter(props: CallBlockProps) {
     on(
       () => [routeSearch.transcriptId, routeSearch.seek],
       () => {
-        if (!routeSearch.transcriptId) return;
+        if (!routeSearch.transcriptId) {
+          setTranscriptTarget(undefined);
+          return;
+        }
         setTranscriptTarget((previous) => ({
           transcriptId: routeSearch.transcriptId,
           gen: (previous?.gen ?? 0) + 1,

@@ -41,7 +41,7 @@ vi.mock('./CallRecording/CallRecordingBody', () => ({
 }));
 afterEach(cleanup);
 
-it('delivers cold, changed and repeated transcript requests to the legacy call body', () => {
+it('delivers and clears transcript requests in the legacy call body', () => {
   const [search, setSearch] = createStore({
     transcriptId: 'segment',
     seek: 'first',
@@ -56,4 +56,8 @@ it('delivers cold, changed and repeated transcript requests to the legacy call b
   setSearch({ transcriptId: 'another', seek: 'next' });
   expect(target().transcriptId).toBe('another');
   expect(target().gen).toBeGreaterThan(1);
+  setSearch({ transcriptId: '', seek: '' });
+  expect(view.container.querySelector('output')!.textContent).toBe('');
+  setSearch({ transcriptId: 'segment', seek: 'reopen' });
+  expect(target().transcriptId).toBe('segment');
 });

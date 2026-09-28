@@ -1183,17 +1183,48 @@ describe('layoutManager', () => {
     });
 
     it.each([
-      { name: 'top-level message' },
-      { name: 'thread reply', threadId: 'thread-1' },
-      { name: 'saved tab', threadId: 'thread-1', saved: { tab: ['recents'] } },
+      { name: 'top-level message', expected: { messageId: ['message-1'] } },
+      {
+        name: 'thread reply',
+        threadId: 'thread-1',
+        expected: { messageId: ['message-1'], threadId: ['thread-1'] },
+      },
+      {
+        name: 'saved tab',
+        threadId: 'thread-1',
+        saved: { tab: ['recents'] },
+        expected: {
+          messageId: ['message-1'],
+          threadId: ['thread-1'],
+          tab: ['recents'],
+        },
+      },
+      {
+        name: 'top-level message after a saved thread',
+        saved: { threadId: ['old-thread'], tab: ['recents'] },
+        expected: { messageId: ['message-1'], tab: ['recents'] },
+      },
+      {
+        name: 'reply after a saved thread',
+        threadId: 'thread-1',
+        saved: { threadId: ['old-thread'] },
+        expected: { messageId: ['message-1'], threadId: ['thread-1'] },
+      },
       {
         name: 'explicit saved target',
         threadId: 'thread-1',
         saved: { messageId: ['saved-message'], threadId: ['saved-thread'] },
+        expected: { messageId: ['saved-message'], threadId: ['saved-thread'] },
+      },
+      {
+        name: 'explicit saved top-level target',
+        threadId: 'thread-1',
+        saved: { messageId: ['saved-message'] },
+        expected: { messageId: ['saved-message'] },
       },
     ])(
       'preserves an in-app channel target through the Chat redirect: $name',
-      async ({ threadId, saved }) => {
+      async ({ threadId, saved, expected }) => {
         const { manager, location, router, dispose } = ingressRouter('/search');
         await router.settled();
 
@@ -1215,21 +1246,13 @@ describe('layoutManager', () => {
 
         expect(location.read().pathname).toBe('/channels/channel-1');
         const search = new URLSearchParams(location.read().search);
-        expect(search.get('s0.channels.messageId')).toBe(
-          saved?.messageId?.[0] ?? 'message-1'
-        );
+        expect(search.get('s0.channels.messageId')).toBe(expected.messageId[0]);
         expect(search.get('s0.channels.threadId')).toBe(
-          saved?.threadId?.[0] ?? threadId ?? null
+          expected.threadId?.[0] ?? null
         );
-        expect(manager.splits()[0]?.content.entryMetadata).toMatchObject({
-          search: {
-            channels: {
-              messageId: ['message-1'],
-              ...(threadId ? { threadId: [threadId] } : {}),
-              ...saved,
-            },
-          },
-        });
+        expect(router.search(manager.splits()[0].id, 'channels')).toEqual(
+          expected
+        );
 
         router.dispose();
         dispose();

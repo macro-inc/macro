@@ -45,7 +45,7 @@ function AgentBlockContent(props: {
     on(
       routeTarget,
       (target) => {
-        if (target) setSearchTarget(target);
+        setSearchTarget(target);
       },
       { defer: true }
     )

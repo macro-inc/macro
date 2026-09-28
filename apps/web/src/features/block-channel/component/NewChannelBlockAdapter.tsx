@@ -411,7 +411,10 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     on(
       () => [routeSearch.messageId, routeSearch.threadId, routeSearch.seek],
       () => {
-        if (!routeSearch.messageId) return;
+        if (!routeSearch.messageId) {
+          setTargetRequest(undefined);
+          return;
+        }
         setActiveTab(DEFAULT_CHANNEL_TAB);
         setTargetRequest({
           kind: 'message',

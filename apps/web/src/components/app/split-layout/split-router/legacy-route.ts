@@ -313,18 +313,21 @@ export function resolveContentLocation(
       : undefined;
   const messageId = channelParams?.[CHANNEL_URL_PARAMS.message];
   const threadId = channelParams?.[CHANNEL_URL_PARAMS.thread];
-  const channelSearch =
-    typeof messageId === 'string'
-      ? {
-          ...savedSearch,
-          [channelsSearch.namespace]: {
-            messageId: [messageId],
-            ...(typeof threadId === 'string' ? { threadId: [threadId] } : {}),
-            ...savedSearch?.[channelsSearch.namespace],
-          },
-        }
-      : undefined;
-  const search = filterRouteSearch(routes, route, channelSearch ?? savedSearch);
+  let contentSearch = savedSearch;
+  if (typeof messageId === 'string') {
+    const channelSearch = { ...savedSearch?.[channelsSearch.namespace] };
+    // Message and thread identify one target; never combine two saved opens.
+    if (!Object.hasOwn(channelSearch, 'messageId')) {
+      channelSearch.messageId = [messageId];
+      if (typeof threadId === 'string') channelSearch.threadId = [threadId];
+      else delete channelSearch.threadId;
+    }
+    contentSearch = {
+      ...savedSearch,
+      [channelsSearch.namespace]: channelSearch,
+    };
+  }
+  const search = filterRouteSearch(routes, route, contentSearch);
   const location: SplitLocation = { route };
   if (search) location.search = search;
   return location;

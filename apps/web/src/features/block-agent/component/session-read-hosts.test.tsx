@@ -7,6 +7,7 @@ import type { NotificationSource } from '@notifications/notification-source';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentMessageTarget } from '../core/search-location';
 import BlockAgent from './Block';
 
 const mocks = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   failed: (): boolean => false,
   active: (): boolean => false,
   source: undefined as NotificationSource | undefined,
+  target: (): AgentMessageTarget | undefined => undefined,
 }));
 
 // Keep both real session hosts and the real read marker. Replace unrelated
@@ -61,7 +63,7 @@ vi.mock('@core/block', () => ({ useBlockId: () => 'placeholder-session' }));
 vi.mock('@core/orchestrator', () => ({ createMethodRegistration: vi.fn() }));
 vi.mock('@core/signal/load', () => ({ blockHandleSignal: { get: vi.fn() } }));
 vi.mock('../primitives/create-agent-route-target', () => ({
-  createAgentRouteTarget: () => () => undefined,
+  createAgentRouteTarget: () => () => mocks.target(),
 }));
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'owner' }));
@@ -133,7 +135,11 @@ vi.mock('./AgentSplitHeader', () => ({
 vi.mock('./sidepanel/AgentSidePanelSections', () => ({
   AgentSidePanelSections: () => null,
 }));
-vi.mock('./Transcript', () => ({ Transcript: () => <div>Conversation</div> }));
+vi.mock('./Transcript', () => ({
+  Transcript: (props: { searchTarget?: AgentMessageTarget }) => (
+    <output>{JSON.stringify(props.searchTarget)}</output>
+  ),
+}));
 vi.mock('@app/features/agents-view/components/ChatComposer', () => ({
   ChatSessionInput: () => null,
 }));
@@ -151,6 +157,7 @@ beforeEach(() => {
   mocks.loaded = () => false;
   mocks.failed = () => false;
   mocks.active = () => false;
+  mocks.target = () => undefined;
   mocks.source = {
     notificationsByEntity: () => ({}),
     isLoading: () => false,
@@ -211,5 +218,25 @@ describe.each(['Home', 'Agents'] as const)('%s session host', (host) => {
     mountHost();
     await vi.advanceTimersByTimeAsync(2_000);
     expect(mocks.markRead).not.toHaveBeenCalled();
+  });
+
+  it('clears a route target before the same session is reopened', () => {
+    const [target, setTarget] = createSignal<AgentMessageTarget>();
+    mocks.target = target;
+    mountHost();
+    const output = () => document.querySelector('output')!.textContent;
+    expect(output()).toBe('');
+    setTarget({ messageTurn: 0, author: 'agent' });
+    expect(JSON.parse(output()!)).toEqual({
+      messageTurn: 0,
+      author: 'agent',
+    });
+    setTarget(undefined);
+    expect(output()).toBe('');
+    setTarget({ messageTurn: 0, author: 'agent' });
+    expect(JSON.parse(output()!)).toEqual({
+      messageTurn: 0,
+      author: 'agent',
+    });
   });
 });
