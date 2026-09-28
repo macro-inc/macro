@@ -399,8 +399,10 @@ fn mcp_public_url_uses_the_proxy_cognition_route() {
 #[test]
 fn frontend_origin_tracks_how_the_app_is_served() {
     let instance = Instance::derive(None, None).unwrap();
-    let static_env = LocalEnv::for_instance(Mode::Local, &instance, true, Tunnels::default()).to_env();
-    let attached_env = LocalEnv::for_instance(Mode::Local, &instance, false, Tunnels::default()).to_env();
+    let static_env =
+        LocalEnv::for_instance(Mode::Local, &instance, true, Tunnels::default()).to_env();
+    let attached_env =
+        LocalEnv::for_instance(Mode::Local, &instance, false, Tunnels::default()).to_env();
     assert_eq!(
         static_env.get("FRONTEND_ORIGIN").map(String::as_str),
         Some("https://localhost:8090")

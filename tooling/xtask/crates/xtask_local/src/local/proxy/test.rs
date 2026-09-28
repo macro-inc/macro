@@ -186,7 +186,9 @@ fn local_proxy_uses_tls_and_wildcard_cors() {
     assert!(
         local.contains("tls /etc/caddy/certs/localhost.pem /etc/caddy/certs/localhost-key.pem")
     );
-    assert!(local.contains("auto_https off"));
+    // Keep main's internal certificates for the separate preview listener.
+    assert!(local.contains("auto_https disable_redirects"));
+    assert!(local.contains("https://*.preview.localhost:8443"));
     assert!(local.contains("@cors header Origin *"));
     assert!(local.contains("@cors_preflight"));
     assert!(local.contains("Access-Control-Allow-Origin \"{http.request.header.Origin}\""));
