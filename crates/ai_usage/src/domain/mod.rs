@@ -1,6 +1,7 @@
 //! Domain layer: the cost model, ports, and the service that computes cost.
 
 pub mod financial;
+pub mod financial_service;
 pub mod ports;
 pub mod service;
 

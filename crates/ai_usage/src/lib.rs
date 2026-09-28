@@ -20,6 +20,10 @@ pub mod inbound;
 pub mod outbound;
 
 pub use domain::financial;
+pub use domain::financial_service::{
+    CacheWritePolicy, CounterSemantics, FinancialRateCatalog, FinancialUsageRepo,
+    FinancialUsageService, PreparedInvocation, RatePublication,
+};
 pub use domain::{
     AiFeature, CompletionUsage, FeatureUsage, FinancialFuture, FinancialRateResolver,
     FinancialUsage, InvocationFunding, ModelPricing, NoOpUsageRecorder, Price, SYSTEM_USER_ID,
