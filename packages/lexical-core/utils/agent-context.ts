@@ -86,8 +86,6 @@ export type AgentContextPrompt = {
   promptMarkdown: string;
   /** Trusted session instructions supplied by the agent harness. */
   instructions?: string;
-  /** Trusted session instructions supplied by the agent harness. */
-  instructions?: string;
   /** Supplied by the message service, never by the prompt's author. */
   parent?: AgentContextParent;
   anchor?: AgentContextAnchor;
