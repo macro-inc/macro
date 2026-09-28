@@ -370,10 +370,10 @@ async fn request(app: &Router, method: &str, uri: &str, body: Value) -> (StatusC
     )
 }
 fn legacy() -> Value {
-    json!({"name":"legacy", "kind":"Agent", "schedule":"0 0 9 * * *", "timezone":"UTC", "task":{}, "enabled":true})
+    json!({"name":"legacy", "kind":"Agent", "schedule":"0 0 9 * * *", "timezone":"UTC", "task":{"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled":true})
 }
 fn event_action() -> Value {
-    json!({"name":"events", "kind":"Agent", "trigger":{"type":"events", "filters":[{"events":["document.updated", "channel.message_posted"]}]}, "task":{}, "enabled":true})
+    json!({"name":"events", "kind":"Agent", "trigger":{"type":"events", "filters":[{"events":["document.updated", "channel.message_posted"]}]}, "task":{"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled":true})
 }
 fn action_id(action: &Value) -> Uuid {
     action["id"].as_str().unwrap().parse().unwrap()

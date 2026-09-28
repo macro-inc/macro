@@ -65,6 +65,10 @@ pub struct Config {
     /// Register EVENT_ROUTINES_ENABLED as a raw boolean in Doppler before rollout.
     #[macro_config_default(false)]
     pub event_routines_enabled: bool,
+    /// Accept agent-target configuration only after all scheduler workers are upgraded.
+    /// Register ROUTINE_AGENTS_ENABLED as a raw boolean in Doppler before rollout.
+    #[macro_config_default(false)]
+    pub routine_agents_enabled: bool,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
 }

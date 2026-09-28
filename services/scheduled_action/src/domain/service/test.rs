@@ -3,6 +3,17 @@ mod user_cleanup;
 use super::*;
 use crate::domain::event_runs::ClaimToken;
 use crate::domain::models::{ActionKind, ExecutionResource, ExecutionResourceType};
+use crate::domain::{
+    event_trigger::EventReference,
+    execution::ExecutionHandle,
+    ports::ScheduledAgentRunner,
+    target_runner::TargetRunner,
+    target_validation::{
+        TargetValidation, TargetValidationError,
+        test::{Sessions, agent_task},
+    },
+};
+use agent_session::domain::routines::RoutineSessionError;
 use macro_uuid::generate_uuid_v7;
 use serde_json::json;
 use std::sync::Mutex;
@@ -129,8 +140,232 @@ pub(crate) fn configuration(events: bool) -> ActionConfiguration {
         name: "routine".into(),
         trigger: serde_json::from_value(trigger).unwrap(),
         kind: ActionKind::Agent,
-        task: json!({"prompt": "summarize"}),
+        task: json!({"model": "model", "prompt": "summarize", "user_prompt": "task"}),
         enabled: true,
+    }
+}
+
+#[tokio::test]
+async fn validates_before_persistence_and_rejects_cross_owner_selection() {
+    let base = service(false);
+    let sessions = Arc::new(Sessions::default());
+    let svc = TestService::new(
+        base.repo.clone(),
+        base.executor.clone(),
+        base.dispatcher_tx.clone(),
+    )
+    .with_target_validation(TargetValidation::new(sessions.clone(), true));
+    let mut config = configuration(false);
+    config.task = agent_task();
+    let foreign = MacroUserIdStr::parse_from_str(FOREIGN_USER).unwrap();
+    let error = svc
+        .create_action(CreateScheduledAction::Canonical(config.clone()), foreign)
+        .await
+        .unwrap_err();
+    assert_eq!(error.downcast_ref(), Some(&RoutineSessionError::Forbidden));
+    assert!(base.repo.actions.lock().unwrap().is_empty());
+
+    config.task = json!({});
+    let error = svc
+        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref(),
+        Some(&TargetValidationError::InvalidTask)
+    );
+    assert!(base.repo.actions.lock().unwrap().is_empty());
+
+    config.task = agent_task();
+    let created = svc
+        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .await
+        .unwrap();
+    let original = created.task;
+    *sessions.error.lock().unwrap() = Some(RoutineSessionError::Forbidden);
+    config.task["user_prompt"] = json!("replacement");
+    let error = svc
+        .update_action(
+            &created.id.unwrap(),
+            UpdateScheduledAction::Canonical(config),
+            user(),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.downcast_ref(), Some(&RoutineSessionError::Forbidden));
+    let stored = base.repo.actions.lock().unwrap();
+    assert_eq!(stored[0].task, original);
+    assert_eq!(
+        stored[0].configuration_revision,
+        ConfigurationRevision::INITIAL
+    );
+}
+
+#[tokio::test]
+async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clients() {
+    let base = service(false);
+    let svc = TestService::new(
+        base.repo.clone(),
+        base.executor.clone(),
+        base.dispatcher_tx.clone(),
+    )
+    .with_target_validation(TargetValidation::new(Arc::new(Sessions::default()), true));
+    let mut config = configuration(false);
+    config.task = agent_task();
+    let error = base
+        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref(),
+        Some(&TargetValidationError::AgentsDisabled)
+    );
+    let created = svc
+        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .await
+        .unwrap();
+    let id = created.id.unwrap();
+    let error = base
+        .update_action(&id, UpdateScheduledAction::Canonical(config), user())
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref(),
+        Some(&TargetValidationError::AgentsDisabled)
+    );
+
+    // An old client cannot erase the agent even when trying to pause it.
+    let mut model = configuration(false);
+    for enabled in [false, true] {
+        model.enabled = enabled;
+        let error = base
+            .update_action(&id, UpdateScheduledAction::Canonical(model.clone()), user())
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.downcast_ref(),
+            Some(&TargetValidationError::ExplicitAgentRequired)
+        );
+        assert_eq!(base.repo.actions.lock().unwrap()[0].task, created.task);
+    }
+    model.task["agent"] = json!(null);
+    let switched = base
+        .update_action(&id, UpdateScheduledAction::Canonical(model.clone()), user())
+        .await
+        .unwrap();
+    assert_eq!(switched.task, model.task);
+    base.create_action(CreateScheduledAction::Canonical(model), user())
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn unavailable_agents_can_be_paused_deleted_and_have_history_read_without_validation() {
+    for claimed in [false, true] {
+        let base = service(false);
+        let sessions = Arc::new(Sessions::default());
+        let svc = TestService::new(
+            base.repo.clone(),
+            base.executor.clone(),
+            base.dispatcher_tx.clone(),
+        )
+        .with_target_validation(TargetValidation::new(sessions.clone(), true));
+        let mut config = configuration(false);
+        config.task = agent_task();
+        let created = svc
+            .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+            .await
+            .unwrap();
+        let id = created.id.unwrap();
+        if claimed {
+            base.repo.actions.lock().unwrap()[0].claimed = Some(Utc::now());
+        }
+        *sessions.error.lock().unwrap() = Some(RoutineSessionError::RuntimeUnavailable);
+        if !claimed {
+            let error = svc
+                .update_action(
+                    &id,
+                    UpdateScheduledAction::Canonical(config.clone()),
+                    user(),
+                )
+                .await
+                .unwrap_err();
+            assert_eq!(
+                error.downcast_ref(),
+                Some(&RoutineSessionError::RuntimeUnavailable)
+            );
+        }
+        let validations = sessions.validations.lock().unwrap().len();
+        config.enabled = false;
+        let paused = svc
+            .update_action(
+                &id,
+                UpdateScheduledAction::Canonical(config.clone()),
+                user(),
+            )
+            .await
+            .unwrap();
+        assert!(!paused.enabled);
+        assert_eq!(paused.task, created.task);
+        assert_eq!(paused.claimed.is_some(), claimed);
+        // Disabling still works if acceptance has since been turned off.
+        base.update_action(&id, UpdateScheduledAction::Canonical(config), user())
+            .await
+            .unwrap();
+        svc.get_execution_records(&id, user()).await.unwrap();
+        svc.delete_action(&id, user()).await.unwrap();
+        assert!(base.repo.actions.lock().unwrap().is_empty());
+        assert_eq!(sessions.validations.lock().unwrap().len(), validations);
+    }
+}
+
+struct NoModelFallback;
+
+impl ScheduledAgentRunner for NoModelFallback {
+    async fn prepare(&self, _: &ScheduledAction, _: &mut ExecutionHandle) -> Result<()> {
+        panic!("must not fall back")
+    }
+    async fn run(
+        &self,
+        _: &ScheduledAction,
+        _: &ExecutionHandle,
+        _: Option<&EventReference>,
+    ) -> Result<()> {
+        panic!("must not fall back")
+    }
+    async fn cancel(&self, _: &ScheduledAction, _: &ExecutionHandle) -> Result<()> {
+        panic!("must not fall back")
+    }
+}
+
+#[tokio::test]
+async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_revocation() {
+    for denial in [
+        RoutineSessionError::PersonaUnavailable,
+        RoutineSessionError::Forbidden,
+    ] {
+        let base = service(false);
+        let sessions = Arc::new(Sessions::default());
+        let svc = TestService::new(
+            base.repo.clone(),
+            base.executor.clone(),
+            base.dispatcher_tx.clone(),
+        )
+        .with_target_validation(TargetValidation::new(sessions.clone(), true));
+        let mut config = configuration(false);
+        config.task = agent_task();
+        let created = svc
+            .create_action(CreateScheduledAction::Canonical(config), user())
+            .await
+            .unwrap();
+        assert!(sessions.preparations.lock().unwrap().is_empty());
+        *sessions.error.lock().unwrap() = Some(denial);
+        let runner = TargetRunner::new(Arc::new(NoModelFallback), sessions.clone());
+        let mut handle = ExecutionHandle::default();
+        let error = runner.prepare(&created, &mut handle).await.unwrap_err();
+        assert_eq!(error.downcast_ref(), Some(&denial));
+        assert!(handle.resource.is_none());
+        assert_eq!(sessions.preparations.lock().unwrap().len(), 1);
     }
 }
 
@@ -169,7 +404,7 @@ async fn creates_both_triggers_with_server_owned_state_and_legacy_input() {
     }
     let legacy = serde_json::from_value(json!({
         "name": "legacy", "schedule": "0 0 9 * * *", "timezone": "UTC",
-        "kind": "Agent", "task": {}, "enabled": true
+        "kind": "Agent", "task": {"model":"model", "prompt":"instructions", "user_prompt":"task"}, "enabled": true
     }))
     .unwrap();
     assert!(
@@ -369,7 +604,7 @@ async fn updates_advance_revision_and_only_trigger_changes_or_enabling_reset_act
     let id = action.id.unwrap();
     let past = Utc::now() - chrono::Duration::days(1);
     svc.repo.actions.lock().unwrap()[0].event_activated_at = Some(past);
-    config.task = json!({"prompt": "changed"});
+    config.task["prompt"] = json!("changed");
     let updated = svc
         .update_action(
             &id,

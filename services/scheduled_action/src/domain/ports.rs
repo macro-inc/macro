@@ -11,6 +11,15 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use tokio::sync::mpsc::{Receiver, Sender};
 
+/// Validate configuration syntax and authorize its target before persistence.
+pub trait TaskTargetValidator: Send + Sync + 'static {
+    fn validate_task(
+        &self,
+        task: &serde_json::Value,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<()>> + Send;
+}
+
 pub trait ScheduledActionRepo: Send + Sync + 'static {
     fn create_action(
         &self,
