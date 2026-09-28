@@ -122,7 +122,11 @@ permission failures should display a failed tool call without a successful resul
   confirm button. Someone who reaches no repository sees a hint with **Connect
   GitHub**, which opens Settings → Connected. Listed recents are remembered
   per user in local storage and offered first, without changing the Automatic
-  default. Once selected, **Branch** shows the repository's default branch (`main` when it
+  default. Automatic selection always chooses an accessible repository, using
+  the most recent accessible session repository when the prompt is ambiguous,
+  or the first available repository for users without repository history. Questions
+  and investigations also get a repository. With no accessible GitHub repositories,
+  starting a coding session fails with a prompt to connect GitHub. Once selected, **Branch** shows the repository's default branch (`main` when it
   has none) and opens a searchable list of that repository's branches
   (`GET /agent-repositories/branches?repoUrl=…` on the agent harness),
   default first. Typing filters the list; an unlisted valid name adds a
