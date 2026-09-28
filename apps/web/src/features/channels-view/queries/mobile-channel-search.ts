@@ -74,7 +74,8 @@ export function useMobileChannelSearch(options: {
   const searching = () => text().length > 0;
   const serviceLoading = () =>
     validateSearchServiceText(text()) &&
-    (text() !== serviceText() || query.isLoading);
+    (text() !== serviceText() ||
+      (query.isFetching && !query.isFetchingNextPage));
 
   return {
     items,

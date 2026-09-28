@@ -209,6 +209,25 @@ describe('mobile channel search', () => {
     expect(test.result.items()).toEqual([team, julia]);
   });
 
+  it('shows loading instead of an empty state while replacing placeholder results', () => {
+    const test = setup('Julia');
+    test.setRows([]);
+    test.setState({
+      isSuccess: true,
+      isFetching: true,
+      isPlaceholderData: true,
+      data: [hutch],
+    });
+    expect(test.result.items()).toEqual([]);
+    expect(test.result.isLoading()).toBe(true);
+    test.setState({
+      isFetching: false,
+      isPlaceholderData: false,
+      data: [],
+    });
+    expect(test.result.isLoading()).toBe(false);
+  });
+
   it('hides stale hits during debounce and placeholder data after changing the text', async () => {
     const test = setup('Julia');
     test.setState({ isSuccess: true, data: [julia], hasNextPage: true });
