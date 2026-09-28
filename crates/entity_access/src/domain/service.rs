@@ -620,7 +620,8 @@ where
             // Agent sessions grant their owner directly and their originating
             // channel as a channel source, both of which the generic accessor
             // query expands.
-            EntityType::Document
+            EntityType::ForeignEntity
+            | EntityType::Document
             | EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread

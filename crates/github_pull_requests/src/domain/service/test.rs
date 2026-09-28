@@ -22,8 +22,8 @@ use crate::domain::{
     models::{
         EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
         GithubPullRequestError, GithubPullRequestFacets, GithubPullRequestLabel,
-        GithubPullRequestRow, GithubPullRequestSortDirection, GithubPullRequestStatus,
-        GithubRepositoryIdentity, UpsertGithubPullRequest,
+        GithubPullRequestReviewDecision, GithubPullRequestRow, GithubPullRequestSortDirection,
+        GithubPullRequestStatus, GithubRepositoryIdentity, UpsertGithubPullRequest,
     },
     ports::{
         GithubPullRequestFacetRepository, GithubPullRequestFacetService,
@@ -548,7 +548,7 @@ async fn upsert_writes_the_row_from_the_merged_metadata() {
             assignees: Vec::new(),
             labels: Vec::new(),
             reviews: Vec::new(),
-            review_decision: None,
+            review_decision: Some(GithubPullRequestReviewDecision::ReviewRequired),
             base: None,
             head: None,
         }]
@@ -899,4 +899,105 @@ async fn lookup_does_not_find_records_from_other_sources() {
         .await;
 
     assert!(matches!(result, Err(GithubPullRequestError::NotFound(id)) if id == record.id));
+}
+
+#[derive(Clone)]
+struct RecordingPublisher {
+    events: Arc<Mutex<Vec<crate::domain::events::GithubPullRequestUpdated>>>,
+    rows: StubPullRequestRows,
+    fail: bool,
+}
+impl crate::domain::ports::GithubPullRequestEventPublisher for RecordingPublisher {
+    fn publish_updated(
+        &self,
+        update: crate::domain::events::GithubPullRequestUpdated,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<(), rootcause::Report>> + Send + '_>> {
+        Box::pin(async move {
+            assert!(
+                self.rows
+                    .rows()
+                    .iter()
+                    .any(|row| row.github_key == update.github_key),
+                "publish only after typed row persistence"
+            );
+            self.events.lock().unwrap().push(update);
+            if self.fail {
+                Err(rootcause::report!("broker unavailable"))
+            } else {
+                Ok(())
+            }
+        })
+    }
+}
+
+#[tokio::test]
+async fn publishes_only_changed_records_after_storage_and_coalesces_refresh() {
+    let foreign = StubForeignEntityService::default();
+    let rows = StubPullRequestRows::default();
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let service = service(&foreign, &rows).with_event_publisher(RecordingPublisher {
+        events: events.clone(),
+        rows: rows.clone(),
+        fail: false,
+    });
+    let open = pull_request(GithubPullRequestStatus::Open);
+    let personal = service
+        .upsert_pull_request(UpsertGithubPullRequest {
+            pull_request: open.clone(),
+            stored_for: user(),
+        })
+        .await
+        .unwrap();
+    let shared = service
+        .upsert_pull_request(UpsertGithubPullRequest {
+            pull_request: open.clone(),
+            stored_for: team(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(events.lock().unwrap().len(), 2);
+    service
+        .upsert_pull_request(UpsertGithubPullRequest {
+            pull_request: open.clone(),
+            stored_for: user(),
+        })
+        .await
+        .unwrap();
+    service.refresh_pull_request(&open).await.unwrap();
+    assert_eq!(
+        events.lock().unwrap().len(),
+        2,
+        "unchanged enrichments must not generate traffic"
+    );
+
+    service
+        .refresh_pull_request(&pull_request(GithubPullRequestStatus::Merged))
+        .await
+        .unwrap();
+    let events = events.lock().unwrap();
+    assert_eq!(events.len(), 3, "one fact per refresh, not per source");
+    assert_eq!(events[2].github_key, GITHUB_KEY);
+    assert_eq!(
+        events[2].foreign_entity_ids,
+        vec![personal.foreign_entity.id, shared.foreign_entity.id]
+    );
+}
+
+#[tokio::test]
+async fn failed_publication_does_not_report_a_committed_write_as_failed() {
+    let foreign = StubForeignEntityService::default();
+    let rows = StubPullRequestRows::default();
+    let service = service(&foreign, &rows).with_event_publisher(RecordingPublisher {
+        events: Arc::default(),
+        rows: rows.clone(),
+        fail: true,
+    });
+    let saved = service
+        .upsert_pull_request(UpsertGithubPullRequest {
+            pull_request: pull_request(GithubPullRequestStatus::Open),
+            stored_for: user(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(foreign.records()[0].id, saved.foreign_entity.id);
 }

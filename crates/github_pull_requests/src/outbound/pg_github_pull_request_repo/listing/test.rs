@@ -1508,3 +1508,59 @@ async fn list_updated_sort_uses_githubs_updated_at_when_known(pool: PgPool) {
         "the pull request reports GitHub's updated time"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn exact_ids_preserve_both_pr_sources_and_enforce_visibility(pool: PgPool) {
+    let records = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool);
+    let team_id = Uuid::now_v7();
+    let personal = insert_foreign_entity_for_source(
+        &records,
+        "macro/app/pull/7",
+        "github_pull_request",
+        "macro|user@example.com",
+        "user",
+    )
+    .await;
+    let team = insert_foreign_entity_for_source(
+        &records,
+        "macro/app/pull/7",
+        "github_pull_request",
+        &team_id.to_string(),
+        "team",
+    )
+    .await;
+    let filter = Some(Arc::new(Expr::or(
+        Expr::val(ForeignEntityLiteral::Id(personal.id)),
+        Expr::val(ForeignEntityLiteral::Id(team.id)),
+    )));
+    let both = listing
+        .list_pull_requests(
+            None,
+            vec![
+                SourceId::user("macro|user@example.com"),
+                SourceId::team(team_id),
+            ],
+            10,
+            filter_query(filter.clone()),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .unwrap();
+    assert_eq!(both.len(), 2);
+    assert!(ids(&both).contains(&personal.id));
+    assert!(ids(&both).contains(&team.id));
+    let personal_only = listing
+        .list_pull_requests(
+            None,
+            vec![SourceId::user("macro|user@example.com")],
+            10,
+            filter_query(filter),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .unwrap();
+    assert_eq!(ids(&personal_only), vec![personal.id]);
+}

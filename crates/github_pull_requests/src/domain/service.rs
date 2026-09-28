@@ -7,6 +7,9 @@ mod changes;
 
 pub use changes::{GithubPullRequestChangesServiceImpl, GithubPullRequestChangesetStore};
 
+use std::sync::Arc;
+use uuid::Uuid;
+
 use entity_access::domain::models::{
     EntityAccessReceipt, EntityType, MemberTeamRole, ViewAccessLevel,
 };
@@ -18,6 +21,7 @@ use item_filters::ast::{LiteralTree, github_pull_request::GithubPullRequestLiter
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::{
+    events::GithubPullRequestUpdated,
     models::{
         EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
         GithubPullRequestError, GithubPullRequestFacets, GithubPullRequestRow,
@@ -25,9 +29,10 @@ use super::{
         StoredGithubPullRequest, UpsertGithubPullRequest, UpsertedGithubPullRequest,
     },
     ports::{
-        GithubPullRequestFacetRepository, GithubPullRequestFacetService,
-        GithubPullRequestIndexRepository, GithubPullRequestIndexer, GithubPullRequestListing,
-        GithubPullRequestListingRepository, GithubPullRequestRepository, GithubPullRequestService,
+        GithubPullRequestEventPublisher, GithubPullRequestFacetRepository,
+        GithubPullRequestFacetService, GithubPullRequestIndexRepository, GithubPullRequestIndexer,
+        GithubPullRequestListing, GithubPullRequestListingRepository, GithubPullRequestRepository,
+        GithubPullRequestService,
     },
 };
 
@@ -35,6 +40,7 @@ use super::{
 pub struct GithubPullRequestServiceImpl<F, R> {
     foreign_entity_service: F,
     repo: R,
+    events: Option<Arc<dyn GithubPullRequestEventPublisher>>,
 }
 
 impl<F: ForeignEntityService, R: GithubPullRequestRepository> GithubPullRequestServiceImpl<F, R> {
@@ -44,6 +50,28 @@ impl<F: ForeignEntityService, R: GithubPullRequestRepository> GithubPullRequestS
         Self {
             foreign_entity_service,
             repo,
+            events: None,
+        }
+    }
+
+    /// Enable committed change publication. Read-only service instances need no publisher.
+    pub fn with_event_publisher(mut self, publisher: impl GithubPullRequestEventPublisher) -> Self {
+        self.events = Some(Arc::new(publisher));
+        self
+    }
+
+    async fn publish_updated(&self, github_key: &str, foreign_entity_ids: Vec<Uuid>) {
+        if foreign_entity_ids.is_empty() {
+            return;
+        }
+        if let Some(events) = &self.events {
+            let update = GithubPullRequestUpdated {
+                github_key: github_key.to_owned(),
+                foreign_entity_ids,
+            };
+            if let Err(error) = events.publish_updated(update).await {
+                tracing::error!(error=?error, github_key, "failed to publish committed PR update");
+            }
         }
     }
 
@@ -157,6 +185,7 @@ impl<F: ForeignEntityService, R: GithubPullRequestRepository> GithubPullRequestS
             .or_else(|| records.first())
             .map(|record| &record.metadata);
         let metadata = pull_request.foreign_entity_metadata(existing_metadata)?;
+        let changed = existing.is_none_or(|record| record.metadata != metadata);
         let participant_github_user_ids = participant_github_user_ids(&metadata);
 
         let foreign_entity = match existing {
@@ -185,6 +214,10 @@ impl<F: ForeignEntityService, R: GithubPullRequestRepository> GithubPullRequestS
             }
         };
         self.store_row(&foreign_entity.metadata, None).await;
+        if changed {
+            self.publish_updated(&pull_request.github_key, vec![foreign_entity.id])
+                .await;
+        }
 
         Ok(UpsertedGithubPullRequest {
             foreign_entity,
@@ -203,8 +236,12 @@ impl<F: ForeignEntityService, R: GithubPullRequestRepository> GithubPullRequestS
         pull_request: &EnrichedGithubPullRequest,
     ) -> Result<Vec<ForeignEntity>, GithubPullRequestError> {
         let mut refreshed = Vec::new();
+        let mut changed = Vec::new();
         for record in self.stored_records(&pull_request.github_key).await? {
             let metadata = pull_request.foreign_entity_metadata(Some(&record.metadata))?;
+            if metadata != record.metadata {
+                changed.push(record.id);
+            }
             refreshed.push(
                 self.foreign_entity_service
                     .patch_foreign_entity(
@@ -220,6 +257,8 @@ impl<F: ForeignEntityService, R: GithubPullRequestRepository> GithubPullRequestS
         if let Some(latest) = refreshed.iter().max_by_key(|record| record.updated_at) {
             self.store_row(&latest.metadata, None).await;
         }
+        self.publish_updated(&pull_request.github_key, changed)
+            .await;
         Ok(refreshed)
     }
 

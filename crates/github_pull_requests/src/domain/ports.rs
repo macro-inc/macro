@@ -261,3 +261,12 @@ pub trait GithubPullRequestFacetRepository: Send + Sync + 'static {
         source_ids: Vec<SourceId>,
     ) -> impl Future<Output = Result<GithubPullRequestFacets, Self::Err>> + Send;
 }
+
+/// Publishes committed PR facts independently of the webhook transport.
+pub trait GithubPullRequestEventPublisher: Send + Sync + 'static {
+    /// Await publication; an error must not be mistaken for a failed database write.
+    fn publish_updated(
+        &self,
+        update: super::events::GithubPullRequestUpdated,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<(), rootcause::Report>> + Send + '_>>;
+}

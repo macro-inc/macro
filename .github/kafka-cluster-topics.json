@@ -10,6 +10,7 @@
   "macro.documents",
   "macro.email",
   "macro.example",
+  "macro.github_pull_requests",
   "macro.initiatives",
   "macro.mentions",
   "macro.messages",

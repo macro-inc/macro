@@ -987,6 +987,15 @@ a PR opened from a list or agent session, a second split, breadcrumb return,
 side-panel toggle, and phone layout. If no GitHub data loads, the detail shows
 an error banner with a Retry button; pressing it refetches the PR in place.
 
+PR metadata changes should update an already loaded Reviews list row and the
+linked agent session's PR status without reloading the page. To verify, keep
+both rows visible and change the PR in GitHub; check the status after the
+webhook arrives. Include a team-owned PR and a PR also stored for your personal
+account. In the network panel, confirm the update arrives on the Soup GraphQL
+subscription without triggering a refetch of every Soup list. Replaying an
+unchanged webhook should not produce another Soup update. The PR detail's
+separate diff and discussion requests are outside this subscription behavior.
+
 ## Calls — `/app/component/calls`
 
 Tabs `All` / `Missed` / `Unattended`; `New call` offers `Call a channel or contact`

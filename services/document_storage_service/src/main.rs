@@ -585,10 +585,17 @@ async fn run() -> anyhow::Result<()> {
             installation_state_secret: config.github_installation_state_secret.to_string(),
         },
         document_service.clone(),
-        Arc::new(GithubPullRequestServiceImpl::new(
-            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
-            PgGithubPullRequestRepo::new(db.clone()),
-        )),
+        Arc::new(
+            GithubPullRequestServiceImpl::new(
+                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+                PgGithubPullRequestRepo::new(db.clone()),
+            )
+            .with_event_publisher(
+                github_pull_requests::broker::BrokerGithubPullRequestPublisher(
+                    macro_event_broker.clone(),
+                ),
+            ),
+        ),
         (*notification_ingress_service).clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
@@ -1354,7 +1361,10 @@ async fn run() -> anyhow::Result<()> {
             ),
             call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
             crm_service.clone(),
-            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+            GithubPullRequestServiceImpl::new(
+                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+                PgGithubPullRequestRepo::new(db.clone()),
+            ),
             reminders_service.clone(),
         )
         .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
@@ -1507,6 +1517,7 @@ async fn run() -> anyhow::Result<()> {
     });
 
     consumer_tracker.spawn({
+        let session_repo = agent_session::outbound::postgres::PgAgentSessionRepo::new(db.clone());
         let brokers = config.kafka_brokers.as_ref().to_string();
         let entity_access_service = entity_access_service.as_ref().clone();
         let macro_event_broker = macro_event_broker.clone();
@@ -1524,7 +1535,13 @@ async fn run() -> anyhow::Result<()> {
                 );
                 tracing::info!("starting realtime Soup entity consumer");
                 let result = fanout_service
-                    .run_entity_update_consumer(&brokers, cancellation_token.cancelled())
+                    .run_entity_update_consumer(
+                        &brokers,
+                        &soup_realtime::outbound::agent_sessions::AgentSessionPullRequestLookup(
+                            session_repo.clone(),
+                        ),
+                        cancellation_token.cancelled(),
+                    )
                     .await;
 
                 if cancellation_token.is_cancelled() {
