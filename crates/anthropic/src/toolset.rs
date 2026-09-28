@@ -73,14 +73,17 @@ fn response_usage(value: &serde_json::Value) -> UsageEvidence {
     };
     let tokens = (|| {
         let optional = |key| match usage.get(key) {
-            None => Some(0),
+            None | Some(serde_json::Value::Null) => Some(0),
             Some(value) => value.as_u64(),
         };
-        if usage
-            .pointer("/cache_creation/ephemeral_1h_input_tokens")
-            .is_some_and(|value| value.as_u64() != Some(0))
-        {
-            return None;
+        if let Some(cache) = usage.get("cache_creation").filter(|cache| !cache.is_null()) {
+            let cache = cache.as_object()?;
+            if cache
+                .get("ephemeral_1h_input_tokens")
+                .is_some_and(|value| !value.is_null() && value.as_u64() != Some(0))
+            {
+                return None;
+            }
         }
         Some(TrustedTokenUsage::from_disjoint(
             usage.get("input_tokens")?.as_u64()?,
@@ -157,9 +160,10 @@ pub(crate) async fn invoke_server_tool(
     });
     // The client performs one HTTP execution, with no hidden retries. Keep it
     // alive after tool cancellation so already-incurred usage can be recorded.
+    let (caller_alive, cancelled) = tokio::sync::oneshot::channel::<()>();
     let response = tokio::spawn(async move {
         let request = crate::types::request::transform_request_web_fetch(request);
-        let result = tokio::time::timeout(std::time::Duration::from_secs(300), async {
+        let execution = async {
             let response = client.post_response("/v1/messages", request).await?;
             let status = response.status();
             let request_id = response
@@ -169,11 +173,16 @@ pub(crate) async fn invoke_server_tool(
                 .and_then(|id| ProviderRequestId::new(id).ok());
             let value = response.json::<serde_json::Value>().await?;
             Ok::<_, anyhow::Error>((status, request_id, value))
-        })
-        .await;
-        let result = match result {
-            Ok(result) => result,
-            Err(error) => Err(error.into()),
+        };
+        tokio::pin!(execution);
+        let result = tokio::select! {
+            result = &mut execution => result,
+            _ = cancelled => match tokio::time::timeout(
+                std::time::Duration::from_secs(300), execution
+            ).await {
+                Ok(result) => result,
+                Err(error) => Err(error.into()),
+            },
         };
         let (usage, provider_request_id, outcome) = match &result {
             Ok((status, request_id, value)) => {
@@ -235,6 +244,7 @@ pub(crate) async fn invoke_server_tool(
     .await
     .map_err(tool_error)?
     .map_err(tool_error)?;
+    drop(caller_alive);
     // Observe before result parsing: a malformed tool result can still incur tokens.
     let response: MessageResponse = serde_json::from_value(response).map_err(tool_error)?;
 

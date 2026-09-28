@@ -339,7 +339,8 @@ async fn delayed_renewal_does_not_convert_a_legacy_period_already_in_use(pool: P
             .unwrap(),
         old
     );
-    // Explicit anchor regressions and mid-period end edits are ignored as well.
+    // Older starts remain ignored; a same-period end correction changes only
+    // the legacy anchor, never the retained allowance or activation history.
     billing
         .set_period(&user("payer"), period.start, period.end)
         .await
@@ -362,7 +363,20 @@ async fn delayed_renewal_does_not_convert_a_legacy_period_already_in_use(pool: P
             .await
             .unwrap()
             .period_anchor,
-        Some((period.start, period.end))
+        Some((period.start, period.end + Duration::days(1)))
+    );
+    assert_eq!(
+        billing
+            .period_allowance(&user("payer"), period.start)
+            .await
+            .unwrap(),
+        old
+    );
+    assert!(
+        repo.period(user("seat"), period.start)
+            .await
+            .unwrap()
+            .is_none()
     );
 }
 

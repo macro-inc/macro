@@ -1,3 +1,4 @@
+mod review;
 mod tracking;
 
 use super::super::metering::ProviderSupport;
@@ -123,6 +124,7 @@ struct Transport {
     remaining: Arc<Mutex<std::collections::VecDeque<Bytes>>>,
     fail: bool,
     stall: bool,
+    connect_delay: Duration,
 }
 
 impl Transport {
@@ -170,7 +172,7 @@ impl HttpClientExt for Transport {
             }
             let body: LazyBody<U> = Box::pin(async move {
                 if stall {
-                    tokio::time::sleep(EXECUTION_TIMEOUT * 2).await;
+                    tokio::time::sleep(DRAIN_TIMEOUT * 2).await;
                 }
                 Ok(U::from(response))
             });
@@ -194,15 +196,27 @@ impl HttpClientExt for Transport {
         T: Into<Bytes> + Send,
     {
         self.called(request);
+        if !self.connect_delay.is_zero() {
+            tokio::time::sleep(self.connect_delay).await;
+        }
         let bytes = self.next_response();
         // Exercise arbitrary byte boundaries, including UTF-8 and CRLF.
         let chunks: Vec<_> = bytes
             .chunks(7)
             .map(|chunk| Ok(Bytes::copy_from_slice(chunk)))
             .collect();
+        let stall = self.stall;
+        let stream = async_stream::stream! {
+            if stall {
+                tokio::time::sleep(DRAIN_TIMEOUT * 2).await;
+            }
+            for chunk in chunks {
+                yield chunk;
+            }
+        };
         Ok(Response::builder()
             .header("content-type", "text/event-stream")
-            .body(Box::pin(futures::stream::iter(chunks)) as http_client::sse::BoxedStream)
+            .body(Box::pin(stream) as http_client::sse::BoxedStream)
             .unwrap())
     }
 }
@@ -521,7 +535,7 @@ async fn absent_support_is_an_activation_gate_not_an_exemption() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn timeout_after_provider_execution_does_not_invent_zero_usage() {
+async fn live_nonstream_request_outlives_the_cancelled_drain_budget() {
     let journal = Arc::new(Journal::default());
     let transport = Transport {
         stall: true,
@@ -535,16 +549,13 @@ async fn timeout_after_provider_execution_does_not_invent_zero_usage() {
         "model",
     )
     .scope(async {
-        assert!(client.send::<_, Bytes>(request()).await.is_err());
+        client.send::<_, Bytes>(request()).await.unwrap();
     })
     .await;
     assert_eq!(transport.calls.load(Ordering::SeqCst), 1);
     let finals = journal.finals.lock().unwrap();
-    assert_eq!(finals[0].outcome, ProviderOutcome::Unknown);
-    assert_eq!(
-        finals[0].usage,
-        UsageEvidence::Missing(UnresolvedReason::Interrupted)
-    );
+    assert_eq!(finals[0].outcome, ProviderOutcome::Succeeded);
+    assert!(matches!(finals[0].usage, UsageEvidence::Reported(_)));
 }
 
 #[tokio::test]

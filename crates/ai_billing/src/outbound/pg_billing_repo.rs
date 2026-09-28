@@ -134,7 +134,7 @@ impl BillingRepo for PgBillingRepo {
                OR (EXCLUDED.period_start > ai_billing_account.period_start
                    AND EXCLUDED.period_start >= ai_billing_account.period_end)
                OR (EXCLUDED.period_start = ai_billing_account.period_start
-                   AND EXCLUDED.period_end = ai_billing_account.period_end)
+                   AND EXCLUDED.period_end > EXCLUDED.period_start)
             "#,
             payer.as_ref(),
             start,

@@ -52,7 +52,9 @@ analytics `ai_usage` table, and funding/collection work queues:
   durable delivery queue during a database outage: those losses require operational
   follow-up. Pending rows identify process interruptions; they are not funding work.
 - Once an HTTP execution starts, provider/evidence exchange survives consumer
-  cancellation in an owned task, with a bounded 300-second drain. A process exit
+  cancellation in an owned task, with a bounded 300-second drain starting only
+  when the caller future or stream receiver is dropped. Live requests and live
+  consumer streams have no metering-imposed deadline. A process exit
   can still strand a pending observation; a failed begin can leave no row. Missing
   terminal stream evidence is retained as interrupted, not inferred from provisional
   counters. Evidence failures do not add a stream error in tracking-only mode.
@@ -106,6 +108,23 @@ the repository root. Record actual commands/results in the task handoff. No host
 mutations, provider calls, Stripe provisioning, flag activation, or UI changes are
 part of this rollout.
 
+### Observation deployment gate: identity lifecycle
+
+The current journal stores user and entity identity in `request` JSONB, without a
+user foreign key or deletion hook (`20260928145631_ai_usage_observations.sql`).
+Deleting an account does not remove that attribution. No retention/erasure worker
+or administrative erasure operation is supplied by this change. This is a current
+privacy lifecycle gap, not something made safe by leaving billing disabled.
+
+Before deploying this observational wiring to real-user traffic, the data owner
+must approve retention and erasure handling (including already-deleted users),
+identify the operator responsible, and verify an executable process against the
+observation table. Until that gate is satisfied, do not deploy the wiring to
+real-user environments. Do not infer a retention duration here, reuse financial
+retention requirements for observations, or cascade-delete financial history.
+Schema/application merge and test-environment verification are not evidence that
+this deployment gate has passed.
+
 Before a future **billing/enforcement** release, separately review/implement:
 
 1. Verified rates, request-regime support, authenticated payer/seat resolution,
@@ -117,3 +136,11 @@ Before a future **billing/enforcement** release, separately review/implement:
    ingress; financial-mode cancellation and funding-denial propagation.
 4. Credit-first allocation, opt-in/caps, collection idempotency and rollout gates.
    Tracking-only observations are never retroactive funding authorization.
+5. An authorized, auditable resolution/release transition for unresolved financial
+   attempts. `FinancialUsage::pending` and funding scans only discover work;
+   reconciliation stops at missing actual usage, and conflicting finalization
+   replays cannot overwrite immutable evidence. Before enabling admission, test
+   operator authorization, retained original evidence, idempotent resolution and
+   recovery of payer ordering/holds. Never treat missing evidence as zero or
+   release a hold merely because a request timed out. This gap may remain deferred
+   only while financial admission and policy activation remain unwired.

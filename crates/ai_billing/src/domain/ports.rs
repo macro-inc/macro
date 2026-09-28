@@ -131,7 +131,9 @@ pub trait BillingRepo: Send + Sync + 'static {
         limit_cents: i64,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Record the subscription period synced from Stripe.
+    /// Record the legacy subscription anchor synced from Stripe. A correction
+    /// to the current start's end is allowed; older/overlapping starts cannot
+    /// replace it. This does not rewrite allowance or financial period history.
     fn set_period(
         &self,
         payer: &MacroUserIdStr<'_>,

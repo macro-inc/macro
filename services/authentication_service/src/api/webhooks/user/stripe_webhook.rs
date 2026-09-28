@@ -783,55 +783,61 @@ async fn handle_team_subscription_event<'a>(
         macro_db_client::user::patch::update_macro_user_has_trialed(&ctx.db, email, true).await?;
     }
 
-    billing::sync_team_usage_policy(ctx, &plan_sync).await?;
-    let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
-    ctx.teams_service
-        .patch_team_subscription_id(team_id, &subscription_id)
-        .await?;
-
-    match subscription_status {
-        "active" | "trialing" => {
-            // Restore stamps every member (owner included) with the team
-            // subscriber role and the tier role of their own seat's plan.
+    billing::complete_subscription_webhook(
+        billing::sync_team_usage_policy(ctx, &plan_sync),
+        async {
+            let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
             ctx.teams_service
-                .restore_permissions_for_team_members(team_id)
-                .await?;
-            sync_team_billing_period(ctx, &plan_sync).await?;
-
-            ctx.teams_service
-                .patch_team_payment_status(team_id, true)
+                .patch_team_subscription_id(team_id, &subscription_id)
                 .await?;
 
-            track_stripe_subscription(
-                ctx.analytics_client.clone(),
-                &subscription_id,
-                tracking_data,
-            );
-            Ok(())
-        }
-        "canceled" | "incomplete" | "incomplete_expired" | "past_due" | "paused" | "unpaid" => {
-            ctx.teams_service
-                .revoke_permissions_for_team_members(team_id)
-                .await?;
-            sync_team_billing_period(ctx, &plan_sync).await?;
-            ctx.teams_service
-                .patch_team_payment_status(team_id, false)
-                .await?;
+            match subscription_status {
+                "active" | "trialing" => {
+                    // Restore stamps every member (owner included) with the team
+                    // subscriber role and the tier role of their own seat's plan.
+                    ctx.teams_service
+                        .restore_permissions_for_team_members(team_id)
+                        .await?;
+                    sync_team_billing_period(ctx, &plan_sync).await?;
 
-            track_stripe_subscription(
-                ctx.analytics_client.clone(),
-                &subscription_id,
-                SubscriptionTrackingData {
-                    is_new: false,
-                    ..tracking_data
-                },
-            );
-            Ok(())
-        }
-        _ => {
-            anyhow::bail!("unexpected subscription status for team subscription");
-        }
-    }
+                    ctx.teams_service
+                        .patch_team_payment_status(team_id, true)
+                        .await?;
+
+                    track_stripe_subscription(
+                        ctx.analytics_client.clone(),
+                        &subscription_id,
+                        tracking_data,
+                    );
+                    Ok(())
+                }
+                "canceled" | "incomplete" | "incomplete_expired" | "past_due" | "paused"
+                | "unpaid" => {
+                    ctx.teams_service
+                        .revoke_permissions_for_team_members(team_id)
+                        .await?;
+                    sync_team_billing_period(ctx, &plan_sync).await?;
+                    ctx.teams_service
+                        .patch_team_payment_status(team_id, false)
+                        .await?;
+
+                    track_stripe_subscription(
+                        ctx.analytics_client.clone(),
+                        &subscription_id,
+                        SubscriptionTrackingData {
+                            is_new: false,
+                            ..tracking_data
+                        },
+                    );
+                    Ok(())
+                }
+                _ => {
+                    anyhow::bail!("unexpected subscription status for team subscription");
+                }
+            }
+        },
+    )
+    .await
 }
 
 #[derive(Debug, Clone, Serialize)]

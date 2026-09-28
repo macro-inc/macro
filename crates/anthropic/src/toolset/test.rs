@@ -181,6 +181,102 @@ fn absent_usage_is_not_zero_and_unknown_cache_ttl_is_unresolved() {
     );
 }
 
+#[tokio::test(start_paused = true)]
+async fn live_tool_has_no_deadline_but_cancelled_tool_drain_is_bounded() {
+    use std::time::Duration;
+    for cancel in [false, true] {
+        let journal = Arc::new(Observations::default());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut data = vec![0; 8192];
+            assert!(socket.read(&mut data).await.unwrap() > 0);
+            started_tx.send(()).unwrap();
+            let _ = release_rx.await;
+            let body = r#"{"content":[],"usage":{"input_tokens":10,"output_tokens":2}}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = socket.write_all(response.as_bytes()).await;
+        });
+        let mut context = AnthropicToolContext::new(
+            Client::with_config(crate::config::Config {
+                api_base: format!("http://{address}"),
+                ..Default::default()
+            }),
+            "claude-haiku-4-5".into(),
+        );
+        context.recorder =
+            ai_usage::with_tracking(Arc::new(ai_usage::NoOpUsageRecorder), journal.clone());
+        let caller = tokio::spawn(async move {
+            let request =
+                RequestContext::new("macro|test@example.com".to_owned().try_into().unwrap());
+            invoke_server_tool(
+                &context,
+                &request,
+                crate::types::request::WEB_SEARCH_TOOL.clone(),
+                "query",
+            )
+            .await
+        });
+        started_rx.await.unwrap();
+        // A live operation can already be older than the detached drain budget.
+        tokio::time::advance(Duration::from_secs(301)).await;
+        assert!(!caller.is_finished());
+        assert!(journal.finals.lock().unwrap().is_empty());
+        if cancel {
+            caller.abort();
+            let _ = caller.await;
+            tokio::task::yield_now().await;
+            tokio::time::advance(Duration::from_secs(299)).await;
+            assert!(journal.finals.lock().unwrap().is_empty());
+            tokio::time::advance(Duration::from_secs(2)).await;
+            for _ in 0..20 {
+                tokio::task::yield_now().await;
+            }
+            assert_eq!(
+                journal.finals.lock().unwrap()[0].usage,
+                UsageEvidence::Missing(UnresolvedReason::Interrupted)
+            );
+        } else {
+            release_tx.send(()).unwrap();
+            caller.await.unwrap().unwrap();
+            assert_eq!(
+                journal.finals.lock().unwrap()[0].usage,
+                UsageEvidence::Reported(TrustedTokenUsage::from_disjoint(10, 2, 0, 0, 0))
+            );
+        }
+        server.abort();
+    }
+}
+
+#[test]
+fn nullable_cache_counters_are_absent_but_malformed_usage_is_unresolved() {
+    use serde_json::json;
+    assert_eq!(
+        response_usage(&json!({"usage": {
+            "input_tokens": 10, "output_tokens": 2, "cache_creation": null,
+            "cache_read_input_tokens": null, "cache_creation_input_tokens": null
+        }})),
+        UsageEvidence::Reported(TrustedTokenUsage::from_disjoint(10, 2, 0, 0, 0))
+    );
+    for usage in [
+        json!({"input_tokens": 10, "output_tokens": null}),
+        json!({"input_tokens": 10, "output_tokens": 2, "cache_creation": 3}),
+        json!({"input_tokens": 10, "output_tokens": 2, "cache_read_input_tokens": -1}),
+        json!({"input_tokens": 10, "output_tokens": 2, "cache_creation_input_tokens": "3"}),
+    ] {
+        assert_eq!(
+            response_usage(&json!({"usage": usage})),
+            UsageEvidence::Missing(UnresolvedReason::UnsupportedDimensions)
+        );
+    }
+}
+
 #[test]
 fn deserialize_web_search_response() {
     // From the Anthropic docs: https://platform.claude.com/docs/en/docs/build-with-claude/tool-use/web-search-tool

@@ -11,6 +11,7 @@ toolset = ["dep:ai_toolset", "dep:async-trait", "dep:anyhow", "dep:ai_usage"]
 
 [dev-dependencies]
 rand = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
 
 
 [dependencies]

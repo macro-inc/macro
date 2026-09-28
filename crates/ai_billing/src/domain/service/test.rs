@@ -1187,6 +1187,19 @@ async fn synced_period_anchors_the_snapshot() {
     let snap = svc.snapshot(&payer).await.unwrap();
     assert_eq!(snap.period_start, start);
     assert_eq!(snap.period_end, end);
+    for corrected in [
+        end + chrono::Duration::days(2),
+        end - chrono::Duration::days(2),
+    ] {
+        svc.sync_period(&payer, start, corrected, None)
+            .await
+            .unwrap();
+        let snapshot = svc.snapshot(&payer).await.unwrap();
+        assert_eq!(
+            (snapshot.period_start, snapshot.period_end),
+            (start, corrected)
+        );
+    }
     // Inverted periods are ignored.
     svc.sync_period(&payer, end, start, None).await.unwrap();
     assert_eq!(svc.snapshot(&payer).await.unwrap().period_start, start);

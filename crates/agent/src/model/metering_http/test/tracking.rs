@@ -202,7 +202,9 @@ async fn caller_cancellation_does_not_cancel_evidence_delivery() {
         tokio::task::yield_now().await;
     }
     caller.abort();
-    tokio::time::advance(EXECUTION_TIMEOUT + Duration::from_secs(1)).await;
+    let _ = caller.await;
+    tokio::task::yield_now().await;
+    tokio::time::advance(DRAIN_TIMEOUT + Duration::from_secs(1)).await;
     for _ in 0..20 {
         tokio::task::yield_now().await;
     }
@@ -219,11 +221,11 @@ async fn captured_financial_session_cannot_be_downgraded_by_an_observational_rec
         Arc::new(ai_usage::NoOpUsageRecorder),
         Arc::new(Observations::default()),
     );
-    let usage = UsageContext::system(AiFeature::Chat);
+    let session_usage = UsageContext::system(AiFeature::Chat);
     let strict = MeteringContext::new(
         FinancialMode::Activated,
         FinancialCapability::Unavailable,
-        usage.clone(),
+        session_usage.clone(),
         vec![],
     );
     let agent = crate::AgentLoop::new(recorder);
@@ -232,16 +234,27 @@ async fn captured_financial_session_cannot_be_downgraded_by_an_observational_rec
             Arc::new(ai_toolset::AsyncToolCollection::<()>::new()),
             Arc::new(()),
             "system",
-            usage,
+            session_usage,
             MockCompletionModel::new([MockTurn::text("must not execute")]),
         ))
         .await;
-    let error = session
-        .send_message(vec![rig_core::message::Message::user("hello")])
-        .await
-        .err()
-        .expect("captured strict scope must fail closed");
-    assert!(error.to_string().contains("capability"));
+    let caller_usage = usage("macro|other@example.com", AiFeature::Automation);
+    for caller in [
+        MeteringContext::tracking_only(Arc::new(Observations::default()), caller_usage.clone()),
+        MeteringContext::new(
+            FinancialMode::Legacy,
+            FinancialCapability::Unavailable,
+            caller_usage,
+            vec![],
+        ),
+    ] {
+        let error = caller
+            .scope(session.send_message(vec![rig_core::message::Message::user("hello")]))
+            .await
+            .err()
+            .expect("captured strict scope must fail closed inside a non-financial scope");
+        assert!(error.to_string().contains("capability"));
+    }
 }
 
 #[tokio::test]

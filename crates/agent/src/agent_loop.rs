@@ -426,9 +426,18 @@ impl Session {
             )
         };
         let telemetry = self.telemetry.clone();
-        // An explicit per-turn scope wins over the construction-time scope
-        // (for example, a session crossing usage-policy activation at renewal).
-        let financial_context = if MeteringContext::current().is_some() {
+        // A newly activated turn may replace the construction-time scope, but
+        // observational/legacy callers must never downgrade an activated session.
+        let current = MeteringContext::current();
+        let financial_context = if current.as_ref().is_some_and(MeteringContext::activated) {
+            current
+        } else if self
+            .financial_context
+            .as_ref()
+            .is_some_and(MeteringContext::activated)
+        {
+            self.financial_context.clone()
+        } else if current.is_some() {
             MeteringContext::for_operation(self.recorder.as_ref(), &self.usage_ctx)
         } else {
             self.financial_context.clone()

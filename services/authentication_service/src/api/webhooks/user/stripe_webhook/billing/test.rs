@@ -1,6 +1,58 @@
 use super::*;
 use serde_json::json;
 
+#[tokio::test]
+async fn policy_failure_preserves_base_work_and_requests_webhook_retry() {
+    let events = std::cell::RefCell::new(Vec::new());
+    let result = complete_subscription_webhook(
+        async {
+            events
+                .borrow_mut()
+                .push("policy checked against original binding");
+            anyhow::bail!("policy storage unavailable")
+        },
+        async {
+            events
+                .borrow_mut()
+                .extend(["subscription", "permissions", "payment"]);
+            Ok(())
+        },
+    )
+    .await;
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("policy storage unavailable")
+    );
+    assert_eq!(
+        *events.borrow(),
+        vec![
+            "policy checked against original binding",
+            "subscription",
+            "permissions",
+            "payment"
+        ]
+    );
+}
+
+#[tokio::test]
+async fn disabled_policy_preserves_legacy_success_and_base_failure() {
+    for fail_base in [false, true] {
+        let called = std::cell::Cell::new(false);
+        let result = complete_subscription_webhook(async { Ok(()) }, async {
+            called.set(true);
+            if fail_base {
+                anyhow::bail!("base failed");
+            }
+            Ok(())
+        })
+        .await;
+        assert!(called.get());
+        assert_eq!(result.is_err(), fail_base);
+    }
+}
+
 fn subscription() -> Value {
     json!({
         "id": "sub_verified", "created": 1_700_000_000, "customer": "cus_verified",

@@ -21,8 +21,8 @@ use super::metering::{Attempt, MeteringContext, MeteringError, WireProtocol};
 #[cfg(test)]
 mod test;
 
-/// Maximum time to drain an authorized execution after its consumer disappears.
-const EXECUTION_TIMEOUT: Duration = Duration::from_secs(300);
+/// Maximum time to drain a provider execution after its consumer disappears.
+const DRAIN_TIMEOUT: Duration = Duration::from_secs(300);
 /// Bound transient SSE parsing memory; never retain or journal model content.
 const MAX_EVENT_BYTES: usize = 1024 * 1024;
 
@@ -141,12 +141,16 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
                 };
                 // Complete the provider/evidence exchange independently of caller
                 // cancellation, before Rig can reject tool arguments or JSON.
-                tokio::spawn(async move {
-                    let result = tokio::time::timeout(EXECUTION_TIMEOUT, async {
-                        let response = client.inner.send::<_, Bytes>(request).await?;
-                        let (parts, body) = response.into_parts();
-                        Ok::<_, http_client::Error>((parts, body.await?))
-                    })
+                let (caller_alive, cancelled) = tokio::sync::oneshot::channel::<()>();
+                let result = tokio::spawn(async move {
+                    let result = drain_after_cancellation(
+                        async {
+                            let response = client.inner.send::<_, Bytes>(request).await?;
+                            let (parts, body) = response.into_parts();
+                            Ok::<_, http_client::Error>((parts, body.await?))
+                        },
+                        cancelled,
+                    )
                     .await;
                     match result {
                         Ok(Ok((parts, bytes))) => {
@@ -174,7 +178,11 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
                     }
                 })
                 .await
-                .map_err(|_| http_error(MeteringError::Stopped))?
+                .map_err(|_| http_error(MeteringError::Stopped))?;
+                // Keep this guard until the await completes; dropping the caller
+                // future instead closes the channel and starts detached draining.
+                drop(caller_alive);
+                result
             })
             .await
         }
@@ -212,9 +220,14 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
         let inner = self.inner.clone();
         // Keep connection establishment alive too: a timeout after provider
         // execution is unresolved evidence, not permission to release the hold.
-        tokio::spawn(async move {
-            let response =
-                tokio::time::timeout(EXECUTION_TIMEOUT, inner.send_streaming(request)).await;
+        let (caller_alive, cancelled) = tokio::sync::oneshot::channel::<()>();
+        let result = tokio::spawn(async move {
+            let mut drain_deadline = None;
+            let response = drain_after_cancellation(inner.send_streaming(request), async {
+                let _ = cancelled.await;
+                drain_deadline = Some(tokio::time::Instant::now() + DRAIN_TIMEOUT);
+            })
+            .await;
             let response = match response {
                 Ok(Ok(response)) => response,
                 other => {
@@ -265,7 +278,12 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
                         let _ = tx.send(chunk).await;
                     }
                 };
-                let _ = tokio::time::timeout(EXECUTION_TIMEOUT, drain).await;
+                // Cancellation during connection establishment and body drain
+                // share one budget, rather than resetting it after headers.
+                let _ = match drain_deadline {
+                    Some(deadline) => tokio::time::timeout_at(deadline, drain).await,
+                    None => drain_after_cancellation(drain, tx.closed()).await,
+                };
                 if let Some(attempt) = attempt {
                     let activated = attempt.activated();
                     let result = attempt
@@ -291,7 +309,21 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
             ))
         })
         .await
-        .map_err(|_| http_error(MeteringError::Stopped))?
+        .map_err(|_| http_error(MeteringError::Stopped))?;
+        drop(caller_alive);
+        result
+    }
+}
+
+/// Live consumers have no metering deadline. Only detached work is bounded.
+async fn drain_after_cancellation<F: Future, C: Future>(
+    execution: F,
+    cancelled: C,
+) -> Result<F::Output, tokio::time::error::Elapsed> {
+    tokio::pin!(execution);
+    tokio::select! {
+        result = &mut execution => Ok(result),
+        _ = cancelled => tokio::time::timeout(DRAIN_TIMEOUT, execution).await,
     }
 }
 
@@ -407,7 +439,9 @@ impl Facts {
                         && let Some(usage) = self.usage.as_mut().and_then(Value::as_object_mut)
                     {
                         for (key, value) in update {
-                            if key == "output_tokens" || value.as_u64() != Some(0) {
+                            if !value.is_null()
+                                && (key == "output_tokens" || value.as_u64() != Some(0))
+                            {
                                 usage.insert(key.clone(), value.clone());
                             }
                         }
@@ -497,21 +531,29 @@ fn optional_count(value: &Value, key: &str) -> Option<u64> {
     }
 }
 
+// Anthropic models these optional cache fields as nullable as well as omittable.
+fn anthropic_optional_count(value: &Value, key: &str) -> Option<u64> {
+    if value.get(key).is_some_and(Value::is_null) {
+        return Some(0);
+    }
+    optional_count(value, key)
+}
+
 fn normalize(protocol: WireProtocol, usage: &Value) -> Option<TrustedTokenUsage> {
     let tokens = match protocol {
         WireProtocol::Anthropic => {
             // Anthropic input excludes cache reads/writes; output already bills
             // thinking at the output rate without a separate reasoning counter.
-            if let Some(cache) = usage.get("cache_creation")
-                && optional_count(cache, "ephemeral_1h_input_tokens")? != 0
+            if let Some(cache) = usage.get("cache_creation").filter(|cache| !cache.is_null())
+                && anthropic_optional_count(cache, "ephemeral_1h_input_tokens")? != 0
             {
                 return None;
             }
             Some(TrustedTokenUsage::from_disjoint(
                 count(usage, "input_tokens")?,
                 count(usage, "output_tokens")?,
-                optional_count(usage, "cache_read_input_tokens")?,
-                optional_count(usage, "cache_creation_input_tokens")?,
+                anthropic_optional_count(usage, "cache_read_input_tokens")?,
+                anthropic_optional_count(usage, "cache_creation_input_tokens")?,
                 0,
             ))
         }

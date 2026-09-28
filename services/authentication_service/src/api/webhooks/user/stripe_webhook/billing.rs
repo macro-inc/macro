@@ -223,6 +223,20 @@ pub(super) async fn sync_team_usage_policy(
     sync_periods(ctx, owner, None, sync.verified.clone()).await
 }
 
+/// Preserve the pre-update identity check without letting its failure skip base
+/// subscription work. Still fail the webhook afterwards so Stripe retries policy
+/// persistence; acknowledging the event here would lose that retry.
+pub(super) async fn complete_subscription_webhook(
+    policy: impl Future<Output = anyhow::Result<()>>,
+    subscription: impl Future<Output = anyhow::Result<()>>,
+) -> anyhow::Result<()> {
+    let policy_result = policy.await.inspect_err(|error| {
+        tracing::warn!(error = ?error, "usage policy sync failed; completing base subscription work before retry");
+    });
+    subscription.await?;
+    policy_result
+}
+
 async fn sync_periods(
     ctx: &ApiContext,
     payer: &MacroUserIdStr<'_>,
