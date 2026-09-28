@@ -1,27 +1,16 @@
-use std::sync::Arc;
-
 use bebop::{Record, SliceWrapper};
 use loro::{VersionVector, awareness::EphemeralStore};
 use tracing::trace;
-use worker::{Result, WebSocket};
+use worker::Result;
 
 use crate::{
     durable_object::{DocumentSyncSession, Wsm},
     error::ResultExt,
     generated::schema::{FromPeer, FromRemote},
-    mutex::Mutex,
+    socket::Socket,
     state::DocumentState,
     storage::SessionStorage,
 };
-
-fn serialize<'a, T: bebop::Record<'a>>(
-    obj: T,
-    msg_buf: &mut Vec<u8>,
-) -> std::result::Result<&[u8], bebop::SerializeError> {
-    msg_buf.clear();
-    obj.serialize(msg_buf)?;
-    Ok(msg_buf)
-}
 
 /// Decodes an inbound WebSocket payload once, before its trace span is created.
 pub fn deserialize_message(message: &[u8]) -> Result<FromPeer<'_>> {
@@ -135,46 +124,32 @@ impl InboundMessageTelemetry {
     }
 }
 
-/// Sends the initial sync message to the client over the websocket
+/// Sends the initial sync message to a single peer.
 /// The initial sync message contains the snapshot of the current state of the document
-pub fn send_initial_sync(
-    ws: &WebSocket,
-    snapshot: &[u8],
-    awareness: &[u8],
-    buf: Arc<Mutex<Vec<u8>>>,
-) -> Result<()> {
-    let message = FromRemote::RemoteInitialSync {
+pub fn send_initial_sync(socket: &Socket, snapshot: &[u8], awareness: &[u8]) -> Result<()> {
+    socket.send(FromRemote::RemoteInitialSync {
         snapshot: SliceWrapper::Raw(snapshot),
         awareness: SliceWrapper::Raw(awareness),
-    };
-
-    let mut buf = buf.lock("serialize RemoteInitialSync in send_initial_sync");
-    let serialized = serialize(message, &mut buf).context("Failed serializing snapshot")?;
-    ws.send_with_bytes(serialized)
-        .context("failed to send initial sync message")?;
-    Ok(())
+    })
 }
 
+/// Broadcasts an awareness update to every connected peer except `from`.
 pub fn broadcast_awareness(
-    from_socket: &WebSocket,
-    sockets: &[WebSocket],
+    dss: &DocumentSyncSession,
+    from: &Socket,
     awareness: &[u8],
-    buf: Arc<Mutex<Vec<u8>>>,
 ) -> Result<()> {
-    let message = FromRemote::RemoteAwareness {
-        awareness: SliceWrapper::Raw(awareness),
-    };
-
-    let mut buf = buf.lock("serialize RemoteAwareness in broadcast_awareness");
-    let serialized = serialize(message, &mut buf).context("failed serializing RemoteAwareness")?;
-
-    for w in sockets.iter().filter(|w| w != &from_socket) {
+    for socket in dss.get_sockets() {
+        if socket == *from {
+            continue;
+        }
         // A dead peer socket must not abort delivery to the remaining peers.
-        if let Err(e) = w.send_with_bytes(serialized) {
+        if let Err(e) = socket.send(FromRemote::RemoteAwareness {
+            awareness: SliceWrapper::Raw(awareness),
+        }) {
             tracing::warn!(error = ?e, "failed to send awareness to a peer; continuing");
         }
     }
-
     Ok(())
 }
 
@@ -186,19 +161,21 @@ const MAX_MESSAGE_SIZE: usize = 1000 * 1000;
     reason = "lots of args lets us avoid having multiple mutable refs to same object"
 )]
 pub async fn process_message(
-    ws: &WebSocket,
+    sender: &Socket,
     document_id: &str,
     document_state: &DocumentState,
     session_storage: &SessionStorage,
     awareness: &EphemeralStore,
     message: FromPeer<'_>,
-    buf: Arc<Mutex<Vec<u8>>>,
     dss: &DocumentSyncSession,
     telemetry: &mut InboundMessageTelemetry,
 ) -> Result<()> {
     // Loading the document after hibernation can yield to a revocation. Check
     // the surface grant again immediately before handling any protocol message.
-    if !dss.validate_surface_sockets(Some(ws)).await? {
+    if !dss
+        .validate_surface_sockets(Some(sender.websocket()))
+        .await?
+    {
         return Ok(());
     }
     trace!(
@@ -210,7 +187,7 @@ pub async fn process_message(
         // This registers a peer id to the owner of the current websocket
         FromPeer::PeerRegisterId { peerid } => {
             telemetry.peer_id = Some(peerid);
-            Wsm::new(dss, ws)
+            Wsm::new(dss, sender.websocket())
                 .add_new_peerid(peerid, document_id)
                 .await?;
         }
@@ -220,19 +197,22 @@ pub async fn process_message(
         FromPeer::PeerUpdate { updates, id } => {
             telemetry.op_id = Some(id.to_string());
             telemetry.update_bytes = Some(updates.iter().map(|u| u.len()).sum());
-            if !Wsm::new(dss, ws).can_edit().await? {
+            if !Wsm::new(dss, sender.websocket()).can_edit().await? {
                 tracing::warn!("received update from peer without edit permission");
                 return Ok(());
             }
 
-            let attribution = match Wsm::new(dss, ws).edit_attribution().await {
+            let attribution = match Wsm::new(dss, sender.websocket()).edit_attribution().await {
                 Ok(attribution) => attribution,
                 Err(error) => {
                     tracing::warn!(error = ?error, "failed to resolve optional edit attribution");
                     None
                 }
             };
-            let peer_ids = Wsm::new(dss, ws).get_peer_ids().await.unwrap_or_default();
+            let peer_ids = Wsm::new(dss, sender.websocket())
+                .get_peer_ids()
+                .await
+                .unwrap_or_default();
             let peer_id = peer_ids.first().copied();
             telemetry.peer_id = peer_id;
             let now_ms = web_time::SystemTime::now()
@@ -264,40 +244,23 @@ pub async fn process_message(
                 }
             }
 
-            {
-                // ACK the sender before broadcasting: the batch is durably
-                // stored at this point, and a failed broadcast to some other
-                // peer must not block the ack.
-                let message = FromRemote::RemoteUpdateAck { id };
-                let mut buf = buf.lock("serialize RemoteUpdateAck in PeerUpdate handler");
-                let serialized =
-                    serialize(message, &mut buf).context("Failed serializing update")?;
-                ws.send_with_bytes(serialized)
-                    .inspect_err(|error| {
-                        tracing::error!(error = ?error, op.id = %id, "failed to send update ack");
-                    })
-                    .context("failed to send update ack")?;
-            }
+            // ACK only after the update is durably stored.
+            sender
+                .send(FromRemote::RemoteUpdateAck { id })
+                .inspect_err(|error| {
+                    tracing::error!(error = ?error, op.id = %id, "failed to send update ack");
+                })
+                .context("failed to send update ack")?;
 
-            // Peers receiving the rebroadcast (everyone but the sender). The
-            // count is the key Teo/Hutch diagnostic: if it excludes a peer the
-            // DO thinks isn't connected, that's the dropped-update bug.
-            let sockets = dss.get_websockets();
-            let targets: Vec<&WebSocket> = sockets.iter().filter(|w| w != &ws).collect();
+            let sockets = dss.get_sockets();
+            let targets: Vec<&Socket> = sockets.iter().filter(|socket| *socket != sender).collect();
             telemetry.broadcast_targets = Some(targets.len());
             for update in &updates {
-                // broadcast each update to other peers
-                let message = FromRemote::RemoteUpdate {
-                    update: SliceWrapper::Raw(update),
-                };
-                let mut buf = buf.lock("serialize RemoteUpdate in PeerUpdate handler");
-                let serialized =
-                    serialize(message, &mut buf).context("Failed serializing update")?;
-                for w in &targets {
-                    // A dead peer socket must not abort delivery to the
-                    // remaining peers.
-                    if let Err(e) = w.send_with_bytes(serialized) {
-                        tracing::warn!(error = ?e, "failed to send update to a peer; continuing");
+                for socket in &targets {
+                    if let Err(error) = socket.send(FromRemote::RemoteUpdate {
+                        update: SliceWrapper::Raw(update),
+                    }) {
+                        tracing::warn!(error = ?error, "failed to send update to a peer; continuing");
                     }
                 }
             }
@@ -312,11 +275,10 @@ pub async fn process_message(
                 return Ok(());
             }
             let encodede = awareness.encode_all();
-            let sockets = dss.get_websockets();
+            let sockets = dss.get_sockets();
             telemetry.broadcast_targets =
-                Some(sockets.iter().filter(|socket| socket != &ws).count());
-            broadcast_awareness(ws, &sockets, &encodede, buf)
-                .context("failed to broadcast awareness")?;
+                Some(sockets.iter().filter(|socket| *socket != sender).count());
+            broadcast_awareness(dss, sender, &encodede).context("failed to broadcast awareness")?;
         }
         // Handle a peer requesting a specific set of updates from the document.
         // The client sends a version vector (not frontiers) so unknown peers
@@ -336,15 +298,11 @@ pub async fn process_message(
             // sent; `decode(vv).encode()` is not guaranteed to reproduce the same
             // bytes for a multi-peer version vector, which would make the client
             // discard a perfectly good response and time out.
-            let message = FromRemote::RemoteUpdateSince {
-                update: SliceWrapper::Raw(&update),
-                vv,
-            };
-
-            let mut buf = buf.lock("serialize RemoteUpdate in PeerRequestSince handler");
-            let serialized =
-                serialize(message, &mut buf).context("failed serializing PeerRequestSince")?;
-            ws.send_with_bytes(serialized)
+            sender
+                .send(FromRemote::RemoteUpdateSince {
+                    update: SliceWrapper::Raw(&update),
+                    vv,
+                })
                 .context("failed to send update")?;
         }
         // Peer is requesting a snapshot from the remote
@@ -352,14 +310,11 @@ pub async fn process_message(
             let snapshot = document_state.export_shallow_snapshot()?;
             telemetry.response_bytes = Some(snapshot.len());
 
-            let message = FromRemote::RemoteSnapshot {
-                snapshot: SliceWrapper::Raw(&snapshot),
-            };
-            let mut buf = buf.lock("serialize RemoteSnapshot in PeerRequestSnapshot handler");
-            let serialized =
-                serialize(message, &mut buf).context("failed serializing PeerRequestSnapshot")?;
-            ws.send_with_bytes(serialized)
-                .context("failed to send update")?;
+            sender
+                .send(FromRemote::RemoteSnapshot {
+                    snapshot: SliceWrapper::Raw(&snapshot),
+                })
+                .context("failed to send snapshot")?;
         }
         FromPeer::Unknown => {
             return Err(worker::Error::from("unknown message type"));
