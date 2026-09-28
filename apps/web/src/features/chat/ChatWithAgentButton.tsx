@@ -10,11 +10,16 @@ import {
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import {
+  enableChatV3Agents,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { createChat } from '@core/util/create';
 import AgentIcon from '@phosphor/sparkle.svg';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
+import { startPendingSession } from '../block-agent/context/pending-session';
 
 export { AgentIcon as ChatWithAgentIcon };
 
@@ -72,6 +77,32 @@ async function createAndOpenChat(seed: {
   if (!seed.replaceSplit && !manager) {
     toast.failure('Unable to open chat');
     return false;
+  }
+  if (isFeatureEnabled(enableChatV3Agents)) {
+    const content = seed.message
+      ? {
+          type: 'agent' as const,
+          id: startPendingSession({ prompt: seed.message }),
+        }
+      : {
+          type: 'component' as const,
+          id: 'agents',
+          preserveParams: true,
+          params: {
+            focusComposer: crypto.randomUUID(),
+            draft: seed.input ?? '',
+          },
+        };
+    if (seed.replaceSplit) seed.replaceSplit.replace({ next: content });
+    else {
+      const result = manager?.openWithSplit(content, {
+        activate: true,
+        preferNewSplit: true,
+      });
+      if (content.type === 'component' && result?.split)
+        result.split.replace({ next: content, mergeHistory: true });
+    }
+    return true;
   }
   let result: Awaited<ReturnType<typeof createChat>>;
   try {

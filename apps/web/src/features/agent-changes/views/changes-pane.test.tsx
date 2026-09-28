@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentChangesContext } from '../context/agent-changes-context';
 import { AgentChangesControllerProvider } from '../context/agent-changes-controller';
 import {
@@ -21,11 +21,21 @@ import {
   ReviewNotesDock,
 } from './SessionChangesControls';
 
+const device = vi.hoisted(() => ({ mobile: false }));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => device.mobile }));
+afterEach(() => {
+  device.mobile = false;
+});
+
 // Pierre mounts a custom element and highlights with shiki; the pane test
 // covers everything around it and leaves the diff body to the browser.
 vi.mock('../components/PierreFileDiff', () => ({
-  PierreFileDiff: (props: { path: string }) => (
-    <div data-testid="diff" data-path={props.path} />
+  PierreFileDiff: (props: { path: string; diffStyle: string }) => (
+    <div
+      data-testid="diff"
+      data-path={props.path}
+      data-style={props.diffStyle}
+    />
   ),
 }));
 
@@ -83,6 +93,25 @@ function readyContext() {
 }
 
 describe('ChangesPane', () => {
+  it('returns to the phone conversation and uses unified diffs', async () => {
+    device.mobile = true;
+    const { controller } = mount(readyContext(), () => <ChangesPane />);
+    controller().layout.open();
+    controller().setDiffStyle('split');
+    await waitFor(() => expect(screen.getAllByTestId('diff')).toHaveLength(2));
+    expect(
+      screen
+        .getAllByTestId('diff')
+        .every((diff) => diff.dataset.style === 'unified')
+    ).toBe(true);
+    expect(
+      screen.queryByRole('button', { name: 'Expand changes to the full width' })
+    ).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Back to conversation' })
+    );
+    expect(controller().layout.changesVisible()).toBe(false);
+  });
   it('lists files and collapses individual or all diffs without viewed controls', async () => {
     const context = readyContext();
     const { controller } = mount(context, () => <ChangesPane />);
@@ -212,7 +241,7 @@ describe('ChangesPane', () => {
     );
     expect(controller().layout.layout()).toBe('changes-only');
     fireEvent.click(
-      screen.getByRole('button', { name: 'Bring the session back' })
+      screen.getByRole('button', { name: 'Back to conversation' })
     );
     expect(controller().layout.layout()).toBe('split');
     fireEvent.click(

@@ -8,6 +8,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@components/app/GlobalAppState';
+import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { previewBlockTarget } from '@components/app/previewTarget';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -17,6 +18,7 @@ import { ChatEmptyStateContext } from '@core/component/AI/component/message/Empt
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { useSoupItemsQuery } from '@queries/soup/items';
@@ -86,6 +88,8 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
         }
       : undefined
   );
+  const [mobileList, setMobileList] = createSignal(true);
+  const [draft, setDraft] = createSignal('');
   const [search, setSearch] = createSignal('');
   const rosterSource = createAgentRosterSource();
   const query = useSoupItemsQuery(
@@ -125,6 +129,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   onMount(() => panel.handle.setDisplayName('Agents'));
 
   const showComposer = () => {
+    setMobileList(false);
     if (panel.handle.content().id !== 'agents') {
       panel.handle.replace({ next: { type: 'component', id: 'agents' } });
       return;
@@ -142,11 +147,19 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
           : undefined;
       },
       (request) => {
-        if (request) showComposer();
+        if (!request) return;
+        const content = panel.handle.content();
+        if (
+          content.type === 'component' &&
+          typeof content.params?.draft === 'string'
+        )
+          setDraft(content.params.draft);
+        showComposer();
       }
     )
   );
   const openPage = (next: AgentsPage) => {
+    setMobileList(false);
     setSelected(undefined);
     setPage(next);
   };
@@ -169,6 +182,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     )
   );
   const openRoster = (_kind: AgentKind) => {
+    setMobileList(false);
     setSelected(undefined);
     setPage('agents');
   };
@@ -177,6 +191,16 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     event?: MouseEvent,
     targetMode: AgentsMode = mode()
   ) => {
+    if (isTouchDevice()) {
+      layout.openWithSplit(
+        {
+          type: conversation.type === 'agent_session' ? 'agent' : 'chat',
+          id: conversation.id,
+        },
+        { referredFrom: 'agents' }
+      );
+      return;
+    }
     const next = {
       type: 'component' as const,
       id: agentsRouteId({ mode: targetMode, conversation }),
@@ -239,6 +263,30 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     return 'New conversation';
   };
 
+  const sidebar = () => (
+    <AgentsSidebar
+      activePage={selected() ? undefined : page()}
+      onOpenPage={(next) =>
+        next === 'agents' ? openRoster('agent') : openPage(next)
+      }
+      modeForConversation={modeForConversation}
+      activeConversationId={selected()?.activeConversationId}
+      search={search()}
+      groups={groups()}
+      loading={query.isPending}
+      error={query.isLoadingError}
+      hasNextPage={Boolean(query.hasNextPage)}
+      loadingNextPage={query.isFetchingNextPage}
+      onNewConversation={showComposer}
+      onSearchChange={setSearch}
+      onOpenConversation={(conversation, event) =>
+        openConversation(conversation, event, modeForConversation(conversation))
+      }
+      onRetry={() => void query.refetch()}
+      onLoadMore={() => void query.fetchNextPage()}
+    />
+  );
+
   return (
     <SplitPanel.Root>
       <SplitPanel.Body>
@@ -262,42 +310,28 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
               layoutBreakpoint="collapsed"
               main={{ min: 280, preferredWidth: 640 }}
             >
-              <ViewShell.Aside>
-                <AgentsSidebar
-                  activePage={selected() ? undefined : page()}
-                  onOpenPage={(next) =>
-                    next === 'agents' ? openRoster('agent') : openPage(next)
-                  }
-                  modeForConversation={modeForConversation}
-                  activeConversationId={selected()?.activeConversationId}
-                  search={search()}
-                  groups={groups()}
-                  loading={query.isPending}
-                  error={query.isLoadingError}
-                  hasNextPage={Boolean(query.hasNextPage)}
-                  loadingNextPage={query.isFetchingNextPage}
-                  onNewConversation={showComposer}
-                  onSearchChange={setSearch}
-                  onOpenConversation={(conversation, event) =>
-                    openConversation(
-                      conversation,
-                      event,
-                      modeForConversation(conversation)
-                    )
-                  }
-                  onRetry={() => void query.refetch()}
-                  onLoadMore={() => void query.fetchNextPage()}
-                />
-              </ViewShell.Aside>
+              <Show when={!isTouchDevice()}>
+                <ViewShell.Aside>{sidebar()}</ViewShell.Aside>
+              </Show>
 
               <ViewShell.Main class="overflow-hidden">
-                <main class="main">
+                <main
+                  class="main touch:pt-[calc(var(--safe-top,0px)+0.5rem)]"
+                  classList={{ hidden: isTouchDevice() && mobileList() }}
+                >
                   <Show
                     when={selected()?.conversation}
                     keyed
                     fallback={
                       <>
-                        <Topbar title={pageTitle()} />
+                        <Topbar
+                          title={pageTitle()}
+                          onBack={
+                            isTouchDevice()
+                              ? () => setMobileList(true)
+                              : undefined
+                          }
+                        />
                         <div class="body">
                           <Suspense fallback={<LoadingComposer />}>
                             <Switch>
@@ -307,16 +341,26 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                               <Match when={page() === 'agents'}>
                                 <AgentSettings />
                               </Match>
-                              <Match when={true}>
-                                <NewChatPage
-                                  roster={rosterSource.roster()}
-                                  rosterLoading={rosterSource.loading()}
-                                  availabilityLoading={rosterSource.availabilityLoading()}
-                                  onStart={startConversation}
-                                  onOpenRoster={openRoster}
-                                />
-                              </Match>
                             </Switch>
+                            <div
+                              class="contents"
+                              classList={{ hidden: page() !== 'new' }}
+                            >
+                              <NewChatPage
+                                active={
+                                  !isTouchDevice() ||
+                                  (!mobileList() && page() === 'new')
+                                }
+                                workspaceId={panel.handle.id}
+                                draft={draft()}
+                                onDraftChange={setDraft}
+                                roster={rosterSource.roster()}
+                                rosterLoading={rosterSource.loading()}
+                                availabilityLoading={rosterSource.availabilityLoading()}
+                                onStart={startConversation}
+                                onOpenRoster={openRoster}
+                              />
+                            </div>
                           </Suspense>
                         </div>
                       </>
@@ -364,6 +408,16 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                     )}
                   </Show>
                 </main>
+                <Show when={isTouchDevice() && mobileList()}>
+                  <div
+                    class="size-full min-h-0 pt-[calc(var(--safe-top,0px)+0.5rem)]"
+                    style={{
+                      'padding-bottom': `${FloatRegions.hostHeight()}px`,
+                    }}
+                  >
+                    {sidebar()}
+                  </div>
+                </Show>
               </ViewShell.Main>
             </ViewShell.Root>
           </div>

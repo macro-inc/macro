@@ -28,7 +28,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
-import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
+import ArrowUp from '@phosphor/arrow-up.svg';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 
@@ -386,10 +386,14 @@ export function AgentInput(props: AgentInputProps) {
                       disabled={props.disabled || props.readOnly}
                     />
                     <Show
-                      when={canSendNext()}
+                      when={
+                        props.hasQueuedMessages &&
+                        markdown().trim().length === 0 &&
+                        attachments().length === 0
+                      }
                       fallback={
                         <Show
-                          when={props.busy && props.onStop}
+                          when={props.busy && props.onStop && !canSend()}
                           fallback={
                             <SendButton
                               appearance="composer"
@@ -422,8 +426,9 @@ export function AgentInput(props: AgentInputProps) {
                         tooltip="Send next queued message"
                         shortcut="Enter"
                         onClick={sendNext}
+                        disabled={!canSendNext()}
                       >
-                        <EnterIcon />
+                        <ArrowUp />
                       </SendButton>
                     </Show>
                   </div>

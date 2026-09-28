@@ -10,9 +10,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   createChat: vi.fn(),
+  agentsEnabled: false,
+  startPendingSession: vi.fn(() => 'agent-id'),
   openWithSplit: vi.fn(),
   storeChatStateImmediate: vi.fn(),
   setPendingSendData: vi.fn(),
+}));
+
+vi.mock('@core/constant/featureFlags', () => ({
+  enableChatV3Agents: {},
+  isFeatureEnabled: () => mocks.agentsEnabled,
+}));
+vi.mock('../block-agent/context/pending-session', () => ({
+  startPendingSession: mocks.startPendingSession,
 }));
 
 vi.mock('@app/signal/splitLayout', () => ({
@@ -41,11 +51,12 @@ vi.mock('@ui', () => ({
   Button: () => null,
 }));
 
-import { openChatWithAgent } from './ChatWithAgentButton';
+import { openChatWithAgent, openChatWithMessage } from './ChatWithAgentButton';
 
 describe('openChatWithAgent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.agentsEnabled = false;
     mocks.createChat.mockResolvedValue({ chatId: 'chat-id' });
   });
 
@@ -113,5 +124,45 @@ describe('openChatWithAgent', () => {
     ).toBe(false);
     expect(mocks.openWithSplit).not.toHaveBeenCalled();
     expect(mocks.storeChatStateImmediate).not.toHaveBeenCalled();
+  });
+});
+
+describe('new agent creation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.agentsEnabled = true;
+  });
+  it('opens a contextual draft in the new composer without creating a legacy chat', async () => {
+    await openChatWithAgent({
+      type: 'document',
+      id: 'doc-id',
+      name: 'Plan',
+      fileType: 'md',
+    });
+    expect(mocks.createChat).not.toHaveBeenCalled();
+    expect(mocks.startPendingSession).not.toHaveBeenCalled();
+    expect(mocks.openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'component',
+        id: 'agents',
+        params: expect.objectContaining({
+          draft: expect.stringContaining('doc-id'),
+          focusComposer: expect.any(String),
+        }),
+      }),
+      expect.anything()
+    );
+  });
+  it('sends an immediate prompt through the new agent service', async () => {
+    await openChatWithMessage('Explain this');
+    expect(mocks.startPendingSession).toHaveBeenCalledWith({
+      prompt: 'Explain this',
+    });
+    expect(mocks.openWithSplit).toHaveBeenCalledWith(
+      { type: 'agent', id: 'agent-id' },
+      expect.anything()
+    );
+    expect(mocks.createChat).not.toHaveBeenCalled();
+    expect(mocks.setPendingSendData).not.toHaveBeenCalled();
   });
 });

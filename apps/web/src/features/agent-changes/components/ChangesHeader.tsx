@@ -12,6 +12,7 @@ import { pullRequestNumber } from '../core/pull-request';
 export type DiffStyleValue = 'unified' | 'split';
 
 export function ChangesHeader(props: {
+  mobile?: boolean;
   /** The pane fills the width; the session is off screen. */
   spotlit: boolean;
   /** `head → base`, when known. */
@@ -35,11 +36,11 @@ export function ChangesHeader(props: {
   };
   return (
     <header class="flex h-12 shrink-0 items-center gap-1.5 border-b border-edge pr-2 pl-2.5">
-      <Show when={props.spotlit}>
+      <Show when={props.spotlit || props.mobile}>
         <Button
           variant="ghost"
           size="icon-sm"
-          tooltip="Bring the session back"
+          tooltip="Back to conversation"
           onClick={() => props.onBack()}
         >
           <ArrowLeftIcon />
@@ -85,33 +86,40 @@ export function ChangesHeader(props: {
           variant="outline"
           size="sm"
           class="gap-1.5"
+          aria-label="View pull request"
           onClick={props.onViewPullRequest}
         >
           <GitPullRequestIcon class="size-3.5" />
-          <span>View pull request</span>
+          <Show when={!props.mobile}>
+            <span>View pull request</span>
+          </Show>
         </Button>
       </Show>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-pressed={props.spotlit}
-        tooltip={
-          props.spotlit
-            ? 'Back to the split'
-            : 'Expand changes to the full width'
-        }
-        onClick={() => props.onSpotlight()}
-      >
-        {props.spotlit ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        tooltip="Close the changes pane"
-        onClick={() => props.onClose()}
-      >
-        <XIcon />
-      </Button>
+      <Show when={!props.mobile}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-pressed={props.spotlit}
+          tooltip={
+            props.spotlit
+              ? 'Back to the split'
+              : 'Expand changes to the full width'
+          }
+          onClick={() => props.onSpotlight()}
+        >
+          {props.spotlit ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
+        </Button>
+      </Show>
+      <Show when={!props.mobile}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          tooltip="Close the changes pane"
+          onClick={() => props.onClose()}
+        >
+          <XIcon />
+        </Button>
+      </Show>
     </header>
   );
 }

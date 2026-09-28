@@ -5,6 +5,38 @@ User-sent messages in chat and agent transcripts use an ink-colored bubble with
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
+## Phones with new agents enabled
+
+With `enable-chat-v3-agents`, **Agents** opens the new conversation list on phones,
+including GitHub PR state and links. Tap a row to open a full-screen conversation;
+the header back button returns to the previous screen, or Agents for a direct link.
+There is no conversation side panel on phones. **Changes** opens a full-width,
+unified diff with **Back to conversation**; returning preserves the unsent draft.
+
+**New conversation** opens the phone composer. Returning to the list and reopening
+it preserves the draft, attachments, agent, model, repository, and branch. Tap the
+agent/model control to open a searchable bottom sheet. Tap an agent to use its
+default model, or its model arrow to choose a model; **Create agent** opens the
+roster. **Agents** and **Connections** remain reachable from the list.
+
+With the flag enabled, Home/list composers, search, the create menu, folder AI
+creation, contextual **Chat with AI**, and onboarding prompts all start new agent
+sessions. Existing legacy chat rows still open their original chats. Without the
+flag, the existing creation and list flows remain available.
+
+While an agent works, a draft can be sent to its queue. Above the queue,
+**Send next** explicitly interrupts the current turn and sends the oldest queued
+message. The empty composer offers the same action when messages are queued;
+with a draft it offers **Send**. With no draft or queue, the busy composer offers
+**Stop**. Send-next actions disable during stopping/starting and for read-only
+sessions.
+
+Phone verification: check a narrow viewport with touch emulation, then exercise
+list → new conversation → back → new conversation, a row and direct session link,
+the model sheet and repository controls, queued sends, and Changes → back. Check
+that composers remain above the keyboard and neither Changes nor headers cause
+horizontal overflow.
+
 ## Uploading files with AI
 
 `UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB

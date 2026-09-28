@@ -31,6 +31,7 @@ import { createChatComposerTip } from '../primitives/chat-composer-tip';
 /** Shared input that starts on one line and grows with the draft. */
 export function ChatComposer(props: {
   autoFocus?: boolean;
+  collapseOnBlur?: boolean;
   registerFocus?: (focus: () => void) => void;
   draft: string;
   onDraftChange: (draft: string) => void;
@@ -75,6 +76,8 @@ export function ChatComposer(props: {
     setHeight(element.getBoundingClientRect().height);
   });
   let container: HTMLDivElement | undefined;
+  const [focused, setFocused] = createSignal(false);
+  const collapsed = () => isTouchDevice() && props.collapseOnBlur && !focused();
   useTouchOutsideToDismissKeyboard(() => container);
   const disabled = () => !!props.blockedReason || props.session?.disabled;
   const canSendNext = () =>
@@ -125,6 +128,7 @@ export function ChatComposer(props: {
 
   const { isCompact } = createComposerLayout(editor.buildHandle().lexical, {
     container: layout,
+    mode: () => (collapsed() ? 'collapsed' : 'auto'),
   });
 
   // Apply host-supplied drafts (Home suggestions) to the existing editor.
@@ -191,7 +195,19 @@ export function ChatComposer(props: {
         commands: inputCommands,
       }}
     >
-      <div ref={container} data-keep-keyboard class="min-w-0">
+      <div
+        ref={container}
+        data-keep-keyboard
+        class="min-w-0"
+        onFocusIn={() => setFocused(true)}
+        onFocusOut={(event) => {
+          if (
+            !(event.relatedTarget instanceof Node) ||
+            !event.currentTarget.contains(event.relatedTarget)
+          )
+            setFocused(false);
+        }}
+      >
         <ComposerSurface
           as="div"
           data-agent-composer="chat"
@@ -241,7 +257,13 @@ export function ChatComposer(props: {
                     </Input.AttachFilesAction>
                   </div>
                 </Show>
-                <div class="max-h-60 min-w-0 flex-1 self-center group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:basis-full overflow-y-auto px-[9.375px] group-data-[composer-compact=true]/composer:px-0 group-data-[composer-coding=true]/composer:min-h-[58px]">
+                <div
+                  classList={{
+                    'max-h-6 overflow-hidden': !!collapsed(),
+                    'max-h-[min(15rem,30dvh)]': !collapsed(),
+                  }}
+                  class="min-w-0 flex-1 self-center group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:basis-full overflow-y-auto px-[9.375px] group-data-[composer-compact=true]/composer:px-0 group-data-[composer-coding=true]/composer:min-h-[58px]"
+                >
                   <MarkdownShell
                     class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
                     config={editor}

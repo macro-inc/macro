@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
@@ -15,6 +16,7 @@ import {
   storeChatStateImmediate,
   storeSoupInputModel,
 } from '@core/component/AI/util/storage';
+import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -22,7 +24,8 @@ import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { createEffect } from 'solid-js';
+import { createEffect, Show } from 'solid-js';
+import { MobileAgentComposer } from '../agents-view/mobile-agent-composer';
 
 function SoupChatInputInner() {
   const splitPanelContext = useSplitPanelOrThrow();
@@ -134,6 +137,15 @@ function SoupChatInputInner() {
 }
 
 export function SoupChatInput() {
+  const agents = useFeatureFlag(enableChatV3Agents);
+  return (
+    <Show when={agents().enabled} fallback={<LegacySoupChatInput />}>
+      <MobileAgentComposer />
+    </Show>
+  );
+}
+
+function LegacySoupChatInput() {
   // Seed the selector from the persisted soup draft model so the user's last
   // choice in the new-chat composer is restored. ChatInputProvider falls back
   // to DEFAULT_MODEL when this is undefined.

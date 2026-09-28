@@ -76,7 +76,7 @@ it('updates Agents layout metadata after the remote flag loads and changes', () 
   });
 });
 
-it('keeps the legacy layout on touch devices when Agents is enabled', () => {
+it('uses the new Agents layout on touch devices when enabled', () => {
   state.touch = true;
   state.flag = () => ({ enabled: true, loading: false });
   render(() => (
@@ -86,6 +86,6 @@ it('keeps the legacy layout on touch devices when Agents is enabled', () => {
   ));
 
   expect(state.updateMeta).toHaveBeenCalledWith({
-    splitPanelLayout: 'legacy',
+    splitPanelLayout: 'composable',
   });
 });

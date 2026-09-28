@@ -129,10 +129,17 @@ function SplitBackButton() {
       class="p-1 rounded-lg touch:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
-      disabled={!context.handle.canGoBack()}
+      disabled={
+        !context.handle.canGoBack() && context.handle.content().type !== 'agent'
+      }
       onClick={() => {
         if (splitBackInterceptor()?.()) return;
-        context.handle.goBack();
+        if (
+          !context.handle.canGoBack() &&
+          context.handle.content().type === 'agent'
+        ) {
+          context.handle.replace({ next: { type: 'component', id: 'agents' } });
+        } else context.handle.goBack();
       }}
     >
       <CaretLeft />
@@ -636,7 +643,8 @@ export function SplitHeader(props: {
             <HeaderIsland
               class={cn(
                 'relative gap-0 px-1',
-                (!panel.handle.canGoBack() ||
+                ((!panel.handle.canGoBack() &&
+                  panel.handle.content().type !== 'agent') ||
                   isListViewID(panel.handle.content().id)) &&
                   'hidden'
               )}

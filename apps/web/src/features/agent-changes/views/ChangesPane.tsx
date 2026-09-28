@@ -4,6 +4,7 @@
  * resolved values to the components.
  */
 
+import { isMobile } from '@core/mobile/isMobile';
 import CircleNotchIcon from '@phosphor/circle-notch.svg';
 import WarningCircleIcon from '@phosphor/warning-circle.svg';
 import { Button } from '@ui';
@@ -78,7 +79,7 @@ function DiffStack(props: { entries: FileDiffEntry[] }) {
                     <PierreFileDiff
                       path={path()}
                       diff={diff()}
-                      diffStyle={diffStyle()}
+                      diffStyle={isMobile() ? 'unified' : diffStyle()}
                       themeType={themeType()}
                       notes={notesForFile(review.notes(), path())}
                       composing={composing()}
@@ -126,6 +127,7 @@ export function ChangesPane() {
       aria-label="Changes"
     >
       <ChangesHeader
+        mobile={isMobile()}
         spotlit={layout.layout() === 'changes-only'}
         range={range()}
         diffStyle={diffStyle()}
@@ -137,7 +139,7 @@ export function ChangesPane() {
         }}
         refreshing={model.refreshing() || state().kind === 'capturing'}
         onRefresh={() => void model.refresh()}
-        onBack={layout.backToSplit}
+        onBack={isMobile() ? layout.close : layout.backToSplit}
         onSpotlight={layout.spotlight}
         onClose={layout.close}
       />

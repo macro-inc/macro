@@ -15,6 +15,7 @@ import { buildAgentRoster, type PersistedAgentLike } from '../core/roster';
 import { NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
+  touch: false,
   openSettings: vi.fn(),
   attachments: [] as InputAttachmentData[],
   recentIds: [] as string[],
@@ -24,6 +25,9 @@ const mocks = vi.hoisted(() => ({
     mocks.preferredInmemModel = id;
   }),
   repositories: [] as { url: string; defaultBranch?: string }[],
+}));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => mocks.touch,
 }));
 vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
 vi.mock('@channel/Input', async () => ({
@@ -145,6 +149,7 @@ function page(
   const onStart = vi.fn();
   render(() => (
     <NewChatPage
+      compact={mocks.touch}
       roster={buildAgentRoster({
         agents,
         runtimes: [],
@@ -189,6 +194,7 @@ async function hoverAgent(name: string) {
 describe('agent-led new conversation', () => {
   let motionStyles: HTMLStyleElement;
   beforeEach(() => {
+    mocks.touch = false;
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
     mocks.recentUrls = [];
@@ -202,14 +208,65 @@ describe('agent-led new conversation', () => {
     });
     motionStyles = document.createElement('style');
     motionStyles.textContent =
-      '[role="menu"] { animation-name: none; transition-duration: 0s; }';
+      '[role="menu"], [data-corvu-drawer-content], [data-corvu-drawer-overlay] { animation-name: none; transition-duration: 0s; }';
     document.head.append(motionStyles);
     vi.stubGlobal('scrollTo', vi.fn());
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    Element.prototype.scrollTo = vi.fn();
   });
   afterEach(() => {
     cleanup();
+    mocks.touch = false;
     motionStyles.remove();
     vi.unstubAllGlobals();
+  });
+  it('selects a coding model from the phone sheet without hover and preserves the draft', async () => {
+    mocks.touch = true;
+    const send = page();
+    fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+      target: { value: 'Phone draft' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Models for Cursor' })
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'GPT-5' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: 'Phone draft',
+        botId: CURSOR_BOT_ID,
+        modelOverride: 'gpt-5',
+      })
+    );
+  });
+  it('filters models in the phone sheet and selects an in-memory model', async () => {
+    mocks.touch = true;
+    const send = page();
+    fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+    fireEvent.input(
+      await screen.findByRole('textbox', { name: 'Search agents and models' }),
+      {
+        target: { value: 'Sonnet 5' },
+      }
+    );
+    expect(screen.queryByRole('button', { name: 'Chat default' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Sonnet 5' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelOverride: 'anthropic/claude-sonnet-5',
+      })
+    );
   });
   it('offers both kinds without a mode or model control and starts with the agent default', async () => {
     const send = page();
