@@ -1,4 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
@@ -57,6 +58,8 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
   return (
     <ChannelsMobileView
       source={mobileSearchSource}
+      searchQuery={mobileSearchText()}
+      onClearSearch={() => SearchState.setQuery('')}
       tab={state.mobileTab}
       onTabChange={setMobileTab}
     />

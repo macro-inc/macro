@@ -1,7 +1,7 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { createSearchState } from '@app/features/soup/search/create-search-state';
 import { isChannelEntity } from '@entity';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   type ChannelsDataSource,
@@ -56,7 +56,7 @@ export function createChannelSearchSource(options: {
   });
   const isFetching = () =>
     enabled() &&
-    (options.source().isFetching() || (searching() && search.isFetching()));
+    (searching() ? search.isFetching() : options.source().isFetching());
   const hasMore = () =>
     enabled() &&
     (searching() ? search.hasNextPage() : options.source().hasMore());
@@ -65,20 +65,39 @@ export function createChannelSearchSource(options: {
     (searching()
       ? search.isFetchingNextPage()
       : options.source().isLoadingMore());
+  const error = () => {
+    if (!enabled()) return;
+    if (!searching()) return options.source().error();
+    return search.usesServiceSearch() ? search.error() : undefined;
+  };
+  const needsRecentPage = () =>
+    enabled() &&
+    searching() &&
+    options.scope() === 'recents' &&
+    search.usesServiceSearch() &&
+    items().length === 0 &&
+    hasMore() &&
+    !error();
+
+  // An empty filtered page has no mounted list to drive service pagination.
+  createEffect(
+    on(
+      () => needsRecentPage() && !search.isSettling() && !isFetching(),
+      (shouldFetch) => {
+        if (shouldFetch) void search.fetchNextPage();
+      }
+    )
+  );
 
   return {
     items,
     isLoading: () =>
       enabled() &&
       items().length === 0 &&
-      (options.source().isLoading() || (searching() && search.isLoading())),
+      (needsRecentPage() ||
+        (searching() ? search.isLoading() : options.source().isLoading())),
     isFetching,
-    error: () =>
-      enabled()
-        ? ((searching() && search.usesServiceSearch()
-            ? search.error()
-            : undefined) ?? options.source().error())
-        : undefined,
+    error,
     hasMore,
     isLoadingMore,
     loadMore: async () => {

@@ -470,6 +470,14 @@ Channels, or DMs scope. An empty query shows the ordinary list. Scrolling search
 results loads the next search page; clearing the query restores ordinary list
 pagination. Check both surfaces with a matching query, a query with no matches,
 and a clear/reopen cycle.
+On mobile, a nonempty query with no matches shows **No results**, echoes the
+query, and offers **Clear search**. Clearing restores the selected tab's list
+and keeps the dock search session open. The tab's usual empty state and create
+actions appear only when no search text is entered; loading and request errors
+keep their own states.
+Recent search automatically skips pages with no conversations containing messages,
+stopping at a match, the last page, or a search error. Ordinary list errors do not
+affect an active search.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
