@@ -664,7 +664,7 @@ where
         let thread = match deleted.thread_id.filter(|_| !deleted.thread_deleted) {
             Some(id) => O::load_email_thread(ctx, user_id, id)
                 .await
-                .map_err(retryable_draft_error)?,
+                .map_err(retryable_email_error)?,
             None => None,
         };
         Ok(DeleteEmailDraftPayload {
