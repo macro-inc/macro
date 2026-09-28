@@ -10,16 +10,21 @@
 //!   service (DCS).
 //!
 //! The agent crate records usage through the [`UsageRecorder`](domain::UsageRecorder)
-//! port; recording is best-effort and never fails the originating call.
+//! port; analytics recording is best-effort and never fails the originating call.
+//! Activated billable traffic additionally requires the awaited, object-safe
+//! [`FinancialUsage`] capability. [`financial`] defines immutable provider evidence,
+//! exact public usage/customer money, and fail-closed capability selection.
 
 pub mod domain;
 pub mod inbound;
 pub mod outbound;
 
+pub use domain::financial;
 pub use domain::{
-    AiFeature, CompletionUsage, FeatureUsage, ModelPricing, NoOpUsageRecorder, Price,
-    SYSTEM_USER_ID, Usage, UsageAmount, UsageApiParams, UsageContext, UsageEvent, UsageRecorder,
-    UsageRepo, UsageService, UsageSummary, normalize_model_id,
+    AiFeature, CompletionUsage, FeatureUsage, FinancialFuture, FinancialRateResolver,
+    FinancialUsage, InvocationFunding, ModelPricing, NoOpUsageRecorder, Price, SYSTEM_USER_ID,
+    Usage, UsageAmount, UsageApiParams, UsageContext, UsageEvent, UsageRecorder, UsageRepo,
+    UsageService, UsageSummary, normalize_model_id,
 };
 
 use std::sync::Arc;
