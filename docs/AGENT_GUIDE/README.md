@@ -33,3 +33,4 @@ Standalone `bun run dev` uses the same CA and serves HTTPS directly through
 Vite. Hosted dev API and WebSocket requests use `/__macro_dev/` on the page
 origin, with auth cookies scoped to that hostname. Use email-code sign-in; the
 hosted Google/SSO redirect allowlist does not include arbitrary hostnames.
+Email magic links retain the page's HTTP or HTTPS scheme and port.
