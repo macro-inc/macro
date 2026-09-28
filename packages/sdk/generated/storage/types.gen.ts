@@ -925,6 +925,10 @@ export type ApiEntityFilterAst = {
      */
     ef?: unknown;
     /**
+     * Restrict to the authenticated viewer's favorites before pagination when true.
+     */
+    favorites_only?: boolean | null;
+    /**
      * the filters that should be applied to foreign entity records
      */
     fef?: unknown;
@@ -5471,6 +5475,10 @@ export type EntityFilters = {
      * the bundled [EmailFilters]
      */
     email_filters?: EmailFilters;
+    /**
+     * Restrict results to the authenticated viewer's favorites when true.
+     */
+    favorites_only?: boolean | null;
     /**
      * the bundled [ForeignEntityFilters]
      */

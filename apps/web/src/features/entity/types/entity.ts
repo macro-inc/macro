@@ -17,6 +17,8 @@ export type EntityBase = {
   name: string;
   ownerId: string;
   frecencyScore?: number;
+  /** Viewer-owned favorite state from Soup; absent on search-only results. */
+  isFavorited?: boolean;
   /**
    * The viewer's latest own mutation of this entity, present only on rows
    * from `touched_by_me` pages. The Recent feed sorts on it, so mutation

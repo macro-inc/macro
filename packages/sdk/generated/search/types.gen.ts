@@ -1321,6 +1321,10 @@ export type EntityFilters = {
      */
     email_filters?: EmailFilters;
     /**
+     * Restrict results to the authenticated viewer's favorites when true.
+     */
+    favorites_only?: boolean | null;
+    /**
      * the bundled [ForeignEntityFilters]
      */
     foreign_entity_filters?: ForeignEntityFilters;

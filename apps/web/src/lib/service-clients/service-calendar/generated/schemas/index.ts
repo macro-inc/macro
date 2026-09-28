@@ -65,6 +65,7 @@ export * from './refreshCalendarEventOneOfEvent';
 export * from './rsvpCalendarEventRequest';
 export * from './rsvpCalendarEventRequestCalendarId';
 export * from './rsvpCalendarEventRequestRecurrenceId';
+export * from './rsvpCalendarEventRequestRespondingEmail';
 export * from './rsvpCalendarEventRequestScope';
 export * from './updateCalendarEventRequest';
 export * from './updateCalendarEventRequestAttendees';

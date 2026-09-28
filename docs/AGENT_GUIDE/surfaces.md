@@ -313,9 +313,10 @@ connected account. Search is `Ctrl+F` within the surface.
 Noise, and archived mail. It respects the selected inboxes and filters; search
 within the tab is also restricted to favorites. Removing a star removes the row
 from this view. The tab persists across reloads. With `enable-graphql-soup` on,
-favorite membership comes from the filtered GraphQL favorites query, then thread
-IDs scope the paginated GraphQL Soup query. With the flag off, the same scope
-uses the REST queries. An empty favorites list shows `No favorite emails`.
+the paginated GraphQL Soup query uses `favoritesOnly: true`. With the flag off,
+REST Soup uses `favorites_only: true`. Starring changes membership without
+changing the list query. Text search still resolves favorite IDs for the search
+service. An empty favorites list shows `No favorite emails`.
 
 On desktop, a favorited email keeps a filled, muted star just before its
 timestamp. Other rows reserve only that small star slot. Hovering reveals
@@ -1497,3 +1498,32 @@ default root size. Supporting `text-sm` text is 14px and `text-xs` is 12px.
 Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
+
+### Calendar invitations in email
+
+In `/app/component/mail`, open an invitation message; the same card appears in
+`/app/email/:threadId`. Saved details appear below the sender without waiting for calendar
+sync. Expand guests and descriptions with their explicit controls. `View original email`
+is an accessible disclosure that starts closed; attachments remain below it.
+Related recurring components are grouped behind their own disclosure. Only mail synced
+after the feature shipped gets a card; older invitations render as plain email.
+A newly arrived scheduling update shows RSVP and Join only once its calendar state has
+been checked. A series invitation shows its current or next live occurrence.
+
+A connected, resolved invitation shows the responding address and Yes / Maybe / No.
+Local verification requires both email and calendar services: email supplies saved
+snapshots and resolves them against the synced calendar, while calendar service handles
+the RSVP write. With calendar service's `CALENDAR_SYNC_ENABLED` off, its RSVP route is
+not mounted, so a response fails with an error. Seeded local accounts have no Google
+token, so an RSVP there fails at the provider write and rolls back.
+The selected response remains pressed while a save is pending. Recurring invitations ask
+for `This event` or `All events`. Failures keep the card in place and report a retryable
+error; offline responses are not sent. Cancellation and response/proposal notifications
+do not offer RSVP or Join. Disconnected, ambiguous, and syncing states explain why an
+action is unavailable.
+
+`Open in calendar` focuses the current occurrence, even if its date changed.
+`View your day` opens a compact agenda without changing the active split; Close returns
+focus to its trigger. Busy overlapping events are labeled, while cancelled, declined,
+and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
+already-open invitation cards as well as the calendar view.

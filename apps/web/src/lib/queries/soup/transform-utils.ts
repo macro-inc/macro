@@ -1074,7 +1074,10 @@ export const mapApiSoupItemToEntity = (
   );
   const notified = notifiedAt ? { ...touched, notifiedAt } : touched;
 
-  return withRawNotifications(notified, item);
+  return withRawNotifications(
+    { ...notified, isFavorited: item.is_favorited },
+    item
+  );
 };
 
 const toCalendarEventTime = (

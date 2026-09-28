@@ -2163,6 +2163,10 @@
             "$ref": "#/components/schemas/EmailFilters",
             "description": "the bundled [EmailFilters]"
           },
+          "favorites_only": {
+            "type": ["boolean", "null"],
+            "description": "Restrict results to the authenticated viewer's favorites when true."
+          },
           "foreign_entity_filters": {
             "$ref": "#/components/schemas/ForeignEntityFilters",
             "description": "the bundled [ForeignEntityFilters]"

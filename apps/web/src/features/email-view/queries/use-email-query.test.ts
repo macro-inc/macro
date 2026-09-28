@@ -269,44 +269,45 @@ describe('Email list query transitions', () => {
   });
   afterEach(() => dispose?.());
 
-  it('waits for favorites and uses only their IDs in the Soup query', () => {
-    const { source, setState, setEntities, setFavoriteIds } = mount();
+  it('uses a stable Soup filter and renders without a separate favorites response', () => {
+    const { source, setState, setEntities, setFavoriteIds, setFavoritesError } =
+      mount();
     setFavoriteIds(undefined);
     setState('tab', 'favorites');
-    setEntities([email('starred'), email('ordinary')]);
-    expect(source.isLoading()).toBe(true);
-    expect(ids(source)).toEqual([]);
-    expect(vi.mocked(useSoupAstItemsQuery).mock.calls[0][1]?.().enabled).toBe(
-      false
-    );
-    setFavoriteIds(['starred']);
+    setEntities([{ ...email('starred'), isFavorited: true }]);
+    const args = vi.mocked(useSoupAstItemsQuery).mock.calls[0][0];
+    const original = JSON.stringify(args());
     expect(source.isLoading()).toBe(false);
     expect(ids(source)).toEqual(['starred']);
+    expect(args().body.favorites_only).toBe(true);
+    expect(args().transport).toBeUndefined();
     expect(vi.mocked(useSoupAstItemsQuery).mock.calls[0][1]?.().enabled).toBe(
       true
     );
-    expect(
-      vi.mocked(useSoupAstItemsQuery).mock.calls[0][0]().transport
-    ).toBeUndefined();
-    expect(
-      JSON.stringify(vi.mocked(useSoupAstItemsQuery).mock.calls[0][0]().body.ef)
-    ).toContain('starred');
-    expect(favoritesQueryMock).toHaveBeenCalledWith({
-      entityType: ['email_thread'],
-    });
     setFavoriteIds([]);
-    expect(ids(source)).toEqual([]);
+    expect(JSON.stringify(args())).toBe(original);
+    expect(ids(source)).toEqual(['starred']);
+    setFavoritesError(new Error('Favorites unavailable'));
+    expect(source.error()).toBeUndefined();
+    expect(ids(source)).toEqual(['starred']);
   });
 
-  it('surfaces a favorites failure without an endless loading state', () => {
-    const { source, setState, setFavoriteIds, setFavoritesError } = mount();
-    setFavoriteIds(undefined);
+  it('removes only the unfavorited row and restores it on rollback without loading', () => {
+    const { source, setState, setEntities } = mount();
     setState('tab', 'favorites');
-    const error = new Error('Favorites unavailable');
-    setFavoritesError(error);
-    expect(source.error()).toBe(error);
+    const first = { ...email('first'), isFavorited: true };
+    const second = { ...email('second'), isFavorited: true };
+    setEntities([first, second]);
+    const args = vi.mocked(useSoupAstItemsQuery).mock.calls[0][0];
+    const original = JSON.stringify(args());
+    expect(ids(source)).toEqual(['first', 'second']);
+    setEntities([{ ...first, isFavorited: false }, second]);
+    expect(ids(source)).toEqual(['second']);
     expect(source.isLoading()).toBe(false);
-    expect(ids(source)).toEqual([]);
+    expect(JSON.stringify(args())).toBe(original);
+    setEntities([first, second]);
+    expect(ids(source)).toEqual(['first', 'second']);
+    expect(source.isLoading()).toBe(false);
   });
 
   it('lists the scheduled source on the Scheduled tab instead of soup rows', () => {

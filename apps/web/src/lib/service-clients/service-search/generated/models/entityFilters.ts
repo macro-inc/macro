@@ -13,6 +13,7 @@ import type { ChatFilters } from './chatFilters';
 import type { CrmCompanyFilters } from './crmCompanyFilters';
 import type { DocumentFilters } from './documentFilters';
 import type { EmailFilters } from './emailFilters';
+import type { EntityFiltersFavoritesOnly } from './entityFiltersFavoritesOnly';
 import type { ForeignEntityFilters } from './foreignEntityFilters';
 import type { InitiativeFilters } from './initiativeFilters';
 import type { ProjectFilters } from './projectFilters';
@@ -42,6 +43,8 @@ export interface EntityFilters {
   document_filters?: DocumentFilters;
   /** the bundled [EmailFilters] */
   email_filters?: EmailFilters;
+  /** Restrict results to the authenticated viewer's favorites when true. */
+  favorites_only?: EntityFiltersFavoritesOnly;
   /** the bundled [ForeignEntityFilters] */
   foreign_entity_filters?: ForeignEntityFilters;
   /** Initiative filters. Initiatives are opt-in. */

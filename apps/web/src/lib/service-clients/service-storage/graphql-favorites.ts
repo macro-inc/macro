@@ -111,6 +111,51 @@ export type FavoritesCacheTarget = {
   updateCachedList: boolean;
 };
 
+type FavoriteEffects = Extract<
+  SetFavoriteMutation['setFavorite']['result'],
+  { __typename: 'GraphqlMutationSuccess' }
+>['effects'];
+
+function favoriteSoupEffects(
+  args: SetFavoriteArgs,
+  favorite: boolean
+): FavoriteEffects {
+  const typenames = {
+    document: 'GraphqlSoupDocument',
+    project: 'GraphqlSoupProject',
+    chat: 'GraphqlSoupChat',
+    channel: 'GraphqlSoupChannel',
+    channel_message: 'GraphqlSoupChannelMessage',
+    email_thread: 'GraphqlSoupEmailThread',
+    calendar_event: 'GraphqlSoupCalendarEvent',
+    call: 'GraphqlSoupCall',
+    crm_company: 'GraphqlSoupCrmCompany',
+    foreign_entity: 'GraphqlSoupForeignEntity',
+    reminder: 'GraphqlSoupReminder',
+    agent_session: 'GraphqlSoupAgentSession',
+    user: undefined,
+    team: undefined,
+    static_file: undefined,
+    crm_contact: undefined,
+    skill: undefined,
+    scheduled_action: undefined,
+    initiative: 'GraphqlSoupInitiative',
+  } as const satisfies Record<FavoriteEntityType, string | undefined>;
+  const typename = typenames[args.entityType];
+  return typename
+    ? [
+        {
+          __typename: 'SoupUpdated',
+          item: {
+            __typename: typename,
+            id: args.entityId,
+            isFavorited: favorite,
+          },
+        },
+      ]
+    : [];
+}
+
 /** Submit a durable optimistic GraphQL add/remove favorite mutation. */
 export function executeGraphqlSetFavoriteMutation(
   client: Client,
@@ -141,7 +186,10 @@ export function executeGraphqlSetFavoriteMutation(
   const optimisticData: SetFavoriteMutation = {
     setFavorite: {
       __typename: 'SetFavoritePayload',
-      result: { __typename: 'GraphqlMutationSuccess' },
+      result: {
+        __typename: 'GraphqlMutationSuccess',
+        effects: favoriteSoupEffects(args, favorite),
+      },
       favorite: favorite ? optimisticFavorite : null,
     },
   };

@@ -63,6 +63,7 @@ describe('chat soup entities', () => {
         type: 'chat',
         id: item.data.id,
         model,
+        isFavorited: false,
       });
     }
   );

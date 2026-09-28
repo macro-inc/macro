@@ -63,6 +63,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 mod agent_metadata;
+mod favorites;
 
 #[cfg(test)]
 mod tests;
@@ -216,6 +217,7 @@ pub struct SoupImpl<T, U, V, C, K, Crm, F, Rem> {
     reminders_service: Rem,
     /// Optional captured branch facts supplied by the owning changes domain.
     agent_branches: Option<Arc<dyn agent_changes::domain::ports::SessionBranchReader>>,
+    favorites: Option<Arc<dyn favorites::FavoriteReader>>,
 }
 
 impl<T, U, V, C, K, Crm, F, Rem> SoupImpl<T, U, V, C, K, Crm, F, Rem>
@@ -252,6 +254,7 @@ where
             foreign_entity_service,
             reminders_service,
             agent_branches: None,
+            favorites: None,
         }
     }
 
@@ -262,6 +265,30 @@ where
     ) -> Self {
         self.agent_branches = Some(Arc::new(reader));
         self
+    }
+
+    /// Attach the owning favorites service for viewer-scoped query filtering.
+    pub fn with_favorites<S: ::favorites::domain::ports::FavoritesService>(
+        mut self,
+        service: Arc<S>,
+    ) -> Self {
+        self.favorites = Some(Arc::new(favorites::Reader(service)));
+        self
+    }
+
+    async fn favorite_entities(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        ast: Option<&EntityFilterAst>,
+    ) -> Result<Option<Vec<Entity<'static>>>, SoupErr> {
+        if ast.and_then(|ast| ast.favorites_only) != Some(true) {
+            return Ok(None);
+        }
+        let reader = self
+            .favorites
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Soup favorites reader is not configured"))?;
+        Ok(Some(reader.read(user).await?))
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -1518,7 +1545,20 @@ where
         R: Clone + Serialize + Send,
     {
         let entity_filter = req.filters().clone();
-        let req = req.into_ast()?;
+        let mut req = req.into_ast()?;
+        if req.entity_ast().and_then(|ast| ast.favorites_only) == Some(true)
+            && !matches!(&req.cursor, SoupQuery::Simple(_))
+        {
+            return Err(SoupErr::AstErr(item_filters::ast::ExpandErr::ApiAst(
+                "favorites_only requires a timestamp sort".into(),
+            )));
+        }
+        let favorite_entities = self.favorite_entities(&req.user, req.entity_ast()).await?;
+        if let Some(entities) = &favorite_entities {
+            req.cursor = req
+                .cursor
+                .map(|ast| ast.map(|ast| favorites::apply(ast, entities)));
+        }
         let limit = req.limit.clamp(1, 500);
 
         // CRM-scoped visibility (team-wide email scope or hidden CRM
@@ -1535,7 +1575,7 @@ where
         }
 
         // Borrow before email's builder consumes team_receipt.
-        let crm_company_request = req.build_crm_company_request(&team_receipt);
+        let mut crm_company_request = req.build_crm_company_request(&team_receipt);
         let foreign_entity_source_ids = req.build_foreign_entity_source_ids(team_receipt.as_ref());
         let metadata_source_ids = foreign_entity_source_ids.clone();
         let metadata_user = req.user.to_string();
@@ -1544,7 +1584,23 @@ where
         let comms_request = req.build_comms_request();
         let comms_thread_request = req.build_comms_thread_request();
         let call_request = req.build_call_request();
-        let reminder_request = req.build_reminder_request(limit.into());
+        let mut reminder_request = req.build_reminder_request(limit.into());
+        if let Some(entities) = &favorite_entities {
+            crm_company_request = crm_company_request.and_then(|mut request| {
+                favorites::intersect(
+                    &mut request.company_ids,
+                    favorites::ids(entities, EntityType::CrmCompany),
+                )
+                .then_some(request)
+            });
+            reminder_request = reminder_request.and_then(|mut request| {
+                favorites::intersect(
+                    &mut request.reminder_ids,
+                    favorites::ids(entities, EntityType::Reminder),
+                )
+                .then_some(request)
+            });
+        }
         let sort_direction = req.sort_direction;
 
         let output: Result<SoupOutput<R, SoupCandidate>, SoupErr> = match req.cursor {
@@ -1825,9 +1881,17 @@ where
     #[tracing::instrument(err, skip(self, req))]
     async fn get_user_soup_grouped(
         &self,
-        req: GroupedSortRequest<'_>,
+        mut req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         let user_id = req.user_id.clone();
+        if let Some(entities) = self
+            .favorite_entities(&user_id, Some(req.cursor.filter()))
+            .await?
+        {
+            req.cursor = req
+                .cursor
+                .map_filter(|ast| favorites::apply(ast, &entities));
+        }
         let items = self.handle_grouped_soup_request(req).await?;
         self.populate_grouped_items(user_id, items).await
     }

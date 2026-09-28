@@ -2175,6 +2175,10 @@ GraphQL input mirroring `item_filters::ast::EntityFilterAst`.
 """
 input GraphqlEntityFilterAst {
 	"""
+	Restrict results to the authenticated viewer's favorites when true.
+	"""
+	favoritesOnly: Boolean
+	"""
 	The calendar event filter to apply.
 	"""
 	calendarEventFilter: GraphqlCalendarEventExpr
@@ -5477,6 +5481,10 @@ type GraphqlSoupEmailLabel {
 An adaptively hydrated email content projection for Soup queries.
 """
 type GraphqlSoupEmailMessage {
+	"""
+	Immutable scheduling snapshots; JSON keeps both transports identical.
+	"""
+	calendarInvitations: JSON!
 	"""
 	The unique message identifier.
 	"""

@@ -816,6 +816,9 @@ pub enum TagFilterMode {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct EntityFilters {
+    /// Restrict results to the authenticated viewer's favorites when true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favorites_only: Option<bool>,
     /// the bundled [CalendarEventFilters]
     #[serde(default)]
     pub calendar_event_filters: CalendarEventFilters,
@@ -872,6 +875,7 @@ pub struct EntityFilters {
 impl IsEmpty for EntityFilters {
     fn is_empty(&self) -> bool {
         let EntityFilters {
+            favorites_only,
             calendar_event_filters,
             project_filters,
             document_filters,
@@ -890,7 +894,8 @@ impl IsEmpty for EntityFilters {
             // Mode is a modifier on tag_option_ids, not a filter by itself.
             tag_filter_mode: _,
         } = self;
-        calendar_event_filters.is_empty()
+        favorites_only != &Some(true)
+            && calendar_event_filters.is_empty()
             && project_filters.is_empty()
             && document_filters.is_empty()
             && chat_filters.is_empty()

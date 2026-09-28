@@ -31,6 +31,9 @@ describe('handleRefreshCalendar', () => {
 
     expect(invalidateCalendarOccurrencesMock).toHaveBeenCalledTimes(1);
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: calendarKeys.invitations._def,
+    });
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
       queryKey: calendarKeys.visibleCalendars.queryKey,
     });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
@@ -47,6 +50,9 @@ describe('handleRefreshCalendar', () => {
     });
 
     expect(invalidateCalendarOccurrencesMock).not.toHaveBeenCalled();
+    expect(invalidateQueriesMock).not.toHaveBeenCalledWith({
+      queryKey: calendarKeys.invitations._def,
+    });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
       queryKey: calendarKeys.visibleCalendars.queryKey,
     });

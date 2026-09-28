@@ -244,6 +244,20 @@ pub async fn upsert_message(
             })
         })?;
 
+    // Also runs for a message already saved by a whole-thread fetch, which carries no
+    // calendar parts. Saves skip existing components; an attachment-only invitation is
+    // downloaded again on a re-sync.
+    if !message.is_draft {
+        crate::pubsub::invitation_extraction::save_discovered(
+            ctx,
+            link.id,
+            &payload.provider_message_id,
+            message_db_id,
+            &fetched.calendar_parts,
+        )
+        .await;
+    }
+
     // Publish to the macro.email topic immediately after the committed insert.
     // Drafts publish after every sync because their bodies are mutable. Existing
     // immutable messages remain suppressed except when a previously synced provider

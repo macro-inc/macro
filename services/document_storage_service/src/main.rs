@@ -1283,6 +1283,8 @@ async fn run() -> anyhow::Result<()> {
         )),
     );
 
+    let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
+
     // Keep the replica-backed Soup reader alongside the primary-backed email
     // writer in SoupRouterState. REST, GraphQL lists, and realtime hydration
     // share this reader; only email mutations and their reply loader use the
@@ -1304,6 +1306,7 @@ async fn run() -> anyhow::Result<()> {
             ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
             reminders_service.clone(),
         )
+        .with_favorites(favorites_service.clone())
         .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
             readonly_db.clone(),
         )),
@@ -1483,7 +1486,6 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
-    let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
     let favorites_mutation_service = Arc::new(FavoritesMutationServiceImpl::new(
         favorites_service.clone(),
         entity_access_service.clone(),
