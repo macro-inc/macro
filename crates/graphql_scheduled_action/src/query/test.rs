@@ -336,5 +336,5 @@ fn assert_redacted(response: async_graphql::Response) {
         response.errors[0].extensions.as_ref().unwrap().get("code"),
         Some(&async_graphql::Value::from("INTERNAL_SERVER_ERROR"))
     );
-    assert!(response.data.into_json().unwrap().is_null());
+    assert_eq!(response.data.into_json().unwrap(), json!({ "user": null }));
 }
