@@ -26,6 +26,12 @@ export function createContentNavigator(
     const path = `/${encodeRoute(routes, { location }).map(encodeURIComponent).join('/')}`;
     const query = new URLSearchParams();
     replaceSplitSearchParams(query, [{ location }]);
+    let onApplied = options.onApplied;
+    const reportApplied = () => {
+      const callback = onApplied;
+      onApplied = undefined;
+      callback?.();
+    };
     router.navigate(source.id, query.size ? `${path}?${query}` : path, {
       target:
         options.preferNewSplit && manager.canAppendSplit()
@@ -33,9 +39,12 @@ export function createContentNavigator(
           : 'current',
       replace: options.mergeHistory,
       search: options.search,
-      onApplied: options.onApplied,
+      onApplied: reportApplied,
       open: (request) =>
-        openAppSplitLocation(manager, routes, request, content, options),
+        openAppSplitLocation(manager, routes, request, content, {
+          ...options,
+          onApplied: reportApplied,
+        }),
     });
   };
 }

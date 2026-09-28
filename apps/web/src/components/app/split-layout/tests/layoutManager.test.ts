@@ -998,12 +998,14 @@ describe('layoutManager', () => {
           return cleanup;
         });
         const animate = vi.fn();
+        const onApplied = vi.fn();
         if (animated) swipe.setForwardNavigationTrigger(animate);
         manager.openWithSplit(
           withListNavigationSource({ type: 'channel', id: 'entity' }, source),
           {
             handle: source,
             referredFrom: 'search',
+            onApplied,
             search: searchLocationUpdates('entity', {
               type: 'channel',
               messageId: 'message',
@@ -1013,11 +1015,13 @@ describe('layoutManager', () => {
         await router.settled();
         if (animated) {
           expect(animate).toHaveBeenCalledOnce();
+          expect(onApplied).not.toHaveBeenCalled();
           expect(manager.activeSplitId()).toBe(source.id);
           swipe.completeNavigateForward();
           await router.settled();
         }
         const detail = manager.activeSplit()!;
+        expect(onApplied).toHaveBeenCalledOnce();
         expect(detail.id).not.toBe(source.id);
         expect(detail.referredFrom()).toBe('search');
         expect(listNavigationSourceId(detail)).toBe(source.id);
@@ -1029,6 +1033,54 @@ describe('layoutManager', () => {
         await router.settled();
         expect(manager.activeSplitId()).toBe(source.id);
         expect(router.route(source.id)?.matches[0].id).toBe('view-search');
+        router.dispose();
+        disposeSwipe();
+        dispose();
+      }
+    );
+
+    it.each(['same', 'different', 'removed'])(
+      'only reports the promoted native request applied (%s prepared target)',
+      async (next) => {
+        const { manager, router, dispose } = ingressRouter('/search', {
+          touch: true,
+        });
+        await router.settled();
+        const source = manager.activeSplit()!;
+        let swipe!: ReturnType<typeof createMobileSwipeLayout>;
+        const disposeSwipe = createRoot((cleanup) => {
+          swipe = createMobileSwipeLayout(manager);
+          swipe.setForwardNavigationTrigger(vi.fn());
+          return cleanup;
+        });
+        const first = vi.fn();
+        const second = vi.fn();
+        const open = (id: string, onApplied: () => void) =>
+          manager.openWithSplit(
+            { type: 'channel', id },
+            {
+              handle: source,
+              onApplied,
+              search: searchLocationUpdates(id, {
+                type: 'channel',
+                messageId: 'hit',
+              }),
+            }
+          );
+        open('entity', first);
+        await router.settled();
+        expect(first).not.toHaveBeenCalled();
+        if (next === 'removed') {
+          manager.removeSplit(swipe.slotBSplitId()!);
+        } else {
+          open(next === 'same' ? 'entity' : 'other', second);
+        }
+        await router.settled();
+        expect(second).not.toHaveBeenCalled();
+        swipe.completeNavigateForward();
+        await router.settled();
+        expect(first).not.toHaveBeenCalled();
+        expect(second).toHaveBeenCalledTimes(next === 'removed' ? 0 : 1);
         router.dispose();
         disposeSwipe();
         dispose();
