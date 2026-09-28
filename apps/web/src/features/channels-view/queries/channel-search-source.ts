@@ -1,7 +1,7 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { createSearchState } from '@app/features/soup/search/create-search-state';
 import { isChannelEntity } from '@entity';
-import { type Accessor, createEffect, createMemo, on } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   type ChannelsDataSource,
@@ -47,11 +47,26 @@ export function createChannelSearchSource(options: {
   });
   const items = createMemo(() => {
     if (!enabled()) return [];
+    if (!searching()) return [...options.source().items()];
+
+    // Search records lack loaded conversation metadata, including message previews.
+    const loadedById = new Map(
+      options
+        .source()
+        .items()
+        .map((channel) => [channel.id, channel])
+    );
+    const matches = search
+      .data()
+      .filter(isChannelEntity)
+      .map((channel) => ({
+        ...channel,
+        ...loadedById.get(channel.id),
+      }));
+    // Recent search includes both channels and DMs, even without message metadata.
     return filterChannelsForScope(
-      options.scope(),
-      searching()
-        ? search.data().filter(isChannelEntity)
-        : [...options.source().items()]
+      options.scope() === 'recents' ? 'search' : options.scope(),
+      matches
     );
   });
   const isFetching = () =>
@@ -70,32 +85,13 @@ export function createChannelSearchSource(options: {
     if (!searching()) return options.source().error();
     return search.usesServiceSearch() ? search.error() : undefined;
   };
-  const needsRecentPage = () =>
-    enabled() &&
-    searching() &&
-    options.scope() === 'recents' &&
-    search.usesServiceSearch() &&
-    items().length === 0 &&
-    hasMore() &&
-    !error();
-
-  // An empty filtered page has no mounted list to drive service pagination.
-  createEffect(
-    on(
-      () => needsRecentPage() && !search.isSettling() && !isFetching(),
-      (shouldFetch) => {
-        if (shouldFetch) void search.fetchNextPage();
-      }
-    )
-  );
 
   return {
     items,
     isLoading: () =>
       enabled() &&
       items().length === 0 &&
-      (needsRecentPage() ||
-        (searching() ? search.isLoading() : options.source().isLoading())),
+      (searching() ? search.isLoading() : options.source().isLoading()),
     isFetching,
     error,
     hasMore,
@@ -107,8 +103,10 @@ export function createChannelSearchSource(options: {
     },
     refresh: async () => {
       if (!enabled()) return;
-      await options.source().refresh();
-      if (searching()) await search.refresh();
+      await Promise.all([
+        options.source().refresh(),
+        ...(searching() ? [search.refresh()] : []),
+      ]);
     },
   };
 }

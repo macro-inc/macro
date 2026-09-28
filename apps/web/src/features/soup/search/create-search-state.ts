@@ -105,7 +105,12 @@ export function createSearchState(options: CreateSearchStateOptions) {
   });
 
   const serviceSearchResults = createMemo<EntityData[]>(() => {
-    if (isServiceDisabled() || !isServiceDebounceSettled()) return [];
+    if (
+      !queryEnabled() ||
+      !searchQuery.isSuccess ||
+      searchQuery.isPlaceholderData
+    )
+      return [];
 
     if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return [];
 
@@ -171,11 +176,15 @@ export function createSearchState(options: CreateSearchStateOptions) {
     isSettling: () => isLocalSearchSettling() || isSearchServiceLoading(),
     usesServiceSearch: queryEnabled,
     isLoading: () => isSearchServiceLoading() && data().length === 0,
-    isFetching: () => isSearchServiceLoading() || searchQuery.isFetching,
+    isFetching: () =>
+      isSearchServiceLoading() || (queryEnabled() && searchQuery.isFetching),
     error: () =>
       searchQuery.error instanceof Error ? searchQuery.error : undefined,
-    hasNextPage: () => queryEnabled() && (searchQuery.hasNextPage ?? false),
-    isFetchingNextPage: () => searchQuery.isFetchingNextPage,
+    hasNextPage: () =>
+      queryEnabled() &&
+      !searchQuery.isPlaceholderData &&
+      (searchQuery.hasNextPage ?? false),
+    isFetchingNextPage: () => queryEnabled() && searchQuery.isFetchingNextPage,
     fetchNextPage: () => searchQuery.fetchNextPage(),
     refetch: () => searchQuery.refetch(),
     /** Refetches the service results, throwing on failure so a caller (mobile

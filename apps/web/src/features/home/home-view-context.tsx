@@ -1,4 +1,5 @@
 import { channelsSearch } from '@app/features/channels-view/channels-route';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { makePersistedState } from '@app/lib/persistence';
@@ -24,6 +25,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  mergeProps,
   on,
 } from 'solid-js';
 import {
@@ -96,7 +98,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   const selectPreview = createPreviewSelectionGuard();
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'signal';
-  const [state, setState] = makePersistedState(
+  const [persistedState, setState] = makePersistedState(
     createStore<HomeViewState>({
       tab: initialTab,
       search: initial.search ?? '',
@@ -110,6 +112,16 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
       restorePreferences: initial.facets === undefined,
     })
   );
+
+  const searchText = useMobileSearchText(
+    () => persistedState.search,
+    panel.handle.isActive
+  );
+  const state = mergeProps(persistedState, {
+    get search() {
+      return searchText();
+    },
+  });
 
   createEffect(
     on(

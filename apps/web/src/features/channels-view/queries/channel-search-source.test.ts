@@ -35,17 +35,22 @@ function setup(initialText = '', initialScope: ChannelsSourceScope = 'search') {
     const [text, setText] = createSignal(initialText);
     const [scope, setScope] = createSignal(initialScope);
     const [enabled, setEnabled] = createSignal(true);
+    const [rows, setRows] = createSignal([localChannel, localDm]);
     const [remote, setRemote] = createStore<{
       data: ChannelEntity[];
       isFetching: boolean;
       isFetchingNextPage: boolean;
       hasNextPage: boolean;
+      isSuccess: boolean;
+      isPlaceholderData: boolean;
       error: Error | null;
     }>({
       data: [],
       isFetching: false,
       isFetchingNextPage: false,
       hasNextPage: true,
+      isSuccess: true,
+      isPlaceholderData: false,
       error: null,
     });
     const serverNextPage = vi.fn(async () => {});
@@ -61,7 +66,15 @@ function setup(initialText = '', initialScope: ChannelsSourceScope = 'search') {
         queryEnabled = () => options?.().enabled ?? true;
         return {
           get data() {
+            if (!remote.isSuccess)
+              throw new Error('Pending data read would suspend');
             return remote.data;
+          },
+          get isSuccess() {
+            return remote.isSuccess;
+          },
+          get isPlaceholderData() {
+            return remote.isPlaceholderData;
           },
           get isEnabled() {
             return queryEnabled();
@@ -84,7 +97,7 @@ function setup(initialText = '', initialScope: ChannelsSourceScope = 'search') {
       }
     );
     const local: ChannelsDataSource = {
-      items: () => [localChannel, localDm],
+      items: rows,
       isLoading: vi.fn(() => false),
       isFetching: vi.fn(() => false),
       error: () => undefined,
@@ -107,6 +120,7 @@ function setup(initialText = '', initialScope: ChannelsSourceScope = 'search') {
       setText,
       setScope,
       setEnabled,
+      setRows,
       setRemote,
       serverNextPage,
       serverRefresh,
@@ -140,7 +154,7 @@ describe('shared channel search source', () => {
     expect(s.queryEnabled()).toBe(false);
   });
 
-  it('merges local and remote matches once, preferring the service entity', () => {
+  it('merges local and remote matches once, retaining loaded conversation metadata', () => {
     const s = setup('alpha');
     s.setRemote('data', [
       channel('channel', 'Alpha updated'),
@@ -153,7 +167,7 @@ describe('shared channel search source', () => {
       1
     );
     expect(s.source.items().find((row) => row.id === 'channel')?.name).toBe(
-      'Alpha updated'
+      'Alpha channel'
     );
   });
 
@@ -179,7 +193,7 @@ describe('shared channel search source', () => {
     ]);
     expect(ids(s.source)).toEqual(['channel']);
     s.setScope('recents');
-    expect(ids(s.source)).toEqual([]); // Neither fixture has messages.
+    expect(ids(s.source)).toEqual(['channel', 'dm']); // Search includes conversations without message metadata.
   });
 
   it('paginates and refreshes search results instead of the unfiltered list', async () => {
@@ -227,7 +241,7 @@ describe('shared channel search source', () => {
 
   it('uses ordinary loading state only when the query is empty', async () => {
     const s = setup('nonexistent');
-    s.local.items = () => [];
+    s.setRows([]);
     vi.mocked(s.local.isLoading).mockReturnValue(true);
     vi.mocked(s.local.isFetching).mockReturnValue(true);
     s.setText('');
@@ -265,24 +279,11 @@ describe('shared channel search source', () => {
     expect(s.local.refresh).not.toHaveBeenCalled();
   });
 
-  it('pages past empty Recent matches until a conversation with messages appears', () => {
+  it('includes remote-only Recent hits without message metadata and preserves loaded previews', () => {
     const s = setup('alpha');
-    s.serverNextPage.mockImplementation(async () => {
-      s.setRemote({ isFetching: true, isFetchingNextPage: true });
-    });
-    s.setRemote('data', [channel('empty-1', 'Alpha empty')]);
-    s.setScope('recents');
-    expect(s.serverNextPage).toHaveBeenCalledTimes(1);
-    expect(s.source.isLoading()).toBe(true);
-
-    s.setRemote({
-      data: [channel('empty-2', 'Alpha empty')],
-      isFetching: false,
-      isFetchingNextPage: false,
-    });
-    expect(s.serverNextPage).toHaveBeenCalledTimes(2);
-    const recent: ChannelEntity = {
-      ...channel('recent', 'Alpha recent'),
+    const local = {
+      ...localChannel,
+      participantIds: ['viewer'],
       latestRootMessage: {
         messageId: 'message',
         senderId: 'viewer',
@@ -291,62 +292,56 @@ describe('shared channel search source', () => {
         createdAt: '2026-09-28T12:00:00Z',
       },
     };
-    s.setRemote({
-      data: [recent],
-      isFetching: false,
-      isFetchingNextPage: false,
-    });
-    expect(ids(s.source)).toEqual(['recent']);
-    expect(s.serverNextPage).toHaveBeenCalledTimes(2);
-    expect(s.source.isLoading()).toBe(false);
-    expect(s.local.loadMore).not.toHaveBeenCalled();
+    s.setRows([local]);
+    s.setScope('recents');
+    s.setRemote('data', [
+      channel('channel', 'Alpha remote copy'),
+      channel('remote', 'Alpha remote', true),
+    ]);
+    expect(ids(s.source)).toEqual(['channel', 'remote']);
+    expect(s.source.items()[0]).toMatchObject(local);
+    expect(s.source.items()[1].latestRootMessage).toBeUndefined();
+    expect(s.serverNextPage).not.toHaveBeenCalled();
     expect(s.request().body.filters?.channel_filters).toEqual({
       is_participant: true,
       channel_types: undefined,
     });
   });
 
-  it('stops empty Recent pagination when pages are exhausted or a request fails', () => {
+  it('never reads pending data or exposes placeholder hits and pagination', async () => {
     const s = setup('alpha');
-    s.serverNextPage.mockImplementation(async () => {
-      s.setRemote({ isFetching: true, isFetchingNextPage: true });
-    });
-    s.setScope('recents');
-    expect(s.serverNextPage).toHaveBeenCalledOnce();
+    s.setRemote({ isSuccess: false });
+    expect(ids(s.source)).toEqual(['channel', 'dm']);
     s.setRemote({
-      hasNextPage: false,
-      isFetching: false,
-      isFetchingNextPage: false,
+      isSuccess: true,
+      data: [channel('remote', 'Alpha remote')],
+      isPlaceholderData: true,
     });
-    expect(s.source.isLoading()).toBe(false);
+    expect(ids(s.source)).toEqual(['channel', 'dm']);
     expect(s.source.hasMore()).toBe(false);
-    expect(s.serverNextPage).toHaveBeenCalledOnce();
-
-    const failure = new Error('Search failed');
-    s.setRemote({ hasNextPage: true, error: failure });
-    expect(s.source.error()).toBe(failure);
-    expect(s.source.isLoading()).toBe(false);
-    expect(s.serverNextPage).toHaveBeenCalledOnce();
+    await s.source.loadMore();
+    expect(s.serverNextPage).not.toHaveBeenCalled();
+    s.setRemote('isPlaceholderData', false);
+    expect(ids(s.source)).toContain('remote');
+    s.setScope('direct_messages');
+    s.setRemote('isPlaceholderData', true);
+    expect(ids(s.source)).toEqual(['dm']);
+    expect(s.source.hasMore()).toBe(false);
   });
 
-  it('does not continue Recent pagination after closing or changing the search', async () => {
+  it('ignores an old service fetch for short queries and refreshes search even when browse fails', async () => {
     const s = setup('alpha');
-    s.serverNextPage.mockImplementation(async () => {
-      s.setRemote({ isFetching: true, isFetchingNextPage: true });
+    s.local.refresh = vi.fn(async () => {
+      throw new Error('Browse failed');
     });
-    s.setScope('recents');
-    s.setEnabled(false);
-    s.setRemote({ isFetching: false, isFetchingNextPage: false });
-    expect(s.serverNextPage).toHaveBeenCalledOnce();
-    s.setText('');
-    s.setEnabled(true);
+    await expect(s.source.refresh()).rejects.toThrow('Browse failed');
+    expect(s.serverRefresh).toHaveBeenCalledOnce();
+    s.setRemote({ isFetching: true, isFetchingNextPage: true });
+    s.setText('zz');
     await vi.advanceTimersByTimeAsync(300);
-    expect(s.serverNextPage).toHaveBeenCalledOnce();
-    s.setText('bravo');
-    expect(s.serverNextPage).toHaveBeenCalledOnce();
-    s.setScope('channels');
-    await vi.advanceTimersByTimeAsync(300);
-    expect(s.serverNextPage).toHaveBeenCalledOnce();
+    expect(s.source.isFetching()).toBe(false);
+    expect(s.source.isLoadingMore()).toBe(false);
+    expect(s.source.hasMore()).toBe(false);
   });
 
   it('reports only errors from the active source', async () => {
