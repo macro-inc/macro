@@ -139,6 +139,7 @@ export class WafObservability extends pulumi.ComponentResource {
               {
                 awsManagedRulesBotControlRuleSet: {
                   inspectionLevel: 'COMMON',
+                  enableMachineLearning: false,
                 },
               },
             ],
@@ -283,31 +284,23 @@ export class WafObservability extends pulumi.ComponentResource {
         isEnabled: true,
         filters: [
           {
-            query: `"${webAclName}"`,
+            query: `@webaclId:"${webAclArn}"`,
           },
         ],
         tags: ['env:prod', 'service:cloud-storage-service', 'source:waf'],
         processors: [
           {
-            grokParser: {
-              name: 'Parse AWS WAF JSON',
+            arrayProcessor: {
+              name: 'Extract W3C traceparent header',
               isEnabled: true,
-              source: 'message',
-              samples: [
-                JSON.stringify({
-                  timestamp: 0,
-                  webaclId: webAclArn,
-                  action: 'BLOCK',
-                  httpRequest: {
-                    clientIp: '192.0.2.1',
-                    uri: '/',
-                    httpMethod: 'GET',
-                  },
-                }),
-              ],
-              grok: {
-                matchRules: 'waf_json %{data::json}',
-                supportRules: '',
+              operation: {
+                select: {
+                  source: 'httpRequest.headers',
+                  filter:
+                    'name:traceparent OR name:Traceparent OR name:TraceParent',
+                  valueToExtract: 'value',
+                  target: 'waf.traceparent',
+                },
               },
             },
           },
@@ -315,15 +308,14 @@ export class WafObservability extends pulumi.ComponentResource {
             grokParser: {
               name: 'Parse W3C traceparent',
               isEnabled: true,
-              source: 'message',
+              source: 'waf.traceparent',
               samples: [
-                '{"httpRequest":{"headers":[{"name":"traceparent","value":"00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01"}]}}',
+                '00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01',
               ],
               grok: {
                 matchRules:
-                  'traceparent %{traceparentPrefix}%{regex("[0-9A-Fa-f]{32}"):waf.trace_id:lowercase}-%{regex("[0-9A-Fa-f]{16}"):waf.span_id:lowercase}-%{regex("[0-9A-Fa-f]{2}")}%{data}',
-                supportRules:
-                  'traceparentPrefix .*"name"\\s*:\\s*"[Tt][Rr][Aa][Cc][Ee][Pp][Aa][Rr][Ee][Nn][Tt]"\\s*,\\s*"value"\\s*:\\s*"00-',
+                  'traceparent 00-%{regex("[0-9A-Fa-f]{32}"):waf.trace_id:lowercase}-%{regex("[0-9A-Fa-f]{16}"):waf.span_id:lowercase}-%{regex("[0-9A-Fa-f]{2}")}',
+                supportRules: '',
               },
             },
           },
