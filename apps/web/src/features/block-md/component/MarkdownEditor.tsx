@@ -109,6 +109,7 @@ import {
   registerInternalLayoutShiftListener,
 } from '@core/component/LexicalMarkdown/plugins/shared/utils';
 import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
+import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   editorFocusSignal,
@@ -206,6 +207,7 @@ export function MarkdownEditor(props: {
   loroManager: LoroManager;
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
+  resolveAppLink?: MentionLinkResolver;
 }) {
   const {
     documentId,
@@ -236,7 +238,6 @@ export function MarkdownEditor(props: {
     findAndReplace: findAndReplaceStore,
     setFindAndReplace: setFindAndReplaceStore,
   } = documentState.editor;
-  const { revisions, setRevisions } = documentState.rewrite;
   const saveBlocked = () => documentState.comments.activeCommentThread === -1;
 
   const IS_SYNC = () => documentSource().type === 'sync';
@@ -404,10 +405,11 @@ export function MarkdownEditor(props: {
     const dragInsertPosition = getValidDragInsertPosition(editor, res.mousePos);
     if (!dragInsertPosition) return;
 
-    const mentionId =
-      res.item.type === 'agent_session'
-        ? undefined
-        : await trackMention(blockId, 'document', res.id);
+    const mentionId = await trackMention(
+      blockId,
+      res.item.type === 'agent_session' ? 'agent_session' : 'document',
+      res.id
+    );
 
     let blockParams: Record<string, string> | undefined;
     if (res.blockName === 'channel') {
@@ -625,7 +627,7 @@ export function MarkdownEditor(props: {
         dragListenerRef: editorContainerRef,
       })
     )
-    .use(textPastePlugin())
+    .use(textPastePlugin(props.resolveAppLink))
     .use(restoreFocusPlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
@@ -681,12 +683,7 @@ export function MarkdownEditor(props: {
   }
 
   if (ENABLE_MARKDOWN_DIFF) {
-    plugins.use(
-      diffPlugin({
-        revisionsSignal: [revisions, setRevisions],
-        nodeIdMap: lexicalWrapper.mapping!,
-      })
-    );
+    plugins.use(diffPlugin());
   }
 
   const [accessoryStore, setAccessoryStore] = createAccessoryStore();
@@ -1149,10 +1146,12 @@ export function MarkdownEditor(props: {
         </Show>
 
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
-          <CommentsProvider
-            activeComment={activeCommentIdParam}
-            loroManager={props.loroManager}
-          />
+          <Suspense>
+            <CommentsProvider
+              activeComment={activeCommentIdParam}
+              loroManager={props.loroManager}
+            />
+          </Suspense>
         </Show>
 
         <Show when={canEdit()}>

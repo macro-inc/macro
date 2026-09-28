@@ -5,7 +5,7 @@ fn check_ser_meta() -> Result<(), Box<dyn std::error::Error>> {
     let m = MentionedInDocumentCommentMetadata {
         sender_display_name: None,
         document_name: "test".to_string(),
-        owner: MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
+        owner: Owner::from_principal_str("macro|user@test.com").unwrap(),
         file_type: None,
         sub_type: None,
         mention_id: "xxx".to_string(),
@@ -25,6 +25,10 @@ fn user_id(s: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(s.to_string()).unwrap()
 }
 
+fn document_owner(user: &MacroUserIdStr<'static>) -> Owner {
+    Owner::User(user.clone())
+}
+
 // ---------------------------------------------------------------------------
 // No duplicate notifications
 // ---------------------------------------------------------------------------
@@ -39,7 +43,7 @@ fn mentioned_user_who_is_also_thread_participant_gets_only_mention() {
         &[bob.to_string()],                              // bob is mentioned
         &[bob.to_string(), sender.as_ref().to_string()], // bob is also a thread participant
         &[],
-        &user_id("macro|owner@test.com"),
+        &document_owner(&user_id("macro|owner@test.com")),
         true, // is_reply
     );
 
@@ -68,7 +72,7 @@ fn mentioned_user_who_is_also_doc_owner_gets_only_mention() {
         &[owner.as_ref().to_string()], // owner is mentioned
         &[sender.as_ref().to_string()],
         &[],
-        &owner,
+        &document_owner(&owner),
         false,
     );
 
@@ -92,7 +96,7 @@ fn thread_participant_who_is_also_doc_owner_gets_only_thread_reply() {
         &[],                                                        // no mentions
         &[owner.as_ref().to_string(), sender.as_ref().to_string()], // owner is thread participant
         &[],
-        &owner,
+        &document_owner(&owner),
         true,
     );
 
@@ -116,7 +120,7 @@ fn user_who_is_mentioned_and_thread_participant_and_doc_owner_gets_only_mention(
         &[owner.as_ref().to_string()], // owner is mentioned
         &[owner.as_ref().to_string(), sender.as_ref().to_string()], // owner is thread participant
         &[],
-        &owner, // and doc owner
+        &document_owner(&owner),
         true,
     );
 
@@ -144,7 +148,7 @@ fn dedup_works_across_different_casing() {
             sender.as_ref().to_string(),
         ], // lowercase owner
         &[],
-        &owner,
+        &document_owner(&owner),
         true,
     );
 
@@ -169,7 +173,7 @@ fn dedup_works_for_doc_owner_with_different_casing() {
         &["macro|Owner@Test.COM".to_string()], // mixed case
         &[sender.as_ref().to_string()],
         &[],
-        &owner,
+        &document_owner(&owner),
         false,
     );
 
@@ -196,7 +200,7 @@ fn sender_never_receives_notification() {
         &[],
         &[sender.as_ref().to_string()], // sender is only thread participant
         &[],
-        &sender, // sender is also doc owner
+        &document_owner(&sender),
         true,
     );
 
@@ -220,7 +224,7 @@ fn new_thread_comment_notifies_doc_owner() {
         &[],
         &[sender.as_ref().to_string()], // only one comment (the new one)
         &[],
-        &owner,
+        &document_owner(&owner),
         false, // not a reply
     );
 
@@ -240,7 +244,7 @@ fn non_owner_non_assignee_commenter_gets_subsequent_thread_reply() {
         &[],
         &[commenter.to_string(), sender.as_ref().to_string()],
         &[],
-        &owner,
+        &document_owner(&owner),
         true,
     );
 
@@ -264,7 +268,7 @@ fn reply_notifies_thread_participants_and_doc_owner() {
         &[],
         &[alice.to_string(), sender.as_ref().to_string()],
         &[],
-        &owner,
+        &document_owner(&owner),
         true,
     );
 
@@ -283,7 +287,7 @@ fn no_thread_reply_notifications_for_first_comment() {
         &[],
         &[sender.as_ref().to_string()],
         &[],
-        &owner,
+        &document_owner(&owner),
         false, // first comment, not a reply
     );
 
@@ -305,7 +309,7 @@ fn assignee_gets_notification_when_not_in_other_groups() {
         &[],
         &[sender.as_ref().to_string()],
         &[assignee.to_string()],
-        &owner,
+        &document_owner(&owner),
         false,
     );
 
@@ -328,7 +332,7 @@ fn mentioned_user_who_is_also_assignee_gets_only_mention() {
         &[bob.to_string()],
         &[sender.as_ref().to_string()],
         &[bob.to_string()],
-        &owner,
+        &document_owner(&owner),
         false,
     );
 
@@ -354,7 +358,7 @@ fn thread_participant_who_is_also_assignee_gets_only_thread_reply() {
         &[],
         &[alice.to_string(), sender.as_ref().to_string()],
         &[alice.to_string()],
-        &owner,
+        &document_owner(&owner),
         true,
     );
 
@@ -379,7 +383,7 @@ fn assignee_who_is_also_doc_owner_gets_only_assignee() {
         &[],
         &[sender.as_ref().to_string()],
         &[owner.as_ref().to_string()],
-        &owner,
+        &document_owner(&owner),
         false,
     );
 
@@ -404,7 +408,7 @@ fn sender_who_is_assignee_gets_no_notification() {
         &[],
         &[sender.as_ref().to_string()],
         &[sender.as_ref().to_string()],
-        &owner,
+        &document_owner(&owner),
         false,
     );
 
@@ -432,7 +436,7 @@ fn multiple_assignees_deduped_correctly() {
             thread_participant.to_string(),
             pure_assignee.to_string(),
         ],
-        &owner,
+        &document_owner(&owner),
         true,
     );
 
@@ -466,7 +470,7 @@ fn assignee_dedup_works_across_different_casing() {
         &["macro|Bob@Test.COM".to_string()],
         &[sender.as_ref().to_string()],
         &["macro|bob@test.com".to_string()],
-        &owner,
+        &document_owner(&owner),
         false,
     );
 
@@ -481,4 +485,27 @@ fn assignee_dedup_works_across_different_casing() {
         "bob already in mentions, should not be in assignees"
     );
     assert_eq!(result.all_recipients().len(), result.total_count());
+}
+
+#[test]
+fn bot_or_team_document_owner_is_not_a_user_recipient() {
+    let sender = user_id("macro|sender@test.com");
+    let bot_owner = Owner::from_principal_str("bot|00000000-0000-0000-0000-00000000a1a1").unwrap();
+    let team_owner = Owner::from_principal_str("01234567-89ab-cdef-0123-456789abcdef").unwrap();
+
+    for owner in [bot_owner, team_owner] {
+        let result = compute_notification_recipients(
+            Some(&sender),
+            &[],
+            &[sender.as_ref().to_string()],
+            &[],
+            &owner,
+            false,
+        );
+        assert!(
+            result.doc_owner_recipient.is_none(),
+            "non-user owner {owner} should not receive a document-owner notification"
+        );
+        assert!(result.all_recipients().is_empty());
+    }
 }

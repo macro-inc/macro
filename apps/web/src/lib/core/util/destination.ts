@@ -32,13 +32,14 @@ export function getDestinationFromOptions<T extends CombinedRecipientItem>(
 
   const userIds = options
     .filter((o) => {
+      if (o.kind === 'agent') return false;
       if (o.kind === 'custom') {
         return !o.data.invalid;
       }
       return true;
     })
     .map((o) => {
-      if (o.kind === 'channel') return;
+      if (o.kind === 'channel' || o.kind === 'agent') return;
       return o.id;
     })
     .filter((id) => id != null);

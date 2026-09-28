@@ -28,10 +28,12 @@
 #[cfg(test)]
 mod test;
 
+use crate::domain::error::SessionError;
 use crate::domain::model::{McpHeader, McpServer, McpTransport};
 use crate::domain::model_options::{MODEL_CONFIG_ID, cursor_model_config_options};
 use crate::domain::ports::{
     ArtifactStore, CursorAgents, CursorArtifacts, RepositoryChooser, RunStream, SessionNotifier,
+    WorkingBranchReporter,
 };
 use crate::domain::service::CursorSessionService;
 use crate::domain::slash_commands::cursor_slash_commands;
@@ -71,6 +73,7 @@ pub struct AcpNotifier {
     /// connection, exactly as one service does.
     connection: Arc<OnceLock<ConnectionTo<Client>>>,
     pull_request: Option<Arc<dyn PullRequestReporter>>,
+    working_branch: Option<Arc<dyn WorkingBranchReporter>>,
     bound: Arc<tokio::sync::Notify>,
     reload: Option<tokio::sync::mpsc::UnboundedSender<SessionId>>,
 }
@@ -103,6 +106,12 @@ impl AcpNotifier {
         self
     }
 
+    /// Use the embedding host's session operation for repository branch facts.
+    pub fn with_working_branches(mut self, reporter: Arc<dyn WorkingBranchReporter>) -> Self {
+        self.working_branch = Some(reporter);
+        self
+    }
+
     /// Attach the connection updates will travel over.
     fn bind(&self, connection: ConnectionTo<Client>) {
         // A second bind can only be a bug in `serve`; the first connection
@@ -113,6 +122,18 @@ impl AcpNotifier {
 }
 
 impl SessionNotifier for AcpNotifier {
+    async fn set_working_branch(
+        &self,
+        _session: &SessionId,
+        repository_url: &str,
+        branch: &str,
+    ) -> Result<(), rootcause::Report> {
+        if let Some(reporter) = &self.working_branch {
+            reporter.set_working_branch(repository_url, branch).await?;
+        }
+        Ok(())
+    }
+
     async fn set_pull_request(
         &self,
         _session: &SessionId,
@@ -431,8 +452,7 @@ where
                             }
                             Err(error) => {
                                 tracing::error!(error = %error, "prompt failed");
-                                let _ = responder
-                                    .respond_with_error(AcpError::new(-32603, error.to_string()));
+                                let _ = responder.respond_with_error(prompt_error(&error));
                             }
                         }
                         Ok(())
@@ -617,6 +637,24 @@ async fn advertise_slash_commands(notifier: &AcpNotifier, session: &SessionId) {
         .await
     {
         tracing::warn!(error = %error, "could not advertise cursor slash commands");
+    }
+}
+
+/// The `session/prompt` error for a failed turn.
+///
+/// The message is the error's `Display` - one sentence for a refusal, the
+/// report for anything else. A refusal the person can act on also carries
+/// its notice as the error's `data`, which is where the fold picks it up.
+fn prompt_error(error: &SessionError) -> AcpError {
+    let acp_error = AcpError::new(-32603, error.to_string());
+    match error {
+        SessionError::Rejected(refusal) => acp_error.data(
+            refusal
+                .notice
+                .as_ref()
+                .and_then(|notice| serde_json::to_value(notice).ok()),
+        ),
+        _ => acp_error,
     }
 }
 

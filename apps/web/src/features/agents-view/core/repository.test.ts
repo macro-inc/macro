@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   defaultBranchFor,
+  filterBranches,
   filterRepositories,
+  orderBranches,
   orderRepositories,
   parseRepositoryInput,
   type ReachableRepository,
@@ -115,5 +117,36 @@ describe('defaultBranchFor', () => {
       'main'
     );
     expect(defaultBranchFor(all, undefined)).toBe('main');
+  });
+});
+
+describe('orderBranches', () => {
+  it("puts the repository's default first when it is listed", () => {
+    expect(orderBranches(['feature/a', 'main', 'develop'], 'main')).toEqual([
+      'main',
+      'feature/a',
+      'develop',
+    ]);
+  });
+
+  it('leaves GitHub order alone when the default is unknown or absent', () => {
+    expect(orderBranches(['feature/a', 'develop'], 'main')).toEqual([
+      'feature/a',
+      'develop',
+    ]);
+    expect(orderBranches(['feature/a', 'develop'])).toEqual([
+      'feature/a',
+      'develop',
+    ]);
+  });
+});
+
+describe('filterBranches', () => {
+  it('matches a branch name, ignoring case', () => {
+    const all = ['main', 'develop', 'feature/Home'];
+    expect(filterBranches(all, '')).toEqual(all);
+    expect(filterBranches(all, 'DEV')).toEqual(['develop']);
+    expect(filterBranches(all, 'home')).toEqual(['feature/Home']);
+    expect(filterBranches(all, 'nothing')).toEqual([]);
   });
 });

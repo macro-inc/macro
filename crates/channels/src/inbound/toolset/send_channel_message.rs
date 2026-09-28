@@ -72,6 +72,7 @@ where
             .post(
                 access,
                 PostMessage {
+                    id: None,
                     attribution: MessageAttribution::ActingUser,
                     notification_policy: PostMessageNotificationPolicy::Default,
                     content: self.content.clone(),

@@ -1,6 +1,6 @@
 use super::*;
 use crate::chat::SoupChat;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TestPropertiesField {
@@ -12,7 +12,7 @@ fn raw_chat() -> SoupItem<()> {
         id: Uuid::nil(),
         name: "Test chat".to_string(),
         model: Some("openai/gpt-5.6".to_string()),
-        owner_id: MacroUserIdStr::try_from("macro|test@example.com".to_string()).unwrap(),
+        owner_id: Owner::try_from("macro|test@example.com".to_string()).unwrap(),
         project_id: None,
         is_persistent: true,
         created_at: DateTime::<Utc>::default(),

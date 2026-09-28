@@ -2,6 +2,7 @@
 use crate::api::context::ApiContext;
 use ai_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
 use anyhow::Context;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
@@ -21,6 +22,8 @@ use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -34,8 +37,8 @@ use macro_authorization::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::{
-    ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
-    StaticFileServiceUrl, SyncServiceUrl,
+    AuthServiceUrl, CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
+    EmailServiceUrl, LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
@@ -270,7 +273,10 @@ async fn main() -> anyhow::Result<()> {
         config.document_storage_bucket.to_string(),
         config.docx_document_upload_bucket.to_string(),
     );
-    let document_repo = PgDocumentRepo::new(db.clone());
+    let document_repo = PgDocumentRepo::new(
+        db.clone(),
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone()))),
+    );
 
     let cloudfront_config = CloudFrontConfig {
         distribution_url: config
@@ -286,8 +292,17 @@ async fn main() -> anyhow::Result<()> {
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
-    let properties_service =
-        ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
+    let event_broker_tracker = TaskTracker::new();
+    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
+        macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
+    );
+    let properties_service = ai_tools::build_properties_service_with_broker(
+        db.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+    );
     let task_properties_service = ai_tools::build_task_properties_adapter(
         db.clone(),
         properties_service.clone(),
@@ -300,12 +315,6 @@ async fn main() -> anyhow::Result<()> {
         import::outbound::document_properties::DocumentPropertiesApplicator::new(
             properties_service.clone(),
         );
-    let event_broker_tracker = TaskTracker::new();
-    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
-        macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-        event_broker_tracker.clone(),
-    );
     let document_service = DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
@@ -319,6 +328,19 @@ async fn main() -> anyhow::Result<()> {
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
         macro_event_broker.clone(),
     );
+    // Messages sent by AI tools (chat, agents) dispatch the same side effects
+    // as the document-storage message API, so mentions, replies and document
+    // comments notify recipients and stream to connected clients.
+    let channels_connection_gateway =
+        Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
+            internal_api_key.clone(),
+            ConnectionGatewayUrl::new()?.to_string(),
+        ));
+    let side_effect_clients = ai_tools::ChannelSideEffectClients {
+        connection_gateway: channels_connection_gateway.clone(),
+        sqs: aws_sdk_sqs::Client::new(&aws_config),
+        macro_event_broker: macro_event_broker.clone(),
+    };
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,
@@ -330,6 +352,11 @@ async fn main() -> anyhow::Result<()> {
             std::sync::Arc::new(reqwest::Client::new()),
         ),
         config.document_permission_jwt.as_ref().to_string(),
+        ai_tools::build_message_service_with_side_effects(
+            db.clone(),
+            lexical_client.clone(),
+            &side_effect_clients,
+        ),
     );
 
     tracing::info!("initialized document tool context");
@@ -430,24 +457,44 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized chat tool context");
 
-    // Channel messages sent by AI tools (chat, agents) dispatch the same side
-    // effects as the document-storage channel API, so mentions and replies
-    // notify recipients and stream to connected clients.
-    let channels_connection_gateway =
-        Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
-            internal_api_key.clone(),
-            ConnectionGatewayUrl::new()?.to_string(),
-        ));
     let channel_tool_context = ai_tools::build_channel_tool_context_with_side_effects(
         db.clone(),
         lexical_client.clone(),
-        ai_tools::ChannelSideEffectClients {
-            connection_gateway: channels_connection_gateway.clone(),
-            sqs: aws_sdk_sqs::Client::new(&aws_config),
-            macro_event_broker: macro_event_broker.clone(),
-        },
+        &side_effect_clients,
     );
-    let recorder = ai_usage::pg_recorder(db.clone());
+    let user_permissions_service = Arc::new(
+        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
+            roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
+            roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
+        ),
+    );
+
+    // The AI billing gate reads allowances, credits, and overage state here;
+    // collection (Stripe) lives in the authentication service, which the
+    // recorder below asks to settle once a payer runs past their allowance.
+    let ai_billing = Arc::new(ai_billing::domain::BillingServiceImpl::new(
+        ai_billing::outbound::RolesTeamsEntitlementSource::new(
+            (*user_permissions_service).clone(),
+            teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+        ),
+        ai_billing::outbound::PgUsageReader::new(db.clone()),
+        ai_billing::outbound::PgBillingRepo::new(db.clone()),
+        ai_billing::outbound::NoOpPaymentGateway,
+        config.environment,
+    ));
+    let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
+        internal_api_key.clone(),
+        AuthServiceUrl::new()?.to_string(),
+    ));
+    let recorder: Arc<dyn ai_usage::UsageRecorder> =
+        Arc::new(ai_billing::outbound::SettlingUsageRecorder::new(
+            Arc::new(ai_usage::domain::service::UsageServiceImpl::new(
+                ai_usage::outbound::PgUsageRepo::new(db.clone()),
+            )),
+            ai_billing.clone(),
+            ai_billing::outbound::HttpSettlementTrigger::new(auth_service_client),
+            config.environment,
+        ));
 
     // The import pipeline: staged/imported external items, gather jobs over
     // the user's connectors, and the Haiku import job. Built before the tool
@@ -584,6 +631,15 @@ async fn main() -> anyhow::Result<()> {
         user_email_service,
     );
 
+    let initiative_tool_context = ai_tools::build_initiative_tool_context(
+        db.clone(),
+        &document_tool_context,
+        properties_service.clone(),
+        entity_access_service.clone(),
+        aws_sdk_sqs::Client::new(&aws_config),
+        macro_event_broker.clone(),
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -600,7 +656,7 @@ async fn main() -> anyhow::Result<()> {
         call_tool_context: call_tool_context.clone(),
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             db.clone(),
-            EmailServiceUrl::new()?.to_string(),
+            CalendarServiceUrl::new()?,
             internal_api_key.clone(),
         ),
         notification_tool_context: notification_tool_context.clone(),
@@ -620,11 +676,13 @@ async fn main() -> anyhow::Result<()> {
             DocumentStorageServiceUrl::new()?.to_string(),
         ),
         project_tool_context,
+        initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
         skill_tool_context: ai_tools::build_skill_tool_context(
             search_service_client.clone(),
             soup_service.clone(),
+            &document_tool_context,
         ),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
@@ -774,13 +832,6 @@ async fn main() -> anyhow::Result<()> {
     )
     .with_auth_completed_hook(pipedream_auth_hook);
 
-    let user_permissions_service = Arc::new(
-        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
-            roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
-            roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
-        ),
-    );
-
     let api_result = api::setup_and_serve(ApiContext {
         db: db.clone(),
         email_service_client_external,
@@ -789,6 +840,7 @@ async fn main() -> anyhow::Result<()> {
         search_service_client,
         authorization_state,
         user_permissions_service,
+        ai_billing,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
         notification_ingress_service,

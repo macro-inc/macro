@@ -4,7 +4,6 @@ import {
   executeMarkEntitiesDone,
   executeMarkEntitiesUndone,
   type MarkEntitiesDoneContext,
-  openEntityInSplitFromUnifiedList,
   resolveMarkEntitiesDoneVariables,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
@@ -30,14 +29,15 @@ import type {
 
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
-  'inbox-signal',
-  'inbox-noise',
+  'home-signal',
+  'home-noise',
   // Marking a pending reminder done cancels it before it fires — same as the
   // standalone Reminders view's Scheduled tab below.
-  'inbox-reminders',
+  'home-reminders',
   'mail-important',
   'mail-all',
   'mail-noise',
+  'mail-favorites',
   // Calendar lists invite threads from the "all" email view, so done rows
   // stay in place and flip to the done state exactly like mail "All".
   'mail-calendar',
@@ -112,8 +112,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   // rework how notifications are sent to not be under just the 'channel'
   // entity
   const scopeChannelNotificationsToEntity = () =>
-    splitPanel?.handle.content().id === 'inbox' ||
-    splitPanel?.handle.referredFrom() === 'inbox';
+    splitPanel?.handle.content().id === 'home' ||
+    splitPanel?.handle.referredFrom() === 'home';
 
   const { notificationSource, hotkeyGroup } = options;
   const mutation = useUndoableMutation<
@@ -228,6 +228,10 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       entity.type === 'email' ||
       entity.type === 'channel' ||
       entity.type === 'chat' ||
+      // Agent-session rows exist in the inbox only through their settled /
+      // waiting-for-input / mentioned notifications, so done resolves to
+      // those notification ids like every other notification-backed type.
+      entity.type === 'agent_session' ||
       entity.type === 'document' ||
       entity.type === 'project' ||
       entity.type === 'foreign' ||
@@ -376,19 +380,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         actionId: 'mark-done',
         entity: nextRow?.original,
       });
-    } else {
-      const controller = splitPanel?.handle;
-      if (controller?.isControllerSplit()) {
-        if (nextRow) {
-          void openEntityInSplitFromUnifiedList(nextRow.original, {
-            splitHandle: controller,
-            mergeHistory: true,
-            notificationSource: options.notificationSource(),
-          });
-        } else {
-          controller.resetPreview();
-        }
-      }
     }
 
     // When marking done navigated the view to the next item, undo navigates

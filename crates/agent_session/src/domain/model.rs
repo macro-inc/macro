@@ -4,6 +4,9 @@ use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::Owner;
+
+use super::error::AgentSessionError;
 
 // The log vocabulary - the session id, the log entry, and the frame it
 // carries - is owned by `agent_fold`, the bottom of the agent session stack,
@@ -84,6 +87,23 @@ pub struct SessionManager {
     /// `None` means the manager is live but unreachable - hold the error
     /// rather than execute somewhere the actor is not.
     pub address: Option<ReplicaAddress>,
+    /// Whether the holder has published that it is shutting down. Still
+    /// heartbeating, so still "live" by the lease's own liveness rule, but
+    /// no longer somewhere to send work.
+    pub draining: bool,
+}
+
+/// What the lease says about a session, seen from one replica.
+#[derive(Debug, Clone)]
+pub struct LeaseView {
+    /// The replica holding the lease, when a live one holds it - draining
+    /// or not, because who may take over from a draining holder is the
+    /// reader's decision, not the store's.
+    pub holder: Option<SessionManager>,
+    /// Whether the replica that asked has published that it is draining.
+    /// Asked in the same statement as the holder: a command's routing turns
+    /// on both, and two round trips could straddle the drain.
+    pub asking_replica_draining: bool,
 }
 
 /// Where a session's live actor runs, from one service instance's viewpoint.
@@ -96,6 +116,9 @@ pub enum SessionManagement {
     Ours,
     /// A live peer manages it; commands belong at its address.
     Peer(SessionManager),
+    /// This instance is draining: it is about to stop, so work sent here
+    /// would die with it. Commands belong on a replica that is staying.
+    Draining,
 }
 
 /// A session's takeover counter, bumped by every successful claim.
@@ -162,8 +185,8 @@ pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
 pub struct CreateAgentSessionParams {
     /// Caller-minted session id, available before persistence.
     pub id: AgentSessionId,
-    /// User who created and owns the session.
-    pub owner_id: MacroUserIdStr<'static>,
+    /// Who created and owns the session.
+    pub owner_id: Owner,
     /// Bot running the agent.
     pub bot_id: BotId,
     /// Root message identifying the originating thread, if any.
@@ -208,8 +231,8 @@ pub struct AgentSession {
     pub id: AgentSessionId,
     /// User-facing session name.
     pub name: String,
-    /// The user who created and owns the session. Immutable for its life.
-    pub owner_id: MacroUserIdStr<'static>,
+    /// Who created and owns the session. Immutable for its life.
+    pub owner_id: Owner,
     /// The root message where the bot was originally invoked, if any.
     pub thread_id: Option<Uuid>,
     /// Entity owning the originating thread, derived from its root message.
@@ -251,6 +274,21 @@ pub struct AgentSession {
     pub status: SessionStatus,
     pub created_at: DateTime<Utc>,
     pub modified_at: DateTime<Utc>,
+}
+
+impl AgentSession {
+    /// The user this session runs as.
+    ///
+    /// For every path that acts as the owner - spends their credentials,
+    /// bills them, grants them access - rather than merely names them. The
+    /// owner is a user for every session today, but the type no longer says
+    /// so; asking here fails typed for any other kind instead of treating a
+    /// bot or team as a person.
+    pub fn owner_user(&self) -> Result<&MacroUserIdStr<'static>, AgentSessionError> {
+        self.owner_id
+            .as_user()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(self.owner_id.owner_type()))
+    }
 }
 
 /// A persisted agent-session name changed and should be shown to live viewers.
@@ -316,6 +354,43 @@ pub struct SessionBot {
     /// Avatar, when it has one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
+}
+
+/// One waiting action as the session store records it.
+///
+/// The harness keeps an in-memory working copy beside the live actor; this
+/// is the durable form a restart or a reader on another replica consults.
+/// `announce` is the harness's channel/document origin, stored as JSON so
+/// this crate does not depend on harness types.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredQueuedAction {
+    /// The id the action was accepted under.
+    pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
+    /// What will be delivered - a prompt's text is the raw user text.
+    pub action: agent_runtime_protocol::domain::action::AgentAction,
+    /// The user who queued it, absent when a bot acted on nobody's behalf.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// When it was accepted.
+    pub created_at: DateTime<Utc>,
+    /// Harness announce origin, opaque to this crate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub announce: Option<serde_json::Value>,
+    /// Chip message id, once posted, so a retry does not announce twice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub announced_message_id: Option<Uuid>,
+}
+
+impl From<&StoredQueuedAction> for super::ports::QueuedControl {
+    fn from(stored: &StoredQueuedAction) -> Self {
+        Self {
+            action_id: stored.action_id,
+            action: stored.action.clone(),
+            actor: stored.actor.clone(),
+            created_at: stored.created_at,
+        }
+    }
 }
 
 /// One action waiting in a session's queue.
@@ -412,6 +487,9 @@ pub fn cursor_run_checkpoint(message: &Message) -> Option<String> {
 /// session does not own a channel.
 #[derive(Debug, Clone)]
 pub struct LogAppended {
+    /// The durable turn projection after these frames, for list viewers that
+    /// have not loaded the conversation's history.
+    pub turn_state: Option<agent_fold::domain::model::TurnState>,
     /// The session the entries belong to. The fold keys its messages on this,
     /// so a client must pass it through unchanged.
     pub agent_session_id: AgentSessionId,
@@ -535,8 +613,8 @@ pub struct AgentSessionPreviewData {
     pub id: AgentSessionId,
     /// User-facing session name.
     pub name: String,
-    /// The user who owns the session.
-    pub owner_id: MacroUserIdStr<'static>,
+    /// Who owns the session.
+    pub owner_id: Owner,
     /// The bot running the agent, for its avatar.
     pub bot_id: BotId,
     /// Minimal bot identity, hydrated by the service after checking session access.

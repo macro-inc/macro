@@ -33,6 +33,7 @@ macro_auth = { path = "../macro_auth" }
 # The owner's `User` row, which carries the FusionAuth id the exchange needs.
 macro_db_client = { path = "../macro_db_client" }
 macro_user_id = { path = "../macro_user_id" }
+model_owner = { path = "../model_owner" }
 # The rows saying which apps an owner connected, and the client that turns one
 # into Pipedream's MCP endpoint plus the headers scoping a call to it.
 pipedream_mcp = { path = "../pipedream_mcp" }

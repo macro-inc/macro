@@ -9,8 +9,7 @@ import type { EntityActionListState } from './entity-action-context';
  *
  * Opens the reminder's editor the same way a row click does: through
  * {@link openEntityInSplitFromUnifiedList}, which resolves the reminder to its
- * `reminder-view` split and previews it into the Viewer when driven from a
- * Preview Pair. Single-entity only, like creating one.
+ * `reminder-view` split. Single-entity only, like creating one.
  */
 export const makeEditReminderAction = () => {
   const canExecute = (entity: EntityData): boolean =>

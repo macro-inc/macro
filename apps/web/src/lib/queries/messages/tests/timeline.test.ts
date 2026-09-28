@@ -234,6 +234,36 @@ describe('messageTimelineQueryOptions', () => {
     expect(mocks.track).not.toHaveBeenCalled();
   });
 
+  it('rejoining a project replaces cached roots so missed edits and deletions recover', async () => {
+    const project: MessageParent = { type: 'initiative', id: 'project-1' };
+    const old = createMessage('old', '2026-09-10T12:00:00Z', {
+      parent: project,
+    });
+    const deleted = createMessage('deleted', '2026-09-10T13:00:00Z', {
+      parent: project,
+    });
+    testQueryClient.setQueryData<MessageTimelineData>(
+      getMessageTimelineQueryKey(project, null),
+      { pages: [fullPage([deleted, old])], pageParams: [null] }
+    );
+    mocks.list.mockResolvedValueOnce(
+      fullPage([{ ...old, content: 'Edited while disconnected' }])
+    );
+
+    const result = await messageTimelineQueryOptions(project, null).queryFn({
+      pageParam: null,
+    });
+
+    expect(timelineMessages(result).map((item) => item.content)).toEqual([
+      'Edited while disconnected',
+    ]);
+    expect(mocks.list).toHaveBeenCalledWith(project, {
+      ...fullSelection,
+      include_activity: false,
+    });
+    expect(mocks.track).not.toHaveBeenCalled();
+  });
+
   it('cache at latest fetches only roots newer than the newest cached root', async () => {
     const older = createMessage('msg-older', '2026-09-10T13:19:00.123456Z');
     const newer = createMessage('msg-newer', '2026-09-10T13:19:00.123457Z');

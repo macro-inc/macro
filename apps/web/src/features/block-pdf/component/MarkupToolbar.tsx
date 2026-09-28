@@ -16,14 +16,12 @@ export function MarkupToolbar() {
   const canEdit = pdf.permissions.canEdit;
   const canComment = pdf.permissions.canComment;
   const isDocumentOwner = pdf.permissions.isOwner;
-  const [mode, setMode] = pdf.state.signals.placeableMode;
-  const [activePlaceableId] = pdf.state.signals.activePlaceableId;
   const placeableIdMap = usePlaceableIdMap();
   const deletePlaceable = useDeletePlaceable();
-  const showCancel = () => mode() !== PayloadMode.NoMode;
+  const showCancel = () => pdf.markup.mode() !== PayloadMode.NoMode;
   const ownedCommentSelector = useOwnedCommentPlaceableSelector();
   const showDelete = createMemo(() => {
-    const uuid = activePlaceableId();
+    const uuid = pdf.markup.activeId();
     if (!uuid) return false;
     const activePlaceable = placeableIdMap()?.[uuid];
     if (!activePlaceable) return false;
@@ -41,7 +39,9 @@ export function MarkupToolbar() {
             label="Text Box"
             variant="ghost"
             onClick={() => {
-              setMode(PayloadMode.FreeTextAnnotation);
+              pdf.markup.commands.beginPlacement(
+                PayloadMode.FreeTextAnnotation
+              );
             }}
           >
             <Textbox />
@@ -50,7 +50,9 @@ export function MarkupToolbar() {
             size="icon-sm"
             label="Signature"
             variant="ghost"
-            onClick={() => setMode(PayloadMode.Signature)}
+            onClick={() =>
+              pdf.markup.commands.beginPlacement(PayloadMode.Signature)
+            }
           >
             <Signature />
           </Button>
@@ -60,7 +62,7 @@ export function MarkupToolbar() {
           label="Comment"
           variant="ghost"
           onClick={() => {
-            setMode(PayloadMode.Thread);
+            pdf.markup.commands.beginPlacement(PayloadMode.Thread);
           }}
         >
           <ChatTeardrop />
@@ -83,7 +85,7 @@ export function MarkupToolbar() {
                 variant="danger"
                 tooltip="Delete"
                 onClick={() => {
-                  const activePlaceableIndex_ = activePlaceableId();
+                  const activePlaceableIndex_ = pdf.markup.activeId();
                   if (activePlaceableIndex_ == null) return;
                   deletePlaceable(activePlaceableIndex_);
                 }}
@@ -98,7 +100,7 @@ export function MarkupToolbar() {
             variant="danger"
             tooltip="Cancel"
             onClick={() => {
-              setMode(PayloadMode.NoMode);
+              pdf.markup.commands.cancelPlacement();
             }}
           >
             <Cancel />

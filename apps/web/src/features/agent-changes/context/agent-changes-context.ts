@@ -10,6 +10,7 @@
 
 import type { Accessor } from 'solid-js';
 import type { SessionChanges } from '../core/changeset';
+import type { DiffStyle, PaneLayout } from '../core/layout';
 
 export type QueryStatus = 'idle' | 'pending' | 'error' | 'success';
 
@@ -49,11 +50,30 @@ export type ChangesHost = {
   scopeKey: Accessor<string | undefined>;
   /** Omit for a read-only viewer without agent note controls. */
   agent?: ChangesAgent;
+  /**
+   * Whether the source can ever hold changes. Omit for hosts that always
+   * can (a PR entity); a session host reports false for a chat-only
+   * harness or a session with no linked pull request, which hides every
+   * Changes control instead of showing an empty pane.
+   */
+  canHaveChanges?: Accessor<boolean>;
+  /** GitHub API totals; undefined while unavailable, with no estimated fallback. */
+  pullRequestChangeCounts?: Accessor<
+    { additions: number; deletions: number } | undefined
+  >;
   /** The pull request represented by the source. */
   pullRequestUrl: Accessor<string | undefined>;
   openExternal: (url: string) => void;
   copyText: (text: string) => Promise<boolean>;
   notify: (message: string, tone: 'success' | 'failure') => void;
+};
+
+/** Which layout the pane is in, and how its diffs are drawn. */
+export type PaneViewState = {
+  layout: Accessor<PaneLayout>;
+  setLayout: (layout: PaneLayout) => void;
+  diffStyle: Accessor<DiffStyle>;
+  setDiffStyle: (style: DiffStyle) => void;
 };
 
 export type AgentChangesContext = {

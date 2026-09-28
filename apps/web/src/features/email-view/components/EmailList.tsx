@@ -1,5 +1,6 @@
 import '@entity/composed/ListEntity.css';
 import { type ListActivation, useListInteractions } from '@app/components/list';
+import { CommandState } from '@app/features/command/state';
 import {
   resolveEntityActionViewContext,
   toEntityActionListState,
@@ -28,14 +29,12 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   Match,
-  onCleanup,
   type Setter,
   Show,
   Suspense,
@@ -56,10 +55,12 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createEmailRowActionState } from '../primitives/row-action-state';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
+import { EmailRowActions, EmailStarAction } from './EmailRowActions';
 
 type EmailActionRow = {
   entity: WithNotification<EntityData>;
@@ -81,8 +82,6 @@ export function EmailList(props: EmailListProps) {
     options: {
       event?: MouseEvent;
       openInNewSplit?: boolean;
-      replacePreview?: boolean;
-      mergeHistory?: boolean;
     } = {}
   ) {
     const finishTouchHighlight = options.event
@@ -93,16 +92,8 @@ export function EmailList(props: EmailListProps) {
       splitHandle: panel.handle,
       referredFrom: 'mail',
       openInNewSplit: options.openInNewSplit,
-      replacePreview: options.replacePreview,
-      mergeHistory: options.mergeHistory,
     }).finally(() => finishTouchHighlight?.());
   }
-
-  const previewAfterNavigation = debounce(
-    (entity: EntityData) => openEntity(entity, { mergeHistory: true }),
-    150
-  );
-  onCleanup(() => previewAfterNavigation.clear());
 
   function onActivate({
     item,
@@ -120,15 +111,12 @@ export function EmailList(props: EmailListProps) {
 
     if (sourceRow?.kind !== 'entity') return;
 
-    previewAfterNavigation.clear();
-
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
     if (
       !newSplit &&
       metadata?.event?.altKey !== true &&
-      !panel.handle.isControllerSplit() &&
       openThread(
         { id: sourceRow.entity.id, fallbackName: sourceRow.entity.name },
         { event: metadata?.event }
@@ -139,13 +127,12 @@ export function EmailList(props: EmailListProps) {
     openEntity(sourceRow.entity, {
       event: metadata?.event,
       openInNewSplit: newSplit,
-      replacePreview: metadata?.event?.altKey === true && !newSplit,
     });
   }
 
   registerListActivationHandler(onActivate);
 
-  const { buildActionGroups } = createSoupEntityActions();
+  const { buildActionGroups, isFavorited } = createSoupEntityActions();
   const entityActionViewContext = () =>
     resolveEntityActionViewContext({
       activeListView: panel.handle.content().id,
@@ -246,13 +233,6 @@ export function EmailList(props: EmailListProps) {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
-        previewAfterNavigation.clear();
-
-        const row = event.result?.item;
-        if (row?.kind === 'entity' && panel.handle.isControllerSplit()) {
-          previewAfterNavigation(row.entity);
-        }
-
         if (event.kind !== 'move' || event.direction !== 1) return;
         if (source.isLoadingMore() || !source.hasMore()) return;
 
@@ -309,6 +289,53 @@ export function EmailList(props: EmailListProps) {
     list.selection.setAnchor(row.rowId);
   }
 
+  const rowActionState = createEmailRowActionState();
+
+  async function runRowAction(
+    row: EmailActionRow,
+    actionId: 'favorite' | 'mark-done' | 'mark-not-done'
+  ) {
+    const action = actionGroupsFor(row)
+      .flatMap((group) => group.items)
+      .find((item) => item.id === actionId);
+    if (!action || action.disabled) return;
+
+    await rowActionState.run(row.rowId, async () => {
+      focusActionRow(row);
+      try {
+        await action.onClick();
+      } catch {
+        // Entity actions own their rollback and failure notification.
+      } finally {
+        grid()?.focus();
+      }
+    });
+  }
+
+  function RowActions(props: { row: EmailActionRow }) {
+    const archived = () =>
+      props.row.entity.type === 'email' && props.row.entity.done;
+
+    return (
+      <EmailRowActions
+        archived={archived()}
+        canArchive={entityActionViewContext().supportsMarkDone}
+        pending={rowActionState.isPending(props.row.rowId)}
+        onFocus={() => focusActionRow(props.row)}
+        onArchive={() =>
+          void runRowAction(
+            props.row,
+            archived() ? 'mark-not-done' : 'mark-done'
+          )
+        }
+        onCommands={() => {
+          focusActionRow(props.row);
+          CommandState.openForEntityAction([props.row.entity]);
+        }}
+      />
+    );
+  }
+
   let restoredScroll = false;
   function registerVirtualizer(handle?: VirtualizerHandle) {
     setVirtualizer(handle);
@@ -340,7 +367,7 @@ export function EmailList(props: EmailListProps) {
   }
 
   // Switching tab or inbox scope is a new list: drop focus, selection, and
-  // the preview, and start from the top.
+  // and start from the top.
   const listScope = () =>
     `${state.tab}|${state.inboxIds === undefined ? '*' : state.inboxIds.join(',')}`;
   let activeScope = listScope();
@@ -349,10 +376,9 @@ export function EmailList(props: EmailListProps) {
     if (nextScope === activeScope) return;
 
     activeScope = nextScope;
-    previewAfterNavigation.clear();
+
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
-    panel.handle.resetPreview();
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
 
@@ -367,10 +393,6 @@ export function EmailList(props: EmailListProps) {
     });
     if (restored) return;
     if (isTouchDevice()) return;
-    if (panel.handle.isControllerSplit()) {
-      panel.handle.resetPreview();
-      return;
-    }
 
     list.focus.first({
       isNavigable: (row) => row.kind === 'entity',
@@ -403,7 +425,7 @@ export function EmailList(props: EmailListProps) {
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class="soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
+        class="soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none [--color-list-highlighted:var(--color-active)]"
       >
         <PullToRefresh
           scrollContainer={pullScrollContainer}
@@ -540,6 +562,43 @@ export function EmailList(props: EmailListProps) {
                                   <div role="gridcell">
                                     <ListEntity
                                       entity={entityRow().entity}
+                                      leadingAction={
+                                        <Show when={!isTouchDevice()}>
+                                          <EmailStarAction
+                                            starred={isFavorited(
+                                              entityRow().entity
+                                            )}
+                                            pending={rowActionState.isPending(
+                                              entityRow().id
+                                            )}
+                                            onFocus={() =>
+                                              focusActionRow({
+                                                entity: entityRow().entity,
+                                                rowId: entityRow().id,
+                                              })
+                                            }
+                                            onStar={() =>
+                                              void runRowAction(
+                                                {
+                                                  entity: entityRow().entity,
+                                                  rowId: entityRow().id,
+                                                },
+                                                'favorite'
+                                              )
+                                            }
+                                          />
+                                        </Show>
+                                      }
+                                      actions={
+                                        <Show when={!isTouchDevice()}>
+                                          <RowActions
+                                            row={{
+                                              entity: entityRow().entity,
+                                              rowId: entityRow().id,
+                                            }}
+                                          />
+                                        </Show>
+                                      }
                                       checked={list.selection.isSelected(
                                         entityRow().id
                                       )}
@@ -556,8 +615,6 @@ export function EmailList(props: EmailListProps) {
                                         const openInNewSplit = event.shiftKey;
                                         openEntity(project, {
                                           openInNewSplit,
-                                          replacePreview:
-                                            event.altKey && !openInNewSplit,
                                         });
                                       }}
                                       onChecked={(selected, shiftKey) =>

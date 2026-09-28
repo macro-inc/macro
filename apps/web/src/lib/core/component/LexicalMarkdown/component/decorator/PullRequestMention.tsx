@@ -1,7 +1,10 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { HoverCard } from '@core/component/HoverCard';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import {
+  useNativeSplitNavigationHandler,
+  useSplitNavigationHandler,
+} from '@core/util/useSplitNavigationHandler';
 import {
   $isPullRequestMentionNode,
   HISTORIC_TAG,
@@ -453,7 +456,7 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
     );
   }
 
-  const navHandlers = useSplitNavigationHandler<HTMLSpanElement>((e) => {
+  const navHandlers = useNativeSplitNavigationHandler<HTMLSpanElement>((e) => {
     e.stopPropagation();
     open(e);
   });

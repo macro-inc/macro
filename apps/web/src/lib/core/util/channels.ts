@@ -9,7 +9,10 @@ import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
-import { useSendMessageMutation } from '@queries/messages/mutations';
+import {
+  newMessageId,
+  useSendMessageMutation,
+} from '@queries/messages/mutations';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { createCallback } from '@solid-primitives/rootless';
@@ -18,6 +21,8 @@ type SendContent = {
   content: string;
   mentions: SimpleMention[];
   attachments?: NewAttachment[];
+  /** An entity owner may need to authorize the resolved DM/channel before sending. */
+  beforeSend?: (channelId: string) => Promise<void>;
 };
 
 type NavigationOptions = {
@@ -49,16 +54,18 @@ export function useSendMessageToPeople() {
     content: string,
     mentions: SimpleMention[],
     attachments: NewAttachment[],
-    navigate?: NavigationOptions
+    navigate?: NavigationOptions,
+    beforeSend?: (channelId: string) => Promise<void>
   ) {
     const senderId = userId();
     if (!senderId) return;
+    await beforeSend?.(channelId);
     const messageResponse = await sendMessage
       .mutateAsync({
         parent: { type: 'channel', id: channelId },
         message: { content, attachments, mentions },
         senderId,
-        optimisticId: crypto.randomUUID(),
+        optimisticId: newMessageId(),
       })
       .catch(() => null);
     if (!messageResponse) return;
@@ -110,7 +117,8 @@ export function useSendMessageToPeople() {
       args.content,
       args.mentions,
       args.attachments ?? [],
-      args.navigate
+      args.navigate,
+      args.beforeSend
     );
   }
 
@@ -120,7 +128,8 @@ export function useSendMessageToPeople() {
       args.content,
       args.mentions,
       args.attachments ?? [],
-      args.navigate
+      args.navigate,
+      args.beforeSend
     );
   }
 

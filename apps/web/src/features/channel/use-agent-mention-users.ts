@@ -1,10 +1,6 @@
 import { isClaudeBotId } from '@core/constant/claudeAgent';
 import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
-import {
-  enableChatV3Agents,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { useCursorAgentsAccess } from '@core/cursor/flag';
 import type { IUser } from '@core/user/types';
 import { uniqueByKey } from '@core/util/compareUtils';
@@ -16,10 +12,10 @@ import {
   isMacroAiId,
   isMacroCoderId,
   isMacroNewId,
-  macroAiMentionUser,
   macroCoderMentionUser,
-  macroNewMentionUser,
+  macroMentionUser,
 } from './macroAi';
+import { useChatV3AgentsFlag } from './use-chat-v3-agents-flag';
 
 /**
  * Built-in agent entries shared by every message composer. Account setup does
@@ -27,29 +23,29 @@ import {
  * thread when setup is needed, so replies link to Settings → Harness rather
  * than the entry disappearing. The built-in Cursor entry follows the Cursor
  * rollout flag. Mentions are re-tagged as bot mentions at send time.
+ *
+ * Macro gets exactly one entry. Both Macro bots are dropped from the incoming
+ * list first, so a stray participant or channel-bot row cannot put a second
+ * "Macro" in the menu; the rollout then decides which id that one entry
+ * carries.
  */
 export function useAgentMentionUsers(
   users: Accessor<IUser[]>,
   enabled: Accessor<boolean> = () => true
 ): Accessor<IUser[]> {
   const canUseCursor = useCursorAgentsAccess();
+  const canUseAgents = useChatV3AgentsFlag();
 
   return () => {
     if (!enabled()) return users();
     const base = users().filter(
-      (user) => canUseCursor() || !isCursorBotId(user.id)
+      (user) =>
+        (canUseCursor() || !isCursorBotId(user.id)) &&
+        !isMacroAiId(user.id) &&
+        !isMacroNewId(user.id)
     );
-    if (
-      isFeatureEnabled(enableChatV3Agents) &&
-      !base.some((user) => isMacroCoderId(user.id))
-    ) {
+    if (canUseAgents() && !base.some((user) => isMacroCoderId(user.id))) {
       base.unshift(macroCoderMentionUser());
-    }
-    if (
-      isFeatureEnabled(enableChatV3Agents) &&
-      !base.some((user) => isMacroNewId(user.id))
-    ) {
-      base.unshift(macroNewMentionUser());
     }
     if (canUseCursor() && !base.some((user) => isCursorBotId(user.id))) {
       base.unshift(cursorMentionUser());
@@ -60,9 +56,7 @@ export function useAgentMentionUsers(
     if (!base.some((user) => isClaudeBotId(user.id))) {
       base.unshift(claudeMentionUser());
     }
-    if (!base.some((user) => isMacroAiId(user.id))) {
-      base.unshift(macroAiMentionUser());
-    }
+    base.unshift(macroMentionUser(canUseAgents()));
     return uniqueByKey(base, (user) => user.id);
   };
 }

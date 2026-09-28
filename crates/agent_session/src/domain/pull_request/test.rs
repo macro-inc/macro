@@ -46,11 +46,11 @@ async fn persists_and_publishes_once_and_rejects_another_owner() {
     ));
     assert!(repo.list_by_session(session.id).await.unwrap().is_empty());
     service
-        .set_pull_request(session.id, &session.owner_id, url, None)
+        .set_pull_request(session.id, session.owner_user().unwrap(), url, None)
         .await
         .unwrap();
     service
-        .set_pull_request(session.id, &session.owner_id, url, None)
+        .set_pull_request(session.id, session.owner_user().unwrap(), url, None)
         .await
         .unwrap();
     assert!(repo.list_by_session(session.id).await.unwrap().is_empty());
@@ -66,7 +66,7 @@ async fn persists_and_publishes_once_and_rejects_another_owner() {
     service
         .set_pull_request(
             session.id,
-            &session.owner_id,
+            session.owner_user().unwrap(),
             "https://github.com/org/repo/pull/124",
             None,
         )
@@ -92,7 +92,7 @@ async fn gateway_failure_does_not_undo_the_persisted_link() {
     let service = SessionPullRequestService::new(repo.clone(), RecordingRealtime::down());
     let url = "https://github.com/org/repo/pull/123";
     service
-        .set_pull_request(session.id, &session.owner_id, url, None)
+        .set_pull_request(session.id, session.owner_user().unwrap(), url, None)
         .await
         .unwrap();
     assert_eq!(
@@ -124,12 +124,17 @@ async fn superseded_claim_cannot_publish_even_an_unchanged_url() {
     let service = SessionPullRequestService::new(repo.clone(), realtime.clone());
     let current_url = "https://github.com/org/repo/pull/2";
     service
-        .set_pull_request(session.id, &session.owner_id, current_url, Some(current))
+        .set_pull_request(
+            session.id,
+            session.owner_user().unwrap(),
+            current_url,
+            Some(current),
+        )
         .await
         .unwrap();
     for url in ["https://github.com/org/repo/pull/1", current_url] {
         assert!(
-            matches!(service.set_pull_request(session.id, &session.owner_id, url, Some(old)).await, Err(AgentSessionError::FencedOut(id)) if id == session.id)
+            matches!(service.set_pull_request(session.id, session.owner_user().unwrap(), url, Some(old)).await, Err(AgentSessionError::FencedOut(id)) if id == session.id)
         );
     }
     assert_eq!(

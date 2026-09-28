@@ -197,6 +197,14 @@ const styleFields: {
   },
 };
 const styleKeys = Object.keys(styleFields) as (keyof SpreadsheetCellStyle)[];
+const styleFieldsByMap = new Map(
+  Object.values(styleFields).map((field) => [field.map, field])
+);
+
+/** Validate a persisted style using the same rules as local cell edits. */
+export function isSpreadsheetStyleEntry(map: string, value: unknown): boolean {
+  return styleFieldsByMap.get(map)?.valid(value) ?? false;
+}
 
 /** Clipboard styles and local patches use the same validation as remote data. */
 export function isSpreadsheetCellStyle(

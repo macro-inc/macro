@@ -5,7 +5,6 @@ import type {
 import { describe, expect, it } from 'vitest';
 import {
   activityCounts,
-  changedFiles,
   countDiffChanges,
   latestPlan,
 } from './session-summary';
@@ -76,27 +75,6 @@ describe('latestPlan', () => {
   });
 });
 
-describe('changedFiles', () => {
-  it('sums stats per path across edits, in first-touched order', () => {
-    const messages = [
-      message(0, [
-        edit([{ path: 'a.ts', oldText: 'x\n', newText: 'x\ny\n' }]),
-        edit([{ path: 'b.ts', oldText: null, newText: 'one\ntwo\n' }]),
-      ]),
-      message(1, [edit([{ path: 'a.ts', oldText: 'y\n', newText: 'z\n' }])]),
-    ];
-    expect(changedFiles(messages)).toEqual([
-      { path: 'a.ts', additions: 2, deletions: 1 },
-      { path: 'b.ts', additions: 2, deletions: 0 },
-    ]);
-  });
-
-  it('ignores non-edit tools', () => {
-    const messages = [message(0, [tool({ kind: 'read', paths: ['a.ts'] })])];
-    expect(changedFiles(messages)).toEqual([]);
-  });
-});
-
 describe('subagent descent', () => {
   it("counts a subagent's edits and tool calls as the session's", () => {
     const nested = edit([{ path: 'b.rs', oldText: 'x\n', newText: 'y\n' }]);
@@ -117,7 +95,6 @@ describe('subagent descent', () => {
       },
     };
     const messages = [message(0, [subagent])];
-    expect(changedFiles(messages).map((file) => file.path)).toEqual(['b.rs']);
     const counts = Object.fromEntries(
       activityCounts(messages).map((item) => [item.key, item.count])
     );

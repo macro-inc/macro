@@ -42,7 +42,7 @@ pub const SOUP_FLAT_V3: &str = "soup-flat-v3";
 /// Browser-composed profile with complete active-notification membership.
 pub const SOUP_FLAT_V4: &str = "soup-flat-v4";
 /// Host-composed profile with complete selectable property snapshots.
-pub const SOUP_FLAT_V5: &str = "soup-flat-v5";
+pub const SOUP_FLAT_V6: &str = "soup-flat-v6";
 
 // Keep this lightweight crate wasm-compatible instead of depending on the
 // native `system_properties` crate. A native test locks this stable UUID to
@@ -79,9 +79,9 @@ pub mod vocabulary {
         Profile::new(token(super::SOUP_FLAT_V4))
     }
 
-    /// Host-composed property-aware Soup profile.
-    pub fn profile_v5() -> Profile {
-        Profile::new(token(super::SOUP_FLAT_V5))
+    /// Host-composed property and favorite-aware Soup profile.
+    pub fn profile_v6() -> Profile {
+        Profile::new(token(super::SOUP_FLAT_V6))
     }
 
     /// IDs of unseen notifications for the viewer and primary entity.
@@ -272,6 +272,12 @@ fn check_soup_flat(
     supports_status_properties: bool,
     supports_notifications: bool,
 ) -> Eligibility {
+    if ast.initiative_filter.is_some() {
+        return Eligibility::Unsupported(UnsupportedReason::Partition("initiative"));
+    }
+    if ast.favorites_only == Some(true) {
+        return Eligibility::Unsupported(UnsupportedReason::Literal("favorites"));
+    }
     if request.has_cursor {
         return Eligibility::Unsupported(UnsupportedReason::Cursor);
     }
@@ -728,7 +734,7 @@ fn compile_document_literal(
         }
         DocumentLiteral::ProjectId(id) => exact_uuid(vocabulary::project_id(), id),
         DocumentLiteral::Owner(owner) => {
-            return exact_utf8(vocabulary::owner(), owner.to_string());
+            return exact_utf8(vocabulary::owner(), owner.principal_id());
         }
         DocumentLiteral::SubType(sub_type) if supports_v2_facts => {
             return exact_utf8(vocabulary::document_sub_type(), sub_type.to_string());
@@ -763,7 +769,7 @@ fn compile_project_literal(literal: &ProjectLiteral) -> Result<PredicateExpr, Co
         ProjectLiteral::ProjectId(id) => exact_uuid(vocabulary::project_id(), id),
         ProjectLiteral::ProjectIdSelf(id) => exact_uuid(vocabulary::id(), id),
         ProjectLiteral::Owner(owner) => {
-            return exact_utf8(vocabulary::owner(), owner.to_string());
+            return exact_utf8(vocabulary::owner(), owner.principal_id());
         }
         ProjectLiteral::CreatedAt(date) => date_expr(vocabulary::created_at(), date),
         ProjectLiteral::UpdatedAt(date) => date_expr(vocabulary::updated_at(), date),
@@ -776,7 +782,7 @@ fn compile_chat_literal(literal: &ChatLiteral) -> Result<PredicateExpr, CompileE
         ChatLiteral::ChatId(id) => exact_uuid(vocabulary::id(), id),
         ChatLiteral::ProjectId(id) => exact_uuid(vocabulary::project_id(), id),
         ChatLiteral::Owner(owner) => {
-            return exact_utf8(vocabulary::owner(), owner.to_string());
+            return exact_utf8(vocabulary::owner(), owner.principal_id());
         }
         ChatLiteral::CreatedAt(date) => date_expr(vocabulary::created_at(), date),
         ChatLiteral::UpdatedAt(date) => date_expr(vocabulary::updated_at(), date),

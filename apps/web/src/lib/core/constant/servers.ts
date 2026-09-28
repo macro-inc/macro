@@ -11,9 +11,14 @@ const serverHostLocal: Servers = {
   'unfurl-service': 'http://localhost:8095',
   contacts: 'http://localhost:8083',
   'email-service': 'http://localhost:8087',
+  // calendar_service owns calendar locally on 8088. No gateway locally, so the
+  // client hits the service port directly; it drops the /calendar segment, so
+  // that prefix is carried here.
+  'calendar-service': 'http://localhost:8088/calendar',
   'image-proxy-service': 'http://localhost:8097',
   'scheduled-action': 'http://localhost:8099',
   'agent-harness': 'http://localhost:8101',
+  preview: 'http://localhost:8110',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -41,9 +46,11 @@ const serverHostRemote = {
   'unfurl-service': `${gatewayHost}/unfurl`,
   contacts: `${gatewayHost}/contacts`,
   'email-service': `${gatewayHost}/email`,
+  'calendar-service': `${gatewayHost}/calendar`,
   'image-proxy-service': `${gatewayHost}/image-proxy`,
   'scheduled-action': `${gatewayHost}/scheduled-action`,
   'agent-harness': `${gatewayHost}/agent-harness`,
+  preview: `${gatewayHost}/preview`,
 } as const;
 
 type Servers = Record<keyof typeof serverHostRemote, string>;
@@ -102,8 +109,13 @@ function proxyServers(): Servers | undefined {
     'static-file': `${proxyOrigin}/static-file`,
     'unfurl-service': `${proxyOrigin}/unfurl`,
     'agent-harness': `${proxyOrigin}/agent-harness`,
+    preview: `${proxyOrigin}/preview`,
     contacts: `${proxyOrigin}/contacts`,
     'email-service': `${proxyOrigin}/email`,
+    // calendar_service is in the local inventory, so the proxy has a /calendar
+    // route to it (Caddy strips the prefix); the client drops /calendar and
+    // re-appends it via this host.
+    'calendar-service': `${proxyOrigin}/calendar`,
     'image-proxy-service': `${proxyOrigin}/image-proxy`,
     'scheduled-action': `${proxyOrigin}/scheduled-action`,
   };

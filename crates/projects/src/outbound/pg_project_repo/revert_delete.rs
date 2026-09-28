@@ -1,3 +1,4 @@
+use model_owner::Owner;
 use sqlx::{Postgres, Transaction};
 
 use crate::domain::models::RevertDeleteResult;
@@ -134,6 +135,7 @@ async fn restore_items(
         }
         _ => unreachable!("known item type"),
     };
+    let (history_item_ids, history_owner_ids) = user_history_pairs(item_ids, owner_ids)?;
     sqlx::query!(
         r#"
         INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")
@@ -142,13 +144,31 @@ async fn restore_items(
         ON CONFLICT ("userId", "itemId", "itemType") DO UPDATE
         SET "updatedAt" = NOW()
         "#,
-        item_ids,
-        owner_ids,
+        &history_item_ids,
+        &history_owner_ids,
         item_type,
     )
     .execute(transaction.as_mut())
     .await?;
     Ok(())
+}
+
+fn user_history_pairs(
+    item_ids: &[String],
+    owner_ids: &[String],
+) -> Result<(Vec<String>, Vec<String>), sqlx::Error> {
+    item_ids
+        .iter()
+        .zip(owner_ids)
+        .filter_map(
+            |(item_id, owner_id)| match Owner::from_principal_str(owner_id) {
+                Ok(Owner::User(user_id)) => Some(Ok((item_id.clone(), user_id.to_string()))),
+                Ok(Owner::Bot(_) | Owner::Team(_)) => None,
+                Err(error) => Some(Err(sqlx::Error::Decode(Box::new(error)))),
+            },
+        )
+        .collect::<Result<Vec<_>, _>>()
+        .map(|pairs| pairs.into_iter().unzip())
 }
 
 async fn clear_registered_entities(
@@ -164,4 +184,46 @@ async fn clear_registered_entities(
             .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_history_pairs_keeps_users_and_skips_bot_and_team() {
+        let item_ids = [
+            "project-user".to_string(),
+            "project-bot".to_string(),
+            "project-team".to_string(),
+        ];
+        let owner_ids = [
+            "macro|owner@example.com".to_string(),
+            "bot|00000000-0000-0000-0000-00000000a1a1".to_string(),
+            "01234567-89ab-cdef-0123-456789abcdef".to_string(),
+        ];
+
+        let (history_item_ids, history_owner_ids) =
+            user_history_pairs(&item_ids, &owner_ids).expect("valid principals should parse");
+
+        assert_eq!(history_item_ids, vec!["project-user".to_string()]);
+        assert_eq!(
+            history_owner_ids,
+            vec!["macro|owner@example.com".to_string()]
+        );
+    }
+
+    #[test]
+    fn user_history_pairs_fails_the_restore_on_malformed_owners() {
+        let item_ids = ["project-one".to_string(), "project-two".to_string()];
+        let owner_ids = [
+            "not-a-macro-user".to_string(),
+            "macro|owner@example.com".to_string(),
+        ];
+
+        let error = user_history_pairs(&item_ids, &owner_ids)
+            .expect_err("malformed owners should fail restore");
+
+        assert!(matches!(error, sqlx::Error::Decode(_)));
+    }
 }

@@ -85,7 +85,13 @@ vi.mock('@core/signal/permissions', () => ({ useCanEdit: () => () => true }));
 vi.mock('@core/util/message-send-motion', () => ({ markMessageSent: vi.fn() }));
 vi.mock('@queries/auth', () => ({ invalidateUserQuota: vi.fn() }));
 vi.mock('@core/component/AI/component/input/buildChatEditor', () => ({
-  buildChatEditor: () => ({ withMentions: () => mocks.editor }),
+  buildChatEditor: () => {
+    const builder = {
+      withAppLinkResolver: () => builder,
+      withMentions: () => mocks.editor,
+    };
+    return builder;
+  },
 }));
 vi.mock('@core/component/AI/signal/mention-attachment-callbacks', () => ({
   createMentionAttachmentCallbacks: () => ({}),

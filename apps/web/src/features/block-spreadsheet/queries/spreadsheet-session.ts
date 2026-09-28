@@ -11,8 +11,8 @@ import {
 import {
   type InitialSync,
   type LiveSyncSource,
+  type SyncError,
   SyncSourceStatus,
-  type TimeoutError,
 } from '@macro-inc/collaboration/collab/source';
 import {
   BrowserWALStore,
@@ -39,7 +39,7 @@ export type SpreadsheetSessionOptions = {
   userId?: string;
   canEdit: Accessor<boolean>;
   syncSource: LiveSyncSource;
-  doInitialSync: () => ResultAsync<InitialSync, TimeoutError>;
+  doInitialSync: () => ResultAsync<InitialSync, SyncError>;
 };
 
 // Snapshot stores for successive mounts share one IndexedDB key. Finish an

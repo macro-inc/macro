@@ -28,6 +28,15 @@ export class AgentSessionNamespace {
     return AgentSession.repositories(this.client);
   }
 
+  /**
+   * Branch names on one repository the caller can start a managed session
+   * from. `repoUrl` is one of the URLs {@link AgentSessionNamespace.repositories}
+   * lists.
+   */
+  repositoryBranches(repoUrl: string): Promise<string[]> {
+    return AgentSession.repositoryBranches(this.client, repoUrl);
+  }
+
   /** The caller's default sandbox size for new `@coder` sessions. */
   defaultSandboxSize(): Promise<SandboxSize> {
     return AgentSession.defaultSandboxSize(this.client);

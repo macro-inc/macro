@@ -14,6 +14,19 @@ let testQueryClient: QueryClient;
 
 const getSoupItemsMock = vi.hoisted(() => vi.fn());
 const refreshActiveGraphqlSoupQueriesMock = vi.hoisted(() => vi.fn());
+const graphqlSoup = vi.hoisted(() => ({ enabled: false }));
+
+vi.mock('@core/constant/featureFlags', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@core/constant/featureFlags')>();
+  return {
+    ...actual,
+    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
+      flag === actual.enableGraphqlSoup
+        ? graphqlSoup.enabled
+        : actual.isFeatureEnabled(flag),
+  };
+});
 
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getSoupItems: getSoupItemsMock },
@@ -191,6 +204,7 @@ function getSearchQuery() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  graphqlSoup.enabled = false;
   getSoupItemsMock.mockResolvedValue({
     isErr: () => false,
     value: { items: [] },
@@ -243,6 +257,11 @@ describe('buildSingleEntityFilter', () => {
       entityType: 'project' as const,
       filterKey: 'project_filters',
       idKey: 'project_ids',
+    },
+    {
+      entityType: 'initiative' as const,
+      filterKey: 'initiative_filters',
+      idKey: 'initiative_ids',
     },
     {
       entityType: 'call' as const,
@@ -302,6 +321,66 @@ describe('refetchSoupEntity', () => {
 
     expect(refreshActiveGraphqlSoupQueriesMock).not.toHaveBeenCalled();
     expect(getSoupItemsMock).toHaveBeenCalledOnce();
+  });
+
+  describe('when GraphQL owns the soup lists', () => {
+    beforeEach(() => {
+      graphqlSoup.enabled = true;
+      getSoupItemsMock.mockResolvedValue({
+        isErr: () => false,
+        value: { items: [mockDocumentItem('doc-new')] },
+      });
+    });
+    afterEach(() => {
+      mockNormalizer.getObjectById.mockReturnValue(null);
+    });
+
+    it('neither fetches nor invalidates REST lists for an entity no REST list holds', async () => {
+      seedSoupQuery(mockSoupCache([[mockDocumentItem('d-1')]]));
+
+      await refetchSoupEntity('doc-new', 'document');
+
+      expect(getSoupItemsMock).not.toHaveBeenCalled();
+      expect(testQueryClient.getQueryState(soupSeedKey)?.isInvalidated).toBe(
+        false
+      );
+      expect(getSoupQuery()?.pages[0].items.map(getSoupItemId)).toEqual([
+        'd-1',
+      ]);
+    });
+
+    it('still refetches an entity a REST list already holds', async () => {
+      mockNormalizer.getObjectById.mockReturnValue(mockDocumentItem('doc-new'));
+
+      await refetchSoupEntity('doc-new', 'document');
+
+      expect(getSoupItemsMock).toHaveBeenCalledOnce();
+    });
+
+    it('inserts a just-created entity into REST lists without refetching them', async () => {
+      seedSoupQuery(mockSoupCache([[mockDocumentItem('d-1')]]));
+
+      await refetchSoupEntity('doc-new', 'document', { created: true });
+
+      expect(getSoupQuery()?.pages[0].items.map(getSoupItemId)).toEqual([
+        'doc-new',
+        'd-1',
+      ]);
+      expect(testQueryClient.getQueryState(soupSeedKey)?.isInvalidated).toBe(
+        false
+      );
+    });
+
+    it('still inserts own-touch creations into REST lists', async () => {
+      seedSoupQuery(mockSoupCache([[mockDocumentItem('d-1')]]));
+
+      await refetchSoupEntity('doc-new', 'document', { ownTouch: true });
+
+      expect(getSoupQuery()?.pages[0].items.map(getSoupItemId)).toEqual([
+        'doc-new',
+        'd-1',
+      ]);
+    });
   });
 });
 
@@ -657,7 +736,7 @@ describe('optimisticUpdateSoupItemUpdatedAt', () => {
 
 // -- Normalized grouped cache tests --
 
-import { soupItemMatchesInboxTab } from '@app/features/inbox-view/queries/inbox-item-filter';
+import { soupItemMatchesHomeTab } from '@app/features/home/queries/home-item-filter';
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import {
   soupItemMatchesProjectMembership,
@@ -1557,7 +1636,7 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
  * queries both carry `emailView: 'inbox'`, so a websocket notification for a
  * cached noise email restored the row into the Signal feed (and vice versa)
  * until an unrelated refetch corrected it. The inbox now attaches
- * `soupItemMatchesInboxTab` as each tab query's `insertFilter`.
+ * `soupItemMatchesHomeTab` as each tab query's `insertFilter`.
  */
 describe('inbox tab gate (Signal vs Noise)', () => {
   function inboxEmailItem(id: string, isSignal: boolean): SoupApiItem {
@@ -1576,7 +1655,7 @@ describe('inbox tab gate (Signal vs Noise)', () => {
     ];
     testQueryClient.setQueryDefaults(key, {
       meta: {
-        insertFilter: (item: SoupApiItem) => soupItemMatchesInboxTab(item, tab),
+        insertFilter: (item: SoupApiItem) => soupItemMatchesHomeTab(item, tab),
       },
     });
     const data: InfiniteData<SoupAstItemsFlatPage, unknown> = {

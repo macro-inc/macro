@@ -8,6 +8,7 @@ describe('createGettingStartedState', () => {
       load: vi.fn().mockReturnValue({
         completedActionIds: ['set-name'],
         collapsedSectionIds: ['basics'],
+        chatIdsByAction: {},
       }),
       save: vi.fn(),
     };
@@ -20,12 +21,14 @@ describe('createGettingStartedState', () => {
     expect(store.save).toHaveBeenLastCalledWith('user-1', {
       completedActionIds: ['set-name', 'connect-email'],
       collapsedSectionIds: ['basics'],
+      chatIdsByAction: {},
     });
 
     state.toggleSection('basics');
     expect(store.save).toHaveBeenLastCalledWith('user-1', {
       completedActionIds: ['set-name', 'connect-email'],
       collapsedSectionIds: [],
+      chatIdsByAction: {},
     });
   });
 });

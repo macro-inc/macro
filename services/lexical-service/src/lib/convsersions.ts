@@ -1,8 +1,10 @@
 import { $convertToMarkdownString } from '@lexical/markdown';
 import { $dfsIterator } from '@lexical/utils';
 import {
+  $getCommentMarkContext,
   $getId,
   $isImageNode,
+  type CommentMarkContext,
   EXTERNAL_TRANSFORMERS,
   type ImageNode,
   INTERNAL_TRANSFORMERS,
@@ -29,6 +31,16 @@ export function toPlaintext(raw: SerializedEditorState) {
   } catch (_) {
     throw new Error('Error converting snapshot to plain text');
   }
+}
+
+/** The live text of a comment mark and its surrounding blocks, if still present. */
+export function toCommentMarkContext(
+  raw: SerializedEditorState,
+  markId: string
+): CommentMarkContext | null {
+  const editor = createEditor();
+  editor.setEditorState(editor.parseEditorState(raw));
+  return editor.read(() => $getCommentMarkContext(markId));
 }
 
 export function toSearchText(raw: SerializedEditorState) {

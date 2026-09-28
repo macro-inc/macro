@@ -6,9 +6,9 @@
 //! it - sending, and editing or removing what is queued - needs `Edit`, which
 //! the mention's channel holds, so whoever can prompt the bot through the
 //! thread can prompt it here too; renaming, resizing, or deleting the session
-//! needs `Owner`. Permission comes from the session's own `entity_access`
-//! rows - the owner with owner access, the mention's channel as editor - never
-//! from any channel the session was once rendered in. Handlers only map
+//! needs `Owner`. Permission comes from the session's grants, sharing settings,
+//! or originating document. Sharing changes also require actual session ownership.
+//! Handlers only map
 //! transport DTOs to domain types and call the [`AgentSessionService`]; they
 //! make no authorization or business decisions of their own.
 //!
@@ -25,7 +25,7 @@ use agent_runtime_protocol::domain::{
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
 };
@@ -35,11 +35,12 @@ use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAcces
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
-    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserBotOrHarness, UserBotOrHarnessAuthorization,
+    ActingUser, InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserBotOrHarness, UserBotOrHarnessAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -50,14 +51,17 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
-    ManagedPersonaError, OpenExternalAgentSession, OpenManagedSession, SessionOpener,
-    SessionThread, managed_persona_for_user,
+    ExternalSessionRequester, ManagedPersonaError, OpenExternalAgentSession, OpenManagedSession,
+    RequestedExternalSession, SelectedPersona, SessionOpener, SessionThread, persona_for_owner,
 };
 use crate::domain::service::AgentSessionService;
 use bots::domain::models::BotId;
 
 #[cfg(test)]
 mod test;
+
+/// Link, channel, and team sharing routes.
+pub mod sharing;
 
 /// Shared state for the agent session router: the agent session service plus
 /// the authorization state the request extractors authenticate against.
@@ -211,6 +215,10 @@ where
             delete(delete_agent_session_handler::<R, Access, Auth>),
         )
         .route(
+            "/user/{user_id}",
+            delete(delete_user_sessions_handler::<R, Access, Auth>),
+        )
+        .route(
             "/{session_id}/control",
             post(control_agent_session_handler::<R, Access, Auth>),
         )
@@ -228,6 +236,21 @@ where
             put(put_agent_session_sandbox_size_handler::<R, Access, Auth>),
         )
         .with_state(state)
+}
+
+/// Account lifecycle endpoint: never grants cleanup authority to a user or harness token.
+async fn delete_user_sessions_handler<R, Access, Auth>(
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(user_id): Path<MacroUserIdStr<'static>>,
+) -> Result<StatusCode, AgentSessionApiError>
+where
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state.recipient.delete_user_sessions(user_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Build the caller-default sandbox size router. Mount at `/agent-sandbox-size`.
@@ -279,6 +302,12 @@ impl IntoResponse for AgentSessionApiError {
                 )
                     .into_response()
             }
+            // Nothing to open onto: the operator has to bring the runtime up
+            // (or update it) before this bot's sessions can start from here.
+            Self::Domain(AgentSessionError::RuntimeUnavailable(reason)) => {
+                tracing::info!(reason, "open refused: the bot's runtime is unavailable");
+                (StatusCode::CONFLICT, reason).into_response()
+            }
             // Same class as a disconnected runtime: nothing is wrong, and
             // repeating the request will not land. The form the caller is
             // answering has already resolved (someone else answered, a stop
@@ -293,6 +322,39 @@ impl IntoResponse for AgentSessionApiError {
             }
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
+            }
+            Self::Domain(AgentSessionError::InvalidSharing(message)) => {
+                (StatusCode::BAD_REQUEST, message).into_response()
+            }
+            Self::Domain(AgentSessionError::SharingChanged) => (
+                StatusCode::CONFLICT,
+                "sharing changed; reload and try again",
+            )
+                .into_response(),
+            Self::Domain(AgentSessionError::TeamSharing(error)) => {
+                use models_permissions::share_permission::team_share::TeamSharePolicyError;
+                let status = match error {
+                    TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+                        StatusCode::FORBIDDEN
+                    }
+                    TeamSharePolicyError::InvalidRevision => StatusCode::CONFLICT,
+                    _ => StatusCode::BAD_REQUEST,
+                };
+                (status, error.to_string()).into_response()
+            }
+            // This replica is on its way out of a rolling deploy. The work
+            // was not started, so the honest answer is "ask again" rather
+            // than a 200 for a command that would have died with the
+            // process: 503 with a retry hint, which is what the load
+            // balancer's next pick will serve.
+            Self::Domain(AgentSessionError::Draining(session_id)) => {
+                tracing::info!(%session_id, "command refused: this replica is draining");
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    [(header::RETRY_AFTER, "1")],
+                    "this replica is shutting down; retry",
+                )
+                    .into_response()
             }
             // Already dispatched, removed, or never queued: the caller's
             // entry is not waiting anymore, and there is no un-sending it.
@@ -549,7 +611,13 @@ impl AgentSessionResponse {
     pub fn new(session: AgentSession, can_edit: bool) -> Self {
         let thread_channel_id = match &session.thread_parent {
             Some(messages::domain::models::MessageParent::Channel(channel_id)) => Some(*channel_id),
-            Some(messages::domain::models::MessageParent::Document(_)) | None => None,
+            Some(
+                messages::domain::models::MessageParent::Document(_)
+                | messages::domain::models::MessageParent::Initiative(_)
+                | messages::domain::models::MessageParent::CrmCompany(_)
+                | messages::domain::models::MessageParent::CrmContact(_),
+            )
+            | None => None,
         };
         Self {
             id: session.id.as_uuid(),
@@ -1343,62 +1411,66 @@ pub async fn get_agent_session_log_handler<
 /// Nothing about the gateway: a runtime dials once per bot, at an address its
 /// own configuration names, so creating a session says nothing about where to
 /// connect.
-pub struct CreateSessionState<Opener, Bots, Auth> {
+pub struct CreateSessionState<Opener, Bots, Requests, Auth> {
     opener: Arc<Opener>,
     bots: Arc<Bots>,
+    requests: Arc<Requests>,
     authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<Opener, Bots, Auth> CreateSessionState<Opener, Bots, Auth> {
+impl<Opener, Bots, Requests, Auth> CreateSessionState<Opener, Bots, Requests, Auth> {
     /// Create route state.
     pub fn new(
         opener: Arc<Opener>,
         bots: Arc<Bots>,
+        requests: Arc<Requests>,
         authorization_state: MacroAuthorizationState<Auth>,
     ) -> Self {
         Self {
             opener,
             bots,
+            requests,
             authorization_state,
         }
     }
 }
 
-// Manual Clone impl so Opener and Bots don't need to be Clone (both are
-// behind Arcs).
-impl<Opener, Bots, Auth> Clone for CreateSessionState<Opener, Bots, Auth> {
+// Manual Clone impl so the ports don't need to be Clone (all behind Arcs).
+impl<Opener, Bots, Requests, Auth> Clone for CreateSessionState<Opener, Bots, Requests, Auth> {
     fn clone(&self) -> Self {
         Self {
             opener: Arc::clone(&self.opener),
             bots: Arc::clone(&self.bots),
+            requests: Arc::clone(&self.requests),
             authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<Opener, Bots, Auth> FromRef<CreateSessionState<Opener, Bots, Auth>>
+impl<Opener, Bots, Requests, Auth> FromRef<CreateSessionState<Opener, Bots, Requests, Auth>>
     for MacroAuthorizationState<Auth>
 {
-    fn from_ref(state: &CreateSessionState<Opener, Bots, Auth>) -> Self {
+    fn from_ref(state: &CreateSessionState<Opener, Bots, Requests, Auth>) -> Self {
         state.authorization_state.clone()
     }
 }
 
 /// Build the router serving `POST /agent-sessions`. Mount it under the same
 /// prefix as [`agent_session_read_router`] and [`agent_session_control_router`].
-pub fn agent_session_create_router<Opener, Bots, Auth, S>(
-    state: CreateSessionState<Opener, Bots, Auth>,
+pub fn agent_session_create_router<Opener, Bots, Requests, Auth, S>(
+    state: CreateSessionState<Opener, Bots, Requests, Auth>,
 ) -> Router<S>
 where
     Opener: SessionOpener,
     Bots: BotDirectory,
+    Requests: ExternalSessionRequester,
     Auth: MacroAuthorizationService,
     S: Clone + Send + Sync + 'static,
 {
     Router::new()
         .route(
             "/",
-            post(create_agent_session_handler::<Opener, Bots, Auth>),
+            post(create_agent_session_handler::<Opener, Bots, Requests, Auth>),
         )
         .with_state(state)
 }
@@ -1418,6 +1490,15 @@ where
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionRequest {
+    /// Id to create the session under, minted by the caller. Lets a surface
+    /// open on the session's final id - URL, history row, references - the
+    /// moment the user acts, rather than after this request answers (which
+    /// for a managed sandbox can take a while). Omitted, the service mints
+    /// one. Answers 409 if a session already holds the id. On an external
+    /// request it is how a runtime answering a composer request names the
+    /// id it was handed, so the requester waiting on that id finds the session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<Uuid>,
     /// Bot the session runs for. On a managed request this optionally selects
     /// a persisted persona the user owns, may use through team membership, or
     /// can `@` mention in a shared channel; omitting it uses the deployment's
@@ -1460,6 +1541,14 @@ pub struct CreateAgentSessionRequest {
     /// in-process one acts on them today; `agent_harness`'s `AgentKind`
     /// records what each of the others will need to.
     pub instructions: Option<String>,
+    /// Model the managed session runs on, overriding the persona's. Managed
+    /// sessions only: an external runtime picks its own.
+    ///
+    /// The session's model from the moment it exists, which is what a caller
+    /// choosing one before the first prompt means. Selecting a model *during*
+    /// a session is a control action instead, and reads as one in its
+    /// transcript.
+    pub model: Option<String>,
 }
 
 /// The triggering mention on a create request.
@@ -1527,8 +1616,9 @@ pub enum CreateSessionApiError {
     NotAnAgentBot,
     /// The bot's sessions are opened by the trigger pipeline, not this route.
     ManagedBot,
-    /// The selected persona is served by an external runtime.
-    ExternalPersona,
+    /// A first-party system bot this deployment does not run: nothing can
+    /// serve it, and no caller can fix that.
+    UnmanagedSystemBot,
     /// The caller identified no user to own the session.
     OwnerRequired,
     /// The owner is not a parseable user id.
@@ -1539,6 +1629,9 @@ pub enum CreateSessionApiError {
     MixedSessionShape,
     /// The thread named neither a parent nor a channel.
     ThreadParentRequired,
+    /// A field the request cannot honour for a persona whose runtime is its
+    /// operator's: they configure it, or the caller sends it separately.
+    ExternalPersonaUnsupported(&'static str),
     /// The thread already routes to a session; carries it for recovery.
     ThreadSessionExists {
         /// The existing session, when it could be resolved.
@@ -1574,10 +1667,13 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "this bot's sessions are opened by the trigger pipeline".to_owned(),
             ),
-            Self::ExternalPersona => (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "this persona cannot be started from Macro".to_owned(),
-            ),
+            Self::UnmanagedSystemBot => {
+                tracing::error!("a system bot this deployment does not run was selected");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "this agent is misconfigured and cannot be started".to_owned(),
+                )
+            }
             Self::OwnerRequired => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "owner is required for bot callers".to_owned(),
@@ -1589,13 +1685,17 @@ impl IntoResponse for CreateSessionApiError {
             Self::InvalidWorkspace(reason) => (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned()),
             Self::MixedSessionShape => (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "a managed session may take a prompt, persona and instructions; naming a \
+                "a managed session may take an id, prompt, persona and instructions; naming a \
                  workspace, owner or thread asks for an external one"
                     .to_owned(),
             ),
             Self::ThreadParentRequired => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "thread.parent is required".to_owned(),
+            ),
+            Self::ExternalPersonaUnsupported(field) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                format!("{field} is not supported for an agent that runs on its own machine"),
             ),
             Self::ThreadSessionExists { session_id } => {
                 let body = ThreadSessionExistsResponse {
@@ -1608,6 +1708,10 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),
             ),
+            Self::Domain(AgentSessionError::SessionIdTaken(_)) => (
+                StatusCode::CONFLICT,
+                "a session with this id already exists".to_owned(),
+            ),
             Self::Domain(AgentSessionError::InvalidRepositorySelection(reason)) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned())
             }
@@ -1619,6 +1723,12 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "owner is not a known user".to_owned(),
             ),
+            // Nothing to open onto: the persona's runtime is its operator's,
+            // and it did not answer. Says what they have to fix.
+            Self::Domain(AgentSessionError::RuntimeUnavailable(reason)) => {
+                tracing::info!(reason, "create refused: the bot's runtime is unavailable");
+                (StatusCode::CONFLICT, reason.to_owned())
+            }
             Self::Domain(error) => {
                 tracing::error!(error = ?error, "failed to open an agent session");
                 (
@@ -1678,7 +1788,11 @@ fn resolve_bot(
     }
 }
 
-/// Resolve the user who owns the session.
+/// Resolve who owns the session.
+///
+/// Only ever a user here: every caller this route admits acts as a person,
+/// and the body's `owner` claim is a user id. The type is wider than that so
+/// the row and the runtimes are asked, not told, what kind of owner they got.
 ///
 /// A user caller always owns their own sessions. A harness caller always has a
 /// verified acting user - the owner for a private harness, a confirmed team
@@ -1693,12 +1807,14 @@ fn resolve_bot(
 fn resolve_owner(
     caller: &UserBotOrHarnessAuthorization,
     claimed: Option<String>,
-) -> Result<MacroUserIdStr<'static>, CreateSessionApiError> {
+) -> Result<Owner, CreateSessionApiError> {
     if let Some(user) = caller.acting_user() {
-        return Ok(user.macro_user_id.clone());
+        return Ok(Owner::User(user.macro_user_id.clone()));
     }
     let claimed = claimed.ok_or(CreateSessionApiError::OwnerRequired)?;
-    MacroUserIdStr::try_from(claimed).map_err(|_| CreateSessionApiError::UnparseableOwner)
+    MacroUserIdStr::try_from(claimed)
+        .map(Owner::User)
+        .map_err(|_| CreateSessionApiError::UnparseableOwner)
 }
 
 #[utoipa::path(
@@ -1727,9 +1843,10 @@ fn resolve_owner(
 pub async fn create_agent_session_handler<
     Opener: SessionOpener,
     Bots: BotDirectory,
+    Requests: ExternalSessionRequester,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<CreateSessionState<Opener, Bots, Auth>>,
+    State(state): State<CreateSessionState<Opener, Bots, Requests, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Json(request): Json<CreateAgentSessionRequest>,
 ) -> Result<(StatusCode, Json<CreateAgentSessionResponse>), CreateSessionApiError> {
@@ -1748,22 +1865,75 @@ pub async fn create_agent_session_handler<
         let owner = resolve_owner(&caller.authorization, None)?;
         let profile = if let Some(bot_id) = request.bot_id {
             let selected =
-                managed_persona_for_user(state.bots.as_ref(), BotId::new_from_uuid(bot_id), &owner)
+                persona_for_owner(state.bots.as_ref(), BotId::new_from_uuid(bot_id), &owner)
                     .await
                     .map_err(|error| match error {
                         ManagedPersonaError::Unknown => CreateSessionApiError::UnknownBot,
                         ManagedPersonaError::NotAgent => CreateSessionApiError::NotAnAgentBot,
-                        ManagedPersonaError::External => CreateSessionApiError::ExternalPersona,
+                        ManagedPersonaError::UnmanagedSystemBot => {
+                            CreateSessionApiError::UnmanagedSystemBot
+                        }
                         ManagedPersonaError::Forbidden => CreateSessionApiError::NotYourBot,
                         ManagedPersonaError::Lookup(error) => CreateSessionApiError::Domain(error),
                     })?;
-            Some(selected)
+            match selected {
+                SelectedPersona::Managed(persona) => Some(persona),
+                // The persona's runtime is its operator's, so it opens the
+                // session itself, exactly as it does for a mention: the
+                // request goes out as a trigger and the runtime creates the
+                // session under the id we hand it. Nothing is announced,
+                // there being no thread, and no prompt travels with it - the
+                // caller delivers its first prompt through the control
+                // endpoint once this answers, as it does for a managed one.
+                SelectedPersona::External { bot_id } => {
+                    if request.repo_url.is_some() || request.repo_branch.is_some() {
+                        return Err(CreateSessionApiError::Domain(
+                            AgentSessionError::InvalidRepositorySelection(
+                                "repository selection is supported for Cursor coding agents",
+                            ),
+                        ));
+                    }
+                    // Refused rather than dropped: nothing delivers it, and a
+                    // caller that sent one would otherwise never learn it was
+                    // ignored. A model is different - it is applied when the
+                    // session binds, like the persona's own.
+                    if request.prompt.is_some() {
+                        return Err(CreateSessionApiError::ExternalPersonaUnsupported("prompt"));
+                    }
+                    let owner = owner
+                        .as_user()
+                        .cloned()
+                        .ok_or(CreateSessionApiError::OwnerRequired)?;
+                    let session = state
+                        .requests
+                        .request(RequestedExternalSession {
+                            // The caller's id when it minted one, so the
+                            // surface it already opened is the session the
+                            // runtime creates.
+                            session_id: request
+                                .id
+                                .map(AgentSessionId::new_from_uuid)
+                                .unwrap_or_else(AgentSessionId::new),
+                            bot_id,
+                            owner,
+                            model: request.model.filter(|model| !model.trim().is_empty()),
+                        })
+                        .await?;
+                    return Ok((
+                        StatusCode::CREATED,
+                        Json(CreateAgentSessionResponse {
+                            session: AgentSessionResponse::new(session, true),
+                        }),
+                    ));
+                }
+            }
         } else {
             None
         };
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
+                id: request.id.map(AgentSessionId::new_from_uuid),
                 repo_url: request.repo_url,
                 repo_branch: request
                     .repo_branch
@@ -1778,6 +1948,7 @@ pub async fn create_agent_session_handler<
                 prompt: request.prompt,
                 profile,
                 instructions,
+                model: request.model.filter(|model| !model.trim().is_empty()),
             })
             .await?;
         return Ok((
@@ -1789,8 +1960,9 @@ pub async fn create_agent_session_handler<
     };
 
     // An external runtime sends its own first prompt through the control
-    // endpoint, so accepting one here would silently drop it.
-    if request.prompt.is_some() || request.repo_branch.is_some() {
+    // endpoint, so accepting one here would silently drop it, and it runs on
+    // whatever model its operator configured, which is not ours to set.
+    if request.prompt.is_some() || request.repo_branch.is_some() || request.model.is_some() {
         return Err(CreateSessionApiError::MixedSessionShape);
     }
     let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;
@@ -1851,6 +2023,7 @@ pub async fn create_agent_session_handler<
     let session = match state
         .opener
         .open_external_session(OpenExternalAgentSession {
+            id: request.id.map(AgentSessionId::new_from_uuid),
             bot_id,
             profile: managed_profile,
             workspace,

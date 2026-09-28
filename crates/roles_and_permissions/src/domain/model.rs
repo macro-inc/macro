@@ -3,15 +3,38 @@
 use std::{fmt::Display, str::FromStr};
 
 /// The product tier the user is on
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum ProductTier {
     /// Haiku tier - default
     #[default]
     Haiku,
     /// Sonnet tier
     Sonnet,
-    /// Opus tier
+    /// Opus tier (the Premium plan)
     Opus,
+    /// Max tier (the Max plan): the Premium entitlements with a larger
+    /// monthly AI allowance.
+    Max,
+}
+
+impl ProductTier {
+    /// Every tier, cheapest first.
+    pub const ALL: [ProductTier; 4] = [
+        ProductTier::Haiku,
+        ProductTier::Sonnet,
+        ProductTier::Opus,
+        ProductTier::Max,
+    ];
+
+    /// The subscription role that records this tier on a user.
+    pub fn role(&self) -> RoleId {
+        match self {
+            ProductTier::Haiku => RoleId::SubHaiku,
+            ProductTier::Sonnet => RoleId::SubSonnet,
+            ProductTier::Opus => RoleId::SubOpus,
+            ProductTier::Max => RoleId::SubMax,
+        }
+    }
 }
 
 impl Display for ProductTier {
@@ -20,6 +43,7 @@ impl Display for ProductTier {
             ProductTier::Haiku => write!(f, "haiku"),
             ProductTier::Sonnet => write!(f, "sonnet"),
             ProductTier::Opus => write!(f, "opus"),
+            ProductTier::Max => write!(f, "max"),
         }
     }
 }
@@ -59,6 +83,8 @@ pub enum RoleId {
     SubSonnet,
     /// The user is subscribed to opus plan
     SubOpus,
+    /// The user is subscribed to the Max plan
+    SubMax,
 }
 
 impl FromStr for RoleId {
@@ -81,6 +107,7 @@ impl FromStr for RoleId {
             "sub_haiku" => Ok(RoleId::SubHaiku),
             "sub_sonnet" => Ok(RoleId::SubSonnet),
             "sub_opus" => Ok(RoleId::SubOpus),
+            "sub_max" => Ok(RoleId::SubMax),
             _ => anyhow::bail!("unknown role id: {s}"),
         }
     }
@@ -105,6 +132,7 @@ impl Display for RoleId {
             RoleId::SubHaiku => write!(f, "sub_haiku"),
             RoleId::SubSonnet => write!(f, "sub_sonnet"),
             RoleId::SubOpus => write!(f, "sub_opus"),
+            RoleId::SubMax => write!(f, "sub_max"),
         }
     }
 }
@@ -120,6 +148,7 @@ impl RoleId {
                 | Self::SubHaiku
                 | Self::SubSonnet
                 | Self::SubOpus
+                | Self::SubMax
         )
     }
 }

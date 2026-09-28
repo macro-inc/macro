@@ -2,6 +2,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
 import { partialMatchKey, type QueryKey } from '@tanstack/query-core';
 import { authKeys } from './auth/keys';
+import { hasCachedUserIdentity } from './auth/user-info-cache';
 import { channelKeys } from './channel/keys';
 import { createPersistenceKey, type PersistScope } from './persistence';
 import { createPerQueryIDBStore } from './persistence/per-query-idb';
@@ -60,6 +61,9 @@ export function createQueryPersistenceScopes(
             shouldPersist: (queryKey: QueryKey) =>
               partialMatchKey(queryKey, authKeys.userInfo.queryKey),
             shouldRestore: hasLoginCookie,
+            // Keep persisting logout to supersede the old identity, but never
+            // hydrate that marker into a new login (which would clear its cookie).
+            shouldRestoreData: hasCachedUserIdentity,
           } satisfies PersistScope,
         ]
       : []),

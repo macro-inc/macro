@@ -3,7 +3,8 @@
 //! Every route is restricted to Macro admins — callers whose user id resolves
 //! to an `@macro.com` email.
 
-use crate::domain::{AiFeature, UsageApiParams, UsageService, UsageSummary};
+use super::models::UsageSummary;
+use crate::domain::{AiFeature, ModelPricing, UsageApiParams, UsageError, UsageService};
 use axum::{
     Json, Router,
     extract::{FromRef, State},
@@ -19,9 +20,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
-
-/// Domain suffix that identifies a Macro admin.
-const ADMIN_EMAIL_SUFFIX: &str = "@macro.com";
 
 /// Request body for [`get_usage_handler`].
 #[derive(Debug, Default, Deserialize, ToSchema)]
@@ -43,10 +41,32 @@ pub struct UsageRequest {
 pub struct SetPricingRequest {
     /// The model api id to (re)price.
     pub model: String,
-    /// New price per million input tokens (USD).
-    pub price_per_mil_in: f32,
-    /// New price per million output tokens (USD).
-    pub price_per_mil_out: f32,
+    /// New price per million input tokens (USD). Required for token pricing.
+    pub price_per_mil_in: Option<f32>,
+    /// New price per million output tokens (USD). Required for token pricing.
+    pub price_per_mil_out: Option<f32>,
+    /// Price per minute of audio (USD), or null for token-only pricing.
+    pub price_per_audio_minute: Option<f32>,
+}
+
+impl SetPricingRequest {
+    fn pricing(&self) -> Result<ModelPricing, &'static str> {
+        match (
+            self.price_per_mil_in,
+            self.price_per_mil_out,
+            self.price_per_audio_minute,
+        ) {
+            (input, output, Some(per_minute))
+                if input.is_none_or(|price| price == 0.0)
+                    && output.is_none_or(|price| price == 0.0) =>
+            {
+                Ok(ModelPricing::Audio { per_minute })
+            }
+            (Some(input), Some(output), None) => Ok(ModelPricing::Tokens { input, output }),
+            (_, _, Some(_)) => Err("choose token pricing or audio pricing"),
+            _ => Err("provide both token prices or an audio price"),
+        }
+    }
 }
 
 /// Error response body.
@@ -100,36 +120,22 @@ where
         .with_state(state)
 }
 
-/// Returns `Some(403)` unless the caller is a Macro admin.
-fn admin_rejection<Auth>(
-    user: &MacroAuthorizationExtractor<Auth, UserOrInternal>,
-) -> Option<Response> {
-    if user
-        .authorization
-        .user
-        .macro_user_id
-        .email_str()
-        .ends_with(ADMIN_EMAIL_SUFFIX)
-    {
-        None
-    } else {
-        Some(
-            (
-                StatusCode::FORBIDDEN,
-                Json(ErrorBody {
-                    error: "admin access required".to_string(),
-                }),
-            )
-                .into_response(),
-        )
-    }
-}
-
-fn internal_error(context: &str) -> Response {
+fn error_response(error: UsageError, context: &str) -> Response {
+    let (status, message) = match error {
+        UsageError::Forbidden => (StatusCode::FORBIDDEN, "admin access required"),
+        UsageError::InvalidPricing => (
+            StatusCode::BAD_REQUEST,
+            "prices must be finite and non-negative",
+        ),
+        error => {
+            tracing::error!(error = ?error, context, "AI usage request failed");
+            (StatusCode::INTERNAL_SERVER_ERROR, context)
+        }
+    };
     (
-        StatusCode::INTERNAL_SERVER_ERROR,
+        status,
         Json(ErrorBody {
-            error: context.to_string(),
+            error: message.to_string(),
         }),
     )
         .into_response()
@@ -157,10 +163,6 @@ pub async fn get_usage_handler<T: UsageService, Auth: MacroAuthorizationService>
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<UsageRequest>,
 ) -> Response {
-    if let Some(resp) = admin_rejection(&user) {
-        return resp;
-    }
-
     let include_users: std::result::Result<Vec<MacroUserIdStr<'static>>, _> = req
         .include_users
         .into_iter()
@@ -186,12 +188,12 @@ pub async fn get_usage_handler<T: UsageService, Auth: MacroAuthorizationService>
         features: req.features,
     };
 
-    match service.get_usage(params).await {
-        Ok(summary) => Json(summary).into_response(),
-        Err(e) => {
-            tracing::error!(error = ?e, "failed to query ai usage");
-            internal_error("failed to query usage")
-        }
+    match service
+        .get_usage(user.authorization.user.macro_user_id, params)
+        .await
+    {
+        Ok(summary) => Json(UsageSummary::from(summary)).into_response(),
+        Err(error) => error_response(error, "failed to query usage"),
     }
 }
 
@@ -202,6 +204,7 @@ pub async fn get_usage_handler<T: UsageService, Auth: MacroAuthorizationService>
     request_body = SetPricingRequest,
     responses(
         (status = 200, description = "Pricing updated"),
+        (status = 400, description = "Invalid pricing", body = ErrorBody),
         (status = 403, description = "Admin access required", body = ErrorBody),
         (status = 500, description = "Internal server error", body = ErrorBody),
     ),
@@ -216,18 +219,26 @@ pub async fn set_pricing_handler<T: UsageService, Auth: MacroAuthorizationServic
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<SetPricingRequest>,
 ) -> Response {
-    if let Some(resp) = admin_rejection(&user) {
-        return resp;
-    }
-
+    let pricing = match req.pricing() {
+        Ok(pricing) => pricing,
+        Err(error) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorBody {
+                    error: error.into(),
+                }),
+            )
+                .into_response();
+        }
+    };
     match service
-        .set_pricing(req.model, req.price_per_mil_in, req.price_per_mil_out)
+        .set_pricing(user.authorization.user.macro_user_id, req.model, pricing)
         .await
     {
         Ok(()) => StatusCode::OK.into_response(),
-        Err(e) => {
-            tracing::error!(error = ?e, "failed to set pricing");
-            internal_error("failed to set pricing")
-        }
+        Err(error) => error_response(error, "failed to set pricing"),
     }
 }
+
+#[cfg(test)]
+mod test;

@@ -29,7 +29,7 @@ export type MobileDockView = {
  */
 const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
   {
-    id: 'inbox',
+    id: 'home',
     label: 'Notifications',
     icon: BellIcon,
     iconActive: BellFillIcon,

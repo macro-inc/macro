@@ -1,9 +1,25 @@
 //! PostgreSQL adapter for markdown lifecycle backfill.
 
-use crate::domain::markdown_backfill::{MarkdownBackfillCandidate, MarkdownBackfillRepo};
-use crate::outbound::pg_document_repo::PgDocumentRepo;
+use anyhow::Context as _;
+use model_owner::Owner;
+use sqlx::PgPool;
 
-impl MarkdownBackfillRepo for PgDocumentRepo {
+use crate::domain::markdown_backfill::{MarkdownBackfillCandidate, MarkdownBackfillRepo};
+
+/// PostgreSQL-backed markdown backfill repository.
+#[derive(Clone)]
+pub struct PgMarkdownBackfillRepo {
+    pool: PgPool,
+}
+
+impl PgMarkdownBackfillRepo {
+    /// Create a new repository backed by the given connection pool.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+impl MarkdownBackfillRepo for PgMarkdownBackfillRepo {
     #[tracing::instrument(err, skip(self))]
     #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn fetch_markdown_backfill_candidates(
@@ -44,21 +60,22 @@ impl MarkdownBackfillRepo for PgDocumentRepo {
             .fetch_all(&self.pool)
             .await?;
 
-        Ok(rows
-            .into_iter()
+        rows.into_iter()
             .map(
                 |(id, owner, document_instance_id, uploaded, content_state, content_location)| {
-                    MarkdownBackfillCandidate {
+                    let owner = Owner::from_principal_str(&owner)
+                        .with_context(|| format!("document {id} has an invalid owner"))?;
+                    Ok(MarkdownBackfillCandidate {
                         id,
                         owner,
                         document_instance_id,
                         uploaded,
                         content_state,
                         content_location,
-                    }
+                    })
                 },
             )
-            .collect())
+            .collect()
     }
 
     #[tracing::instrument(err, skip(self, candidates), fields(count = candidates.len()))]

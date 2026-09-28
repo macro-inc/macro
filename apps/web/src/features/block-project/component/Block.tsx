@@ -25,7 +25,6 @@ import {
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { type Component, createSignal, Show } from 'solid-js';
-import { ModalsProvider } from './ModalsProvider';
 import { ProjectSidePanelSections } from './sidepanel/ProjectSidePanelSections';
 import { TopBar } from './TopBar';
 
@@ -112,26 +111,24 @@ const Block: Component = () => {
           disabled: isSpecialProject,
         }}
       >
-        <ModalsProvider>
-          <Show when={isDragging() && !isSpecialProject}>
-            <FileDropOverlay>Upload to this folder</FileDropOverlay>
+        <Show when={isDragging() && !isSpecialProject}>
+          <FileDropOverlay>Upload to this folder</FileDropOverlay>
+        </Show>
+        <SidePanel.Layout defaultOpen={false}>
+          <Show when={!isSpecialProject}>
+            <ProjectSidePanelSections />
           </Show>
-          <SidePanel.Layout defaultOpen={false}>
-            <Show when={!isSpecialProject}>
-              <ProjectSidePanelSections />
-            </Show>
-            <div class="flex size-full min-w-0 flex-col overflow-hidden">
-              <TopBar />
-              <ProjectEntityList
-                projectId={projectId}
-                soup={projectSoup}
-                // Scope is already attached by the block container so we can use that
-                // Change this when we remove blocks
-                scopeId={blockHotkeyScopeSignal.get()}
-              />
-            </div>
-          </SidePanel.Layout>
-        </ModalsProvider>
+          <div class="flex size-full min-w-0 flex-col overflow-hidden">
+            <TopBar />
+            <ProjectEntityList
+              projectId={projectId}
+              soup={projectSoup}
+              // Scope is already attached by the block container so we can use that
+              // Change this when we remove blocks
+              scopeId={blockHotkeyScopeSignal.get()}
+            />
+          </div>
+        </SidePanel.Layout>
       </div>
     </DocumentBlockContainer>
   );

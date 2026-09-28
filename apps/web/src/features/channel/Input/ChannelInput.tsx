@@ -1,3 +1,4 @@
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
@@ -24,7 +25,7 @@ import {
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
 import type { MessageParent } from '@service-storage/messages';
-import { CollapsedInput, ComposerSurface } from '@ui';
+import { CollapsedInput, ComposerSurface, cn } from '@ui';
 import { $getRoot } from 'lexical';
 import {
   type Accessor,
@@ -34,8 +35,17 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import {
+  DictationButton,
+  DictationFeedback,
+  DictationPanel,
+} from '../../dictation/components/dictation-controls';
+import { createComposerDictation } from '../../dictation/composer-dictation';
+import type { DictationController } from '../../dictation/core/types';
 import { useAgentMentionUsers } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
+import { useMessageParticipants } from '../use-message-participants';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 import { createCollapsedInputState } from './create-collapsed-input-state';
@@ -65,6 +75,11 @@ export type ChannelInputProps = InputCallbacks & {
   markdownNamespace?: string;
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
+  /**
+   * People surfaced in the `@`-mention typeahead. Defaults to the `parent`'s
+   * own people: a channel's participants, or the workspace contacts a
+   * document's composers offer.
+   */
   participants?: Accessor<IUser[]>;
   /** Channel bots surfaced in the `@`-mention typeahead alongside users. */
   bots?: Accessor<IUser[]>;
@@ -77,9 +92,19 @@ export type ChannelInputProps = InputCallbacks & {
    * Defaults to `false`.
    */
   collapsible?: boolean;
+  /**
+   * Drop the composer's own card chrome (rounding, background, shadow) and sit
+   * flat on whatever surface hosts it. For composers that already live inside a
+   * card, such as a document margin thread, where the composer's card would
+   * read as a second box inside the first.
+   */
+  flat?: boolean;
 };
 
-function WebDefaultActions(props: { input: InputData }) {
+function WebDefaultActions(props: {
+  input: InputData;
+  dictation: DictationController;
+}) {
   return (
     <>
       <Input.Layout.ActionsLeft>
@@ -89,13 +114,17 @@ function WebDefaultActions(props: { input: InputData }) {
         </Show>
       </Input.Layout.ActionsLeft>
       <Input.Layout.ActionsRight>
+        <DictationButton dictation={props.dictation} />
         <Input.SendAction />
       </Input.Layout.ActionsRight>
     </>
   );
 }
 
-function IosDefaultActions(props: { input: InputData }) {
+function IosDefaultActions(props: {
+  input: InputData;
+  dictation: DictationController;
+}) {
   return (
     <>
       <Input.Layout.ActionsLeft>
@@ -105,19 +134,25 @@ function IosDefaultActions(props: { input: InputData }) {
         </Show>
       </Input.Layout.ActionsLeft>
       <Input.Layout.ActionsRight>
+        <DictationButton dictation={props.dictation} />
         <Input.SendAction />
       </Input.Layout.ActionsRight>
     </>
   );
 }
 
-function DefaultActions(props: { input: InputData }) {
+function DefaultActions(props: {
+  input: InputData;
+  dictation: DictationController;
+}) {
   return (
     <Show
       when={isPlatform('ios')}
-      fallback={<WebDefaultActions input={props.input} />}
+      fallback={
+        <WebDefaultActions input={props.input} dictation={props.dictation} />
+      }
     >
-      <IosDefaultActions input={props.input} />
+      <IosDefaultActions input={props.input} dictation={props.dictation} />
     </Show>
   );
 }
@@ -158,7 +193,8 @@ export function ChannelInput(props: ChannelInputProps) {
     attachFiles: (files) => inputState.commands.attachFiles(files),
   });
 
-  const isCollapsed = () => !!props.collapsible && collapsedInput.isCollapsed();
+  const isCollapsed = () =>
+    !!props.collapsible && collapsedInput.isCollapsed() && !dictation.active();
 
   let isEditorConnected = false;
   let acceptTyping = false;
@@ -221,16 +257,21 @@ export function ChannelInput(props: ChannelInputProps) {
     !props.bots && props.parent
       ? useMessageBotMentionUsers(() => props.parent!)
       : () => [];
+  const parentParticipants =
+    !props.participants && props.parent
+      ? useMessageParticipants(() => props.parent!)
+      : () => [];
   // Connection-prompt behavior for the built-in agents lives in
   // useAgentMentionUsers; participants and channel/document bots feed it here.
   const mentionUsers = useAgentMentionUsers(() => [
-    ...(props.participants?.() ?? []),
+    ...(props.participants?.() ?? parentParticipants()),
     ...(props.bots?.() ?? parentBots()),
   ]);
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     groupMentions: !props.parent || props.parent.type === 'channel',
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
+    resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
     users: mentionUsers,
     scrollContainer,
@@ -244,7 +285,7 @@ export function ChannelInput(props: ChannelInputProps) {
     onEnter: () => {
       if (isTouchDevice()) return false;
       typingTracker.stop();
-      inputState.commands.send();
+      void commands.send();
       return true;
     },
     onPasteFilesAndDirs: (files, directories) => {
@@ -256,6 +297,19 @@ export function ChannelInput(props: ChannelInputProps) {
   });
   const markdownHandle = markdownEditor.buildHandle();
   const lexicalEditor = () => markdownHandle.lexical;
+  const composerDictation = createComposerDictation(lexicalEditor);
+  const dictation: DictationController = {
+    ...composerDictation,
+    start: () => {
+      collapsedInput.expand();
+      return composerDictation.start();
+    },
+  };
+  const commands = {
+    ...inputState.commands,
+    // Keyboard, toolbar, and external handles all share this guard.
+    send: async () => (dictation.active() ? false : inputState.commands.send()),
+  };
   const { isCompact: oneLineInput } = createComposerLayout(lexicalEditor(), {
     container: layout,
     mode: () =>
@@ -345,7 +399,7 @@ export function ChannelInput(props: ChannelInputProps) {
       collapsedInput.expand();
       focusEditor();
     },
-    send: () => inputState.commands.send(),
+    send: commands.send,
     attachFiles: (files) => inputState.commands.attachFiles(files),
     insertEntityMention,
     previewEntityMentionInsertion,
@@ -367,6 +421,10 @@ export function ChannelInput(props: ChannelInputProps) {
     runWithInputFocused: true,
     hide: true,
     keyDownHandler: () => {
+      if (dictation.active()) {
+        dictation.cancel();
+        return true;
+      }
       // Block upstream escape handlers when ESC should close inline menus.
       return markdownEditor.controls.isInlineMenuOpen();
     },
@@ -378,7 +436,12 @@ export function ChannelInput(props: ChannelInputProps) {
         onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
         onDragEnd={() => inputState.setIsDraggedOver(false)}
       >
-        <Input.Layout ref={setLayout} oneLineInput={oneLineInput()}>
+        <Input.Layout
+          ref={setLayout}
+          oneLineInput={oneLineInput()}
+          inert={dictation.active()}
+          classList={{ invisible: dictation.active() }}
+        >
           <Input.DropOverlay />
           <Input.Layout.Body>
             <Input.FormatRibbon>
@@ -431,7 +494,7 @@ export function ChannelInput(props: ChannelInputProps) {
           <Switch>
             <Match when={props.children}>{props.children}</Match>
             <Match when>
-              <DefaultActions input={inputState.view()} />
+              <DefaultActions input={inputState.view()} dictation={dictation} />
             </Match>
           </Switch>
         </Input.Layout>
@@ -440,7 +503,13 @@ export function ChannelInput(props: ChannelInputProps) {
   };
 
   return (
-    <Input.Root input={inputState.view()} commands={inputState.commands}>
+    <Input.Root
+      input={inputState.view()}
+      commands={commands}
+      // An inline reply's bottom margin spaces it from the thread below; a
+      // flat composer's host card already pads it.
+      class={cn(props.flat && 'mb-0')}
+    >
       <Show when={isCollapsed()}>
         {/* File picker opened from the CollapsedInput attach button. */}
         <input
@@ -471,20 +540,31 @@ export function ChannelInput(props: ChannelInputProps) {
           getFocusTarget={() => lexicalEditor().getRootElement()}
           onAttach={collapsedInput.attach}
           onOpen={collapsedInput.expand}
-          onSend={() => void inputState.commands.send()}
+          trailingAction={<DictationButton dictation={dictation} />}
+          onSend={() => void commands.send()}
         />
       </Show>
-      <ComposerSurface
-        onFocusOut={(e) => {
+      <Dynamic
+        component={props.flat ? 'div' : ComposerSurface}
+        onFocusOut={(e: FocusEvent & { currentTarget: HTMLElement }) => {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
+          if (dictation.active()) return;
           collapsedInput.collapse();
         }}
-        class={isCollapsed() ? 'hidden' : undefined}
+        // `ComposerSurface` stretches itself; a bare div would take its
+        // content width inside a centering flex host, such as the margin card.
+        class={cn(
+          props.flat && 'w-full',
+          isCollapsed() && 'hidden',
+          !isCollapsed() && 'relative'
+        )}
       >
         {renderSurfaceContent()}
-      </ComposerSurface>
+        <DictationPanel dictation={dictation} />
+      </Dynamic>
+      <DictationFeedback dictation={dictation} />
     </Input.Root>
   );
 }

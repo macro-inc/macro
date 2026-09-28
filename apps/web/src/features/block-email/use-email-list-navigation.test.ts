@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   hasMore: false,
   active: true,
   currentId: 'a',
-  viewId: 'mail' as 'mail' | 'inbox',
+  viewId: 'mail' as 'mail' | 'home',
   sourceId: 'email-split',
   handle: {
     id: 'email-split',
@@ -35,7 +35,7 @@ vi.mock('@app/features/next-soup/soup-context', () => ({
   useMaybeSoup: () => undefined,
 }));
 vi.mock('@app/signal/splitLayout', () => ({
-  globalSplitManager: () => ({ controllerOf: () => undefined }),
+  globalSplitManager: () => undefined,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => undefined,

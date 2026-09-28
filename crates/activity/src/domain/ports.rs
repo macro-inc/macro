@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use uuid::Uuid;
 
@@ -65,6 +66,79 @@ pub struct ActivityRange {
     pub truncated: bool,
 }
 
+/// Announces durably recorded activities to realtime subscribers.
+///
+/// Best-effort: implementations bound delivery time and log failures instead
+/// of failing the durable write. Clients refetch on reconnect to recover
+/// missed pushes. Uncommitted source offsets may also replay announcements.
+pub trait ActivityRealtimePublisher: Send + Sync {
+    /// Announces recorded activities to their subjects and current accessors.
+    fn publish_recorded(&self, activities: &[Activity]) -> impl Future<Output = ()> + Send;
+
+    /// Announces the durable removal of activity rows.
+    fn publish_invalidated(&self) -> impl Future<Output = ()> + Send;
+}
+
+/// Announce through both publishers, in order; each remains best-effort.
+impl<A: ActivityRealtimePublisher, B: ActivityRealtimePublisher> ActivityRealtimePublisher
+    for (A, B)
+{
+    async fn publish_recorded(&self, activities: &[Activity]) {
+        self.0.publish_recorded(activities).await;
+        self.1.publish_recorded(activities).await;
+    }
+
+    async fn publish_invalidated(&self) {
+        self.0.publish_invalidated().await;
+        self.1.publish_invalidated().await;
+    }
+}
+
+/// Resolves who may currently see an entity's activity.
+///
+/// Used at publish time to widen realtime delivery beyond the acting
+/// subject: entity timelines are watched by everyone with access to the
+/// entity, not only whoever acted.
+pub trait ActivityAudienceExpander: Send + Sync {
+    /// The adapter's error type.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Returns all users with current access to the entity.
+    fn entity_audience(
+        &self,
+        entity_type: EntityType,
+        entity_id: &str,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
+
+    /// Check a particular viewer, including link-based access that cannot be
+    /// enumerated as an audience. The conservative default uses explicit recipients.
+    fn viewer_can_see(
+        &self,
+        entity_type: EntityType,
+        entity_id: &str,
+        viewer: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send {
+        async move {
+            Ok(self
+                .entity_audience(entity_type, entity_id)
+                .await?
+                .iter()
+                .any(|user| user == viewer))
+        }
+    }
+}
+
+/// Publishes an already addressed activity announcement.
+pub trait ActivityEventPublisher: Send + Sync {
+    /// The transport's error type.
+    type Err: std::fmt::Debug + Send + Sync + 'static;
+    /// Delivers a domain event without deciding its recipients.
+    fn publish(
+        &self,
+        event: super::events::ActivityTopicEvent,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
 /// Persists activities.
 pub trait ActivityRepo {
     /// The adapter's error type.
@@ -82,15 +156,6 @@ pub trait ActivityRepo {
         &self,
         entities: &[(EntityType, String)],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-}
-
-/// Notification after facts have been durably materialized, never before.
-pub trait ActivityObserver: Send + Sync {
-    /// Notify interested timelines. Failures are best effort; storage remains committed.
-    fn persisted<'a>(
-        &'a self,
-        activities: &'a [Activity],
-    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 }
 
 /// Reads activities. Rows come back newest-first (`occurred_at DESC, id
@@ -142,4 +207,21 @@ pub trait ActivityReads {
         to: DateTime<Utc>,
         limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityRange, Self::Err>> + Send;
+}
+
+/// Paginated entity history, separate from subject feeds and batched previews.
+/// Callers must hold entity access and verify references embedded in payloads.
+pub trait EntityActivityReads: Send + Sync + 'static {
+    /// Persistence error.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Read one entity in stable `(occurred_at DESC, id DESC)` order. The raw-row
+    /// cursor advances even when a corrupt row cannot be decoded.
+    fn entity_feed(
+        &self,
+        entity_type: EntityType,
+        entity_id: &str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> impl Future<Output = Result<ActivityFeedPage, Self::Err>> + Send;
 }

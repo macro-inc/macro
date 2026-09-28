@@ -23,6 +23,7 @@ use std::sync::LazyLock;
 
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::CreationPrincipal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -87,6 +88,18 @@ impl Attribution {
     }
 }
 
+impl From<&CreationPrincipal> for Attribution {
+    fn from(principal: &CreationPrincipal) -> Self {
+        match principal {
+            CreationPrincipal::User(user) => Self::direct(Actor::new_from_user(user.clone())),
+            CreationPrincipal::BotForUser { bot, user } => {
+                Self::delegated(Actor::new_from_bot(*bot), user.clone())
+            }
+            CreationPrincipal::TeamBot { bot, .. } => Self::direct(Actor::new_from_bot(bot.get())),
+        }
+    }
+}
+
 /// The entity-kind vocabulary activities are recorded against (re-exported
 /// for domain mappings).
 pub use model_entity::EntityType;
@@ -136,6 +149,13 @@ pub struct ParticipantChange {
 pub struct CallStart {
     /// The started call.
     pub call_id: String,
+}
+
+/// Task referenced by a project membership event. No task name is stored.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InitiativeTaskChange {
+    /// The task document. Readers must verify task visibility before exposing this reference.
+    pub task_id: String,
 }
 
 /// The durable action vocabulary — what the `action`/`action_payload`
@@ -189,6 +209,10 @@ pub enum Action {
     PictureChanged,
     /// A call finished in the entity.
     CallEnded(CallEnd),
+    /// A task was added to an initiative.
+    TaskAdded(InitiativeTaskChange),
+    /// A task was removed from an initiative.
+    TaskRemoved(InitiativeTaskChange),
 }
 
 /// The names captured when an entity is renamed.
@@ -262,6 +286,7 @@ impl Action {
             Action::CallStarted(start) => payload(start),
             Action::Renamed(change) => payload(change),
             Action::CallEnded(end) => payload(end),
+            Action::TaskAdded(change) | Action::TaskRemoved(change) => payload(change),
         };
         (tag, payload)
     }
@@ -302,6 +327,8 @@ impl Action {
             ActionTag::Renamed => Ok(Action::Renamed(parsed(payload)?)),
             ActionTag::PictureChanged => Ok(Action::PictureChanged),
             ActionTag::CallEnded => Ok(Action::CallEnded(parsed(payload)?)),
+            ActionTag::TaskAdded => Ok(Action::TaskAdded(parsed(payload)?)),
+            ActionTag::TaskRemoved => Ok(Action::TaskRemoved(parsed(payload)?)),
         }
     }
 }

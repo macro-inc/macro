@@ -77,8 +77,8 @@ export type LiveSyncSource = {
   status: Accessor<SyncSourceStatus>;
   requestUpdatesSince: (
     version: VersionVector
-  ) => ResultAsync<RawUpdate, TimeoutError>;
-  requestSnapshot: () => ResultAsync<RawUpdate, TimeoutError>;
+  ) => ResultAsync<RawUpdate, SyncError>;
+  requestSnapshot: () => ResultAsync<RawUpdate, SyncError>;
   reconnect: () => void;
   cleanup: () => void;
 };

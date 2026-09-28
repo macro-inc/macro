@@ -1,9 +1,16 @@
+import {
+  createRoutesManifest,
+  createSolidRouterLocation,
+  decodeRouteLayout,
+  SplitRouter,
+  type SplitRouterMiddleware,
+  type SplitRoutes,
+} from '@app/lib/split-router';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { Resize } from '@core/component/Resize';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
-import { useWindowSize } from '@solid-primitives/resize-observer';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createEffect,
@@ -23,41 +30,41 @@ import {
   type SplitId,
   type SplitManager,
 } from './layoutManager';
-import { createLayoutUrlSync, restorePreviewPairs } from './layoutUrlSync';
 import {
   createMobileSwipeLayout,
   type MobileSwipeLayout,
 } from './mobile/createMobileSwipeLayout';
 import { MobileSplitContainer } from './mobile/MobileSplitContainer';
-import {
-  loadRestorablePreviewLayout,
-  PREVIEW_QUERY_PARAM,
-} from './previewPersistence';
-import { splitMinWidthForContent } from './splitContentSizing';
+import { splitContentFromLocation } from './split-router/legacy-route';
+import { DEFAULT_SPLIT_MIN_WIDTH } from './splitContentSizing';
 import { createSplitFocusTracker } from './splitFocusTracker';
+import { createAppSplitRouterLayout } from './splitRouterLayout';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
+  routes: SplitRoutes;
+  middleware?: readonly SplitRouterMiddleware[];
   setManager: Setter<SplitManager | undefined>;
 };
 
 export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const viewportSize = useWindowSize();
-  const previewQuery = () => location.query[PREVIEW_QUERY_PARAM];
-  const decodedLayout = createMemo(() =>
-    loadRestorablePreviewLayout(props.pairs, previewQuery(), {
-      allowPreviewPairs: !isTouchDevice(),
-    })
+  // Bootstrap the legacy layout with the same local state adopted by the router.
+  const routes = createRoutesManifest(props.routes);
+  const initialContents = decodeRouteLayout(routes, props.pairs).map((entry) =>
+    splitContentFromLocation(entry.location)
   );
-  const initialLayout = decodedLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
-  const splitManager = createSplitLayout(
-    blockOrchestrator,
-    initialLayout.contents
-  );
-  restorePreviewPairs(splitManager, initialLayout.previewPairs);
+  const splitManager = createSplitLayout(blockOrchestrator, initialContents);
+  const routerLayout = createAppSplitRouterLayout(splitManager, routes);
+  const externalLocation = createSolidRouterLocation({
+    pathname: () => `/${props.pairs.join('/')}`,
+    search: () => location.search,
+    hash: () => location.hash,
+    state: () => location.state,
+    navigate,
+  });
   const [, setTabTitle] = tabTitleSignal;
 
   // Create the mobile swipe layout once on mobile devices.
@@ -84,10 +91,6 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   const activeSplitSelector = createSelector(splitManager.activeSplitId);
 
-  createEffect(() => props.setManager(splitManager));
-
-  onCleanup(() => props.setManager(undefined));
-
   createEffect(() => {
     setTabTitle(splitManager.tabTitle());
   });
@@ -95,95 +98,78 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   // <For> on plain ids for stable referential equality
   const ids = createMemo(() => splits().map(({ id }) => id));
 
-  createLayoutUrlSync(
-    splitManager,
-    () => props.pairs,
-    previewQuery,
-    decodedLayout,
-    {
-      navigate,
-      search: () => location.search,
-      hash: () => location.hash,
-    }
-  );
   createSplitFocusTracker({ splitManager, panelRefs, splits });
+  createEffect(() => props.setManager(splitManager));
+  onCleanup(() => props.setManager(undefined));
 
   return (
-    <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <div class="size-full" classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}>
-        <Show
-          when={isNativeMobilePlatform() && mobileSwipeLayout}
-          fallback={
-            // Desktop: side-by-side resizable splits.
-            <Resize.Zone
-              direction="horizontal"
-              gutter={useBentoLayout() ? 6 : 1}
-              showDividers={!useBentoLayout()}
-              captureResizeCtx={splitManager.setResizeContext}
-            >
-              <For each={ids()}>
-                {(id, index) => (
-                  <Show when={splitManager.getSplit(id)}>
-                    {(handle) => (
-                      <Suspense>
-                        <Resize.Panel
-                          id={id}
-                          minSize={splitMinWidthForContent(handle().content(), {
-                            isPreviewController: handle().isControllerSplit(),
-                          })}
-                          // A Preview Pair is one layout unit: its two splits
-                          // share the space a single split would get. Both
-                          // members key their group by the Controller's id.
-                          shareGroup={
-                            splitManager.viewerOf(id) !== undefined
-                              ? id
-                              : splitManager.controllerOf(id)
-                          }
-                          // Automatic redistribution targets an engaged
-                          // Controller at its configured preferred width.
-                          // This is not a hard max: the gutter can still be
-                          // dragged past it.
-                          redistributionPreferredSize={splitManager.previewControllerWidth(
-                            id,
-                            viewportSize.width
-                          )}
-                          index={index()}
-                        >
-                          <SplitPanel
-                            split={splits()[index()]!}
-                            handle={handle()}
-                            active={activeSplitSelector(id)}
-                            setPanelRef={(panelRef) =>
-                              panelRefs.set(id, panelRef)
-                            }
-                            index={index()}
-                          />
-                        </Resize.Panel>
-                      </Suspense>
-                    )}
-                  </Show>
-                )}
-              </For>
-            </Resize.Zone>
-          }
+    <SplitRouter.Root
+      layout={routerLayout}
+      routes={routes}
+      location={externalLocation}
+      middleware={props.middleware}
+    >
+      <SplitLayoutContext.Provider value={{ manager: splitManager }}>
+        <div
+          class="size-full"
+          classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}
         >
-          {/* Mobile: stacked FG/BG layout with swipe-back gesture. */}
-          <MobileSplitContainer
-            splitManager={splitManager}
-            mobileSwipeLayout={mobileSwipeLayout!}
-            splits={splits}
-            panelRefs={panelRefs}
-          />
-        </Show>
-      </div>
-      <PopoverSplitRenderer
-        popovers={splitManager.popovers}
-        onClosePopover={(id) => {
-          const activePopovers = splitManager.getActivePopovers();
-          const popover = activePopovers.find((p) => p.id === id);
-          popover?.close();
-        }}
-      />
-    </SplitLayoutContext.Provider>
+          <Show
+            when={isNativeMobilePlatform() && mobileSwipeLayout}
+            fallback={
+              // Desktop: side-by-side resizable splits.
+              <Resize.Zone
+                direction="horizontal"
+                gutter={useBentoLayout() ? 6 : 1}
+                showDividers={!useBentoLayout()}
+                captureResizeCtx={splitManager.setResizeContext}
+              >
+                <For each={ids()}>
+                  {(id, index) => (
+                    <Show when={splitManager.getSplit(id)}>
+                      {(handle) => (
+                        <Suspense>
+                          <Resize.Panel
+                            id={id}
+                            minSize={DEFAULT_SPLIT_MIN_WIDTH}
+                            index={index()}
+                          >
+                            <SplitPanel
+                              split={splits()[index()]!}
+                              handle={handle()}
+                              active={activeSplitSelector(id)}
+                              setPanelRef={(panelRef) =>
+                                panelRefs.set(id, panelRef)
+                              }
+                              index={index()}
+                            />
+                          </Resize.Panel>
+                        </Suspense>
+                      )}
+                    </Show>
+                  )}
+                </For>
+              </Resize.Zone>
+            }
+          >
+            {/* Mobile: stacked FG/BG layout with swipe-back gesture. */}
+            <MobileSplitContainer
+              splitManager={splitManager}
+              mobileSwipeLayout={mobileSwipeLayout!}
+              splits={splits}
+              panelRefs={panelRefs}
+            />
+          </Show>
+        </div>
+        <PopoverSplitRenderer
+          popovers={splitManager.popovers}
+          onClosePopover={(id) => {
+            const activePopovers = splitManager.getActivePopovers();
+            const popover = activePopovers.find((p) => p.id === id);
+            popover?.close();
+          }}
+        />
+      </SplitLayoutContext.Provider>
+    </SplitRouter.Root>
   );
 }

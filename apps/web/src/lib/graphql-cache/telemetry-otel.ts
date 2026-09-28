@@ -76,7 +76,27 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         if (event.oldestAgeMs !== undefined) {
           span.setAttr('cache.oldest_age_ms', event.oldestAgeMs);
         }
-        span.end();
+        try {
+          if (event.name === 'graphql_cache.slow_query') {
+            const attributes = {
+              'db.system.name': 'sqlite',
+              'db.query.fingerprint': event.queryFingerprint,
+              'cache.backend': event.backend,
+              'cache.duration_ms': event.durationMs,
+              'cache.outcome': event.outcome,
+              'cache.slow_query_threshold_ms': 200,
+            };
+            for (const [key, value] of Object.entries(attributes)) {
+              if (value !== undefined) span.setAttr(key, value);
+            }
+            // Preserve the cache privacy contract on the log as well as the span.
+            span.run(() =>
+              Telemetry.warn('graphql_cache.slow_query', attributes)
+            );
+          }
+        } finally {
+          span.end();
+        }
       } catch {
         // OTel availability and exporter failures never affect cache behavior.
       }

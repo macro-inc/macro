@@ -40,6 +40,19 @@ export function parseCacheRevision(value: unknown): CacheRevision {
 
 export const INITIAL_CACHE_REVISION = '0' as CacheRevision;
 
+/** Validates the durable database-generation UUID shared by cache hosts. */
+export function parseStorageGeneration(value: unknown): string {
+  if (
+    typeof value !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      value
+    )
+  ) {
+    throw new TypeError('invalid cache storage generation');
+  }
+  return value;
+}
+
 /** Scheduling hint for latency-sensitive cache reads. */
 export type CacheReadPriority = 'user-visible';
 
@@ -291,6 +304,12 @@ export type OptimisticLinkPatchWire = {
     | { kind: 'remove'; entityKey: string }
     | { kind: 'prependUnique'; entityKey: string }
     | {
+        kind: 'upsertByField';
+        entityKey: string;
+        whereField: string;
+        equals: string | number | boolean | null;
+      }
+    | {
         kind: 'removeEmbeddedLink';
         listItem: {
           whereField: string;
@@ -435,6 +454,7 @@ export type MutationSettlement =
 export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | { kind: 'current-revision' }
+  | { kind: 'current-storage-generation' }
   | {
       kind: 'read';
       opId?: string;
@@ -594,7 +614,8 @@ export type CachePush =
       /** Changed entity keys, for diagnostics/advanced consumers. */
       keys: string[];
     }
-  | { kind: 'cache-changed'; revision: CacheRevision }
+  | { kind: 'cache-changed'; revision: CacheRevision; reset?: boolean }
+  | { kind: 'cache-hydrated'; revision: CacheRevision }
   | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -669,6 +690,12 @@ export function isCachePush(value: unknown): value is CachePush {
         isWireStringArray(value.keys)
       );
     case 'cache-changed':
+      return (
+        hasOnlyWireKeys(value, ['kind', 'revision', 'reset']) &&
+        isCacheRevision(value.revision) &&
+        (value.reset === undefined || typeof value.reset === 'boolean')
+      );
+    case 'cache-hydrated':
       return (
         hasOnlyWireKeys(value, ['kind', 'revision']) &&
         isCacheRevision(value.revision)

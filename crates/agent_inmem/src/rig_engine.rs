@@ -33,6 +33,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use memory::domain::MemoryService as _;
 use memory::domain::service::MemoryServiceImpl;
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
+use model_owner::Owner;
 use sqlx::PgPool;
 use tokio::sync::mpsc;
 use tracing::Instrument as _;
@@ -96,7 +97,7 @@ fn tools_for_turn(
 
 impl TurnEngine for RigTurnEngine {
     fn supported_models(&self) -> &[&str] {
-        chat::domain::models::CHAT_MODELS
+        crate::domain::models::advertised_models()
     }
 
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
@@ -133,6 +134,21 @@ async fn drive_turn(
         reviewer,
     } = request;
 
+    // A turn runs as a person: tools act with the owner's identity, the
+    // memory is theirs, and usage is billed to them. A session owned by
+    // anything else has no turn to run here, and says so instead of running
+    // as somebody it is not.
+    let owner = match owner {
+        Owner::User(owner) => owner,
+        other => {
+            return Err(AgentError::Other(anyhow::anyhow!(
+                "in-process turns run as the session owner, who must be a user; \
+                 this session is owned by a {}",
+                other.owner_type()
+            )));
+        }
+    };
+
     // Chat's tools with the session's prompt: the user tools (`SendEmail`,
     // `CreateCalendarEvent`) defer to the user, and this runtime finishes
     // them in the turn through `reviewer`.
@@ -155,6 +171,13 @@ async fn drive_turn(
     // Carry the feature on the context so tool-spawned subagents attribute to it.
     let mut tool_context = base_context.clone();
     tool_context.usage_context = usage_ctx.clone();
+    // The tools act as the session's bot, delegated for the owner: its writes
+    // are attributed to it and presented under its name, not Macro's.
+    if let Some(identity) = &identity {
+        tool_context = tool_context
+            .with_actor(identity.bot)
+            .with_actor_name(&identity.name);
+    }
     let tool_context = InMemToolContext {
         base: tool_context,
         ask_user: AskUserContext {

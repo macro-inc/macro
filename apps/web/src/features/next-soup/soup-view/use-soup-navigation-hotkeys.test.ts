@@ -20,8 +20,6 @@ vi.mock('@core/mobile/inputModality', () => ({
 }));
 
 vi.mock('@app/features/next-soup/utils', () => ({
-  isDuplicatePreviewEntityOpen: vi.fn(() => false),
-  notifyDuplicateContentOpen: vi.fn(),
   openEntityInSplitFromUnifiedList: vi.fn(),
 }));
 
@@ -134,8 +132,6 @@ const createSplitHandleStub = () =>
     id: 'split-test',
     content: () => ({ type: 'component', id: 'tasks' }),
     referredFrom: () => undefined,
-    isControllerSplit: () => false,
-    viewerId: () => undefined,
     registerEntryStateCaptor: () => () => {},
   }) as unknown as SplitHandle;
 

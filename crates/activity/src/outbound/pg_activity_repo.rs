@@ -4,6 +4,8 @@
 mod test;
 mod timeline;
 
+mod entity_history;
+
 use std::collections::HashMap;
 use std::num::{NonZeroU32, NonZeroU64};
 use std::str::FromStr;

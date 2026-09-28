@@ -1,8 +1,5 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
-import { agentsRouteFromSegments } from '@app/features/agents-view/core/route';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import type { BlockAlias, BlockName } from '@core/block';
-import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   type Accessor,
@@ -18,55 +15,10 @@ import type {
   SplitHandle,
   SplitManager,
 } from './layoutManager';
-import type { CollapsibleItemInput } from './utils/createPriorityCollapser';
-
-export function decodePairs(segments: string[]): SplitContent[] {
-  const pairs: SplitContent[] = [];
-  for (let i = 0; i < segments.length; i += 2) {
-    const type = segments[i];
-    const id = segments[i + 1];
-    if (!type || !id) break;
-    const agentsRoute = agentsRouteFromSegments(type, id);
-
-    if (agentsRoute) {
-      pairs.push({ type: 'component', id: agentsRoute });
-    } else if (type === 'settings') {
-      // `settings/<tab>` is the URL form of the docked settings panel; it maps
-      // to the internal `component/settings` content. The active tab is read
-      // reactively from the URL by SettingsPanelComponentWrapper, so it isn't
-      // threaded through content params. See `contentUrlSegments` in
-      // layoutManager for the matching encode.
-      pairs.push({ type: 'component', id: 'settings' });
-    } else if (type === 'component') {
-      pairs.push({ type: 'component', id });
-    } else {
-      const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);
-      if (isBlockAlias(type)) {
-        const content: SplitContent = {
-          type,
-          id,
-          aliasContext: {
-            alias: type,
-            baseType: resolvedType,
-          },
-        };
-        pairs.push(content);
-      } else {
-        const content: SplitContent = { type: resolvedType, id };
-        pairs.push(content);
-      }
-    }
-  }
-  return pairs.length ? pairs : [{ type: 'component', id: LIST_VIEW_ID.inbox }];
-}
-
-function _encodePairs(splits: ReadonlyArray<SplitContent>): string[] {
-  return splits.flatMap((s) => [
-    // Use the alias type if available, otherwise use the base type
-    s.type === 'component' ? s.type : s.aliasContext?.alias || s.type,
-    s.id,
-  ]);
-}
+import type {
+  CollapsibleItemInput,
+  PriorityCollapser,
+} from './utils/createPriorityCollapser';
 
 const _isInSplit = createCallback(() => {
   return !!useContext(SplitPanelContext);
@@ -115,30 +67,37 @@ export function useSplitPanel() {
   return useContext(SplitPanelContext);
 }
 
-/**
- * A Preview Pair occupies two slots but behaves as one logical split, and its
- * Viewer is never independently closable.
- */
-export function shouldShowSplitCloseButton(
+/** Whether closing this split leaves another split visible. */
+export function shouldShowSplitCloseButton(manager: SplitManager) {
+  return manager.getVisibleSplitCount() > 1;
+}
+
+/** Close a visible panel, or return the last one to its most recent list. */
+export function closeSplitOrReturnToList(
   manager: SplitManager,
   handle: SplitHandle
 ) {
-  const logicalSplitCount =
-    manager.splits().length - manager.previewPairs().length;
-  return logicalSplitCount > 1 && !handle.isViewerSplit();
+  if (shouldShowSplitCloseButton(manager)) {
+    handle.close();
+    return;
+  }
+  const content = handle.content();
+  if (content.type === 'component' && isListViewID(content.id)) return;
+  if (
+    handle.goBackTo(
+      (entry) => entry.type === 'component' && isListViewID(entry.id)
+    )
+  )
+    return;
+  handle.replace({
+    next: { type: 'component', id: LIST_VIEW_ID.home },
+    mergeHistory: true,
+  });
 }
 
-/**
- * Whether content may claim focus automatically when it mounts in the current
- * split. Preview Pair Viewers and inline previews stay passive until the user
- * focuses them.
- *
- * This is intentionally a snapshot: dissolving a Preview Pair later must not
- * trigger delayed autofocus in content that is already mounted.
- */
+/** Inline previews stay passive until the user focuses them. */
 export function useCanAutofocusSplitContent() {
-  const panel = useSplitPanel();
-  return !panel?.handle.isViewerSplit() && !panel?.isInlinePreview;
+  return !useSplitPanel()?.isInlinePreview;
 }
 
 /**
@@ -217,9 +176,14 @@ function _createIsActiveSplitContentMemo(
   });
 }
 
-function useRegisterCollapsibleItem(
-  input: CollapsibleItemInput,
-  region: 'header' | 'toolbar'
+/**
+ * Register a collapsible item with an explicit collapser for the lifetime of
+ * the calling owner. Rows outside the split header (a ViewShell top bar with
+ * its own overflow sensor) hand their controller's collapser in directly.
+ */
+export function useRegisterPriorityCollapseItem(
+  collapser: PriorityCollapser,
+  input: CollapsibleItemInput
 ): Accessor<boolean> {
   const [collapsed, setCollapsedInner] = createSignal(false);
   const setCollapsed = (value: boolean, opts?: { silent?: boolean }) => {
@@ -227,9 +191,6 @@ function useRegisterCollapsibleItem(
     if (!opts?.silent) input.onCollapsedChange?.(value);
   };
   input.onCollapsedChange?.(false);
-  const ctx = useSplitPanelOrThrow();
-  const collapser =
-    region === 'header' ? ctx.headerCollapser : ctx.toolbarCollapser;
   const cleanup = collapser.register({
     ...input,
     collapsed,
@@ -237,6 +198,16 @@ function useRegisterCollapsibleItem(
   });
   onCleanup(cleanup);
   return collapsed;
+}
+
+function useRegisterCollapsibleItem(
+  input: CollapsibleItemInput,
+  region: 'header' | 'toolbar'
+): Accessor<boolean> {
+  const ctx = useSplitPanelOrThrow();
+  const collapser =
+    region === 'header' ? ctx.headerCollapser : ctx.toolbarCollapser;
+  return useRegisterPriorityCollapseItem(collapser, input);
 }
 
 export function useRegisterCollapsibleHeaderItem(

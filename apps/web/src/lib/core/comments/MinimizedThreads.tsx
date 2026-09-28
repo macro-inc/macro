@@ -1,16 +1,12 @@
+import { Popover } from '@kobalte/core/popover';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
+import CheckCircle from '@phosphor/check-circle.svg';
 import { cn, Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
-import {
-  createEffect,
-  createSignal,
-  onCleanup,
-  Show,
-  useContext,
-} from 'solid-js';
+import { createEffect, createSignal, on, Show, useContext } from 'solid-js';
 import type { Layout, Root } from './commentType';
 import { MeasureContainer } from './MeasureContainer';
-import { CommentsContext, Thread } from './Thread';
+import { CommentsContext, ThreadCard } from './Thread';
 
 export function MinimizedThread(props: {
   comment: Root;
@@ -26,9 +22,7 @@ export function MinimizedThread(props: {
   expandable?: boolean;
 }) {
   const [expanded, setExpanded] = createSignal<boolean>(false);
-  const [expandedThreadRef, setExpandedThreadRef] = createSignal<
-    HTMLDivElement | undefined
-  >(undefined);
+  const [badge, setBadge] = createSignal<HTMLDivElement>();
 
   const expandable = () => props.expandable !== false;
 
@@ -37,6 +31,16 @@ export function MinimizedThread(props: {
   }
 
   const { highlightedCommentId, setActiveThread } = useContext(CommentsContext);
+  // Resolving from the expanded card folds the thread back to its badge.
+  createEffect(
+    on(
+      () => props.comment.resolved,
+      (resolved) => {
+        if (resolved) setExpanded(false);
+      },
+      { defer: true }
+    )
+  );
   createEffect(() => {
     if (!expandable()) return;
     const hId = highlightedCommentId();
@@ -44,23 +48,6 @@ export function MinimizedThread(props: {
     if (hId === props.comment.id || props.comment.children.includes(hId)) {
       setExpanded(true);
     }
-  });
-
-  createEffect(() => {
-    if (!expanded()) return;
-    function handleClick(e: MouseEvent) {
-      const _expandedThreadRef = expandedThreadRef();
-      if (
-        _expandedThreadRef &&
-        !_expandedThreadRef.contains(e.target as Node)
-      ) {
-        setExpanded(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    onCleanup(() => {
-      document.removeEventListener('mousedown', handleClick);
-    });
   });
 
   // TODO (seamus) : in the current version of minimized threads the ids are
@@ -86,19 +73,7 @@ export function MinimizedThread(props: {
   };
 
   return (
-    <Show
-      when={!expanded()}
-      fallback={
-        <Thread
-          comment={props.comment}
-          layout={props.layout}
-          isActive={true}
-          maxHeight={props.maxHeight}
-          ref={setExpandedThreadRef}
-          width={320}
-        />
-      }
-    >
+    <>
       <MeasureContainer
         alignment={'left'}
         alignmentOffset={0}
@@ -110,6 +85,7 @@ export function MinimizedThread(props: {
       >
         <Layer depth={2}>
           <div
+            ref={setBadge}
             class={cn(
               'transition-transform flex items-center group text-ink-extra-muted pointer-events-auto',
               props.isActive && '-translate-x-4'
@@ -122,7 +98,17 @@ export function MinimizedThread(props: {
                 'bg-comment/10 group-hover:bg-comment/20': props.isActive,
               })}
             >
-              <ChatTeardrop class="size-4" onClick={clickHandler} />
+              <Show
+                when={props.comment.resolved}
+                fallback={
+                  <ChatTeardrop class="size-4" onClick={clickHandler} />
+                }
+              >
+                <CheckCircle
+                  class="size-4 text-success"
+                  onClick={clickHandler}
+                />
+              </Show>
               <div class="flex items-center px-1 h-6">
                 <span class="text-xs text-center">{commentCount()}</span>
               </div>
@@ -130,6 +116,46 @@ export function MinimizedThread(props: {
           </div>
         </Layer>
       </MeasureContainer>
-    </Show>
+      {/* A dismissable layer, not an outside-click listener: the delete
+          confirmation and menus the card opens nest inside it, so pressing
+          them does not dismiss the card. Unportaled, the card keeps the
+          document's scroll and clipping like the badge it opens from. */}
+      <Popover
+        open={expanded()}
+        onOpenChange={(open) => {
+          setExpanded(open);
+          // Discard a dismissed draft in the same tick; waiting for the
+          // editor's selection change paints its badge and highlight a frame.
+          // A thread activated by the same press keeps its selection.
+          if (!open && props.comment.isNew && props.isActive)
+            setActiveThread(null);
+        }}
+        anchorRef={badge}
+        placement="left-start"
+        gutter={4}
+        flip
+        slide
+      >
+        <Popover.Content
+          class="outline-none"
+          style={{ 'z-index': 'calc(var(--z-index-placeable) + 1)' }}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={(e) => {
+            // The badge reopens the card on click; closing on its press first
+            // would make it flicker shut and open again.
+            const target = e.detail.originalEvent.target;
+            if (target instanceof Node && badge()?.contains(target))
+              e.preventDefault();
+          }}
+          onClick={(e) => {
+            setActiveThread(props.comment.threadId);
+            e.stopPropagation();
+          }}
+        >
+          <ThreadCard comment={props.comment} isActive width={320} />
+        </Popover.Content>
+      </Popover>
+    </>
   );
 }

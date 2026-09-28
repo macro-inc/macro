@@ -1657,7 +1657,7 @@ async fn test_filter_by_owner(db: PgPool) -> anyhow::Result<()> {
         match item {
             SoupItem::Document(doc) => {
                 assert_eq!(
-                    doc.owner_id.as_ref(),
+                    doc.owner_id.principal_id(),
                     "macro|user-1@test.com",
                     "All documents should be owned by user-1"
                 );
@@ -5910,7 +5910,9 @@ fn mock_empty_ast() -> EntityFilterAst {
         foreign_entity_filter: None,
         reminder_filter: None,
         agent_session_filter: None,
+        initiative_filter: None,
         properties_filter: None,
+        favorites_only: None,
     }
 }
 

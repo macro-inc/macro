@@ -6,7 +6,8 @@ use std::time::Duration;
 
 use crate::config::Harness;
 use crate::outbound::acp_probe::{ProbeError, ProbeSubprocess, probe_subprocess};
-use agent_client_protocol::{AcpAgent, AcpAgentConfig, Client, ConnectTo};
+use crate::outbound::acp_process::AcpProcess;
+use agent_client_protocol::{Client, ConnectTo};
 use agent_runtime_protocol::domain::connection::{
     ConnectionError, ModelProbeHandler, RuntimeChannel, RuntimeConnection,
 };
@@ -39,7 +40,8 @@ pub async fn bridge(
     };
     let (mut runtime, acp) = RuntimeConnection::connect_with_model_probe_handler(channel, probes);
 
-    let agent = AcpAgent::new(AcpAgentConfig::new(&harness.command).args(harness.args.clone()))
+    let agent = AcpProcess::new(&harness.command, harness.args.clone(), cwd)
+        .envs(harness.env.clone())
         // The wire tap: every ndjson line crossing the child's stdio, plus
         // its stderr. Enable with RUST_LOG=coding_agent_worker=trace.
         .with_debug(|line, direction| {
@@ -69,6 +71,7 @@ fn probe_process(harness: &Harness, cwd: &Path) -> ProbeSubprocess {
         command: harness.command.clone().into(),
         args: harness.args.clone(),
         cwd: cwd.to_owned(),
+        env: harness.env.clone(),
     }
 }
 
@@ -90,10 +93,6 @@ impl ModelProbeHandler for HarnessModelProbes {
 fn safe_probe_error(error: ProbeError) -> String {
     match error {
         ProbeError::Timeout(_) => "the ACP model probe timed out".to_owned(),
-        #[cfg(not(unix))]
-        ProbeError::UnsupportedWorkingDirectory => {
-            "the ACP model probe cannot apply the configured working directory".to_owned()
-        }
         ProbeError::Protocol(_) => "the ACP model probe protocol failed".to_owned(),
         ProbeError::Process(_) => "the ACP model probe process failed".to_owned(),
     }

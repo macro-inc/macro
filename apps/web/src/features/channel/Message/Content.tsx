@@ -4,6 +4,7 @@ import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { isEmojiOnly } from '@core/util/string';
 import { cn } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
+import { splitMessageContent } from './agent-session-link';
 import { useMessage, useSearchHighlightTermsLookup } from './context';
 import { createSearchHighlightOverlay } from './highlightOverlay';
 
@@ -13,10 +14,12 @@ type ContentProps = {
 
 export function Content(props: ContentProps) {
   const message = useMessage();
-  const bigEmoji = createMemo(() => isEmojiOnly(message().content));
   const termsLookup = useSearchHighlightTermsLookup();
 
-  const content = createMemo(() => message().content);
+  // The body only: an agent message's leading session node is chrome the
+  // sender line renders (`Message.AgentSessionLink`), not part of the text.
+  const content = createMemo(() => splitMessageContent(message()).body);
+  const bigEmoji = createMemo(() => isEmojiOnly(content()));
   const terms = createMemo(() => termsLookup?.(message().id));
 
   const [markdownRoot, setMarkdownRoot] = createSignal<HTMLDivElement>();
@@ -24,7 +27,7 @@ export function Content(props: ContentProps) {
   createSearchHighlightOverlay({ root: markdownRoot, content, terms });
 
   return (
-    <Show when={message().content}>
+    <Show when={content()}>
       <div
         data-message-content
         class={cn(

@@ -1,10 +1,13 @@
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use models_bulk_upload::ProjectDocumentStatus;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 pub mod request;
 pub mod response;
+
+#[cfg(test)]
+mod test;
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, Clone, Eq, PartialEq, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
@@ -14,7 +17,9 @@ pub struct Project {
     /// The name of the project
     pub name: String,
     /// The user id of who created the project
-    pub user_id: String,
+    #[schema(value_type = String)]
+    #[sqlx(try_from = "String")]
+    pub user_id: Owner,
     /// The parent project id
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
@@ -45,7 +50,7 @@ pub struct BasicProject {
     pub id: String,
     #[schema(value_type = String)]
     #[sqlx(try_from = "String")]
-    pub user_id: MacroUserIdStr<'static>,
+    pub user_id: Owner,
     pub parent_id: Option<String>,
     pub name: String,
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -64,7 +69,9 @@ pub enum ProjectPreview {
 pub struct ProjectPreviewData {
     pub id: String,
     pub name: String,
-    pub owner: String,
+    #[schema(value_type = String)]
+    #[sqlx(try_from = "String")]
+    pub owner: Owner,
     pub path: Vec<String>,
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }

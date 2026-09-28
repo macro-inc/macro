@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { ConnectionCard, type ConnectionCardProps } from './connection-card';
 
 vi.mock('@ui', () => ({
+  confirmDialog: vi.fn(),
   Button: (
     props: import('solid-js').JSX.ButtonHTMLAttributes<HTMLButtonElement>
   ) => <button {...props} />,
@@ -23,11 +24,11 @@ function props(): ConnectionCardProps {
     onRefresh: vi.fn(),
   };
 }
-it('shows Claude before connection and explains restart behavior', () => {
+it('shows Claude before connection without adding setup details', () => {
   const value = props();
   render(() => <ConnectionCard {...value} />);
   expect(screen.getByText('Claude Cloud')).toBeTruthy();
-  expect(screen.getByText(/Reconnect after a backend restart/)).toBeTruthy();
+  expect(screen.queryByText(/Macro never asks/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Connect Claude' }));
   expect(value.onBegin).toHaveBeenCalledOnce();
 });
@@ -42,6 +43,7 @@ it('renders consent link and masked code entry without tokens', () => {
     code: 'code#state',
   };
   render(() => <ConnectionCard {...value} />);
+  expect(screen.getByText(/This connection is temporary/)).toBeTruthy();
   expect(screen.getByRole('link').getAttribute('rel')).toBe(
     'noopener noreferrer'
   );

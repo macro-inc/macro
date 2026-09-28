@@ -129,13 +129,18 @@ impl ServerHandler for InternalTools {
             .ok_or_else(|| {
                 rmcp::ErrorData::invalid_request("Missing session authorization", None)
             })?;
+        // Session tools run as the owner; a session owned by anything else
+        // has nobody to run them as.
+        let owner = grant
+            .owner_user()
+            .map_err(|error| rmcp::ErrorData::invalid_request(error.to_string(), None))?;
         let result = toolset()
             .try_tool_call(
                 SessionToolContext {
                     service: self.service.clone(),
                     session: grant.id,
                 },
-                RequestContext::new(grant.owner_id.clone()),
+                RequestContext::new(owner.clone()),
                 &request.name,
                 &serde_json::Value::Object(request.arguments.unwrap_or_default()),
             )

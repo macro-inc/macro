@@ -36,7 +36,7 @@ frontend feature layers:
 | `views/SpreadsheetEditor.tsx` | Compose the editor and load the calculation engine. |
 
 The editor fills its split beneath the shared document title bar. Saved documents
-use `ShareTrigger` and `ShareBlockModal`, including existing document permissions,
+use `ShareTrigger` and `useShareModal`, including existing document permissions,
 copy links, and the Share keyboard shortcut. The local sample also has a Share
 action: it creates a native document, saves the sample's Loro operations, waits for
 the sync acknowledgement, then opens the saved document's sharing dialog. Failed
@@ -252,6 +252,10 @@ and compare formula, error, and formatting behavior before updating the pin.
   All cell styles persist, sync independently, copy/fill, and undo. Number formats
   include general, number, USD currency, percent, scientific, date, time, and plain
   text, with adjustable decimal places. Date/time displays are deterministic UTC.
+  Cells without an explicit format honor the date/time formats IronCalc infers for
+  typed dates, `DATE()`-style results and arithmetic on date cells (formula results
+  only from the year 2000 on, so day counts stay numbers). A cell holding one
+  `<m-date-mention>` pill calculates as that local calendar date.
   Plain text treats formula-looking input literally. Wrapped rows grow to 160px at
   100% zoom; larger content remains available in the formula bar/editor.
 - Internal copying preserves formatting and translates relative/mixed references

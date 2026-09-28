@@ -1,0 +1,7 @@
+mutation SetEmailThreadArchived($input: SetEmailThreadArchivedInput!) {
+	setEmailThreadArchived(input: $input) {
+		__typename
+		id
+		inboxVisible
+	}
+}

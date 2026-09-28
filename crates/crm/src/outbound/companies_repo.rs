@@ -2294,6 +2294,30 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn legacy_thread_root(
+        &self,
+        entity_id: &Uuid,
+        thread_id: &Uuid,
+    ) -> Result<Option<Uuid>, CrmError> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT c.id
+            FROM crm_comment c
+            JOIN crm_thread t ON t.id = c.thread_id
+            WHERE t.id = $1
+              AND (t.company_id = $2 OR t.contact_id = $2)
+            ORDER BY c.created_at ASC, c.id ASC
+            LIMIT 1
+            "#,
+            thread_id,
+            entity_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_team_settings(&self, team_id: &Uuid) -> Result<CrmTeamSettings, CrmError> {
         let row = sqlx::query!(
             r#"

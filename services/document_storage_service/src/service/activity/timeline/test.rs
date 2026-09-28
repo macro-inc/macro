@@ -1,5 +1,5 @@
 use super::*;
-use activity::domain::ports::ActivityObserver;
+use activity::domain::ports::ActivityRealtimePublisher;
 use activity::{Activity, Actor};
 use channels::domain::activity::{ChannelAction, ChannelActivity};
 
@@ -22,7 +22,7 @@ fn picture(channel: Uuid, ordinal: u32) -> Activity {
 #[tokio::test]
 async fn queue_groups_one_channels_facts_and_ignores_non_timeline_activity() {
     let (sender, mut receiver) = mpsc::channel(QUEUE_CAPACITY);
-    let observer = TimelineObserver(sender);
+    let publisher = ChannelTimelinePublisher(sender);
     let ignored = Activity::common(
         Uuid::from_u128(2),
         0,
@@ -34,8 +34,8 @@ async fn queue_groups_one_channels_facts_and_ignores_non_timeline_activity() {
         chrono::Utc::now(),
     );
     let (first, second) = (picture(CHANNEL, 0), picture(CHANNEL, 1));
-    observer
-        .persisted(&[first.clone(), second.clone(), ignored])
+    publisher
+        .publish_recorded(&[first.clone(), second.clone(), ignored])
         .await;
     let (channel_id, activities) = receiver.try_recv().unwrap();
     assert_eq!(channel_id, CHANNEL);
@@ -51,18 +51,18 @@ async fn queue_groups_one_channels_facts_and_ignores_non_timeline_activity() {
 #[tokio::test]
 async fn full_or_closed_delivery_queue_never_blocks_persistence() {
     let (sender, receiver) = mpsc::channel(1);
-    let observer = TimelineObserver(sender);
-    observer.persisted(&[picture(CHANNEL, 0)]).await;
+    let publisher = ChannelTimelinePublisher(sender);
+    publisher.publish_recorded(&[picture(CHANNEL, 0)]).await;
     tokio::time::timeout(
         std::time::Duration::from_millis(100),
-        observer.persisted(&[picture(Uuid::from_u128(11), 0)]),
+        publisher.publish_recorded(&[picture(Uuid::from_u128(11), 0)]),
     )
     .await
     .unwrap();
     drop(receiver);
     tokio::time::timeout(
         std::time::Duration::from_millis(100),
-        observer.persisted(&[picture(Uuid::from_u128(12), 0)]),
+        publisher.publish_recorded(&[picture(Uuid::from_u128(12), 0)]),
     )
     .await
     .unwrap();

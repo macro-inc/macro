@@ -5,6 +5,7 @@ use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
+use model_owner::Owner;
 pub use notification::domain::models::NotificationTitle;
 use notification::domain::models::{
     NotifCollapseKey, Notification, NotificationExtIos,
@@ -643,7 +644,7 @@ pub struct DocumentMentionMetadata {
     pub document_name: String,
     /// The owner of the document
     #[schema(value_type = String)]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The file type of the document
     #[serde(alias = "file_type")]
     pub file_type: Option<String>,
@@ -1190,7 +1191,7 @@ pub struct MentionedInDocumentCommentMetadata {
     pub document_name: String,
     /// The owner of the document.
     #[schema(value_type = String)]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The file type of the document.
     pub file_type: Option<String>,
     /// The sub type of the document (e.g. task).
@@ -1243,7 +1244,7 @@ pub struct RepliedToDocumentCommentThreadMetadata {
     pub document_name: String,
     /// The owner of the document.
     #[schema(value_type = String)]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The file type of the document.
     pub file_type: Option<String>,
     /// The sub type of the document (e.g. task).
@@ -1315,7 +1316,7 @@ pub struct CommentedOnDocumentMetadata {
     pub document_name: String,
     /// The owner of the document.
     #[schema(value_type = String)]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The file type of the document.
     pub file_type: Option<String>,
     /// The sub type of the document (e.g. task).
@@ -1626,15 +1627,14 @@ const AGENT_EXCERPT_MAX_CHARS: usize = 280;
 /// The session an agent-session notification is about, and where its magic
 /// chip lives when it was opened from a thread.
 ///
-/// The conversation an agent session was opened from: a channel or a
-/// document discussion. Spelled like the message API's parent so a client can
-/// route to either surface.
+/// The conversation an agent session was opened from: a channel, document,
+/// or initiative. Spelled like the message API's parent for client routing.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
 pub struct AgentSessionOriginParent {
-    /// `channel` or `document`.
+    /// `channel`, `document`, or `initiative`.
     #[serde(rename = "type")]
     pub kind: String,
-    /// The channel or document id.
+    /// The parent entity id.
     pub id: String,
 }
 
@@ -1864,3 +1864,7 @@ impl NotificationExtIos for AgentSessionMentionedMetadata {
         agent_session_apns(self, &self.session, sender_id, notification_id)
     }
 }
+mod initiative_discussion;
+pub use initiative_discussion::{InitiativeDiscussionMetadata, InitiativeDiscussionReason};
+mod crm_discussion;
+pub use crm_discussion::{CrmDiscussionMetadata, CrmDiscussionReason};

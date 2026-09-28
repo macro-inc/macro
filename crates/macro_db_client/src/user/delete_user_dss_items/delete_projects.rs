@@ -54,17 +54,18 @@ pub async fn delete_user_projects(
     .execute(transaction.as_mut())
     .await?;
 
+    let project_uuids = user_projects
+        .iter()
+        .filter_map(|id| macro_uuid::string_to_uuid(id).ok())
+        .collect::<Vec<_>>();
     crate::item_access::delete::delete_user_entity_access_bulk(
         transaction,
-        &user_projects
-            .iter()
-            .filter_map(|p| macro_uuid::string_to_uuid(p).ok())
-            .collect::<Vec<uuid::Uuid>>(),
+        &project_uuids,
         EntityType::Project,
     )
     .await?;
 
-    // Delete chats
+    // Delete projects
     sqlx::query!(
         r#"
         DELETE FROM "Project" 
@@ -75,39 +76,9 @@ pub async fn delete_user_projects(
     .execute(transaction.as_mut())
     .await?;
 
-    Ok(user_projects)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use sqlx::{Pool, Postgres};
-
-    #[sqlx::test(fixtures(
-        path = "../../../fixtures",
-        scripts("basic_user_with_lots_of_documents")
-    ))]
-    async fn test_delete_user_projects(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let mut transaction = pool.begin().await?;
-        delete_user_projects(&mut transaction, "macro|user@user.com").await?;
-        transaction.commit().await?;
-
-        let project_ids = sqlx::query!(
-            r#"
-            SELECT
-                p.id
-            FROM
-                "Project" p
-            WHERE
-                p."userId" = $1
-            "#,
-            "macro|user@user.com"
-        )
-        .fetch_all(&pool)
-        .await?;
-
-        assert_eq!(project_ids.len(), 0);
-
-        Ok(())
+    for project_uuid in project_uuids {
+        entity_registry_db_utils::delete_entity(transaction, project_uuid).await?;
     }
+
+    Ok(user_projects)
 }

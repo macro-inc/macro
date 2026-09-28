@@ -7,6 +7,7 @@ import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { AgentChannelScope } from '@service-storage/generated/schemas/agentChannelScope';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { agentKeys } from './keys';
 
 /**
@@ -36,6 +37,12 @@ export type CreateAgentParams = {
    * macrod prompts.
    */
   autoAcceptPermissions?: boolean;
+  /**
+   * Whether the agent is a coding agent, which decides how it answers a
+   * channel mention: a magic chip into its live session, or a reply in the
+   * thread.
+   */
+  isCoding: boolean;
 };
 
 export type UpdateAgentParams = CreateAgentParams & {
@@ -47,9 +54,10 @@ export type DeleteAgentParams = {
   channelIds: string[];
 };
 
-export function useAgentsQuery() {
+export function useAgentsQuery(enabled: Accessor<boolean> = () => true) {
   return useQuery(() => ({
     queryKey: agentKeys.list.queryKey,
+    enabled: enabled(),
     queryFn: async (): Promise<AgentWithHarnessId[]> =>
       await throwOnErr(() => storageServiceClient.getAgents()),
   }));
@@ -88,6 +96,7 @@ export function useCreateAgentMutation() {
           mcp: vars.mcp,
           team_id: vars.teamId,
           auto_accept_permissions: vars.autoAcceptPermissions ?? null,
+          is_coding: vars.isCoding,
         })
       ),
     onSuccess: async (agent) => {
@@ -121,6 +130,7 @@ export function useUpdateAgentMutation() {
           mcp: vars.mcp,
           team_id: vars.teamId,
           auto_accept_permissions: vars.autoAcceptPermissions ?? null,
+          is_coding: vars.isCoding,
         })
       ),
     onSuccess: async (updated) => {

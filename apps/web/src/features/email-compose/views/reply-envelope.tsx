@@ -27,6 +27,7 @@ type ReplyEnvelopeProps = {
   mobile: Accessor<boolean>;
   portalScope: Accessor<'local' | undefined>;
   replyType: Accessor<ReplyType | undefined>;
+  disabled: Accessor<boolean>;
 };
 
 /** Sender, recipients and subject, sharing field behavior across both layouts. */
@@ -137,6 +138,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                       activeInboxId={props.activeInboxId()}
                       onSelect={props.onSenderChange}
                       portalScope={props.portalScope()}
+                      disabled={props.disabled()}
                     />
                   </div>
                   <div class="flex items-center ml-auto shrink-0">
@@ -144,6 +146,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                       <Button
                         size="sm"
                         class="rounded-lg"
+                        disabled={props.disabled()}
                         onClick={() => {
                           setShowCc(true);
                           queueMicrotask(() => ccRef()?.focus());
@@ -156,6 +159,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                       <Button
                         size="sm"
                         class="rounded-lg"
+                        disabled={props.disabled()}
                         onClick={() => {
                           setShowBcc(true);
                           queueMicrotask(() => bccRef()?.focus());
@@ -229,6 +233,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                 e.currentTarget.blur();
               }}
               placeholder="Subject"
+              disabled={props.disabled()}
             />
           </div>
         </>
@@ -305,6 +310,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
             activeInboxId={props.activeInboxId()}
             onSelect={props.onSenderChange}
             portalScope={props.portalScope()}
+            disabled={props.disabled()}
           />
         </div>
 
@@ -322,6 +328,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
               e.currentTarget.blur();
             }}
             placeholder="Subject:"
+            disabled={props.disabled()}
           />
         </div>
       </div>

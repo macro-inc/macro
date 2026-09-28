@@ -1,3 +1,4 @@
+import { ContentLoading } from '@components/app/ContentLoading';
 import {
   EntityLoadGate,
   type EntityLoadResult,
@@ -22,7 +23,7 @@ export function EmailThreadLoadGate<Data>(
   props: EmailThreadLoadGateProps<Data>
 ) {
   return (
-    <Suspense>
+    <Suspense fallback={<ContentLoading />}>
       <EntityLoadGate
         result={props.result}
         loadErrorTitle="Unable to load this email"

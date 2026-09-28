@@ -33,7 +33,6 @@ import {
   captureThreadPreviewReplySnapshot,
   insertReplyIntoThreadPreview,
   removeReplyFromThreadPreview,
-  replaceReplyIdInThreadPreview,
   restoreReplyToThreadPreview,
 } from './thread-preview';
 import {
@@ -250,6 +249,11 @@ export function messageTimelineQueryOptions(
           reason: 'load_around',
         });
         return page;
+      }
+      // Rejoining a project must recover missed edits, reactions and deletions
+      // on existing discussions. A created-at delta only includes new roots.
+      if (parent.type === 'initiative') {
+        return fetchMessageTimelinePage(parent, null, null);
       }
       const watermark = readMessageTimelineWatermark(parent);
       if (watermark.kind !== 'ready') {
@@ -554,20 +558,6 @@ export function removeTopLevelMessageFromMessageTimeline(
   );
 }
 
-export function replaceTopLevelMessageIdInMessageTimeline(
-  data: MessageTimelineData | undefined,
-  optimisticId: string,
-  realId: string
-): MessageTimelineData | undefined {
-  if (!data) return data;
-
-  return mapMessageTimelineItems(data, (message) =>
-    message.id === optimisticId
-      ? { ...message, id: realId, state: { ...message.state, root_id: realId } }
-      : message
-  );
-}
-
 function getTopLevelMessageSnapshot(
   data: MessageTimelineData | undefined,
   messageId: string
@@ -639,25 +629,6 @@ export function removeThreadReplyFromMessageTimeline(
   return mapMessageTimelineItems(data, (message) => {
     if (message.id !== threadId) return message;
     const thread = removeReplyFromThreadPreview(message.thread, replyId);
-    return thread === message.thread ? message : { ...message, thread };
-  });
-}
-
-export function replaceThreadReplyIdInMessageTimeline(
-  data: MessageTimelineData | undefined,
-  threadId: string,
-  optimisticId: string,
-  realId: string
-): MessageTimelineData | undefined {
-  if (!data) return data;
-
-  return mapMessageTimelineItems(data, (message) => {
-    if (message.id !== threadId) return message;
-    const thread = replaceReplyIdInThreadPreview(
-      message.thread,
-      optimisticId,
-      realId
-    );
     return thread === message.thread ? message : { ...message, thread };
   });
 }

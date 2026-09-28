@@ -240,6 +240,32 @@ services:
       - services
 
   # ============================================================================
+  # calendar_service (Port 8088)
+  # Google Calendar sync + calendar API, and the local owner of /calendar.
+  # ============================================================================
+  calendar_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/calendar_service"]
+    ports:
+      - "8088:8080"
+    depends_on:
+      - postgres
+      - redis
+      - authentication-service
+      - connection_gateway
+    networks:
+      databases:
+      services:
+        aliases:
+          - calendar-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
   # notification_service (Port 8089)
   # User notifications - NotificationDB
   # ============================================================================
@@ -331,6 +357,21 @@ services:
   # DEV_DANGEROUS_LOCAL_CONTAINERS and runs sandboxes on the host Docker daemon
   # instead. Trigger processing and external sessions run without either.
   # ============================================================================
+  preview_gateway:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/preview_gateway"]
+    restart: on-failure
+    environment:
+      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
+    depends_on:
+      - postgres
+      - connection_gateway
+    networks:
+      databases:
+      services:
+        aliases:
+          - preview-gateway
+
   agent_harness_service:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/agent_harness_service"]

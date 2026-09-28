@@ -3,10 +3,10 @@ import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentChangesContext } from '../context/agent-changes-context';
 import { AgentChangesControllerProvider } from '../context/agent-changes-controller';
+import { createLocalPaneViewState } from '../pane-view-state';
 import {
   type AgentChangesController,
   createAgentChanges,
-  type DiffStyle,
 } from '../primitives/create-agent-changes';
 import { createMemoryStorage } from '../tests/memory-storage';
 import {
@@ -23,10 +23,16 @@ import {
 
 // Pierre mounts a custom element and highlights with shiki; the pane test
 // covers everything around it and leaves the diff body to the browser.
-vi.mock('../components/PierreFileDiff', () => ({
+vi.mock('@app/components/diff-view/pierre/PierreFileDiff', () => ({
   PierreFileDiff: (props: { path: string }) => (
     <div data-testid="diff" data-path={props.path} />
   ),
+}));
+
+// jsdom has no ResizeObserver; the file tree's collapse animation measures with one.
+vi.mock('@solid-primitives/resize-observer', () => ({
+  createResizeObserver: () => {},
+  createElementSize: () => ({ width: 0, height: 0 }),
 }));
 
 // Module-load quarantine, not a dependency substitute: the connection-gateway
@@ -56,14 +62,13 @@ function mount(
   context: AgentChangesContext,
   ui: () => ReturnType<typeof ChangesPane>
 ) {
-  const [diffStyle, setDiffStyle] = createSignal<DiffStyle>('unified');
   const [dismissed, setDismissed] = createSignal<string>();
   let controller!: AgentChangesController;
   const result = render(() => {
     controller = createAgentChanges({
       context,
       storage: createMemoryStorage(),
-      diffStyle: [diffStyle, setDiffStyle],
+      view: createLocalPaneViewState(),
       dismissed: [dismissed, setDismissed],
     });
     return (
@@ -98,9 +103,9 @@ describe('ChangesPane', () => {
       screen.queryByRole('button', { name: 'Mark all viewed' })
     ).toBeNull();
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^Hide / })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide a.ts' }));
     expect(screen.getAllByTestId('diff')).toHaveLength(1);
-    expect(screen.getByText('Show diff')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show a.ts' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
     expect(screen.queryAllByTestId('diff')).toHaveLength(0);
@@ -198,9 +203,24 @@ describe('ChangesPane', () => {
     expect(
       screen.queryByRole('button', { name: 'Create pull request' })
     ).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'View pull request' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'View pull request #1482' })
+    );
     expect(context.opened).toEqual([url]);
     expect(context.sent).toEqual([]);
+  });
+
+  it('hides and shows the file tree from the toolbar', async () => {
+    const context = readyContext();
+    const { controller } = mount(context, () => <ChangesPane />);
+    controller().layout.open();
+    const tree = () => screen.queryByRole('group', { name: 'Changed files' });
+    expect(tree()).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide file tree' }));
+    await waitFor(() => expect(tree()).toBeNull());
+    expect(controller().layout.treeOpen()).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Show file tree' }));
+    await waitFor(() => expect(tree()).toBeTruthy());
   });
 
   it('closes and spotlights from its header', () => {
@@ -210,15 +230,13 @@ describe('ChangesPane', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Expand changes to the full width' })
     );
-    expect(controller().layout.layout()).toBe('changes-only');
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Bring the session back' })
-    );
+    expect(controller().layout.layout()).toBe('full');
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the split' }));
     expect(controller().layout.layout()).toBe('split');
     fireEvent.click(
       screen.getByRole('button', { name: 'Close the changes pane' })
     );
-    expect(controller().layout.layout()).toBe('agent-only');
+    expect(controller().layout.layout()).toBe('closed');
   });
 });
 
@@ -232,6 +250,52 @@ describe('session controls', () => {
     fireEvent.click(toggle);
     expect(controller().layout.layout()).toBe('split');
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('uses GitHub API totals without falling back to captured estimates', () => {
+    const context = readyContext();
+    const [counts, setCounts] = createSignal<
+      { additions: number; deletions: number } | undefined
+    >({ additions: 8, deletions: 2 });
+    context.host.pullRequestChangeCounts = counts;
+    const { controller } = mount(context, () => <ChangesToggle />);
+    const toggle = screen.getByRole('button', { name: /Changes/ });
+    expect(toggle.textContent).toBe('Changes+8−2');
+
+    // A missing or stale PR capture must not replace GitHub totals.
+    context.setSummary(undefined);
+    expect(toggle.textContent).toBe('Changes+8−2');
+    context.setSummary({ capturing: true, changeset: mockChangeset() });
+    expect(toggle.textContent).toBe('Changes+8−2');
+    expect(toggle.querySelector('.animate-pulse')).toBeNull();
+    expect(controller().changeCounts()).toEqual({ additions: 8, deletions: 2 });
+    // Missing GitHub data must not expose the snapshot's +3 / −1 estimates.
+    setCounts(undefined);
+    expect(toggle.textContent).toBe('Changes');
+    expect(controller().changeCounts()).toBeUndefined();
+
+    setCounts({ additions: 12, deletions: 0 });
+    expect(toggle.textContent).toBe('Changes+12');
+    setCounts({ additions: 0, deletions: 4 });
+    expect(toggle.textContent).toBe('Changes−4');
+    setCounts({ additions: 0, deletions: 0 });
+    expect(toggle.textContent).toBe('Changes');
+    fireEvent.click(toggle);
+    expect(controller().layout.changesVisible()).toBe(true);
+  });
+
+  it('does not display fake zero counts before a snapshot loads or for empty snapshots', () => {
+    const context = createMockAgentChangesContext();
+    mount(context, () => <ChangesToggle />);
+    const toggle = screen.getByRole('button', { name: /Changes/ });
+    expect(toggle.textContent).toBe('Changes');
+    context.setSummary({
+      capturing: false,
+      changeset: mockChangeset({ files: [], additions: 0, deletions: 0 }),
+    });
+    expect(toggle.textContent).toBe('Changes');
+    context.setSummary({ capturing: false, changeset: mockChangeset() });
+    expect(toggle.textContent).toBe('Changes+3−1');
   });
 
   it('hands off to the pane while it is closed, and can be dismissed', () => {
@@ -275,6 +339,38 @@ describe('session controls', () => {
     expect(context.sent[0]).toContain('`apps/web/src/a.ts`, line 2 (new)');
     expect(context.sent[0]).toContain('Use a named constant');
     expect(screen.queryByText(/review note/)).toBeNull();
+  });
+
+  it('renders nothing for a host that can never have changes', () => {
+    const context = readyContext();
+    const [coding, setCoding] = createSignal(false);
+    const { controller } = mount(
+      { ...context, host: { ...context.host, canHaveChanges: coding } },
+      () => (
+        <>
+          <ChangesToggle />
+          <ChangesHandoff />
+          <ReviewNotesDock />
+        </>
+      )
+    );
+    controller().review.addNote(
+      {
+        path: 'apps/web/src/a.ts',
+        side: 'additions',
+        lineNumber: 2,
+        endLineNumber: 2,
+      },
+      'Use a constant'
+    );
+    expect(screen.queryByRole('button', { name: /Changes/ })).toBeNull();
+    expect(screen.queryByText('Changes ready to review')).toBeNull();
+    expect(screen.queryByText(/review note/)).toBeNull();
+
+    setCoding(true);
+    expect(screen.getByRole('button', { name: /Changes/ })).toBeTruthy();
+    expect(screen.getByText('Changes ready to review')).toBeTruthy();
+    expect(screen.getByText(/review note/)).toBeTruthy();
   });
 
   it("opens the note's file from the expanded dock", () => {

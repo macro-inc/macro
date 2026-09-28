@@ -41,6 +41,32 @@ fn spawn_handle() -> EngineHandle {
     EngineHandle::new(storage, None)
 }
 
+#[test]
+fn storage_generation_survives_native_reopening_and_rotates_after_clear() {
+    let dir = tempfile::tempdir().unwrap();
+    let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
+    let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+    let first = block_on(handle.current_storage_generation()).unwrap();
+    assert_eq!(
+        block_on(handle.clone().current_storage_generation()).unwrap(),
+        first
+    );
+    handle.shutdown().unwrap();
+    let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+    assert_eq!(
+        block_on(handle.current_storage_generation()).unwrap(),
+        first
+    );
+    block_on(handle.clear()).unwrap();
+    let replacement = block_on(handle.current_storage_generation()).unwrap();
+    assert_ne!(replacement, first);
+    assert_eq!(
+        block_on(handle.current_storage_generation()).unwrap(),
+        replacement
+    );
+    handle.shutdown().unwrap();
+}
+
 fn write(
     handle: &EngineHandle,
     origin: Option<&str>,
@@ -136,6 +162,27 @@ fn write_then_read_round_trips() {
         panic!("expected hit");
     };
     assert_eq!(data, soup_data(false));
+}
+
+#[test]
+fn identical_hydration_does_not_advance_the_native_revision() {
+    let handle = spawn_handle();
+    let hydrate = || {
+        block_on(handle.hydrate_query(
+            HYDRATION_QUERY.to_string(),
+            Some("Soup".to_string()),
+            variables(),
+            soup_data(true),
+            None,
+        ))
+        .unwrap()
+        .write_result
+    };
+    let first = hydrate();
+    let duplicate = hydrate();
+    assert!(first.revision_advanced);
+    assert!(!duplicate.revision_advanced);
+    assert_eq!(first.revision, duplicate.revision);
 }
 
 #[test]

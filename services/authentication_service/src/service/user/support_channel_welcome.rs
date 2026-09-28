@@ -112,6 +112,7 @@ If you have any feedback or find any bugs let us know here.",
             Sender::new_from_user(julia),
             channel_id,
             PostMessage {
+                id: None,
                 attribution: MessageAttribution::Unprompted,
                 notification_policy: PostMessageNotificationPolicy::MentionsOnly,
                 content: welcome,

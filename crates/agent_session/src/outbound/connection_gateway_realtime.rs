@@ -79,6 +79,9 @@ pub const AGENT_SESSION_CHANGES: &str = "agent_session_changes";
 /// contract.
 #[derive(Debug, Serialize)]
 pub struct AgentSessionLogEvent {
+    /// The authoritative activity projection after the flushed frames.
+    #[serde(rename = "turnState")]
+    pub turn_state: Option<agent_fold::domain::model::TurnState>,
     /// The session the frames belong to, and half of the composite id their
     /// folded messages are keyed by.
     #[serde(rename = "agentSessionId")]
@@ -162,6 +165,7 @@ impl AgentSessionLogEvent {
     pub fn new(event: LogAppended) -> Self {
         Self {
             agent_session_id: event.agent_session_id.as_uuid(),
+            turn_state: event.turn_state,
             entries: event
                 .entries
                 .into_iter()
@@ -224,10 +228,13 @@ impl crate::domain::audience::SessionSubscriptions for ConnectionGatewaySessionS
             .into_iter()
             .collect();
         if let Some(parent) = parent {
-            let kind = if parent.is_discussion() {
-                GatewayEntityType::Document
-            } else {
-                GatewayEntityType::Channel
+            use messages::domain::models::MessageParent;
+            let kind = match parent {
+                MessageParent::Channel(_) => GatewayEntityType::Channel,
+                MessageParent::Document(_) => GatewayEntityType::Document,
+                MessageParent::Initiative(_) => GatewayEntityType::Initiative,
+                MessageParent::CrmCompany(_) => GatewayEntityType::CrmCompany,
+                MessageParent::CrmContact(_) => GatewayEntityType::CrmContact,
             };
             users.extend(
                 self.0

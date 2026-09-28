@@ -21,6 +21,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 const live = vi.hoisted(() => ({
   acquire: vi.fn(),
+  load: vi.fn(),
   release: vi.fn(),
   issue: vi.fn(),
   snapshot: {
@@ -30,6 +31,10 @@ const live = vi.hoisted(() => ({
   listeners: new Set<(events: unknown[]) => void>(),
 }));
 const serviceClient = vi.hoisted(() => ({ get: vi.fn() }));
+
+vi.mock('@queries/agent-session/list-sync', () => ({
+  refreshAgentSessionLists: vi.fn(async () => {}),
+}));
 
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
@@ -45,7 +50,7 @@ vi.mock('@core/agent-session/AgentSession', () => ({
       live.acquire(id);
       return {
         id,
-        load: () => Promise.resolve({ session: {}, bot: {} }),
+        load: live.load,
         snapshot: () => Promise.resolve(live.snapshot),
         subscribe: (listener: (events: unknown[]) => void) => {
           live.listeners.add(listener);
@@ -169,6 +174,33 @@ describe('createMagicChipModel', () => {
       },
     });
     live.issue.mockResolvedValue({ isErr: () => false });
+    live.load.mockResolvedValue({ session: {}, bot: {} });
+  });
+
+  it('reports a failed load only while the chip is mounted', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    const loads: Array<(error: Error) => void> = [];
+    live.load.mockImplementation(
+      () => new Promise((_, reject) => loads.push(reject))
+    );
+    const [mounted, unmounted] = [0, 1].map(() =>
+      createRoot((dispose) => {
+        createModel(props);
+        return dispose;
+      })
+    );
+    unmounted?.();
+    loads[1]?.(new Error('agent session released: session'));
+    await settle();
+    expect(consoleError).not.toHaveBeenCalled();
+
+    loads[0]?.(new Error('agent session log could not be fetched: session'));
+    await settle();
+    expect(consoleError).toHaveBeenCalledOnce();
+    mounted?.();
+    consoleError.mockRestore();
   });
 
   it.each([0, '0'])(
@@ -358,6 +390,30 @@ describe('createMagicChipModel', () => {
     }
   );
 
+  it.each(['in-memory', 'macro-inmem', 'sandbox'])(
+    'names the %s session Macro Agent, not Macro Agent Agent',
+    async (harness) => {
+      serviceClient.get.mockResolvedValue({
+        isOk: () => true,
+        isErr: () => false,
+        value: {
+          status: { kind: 'disconnected' },
+          harness,
+          model: '',
+          canEdit: true,
+        },
+      });
+      let model!: ReturnType<typeof createMagicChipModel>;
+      const dispose = createRoot((dispose) => {
+        model = createModel(props);
+        return dispose;
+      });
+      await settle();
+      expect(model.header()?.agent).toBe('Macro Agent');
+      dispose();
+    }
+  );
+
   it('restarts an initial pending snapshot when registration arrives', async () => {
     const snapshot = (pullRequestUrl: string | null) => ({
       isErr: () => false,
@@ -506,7 +562,7 @@ describe('createMagicChipModel', () => {
 
     expect(presentation()).toEqual({
       kind: 'working',
-      activity: { label: 'Session disconnected', busy: false },
+      activity: { label: 'Session disconnected', busy: false, tone: 'stopped' },
     });
 
     dispose();

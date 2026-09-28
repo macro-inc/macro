@@ -14,6 +14,27 @@ export type SelectOptionEntry = {
   color: string | null;
 };
 
+/** Validated entity references for a host that can resolve their display names. */
+export function propertyEntityReferences(
+  raw: unknown
+): Array<{ id: string; type: string }> | undefined {
+  const tagged = asTaggedValue(raw);
+  if (tagged?.type !== 'EntityReference' || !Array.isArray(tagged.value))
+    return undefined;
+  const references: Array<{ id: string; type: string }> = [];
+  for (const value of tagged.value) {
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      typeof value.entity_id !== 'string' ||
+      typeof value.entity_type !== 'string'
+    )
+      return undefined;
+    references.push({ id: value.entity_id, type: value.entity_type });
+  }
+  return references;
+}
+
 /**
  * Resolves a stored SelectOption value into its options (label + tag color),
  * for rendering with the property system's option pills. Returns undefined

@@ -125,7 +125,7 @@ where
 
         // Check ownership only if authenticated
         if let Some(ref user_id) = macro_user_id
-            && document_context.owner == *user_id
+            && document_context.owner.is_user(user_id)
         {
             return Ok(Self {
                 entity_access_receipt: EntityAccessReceipt {

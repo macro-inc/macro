@@ -66,6 +66,7 @@ type TargetAstKey =
   | 'propf';
 
 type AstBody = Partial<Record<TargetAstKey, RestAst>> & {
+  favorites_only?: SoupAstBody['favorites_only'];
   /** CRM-address and CRM-domain filters are REST-only today. */
   eca?: string[];
   ecd?: string[];
@@ -617,6 +618,8 @@ function assertGraphqlCompatibleBody(body: AstBody): void {
 function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
   assertGraphqlCompatibleBody(body);
   const filters: GraphqlEntityFilterAstInput = {};
+  if (body.favorites_only !== undefined)
+    filters.favoritesOnly = body.favorites_only;
 
   if (body.calf) {
     filters.calendarEventFilter = compileExpr(

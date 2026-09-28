@@ -11,8 +11,20 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ModelCatalogPicker } from './ModelCatalogPicker';
+import { ModelCatalogMenu, ModelCatalogPicker } from './ModelCatalogPicker';
 import type { CatalogModelOption } from './modelCatalog';
+
+const { isMobileWidth, setMobileWidth } = vi.hoisted(() => {
+  let mobile = false;
+  return {
+    isMobileWidth: () => mobile,
+    setMobileWidth: (value: boolean) => {
+      mobile = value;
+    },
+  };
+});
+
+vi.mock('@core/mobile/mobileWidth', () => ({ isMobileWidth }));
 
 vi.mock('@ui', () => {
   const cn = (...args: unknown[]) =>
@@ -87,14 +99,15 @@ vi.mock('@ui', () => {
 const OPTIONS: CatalogModelOption[] = [
   { id: 'auto', label: 'Auto', group: 'Auto' },
   { id: 'grok', label: 'Cursor Grok 4.6 High Fast' },
-  { id: 'opus', label: 'Claude Opus 5 High' },
-  { id: 'sonnet', label: 'Claude Sonnet 5 High' },
+  { id: 'opus', label: 'Opus 5 High' },
+  { id: 'sonnet', label: 'Sonnet 5 High' },
   { id: 'sol', label: 'GPT-5.6 Sol High' },
   { id: 'gemini', label: 'Gemini 3.8 Flash High' },
 ];
 
 afterEach(() => {
   cleanup();
+  setMobileWidth(false);
 });
 
 function mountPicker() {
@@ -142,5 +155,65 @@ describe('ModelCatalogPicker search focus', () => {
         screen.getByRole('textbox', { name: 'Search models' })
       );
     });
+  });
+});
+
+describe('ModelCatalogMenu search focus', () => {
+  it('puts caret in the search field when autoFocusSearch mounts the catalog', async () => {
+    render(() => (
+      <ModelCatalogMenu
+        autoFocusSearch
+        value="auto"
+        options={OPTIONS}
+        onSelect={() => {}}
+      />
+    ));
+    const search = screen.getByRole('textbox', { name: 'Search models' });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(search);
+    });
+  });
+
+  it('reclaims search focus when the submenu trigger steals it', async () => {
+    render(() => (
+      <ModelCatalogMenu
+        autoFocusSearch
+        value="auto"
+        options={OPTIONS}
+        onSelect={() => {}}
+      />
+    ));
+    const search = screen.getByRole('textbox', { name: 'Search models' });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(search);
+    });
+
+    const thief = document.createElement('button');
+    document.body.append(thief);
+    thief.focus();
+    expect(document.activeElement).toBe(thief);
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(search);
+    });
+    thief.remove();
+  });
+});
+
+describe('ModelCatalogPicker more models at phone width', () => {
+  it('replaces the list in place and comes back', () => {
+    setMobileWidth(true);
+    mountPicker();
+    fireEvent.click(screen.getByRole('button', { name: 'Agent model' }));
+
+    expect(screen.queryByText('Gemini 3.8 Flash High')).toBeNull();
+
+    fireEvent.click(screen.getByText('More models'));
+    expect(screen.getByText('Gemini 3.8 Flash High')).toBeTruthy();
+    expect(screen.queryByText('Opus 5 High')).toBeNull();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Recommended' }));
+    expect(screen.getByText('Opus 5 High')).toBeTruthy();
+    expect(screen.queryByText('Gemini 3.8 Flash High')).toBeNull();
   });
 });

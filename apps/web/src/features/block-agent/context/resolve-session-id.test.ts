@@ -9,7 +9,7 @@ import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const create = vi.hoisted(() => ({
-  resolve: undefined as ((id: string) => void) | undefined,
+  resolve: undefined as ((id?: string) => void) | undefined,
   reject: undefined as (() => void) | undefined,
   control: vi.fn(),
 }));
@@ -17,9 +17,9 @@ const create = vi.hoisted(() => ({
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: {
     create: vi.fn(
-      () =>
+      (request: { id: string }) =>
         new Promise((resolve) => {
-          create.resolve = (id: string) =>
+          create.resolve = (id: string = request.id) =>
             resolve({ isErr: () => false, value: { session: { id } } });
           create.reject = () =>
             resolve({
@@ -34,6 +34,17 @@ vi.mock('@service-agent-harness/client', () => ({
         })
     ),
     control: create.control,
+  },
+}));
+
+// The first prompt goes through the shared session so it is folded
+// speculatively; here that is just the control POST under the session's id.
+vi.mock('@core/agent-session/AgentSession', () => ({
+  AgentSession: {
+    acquire: (id: string) => ({
+      issue: (action: unknown) => create.control(id, action),
+      release: () => {},
+    }),
   },
 }));
 
@@ -60,8 +71,8 @@ describe('a block id that is already a session', () => {
   });
 });
 
-describe('a placeholder', () => {
-  it('has no session until the create lands, then has that one', async () => {
+describe('an id whose create is in flight', () => {
+  it('has no session until the create lands, then is that session', async () => {
     const placeholder = startPendingSession();
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);
@@ -69,10 +80,24 @@ describe('a placeholder', () => {
       expect(resolved.pending()).toBe(true);
       expect(resolved.failed()).toBe(false);
 
-      create.resolve?.('session-9');
+      create.resolve?.();
       await flush();
 
-      expect(resolved.sessionId()).toBe('session-9');
+      expect(resolved.sessionId()).toBe(placeholder);
+      expect(resolved.pending()).toBe(false);
+      dispose();
+    });
+  });
+
+  // A service that predates client-minted ids answers with its own; the
+  // block adopts that one exactly as it adopted a placeholder's before.
+  it('adopts the id the service answers with when it differs', async () => {
+    const minted = startPendingSession();
+    await createRoot(async (dispose) => {
+      const resolved = resolveSessionId(() => minted);
+      create.resolve?.('server-minted');
+      await flush();
+      expect(resolved.sessionId()).toBe('server-minted');
       expect(resolved.pending()).toBe(false);
       dispose();
     });
@@ -93,7 +118,10 @@ describe('a placeholder', () => {
     });
   });
 
-  it('applies a model override before delivering the first prompt', async () => {
+  // A model chosen before the session exists is what the session is created
+  // on, not something switched afterwards: the first prompt is the only thing
+  // sent, so it opens the session's first turn and the session gets a name.
+  it('creates the session on the chosen model', async () => {
     create.control.mockResolvedValue({
       isErr: () => false,
       value: { actionId: 'action-1', status: 'accepted' },
@@ -106,41 +134,50 @@ describe('a placeholder', () => {
       repoBranch: 'feature/home',
     });
     expect(agentHarnessServiceClient.create).toHaveBeenLastCalledWith({
+      id: placeholder,
       botId: 'persona-1',
+      model: 'model-2',
       repoUrl: 'https://github.com/macro-inc/macro',
       repoBranch: 'feature/home',
     });
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);
-      create.resolve?.('session-10');
+      create.resolve?.();
       await flush();
       await flush();
 
       expect(create.control.mock.calls).toEqual([
-        ['session-10', { type: 'setModel', model: 'model-2' }],
-        ['session-10', { type: 'prompt', prompt: 'Fix the tests' }],
+        [placeholder, { type: 'prompt', prompt: 'Fix the tests' }],
       ]);
-      expect(resolved.sessionId()).toBe('session-10');
+      expect(resolved.sessionId()).toBe(placeholder);
       dispose();
     });
   });
 
-  it('shows a model failure without sending the prompt on the wrong model', async () => {
-    create.control.mockResolvedValue({
-      isErr: () => true,
-      error: [{ code: 'HTTP_ERROR', message: 'Model is unavailable.' }],
-    });
-    const placeholder = startPendingSession({
-      modelOverride: 'missing',
-      prompt: 'Hello',
-    });
+  // The prompt shows as sent from the block's own speculation the moment the
+  // session exists; the block must not wait for the harness to accept it.
+  it('has the session as soon as the create lands, prompt still on the wire', async () => {
+    let deliver: ((result: unknown) => void) | undefined;
+    create.control.mockReturnValue(
+      new Promise((resolve) => {
+        deliver = resolve;
+      })
+    );
+    const placeholder = startPendingSession({ prompt: 'Hello' });
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);
-      create.resolve?.('session-model-error');
+      expect(resolved.pendingPrompt()).toBe('Hello');
+      create.resolve?.();
       await flush();
-      expect(resolved.error()).toBe('Model is unavailable.');
+      expect(resolved.sessionId()).toBe(placeholder);
       expect(resolved.pending()).toBe(false);
       expect(create.control).toHaveBeenCalledTimes(1);
+      deliver?.({
+        isErr: () => false,
+        value: { actionId: 'action-11', status: 'accepted' },
+      });
+      await flush();
+      expect(resolved.failed()).toBe(false);
       dispose();
     });
   });
@@ -153,7 +190,7 @@ describe('a placeholder', () => {
     const placeholder = startPendingSession({ prompt: 'Hello' });
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);
-      create.resolve?.('session-prompt-error');
+      create.resolve?.();
       await flush();
       expect(resolved.error()).toBe('Runtime is disconnected.');
       expect(resolved.pending()).toBe(false);
@@ -161,13 +198,14 @@ describe('a placeholder', () => {
     });
   });
 
-  // A placeholder URL reloaded in a new tab: the create it named belonged to
-  // the tab that is gone, so there is nothing to wait for.
-  it('with no create behind it is a failure, not a wait', () => {
+  // The id is final from the start, so a URL reloaded in another tab names a
+  // real session: it loads (or fails to) like any other, never a dead end.
+  it('with no create behind it in this tab is a session to load', () => {
     createRoot((dispose) => {
-      const resolved = resolveSessionId(() => 'pending-nothing');
+      const resolved = resolveSessionId(() => 'reloaded-elsewhere');
+      expect(resolved.sessionId()).toBe('reloaded-elsewhere');
       expect(resolved.pending()).toBe(false);
-      expect(resolved.failed()).toBe(true);
+      expect(resolved.failed()).toBe(false);
       dispose();
     });
   });
@@ -187,10 +225,10 @@ it.each(['Describe this', ''])(
         mimeType: 'image/png',
       },
     ];
-    startPendingSession({ prompt, attachments });
-    create.resolve?.('session-image');
+    const id = startPendingSession({ prompt, attachments });
+    create.resolve?.();
     await flush();
-    expect(create.control).toHaveBeenCalledWith('session-image', {
+    expect(create.control).toHaveBeenCalledWith(id, {
       type: 'prompt',
       prompt,
       attachments,

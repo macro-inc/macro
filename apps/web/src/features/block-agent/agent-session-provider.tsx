@@ -7,9 +7,10 @@ import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
 import type {
-  AgentAction,
-  AgentSessionResponse,
-} from '@service-agent-harness/generated/schemas';
+  FoldedMessage,
+  TurnState,
+} from '@service-agent-fold/generated/types';
+import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import {
   type Accessor,
   createEffect,
@@ -23,6 +24,7 @@ import {
   type QueueController,
 } from './context/create-queue-controller';
 import { resolveSessionId } from './context/resolve-session-id';
+import { createSendNext } from './context/send-next';
 import { createInteractionController } from './primitives/create-interaction-controller';
 import type { QuoteInsert } from './ui';
 
@@ -34,7 +36,7 @@ export function AgentSessionProvider(
     onSessionId?: (sessionId: string) => void;
   }
 ) {
-  const { sessionId, pending, failed, error } = resolveSessionId(
+  const { sessionId, pending, failed, error, pendingPrompt } = resolveSessionId(
     () => props.blockId
   );
 
@@ -45,9 +47,40 @@ export function AgentSessionProvider(
 
   const userId = useUserId();
   const live = createAgentSession(sessionId, { userId });
-  const turn = () => live.metadata()?.turn ?? 'idle';
+  // A block opened by sending a first prompt shows that prompt, and the
+  // working line under it, from its very first paint. Nothing else can: the
+  // session does not exist until `POST /agent-sessions` answers, and the
+  // shared session's own speculation starts only once it does. This stands
+  // in until the fold reports anything at all - the speculated bubble
+  // arrives under the same key and takes over without a gap.
+  const firstPrompt = () => {
+    const prompt = pendingPrompt();
+    if (!prompt || failed() || live.messages().length > 0) return undefined;
+    return prompt;
+  };
+  const messages = (): FoldedMessage[] => {
+    const prompt = firstPrompt();
+    if (prompt === undefined) return live.messages();
+    return [
+      {
+        agentSessionId: sessionId() ?? props.blockId,
+        turn: 0,
+        author: { kind: 'user', userId: userId() ?? null },
+        requestId: null,
+        parts: [{ kind: 'text', text: prompt }],
+        stop: null,
+        pending: true,
+      },
+    ];
+  };
+  const turn = (): TurnState =>
+    firstPrompt() !== undefined
+      ? 'starting'
+      : (live.metadata()?.turn ?? 'idle');
   const served = createQueueController({
-    sessionId,
+    // Public viewers can read the transcript without signing in, while the
+    // live action queue requires an authenticated caller.
+    sessionId: () => (userId() ? sessionId() : undefined),
     messages: live.messages,
   });
   // A row the user removes may be one `sendNext` already showed as sent;
@@ -59,20 +92,13 @@ export function AgentSessionProvider(
       return served.remove(actionId);
     },
   };
-  const sendNext = () => {
-    const head = queue.entries()[0];
-    if (!head) return;
-    const action: AgentAction | undefined =
-      head.kind === 'prompt' && head.prompt != null
-        ? { type: 'prompt', prompt: head.prompt }
-        : head.kind === 'compact'
-          ? { type: 'compact' }
-          : undefined;
-    void live.issue({ type: 'stop' })?.then((result) => {
-      if (result.isErr()) live.retract(head.actionId);
-    });
-    if (action) live.expect(head.actionId, action);
-  };
+  const sendNext = createSendNext({
+    currentTurn: live.currentTurn,
+    entries: queue.entries,
+    issue: live.issue,
+    expect: live.expect,
+    retract: live.retract,
+  });
   const interactions = createInteractionController({
     sessionId,
     pending: () => live.metadata()?.pendingInteractions ?? [],
@@ -113,11 +139,13 @@ export function AgentSessionProvider(
           session: live.session,
           bot: live.bot,
           metadata: live.metadata,
-          messages: live.messages,
+          messages,
           // A create that failed leaves the block with nothing to load, which
           // is the same dead end for the reader as a load that failed.
           loadFailed: () => live.loadFailed() || failed(),
-          loadRetryable: live.loadFailed,
+          accessDenied: live.accessDenied,
+          // Retrying a 401 gets the same 401.
+          loadRetryable: () => live.loadFailed() && !live.accessDenied(),
           retryLoad: live.retry,
           turn,
           issue: live.issue,

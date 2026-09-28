@@ -72,8 +72,8 @@ may import a block package, `@core/block`, or block-related signal modules.
   callbacks use those captured functions instead of resolving a provider after
   setup.
 - `email-view` owns an `EntityDetailNavigationStack`. Ordinary list activation
-  mounts the thread inside `/app/component/mail`; Shift-open and Preview Pair
-  navigation continue through the standalone `/app/email/:threadId` block. The
+  mounts the thread inside `/app/component/mail`; Shift-open
+  navigation continues through the standalone `/app/email/:threadId` block. The
   filtered data source outlives the list UI so Previous, Next, Mark done, and
   restored list focus keep their source order while detail is mounted.
 
@@ -155,6 +155,8 @@ The compose controllers now assemble these smaller responsibilities:
 | --- | --- |
 | `attachment-persistence.ts` | Upload/remove operations and completion tracking. Receives attachment state and three transport capabilities. A saved attachment ID does not mean its content upload has finished; every save waits for outstanding uploads. |
 | `email-send-schedule.ts` | Confirmed send time, pending changes, unscheduling and archive feedback. Scheduling saves the current draft and waits for its attachments even when a draft ID already exists; each operation retains its selected inbox. |
+| `draft-session.ts` / `draft-persistence.ts` | Shared draft identity, queued-write status, rejection policy, and save/delete ordering. Server identity and a committed latest save are separate facts; REST send, schedule, and uploads wait for a committed save. |
+| `send-readiness.ts` | Why an immediate send must be refused: offline, a draft the server cannot address yet (queued or unconfirmed handle), or an attachment whose upload never finished. Pure checks plus the one failure notice both controllers show. |
 | `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits on disposal, and exposes cancellation and completion for send/discard. |
 | `reply-recipient-fields.ts` | Recipient field expansion, drag/drop and outside interaction. Receives values, a setter and a change callback; it knows nothing about saving or sending. |
 | `reply-composer-focus.ts` | Deferred editor/recipient focus and the forward focus guard. Receives DOM accessors and an editor `focus()` capability. Its timers, animation frames and event listeners end with its owner. |
@@ -431,3 +433,69 @@ Use `bun run --cwd packages/email-renderer viewer` to inspect fixtures without a
 account or backend. Do not regenerate visual expectations simply to make a
 refactor pass: reproduce the baseline in the same browser and explain each
 remaining difference before accepting it.
+
+## Calendar invitation snapshots
+
+Calendar MIME extraction belongs to the email domain and happens at sync time, when live
+sync or backfill saves a message; re-syncing a message repeats it idempotently. `email_message_calendar_invites` stores the immutable
+components; mail without calendar parts gets no rows. Sync parses the inline bytes it
+already fetched. When a message has no inline calendar part, sync downloads its `.ics`
+attachments best-effort; a failed or oversized download leaves the message as plain
+mail, with no retry. Mail synced before the feature shipped is not reinspected, and a
+parser change applies only to newly synced mail. Opening a message never fetches
+provider MIME or parses ICS.
+When an already-loaded thread's saved invitations change, that thread's calendar
+resolution is revalidated in the background; its first load or a switch between threads
+does not trigger it. Cards are keyed by component, so thread refreshes keep their state.
+Without the calendar UI flag, cards render the saved invitation with no calendar lookup.
+
+Scheduling revisions come only from the thread's own saved components, and are
+reconciled separately for each original occurrence and its series master. A lower-sequence master cancellation still cancels an instance
+with a higher independent sequence. RSVP carries the displayed responding address;
+the calendar domain verifies inbox ownership before passing only that address to
+Google. Optimistic responses and rollback ownership are scoped to that attendee.
+
+The parser compatibility corpus is in `crates/email/fixtures/calendar`. `ical` 0.11
+handles folded properties, parameters, and embedded VTIMEZONE syntax. `chrono-tz`
+resolves unambiguous IANA times, and the Windows zone IDs that Outlook writes map to
+IANA through the CLDR table in `calendar_invitation_parser/windows_zones.rs`. Custom
+zones, floating times, and DST gaps or ambiguities remain explicitly unresolved. Snapshots keep only fields that reads use.
+Limits are 512 KiB per part and 32 components/parts per message. Date-only
+ends remain exclusive; recurrence IDs retain the original occurrence identity.
+
+Fully hydrated message reads batch-load snapshots, expose them through REST and GraphQL
+as a plain component list, and preserve them in the cached message projection. Parsed
+list previews never load them. GraphQL JSON is validated at its transport
+adapter. `email-message` owns the typed card and groups recurrence components by UID.
+Original bodies and attachments remain accessible. When a message has invitations, the
+card replaces the body and the original sits behind a "View original email" disclosure
+that starts closed.
+
+`email-thread/calendar-invitation.tsx` composes the refreshable calendar query, shared
+RSVP controller, and agenda. `queries/calendar-invitation.ts` maps transport data to
+small presentation values. The body renderer has no calendar dependencies.
+`block-email` injects calendar navigation with both the original identity and current
+occurrence time, including when an instance has moved to another day.
+
+The email resolution endpoint first authorizes the thread, then derives identities from
+the thread's newest 100 stored components in one batch, without loading its messages.
+It calls the calendar domain's `CalendarInvitationService` port in-process: the email
+service composition root constructs `CalendarInvitationResolver` over
+`PgCalendarRepository`, as it already does for its other calendar services. The
+calendar domain limits lookup to the verified viewer's owned, connected Google-backed
+copies, prefers the thread's inbox, resolves a series to its current or next live occurrence
+(else its latest), and withholds ambiguous, read-only, stale,
+cancelled, mismatched-organizer, or unresolved-instance responses. Newer saved
+scheduling revisions in the thread suppress stale actions while calendar sync catches
+up. Exception revisions are preserved independently of the master. Reads never create
+calendar events. Resolution does not consult calendar_service's sync kill switch: when
+it is off, calendar_service does not mount the RSVP route, so a response fails and the
+card reports that it could not be saved.
+Resolution failures leave the saved card useful and are retried through the existing
+frontend resolution query.
+
+RSVP uses the existing provider write-through mutation. Its writer revisions cover both
+occurrence and invitation caches, including email-only views. Failed older requests
+cannot roll back a newer selection or replace its feedback. Settlement revalidates both
+projections. The on-demand local-day agenda shares occurrence queries and handles DST
+boundaries and exclusive all-day ends without mounting a calendar grid.

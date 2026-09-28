@@ -5,6 +5,7 @@
  * marks — so the composer keeps no state of its own.
  */
 
+import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
 import {
   createInputAttachmentTracker,
   type InputAttachmentData,
@@ -49,17 +50,24 @@ export function AgentComposer(props: {
     metadata,
     pending,
     queue,
+    session,
     sendNext,
     turn,
     registerQuoteInsert,
   } = useAgentSession();
+  const changes = useOptionalAgentChanges();
+  const readOnly = () => session()?.canEdit === false;
 
   // The fold speculates the action the moment it is issued, so success is
   // observed there; only a refusal needs saying here.
-  const act = (action: AgentAction, failure: string) => {
-    void issue(action)?.then((result) => {
-      if (result.isErr()) toast.failure(failure);
-    });
+  const act = async (action: AgentAction, failure: string) => {
+    if (readOnly()) return;
+    try {
+      const result = await issue(action);
+      if (result?.isErr()) toast.failure(failure);
+    } catch {
+      toast.failure(failure);
+    }
   };
 
   // A turn is open in some form: the send button becomes a stop square and
@@ -93,18 +101,31 @@ export function AgentComposer(props: {
   // agent can only reach a file by a URL it can fetch. The chips and the
   // upload flow are the channel composer's.
   const attachmentTracker = createInputAttachmentTracker();
-  const attachFiles = (files: File[]) =>
+  const attachFiles = (files: File[]) => {
+    if (readOnly()) return;
     void uploadInputAttachments({
       files,
       tracker: attachmentTracker,
       uploadFile: (file) =>
         uploadFile(file, 'static', { hideProgressIndicator: true }),
     });
+  };
   // Attachments ride the prompt action itself, so they take the same path as
   // the text: issued once, speculated by the fold, and queued server-side
   // behind a running turn with the files still on them.
   const send = (markdown: string, attachments: InputAttachmentData[]) => {
-    act(promptActionOf(markdown, attachments), 'The message could not be sent');
+    if (readOnly()) return;
+    // Queued review notes ride this send: taking them here marks them sent
+    // before the prompt is issued, so a second Enter cannot post them again
+    // as their own queued prompt (which would then stop-and-flush).
+    const notes = changes?.consumeSendableNotes() ?? '';
+    const prompt = [markdown, notes]
+      .filter((part) => part.length > 0)
+      .join('\n\n');
+    void act(
+      promptActionOf(prompt, attachments),
+      'The message could not be sent'
+    );
     attachmentTracker.clearAttachments();
   };
 
@@ -135,8 +156,13 @@ export function AgentComposer(props: {
         <div class="pb-1.5">
           <QueuedPrompts
             items={queuedItems()}
-            onEdit={(actionId, prompt) => void queue.edit(actionId, prompt)}
-            onRemove={(actionId) => void queue.remove(actionId)}
+            disabled={readOnly()}
+            onEdit={(actionId, prompt) => {
+              if (!readOnly()) void queue.edit(actionId, prompt);
+            }}
+            onRemove={(actionId) => {
+              if (!readOnly()) void queue.remove(actionId);
+            }}
             onNavigateBelow={() => focusInput?.()}
             registerFocusFromBelow={(focus) => {
               focusQueueBottom = focus;
@@ -164,24 +190,37 @@ export function AgentComposer(props: {
         )}
       </For>
       <Input
-        placeholder="Message the agent, @mention anything"
+        placeholder={
+          readOnly()
+            ? 'You have view-only access to this agent session'
+            : 'Message the agent, @mention anything'
+        }
+        readOnly={readOnly()}
         autofocus={props.autofocus}
         busy={busy()}
         hasQueuedMessages={queuedItems().length > 0}
-        // The fold's own answer to "a stop is already working on this turn",
-        // which holds from the moment the stop is folded until the turn
-        // actually ends. `pending` alone clears as soon as the log confirms
-        // the cancel, which is well before the runtime winds the turn down -
-        // and every Enter in that gap posted another cancel.
-        stopPending={turn() === 'stopping'}
+        // Read off the fold's turn discriminant, never `pending`, which
+        // clears as soon as the log confirms a cancel - well before the
+        // runtime winds the turn down, and every Enter in that gap posted
+        // another cancel. `stopping` is a stop already working on this turn.
+        // `starting` is the prompt the last advance showed as sent, still
+        // unconfirmed: the server has not dispatched it, so a stop now would
+        // end the turn already ending and the server would dispatch *that*
+        // head - the next one would sit as a sent-looking bubble while it
+        // waits. Enter is admitted again once the log confirms the head.
+        sendNextHeld={turn() === 'stopping' || turn() === 'starting'}
         // Prompts go straight to the service, so sending needs a session to
         // post to — a block whose create is still on the wire can be typed
         // into, but not sent from, until the id lands.
-        disabled={loadFailed() || pending()}
+        disabled={loadFailed() || pending() || readOnly()}
         commands={() => metadata()?.availableCommands ?? []}
         onSend={send}
-        onStop={() => act({ type: 'stop' }, 'The agent could not be stopped')}
-        onSendNext={sendNext}
+        onStop={() =>
+          void act({ type: 'stop' }, 'The agent could not be stopped')
+        }
+        onSendNext={() => {
+          if (!readOnly()) sendNext();
+        }}
         attachments={attachmentTracker.attachments()}
         onAttachFiles={attachFiles}
         onRemoveAttachment={(attachment) =>
@@ -203,9 +242,12 @@ export function AgentComposer(props: {
             model={metadata()?.model ?? null}
             changingTo={changingModel(messages(), metadata()?.model ?? null)}
             options={metadata()?.supportedModels ?? []}
-            disabled={loadFailed()}
+            disabled={loadFailed() || readOnly()}
             onSelect={(model) =>
-              act({ type: 'setModel', model }, 'The model could not be changed')
+              void act(
+                { type: 'setModel', model },
+                'The model could not be changed'
+              )
             }
           />
         }

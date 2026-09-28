@@ -1,24 +1,16 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import type { Maybe } from '@core/types';
 import { throwOnErr } from '@core/util/result';
-import { channelThreadRootId } from '@notifications/channel-thread-root';
 import {
   nextNotificationState,
   notificationStatesForFilter,
 } from '@notifications/notification-state';
 import type { UnifiedNotification } from '@notifications/types';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
-import {
-  bumpSoupEntityNotifiedAt,
-  hasSoupEntity,
-  optimisticUpdateSoupItemUpdatedAt,
-  refetchSoupEntity,
-  restoreSoupEntityToDoneFilteredQueries,
-  type SoupEntityTag,
-} from '@queries/soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { notificationServiceClient } from '@service-notification/client';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
@@ -26,13 +18,13 @@ import type { GetAllUserNotificationsResponse } from '@service-notification/gene
 import type { NotificationUpdateOperation } from '@service-storage/graphql/generated/graphql';
 import { updateNotifications } from '@service-storage/graphql-notifications';
 import { graphqlCacheEnabled } from '@service-storage/graphql-soup';
+import { createLazyMemo } from '@solid-primitives/memo';
 import {
   type InfiniteData,
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
-import { match, P } from 'ts-pattern';
+import { type Accessor, createSignal, untrack } from 'solid-js';
 import { z } from 'zod';
 import { queryClient } from '../client';
 import {
@@ -41,6 +33,7 @@ import {
   type UpdateNotificationsResult,
 } from './graphql/user-notifications';
 import { notificationKeys } from './keys';
+import { updateSoupForNotification } from './notification-soup';
 
 function stripOwnerId({
   owner_id: _,
@@ -185,6 +178,8 @@ export type UserNotificationsQueryOptions = {
 
 /** Query state exposed by the transport-neutral notification facade. */
 export type UserNotificationsQuery = {
+  /** Reactively reports data/status activation of the GraphQL feed (REST is eager). */
+  readonly isStarted: boolean;
   readonly data: UnifiedNotification[] | undefined;
   readonly error: Error | null;
   readonly isLoading: boolean;
@@ -230,14 +225,23 @@ export function useUserNotificationsQuery(
   args: Accessor<UserNotificationsQueryArgs>,
   options?: Accessor<UserNotificationsQueryOptions>
 ): UserNotificationsQuery {
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const queryEnabled = () => options?.().enabled !== false;
 
-  const usesGraphql = () =>
-    isFeatureEnabled(enableGraphqlSoup) && args().done !== true;
+  // Cold-start flags can arrive after the observers mount. Enabling and
+  // reading a transport must react to the same flag, not an imperative snapshot.
+  const usesGraphql = () => graphqlSoupFlag().enabled && args().done !== true;
 
-  const graphqlQuery = createGraphqlNotificationsQuery(args, () => ({
-    enabled: queryEnabled() && usesGraphql(),
-  }));
+  const [graphqlStarted, setGraphqlStarted] = createSignal(false);
+  const graphqlQuery = createLazyMemo(() =>
+    untrack(() => {
+      const query = createGraphqlNotificationsQuery(args, () => ({
+        enabled: queryEnabled() && usesGraphql(),
+      }));
+      setGraphqlStarted(true);
+      return query;
+    })
+  );
 
   const restQuery = useRestUserNotificationsQuery(args, () => ({
     enabled: queryEnabled() && !usesGraphql(),
@@ -245,45 +249,49 @@ export function useUserNotificationsQuery(
 
   const refetch = async () => {
     if (usesGraphql()) {
-      await graphqlQuery.refetch({
+      await graphqlQuery().refetch({
         requestPolicy: 'network-only',
         throwOnError: true,
       });
     } else {
-      await restQuery.refetch();
+      const result = await restQuery.refetch();
+      if (result.error) throw result.error;
     }
   };
 
   return {
+    get isStarted() {
+      return !usesGraphql() || graphqlStarted();
+    },
     get data() {
-      return usesGraphql() ? graphqlQuery.data : restQuery.data;
+      return usesGraphql() ? graphqlQuery().data : restQuery.data;
     },
     get error() {
       return usesGraphql()
-        ? graphqlQuery.error
+        ? graphqlQuery().error
         : ((restQuery.error as Error | null) ?? null);
     },
     get isLoading() {
-      return usesGraphql() ? graphqlQuery.isLoading : restQuery.isLoading;
+      return usesGraphql() ? graphqlQuery().isLoading : restQuery.isLoading;
     },
     get isFetching() {
-      return usesGraphql() ? graphqlQuery.isFetching : restQuery.isFetching;
+      return usesGraphql() ? graphqlQuery().isFetching : restQuery.isFetching;
     },
     get isFetchingNextPage() {
       return usesGraphql()
-        ? graphqlQuery.isFetchingNextPage
+        ? graphqlQuery().isFetchingNextPage
         : restQuery.isFetchingNextPage;
     },
     get hasNextPage() {
       return usesGraphql()
-        ? graphqlQuery.hasNextPage
+        ? graphqlQuery().hasNextPage
         : (restQuery.hasNextPage ?? false);
     },
     get transport() {
       return usesGraphql() ? 'graphql' : 'rest';
     },
     async fetchNextPage() {
-      if (usesGraphql()) await graphqlQuery.fetchNextPage();
+      if (usesGraphql()) await graphqlQuery().fetchNextPage();
       else await restQuery.fetchNextPage();
     },
     refetch,
@@ -913,37 +921,6 @@ export async function getNotificationById(
   return stripOwnerId(res as NotificationItem);
 }
 
-function notificationEntityTypeToSoupTag(
-  entityType: UnifiedNotification['entity_type']
-): SoupEntityTag | null {
-  return match(entityType)
-    .with('document', () => 'document' as const)
-    .with('chat', () => 'chat' as const)
-    .with('channel', () => 'channel' as const)
-    .with('project', () => 'project' as const)
-    .with('email_thread', () => 'emailThread' as const)
-    .with('foreign_entity', () => 'foreignEntity' as const)
-    .with('reminder', () => 'reminder' as const)
-    .with('calendar_event', () => 'calendarEvent' as const)
-    .with(
-      P.union(
-        'user',
-        'team',
-        'call',
-        'channel_message',
-        'static_file',
-        'crm_company',
-        'crm_contact',
-        'skill',
-        'agent_session',
-        'scheduled_action',
-        'initiative'
-      ),
-      () => null
-    )
-    .exhaustive();
-}
-
 /**
  * Snapshot the cached notification objects for the given ids. The returned
  * items can later be put back via `restoreUserNotifications`. Optimistic
@@ -1071,7 +1048,6 @@ export function optimisticInsertNotification(
   notification: UnifiedNotification
 ) {
   const item = notification as NotificationItem;
-  const soupTag = notificationEntityTypeToSoupTag(notification.entity_type);
 
   trackUnconfirmedInsert(item);
 
@@ -1116,48 +1092,7 @@ export function optimisticInsertNotification(
     };
   });
 
-  if (soupTag) {
-    if (hasSoupEntity(notification.entity_id)) {
-      if (notification.created_at) {
-        optimisticUpdateSoupItemUpdatedAt(
-          notification.entity_id,
-          soupTag,
-          notification.created_at
-        );
-      }
-    } else {
-      refetchSoupEntity(notification.entity_id, soupTag);
-    }
-
-    // The inbox's notified_at order moves the notified row up right away
-    // rather than on the next refetch of the page. A mention or thread reply
-    // belongs to its channel-thread row — the row the soup feed keys it on —
-    // so that is the row stamped (and fetched in, when it is not cached yet),
-    // not the channel's.
-    const threadRootId = channelThreadRootId(notification);
-    if (notification.created_at) {
-      bumpSoupEntityNotifiedAt(
-        threadRootId ?? notification.entity_id,
-        notification.created_at
-      );
-    }
-    if (threadRootId && !hasSoupEntity(threadRootId)) {
-      refetchSoupEntity(threadRootId, 'channelThread');
-    }
-
-    // A cached row may be absent from the done-filtered feeds — dropped when
-    // it was marked done, or the feed was fetched while it had nothing
-    // outstanding. The field merges above only patch rows already present,
-    // so put the row back where it is missing; otherwise this notification
-    // stays invisible in the inbox until the next refetch. No-op for rows
-    // the refetch paths above insert.
-    if (notification.state !== 'done') {
-      restoreSoupEntityToDoneFilteredQueries(
-        threadRootId ?? notification.entity_id,
-        notification.state
-      );
-    }
-  }
+  updateSoupForNotification(notification);
 
   // Cache is already updated via setQueriesData above. Mark as stale without
   // refetching — refetchType default would re-fetch every cached page of the

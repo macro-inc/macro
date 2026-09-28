@@ -195,6 +195,19 @@ impl ConfigForm {
         }
         let section = self.doc["harness"].or_insert(toml_edit::table());
         section["args"] = value(args);
+        // Replaced, not merged: the previous agent's variables name its CLI,
+        // not this one's.
+        if agent.launch.env.is_empty() {
+            if let Some(table) = section.as_table_like_mut() {
+                table.remove("env");
+            }
+        } else {
+            let mut env = toml_edit::InlineTable::new();
+            for (name, path) in &agent.launch.env {
+                env.insert(name, path.as_str().into());
+            }
+            section["env"] = value(env);
+        }
     }
 
     /// Apply Quickstart values to this document without replacing other settings.

@@ -127,20 +127,7 @@ export const useEntityActionHotkeys = (
 
   const openNextEntity: EntityActionNavigationHandler = ({ entity }) => {
     if (!splitHandle) return;
-    if (!entity) {
-      if (splitHandle.isControllerSplit()) splitHandle.resetPreview();
-      return;
-    }
-
-    if (splitHandle.isControllerSplit()) {
-      openEntityInSplitFromUnifiedList(entity, {
-        splitHandle,
-        mergeHistory: true,
-        referredFrom: splitHandle.referredFrom(),
-        notificationSource,
-      });
-      return;
-    }
+    if (!entity) return;
 
     const handleContent = splitHandle.content()?.type;
     if (!handleContent) return;
@@ -400,6 +387,26 @@ export const useEntityActionHotkeys = (
   }).withGroup(group);
 
   // Mute notifications (command menu only, no keybinding)
+  registerHotkey({
+    scopeId,
+    description: 'Snooze notifications…',
+    keywords: ['pause', 'morning', 'weekend', 'notifications'],
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (!entities.length || !entities.every(muteAction.canExecute))
+        return false;
+      muteAction.snooze(entities);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(muteAction.canExecute);
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
   registerHotkey({
     hotkeyToken: TOKENS.entity.action.mute,
     scopeId,
@@ -734,7 +741,12 @@ export const useEntityActionHotkeys = (
       keyDownHandler: () => {
         const entities = getEntitiesForAction();
         if (entities.length === 0) return false;
-        if (!entities.every(setCompanyPropertyAction.canExecute)) return false;
+        if (
+          !entities.every((entity) =>
+            setCompanyPropertyAction.canExecute(entity, field)
+          )
+        )
+          return false;
         setCompanyPropertyAction.execute(entities, field);
         return true;
       },
@@ -743,7 +755,9 @@ export const useEntityActionHotkeys = (
         const entities = getEntitiesForAction();
         return (
           entities.length > 0 &&
-          entities.every(setCompanyPropertyAction.canExecute)
+          entities.every((entity) =>
+            setCompanyPropertyAction.canExecute(entity, field)
+          )
         );
       },
       scopeId,

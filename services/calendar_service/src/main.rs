@@ -12,6 +12,7 @@ use calendar_service::backfill_queue::CalendarBackfillQueueClient;
 use calendar_service::calendar_backfill::CalendarBackfillContext;
 use calendar_service::calendar_backfill_adapters::RedisCalendarRequestGate;
 use calendar_service::calendar_ratelimit::CalendarRateLimiter;
+use calendar_service::calendar_reauth::LinkManagerReauthNotifier;
 use calendar_service::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use calendar_service::calendar_tokens::CalendarTokenProviderAdapter;
 use calendar_service::config::{Config, calendar_watch_config};
@@ -109,6 +110,15 @@ async fn main() -> anyhow::Result<()> {
     let rate_limiter =
         CalendarRateLimiter::new(redis_inner_client, config.redis_rate_limit_window_secs);
 
+    // Reauth-required notifications ride the shared email link-manager queue,
+    // whose email_service consumer owns the single reconnect-your-inbox
+    // notification; the queue URL resolves from per-environment defaults.
+    let link_manager_queue = macro_queues::LinkManagerQueue::new();
+    let reauth_notifier = LinkManagerReauthNotifier::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        link_manager_queue.to_string(),
+    );
+
     // Sync scheduler + calendar outbox drain.
     worker_tracker.spawn(calendar_service::calendar_outbox::run(
         db.clone(),
@@ -136,6 +146,7 @@ async fn main() -> anyhow::Result<()> {
             auth_service_client.clone(),
             connection_gateway_client.clone(),
             macro_event_broker.clone(),
+            reauth_notifier.clone(),
             calendar_watch_config(),
             config.calendar_sync_enabled,
         );

@@ -48,6 +48,41 @@ describe('Reactions', () => {
     expect(screen.queryByRole('button', { name: 'Add reaction' })).toBeNull();
   });
 
+  it('dims a reaction the current user already added', () => {
+    render(() => (
+      <Root
+        message={{
+          ...baseMessage,
+          reactions: [
+            { emoji: '❤️', users: ['user-1', 'user-2'] },
+            { emoji: '👍', users: ['user-3'] },
+          ],
+        }}
+        actions={{
+          onReact: () => undefined,
+        }}
+      >
+        <Reactions />
+      </Root>
+    ));
+
+    const chips = () =>
+      screen
+        .getAllByRole('button')
+        .filter((el) => el.hasAttribute('data-message-reaction-chip'));
+    const heart = chips().find((el) => el.dataset.emoji === '❤️');
+    const thumb = chips().find((el) => el.dataset.emoji === '👍');
+
+    expect(heart?.hasAttribute('data-user-reacted')).toBe(true);
+    expect(heart?.className).toContain(
+      'bg-[color-mix(in_oklch,oklch(0_0_0)_16%,var(--color-control))]'
+    );
+    expect(thumb?.hasAttribute('data-user-reacted')).toBe(false);
+    expect(thumb?.className).not.toContain(
+      'bg-[color-mix(in_oklch,oklch(0_0_0)_16%,var(--color-control))]'
+    );
+  });
+
   it('calls onReact with chip emoji when a reaction chip is clicked', async () => {
     const user = userEvent.setup({ skipHover: true });
     const onReact = vi.fn();

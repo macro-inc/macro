@@ -3,8 +3,10 @@ import {
   createComponent,
   createContext,
   createSignal,
+  onCleanup,
   type ParentProps,
   type Setter,
+  untrack,
   useContext,
 } from 'solid-js';
 import {
@@ -32,6 +34,10 @@ export type NativeCallSnapshot = {
 export type NativeCallState = {
   snapshot: Accessor<NativeCallSnapshot | null>;
   setSnapshot: Setter<NativeCallSnapshot | null>;
+  /** Observe native updates directly, including the current snapshot. */
+  onSnapshot: (
+    listener: (snapshot: NativeCallSnapshot | null) => void
+  ) => () => void;
   bootstrapChannelId: Accessor<string | null>;
   setBootstrapChannelId: Setter<string | null>;
   participantIdentities: Accessor<string[]>;
@@ -42,8 +48,19 @@ export type NativeCallState = {
 
 const NativeCallContext = createContext<NativeCallState>();
 
-function createNativeCallState(): NativeCallState {
+export function createNativeCallState(): NativeCallState {
   const [snapshot, setSnapshot] = createSignal<NativeCallSnapshot | null>(null);
+  const listeners = new Set<(snapshot: NativeCallSnapshot | null) => void>();
+  onCleanup(() => listeners.clear());
+  const updateSnapshot: NativeCallState['setSnapshot'] = (value) => {
+    const next = setSnapshot(value);
+    untrack(() => {
+      for (const listener of [...listeners]) {
+        if (listeners.has(listener)) listener(next);
+      }
+    });
+    return next;
+  };
   // Tracks the channel from early native CallKit events before the full native
   // media snapshot is available. snapshot remains authoritative once set.
   const [bootstrapChannelId, setBootstrapChannelId] = createSignal<
@@ -56,7 +73,14 @@ function createNativeCallState(): NativeCallState {
 
   return {
     snapshot,
-    setSnapshot,
+    setSnapshot: updateSnapshot,
+    onSnapshot: (listener) => {
+      listeners.add(listener);
+      untrack(() => listener(snapshot()));
+      return () => {
+        listeners.delete(listener);
+      };
+    },
     bootstrapChannelId,
     setBootstrapChannelId,
     participantIdentities,

@@ -26,10 +26,19 @@ import {
   useSchedulesQuery,
   useUpdateScheduleMutation,
 } from '@queries/agent-schedule/schedules';
+import { getCronTrigger } from '@queries/agent-schedule/triggers';
 import { useChatQuery } from '@queries/chat';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
-import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
 import { AutomationRenameModal } from './AutomationRenameModal';
 import { AutomationTimePicker } from './AutomationTimePicker';
@@ -42,6 +51,7 @@ import {
   getErrorMessage,
   INPUT_CLASS,
   isValidTime,
+  scheduleToDuplicateBody,
   WEEKDAY_OPTIONS,
 } from './automationUtils';
 import type { ScheduleDraft } from './types';
@@ -135,8 +145,14 @@ export function Automation() {
 
   const schedulesQuery = useSchedulesQuery(() => true);
   const schedule = createMemo(() =>
-    schedulesQuery.data?.find((item) => item.id === scheduleId)
+    !schedulesQuery.isPending
+      ? schedulesQuery.data?.find((item) => item.id === scheduleId)
+      : undefined
   );
+  const cronTrigger = () => {
+    const current = schedule();
+    return current ? getCronTrigger(current) : undefined;
+  };
   const scheduleEntity = () => {
     const current = schedule();
     return current ? scheduleToEntity(current) : undefined;
@@ -147,7 +163,7 @@ export function Automation() {
   const currentSummary = createMemo(() => {
     const d = state();
     if (!d) return '';
-    return describeSchedule(d, getDefaultTimezone());
+    return describeSchedule(d, cronTrigger()?.timezone ?? getDefaultTimezone());
   });
 
   const formError = createMemo(() => {
@@ -179,17 +195,16 @@ export function Automation() {
     const d = state();
     const previous = schedule();
     if (!d || !previous) return;
-    updateMutation.mutate({
-      scheduleId,
-      body: draftToUpdateBody(d, previous),
-    });
+    const body = draftToUpdateBody(d, previous);
+    if (!body) return;
+    updateMutation.mutate({ scheduleId, body });
   };
 
   const debouncedSave = debounce(save, 300);
 
   const setState = (update: (prev: ScheduleDraft) => ScheduleDraft) => {
     const current = state();
-    if (!current) return;
+    if (!current || !cronTrigger()) return;
     const next = update(current);
     setRawState(next);
     if (next.name !== current.name) {
@@ -198,18 +213,22 @@ export function Automation() {
     debouncedSave();
   };
 
-  whenSettled(schedulesQuery, () => {
+  function initializeDraft(): void {
     const current = schedule();
     if (!current) return;
     setRawState(draftFromSchedule(current));
     panel.handle.setDisplayName(current.name);
-  });
+  }
+
+  whenSettled(schedulesQuery, initializeDraft, initializeDraft);
 
   const historyQuery = useScheduleHistoryQuery(
     () => scheduleId,
-    () => true
+    () => Boolean(cronTrigger())
   );
-  const history = createMemo(() => historyQuery.data ?? []);
+  const history = createMemo(() =>
+    historyQuery.isSuccess ? (historyQuery.data ?? []) : []
+  );
 
   const [renameOpen, setRenameOpen] = createSignal(false);
 
@@ -237,14 +256,9 @@ export function Automation() {
   const duplicateAutomation = () => {
     const current = schedule();
     if (!current || duplicateMutation.isPending) return;
-    duplicateMutation.mutate({
-      enabled: current.enabled,
-      kind: current.kind,
-      name: `${current.name} copy`,
-      schedule: current.schedule,
-      task: current.task,
-      timezone: current.timezone,
-    });
+    const body = scheduleToDuplicateBody(current);
+    if (!body) return;
+    duplicateMutation.mutate(body);
   };
 
   // Confirms via the shared bulk-delete modal, which routes automations to
@@ -276,25 +290,29 @@ export function Automation() {
   });
 
   onMount(() => {
-    invalidateSchedules();
+    void invalidateSchedules();
   });
 
   return (
     <Show
-      when={state()}
+      when={cronTrigger() && state()}
       fallback={
-        <Show
-          when={!schedulesQuery.isPending && !schedule()}
-          fallback={
-            <div class="flex size-full items-center justify-center text-xs text-ink-muted">
-              Loading…
-            </div>
-          }
-        >
-          <div class="flex size-full items-center justify-center text-xs text-ink-muted">
-            Automation not found.
-          </div>
-        </Show>
+        <div class="flex size-full flex-col items-center justify-center gap-2 p-3 text-center text-sm text-ink-muted">
+          <Switch fallback={<>Automation not found.</>}>
+            <Match when={schedulesQuery.isError && !schedule()}>
+              Unable to load automation. Please try again.
+            </Match>
+            <Match when={schedulesQuery.isPending}>Loading…</Match>
+            <Match when={schedule() && !cronTrigger()}>
+              <h1 class="font-semibold text-ink">Backend-managed routine</h1>
+              <p>
+                Event-triggered routines cannot be edited or duplicated here.
+                Manage this routine through the API. This editor only supports
+                cron schedules.
+              </p>
+            </Match>
+          </Switch>
+        </div>
       }
     >
       {(d) => (

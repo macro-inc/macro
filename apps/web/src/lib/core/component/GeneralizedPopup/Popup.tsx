@@ -29,7 +29,7 @@ export function GeneralizedPopup(props: GeneralizedPopupProps) {
       <div
         ref={props.ref}
         id="generalized-popup"
-        class="border border-edge bg-surface shadow-xl rounded-lg z-highlight-menu inline-flex items-start flex-col p-1"
+        class="border border-edge bg-surface shadow-xl rounded-lg inline-flex items-start flex-col p-1"
       >
         {props.children}
       </div>

@@ -25,6 +25,7 @@ import {
   type ReorderFavoritesResult,
   type SetFavoriteArgs,
   toGraphqlFavoriteEntityType,
+  UNFILTERED_FAVORITES_VARIABLES,
 } from '@service-storage/graphql-favorites';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { AnyVariables, Client, OperationResult } from '@urql/core';
@@ -64,7 +65,7 @@ function favoritesQueryVariables(
           entityIds: filter.entityId,
         },
       }
-    : {};
+    : UNFILTERED_FAVORITES_VARIABLES;
 }
 
 function favoriteMatchesFilter(
@@ -81,7 +82,10 @@ function activeFavoritesCacheTargets(
   favorite?: SetFavoriteArgs
 ): FavoritesCacheTarget[] {
   const targets = new Map<string, FavoritesCacheTarget>([
-    [JSON.stringify({}), { variables: {}, updateCachedList: false }],
+    [
+      JSON.stringify(UNFILTERED_FAVORITES_VARIABLES),
+      { variables: UNFILTERED_FAVORITES_VARIABLES, updateCachedList: false },
+    ],
   ]);
   for (const active of activeFavoritesQueries) {
     if (favorite && !favoriteMatchesFilter(favorite, active.filter)) continue;

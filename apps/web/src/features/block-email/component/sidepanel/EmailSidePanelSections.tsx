@@ -6,6 +6,7 @@ import {
 } from '@app/features/property/side-panel/properties';
 import { SidePanel } from '@components/app/side-panel';
 import { References } from '@core/component/References';
+import { queryReadyGate } from '@queries/gate';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { Show, Suspense } from 'solid-js';
 
@@ -59,7 +60,7 @@ function ReferencesSectionConditional(props: { threadId: string }) {
     () => 'email'
   );
 
-  const count = () => references.data?.length ?? 0;
+  const count = () => (queryReadyGate(references) ? references.data.length : 0);
 
   return (
     <Show when={count() > 0}>

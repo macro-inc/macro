@@ -7,6 +7,7 @@ use model::document::{BasicDocument, FileType};
 use model::document::{ID, SaveBomPart, VersionID};
 use model::project::Project;
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{Postgres, Transaction};
@@ -20,8 +21,7 @@ pub async fn create_project_transaction(
     parent_id: Option<String>,
     share_permission: &SharePermissionV2,
 ) -> anyhow::Result<Project> {
-    let project = sqlx::query_as!(
-        Project,
+    let row = sqlx::query!(
         r#"
         INSERT INTO "Project" ("name", "userId", "parentId", "createdAt", "updatedAt")
         VALUES ($1, $2, $3, NOW(), NOW())
@@ -34,6 +34,15 @@ pub async fn create_project_transaction(
     )
     .fetch_one(transaction.as_mut())
     .await?;
+    let project = Project {
+        id: row.id,
+        name: row.name,
+        user_id: Owner::from_principal_str(&row.user_id)?,
+        parent_id: row.parent_id,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        deleted_at: row.deleted_at,
+    };
 
     create_project_permission(transaction, &project.id, share_permission).await?;
     upsert_user_history(transaction, user_id.copied(), &project.id, "project").await?;
@@ -157,7 +166,7 @@ pub async fn create_onboarding_documents(
             documents.push(BasicDocument {
                 document_id: document_id.to_string(),
                 document_version_id: *document_version_id,
-                owner: user_id.clone(),
+                owner: Owner::User(user_id.clone()),
                 document_name: document_names.0.to_string(),
                 file_type: Some(document_names.1.to_string()),
                 sha: None,
@@ -222,7 +231,7 @@ pub async fn create_onboarding_docx(
     Ok(BasicDocument {
         document_id: document.id,
         document_version_id: document_bom.id,
-        owner: user_id,
+        owner: Owner::User(user_id),
         document_name: document_name.to_string(),
         file_type: Some(FileType::Docx.as_str().to_string()),
         sha: None,

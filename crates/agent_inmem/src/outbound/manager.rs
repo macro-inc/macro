@@ -14,7 +14,7 @@ use agent_runtime_protocol::domain::connection::{RuntimeConnection, ServerChanne
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use agent_session::domain::model::AgentSessionId;
 use dashmap::DashMap;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 
 use crate::domain::agent::{AgentState, serve};
 use crate::domain::engine::{AgentIdentity, TurnEngine};
@@ -31,7 +31,7 @@ pub struct SessionFacts {
     /// The session the agent serves.
     pub id: AgentSessionId,
     /// The session's owner; turns act on their behalf.
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// Model id stamped on the session row.
     pub model: String,
     /// The bot's display name and `@` handle, folded into every turn's

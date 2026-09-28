@@ -2353,6 +2353,37 @@ async fn thread_participants_exclude_departed_senders(pool: Pool<Postgres>) -> a
     Ok(())
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn thread_participants_exclude_deleted_messages(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // t41: user-b rooted the thread and user-c replied. user-e only appears in
+    // soft-deleted replies: one they authored, and one from user-b that
+    // @-mentioned them (whose mention row still exists).
+    let participants = repo.get_thread_participants(T41).await?;
+
+    let ids: Vec<&str> = participants.iter().map(|p| p.as_ref()).collect();
+    assert!(
+        ids.contains(&USER_B),
+        "thread root sender should be included"
+    );
+    assert!(
+        ids.contains(&USER_C),
+        "active reply sender should be included"
+    );
+    assert!(
+        !ids.contains(&USER_E),
+        "a user who only sent, or was only mentioned in, deleted replies must not be a thread participant"
+    );
+    assert!(
+        !ids.contains(&LEFT_USER),
+        "departed sender must not be treated as a thread participant"
+    );
+    Ok(())
+}
+
 // -- resolve_top_level_parent -------------------------------------------------
 
 #[sqlx::test(

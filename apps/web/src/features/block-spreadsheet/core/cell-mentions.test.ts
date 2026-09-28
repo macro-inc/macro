@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { initSync } from '@ironcalc/wasm';
 import { createInitializedSpreadsheetCalculator } from '@macro-inc/spreadsheet/calculation';
 import {
+  cellDateMention,
   cellMentionQuery,
   cellPlainText,
   cellTextParts,
@@ -94,6 +95,74 @@ describe('spreadsheet mention source', () => {
     } finally {
       first.free();
       second.free();
+      engine.dispose();
+    }
+  });
+  it('reads the docs date mention encoding and rejects unparseable dates', () => {
+    const due = encodeCellMention({
+      type: 'date',
+      date: '2026-09-28T04:00:00.000Z',
+      displayFormat: 'Tomorrow',
+    });
+    expect(cellTextParts(due)[0].mention).toEqual({
+      type: 'date',
+      date: '2026-09-28T04:00:00.000Z',
+      displayFormat: 'Tomorrow',
+    });
+    expect(cellPlainText(`Due ${due}!`)).toBe('Due Tomorrow!');
+    expect(
+      cellPlainText(
+        '<m-date-mention>{"date":"2026-09-28T04:00:00.000Z","displayFormat":"","mentionUuid":"m1"}</m-date-mention>'
+      )
+    ).toBe('Sep 28, 2026');
+    for (const text of [
+      '<m-date-mention>{"date":"someday","displayFormat":"Someday"}</m-date-mention>',
+      '<m-date-mention>{"displayFormat":"Tomorrow"}</m-date-mention>',
+    ])
+      expect(cellPlainText(text)).toBe(text);
+    expect(cellMentionQuery(`${due} @tom`, due.length + 5)?.query).toBe('tom');
+  });
+  it('identifies cells holding a single date pill', () => {
+    const due = encodeCellMention({
+      type: 'date',
+      date: '2026-09-28T04:00:00.000Z',
+      displayFormat: 'Tomorrow',
+    });
+    expect(cellDateMention(due)?.date).toBe('2026-09-28T04:00:00.000Z');
+    expect(cellDateMention(`  ${due} \n`)?.displayFormat).toBe('Tomorrow');
+    expect(cellDateMention(`Due ${due}`)).toBeUndefined();
+    expect(cellDateMention(`${due}${due}`)).toBeUndefined();
+    expect(cellDateMention(`${person} ${due}`)).toBeUndefined();
+    expect(cellDateMention('9/28/2026')).toBeUndefined();
+  });
+  it('calculates a lone date pill as that calendar date in the local time zone', () => {
+    const engine = createInitializedSpreadsheetCalculator();
+    try {
+      const local = new Date(2026, 8, 28, 9, 30);
+      const due = encodeCellMention({
+        type: 'date',
+        date: local.toISOString(),
+        displayFormat: 'Tomorrow',
+      });
+      const values = engine.calculate({
+        A1: { value: `${due} ` },
+        A2: { value: '=A1+7' },
+        A3: { value: `Due ${due}` },
+        A4: { value: '=A3' },
+        A5: { value: due, format: 'number' },
+        A6: { value: due, format: 'text' },
+        A7: { value: '=A1-DATE(2026,9,20)' },
+      });
+      // The pill's time of day is dropped so date arithmetic stays whole days.
+      expect(values.A1).toEqual({ display: '9/28/2026', number: 46293 });
+      expect(values.A2).toEqual({ display: '10/5/2026', number: 46300 });
+      expect(values.A3).toEqual({ display: 'Due Tomorrow' });
+      expect(values.A4).toEqual({ display: 'Due Tomorrow' });
+      expect(values.A5).toEqual({ display: '46,293.00', number: 46293 });
+      expect(values.A6).toEqual({ display: 'Tomorrow' });
+      // A day count is not a date, even though the engine formats it as one.
+      expect(values.A7).toEqual({ display: '8', number: 8 });
+    } finally {
       engine.dispose();
     }
   });

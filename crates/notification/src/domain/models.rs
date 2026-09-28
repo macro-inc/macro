@@ -4,6 +4,7 @@ pub mod android;
 pub mod apple;
 pub mod device;
 pub mod email_notification_digest;
+pub mod entity_query;
 pub mod mobile;
 pub mod push_notification_event;
 pub mod queue_message;

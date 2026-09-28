@@ -372,13 +372,13 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     expect(view.scroller.scrollTop).toBe(view.scroller.scrollHeight - viewport);
   });
 
-  it('bottom-aligns a short transcript inside mobile insets and preserves selection wiring', async () => {
+  it('top-aligns a short transcript inside mobile insets and preserves selection wiring', async () => {
     session.touch = true;
     const view = mount([message(0)]);
     await settle();
     const row = view.container.querySelector<HTMLElement>('[data-index="0"]')!;
     expect(row.style.transform).toBe(
-      'translateY(calc(224px - var(--channel-scroll-adjustment, 0px)))'
+      'translateY(calc(56px - var(--channel-scroll-adjustment, 0px)))'
     );
     expect(view.scroller.scrollTop).toBe(0);
     const reply = view.getByText('Reply to selection');
@@ -387,7 +387,7 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     expect(session.quoteSelection).toHaveBeenCalledWith('selected text');
   });
 
-  it('uses the channel header inset without a fixed-pixel decorative gap', async () => {
+  it('adds top padding after the floating header inset', async () => {
     session.touch = true;
     rowHeight = 500;
     const view = mount([message(0)]);
@@ -396,9 +396,9 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     await settle();
     const row = view.container.querySelector<HTMLElement>('[data-index="0"]')!;
     expect(row.style.transform).toBe(
-      'translateY(calc(40px - var(--channel-scroll-adjustment, 0px)))'
+      'translateY(calc(56px - var(--channel-scroll-adjustment, 0px)))'
     );
-    expect(view.scroller.scrollHeight).toBe(40 + 500 + 80);
+    expect(view.scroller.scrollHeight).toBe(56 + 500 + 80);
   });
 
   it('keeps a mounted row and its selection when its message object is replaced', async () => {

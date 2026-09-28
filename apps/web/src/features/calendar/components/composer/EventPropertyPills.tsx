@@ -42,7 +42,7 @@ import {
 } from './out-of-office';
 
 const PROPERTY_TRIGGER_CLASS =
-  'group flex h-7 items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-surface px-2 py-1 text-left text-xs leading-tight text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink focus-visible:ring-accent/10 data-expanded:bg-hover data-expanded:text-ink';
+  'group flex h-7 items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-control px-2 py-1 text-left text-xs leading-tight text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink focus-visible:ring-accent/10 data-expanded:bg-hover data-expanded:text-ink';
 const PROPERTY_VALUE_CLASS =
   'group-hover:text-ink group-focus-visible:text-ink group-data-expanded:text-ink';
 
@@ -353,7 +353,7 @@ export function EventComposerLocationPill(
               placeholder="Add location..."
               aria-label="Location"
               disabled={props.disabled}
-              class="h-8 w-full rounded-md border border-edge-muted bg-surface px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
+              class="h-8 w-full rounded-md border border-edge-muted bg-control px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
             />
           </Popover.Content>
         </Layer>
@@ -371,6 +371,10 @@ const GOOGLE_MEET_OPTION: EventComposerConferenceOption = {
   value: 'google_meet',
   label: 'Google Meet',
 };
+const MACRO_CALL_OPTION: EventComposerConferenceOption = {
+  value: 'macro',
+  label: 'Macro call',
+};
 const NO_CONFERENCING_OPTION: EventComposerConferenceOption = {
   value: 'none',
   label: 'No meeting link',
@@ -383,6 +387,7 @@ const EXISTING_CONFERENCING_OPTION: EventComposerConferenceOption = {
 export interface EventComposerConferencePillProps {
   value: EventEditorConferenceChoice;
   canKeepExisting: boolean;
+  macroCallsEnabled: boolean;
   onChange: (value: EventEditorConferenceChoice) => void;
   disabled?: boolean;
 }
@@ -391,10 +396,14 @@ export interface EventComposerConferencePillProps {
 export function EventComposerConferencePill(
   props: EventComposerConferencePillProps
 ) {
+  const includesMacroCall = createMemo(
+    () => props.macroCallsEnabled || props.value === 'macro'
+  );
   const options = createMemo(() => [
-    NO_CONFERENCING_OPTION,
-    ...(props.canKeepExisting ? [EXISTING_CONFERENCING_OPTION] : []),
+    ...(includesMacroCall() ? [MACRO_CALL_OPTION] : []),
     GOOGLE_MEET_OPTION,
+    ...(props.canKeepExisting ? [EXISTING_CONFERENCING_OPTION] : []),
+    NO_CONFERENCING_OPTION,
   ]);
   const selectedOption = () =>
     options().find((option) => option.value === props.value) ?? options()[0];
@@ -844,7 +853,7 @@ export function EventComposerDeclineMessagePill(
               placeholder="Add decline message..."
               aria-label="Decline message"
               disabled={props.disabled}
-              class="h-8 w-full rounded-md border border-edge-muted bg-surface px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
+              class="h-8 w-full rounded-md border border-edge-muted bg-control px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
             />
           </Popover.Content>
         </Layer>

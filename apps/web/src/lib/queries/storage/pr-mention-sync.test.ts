@@ -2,6 +2,11 @@ import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { QueryObserver } from '@tanstack/query-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const refreshLists = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('@queries/agent-session/list-sync', () => ({
+  refreshAgentSessionLists: refreshLists,
+}));
+
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/query-core');
   return {
@@ -33,7 +38,10 @@ const byKey = pullRequestMentionKeys.byGithubKey(
 ).queryKey;
 const byId = pullRequestMentionKeys.foreignEntity(entity.id).queryKey;
 
-beforeEach(() => queryClient.clear());
+beforeEach(() => {
+  queryClient.clear();
+  vi.clearAllMocks();
+});
 
 describe('PR gateway updates', () => {
   it('resolves a pending mapping and updates the by-id cache', async () => {
@@ -41,6 +49,7 @@ describe('PR gateway updates', () => {
     await handlePullRequestUpdated(entity);
     expect(queryClient.getQueryData(byKey)).toEqual(entity);
     expect(queryClient.getQueryData(byId)).toEqual(entity);
+    expect(refreshLists).not.toHaveBeenCalled();
   });
 
   it('cancels an older lookup so its null response cannot erase a push', async () => {
@@ -76,6 +85,7 @@ describe('PR gateway updates', () => {
     await handlePullRequestUpdated({ id: entity.id });
     await handlePullRequestUpdated({ ...entity, foreignEntitySource: 'other' });
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
+    expect(refreshLists).not.toHaveBeenCalled();
   });
 
   it('refetches mounted queries after connection recovery', async () => {

@@ -5,32 +5,32 @@
  * `agent-changes-ui` component.
  */
 
+import { SAMPLE_PATCH } from '@app/components/diff-view/debug/fixtures';
 import { Button } from '@ui';
 import { createSignal, For } from 'solid-js';
 import { AgentChangesControllerProvider } from '../context/agent-changes-controller';
+import { createPaneViewState } from '../pane-view-state';
 import { createAgentChanges } from '../primitives/create-agent-changes';
 import { createMockAgentChangesContext } from '../tests/mock-context';
-import { createUrlDiffState } from '../url-diff-state';
 import { AgentChangesSplit } from '../views/AgentChangesSplit';
 import {
   ChangesHandoff,
   ChangesToggle,
   ReviewNotesDock,
 } from '../views/SessionChangesControls';
-import { GALLERY_PATCH, gallerySummary } from './gallery-fixture';
+import { gallerySummary } from './gallery-fixture';
 
 export default function AgentChangesGallery() {
   const context = createMockAgentChangesContext({
     summary: gallerySummary(),
-    patch: GALLERY_PATCH,
+    patch: SAMPLE_PATCH,
     sessionId: 'gallery-session',
   });
-  const urlState = createUrlDiffState(context.host.scopeKey);
+  const view = createPaneViewState();
   const [dismissed, setDismissed] = createSignal<string>();
   const controller = createAgentChanges({
     context,
-    paneLayout: [urlState.layout, urlState.setLayout],
-    diffStyle: [urlState.diffStyle, urlState.setDiffStyle],
+    view,
     dismissed: [dismissed, setDismissed],
   });
   if (controller.review.queued().length === 0) {

@@ -13,6 +13,8 @@ use macro_authorization::{
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
+use model::project::BasicProject;
+use model_owner::Owner;
 use model_user::UserContext;
 use rootcause::Report;
 use uuid::Uuid;
@@ -342,7 +344,7 @@ fn project(deleted: bool) -> BasicProject {
 fn project_owned_by(deleted: bool, owner_id: &'static str) -> BasicProject {
     BasicProject {
         id: PROJECT_ID.to_string(),
-        user_id: MacroUserIdStr::parse_from_str(owner_id).expect("owner id should be valid"),
+        user_id: Owner::from_principal_str(owner_id).expect("owner id should be valid"),
         parent_id: None,
         name: "Test project".to_string(),
         deleted_at: deleted.then(|| {
@@ -422,6 +424,56 @@ async fn authenticated_project_owner_bypasses_access_lookup() {
         }
     ));
     assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn bot_owner_does_not_take_user_owner_fast_path() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let mut project = project(false);
+    project.user_id = Owner::from_principal_str("bot|00000000-0000-0000-0000-00000000a1a1")
+        .expect("bot owner should be valid");
+
+    let extracted =
+        extract_project_access::<EditAccessLevel>(project_request(Some("valid"), project), &state)
+            .await
+            .expect("non-owner should fall through to entity_access");
+
+    assert!(matches!(
+        extracted.entity_access_receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    ));
+    assert_eq!(state.entity_access.calls().len(), 1);
+    assert_eq!(
+        state.entity_access.calls()[0].user_id.as_deref(),
+        Some(USER_ID)
+    );
+}
+
+#[tokio::test]
+async fn team_owner_does_not_take_user_owner_fast_path() {
+    let state = TestState::new(Some(AccessLevel::View));
+    let mut project = project(false);
+    project.user_id = Owner::from_principal_str("01234567-89ab-cdef-0123-456789abcdef")
+        .expect("team owner should be valid");
+
+    let extracted =
+        extract_project_access::<ViewAccessLevel>(project_request(Some("valid"), project), &state)
+            .await
+            .expect("non-owner should fall through to entity_access");
+
+    assert!(matches!(
+        extracted.entity_access_receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    ));
+    assert_eq!(state.entity_access.calls().len(), 1);
+    assert_eq!(
+        state.entity_access.calls()[0].user_id.as_deref(),
+        Some(USER_ID)
+    );
 }
 
 #[tokio::test]

@@ -1,6 +1,5 @@
 import type { CanvasSpec } from '@block-canvas/definition';
 import type { BlockChatSpec } from '@block-chat/blockClient';
-import type { MarkdownBlockSpec } from '@block-md/definition';
 import type { BlockName } from './block';
 
 // Base type for all block method specs
@@ -24,7 +23,7 @@ export interface BlockMethodRegistry {
   write: EmptySpec;
   pdf: EmptySpec;
   html: EmptySpec;
-  md: AssertSpec<MarkdownBlockSpec>;
+  md: EmptySpec;
   code: EmptySpec;
   image: EmptySpec;
   canvas: AssertSpec<CanvasSpec>;

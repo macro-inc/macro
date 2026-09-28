@@ -12,29 +12,31 @@
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { messageSendMotion } from '@core/util/message-send-motion';
+import { openExternalUrl } from '@core/util/url';
 import type {
   FoldedMessage,
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { UserMessageBubble } from '@ui';
-import { For, Index, type JSX, Show } from 'solid-js';
+import { For, Index, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
 import { thoughtIsStreaming } from '../state/thought-streaming';
 import { segmentParts } from '../state/tool-groups';
 import {
   ActionLine,
+  FailureNoticeCard,
   isToolActive,
   Thought,
-  ToolGroup,
   WorkingLine,
 } from '../ui';
+import { LiveToolGroup } from '../views/LiveToolGroup';
 import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
-import { type ToolUsePart, toolCallDetail, toolLabel } from './parts/shared';
+import type { ToolUsePart } from './parts/shared';
 import { TextPart } from './parts/TextPart';
 import { ToolCallPart } from './parts/ToolCallPart';
 
@@ -54,41 +56,56 @@ function AgentMessagePart(props: {
   /** The turn is still in flight — the tail thought reads "Thinking". */
   inFlight: boolean;
 }): JSX.Element {
-  return match(props.part)
-    .with({ kind: 'text' }, (part) => (
-      <TextPart text={part.text} inFlight={props.inFlight} />
-    ))
-    .with({ kind: 'attachment' }, (part) => <AttachmentPart part={part} />)
-    .with({ kind: 'thought' }, (part) => (
-      <Thought
-        text={part.text}
-        active={thoughtIsStreaming(
-          props.inFlight,
-          props.index,
-          props.message.parts.length
+  // Match accessors keep a part's renderer mounted when a streamed snapshot
+  // replaces the object, preserving disclosures while updating their contents.
+  return (
+    <Switch>
+      <Match when={props.part.kind === 'text' && props.part}>
+        {(part) => <TextPart text={part().text} inFlight={props.inFlight} />}
+      </Match>
+      <Match when={props.part.kind === 'attachment' && props.part}>
+        {(part) => <AttachmentPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'thought' && props.part}>
+        {(part) => (
+          <Thought
+            text={part().text}
+            active={thoughtIsStreaming(
+              props.inFlight,
+              props.index,
+              props.message.parts.length
+            )}
+          />
         )}
-      />
-    ))
-    .with({ kind: 'tool_use' }, (part) => (
-      <ToolCallPart
-        part={part}
-        context={{
-          sessionId: props.message.agentSessionId,
-          // The turn and side identify a message within its session (see
-          // `@core/agent-fold/message-id.ts`), so they make its stable id.
-          messageId: `${props.message.agentSessionId}:${props.message.turn}:${props.message.author.kind}`,
-          partIndex: props.index,
-          inFlight: props.inFlight,
-        }}
-      />
-    ))
-    .with({ kind: 'permission' }, (part) => <PermissionPart part={part} />)
-    .with({ kind: 'plan' }, (part) => <PlanPart part={part} />)
-    .with({ kind: 'control' }, (part) => <ControlPart part={part} />)
-    .with({ kind: 'elicitation' }, (part) => (
-      <ElicitationPart part={part} turn={props.message.turn} />
-    ))
-    .exhaustive();
+      </Match>
+      <Match when={props.part.kind === 'tool_use' && props.part}>
+        {(part) => (
+          <ToolCallPart
+            part={part()}
+            context={{
+              sessionId: props.message.agentSessionId,
+              // Turn and side identify a message within its session.
+              messageId: `${props.message.agentSessionId}:${props.message.turn}:${props.message.author.kind}`,
+              partIndex: props.index,
+              inFlight: props.inFlight,
+            }}
+          />
+        )}
+      </Match>
+      <Match when={props.part.kind === 'permission' && props.part}>
+        {(part) => <PermissionPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'plan' && props.part}>
+        {(part) => <PlanPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'control' && props.part}>
+        {(part) => <ControlPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'elicitation' && props.part}>
+        {(part) => <ElicitationPart part={part()} turn={props.message.turn} />}
+      </Match>
+    </Switch>
+  );
 }
 
 /**
@@ -108,32 +125,37 @@ function ToolGroupPart(props: {
     parts().filter((part): part is ToolUsePart => part.kind === 'tool_use');
   // A call the log left running in a finished turn is over (see
   // `settledToolStatus`), so a settled turn's run is never "Calling".
-  const active = () =>
-    props.inFlight && calls().some((call) => isToolActive(call.status));
+  const activeIndex = () =>
+    props.inFlight
+      ? parts().findIndex(
+          (part) => part.kind === 'tool_use' && isToolActive(part.status)
+        )
+      : -1;
+  const active = () => activeIndex() !== -1;
+  const renderParts = () => (
+    <Index each={parts()}>
+      {(part, offset) => (
+        <div class="min-h-8 shrink-0">
+          <AgentMessagePart
+            part={part()}
+            message={props.message}
+            index={props.start + offset}
+            inFlight={props.inFlight}
+          />
+        </div>
+      )}
+    </Index>
+  );
 
   return (
-    <Show when={calls().at(-1)}>
-      {(latest) => (
-        <ToolGroup
-          count={calls().length}
-          active={active()}
-          latest={{
-            label: toolLabel(latest().name),
-            detail: toolCallDetail(latest()),
-          }}
-        >
-          <For each={parts()}>
-            {(part, offset) => (
-              <AgentMessagePart
-                part={part}
-                message={props.message}
-                index={props.start + offset()}
-                inFlight={props.inFlight}
-              />
-            )}
-          </For>
-        </ToolGroup>
-      )}
+    <Show when={calls().length > 0} fallback={renderParts()}>
+      <LiveToolGroup
+        count={calls().length}
+        active={active()}
+        activeIndex={active() ? activeIndex() : undefined}
+      >
+        {renderParts()}
+      </LiveToolGroup>
     </Show>
   );
 }
@@ -146,6 +168,12 @@ function ToolGroupPart(props: {
  * or elicitation prompt is waiting on the reader, not working.
  */
 function showsWorkingLine(message: FoldedMessage): boolean {
+  if (
+    message.parts.some(
+      (part) => part.kind === 'tool_use' && isToolActive(part.status)
+    )
+  )
+    return false;
   const last = message.parts[message.parts.length - 1];
   if (last === undefined) return true;
   return match(last)
@@ -250,9 +278,7 @@ export function Message(props: {
 }) {
   const inFlight = () => props.inFlight;
   const failure = () =>
-    props.message.stop?.kind === 'failed'
-      ? props.message.stop.message
-      : undefined;
+    props.message.stop?.kind === 'failed' ? props.message.stop : undefined;
 
   return (
     <Show
@@ -299,14 +325,27 @@ export function Message(props: {
               session, like a model change or a stop — so it reads as one,
               at the foot of whatever the agent managed to say first. The
               line says what to do about it; the runtime's own account of
-              what happened is the detail. */}
+              what happened is the detail. A failure the runtime wrote in the
+              person's terms is theirs to act on, so it gets a card instead. */}
           <Show when={failure()}>
-            {(message) => (
-              <ActionLine
-                label={`${TURN_FAILED_LABEL} — ${message()}`}
-                detail={message()}
-                failed
-              />
+            {(failed) => (
+              <Show
+                when={failed().notice}
+                fallback={
+                  <ActionLine
+                    label={`${TURN_FAILED_LABEL} — ${failed().message}`}
+                    detail={failed().message}
+                    failed
+                  />
+                }
+              >
+                {(notice) => (
+                  <FailureNoticeCard
+                    notice={notice()}
+                    onOpenLink={openExternalUrl}
+                  />
+                )}
+              </Show>
             )}
           </Show>
         </div>

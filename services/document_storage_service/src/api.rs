@@ -58,7 +58,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     },
                     validate_api_version,
                 ))
-                .layer(macro_cors::cors_layer())
+                .layer(macro_cors::cors_layer().expose_headers([axum::http::header::RETRY_AFTER]))
                 .layer(CompressionLayer::new().gzip(true)),
         )
         // The health router is attached here so we don't attach the logging middleware to it
@@ -99,7 +99,10 @@ fn api_router(state: ApiContext) -> Router {
     let webhook_router = Router::new()
         .nest(
             "/call",
-            call::inbound::axum_router::webhook_router(state.call_webhook_state.clone()),
+            call::inbound::axum_router::webhook_router(
+                state.call_webhook_state.clone(),
+                state.call_public_rate_limiter.clone(),
+            ),
         )
         .nest(
             "/cal",
@@ -113,6 +116,10 @@ fn api_router(state: ApiContext) -> Router {
     );
 
     let internal_router = Router::new()
+        .nest(
+            "/dictation",
+            dictation::inbound::axum_router::dictation_router(state.dictation_state.clone()),
+        )
         .nest(
             "/github",
             github::inbound::github_sync_router::github_sync_router(
@@ -231,6 +238,12 @@ fn api_router(state: ApiContext) -> Router {
         .nest(
             "/favorites",
             favorites::inbound::axum_router::favorites_router(state.favorites_state.clone()),
+        )
+        .nest(
+            "/channel-labels",
+            channel_labels::inbound::axum_router::channel_labels_router(
+                state.channel_labels_state.clone(),
+            ),
         )
         .nest(
             "/user-api-keys",

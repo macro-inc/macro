@@ -149,7 +149,7 @@ export type ItemsForBuckets<Buckets extends Bucket[]> = Buckets extends [
 
 export type QuickAccessList<T extends QuickAccessItem = QuickAccessItem> = {
   items: Accessor<T[]>;
-  /** Total matching items, including pages not loaded yet. */
+  /** Number of loaded matching items. Check hasMore for additional cached pages. */
   totalCount: Accessor<number>;
   hasMore: Accessor<boolean>;
   isLoading: Accessor<boolean>;

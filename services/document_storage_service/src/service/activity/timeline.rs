@@ -13,10 +13,10 @@ const DELIVERY_CONCURRENCY: usize = 16;
 /// One channel's newly committed timeline activity.
 type ChannelActivities = (Uuid, Vec<TimelineActivity>);
 
-/// Enqueues committed activity; delivery resolves the channel's participants.
-pub(crate) struct TimelineObserver(mpsc::Sender<ChannelActivities>);
+/// Enqueues committed channel activity; delivery resolves the channel's participants.
+pub(crate) struct ChannelTimelinePublisher(mpsc::Sender<ChannelActivities>);
 
-impl TimelineObserver {
+impl ChannelTimelinePublisher {
     /// Compose a bounded delivery worker for the service's tracked task lifecycle.
     pub(crate) fn new<R: ChannelRepo>(
         client: ConnectionGatewayClient,
@@ -27,34 +27,32 @@ impl TimelineObserver {
     }
 }
 
-impl activity::domain::ports::ActivityObserver for TimelineObserver {
-    fn persisted<'a>(
-        &'a self,
-        activities: &'a [activity::Activity],
-    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let timeline = activities.iter().filter_map(|event| {
-                if event.entity_type != activity::EntityType::Channel
-                    || !messages::domain::ports::CHANNEL_TIMELINE_ACTIONS
-                        .contains(&event.action.to_columns().0)
-                {
-                    return None;
-                }
-                let channel_id = event.entity_id.parse().ok()?;
-                Some((channel_id, vec![TimelineActivity::from(event)]))
-            });
-            for (channel_id, activities) in by_channel(timeline) {
-                // Storage must keep progressing even when realtime delivery is unavailable.
-                if let Err(error) = self.0.try_send((channel_id, activities)) {
-                    tracing::warn!(
-                        ?error,
-                        %channel_id,
-                        "activity persisted but timeline delivery could not be queued"
-                    );
-                }
+impl activity::domain::ports::ActivityRealtimePublisher for ChannelTimelinePublisher {
+    async fn publish_recorded(&self, activities: &[activity::Activity]) {
+        let timeline = activities.iter().filter_map(|event| {
+            if event.entity_type != activity::EntityType::Channel
+                || !messages::domain::ports::CHANNEL_TIMELINE_ACTIONS
+                    .contains(&event.action.to_columns().0)
+            {
+                return None;
             }
-        })
+            let channel_id = event.entity_id.parse().ok()?;
+            Some((channel_id, vec![TimelineActivity::from(event)]))
+        });
+        for (channel_id, activities) in by_channel(timeline) {
+            // Storage must keep progressing even when realtime delivery is unavailable.
+            if let Err(error) = self.0.try_send((channel_id, activities)) {
+                tracing::warn!(
+                    ?error,
+                    %channel_id,
+                    "activity persisted but timeline delivery could not be queued"
+                );
+            }
+        }
     }
+
+    /// Purges accompany entity deletion; no channel timeline remains to update.
+    async fn publish_invalidated(&self) {}
 }
 
 fn by_channel(

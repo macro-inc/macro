@@ -10,13 +10,18 @@ use sqlx::types::Json;
 mod test;
 
 mod pull_request;
+mod queue;
+mod sharing;
+mod turn_state;
+mod working_branch;
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
-    ClaimOutcome, CreateAgentSessionParams, ExternalSession, ManagerFence, Message, ReplicaAddress,
-    ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager, SessionPreviewCandidate,
-    SessionStatus, StoredAgentSessionLog, ThreadSession, cursor_run_checkpoint,
+    ClaimOutcome, CreateAgentSessionParams, ExternalSession, LeaseView, ManagerFence, Message,
+    ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
+    SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, StoredQueuedAction,
+    ThreadSession, cursor_run_checkpoint,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -26,6 +31,7 @@ use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
+use bot_id::MACRO_NEW_BOT_ID;
 use bots::domain::models::BotId;
 use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
@@ -91,9 +97,42 @@ fn parse_sandbox_size(value: &str) -> anyhow::Result<SandboxSize> {
 
 /// The wire direction and JSON payload for a [`Message`].
 fn message_columns(message: &Message) -> anyhow::Result<(&'static str, serde_json::Value)> {
-    match message {
-        Message::ToServer(message) => Ok(("to_server", serde_json::to_value(message)?)),
-        Message::ToRuntime(message) => Ok(("to_runtime", serde_json::to_value(message)?)),
+    let (direction, mut content) = match message {
+        Message::ToServer(message) => ("to_server", serde_json::to_value(message)?),
+        Message::ToRuntime(message) => ("to_runtime", serde_json::to_value(message)?),
+    };
+    // Postgres `jsonb` rejects U+0000, and a failed log insert stops the session.
+    strip_json_nuls(&mut content);
+    Ok((direction, content))
+}
+
+/// Remove U+0000 from every string in `value`, including object keys.
+fn strip_json_nuls(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(text) => {
+            if text.contains('\0') {
+                text.retain(|character| character != '\0');
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                strip_json_nuls(item);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            if map.keys().any(|key| key.contains('\0')) {
+                let entries = std::mem::take(map);
+                for (key, mut child) in entries {
+                    strip_json_nuls(&mut child);
+                    map.insert(key.replace('\0', ""), child);
+                }
+            } else {
+                for child in map.values_mut() {
+                    strip_json_nuls(child);
+                }
+            }
+        }
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
     }
 }
 
@@ -198,7 +237,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
         Ok(Self {
             id: AgentSessionId::new_from_uuid(row.id),
             name: row.name,
-            owner_id: MacroUserIdStr::try_from(row.owner_id)
+            owner_id: Owner::from_principal_str(&row.owner_id)
                 .context("agent session has an unparseable owner")?,
             thread_id: row.thread_id,
             thread_parent: row.thread_parent.map(|parent| parent.0),
@@ -259,6 +298,12 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         } = params;
         let mcp_servers_json = serde_json::to_value(mcp_servers.servers())
             .context("serialize agent session mcp servers")?;
+        // The owner's grant is a user access row, and the session lands in
+        // the owner's history: this store still holds user-owned sessions,
+        // even though the denormalized owner_id no longer references "User".
+        let owner_user = owner_id
+            .as_user()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(owner_id.owner_type()))?;
 
         // The session row and its access grants land together: a crash between
         // the two would leave a session nobody - not even its owner -
@@ -270,6 +315,10 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             .context("begin agent session create")?;
 
         let (status, status_event_name) = status_columns(&SessionStatus::NoMessages);
+        // An inline @macro mention is a one-shot on the message. It stays out
+        // of the agents list and search. Every other session — the agents
+        // composer, coding agents — is a list row.
+        let list_hidden = bot_id == MACRO_NEW_BOT_ID && thread_id.is_some();
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
@@ -277,9 +326,9 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
                 harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status, status_event_name, egress_token_hash,
-                mcp_scope, mcp_servers, repo_branch
+                mcp_scope, mcp_servers, repo_branch, list_hidden
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             RETURNING
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
@@ -294,7 +343,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 NULL::TEXT AS "external_last_run_id?"
             "#,
             id.as_uuid(),
-            owner_id.as_ref(),
+            owner_user.as_ref(),
             thread_id,
             originating_message_id,
             bot_id.as_uuid(),
@@ -311,13 +360,14 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             mcp_servers.scope_str(),
             mcp_servers_json,
             repo_branch.as_ref().map(|branch| branch.as_str()),
+            list_hidden,
         )
         .fetch_one(&mut *transaction)
         .await
         .map_err(
             |error| match error.as_database_error().and_then(|e| e.constraint()) {
+                Some("agent_session_pkey") => AgentSessionError::SessionIdTaken(id),
                 Some("agent_session_thread_bot_unique") => AgentSessionError::ThreadSessionExists,
-                Some("agent_session_owner_id_fkey") => AgentSessionError::UnknownOwner,
                 _ => AgentSessionError::Unknown(
                     anyhow::Error::new(error).context("failed to create agent session"),
                 ),
@@ -328,7 +378,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             &mut transaction,
             &id.as_uuid(),
             EntityType::AgentSession,
-            owner_id.as_ref(),
+            owner_user.as_ref(),
             EntityAccessSourceType::User,
             AccessLevel::Owner,
         )
@@ -340,7 +390,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             NewEntityRecord::new(
                 id.as_uuid(),
                 RegisteredEntityType::AgentSession,
-                Owner::User(owner_id.clone()),
+                owner_id.clone(),
             ),
         )
         .await
@@ -379,7 +429,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         // row is what Soup's `viewed_at` and the frecency ranking read, so
         // without it a brand-new session would rank below everything the
         // owner has ever opened.
-        upsert_user_history(&mut transaction, owner_id.as_ref(), &id.as_uuid())
+        upsert_user_history(&mut transaction, owner_user.as_ref(), &id.as_uuid())
             .await
             .context("failed to record the agent session in the owner's history")?;
 
@@ -478,7 +528,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                         bot: None,
                         id,
                         name: row.name,
-                        owner_id: MacroUserIdStr::try_from(row.owner_id)
+                        owner_id: Owner::from_principal_str(&row.owner_id)
                             .context("agent session has an unparseable owner")?,
                         bot_id: BotId::new_from_uuid(row.bot_id),
                         status: parse_status(&row.status, row.status_event_name)?,
@@ -716,6 +766,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             UPDATE agent_session
             SET repo_url = $2,
+                working_branch = NULL,
                 modified_at = NOW()
             WHERE id = $1
               AND repo_url IS DISTINCT FROM $2
@@ -891,6 +942,18 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(())
     }
 
+    async fn list_queued_actions(&self, id: AgentSessionId) -> Result<Vec<StoredQueuedAction>> {
+        self.load_queued_actions(id).await
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
+    ) -> Result<()> {
+        self.store_queued_actions(id, entries).await
+    }
+
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         let mut transaction = self
             .pool
@@ -929,16 +992,27 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         // A session old enough to have owned a dedicated channel leaves it
         // behind: it holds the history that channel renders, and is not this
         // operation's to destroy.
-        sqlx::query!(
+        let permission = sqlx::query!(
             r#"
             DELETE FROM agent_session
             WHERE id = $1
+            RETURNING share_permission_id
             "#,
             id.as_uuid(),
         )
-        .execute(&mut *transaction)
+        .fetch_optional(&mut *transaction)
         .await
         .context("failed to delete agent session")?;
+
+        if let Some(permission_id) = permission.and_then(|row| row.share_permission_id) {
+            sqlx::query!(
+                r#"DELETE FROM "SharePermission" WHERE id = $1"#,
+                permission_id
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("failed to delete agent session sharing settings")?;
+        }
 
         transaction
             .commit()
@@ -1039,64 +1113,7 @@ impl ExternalSessionRepo for PgAgentSessionRepo {
 
 impl AgentSessionLogRepo for PgAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
-        let event_status = match &log.content {
-            Message::ToServer(ToServerMessage::Event { event }) => {
-                Some(SessionStatus::Event(event.clone()))
-            }
-            _ => None,
-        };
-        let (direction, content) = message_columns(&log.content)?;
-        let mut transaction = self
-            .pool
-            .begin()
-            .await
-            .context("begin agent session log create")?;
-        let id = macro_uuid::generate_uuid_v7();
-        let created_at = sqlx::query_scalar!(
-            r#"
-            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING created_at
-            "#,
-            id,
-            log.agent_session_id.as_uuid(),
-            log.user_id.as_ref().map(|user_id| user_id.as_ref()),
-            direction,
-            content,
-        )
-        .fetch_one(&mut *transaction)
-        .await
-        .context("failed to create agent session log entry")?;
-
-        if let Some(status) = event_status {
-            let (status, status_event_name) = status_columns(&status);
-            sqlx::query!(
-                r#"
-                UPDATE agent_session
-                SET status = $2,
-                    status_event_name = $3,
-                    modified_at = now()
-                WHERE id = $1
-                "#,
-                log.agent_session_id.as_uuid(),
-                status,
-                status_event_name,
-            )
-            .execute(&mut *transaction)
-            .await
-            .context("failed to update agent session status from log entry")?;
-        }
-
-        transaction
-            .commit()
-            .await
-            .context("commit agent session log create")?;
-
-        Ok(StoredAgentSessionLog {
-            id,
-            created_at,
-            entry: log,
-        })
+        self.create_projected(log, None, None, None).await
     }
 
     async fn create_fenced(
@@ -1219,7 +1236,20 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
         claim: &SessionClaim,
         boundary: Option<crate::domain::model::HistoryBoundary>,
     ) -> Result<StoredAgentSessionLog> {
-        if claim.session != log.agent_session_id {
+        self.create_projected(log, Some(claim), boundary, None)
+            .await
+    }
+
+    async fn create_projected(
+        &self,
+        log: AgentSessionLog,
+        claim: Option<&SessionClaim>,
+        boundary: Option<crate::domain::model::HistoryBoundary>,
+        turn_state: Option<agent_fold::domain::model::TurnState>,
+    ) -> Result<StoredAgentSessionLog> {
+        if claim.is_some_and(|claim| claim.session != log.agent_session_id)
+            || (boundary.is_some() && claim.is_none())
+        {
             return Err(AgentSessionError::FencedOut(log.agent_session_id));
         }
         let event_status = match &log.content {
@@ -1236,24 +1266,26 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .await
             .context("begin fenced agent session log create")?;
 
-        // Hold the session row through commit. A takeover updates this same
-        // row, so it cannot supersede the claim between our check and append.
-        let locked_session = sqlx::query_scalar!(
-            r#"
+        if let Some(claim) = claim {
+            // Hold the session row through commit. A takeover updates this same
+            // row, so it cannot supersede the claim between our check and append.
+            let locked_session = sqlx::query_scalar!(
+                r#"
             SELECT id
             FROM agent_session
             WHERE id = $1 AND manager_replica_id = $2 AND manager_fence = $3
             FOR UPDATE
             "#,
-            log.agent_session_id.as_uuid(),
-            claim.replica.as_uuid(),
-            claim.fence.0,
-        )
-        .fetch_optional(&mut *transaction)
-        .await
-        .context("lock fenced agent session")?;
-        if locked_session.is_none() {
-            return Err(AgentSessionError::FencedOut(log.agent_session_id));
+                log.agent_session_id.as_uuid(),
+                claim.replica.as_uuid(),
+                claim.fence.0,
+            )
+            .fetch_optional(&mut *transaction)
+            .await
+            .context("lock fenced agent session")?;
+            if locked_session.is_none() {
+                return Err(AgentSessionError::FencedOut(log.agent_session_id));
+            }
         }
 
         let id = macro_uuid::generate_uuid_v7();
@@ -1273,7 +1305,7 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
         .await
         .context("failed to create fenced agent session log entry")?;
 
-        if let Some(boundary) = boundary {
+        if let (Some(boundary), Some(claim)) = (boundary, claim) {
             let updated = sqlx::query!(
                 r#"
                 UPDATE agent_session AS session
@@ -1301,7 +1333,7 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             }
         }
 
-        if let Some(run_id) = checkpoint {
+        if let (Some(run_id), Some(claim)) = (checkpoint, claim) {
             let updated = sqlx::query!(
                 r#"
                 UPDATE external_agent_session AS external
@@ -1344,6 +1376,21 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .execute(&mut *transaction)
             .await
             .context("failed to update agent session status from fenced log entry")?;
+        }
+
+        if let Some(turn_state) = turn_state {
+            sqlx::query!(
+                r#"
+                UPDATE agent_session
+                SET turn_state = $2
+                WHERE id = $1 AND turn_state IS DISTINCT FROM $2
+                "#,
+                log.agent_session_id.as_uuid(),
+                turn_state.as_ref(),
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("project agent session turn state with log entry")?;
         }
 
         transaction
@@ -1443,6 +1490,7 @@ impl SessionOwnership for PgAgentSessionRepo {
                     SELECT 1 FROM harness_replica live
                     WHERE live.id = agent_session.manager_replica_id
                       AND live.last_heartbeat_at > now() - make_interval(secs => $3)
+                      AND live.draining_at IS NULL
                 )
               )
             RETURNING manager_fence
@@ -1533,25 +1581,63 @@ impl SessionOwnership for PgAgentSessionRepo {
         Ok(())
     }
 
-    async fn manager_of(&self, session: AgentSessionId) -> Result<Option<SessionManager>> {
+    async fn lease_view(&self, session: AgentSessionId, replica: ReplicaId) -> Result<LeaseView> {
+        // One statement for both halves: the holder comes from the session's
+        // lease, the asking replica's own drain from its heartbeat row, and
+        // reading them apart could straddle the moment this replica started
+        // draining and route a command to itself anyway. Built outward from
+        // the asked-for id rather than from `agent_session`, so a session
+        // that does not exist still answers the drain half.
         let row = sqlx::query!(
             r#"
-            SELECT live.id AS replica_id, live.address
-            FROM agent_session
-            JOIN harness_replica live ON live.id = agent_session.manager_replica_id
-            WHERE agent_session.id = $1
-              AND live.last_heartbeat_at > now() - make_interval(secs => $2)
+            SELECT
+                live.id AS "replica_id?",
+                live.address AS "address?",
+                (live.draining_at IS NOT NULL) AS "holder_draining?",
+                EXISTS (
+                    SELECT 1 FROM harness_replica me
+                    WHERE me.id = $3 AND me.draining_at IS NOT NULL
+                ) AS "asking_replica_draining!"
+            FROM (SELECT $1::uuid AS id) AS asked
+            LEFT JOIN agent_session ON agent_session.id = asked.id
+            LEFT JOIN harness_replica live
+                ON live.id = agent_session.manager_replica_id
+               AND live.last_heartbeat_at > now() - make_interval(secs => $2)
             "#,
             session.as_uuid(),
             REPLICA_STALE_AFTER.as_secs_f64(),
+            replica.as_uuid(),
         )
-        .fetch_optional(&self.pool)
+        .fetch_one(&self.pool)
         .await
-        .context("failed to read the agent session's live manager")?;
-        Ok(row.map(|row| SessionManager {
-            replica: ReplicaId::from_uuid(row.replica_id),
-            address: row.address.map(ReplicaAddress::new),
-        }))
+        .context("failed to read the agent session's lease")?;
+        Ok(LeaseView {
+            holder: row.replica_id.map(|replica_id| SessionManager {
+                replica: ReplicaId::from_uuid(replica_id),
+                address: row.address.map(ReplicaAddress::new),
+                draining: row.holder_draining.unwrap_or(false),
+            }),
+            asking_replica_draining: row.asking_replica_draining,
+        })
+    }
+
+    async fn begin_draining(&self, replica: ReplicaId) -> Result<()> {
+        // Upsert, not update: a replica that has not heartbeated yet still
+        // has to be able to say it is leaving, and the row it creates is
+        // stale from birth - which is exactly what it means.
+        sqlx::query!(
+            r#"
+            INSERT INTO harness_replica (id, draining_at)
+            VALUES ($1, now())
+            ON CONFLICT (id) DO UPDATE
+            SET draining_at = COALESCE(harness_replica.draining_at, now())
+            "#,
+            replica.as_uuid(),
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to publish that the harness replica is draining")?;
+        Ok(())
     }
 }
 

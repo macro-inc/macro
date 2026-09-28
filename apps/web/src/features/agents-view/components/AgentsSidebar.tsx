@@ -16,19 +16,24 @@ import {
   SoupEntityContextMenu,
 } from '@app/features/soup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { unreadFilterFn } from '@entity/utils/filter';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import PlugIcon from '@phosphor/plugs-connected.svg';
+import AgentIcon from '@phosphor/sparkle.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { compactAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
+import type { AgentsPage } from '../core/pages';
 import {
   type AgentConversationEntity,
   type ConversationGroup,
   conversationTimestamp,
 } from '../core/recent-conversations';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
+import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
 
 const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
@@ -36,6 +41,8 @@ const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
 };
 
 export type AgentsSidebarProps = {
+  activePage: AgentsPage | undefined;
+  onOpenPage: (page: AgentsPage) => void;
   modeForConversation: (conversation: AgentConversationEntity) => AgentsMode;
   activeConversationId: string | undefined;
   search: string;
@@ -66,7 +73,9 @@ function ConversationContextMenu(props: {
       selectedEntities={() => []}
       viewContext={AGENTS_ACTION_VIEW_CONTEXT}
       as="div"
-      class="block w-full"
+      // The nav is a fixed-height flex column, so the trigger's default
+      // `h-full` would split that height between the rows; keep rows content-sized.
+      class="block h-auto w-full shrink-0"
       onOpenChange={(open) => {
         if (!open) return;
         props.list.focus.set(props.conversation.id);
@@ -107,6 +116,8 @@ function Row(props: {
       {(session) => (
         <AgentSessionListItem
           entity={session()}
+          surface="agents"
+          unread={unreadFilterFn(session())}
           mode={props.mode}
           active={props.active}
           onOpen={props.onOpen}
@@ -174,7 +185,27 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           />
         </ViewSidebar.Primary>
 
-        <ViewSidebar.Content class="overflow-hidden">
+        <ViewSidebar.Content class="gap-2 overflow-hidden pt-2">
+          <ViewSidebar.Nav aria-label="Agent tools">
+            <ViewSidebar.Item
+              active={props.activePage === 'agents'}
+              onClick={() => props.onOpenPage('agents')}
+            >
+              <ViewSidebar.Icon>
+                <AgentIcon />
+              </ViewSidebar.Icon>
+              <span>Agents</span>
+            </ViewSidebar.Item>
+            <ViewSidebar.Item
+              active={props.activePage === 'connections'}
+              onClick={() => props.onOpenPage('connections')}
+            >
+              <ViewSidebar.Icon>
+                <PlugIcon />
+              </ViewSidebar.Icon>
+              <span>Connections</span>
+            </ViewSidebar.Item>
+          </ViewSidebar.Nav>
           <CollapsibleSection.Root
             open={conversationsOpen()}
             onOpenChange={setConversationsOpen}
@@ -214,6 +245,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               <ViewSidebar.Nav
                 class="min-h-0 flex-1 shrink overflow-auto"
                 aria-label="Recent conversations"
+                aria-busy={props.loading || props.loadingNextPage}
                 onScroll={(event) => {
                   const list = event.currentTarget;
                   if (!props.hasNextPage || props.loadingNextPage) return;
@@ -262,10 +294,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                     </>
                   )}
                 </Key>
-                <Show when={props.loading}>
-                  <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-muted">
-                    Loading conversations…
-                  </p>
+                <Show when={props.loading && total() === 0}>
+                  <AgentSessionListSkeleton />
                 </Show>
                 <Show when={props.error}>
                   <ViewSidebar.Item onClick={props.onRetry}>
@@ -281,9 +311,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                   </p>
                 </Show>
                 <Show when={props.loadingNextPage}>
-                  <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-muted">
-                    Loading more…
-                  </p>
+                  <AgentSessionListSkeleton loadingMore />
                 </Show>
               </ViewSidebar.Nav>
             </CollapsibleSection.Content>

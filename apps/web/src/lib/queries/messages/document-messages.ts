@@ -9,11 +9,13 @@ import {
 import { useQuery } from '@tanstack/solid-query';
 import { type Accessor, createEffect } from 'solid-js';
 import {
+  newMessageId,
   useDeleteMessageMutation,
   useDeleteThreadMutation,
   usePatchThreadMutation,
   useSendMessageMutation,
 } from './mutations';
+import { fetchMessageThread } from './thread-replies';
 import { useMessageTimelineQuery } from './timeline';
 import { timelineMessages } from './timeline-entries';
 
@@ -59,7 +61,7 @@ export async function fetchDocumentThreads(
       cursor: cursor ?? undefined,
     });
     for (const root of timelineMessages(page)) {
-      threads.push(await entityMessagesClient.thread(parent, root.id));
+      threads.push(await fetchMessageThread(parent, root.id));
     }
     cursor = page.next_cursor;
   } while (cursor);
@@ -81,7 +83,7 @@ export function useMessageActions(parent: Accessor<MessageParent>) {
         parent: parent(),
         message,
         senderId,
-        optimisticId: crypto.randomUUID(),
+        optimisticId: newMessageId(),
       });
     },
     delete: (id: string) =>
@@ -111,6 +113,8 @@ export function useMessageLink(
         : entityMessagesClient.get(parent(), target()!),
   }));
   return {
+    error: () => legacy.error,
+    refetch: legacy.refetch,
     messageId: () => {
       const id = target();
       if (!id) return null;

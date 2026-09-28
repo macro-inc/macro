@@ -31,6 +31,7 @@ use crate::domain::ports::{GithubSyncClient, GithubSyncRepo};
 mod test;
 
 /// The GitHub App tokens are minted for.
+#[derive(Clone)]
 pub struct InstallationTokenConfig {
     /// The App's client id, which GitHub wants as the JWT's `iss`.
     pub client_id: String,
@@ -94,6 +95,28 @@ where
 
         self.client
             .generate_scoped_installation_access_token(&jwt, installation, repository, permissions)
+            .await
+    }
+
+    /// The branch names `owner`/`repository` currently has, valid because
+    /// `macro_user_id` may reach it.
+    ///
+    /// Same refusal as [`Self::for_repository`]: a repository the App does
+    /// not cover, or one the user has no claim to, is
+    /// [`GithubError::RepositoryUnavailable`]. An empty repository has no
+    /// branches and is an empty list, not an error.
+    #[tracing::instrument(skip(self), err, fields(%macro_user_id, owner, repository))]
+    pub async fn branches_for_repository(
+        &self,
+        macro_user_id: &MacroUserIdStr<'_>,
+        owner: &str,
+        repository: &str,
+    ) -> Result<Vec<String>, GithubError> {
+        let token = self
+            .for_repository(macro_user_id, owner, repository, &[("contents", "read")])
+            .await?;
+        self.client
+            .list_repository_branches(&token.token, owner, repository)
             .await
     }
 

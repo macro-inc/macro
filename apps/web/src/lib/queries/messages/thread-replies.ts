@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { messageKeys } from './keys';
+import { normalizeMessageThreadSenders } from './message-sender';
 import { useMessageSubscription } from './subscription';
 import { findTopLevelMessageInMessageTimeline } from './timeline';
 
@@ -22,13 +23,23 @@ type ThreadRepliesQueryKey = ReturnType<
   typeof messageKeys.threadReplies
 >['queryKey'];
 
+/** Every thread read shares this so a thread never enters the cache without derived senders. */
+export async function fetchMessageThread(
+  parent: MessageParent,
+  rootId: string
+): Promise<MessageThread> {
+  return normalizeMessageThreadSenders(
+    await entityMessagesClient.thread(parent, rootId)
+  );
+}
+
 export function threadRepliesQueryOptions(
   parent: MessageParent,
   messageId: string
 ) {
   return {
     queryKey: messageKeys.threadReplies(parent, messageId).queryKey,
-    queryFn: () => entityMessagesClient.thread(parent, messageId),
+    queryFn: () => fetchMessageThread(parent, messageId),
     staleTime: Infinity,
   };
 }
@@ -110,23 +121,6 @@ export function removeThreadReply(
   if (!data) return data;
   const nextReplies = data.filter((reply) => reply.id !== replyId);
   return nextReplies.length === data.length ? data : nextReplies;
-}
-
-export function replaceThreadReplyId(
-  data: Array<EntityMessage> | undefined,
-  optimisticId: string,
-  realId: string
-): Array<EntityMessage> | undefined {
-  if (!data) return data;
-
-  let didChange = false;
-  const nextReplies = data.map((reply) => {
-    if (reply.id !== optimisticId) return reply;
-    didChange = true;
-    return { ...reply, id: realId };
-  });
-
-  return didChange ? nextReplies : data;
 }
 
 export function getThreadReplySnapshot(

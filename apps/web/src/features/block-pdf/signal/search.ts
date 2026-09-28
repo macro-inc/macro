@@ -1,16 +1,11 @@
 import type { PDFViewer } from '@block-pdf/PdfViewer';
-import { usePdfDocument } from '../context/pdf-document-context';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 import {
   FindState,
   type IMatchesCount,
   type IUpdateFindControlStateEvent,
 } from '../PdfViewer/EventBus';
 import type { FindController } from '../PdfViewer/FindController';
-import {
-  type TPageToSectionMap,
-  useGetPageToSectionMap,
-} from '../store/tableOfContents';
-import TocUtils from '../util/TocUtils';
 import { generatePhrases } from '../util/wordSearchUtils';
 
 enum SearchMatchType {
@@ -41,12 +36,11 @@ type WordMatch = BaseMatch & {
 type Match = EntityMatch | WordMatch;
 
 function useMergedEventSignal() {
-  const { updateFindControlState, updateFindMatchesCount } =
-    usePdfDocument().state.signals;
+  const { findControlState, findMatchesCount } = usePdfViewer().root;
 
   return (): IUpdateFindControlStateEvent | null => {
-    const controlStateEvent = updateFindControlState[0]();
-    const matchesCount = updateFindMatchesCount[0]();
+    const controlStateEvent = findControlState();
+    const matchesCount = findMatchesCount();
 
     if (!controlStateEvent) return null;
 
@@ -103,10 +97,7 @@ function useMergedEventSignal() {
   };
 }
 
-function getWordMatches(
-  pageToSectionMap: TPageToSectionMap,
-  findController: FindController
-): WordMatch[] {
+function getWordMatches(findController: FindController): WordMatch[] {
   if (
     !findController._pageMatches ||
     findController._pageMatches.length === 0 ||
@@ -153,12 +144,6 @@ function getWordMatches(
         endPos,
         page: pageContent,
       });
-      const section =
-        TocUtils.getNearestSection({
-          page: pageIndex,
-          yPos: startPos,
-          pageToSectionMap,
-        })?.title ?? '';
       matches.push({
         startPos,
         endPos,
@@ -166,7 +151,7 @@ function getWordMatches(
         prePhrase,
         postPhrase,
         matchPhrase,
-        section,
+        section: '',
         matchNumber,
         type: SearchMatchType.Word,
       });
@@ -177,7 +162,7 @@ function getWordMatches(
 }
 
 export function useSearchStart() {
-  const [rootViewer] = usePdfDocument().state.signals.rootViewer;
+  const rootViewer = usePdfViewer().root.instance;
   return (args: Parameters<PDFViewer['search']>[0]) => {
     rootViewer()?.search(args);
   };
@@ -185,7 +170,6 @@ export function useSearchStart() {
 
 export function useSearchResults() {
   const mergedEvent = useMergedEventSignal();
-  const pageToSectionMap = useGetPageToSectionMap();
 
   return (): {
     query: string;
@@ -206,7 +190,7 @@ export function useSearchResults() {
       };
 
     const findController = results.source;
-    const matches = getWordMatches(pageToSectionMap(), findController);
+    const matches = getWordMatches(findController);
     if (matches.length === 0) {
       return null;
     }
@@ -222,7 +206,7 @@ export function useSearchResults() {
 }
 
 export function useJumpToResult() {
-  const [rootViewer] = usePdfDocument().state.signals.rootViewer;
+  const rootViewer = usePdfViewer().root.instance;
   const mergedEvent = useMergedEventSignal();
 
   return (match: Match) => {
@@ -241,7 +225,7 @@ export function useJumpToResult() {
 }
 
 export function useSearchClose() {
-  const [rootViewer] = usePdfDocument().state.signals.rootViewer;
+  const rootViewer = usePdfViewer().root.instance;
   return () => {
     rootViewer()?.findBarClose();
   };

@@ -42,7 +42,9 @@ function RemoveButton(props: {
     <button
       type="button"
       class={cn(
-        'hover:bg-hover hover-transition-bg rounded-md p-1 [@media(hover:none)]:p-2 items-center flex',
+        // Hover/press feedback is painted as a scrim over the button's own
+        // background so the media variant's `bg-surface` chip stays opaque.
+        'not-touch:hover:overlay-hover not-touch:active:overlay-active rounded-md p-1 [@media(hover:none)]:p-2 items-center flex',
         props.class
       )}
       onClick={(event) => {

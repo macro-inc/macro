@@ -77,15 +77,18 @@ impl<
                 "Codex connection encryption is not configured on this deployment".into(),
             )
         })?;
+        // Codex work is paid for by the owner's connection, which only a
+        // person has.
+        let owner = row.owner_user()?.clone();
         let resolved = connections
-            .resolve(row.owner_id.as_ref())
+            .resolve(owner.as_ref())
             .await
             .map_err(|e| HarnessError::Container(e.to_string()))?;
         let claim = Arc::new(std::sync::OnceLock::new());
         let runtime = Arc::new(CodexRuntime {
             provider: self.provider.clone(),
             connections,
-            owner: row.owner_id.clone(),
+            owner,
             binding: RuntimeIdentity {
                 connection_id: resolved.connection_id.to_string(),
                 account_id: resolved.credentials.account_id.clone(),

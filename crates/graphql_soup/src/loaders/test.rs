@@ -18,6 +18,7 @@ use item_filters::{
         project::ProjectLiteral,
     },
 };
+use model_owner::Owner;
 use models_pagination::{Paginated, PaginatedCursor};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{document::SoupDocument, item::SoupItem};
@@ -183,7 +184,7 @@ fn document_named(id: Uuid, name: impl Into<String>) -> SoupItem<()> {
     SoupItem::Document(SoupDocument {
         id,
         document_version_id: 1,
-        owner_id: user("macro|owner@example.com"),
+        owner_id: Owner::from_principal_str("macro|owner@example.com").expect("valid owner"),
         name: name.into(),
         file_type: None,
         sha: None,
@@ -524,5 +525,20 @@ fn encodes_requested_ids_and_disables_unrequested_entity_branches() {
             }
         ),
         HashSet::from([nil])
+    );
+}
+
+#[test]
+fn initiative_hydration_targets_exact_ids_and_disables_unrequested_initiatives() {
+    let id = Uuid::from_u128(42);
+    let entities = vec![EntityType::Initiative.with_entity_string(id.to_string())];
+    let ast = entity_filter_ast(&entities).unwrap();
+    assert!(
+        matches!(ast.initiative_filter.as_deref(), Some(Expr::Literal(InitiativeLiteral::Id(actual))) if *actual == id)
+    );
+    let ast =
+        entity_filter_ast(&[EntityType::Document.with_entity_string(id.to_string())]).unwrap();
+    assert!(
+        matches!(ast.initiative_filter.as_deref(), Some(Expr::Literal(InitiativeLiteral::Id(actual))) if actual.is_nil())
     );
 }

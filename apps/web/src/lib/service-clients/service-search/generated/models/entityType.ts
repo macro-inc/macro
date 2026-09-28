@@ -18,6 +18,7 @@ export const EntityType = {
   CHAT: 'CHAT',
   COMPANY: 'COMPANY',
   DOCUMENT: 'DOCUMENT',
+  INITIATIVE: 'INITIATIVE',
   PROJECT: 'PROJECT',
   TASK: 'TASK',
   THREAD: 'THREAD',

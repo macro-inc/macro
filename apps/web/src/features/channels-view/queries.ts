@@ -11,7 +11,7 @@ import {
   type SoupAstParams,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo } from 'solid-js';
 import type {
   ChannelListSort,
   ChannelsGroup,
@@ -112,6 +112,50 @@ export function channelByIdQueryArgs(channelId: string): SoupAstItemsQueryArgs {
   };
 }
 
+/**
+ * Fetch specific channels by id, for labelled channels the paginated Channels
+ * source has not reached yet. Page through the requested IDs independently
+ * of the main list so broad smart tags include all their matched channels.
+ */
+export function channelsByIdsQueryArgs(
+  channelIds: readonly string[]
+): SoupAstItemsQueryArgs {
+  return {
+    params: {
+      ...CHANNELS_QUERY_PARAMS,
+      limit: Math.min(500, Math.max(1, channelIds.length)),
+      sort_method: 'created_at',
+    },
+    body: compileToAst(
+      queryStateFrom(
+        defineQueryFilters({
+          include: { channelId: [...channelIds] },
+        })
+      )
+    ),
+  };
+}
+
+export function useChannelsByIdsQuery(channelIds: Accessor<readonly string[]>) {
+  const query = useSoupAstItemsQuery(
+    () => channelsByIdsQueryArgs(channelIds()),
+    () => ({ enabled: channelIds().length > 0, staleTime: 30_000 })
+  );
+  // Drive the external paginated query until all requested matches are loaded.
+  createEffect(() => {
+    if (
+      !query.isEnabled ||
+      query.isLoading ||
+      query.isFetching ||
+      query.error ||
+      !query.hasNextPage
+    )
+      return;
+    void query.fetchNextPage();
+  });
+  return query;
+}
+
 export function deduplicateChannels(
   collections: readonly (readonly ChannelEntity[])[]
 ): ChannelEntity[] {
@@ -151,7 +195,11 @@ function useChannelsDataSource(
 ): ChannelsDataSource {
   const query = useSoupAstItemsQuery(
     () => channelsQueryArgs(scope, sortMethod()),
-    () => ({ enabled: enabled(), staleTime: 30_000 })
+    () => ({
+      enabled: enabled(),
+      staleTime: 30_000,
+      graphqlProjection: 'channel-list',
+    })
   );
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isLoading) return previous;
@@ -232,6 +280,8 @@ export function useChannelByIdQuery(
 ) {
   return useSoupAstItemsQuery(
     () => channelByIdQueryArgs(channelId() ?? ''),
-    () => ({ enabled: enabled(), staleTime: 30_000 })
+    // Every activation needs a fresh complete edge for thread scoping and marking
+    // read. GraphQL revalidates on activation; keep the REST fallback stale too.
+    () => ({ enabled: enabled(), staleTime: 0 })
   );
 }

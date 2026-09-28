@@ -50,6 +50,13 @@ impl ActorInboxes {
         self.emails.iter().any(|existing| existing == &email)
     }
 
+    /// Restrict a response to one address already verified as owned by the requester.
+    pub(crate) fn select(&self, email: &str) -> Option<Self> {
+        self.matches(email).then(|| Self {
+            emails: vec![email.to_ascii_lowercase()],
+        })
+    }
+
     /// Set `is_self` on the actor's rows and clear it on every other row.
     pub fn mark_attendees(&self, attendees: &mut [CalendarAttendee]) {
         for attendee in attendees {

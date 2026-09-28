@@ -58,7 +58,7 @@ fn live_args(share: bool, custom_name: Option<&str>) -> EditCallRecordRepoArgs {
 /// Authorize `level` exactly as the domain service would for the persisted creator.
 fn command(facts: &TeamShareFacts, level: Option<AccessLevel>) -> AuthorizedTeamShareCommand {
     authorize_team_share(
-        Some(&facts.owner),
+        facts.owner.as_user(),
         facts,
         TeamShareRequest {
             access_level: Some(level),
@@ -73,7 +73,7 @@ fn command(facts: &TeamShareFacts, level: Option<AccessLevel>) -> AuthorizedTeam
 /// Authorize the deprecated `shareWithTeam` alias as the domain service would.
 fn legacy_command(facts: &TeamShareFacts, enabled: bool) -> AuthorizedTeamShareCommand {
     authorize_team_share(
-        Some(&facts.owner),
+        facts.owner.as_user(),
         facts,
         TeamShareRequest {
             access_level: None,
@@ -221,7 +221,7 @@ async fn get_team_share_facts_reads_creator_team_and_null_state(
             facts.entity,
             EntityType::Call.with_entity_string(call_id.to_string())
         );
-        assert_eq!(facts.owner.as_ref(), USER_A.as_ref());
+        assert!(facts.owner.is_user(&USER_A));
         assert_eq!(facts.owner_team_id, Some(TEAM_ID));
         assert_eq!(facts.current, None);
         assert_eq!(facts.revision, 0);
@@ -391,7 +391,10 @@ async fn toggle_share_with_team_flips_live_call_and_conflicts_once_archived(
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
-    assert_eq!(repo.toggle_share_with_team(&CALL1).await?, (false, CH1));
+    assert_eq!(
+        repo.toggle_share_with_team(&CALL1).await?,
+        (false, Some(CH1))
+    );
     assert!(!live_toggle(&pool, CALL1).await);
     assert!(
         !repo
@@ -401,7 +404,10 @@ async fn toggle_share_with_team_flips_live_call_and_conflicts_once_archived(
             .share_with_team
     );
 
-    assert_eq!(repo.toggle_share_with_team(&CALL1).await?, (true, CH1));
+    assert_eq!(
+        repo.toggle_share_with_team(&CALL1).await?,
+        (true, Some(CH1))
+    );
     assert!(live_toggle(&pool, CALL1).await);
     // Flipping the toggle never touches canonical state or grants.
     assert_eq!(stored_team_share(&pool, CALL1).await, unshared());
