@@ -1,6 +1,9 @@
 //! Stripe adapter: one-off Checkout for credit packs, and immediate invoices
 //! for overage chunks.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{
     BillingError, CreditCheckoutRequest, OverageChargeRequest, PaymentGateway, Result,
 };
