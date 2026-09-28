@@ -104,7 +104,10 @@ export function QueuedPrompts(props: QueuedPromptsProps) {
   // reordering the DOM (focus order still runs newest to next).
   return (
     <div class="flex max-h-[min(40vh,24rem)] flex-col-reverse overflow-y-auto overscroll-contain">
-      <div class="flex shrink-0 flex-col gap-1" data-testid="agent-queued-prompts">
+      <div
+        class="flex shrink-0 flex-col gap-1"
+        data-testid="agent-queued-prompts"
+      >
         <For each={orderedIds()}>
           {(id) => (
             <Show when={itemById(id)}>
