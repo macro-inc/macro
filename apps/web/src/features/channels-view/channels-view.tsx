@@ -1,4 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -24,7 +25,9 @@ import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelDetailView } from './components/ChannelDetailView';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
+import { createMobileChannelSearchSource } from './mobile-search-source';
 import {
+  type ChannelsSources,
   deduplicateChannels,
   resolveSelectedChannel,
   useChannelByIdQuery,
@@ -41,10 +44,32 @@ export type ChannelsViewProps = {
   initialState?: ChannelsViewStateOptions;
 };
 
+// Mounted inside the mobile list's Suspense boundary.
+function MobileChannelsList(props: { sources: ChannelsSources }) {
+  const panel = useSplitPanelOrThrow();
+  const { state, setMobileTab } = useChannelsView();
+  const mobileSearchText = useMobileSearchText(() => '', panel.handle.isActive);
+  const mobileSearchSource = createMobileChannelSearchSource({
+    text: mobileSearchText,
+    scope: () => state.mobileTab,
+    source: () => props.sources[state.mobileTab],
+  });
+  return (
+    <ChannelsMobileView
+      source={
+        mobileSearchText().trim()
+          ? mobileSearchSource
+          : props.sources[state.mobileTab]
+      }
+      tab={state.mobileTab}
+      onTabChange={setMobileTab}
+    />
+  );
+}
+
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, mobileLayout, setAsideWidth, setMobileTab } =
-    useChannelsView();
+  const { state, mobileLayout, setAsideWidth } = useChannelsView();
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
@@ -124,11 +149,7 @@ function ChannelsViewRoot() {
                     </div>
                   }
                 >
-                  <ChannelsMobileView
-                    source={sources[state.mobileTab]}
-                    tab={state.mobileTab}
-                    onTabChange={setMobileTab}
-                  />
+                  <MobileChannelsList sources={sources} />
                 </Suspense>
               </MaybeSoupEntityActionDrawerManager>
             </Show>

@@ -1,3 +1,4 @@
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { makePersistedState } from '@app/lib/persistence';
 import {
@@ -11,7 +12,13 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
-import { type Accessor, createEffect, createMemo, on } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  mergeProps,
+  on,
+} from 'solid-js';
 import {
   createStore,
   produce,
@@ -70,7 +77,7 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
   const selectPreview = createPreviewSelectionGuard();
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'signal';
-  const [state, setState] = makePersistedState(
+  const [persistedState, setState] = makePersistedState(
     createStore<InboxViewState>({
       tab: initialTab,
       search: initial.search ?? '',
@@ -84,6 +91,15 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
       restorePreferences: initial.facets === undefined,
     })
   );
+  const searchText = useMobileSearchText(
+    () => persistedState.search,
+    panel.handle.isActive
+  );
+  const state = mergeProps(persistedState, {
+    get search() {
+      return searchText();
+    },
+  });
 
   createEffect(
     on(

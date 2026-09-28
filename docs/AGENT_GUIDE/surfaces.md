@@ -518,6 +518,15 @@ Sidebar `Search` button → `/app/.../component/search` with a focused query box
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
+On touch devices, the dock's **Search** button opens a persistent input. Type a
+query, then switch the scope pills between **All**, **Notifications**, **Email**,
+**Channels**, **Files**, **Agents**, and **Tasks**. The selected view searches with
+the same query and retains its tab/facet restrictions. Channels searches
+conversation names. Clearing the
+input restores the current scope's unsearched list; **Close search** ends the
+session. Switching scopes keeps the input mounted and focused. The dock query is
+not saved into the view's desktop search or restored entry state.
+
 Agent-session results use the robot icon and show a highlighted transcript snippet.
 `Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.
 Click a snippet to open `/app/agent/<uuid>` at that folded message; a plain row click
