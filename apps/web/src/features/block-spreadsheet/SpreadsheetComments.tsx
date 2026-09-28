@@ -77,6 +77,11 @@ export function SpreadsheetComments(props: {
   const [location, setLocation] = createSignal<SpreadsheetCommentAnchor>();
   const [error, setError] = createSignal('');
   const threads = () => (query.isSuccess ? query.data : []);
+  const discussionTarget = () =>
+    threads().find((thread) => thread.id === target.rootId())?.state.anchor ===
+    null
+      ? target.messageId()
+      : null;
   const request = createMemo(() => ({
     id: linkedMessageId(),
     revision: navigationCount(),
@@ -425,7 +430,7 @@ export function SpreadsheetComments(props: {
                   parent={parent()}
                   canWrite={canComment()}
                   link={{ type: 'spreadsheet', id: props.documentId }}
-                  legacyCommentLinks={false}
+                  targetId={discussionTarget()}
                   label="Workbook discussion"
                 />
               </Suspense>

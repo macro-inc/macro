@@ -52,7 +52,8 @@ export function EntityDiscussion(props: {
   /** Where copied message links open: the entity's block and id. */
   link: { type: string; id: string };
   label?: string;
-  legacyCommentLinks?: boolean;
+  /** Override the URL target; null leaves this discussion untargeted. */
+  targetId?: string | null;
   /**
    * On touch devices, move the composer to the floating accessory region and
    * show the conversation only once it has roots, as the editor page does.
@@ -62,9 +63,7 @@ export function EntityDiscussion(props: {
 }) {
   const params = useUrlParams({ commentId: COMMENT_LINK_PARAM });
   const commentId = () =>
-    props.legacyCommentLinks === false && /^\d+$/.test(params.commentId() ?? '')
-      ? undefined
-      : params.commentId();
+    props.targetId === undefined ? params.commentId() : props.targetId;
   const floating = () =>
     props.floatingComposerOnTouch === true && isTouchDevice();
   let container: HTMLDivElement | undefined;

@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { type Accessor, createSignal, For, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EntityConversation } from './EntityConversation';
+import { EntityDiscussion } from './EntityDiscussion';
 
 const mocks = vi.hoisted(() => ({
   timeline: vi.fn(),
@@ -11,6 +12,17 @@ const mocks = vi.hoisted(() => ({
   capturedParent: undefined as { type: string; id: string } | undefined,
   linkError: null as unknown,
   refetchLink: vi.fn(),
+  urlTarget: undefined as string | undefined,
+  scroll: vi.fn(() => () => {}),
+}));
+
+vi.mock('@core/component/ParamsProvider', () => ({
+  useUrlParams: () => ({ commentId: () => mocks.urlTarget }),
+  useParamNavigationCount: () => () => 0,
+}));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
+vi.mock('./scroll-to-rendered-target', () => ({
+  scrollToRenderedTarget: mocks.scroll,
 }));
 
 vi.mock('@channel/Input', () => ({
@@ -41,7 +53,7 @@ vi.mock('@queries/messages/document-messages', () => ({
       const id = target();
       return id ? `root-of-${id}` : null;
     },
-    resolved: () => mocks.linkResolved,
+    resolved: () => !target() || mocks.linkResolved,
     error: () => mocks.linkError,
     refetch: mocks.refetchLink,
   }),
@@ -74,6 +86,8 @@ afterEach(() => {
   mocks.linkResolved = true;
   mocks.capturedParent = undefined;
   mocks.linkError = null;
+  mocks.urlTarget = undefined;
+  mocks.scroll.mockClear();
   cleanup();
 });
 
@@ -104,6 +118,60 @@ function thread(
 }
 
 const anchor = { type: 'markdown', mark_id: 'mark' } as const;
+
+describe('EntityDiscussion target ownership', () => {
+  it('keeps the latest timeline and disclosure state when the host rejects a URL target', () => {
+    mocks.urlTarget = 'range-reply';
+    mocks.linkResolved = false;
+    mocks.timeline.mockReturnValue({
+      isSuccess: true,
+      data: { pages: [{ items: [thread('Latest workbook topic', null)] }] },
+    });
+    const view = render(() => (
+      <EntityDiscussion
+        parent={{ type: 'document', id: 'document' }}
+        canWrite={false}
+        link={{ type: 'spreadsheet', id: 'document' }}
+        targetId={null}
+      />
+    ));
+    const [, around, enabled] = mocks.timeline.mock.calls.at(-1)!;
+    expect(around()).toBeNull();
+    expect(enabled()).toBe(true);
+    expect(view.getByText('Latest workbook topic')).toBeTruthy();
+    expect(view.queryByText('Loading comments...')).toBeNull();
+    expect(mocks.scroll).not.toHaveBeenCalled();
+    fireEvent.click(view.getByRole('button', { name: 'Discussion' }));
+    expect(view.queryByText('Latest workbook topic')).toBeNull();
+  });
+
+  it.each([undefined, 'workbook-reply'])(
+    'windows and highlights an owned workbook link (override: %s)',
+    (targetId) => {
+      mocks.urlTarget = 'workbook-reply';
+      mocks.timeline.mockReturnValue({
+        isSuccess: true,
+        data: { pages: [{ items: [thread('root-of-workbook-reply', null)] }] },
+      });
+      const view = render(() => (
+        <EntityDiscussion
+          parent={{ type: 'document', id: 'document' }}
+          canWrite={false}
+          link={{ type: 'spreadsheet', id: 'document' }}
+          targetId={targetId}
+        />
+      ));
+      const [, around, enabled] = mocks.timeline.mock.calls.at(-1)!;
+      expect(around()).toBe('root-of-workbook-reply');
+      expect(enabled()).toBe(true);
+      expect(view.getByRole('article').dataset.target).toBe('workbook-reply');
+      expect(mocks.scroll).toHaveBeenCalledWith(
+        expect.any(HTMLElement),
+        'workbook-reply'
+      );
+    }
+  );
+});
 
 function discussion(
   initialPages: MessageListItem[][],

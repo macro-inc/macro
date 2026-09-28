@@ -262,6 +262,8 @@ controls for replies, edits, deletion, reactions, and attachments. Range threads
 also offer **Resolve** and **Reopen**. Mentions and replies use inbox notifications
 and message links. Older spreadsheet annotation comments are not displayed.
 Opening an inbox notification opens the sidebar and targets its comment/range.
+Range links leave Workbook discussion on its normal timeline; workbook links
+open that discussion at the linked message.
 Comment-only access can post/reply; view-only access can read. Edit/delete applies
 to the author's own comments, and failures retain the input draft. Draft demos
 must be saved before persistent comments are available.
@@ -550,8 +552,10 @@ and edits while updating the surrounding thread.
 Select text and choose the comment action to create an anchored comment. These
 threads appear beside their text in the margin (or in the active thread drawer
 on phones) and never in the bottom Discussion, including after live updates or
-reloads. Existing highlights locate threads by their stable mark IDs. Replies,
-attachments, reactions, and editing use the same message controls as channels.
+reloads. Links to these threads open the margin without changing the bottom
+Discussion's timeline or expanding it. Existing highlights locate threads by
+their stable mark IDs. Replies, attachments, reactions, and editing use the same
+message controls as channels.
 Removing the last marked text moves its retained conversation to Discussion,
 where it remains after reload. Removing only part of a marked range keeps the
 conversation anchored to the remaining text. On phones, the active Markdown

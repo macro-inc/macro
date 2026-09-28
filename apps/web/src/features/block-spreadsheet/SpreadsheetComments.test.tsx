@@ -75,7 +75,7 @@ vi.mock('@core/messages/EntityDiscussion', () => ({
   EntityDiscussion: (props: {
     parent: unknown;
     canWrite: boolean;
-    legacyCommentLinks: boolean;
+    targetId: string | null;
     label: string;
   }) => {
     mocks.discussion(props);
@@ -329,10 +329,45 @@ it('mounts a workbook discussion on the document parent without legacy comment l
     expect.objectContaining({
       parent: { type: 'document', id: 'doc' },
       canWrite: true,
-      legacyCommentLinks: false,
+      targetId: null,
     })
   );
   expect(screen.getByText('Workbook discussion')).toBeTruthy();
+});
+
+it.each(['root-id', 'reply-id'])(
+  'keeps a range link (%s) out of the workbook discussion',
+  (target) => {
+    mocks.target = target;
+    mount();
+    expect(mocks.discussion).toHaveBeenCalledWith(
+      expect.objectContaining({ targetId: null })
+    );
+    expect(screen.getByRole('status').textContent).toBe('B4:C5');
+    expect(document.querySelector(`[data-target="${target}"]`)).toBeTruthy();
+  }
+);
+
+it.each(['root-id', 'reply-id'])(
+  'passes a workbook link (%s) to the workbook discussion',
+  (target) => {
+    mocks.target = target;
+    mocks.data[0].state.anchor = null;
+    mount();
+    expect(mocks.discussion).toHaveBeenCalledWith(
+      expect.objectContaining({ targetId: target })
+    );
+    expect(screen.getByRole('status').textContent).toBe('');
+  }
+);
+
+it('leaves the workbook discussion untargeted until the root anchor is known', () => {
+  mocks.target = 'reply-id';
+  mocks.data[0].state.anchor = undefined;
+  mount();
+  expect(mocks.discussion).toHaveBeenCalledWith(
+    expect.objectContaining({ targetId: null })
+  );
 });
 
 it('keeps failed range drafts and hides posting controls from viewers', async () => {
@@ -361,6 +396,10 @@ it('does not navigate to legacy numeric comments or mark deleted threads', () =>
   mount();
   expect(screen.queryByRole('complementary')).toBeNull();
   expect(cap.hasComment('B4')).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Comments' }));
+  expect(mocks.discussion).toHaveBeenCalledWith(
+    expect.objectContaining({ targetId: null })
+  );
 });
 
 it('scrolls and highlights a linked reply again when the notification is reopened', async () => {
