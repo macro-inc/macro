@@ -65,7 +65,11 @@ export async function createTaskWithProperties(
     PropertyDefinition | PropertyDefinitionDetailResponse
   >,
   upsertToHistory: (params: { itemId: string; itemType: 'document' }) => void,
-  options?: { revalidateSoup?: boolean; onMutate?: () => void }
+  options?: {
+    revalidateSoup?: boolean;
+    shareWithTeam?: boolean;
+    onMutate?: () => void;
+  }
 ) {
   options?.onMutate?.();
   // Convert properties to API format (filter out null values)
@@ -83,6 +87,7 @@ export async function createTaskWithProperties(
 
   const createdTask = await createTaskWithInitialSnapshot({
     revalidateSoup: options?.revalidateSoup,
+    shareWithTeam: options?.shareWithTeam,
     title: taskTitle,
     content: taskContent,
     propertyValues: propertyValues.length > 0 ? propertyValues : undefined,

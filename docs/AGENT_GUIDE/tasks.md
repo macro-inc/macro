@@ -80,6 +80,13 @@ filter sheets. Desktop uses the centered composer dialog.
    `Add description...`, and property buttons: `Not Started` (status), `Priority`, assignee
    chip (defaults to you), `Due Date`, `Change or select tags`, `Attach image or video`,
    a `Create More` switch, and `Create Task Ctrl ↵`.
+   The `Shared with Team` row defaults to on and remembers your choice in local
+   storage across composer openings and page reloads. Its hint explains whether
+   the task will be visible to your whole team or only to you and the people you
+   share it with. The choice also applies to Create More, continuing in a split,
+   and tasks created from a project.
+   This row sits below the creation buttons, separated by an edge-to-edge divider.
+   A second divider separates it from Similar Tasks when matches are shown.
 3. `type_text` the title, then press **Ctrl+Enter** to create (the `Create Task` button
    enables once there is a title). Dialog also offers `Continue editing in split` to open the
    task as a full document.
