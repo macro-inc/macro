@@ -1,7 +1,5 @@
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
-import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
-import { withProjectStatusOptions } from '@property/utils/select-options';
 import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import {
   registerActiveGraphqlSoupQuery,
@@ -23,7 +21,7 @@ import {
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import type { ProjectRow, ProjectsSource } from '../context/projects-context';
 import type { ProjectFilters } from '../core/project';
-import { PROJECT_PROPERTY_IDS } from './project-properties';
+import { projectProperties } from './project-properties';
 
 /** Use the same bounded, authorized Soup cursor as tasks, scoped to initiatives. */
 export function projectSoupInput(filters: ProjectFilters): SoupInput {
@@ -110,17 +108,7 @@ export function projectSoupRows(
               ? accessLevels[permission.accessLevel]
               : undefined,
         },
-        properties: mapGraphqlProperties(item.properties)
-          .filter((property) =>
-            PROJECT_PROPERTY_IDS.includes(property.definition.id)
-          )
-          .map(soupPropertyToProperty)
-          .map(withProjectStatusOptions)
-          .sort(
-            (left, right) =>
-              PROJECT_PROPERTY_IDS.indexOf(left.propertyDefinitionId) -
-              PROJECT_PROPERTY_IDS.indexOf(right.propertyDefinitionId)
-          ),
+        properties: projectProperties(mapGraphqlProperties(item.properties)),
       },
     ];
   });

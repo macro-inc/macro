@@ -1,6 +1,4 @@
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
-import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
-import { withProjectStatusOptions } from '@property/utils/select-options';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import {
   createGraphqlBulkSaveEntityPropertiesMutation,
@@ -9,7 +7,6 @@ import {
 import { propertiesKeys } from '@queries/properties/keys';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { soupKeys } from '@queries/soup/keys';
-import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import type { initiativeClient } from '@service-storage/initiative';
 import {
   type QueryClient,
@@ -23,23 +20,10 @@ import { assignProjectTasks } from '../core/assignment';
 import type { ProjectDetail, TaskProjectReference } from '../core/project';
 import { createProjectTaskMutation } from './create-project-task';
 import { projectKeys } from './keys';
+import { projectDetailQueryOptions } from './project-identity';
 import { toProjectDetail } from './project-model';
-import {
-  PROJECT_PROPERTY_IDS,
-  projectDefinitionProperties,
-} from './project-properties';
+import { projectDefinitionProperties } from './project-properties';
 import { createProjectSoupSource } from './project-soup';
-
-const projectProperties = (properties: SoupProperty[]) =>
-  properties
-    .filter((property) => PROJECT_PROPERTY_IDS.includes(property.definition.id))
-    .map(soupPropertyToProperty)
-    .map(withProjectStatusOptions)
-    .sort(
-      (left, right) =>
-        PROJECT_PROPERTY_IDS.indexOf(left.propertyDefinitionId) -
-        PROJECT_PROPERTY_IDS.indexOf(right.propertyDefinitionId)
-    );
 
 const accessLost = (error: unknown) =>
   ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'].some((code) =>
@@ -92,21 +76,9 @@ export function createProjectSources(
         () => {
           const projectId = id();
           return {
-            queryKey: projectKeys.detail(userId(), projectId).queryKey,
+            ...projectDetailQueryOptions(client, userId(), projectId),
             enabled:
               readEnabled() && Boolean(userId() && projectId) && !creating(),
-            queryFn: async ({ signal }) => {
-              const project = await throwOnErr(() =>
-                client.get(projectId, signal)
-              );
-              return {
-                project: toProjectDetail(project),
-                properties: projectProperties(project.properties),
-              };
-            },
-            staleTime: 30_000,
-            refetchInterval: 30_000,
-            refetchOnWindowFocus: true,
           };
         },
         () => cache

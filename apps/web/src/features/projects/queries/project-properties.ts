@@ -1,3 +1,4 @@
+import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import { entityPropertyFromApi } from '@property/api/converters';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
@@ -6,6 +7,7 @@ import {
   withProjectStatusOptions,
 } from '@property/utils/select-options';
 import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
+import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 
 /** Same left-to-right order as the task composer and project detail. */
 export const PROJECT_PROPERTY_IDS: string[] = [
@@ -14,6 +16,19 @@ export const PROJECT_PROPERTY_IDS: string[] = [
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
   SYSTEM_PROPERTY_IDS.DUE_DATE,
 ];
+
+/** A project's values for those properties, in composer order. */
+export function projectProperties(properties: SoupProperty[]): Property[] {
+  return properties
+    .filter((property) => PROJECT_PROPERTY_IDS.includes(property.definition.id))
+    .map(soupPropertyToProperty)
+    .map(withProjectStatusOptions)
+    .sort(
+      (left, right) =>
+        PROJECT_PROPERTY_IDS.indexOf(left.propertyDefinitionId) -
+        PROJECT_PROPERTY_IDS.indexOf(right.propertyDefinitionId)
+    );
+}
 
 export function projectDefinitionProperties(
   items: PropertyDefinitionResponse[]
