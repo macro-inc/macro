@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                github_key,\n                repository_id,\n                number,\n                owner,\n                repo,\n                title,\n                status,\n                draft,\n                author_github_user_id,\n                author_login,\n                requested_reviewer_github_user_ids,\n                participant_github_user_ids,\n                github_updated_at,\n                assignees,\n                labels,\n                reviews,\n                review_decision\n            FROM github_pull_request\n            WHERE github_key = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "github_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "repository_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "number",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "repo",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "draft",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "author_github_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "author_login",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "requested_reviewer_github_user_ids",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "participant_github_user_ids",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 12,
+        "name": "github_updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "assignees",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 14,
+        "name": "labels",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 15,
+        "name": "reviews",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 16,
+        "name": "review_decision",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "21f4995934d45c58fd61fca238288734e89c3da223e731e8164f59596066d4f8"
+}

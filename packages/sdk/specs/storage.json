@@ -10616,6 +10616,77 @@
         }
       }
     },
+    "/github_pull_requests/{id}": {
+      "get": {
+        "tags": ["github_pull_requests"],
+        "summary": "Get the pull request behind a foreign entity record the caller can view.",
+        "operationId": "get_github_pull_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The caller's foreign entity record for the pull request",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredGithubPullRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/harness-pairings": {
       "post": {
         "tags": ["harnesses"],
@@ -25250,6 +25321,12 @@
             "type": ["string", "null"],
             "description": "GitHub's relationship label for the author, when available."
           },
+          "authorId": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The stable numeric GitHub user id for the comment author, when available.",
+            "minimum": 0
+          },
           "authorLogin": {
             "type": ["string", "null"],
             "description": "The GitHub login for the comment author, when available."
@@ -25344,6 +25421,70 @@
               "$ref": "#/components/schemas/GithubRepositoryFacet"
             },
             "description": "Repositories, most pull requests first."
+          }
+        }
+      },
+      "GithubPullRequestLabel": {
+        "type": "object",
+        "description": "A label on a GitHub pull request.",
+        "required": ["name"],
+        "properties": {
+          "color": {
+            "type": ["string", "null"],
+            "description": "The label color as six hex digits without a leading `#`, when known."
+          },
+          "name": {
+            "type": "string",
+            "description": "The label name, unique within its repository regardless of case."
+          }
+        }
+      },
+      "GithubPullRequestReview": {
+        "type": "object",
+        "description": "A reviewer's latest submitted review on a pull request.",
+        "required": ["reviewerGithubUserId", "state"],
+        "properties": {
+          "reviewerGithubUserId": {
+            "type": "string",
+            "description": "The stable numeric GitHub user id of the reviewer, as a string."
+          },
+          "reviewerLogin": {
+            "type": ["string", "null"],
+            "description": "The reviewer's GitHub login, when known."
+          },
+          "state": {
+            "$ref": "#/components/schemas/GithubPullRequestReviewState",
+            "description": "What the review said."
+          },
+          "submittedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the review was submitted, when known."
+          }
+        }
+      },
+      "GithubPullRequestReviewDecision": {
+        "type": "string",
+        "description": "Where a pull request's review stands, from its reviewers' latest reviews.",
+        "enum": ["approved", "changes_requested", "review_required"]
+      },
+      "GithubPullRequestReviewState": {
+        "type": "string",
+        "description": "What a reviewer's latest review on a pull request said.",
+        "enum": ["approved", "changes_requested", "commented", "dismissed"]
+      },
+      "GithubPullRequestUser": {
+        "type": "object",
+        "description": "A GitHub user named on a pull request, such as an assignee.",
+        "required": ["githubUserId"],
+        "properties": {
+          "githubUserId": {
+            "type": "string",
+            "description": "The stable numeric GitHub user id, as a string."
+          },
+          "login": {
+            "type": ["string", "null"],
+            "description": "The user's GitHub login, when known."
           }
         }
       },
@@ -31384,6 +31525,156 @@
           "how_to_guide_id": {
             "type": "string",
             "description": "Id of the user's \"Macro how to guide\"."
+          }
+        }
+      },
+      "StoredGithubPullRequest": {
+        "type": "object",
+        "description": "A GitHub pull request as Macro stores it, read through one of the caller's records.",
+        "required": [
+          "id",
+          "githubKey",
+          "owner",
+          "repo",
+          "number",
+          "url",
+          "draft",
+          "assignees",
+          "labels",
+          "requestedReviewerGithubUserIds",
+          "reviews",
+          "comments",
+          "checks"
+        ],
+        "properties": {
+          "additions": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Lines added across the pull request's changes.",
+            "minimum": 0
+          },
+          "assignees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestUser"
+            },
+            "description": "The users assigned to the pull request."
+          },
+          "authorGithubUserId": {
+            "type": ["string", "null"],
+            "description": "Stable numeric GitHub user id of the author."
+          },
+          "authorLogin": {
+            "type": ["string", "null"],
+            "description": "The author's GitHub login when the pull request was last synced."
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestCheckRun"
+            },
+            "description": "The latest check runs on the pull request's head commit."
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestComment"
+            },
+            "description": "Comments from the pull request's conversation, reviews, and review threads."
+          },
+          "deletions": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Lines deleted across the pull request's changes.",
+            "minimum": 0
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "The pull request body, as GitHub markdown."
+          },
+          "draft": {
+            "type": "boolean",
+            "description": "Whether the pull request is a draft."
+          },
+          "githubKey": {
+            "type": "string",
+            "description": "The pull request's `owner/repo/pull/number` key."
+          },
+          "githubUpdatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When GitHub last updated the pull request."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The caller's record for the pull request."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestLabel"
+            },
+            "description": "The pull request's labels."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The pull request number within its repository."
+          },
+          "owner": {
+            "type": "string",
+            "description": "The repository owner the pull request was last synced under."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The repository name the pull request was last synced under."
+          },
+          "requestedReviewerGithubUserIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Stable numeric GitHub user ids of the users asked to review."
+          },
+          "reviewDecision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubPullRequestReviewDecision",
+                "description": "Where the review stands, derived from `reviews` and the outstanding review requests."
+              }
+            ]
+          },
+          "reviews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestReview"
+            },
+            "description": "Each reviewer's latest submitted review."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string",
+                "description": "The normalized lifecycle status for a GitHub pull request.",
+                "enum": ["open", "closed", "merged"]
+              }
+            ],
+            "description": "The normalized pull request status."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "The pull request title."
+          },
+          "url": {
+            "type": "string",
+            "description": "The pull request's page on GitHub."
           }
         }
       },

@@ -8535,6 +8535,8 @@ export const getDocumentGithubPullRequestsResponsePullRequestsItemAdditionsMin =
 
 export const getDocumentGithubPullRequestsResponsePullRequestsItemChecksItemIdMin = 0;
 
+export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemAuthorIdMin = 0;
+
 export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemIdMin = 0;
 
 export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemInReplyToIdMin = 0;
@@ -8620,6 +8622,15 @@ export const getDocumentGithubPullRequestsResponse = zod
                       .nullish()
                       .describe(
                         "GitHub's relationship label for the author, when available."
+                      ),
+                    authorId: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemAuthorIdMin
+                      )
+                      .nullish()
+                      .describe(
+                        'The stable numeric GitHub user id for the comment author, when available.'
                       ),
                     authorLogin: zod
                       .string()
@@ -9903,6 +9914,297 @@ export const getGithubPullRequestFacetsResponse = zod
   })
   .describe(
     'Repositories, authors, assignees, and labels among the GitHub pull requests a caller can see,\neach with the number of pull requests it covers.'
+  );
+
+/**
+ * @summary Get the pull request behind a foreign entity record the caller can view.
+ */
+export const getGithubPullRequestParams = zod.object({
+  id: zod
+    .uuid()
+    .describe("The caller's foreign entity record for the pull request"),
+});
+
+export const getGithubPullRequestResponseAdditionsMin = 0;
+
+export const getGithubPullRequestResponseChecksItemIdMin = 0;
+
+export const getGithubPullRequestResponseCommentsItemAuthorIdMin = 0;
+
+export const getGithubPullRequestResponseCommentsItemIdMin = 0;
+
+export const getGithubPullRequestResponseCommentsItemInReplyToIdMin = 0;
+
+export const getGithubPullRequestResponseCommentsItemLineMin = 0;
+
+export const getGithubPullRequestResponseCommentsItemOriginalLineMin = 0;
+
+export const getGithubPullRequestResponseCommentsItemPullRequestReviewIdMin = 0;
+
+export const getGithubPullRequestResponseDeletionsMin = 0;
+
+export const getGithubPullRequestResponse = zod
+  .object({
+    additions: zod
+      .number()
+      .min(getGithubPullRequestResponseAdditionsMin)
+      .nullish()
+      .describe("Lines added across the pull request's changes."),
+    assignees: zod
+      .array(
+        zod
+          .object({
+            githubUserId: zod
+              .string()
+              .describe('The stable numeric GitHub user id, as a string.'),
+            login: zod
+              .string()
+              .nullish()
+              .describe("The user's GitHub login, when known."),
+          })
+          .describe(
+            'A GitHub user named on a pull request, such as an assignee.'
+          )
+      )
+      .describe('The users assigned to the pull request.'),
+    authorGithubUserId: zod
+      .string()
+      .nullish()
+      .describe('Stable numeric GitHub user id of the author.'),
+    authorLogin: zod
+      .string()
+      .nullish()
+      .describe(
+        "The author's GitHub login when the pull request was last synced."
+      ),
+    checks: zod
+      .array(
+        zod
+          .object({
+            completedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the check run completed, when available.'),
+            conclusion: zod
+              .string()
+              .nullish()
+              .describe(
+                'The raw GitHub check run conclusion, when the run has completed.'
+              ),
+            id: zod
+              .number()
+              .min(getGithubPullRequestResponseChecksItemIdMin)
+              .describe('The unique GitHub identifier for the check run.'),
+            name: zod.string().describe('The check run name.'),
+            startedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the check run started, when available.'),
+            status: zod.string().describe('The raw GitHub check run status.'),
+            url: zod
+              .string()
+              .nullish()
+              .describe(
+                'The public GitHub URL for the check run, when available.'
+              ),
+          })
+          .describe('A check run associated with a GitHub pull request.')
+      )
+      .describe("The latest check runs on the pull request's head commit."),
+    comments: zod
+      .array(
+        zod
+          .object({
+            authorAssociation: zod
+              .string()
+              .nullish()
+              .describe(
+                "GitHub's relationship label for the author, when available."
+              ),
+            authorId: zod
+              .number()
+              .min(getGithubPullRequestResponseCommentsItemAuthorIdMin)
+              .nullish()
+              .describe(
+                'The stable numeric GitHub user id for the comment author, when available.'
+              ),
+            authorLogin: zod
+              .string()
+              .nullish()
+              .describe(
+                'The GitHub login for the comment author, when available.'
+              ),
+            body: zod.string().describe('The comment or review body text.'),
+            createdAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the comment was created or the review was submitted.'
+              ),
+            id: zod
+              .number()
+              .min(getGithubPullRequestResponseCommentsItemIdMin)
+              .describe(
+                'The unique GitHub identifier for the comment or review.'
+              ),
+            inReplyToId: zod
+              .number()
+              .min(getGithubPullRequestResponseCommentsItemInReplyToIdMin)
+              .nullish()
+              .describe(
+                'The id of the comment this one replies to, when it is part of a review\nthread. Only ever present on `review_comment` sources.'
+              ),
+            line: zod
+              .number()
+              .min(getGithubPullRequestResponseCommentsItemLineMin)
+              .nullish()
+              .describe(
+                "The line in the current diff the comment is anchored to. Cleared by\nGitHub when later commits outdate the comment's diff."
+              ),
+            originalLine: zod
+              .number()
+              .min(getGithubPullRequestResponseCommentsItemOriginalLineMin)
+              .nullish()
+              .describe(
+                'The line the comment was originally anchored to, kept even when the\ndiff has since changed.'
+              ),
+            path: zod
+              .string()
+              .nullish()
+              .describe(
+                'The repository-relative file path the review comment is anchored to.\nOnly ever present on `review_comment` sources.'
+              ),
+            pullRequestReviewId: zod
+              .number()
+              .min(
+                getGithubPullRequestResponseCommentsItemPullRequestReviewIdMin
+              )
+              .nullish()
+              .describe(
+                'The id of the pull request review this comment was submitted with.\nOnly ever present on `review_comment` sources.'
+              ),
+            source: zod
+              .string()
+              .describe(
+                'The GitHub source for the comment, such as `issue_comment` or `review_comment`.'
+              ),
+            updatedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the comment or review was last updated.'),
+            url: zod
+              .string()
+              .nullish()
+              .describe(
+                'The public GitHub URL for the comment or review, when available.'
+              ),
+          })
+          .describe('A comment associated with a GitHub pull request.')
+      )
+      .describe(
+        "Comments from the pull request's conversation, reviews, and review threads."
+      ),
+    deletions: zod
+      .number()
+      .min(getGithubPullRequestResponseDeletionsMin)
+      .nullish()
+      .describe("Lines deleted across the pull request's changes."),
+    description: zod
+      .string()
+      .nullish()
+      .describe('The pull request body, as GitHub markdown.'),
+    draft: zod.boolean().describe('Whether the pull request is a draft.'),
+    githubKey: zod
+      .string()
+      .describe("The pull request's `owner\/repo\/pull\/number` key."),
+    githubUpdatedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When GitHub last updated the pull request.'),
+    id: zod.uuid().describe("The caller's record for the pull request."),
+    labels: zod
+      .array(
+        zod
+          .object({
+            color: zod
+              .string()
+              .nullish()
+              .describe(
+                'The label color as six hex digits without a leading `#`, when known.'
+              ),
+            name: zod
+              .string()
+              .describe(
+                'The label name, unique within its repository regardless of case.'
+              ),
+          })
+          .describe('A label on a GitHub pull request.')
+      )
+      .describe("The pull request's labels."),
+    number: zod
+      .number()
+      .describe('The pull request number within its repository.'),
+    owner: zod
+      .string()
+      .describe('The repository owner the pull request was last synced under.'),
+    repo: zod
+      .string()
+      .describe('The repository name the pull request was last synced under.'),
+    requestedReviewerGithubUserIds: zod
+      .array(zod.string())
+      .describe('Stable numeric GitHub user ids of the users asked to review.'),
+    reviewDecision: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['approved', 'changes_requested', 'review_required'])
+          .describe(
+            "Where a pull request's review stands, from its reviewers' latest reviews."
+          ),
+      ])
+      .optional(),
+    reviews: zod
+      .array(
+        zod
+          .object({
+            reviewerGithubUserId: zod
+              .string()
+              .describe(
+                'The stable numeric GitHub user id of the reviewer, as a string.'
+              ),
+            reviewerLogin: zod
+              .string()
+              .nullish()
+              .describe("The reviewer's GitHub login, when known."),
+            state: zod
+              .enum(['approved', 'changes_requested', 'commented', 'dismissed'])
+              .describe(
+                "What a reviewer's latest review on a pull request said."
+              ),
+            submittedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the review was submitted, when known.'),
+          })
+          .describe("A reviewer's latest submitted review on a pull request.")
+      )
+      .describe("Each reviewer's latest submitted review."),
+    status: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['open', 'closed', 'merged'])
+          .describe(
+            'The normalized lifecycle status for a GitHub pull request.'
+          ),
+      ])
+      .optional()
+      .describe('The normalized pull request status.'),
+    title: zod.string().nullish().describe('The pull request title.'),
+    url: zod.string().describe("The pull request's page on GitHub."),
+  })
+  .describe(
+    "A GitHub pull request as Macro stores it, read through one of the caller's records."
   );
 
 /**

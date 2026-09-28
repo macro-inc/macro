@@ -6362,6 +6362,10 @@ export type GithubPullRequestComment = {
      */
     authorAssociation?: string | null;
     /**
+     * The stable numeric GitHub user id for the comment author, when available.
+     */
+    authorId?: number | null;
+    /**
      * The GitHub login for the comment author, when available.
      */
     authorLogin?: string | null;
@@ -6437,6 +6441,66 @@ export type GithubPullRequestFacets = {
      * Repositories, most pull requests first.
      */
     repositories: Array<GithubRepositoryFacet>;
+};
+
+/**
+ * A label on a GitHub pull request.
+ */
+export type GithubPullRequestLabel = {
+    /**
+     * The label color as six hex digits without a leading `#`, when known.
+     */
+    color?: string | null;
+    /**
+     * The label name, unique within its repository regardless of case.
+     */
+    name: string;
+};
+
+/**
+ * A reviewer's latest submitted review on a pull request.
+ */
+export type GithubPullRequestReview = {
+    /**
+     * The stable numeric GitHub user id of the reviewer, as a string.
+     */
+    reviewerGithubUserId: string;
+    /**
+     * The reviewer's GitHub login, when known.
+     */
+    reviewerLogin?: string | null;
+    /**
+     * What the review said.
+     */
+    state: GithubPullRequestReviewState;
+    /**
+     * When the review was submitted, when known.
+     */
+    submittedAt?: string | null;
+};
+
+/**
+ * Where a pull request's review stands, from its reviewers' latest reviews.
+ */
+export type GithubPullRequestReviewDecision = 'approved' | 'changes_requested' | 'review_required';
+
+/**
+ * What a reviewer's latest review on a pull request said.
+ */
+export type GithubPullRequestReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
+
+/**
+ * A GitHub user named on a pull request, such as an assignee.
+ */
+export type GithubPullRequestUser = {
+    /**
+     * The stable numeric GitHub user id, as a string.
+     */
+    githubUserId: string;
+    /**
+     * The user's GitHub login, when known.
+     */
+    login?: string | null;
 };
 
 /**
@@ -10165,6 +10229,97 @@ export type StarterDocumentsResponse = {
      * Id of the user's "Macro how to guide".
      */
     how_to_guide_id: string;
+};
+
+/**
+ * A GitHub pull request as Macro stores it, read through one of the caller's records.
+ */
+export type StoredGithubPullRequest = {
+    /**
+     * Lines added across the pull request's changes.
+     */
+    additions?: number | null;
+    /**
+     * The users assigned to the pull request.
+     */
+    assignees: Array<GithubPullRequestUser>;
+    /**
+     * Stable numeric GitHub user id of the author.
+     */
+    authorGithubUserId?: string | null;
+    /**
+     * The author's GitHub login when the pull request was last synced.
+     */
+    authorLogin?: string | null;
+    /**
+     * The latest check runs on the pull request's head commit.
+     */
+    checks: Array<GithubPullRequestCheckRun>;
+    /**
+     * Comments from the pull request's conversation, reviews, and review threads.
+     */
+    comments: Array<GithubPullRequestComment>;
+    /**
+     * Lines deleted across the pull request's changes.
+     */
+    deletions?: number | null;
+    /**
+     * The pull request body, as GitHub markdown.
+     */
+    description?: string | null;
+    /**
+     * Whether the pull request is a draft.
+     */
+    draft: boolean;
+    /**
+     * The pull request's `owner/repo/pull/number` key.
+     */
+    githubKey: string;
+    /**
+     * When GitHub last updated the pull request.
+     */
+    githubUpdatedAt?: string | null;
+    /**
+     * The caller's record for the pull request.
+     */
+    id: string;
+    /**
+     * The pull request's labels.
+     */
+    labels: Array<GithubPullRequestLabel>;
+    /**
+     * The pull request number within its repository.
+     */
+    number: number;
+    /**
+     * The repository owner the pull request was last synced under.
+     */
+    owner: string;
+    /**
+     * The repository name the pull request was last synced under.
+     */
+    repo: string;
+    /**
+     * Stable numeric GitHub user ids of the users asked to review.
+     */
+    requestedReviewerGithubUserIds: Array<string>;
+    reviewDecision?: null | GithubPullRequestReviewDecision;
+    /**
+     * Each reviewer's latest submitted review.
+     */
+    reviews: Array<GithubPullRequestReview>;
+    /**
+     * The normalized pull request status.
+     */
+    status?: null | 'open' | 'closed' | 'merged';
+    /**
+     * The pull request title.
+     */
+    title?: string | null;
+    /**
+     * The pull request's page on GitHub.
+     */
+    url: string;
 };
 
 export type String = string;
@@ -15371,6 +15526,33 @@ export type GetGithubPullRequestFacetsResponses = {
 };
 
 export type GetGithubPullRequestFacetsResponse = GetGithubPullRequestFacetsResponses[keyof GetGithubPullRequestFacetsResponses];
+
+export type GetGithubPullRequestData = {
+    body?: never;
+    path: {
+        /**
+         * The caller's foreign entity record for the pull request
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/github_pull_requests/{id}';
+};
+
+export type GetGithubPullRequestErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestError = GetGithubPullRequestErrors[keyof GetGithubPullRequestErrors];
+
+export type GetGithubPullRequestResponses = {
+    200: StoredGithubPullRequest;
+};
+
+export type GetGithubPullRequestResponse = GetGithubPullRequestResponses[keyof GetGithubPullRequestResponses];
 
 export type CreateHarnessPairingData = {
     body: CreatePairingRequest;
