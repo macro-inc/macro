@@ -44,6 +44,19 @@ pub type DcsUserPermissionsService =
         roles_and_permissions::outbound::pgpool::MacroDB,
     >;
 
+/// The AI billing gate: reads plan allowances, credits, and overage state.
+/// DCS never charges anyone (the payment gateway is a no-op); settlement is
+/// requested from the authentication service.
+pub type DcsAiBillingService = ai_billing::domain::BillingServiceImpl<
+    ai_billing::outbound::RolesTeamsEntitlementSource<
+        DcsUserPermissionsService,
+        teams::outbound::team_repo::TeamRepositoryImpl,
+    >,
+    ai_billing::outbound::PgUsageReader,
+    ai_billing::outbound::PgBillingRepo,
+    ai_billing::outbound::NoOpPaymentGateway,
+>;
+
 /// Type alias for the chat model entitlement extractor wired to DCS services.
 pub type DcsChatModelAccess = chat::inbound::http::extractors::ChatModelAccess<
     DcsAuthorizationService,
@@ -132,6 +145,8 @@ pub struct ApiContext {
     pub email_service_client_external: Arc<email_service_client::EmailServiceClientExternal>,
     pub authorization_state: MacroAuthorizationState<DcsAuthorizationService>,
     pub user_permissions_service: Arc<DcsUserPermissionsService>,
+    /// Plan allowance gate for AI requests.
+    pub ai_billing: Arc<DcsAiBillingService>,
     pub config: Arc<Config>,
     pub internal_api_key: InternalApiKey,
     pub notification_ingress_service: Arc<NotificationIngressType>,

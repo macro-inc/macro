@@ -27,18 +27,23 @@ function getEmailLocalPart(email: string): string {
 
 /**
  * Resolves the best display name for a participant
- * Priority: macroDisplayName > participant.name > email local part
+ * Priority: participant.name > macroDisplayName > email local part
+ *
+ * `participant.name` is the From display name of that sender's message in
+ * this thread, so it comes first: the Macro lookup is keyed by address alone
+ * and falls back to the viewer's address book, which pins one person's name
+ * onto every message from a shared sender such as notifications@cal.com.
  */
 function resolveParticipantName(
   participant: EmailThreadParticipants[number],
   macroDisplayName?: string
 ): string {
-  if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
-    return macroDisplayName;
-  }
   const participantFullName = participant.name ?? '';
   if (participantFullName && !isLikelyEmail(participantFullName)) {
     return participantFullName;
+  }
+  if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
+    return macroDisplayName;
   }
   return getEmailLocalPart(participant.email);
 }

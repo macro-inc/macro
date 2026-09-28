@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO channel_label_channel (scope_key, channel_id, label_id)\n           SELECT $1, channel_id, $2 FROM unnest($3::uuid[]) AS channel_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f3ee355f36a75fc3cfd40e04a828d57334e6cf21008b7cc26c9e000fff21fc53"
+}

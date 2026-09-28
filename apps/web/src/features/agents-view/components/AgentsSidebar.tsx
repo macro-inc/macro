@@ -16,6 +16,7 @@ import {
   SoupEntityContextMenu,
 } from '@app/features/soup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { unreadFilterFn } from '@entity/utils/filter';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlugIcon from '@phosphor/plugs-connected.svg';
@@ -32,6 +33,7 @@ import {
   conversationTimestamp,
 } from '../core/recent-conversations';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
+import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
 
 const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
@@ -114,6 +116,8 @@ function Row(props: {
       {(session) => (
         <AgentSessionListItem
           entity={session()}
+          surface="agents"
+          unread={unreadFilterFn(session())}
           mode={props.mode}
           active={props.active}
           onOpen={props.onOpen}
@@ -241,6 +245,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               <ViewSidebar.Nav
                 class="min-h-0 flex-1 shrink overflow-auto"
                 aria-label="Recent conversations"
+                aria-busy={props.loading || props.loadingNextPage}
                 onScroll={(event) => {
                   const list = event.currentTarget;
                   if (!props.hasNextPage || props.loadingNextPage) return;
@@ -289,10 +294,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                     </>
                   )}
                 </Key>
-                <Show when={props.loading}>
-                  <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-muted">
-                    Loading conversations…
-                  </p>
+                <Show when={props.loading && total() === 0}>
+                  <AgentSessionListSkeleton />
                 </Show>
                 <Show when={props.error}>
                   <ViewSidebar.Item onClick={props.onRetry}>
@@ -308,9 +311,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                   </p>
                 </Show>
                 <Show when={props.loadingNextPage}>
-                  <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-muted">
-                    Loading more…
-                  </p>
+                  <AgentSessionListSkeleton loadingMore />
                 </Show>
               </ViewSidebar.Nav>
             </CollapsibleSection.Content>

@@ -1,4 +1,9 @@
 use entity_access_db_utils::AccessLevel;
+
+mod access;
+mod history;
+#[cfg(feature = "toolset")]
+mod toolset;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -423,7 +428,7 @@ async fn create_links_description_document_and_mirrors_member_and_team_grants_as
     assert_eq!(facts.initiative.revision, 1);
     assert_eq!(facts.description.current, grant);
     assert_eq!(facts.description.revision, 1);
-    assert_eq!(facts.description.owner.as_ref(), OWNER);
+    assert_eq!(facts.description.owner.principal_id(), OWNER);
 
     let basic = repo.get_basic(id).await?.expect("created initiative");
     assert_eq!(basic.name, "Launch");
@@ -520,20 +525,23 @@ async fn get_detail_reports_each_channel_grant_once(pool: PgPool) -> anyhow::Res
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_share_with_team_without_owner_team_is_bad_request(
+async fn create_share_with_team_without_owner_team_succeeds_unshared(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
     let repo = repo(pool.clone());
-    let error = repo
+    let created = repo
         .create(
             create_args(&pool, OWNER, "Solo", &[]).await?,
             share_off(),
             TeamShareCreation::Initiative,
         )
-        .await
-        .expect_err("teamless owner cannot share with team");
-    assert!(matches!(error, InitiativeError::BadRequest(message) if message.contains("team")));
+        .await?;
+    let facts = repo.get_team_share_facts(created.id).await?;
+    assert_eq!(facts.initiative.current, None);
+    assert_eq!(facts.initiative.revision, 0);
+    assert_eq!(facts.description.current, None);
+    assert_eq!(facts.description.revision, 0);
     Ok(())
 }
 
@@ -942,6 +950,7 @@ async fn assign_tasks_moves_and_reports_non_tasks(pool: PgPool) -> anyhow::Resul
         .await?;
     assert_eq!(
         first_results
+            .results
             .iter()
             .map(|result| result.status)
             .collect::<Vec<_>>(),
@@ -954,9 +963,23 @@ async fn assign_tasks_moves_and_reports_non_tasks(pool: PgPool) -> anyhow::Resul
             vec![task_a.clone(), not_a_task.clone(), missing.clone()],
         )
         .await?;
-    assert_eq!(second_results[0].status, AssignTaskStatus::Moved);
-    assert_eq!(second_results[1].status, AssignTaskStatus::NotATask);
-    assert_eq!(second_results[2].status, AssignTaskStatus::NotATask);
+    assert_eq!(second_results.results[0].status, AssignTaskStatus::Moved);
+    assert_eq!(second_results.results[1].status, AssignTaskStatus::NotATask);
+    assert_eq!(second_results.results[2].status, AssignTaskStatus::NotATask);
+    assert_eq!(
+        second_results.changes,
+        vec![crate::domain::events::TaskMembershipChange {
+            task_id: task_a.clone(),
+            from: Some(first.id),
+            to: Some(second.id)
+        }]
+    );
+    assert!(
+        repo.assign_tasks(second.id, vec![task_a.clone()])
+            .await?
+            .changes
+            .is_empty()
+    );
 
     let first_detail = repo.get_detail(first.id).await?.expect("first");
     let second_detail = repo.get_detail(second.id).await?.expect("second");

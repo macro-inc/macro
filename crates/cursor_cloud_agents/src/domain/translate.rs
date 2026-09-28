@@ -2,7 +2,7 @@
 //!
 //! [`TranslateMachine`] takes one [`CursorEvent`] at a time and reports the
 //! ACP [`SessionUpdate`]s it implies — usually one, often none. It is a state
-//! machine rather than a function because two translations need memory:
+//! machine rather than a function because some provider facts need memory:
 //!
 //! - Cursor sends the same `tool_call` event for the opening announcement and
 //!   every later progress report; ACP distinguishes `tool_call` from
@@ -12,6 +12,9 @@
 //!   always arrives *after* the bare-named `tool_call` event it describes, so
 //!   the machine records it per call id to refine later updates — the opening
 //!   announcement can only ever rely on the tool's name.
+//!
+//! - Result events retain repository branches and pull request identity for
+//!   the host's durable session metadata, independently of ACP updates.
 //!
 //! Everything else is stateless mapping. Notably, `interaction_update`'s
 //! `text-delta`/`thinking-delta` subtypes duplicate the `assistant` and
@@ -28,11 +31,12 @@
 mod test;
 
 use crate::domain::event::{CursorEvent, GitState, InteractionUpdate, ToolCallEvent};
+use crate::domain::model::RepoUrl;
 use agent_client_protocol::schema::v1::{
     ContentBlock, ContentChunk, Diff, SessionUpdate, TextContent, ToolCall, ToolCallContent,
     ToolCallLocation, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Translates a run's event stream into ACP session updates, one event at a
 /// time.
@@ -50,6 +54,8 @@ pub struct TranslateMachine {
     /// restates the agent's pushed branches, so without this the same url
     /// would be announced once per turn.
     pull_request_url: Option<String>,
+    /// Latest authoritative branch for each repository reported by Cursor.
+    working_branches: BTreeMap<String, String>,
 }
 
 impl TranslateMachine {
@@ -69,9 +75,7 @@ impl TranslateMachine {
                 self.interaction(&update);
                 Vec::new()
             }
-            // The run's git state is the one thing a result carries that the
-            // client wants to know: the pull request Cursor opened.
-            CursorEvent::Result { git, .. } => self.pull_request(git.as_ref()),
+            CursorEvent::Result { git, .. } => self.git_state(git.as_ref()),
             // Lifecycle and keepalives: the session service consumes these as
             // the turn's boundary; they have no ACP counterpart.
             CursorEvent::Status { .. }
@@ -85,16 +89,29 @@ impl TranslateMachine {
         }
     }
 
-    /// Retain the provider's PR for the host's shared session operation.
-    fn pull_request(&mut self, git: Option<&GitState>) -> Vec<SessionUpdate> {
-        let Some(url) = git.and_then(pull_request_url) else {
-            return Vec::new();
-        };
-        if self.pull_request_url.as_deref() == Some(url) {
-            return Vec::new();
+    /// Retain repository facts independently of ACP presentation and PR creation.
+    fn git_state(&mut self, git: Option<&GitState>) -> Vec<SessionUpdate> {
+        if let Some(git) = git {
+            for repository in &git.branches {
+                if let Some(branch) = &repository.branch {
+                    // One fact per repository identity: replay must not apply an
+                    // older HTTPS spelling after a newer scheme-less result.
+                    let identity = RepoUrl::from_git_state(&repository.repo_url)
+                        .map(|repository| repository.as_str().to_owned())
+                        .unwrap_or_else(|| repository.repo_url.clone());
+                    self.working_branches.insert(identity, branch.clone());
+                }
+            }
+            if let Some(url) = pull_request_url(git) {
+                self.pull_request_url = Some(url.to_owned());
+            }
         }
-        self.pull_request_url = Some(url.to_owned());
         Vec::new()
+    }
+
+    /// Latest branch facts keyed by provider repository identity.
+    pub fn working_branches(&self) -> &BTreeMap<String, String> {
+        &self.working_branches
     }
 
     /// Latest PR reported by the provider, for the host's session operation.

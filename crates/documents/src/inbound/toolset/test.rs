@@ -64,3 +64,57 @@ fn test_rename_document_schema_validation() {
         "Description should contain expected text"
     );
 }
+
+#[test]
+fn test_reply_to_document_comment_schema_validation() {
+    let result = generate_validated_input_schema::<ReplyToDocumentComment>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(
+        validated.name, "ReplyToDocumentComment",
+        "Tool name should match the schemars title"
+    );
+    assert!(
+        validated
+            .description
+            .contains("Only use this when explicitly asked"),
+        "Description should limit when the tool posts"
+    );
+}
+
+#[test]
+fn test_resolve_document_comment_schema_validation() {
+    let result = generate_validated_input_schema::<ResolveDocumentComment>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(
+        validated.name, "ResolveDocumentComment",
+        "Tool name should match the schemars title"
+    );
+    assert!(
+        validated
+            .description
+            .contains("Only use this when explicitly asked"),
+        "Description should limit when the tool resolves"
+    );
+}
+
+#[test]
+fn test_comment_on_document_text_schema_validation() {
+    let result = generate_validated_input_schema::<CommentOnDocumentText>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(
+        validated.name, "CommentOnDocumentText",
+        "Tool name should match the schemars title"
+    );
+    assert!(
+        validated
+            .description
+            .contains("Only use this when explicitly asked"),
+        "Description should limit when the tool posts"
+    );
+}

@@ -15,7 +15,7 @@ use crate::entity_resolver::{EntityResolver, EntityResolverError, EntityResolver
 use crate::identity::{self, IdentityBinding, IdentityMap};
 use crate::link_patch::{
     LinkPatchError, OptimisticLinkPatch, QueryRevalidation, apply_link_patches,
-    deduplicate_patches, missing_patch_record,
+    deduplicate_patches, missing_patch_records,
 };
 use crate::normalize::{
     DependencyCompleteness, NormalizeError, RecordUpdates, normalize, normalize_with_dependencies,
@@ -282,6 +282,8 @@ struct BegunOptimisticWrite {
 /// contain `:`).
 const IDENTITY_META_KEY: &str = "__meta:identity";
 const IDENTITY_VALUE_FIELD: &str = "identity";
+const STORAGE_GENERATION_META_KEY: &str = "__meta:storage-generation";
+const STORAGE_GENERATION_VALUE_FIELD: &str = "generation";
 
 /// Hydration/binding state of the session identity tag for this cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -336,6 +338,42 @@ impl<S: Storage> Engine<S> {
     /// Returns the current effective-view revision of this engine generation.
     pub fn current_revision(&self) -> CacheRevision {
         self.revision
+    }
+
+    /// Returns the durable identity of the currently stored cache data.
+    ///
+    /// A fresh generation is installed when the marker is absent or malformed.
+    /// Existing records are preserved when upgrading a cache without this marker.
+    /// Logical clears, identity changes, and physical resets
+    /// remove the marker with the data, so old hydration checkpoints cannot resume.
+    /// Read storage each time: engine replacement and external resets must not
+    /// leave an in-memory generation that outlives its records.
+    pub async fn current_storage_generation(&mut self) -> Result<Uuid, EngineError<S::Error>> {
+        let key = EntityKey(STORAGE_GENERATION_META_KEY.into());
+        let fetched = self
+            .storage
+            .get_batch(std::slice::from_ref(&key))
+            .await
+            .map_err(EngineError::Storage)?;
+        if let Some(record) = fetched.into_iter().next().flatten()
+            && let Some(crate::value::CacheValue::String(value)) =
+                record.fields.get(STORAGE_GENERATION_VALUE_FIELD)
+            && let Ok(generation) = Uuid::parse_str(value)
+        {
+            return Ok(generation);
+        }
+
+        let generation = Uuid::now_v7();
+        let mut record = Record::default();
+        record.fields.insert(
+            STORAGE_GENERATION_VALUE_FIELD.to_string(),
+            crate::value::CacheValue::String(generation.to_string()),
+        );
+        self.storage
+            .put_batch(vec![(key, record)])
+            .await
+            .map_err(EngineError::Storage)?;
+        Ok(generation)
     }
 
     fn ensure_revision_can_advance(&self) -> Result<(), EngineError<S::Error>> {
@@ -1238,10 +1276,18 @@ impl<S: Storage> Engine<S> {
             }
         }
 
-        let mut candidates = layer_keys(&self.optimistic);
-        candidates.extend(updates.keys().cloned());
-        let bases_before = self.load_bases(&candidates).await?;
-        let before = effective_records(&bases_before, &self.optimistic, &candidates);
+        // Without optimistic layers, durable changes are exactly the visible
+        // changes. Avoid loading/cloning the whole batch again on both sides
+        // of an ordinary network refresh.
+        let optimistic_before = if self.optimistic.is_empty() {
+            None
+        } else {
+            let mut candidates = layer_keys(&self.optimistic);
+            candidates.extend(updates.keys().cloned());
+            let bases = self.load_bases(&candidates).await?;
+            let before = effective_records(&bases, &self.optimistic, &candidates);
+            Some((candidates, before))
+        };
         let (changed, mut revision, mut revision_advanced) =
             self.persist_updates(updates, projections).await?;
         if reset && !revision_advanced {
@@ -1249,7 +1295,7 @@ impl<S: Storage> Engine<S> {
             revision_advanced = true;
         }
 
-        if !self.optimistic.is_empty() {
+        let visible_changed = if let Some((mut candidates, before)) = optimistic_before {
             let queued = self
                 .storage
                 .load_mutation_queue()
@@ -1257,13 +1303,15 @@ impl<S: Storage> Engine<S> {
                 .map_err(EngineError::Storage)?;
             self.optimistic = self.rebuild_queued_layers(queued).await?;
             candidates.extend(layer_keys(&self.optimistic));
-        }
-        let bases_after = self.load_bases(&candidates).await?;
-        let after = effective_records(&bases_after, &self.optimistic, &candidates);
-        let visible_changed: BTreeSet<EntityKey<'static>> = candidates
-            .into_iter()
-            .filter(|key| before.get(key) != after.get(key))
-            .collect();
+            let bases_after = self.load_bases(&candidates).await?;
+            let after = effective_records(&bases_after, &self.optimistic, &candidates);
+            candidates
+                .into_iter()
+                .filter(|key| before.get(key) != after.get(key))
+                .collect()
+        } else {
+            changed.clone()
+        };
 
         let mut affected_ops = if reset {
             // Everything anyone had cached is gone: re-execute all ops.
@@ -1397,35 +1445,32 @@ impl<S: Storage> Engine<S> {
 
         let mut changed = BTreeSet::new();
         let mut to_persist: Vec<(EntityKey<'static>, Record)> = Vec::new();
+        let mut touched = Vec::with_capacity(updates.len());
         for (key, update) in updates {
-            let merged = match staging.remove(&key) {
+            let (merged, did_change) = match staging.remove(&key) {
                 Some(mut existing) => {
-                    if existing.merge(update) {
-                        changed.insert(key.clone());
-                    }
-                    existing
+                    let did_change = existing.merge(update);
+                    (existing, did_change)
                 }
-                None => {
-                    changed.insert(key.clone());
-                    update
-                }
+                None => (update, true),
             };
-            // Refresh the hot tier (eviction here is harmless: storage gets
-            // the fully merged record below).
-            self.hot.put(key.clone(), merged.clone());
-            to_persist.push((key, merged));
+            if did_change {
+                changed.insert(key.clone());
+                to_persist.push((key.clone(), merged.clone()));
+            }
+            touched.push((key, merged));
         }
 
-        // Persist every touched record (idempotent for unchanged ones —
-        // keeps storage authoritative even if the hot tier evicted them
-        // between loads).
+        // Unchanged bases are already durable, including those fetched after
+        // hot-tier eviction. Still apply every projection mutation: a partial
+        // response can change projection authority without changing records.
         let revision_advanced = if changed.is_empty() {
             self.projection_mutations_change(&projections).await?
         } else {
             true
         };
         self.storage
-            .put_batch_with_projections(to_persist.clone(), projections)
+            .put_batch_with_projections(to_persist, projections)
             .await
             .map_err(EngineError::Storage)?;
         let revision = if revision_advanced {
@@ -1433,7 +1478,12 @@ impl<S: Storage> Engine<S> {
         } else {
             self.revision
         };
-        self.update_loaded_search_catalogs(&to_persist);
+        // Publish only after the atomic write succeeds. Otherwise a failed
+        // write could poison the hot tier and make its retry look unchanged.
+        self.update_loaded_search_catalogs(&touched);
+        for (key, record) in touched {
+            self.hot.put(key, record);
+        }
         Ok((changed, revision, revision_advanced))
     }
 
@@ -2317,7 +2367,7 @@ impl<S: Storage> Engine<S> {
             // loop from retrying it.
             let missing: BTreeSet<_> = patches
                 .iter()
-                .filter_map(|patch| missing_patch_record(&effective, patch))
+                .flat_map(|patch| missing_patch_records(&effective, patch))
                 .chain(patches.iter().filter_map(|patch| {
                     let inserted = patch.operation.inserted_entity_key()?;
                     (!effective.contains_key(inserted)).then(|| inserted.clone())

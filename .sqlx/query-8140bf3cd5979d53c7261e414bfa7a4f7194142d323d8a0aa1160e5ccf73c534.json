@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE ai_overage_charge\n                SET status = 'pending', updated_at = NOW()\n                WHERE id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8140bf3cd5979d53c7261e414bfa7a4f7194142d323d8a0aa1160e5ccf73c534"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE agent_session\n                SET turn_state = $2\n                WHERE id = $1 AND turn_state IS DISTINCT FROM $2\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "96629a122c9370cdb5d5eef7a637f95c74c332f4f47d4d806b8858562905572e"
+}

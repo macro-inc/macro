@@ -1,9 +1,12 @@
 use crate::domain::{
-    models::{AccessError, AccessGrant, EntityType, ForeignEntityAuthEntity, UserTeamInfo},
+    models::{
+        AccessError, AccessGrant, AccessLevel, EntityType, ForeignEntityAuthEntity, UserTeamInfo,
+    },
     ports::ExplainAccessRepository,
 };
 use crate::outbound::pg_access_repo::queries;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use models_entity_access_management::EntityAccessSourceType;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -257,6 +260,34 @@ async fn explain_calendar_event_access(
     .fetch_optional(pool)
     .await?;
 
+    // Mirrors the access query: a channel share counts only for a current
+    // participant while the event is live and not private or confidential.
+    let channel_grants = sqlx::query!(
+        r#"
+        SELECT
+            grant_row.source_type AS "source_type!: EntityAccessSourceType",
+            grant_row.source_id,
+            grant_row.access_level AS "access_level!: AccessLevel",
+            grant_row.granted_from_project_id
+        FROM calendar_events event
+        JOIN entity_access grant_row
+          ON grant_row.entity_id = event.id
+         AND grant_row.entity_type = 'calendar_event'
+         AND grant_row.source_type = 'channel'
+        JOIN comms_channel_participants participant
+          ON participant.channel_id::text = grant_row.source_id
+         AND participant.user_id = $2
+         AND participant.left_at IS NULL
+        WHERE event.id = $1
+          AND event.status <> 'cancelled'
+          AND event.visibility IN ('default', 'public')
+        "#,
+        event_id,
+        user_id.as_ref(),
+    )
+    .fetch_all(pool)
+    .await?;
+
     Ok(is_owner
         .map(|is_owner| {
             if is_owner {
@@ -266,6 +297,16 @@ async fn explain_calendar_event_access(
             }
         })
         .into_iter()
+        .chain(
+            channel_grants
+                .into_iter()
+                .map(|row| AccessGrant::EntityAccess {
+                    source_type: row.source_type,
+                    source_id: row.source_id,
+                    access_level: row.access_level,
+                    granted_from_project_id: row.granted_from_project_id,
+                }),
+        )
         .collect())
 }
 

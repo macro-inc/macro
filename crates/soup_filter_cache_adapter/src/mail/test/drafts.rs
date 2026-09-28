@@ -2,7 +2,7 @@ use super::*;
 
 const SAVE: &str = r#"mutation SaveEmailDraft($input: SaveEmailDraftInput!) {
     saveEmailDraft(input: $input) { thread {
-        __typename id linkId ownerId inboxVisible isRead isSignal cacheProjection latestInboundMessageTs updatedAt
+        __typename id linkId ownerId inboxVisible isRead isSignal isFavorited cacheProjection latestInboundMessageTs updatedAt
         mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id }
         properties { __typename propertyDefinitionId }
         mailDraftState {
@@ -48,6 +48,7 @@ async fn offline_lifecycle<S: PredicateIndexStorage>(storage: S) {
     thread["cacheProjection"] = Value::Null;
     thread["inboxVisible"] = json!(true);
     thread["isSignal"] = json!(false);
+    thread["isFavorited"] = json!(false);
     thread["mailAllPreview"] = json!({"id":id(10081)});
     thread["mailDraftPreview"] = json!({"id":id(10081)});
     thread["mailSentPreview"] = Value::Null;
@@ -115,7 +116,8 @@ async fn offline_lifecycle<S: PredicateIndexStorage>(storage: S) {
     for view in ["ALL", "INBOX", "DRAFTS"] {
         assert_eq!(
             cached_keys(&mut engine, filters(), view).await,
-            vec![format!("{TYPE}:{}", id(81))]
+            vec![format!("{TYPE}:{}", id(81))],
+            "{view}"
         );
     }
     assert!(cached_keys(&mut engine, filters(), "SENT").await.is_empty());

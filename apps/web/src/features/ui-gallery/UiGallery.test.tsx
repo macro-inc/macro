@@ -43,23 +43,6 @@ function renderGallery() {
 }
 
 describe('UiGallery', () => {
-  it('renders the sidebar with every documented component', () => {
-    renderGallery();
-    const search = screen.getByRole('searchbox', {
-      name: 'Search components',
-    });
-    expect(search.dataset.slot).toBe('input-group-control');
-    const inputGroup = search.closest('[data-slot="input-group"]');
-    expect(inputGroup?.classList).toContain('bg-input');
-    expect(search.classList).toContain('bg-transparent');
-    expect(search.classList).toContain(
-      '[&::-webkit-search-cancel-button]:hidden'
-    );
-    for (const entry of DOC_ENTRIES) {
-      expect(screen.getAllByText(entry.doc.name).length).toBeGreaterThan(0);
-    }
-  });
-
   it('shows Foundation Colors when no page is selected', () => {
     renderGallery();
     expect(

@@ -232,6 +232,7 @@ pub fn remap_patch(
     let key = match &mut patch.operation {
         LinkOperation::Remove { entity_key }
         | LinkOperation::PrependUnique { entity_key }
+        | LinkOperation::UpsertByField { entity_key, .. }
         | LinkOperation::RemoveEmbeddedLink { entity_key, .. }
         | LinkOperation::UpsertEmbeddedLink { entity_key, .. } => entity_key,
     };

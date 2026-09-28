@@ -2,8 +2,8 @@
  * The vocabulary of a session's captured changes.
  *
  * Pure types and functions: what a changed file is, how a capture went, and
- * the small derivations the pane shows (status letters, totals, path
- * splitting). Wire decoding lives in `queries/`; rendering in `components/`.
+ * the small derivations the pane shows (ranges, totals). A `ChangedFile`
+ * is the diff view's `DiffFile` shape. Wire decoding lives in `queries/`.
  */
 
 /** What happened to a file between the base and the head. */
@@ -67,29 +67,6 @@ export type SessionChanges = {
   /** A capture is running right now. */
   capturing: boolean;
 };
-
-/** The one-letter status the tree and file headers show. */
-export type StatusLetter = 'A' | 'M' | 'D' | 'R';
-
-export function statusLetter(kind: FileChangeKind): StatusLetter {
-  switch (kind) {
-    case 'added':
-      return 'A';
-    case 'modified':
-      return 'M';
-    case 'deleted':
-      return 'D';
-    case 'renamed':
-      return 'R';
-  }
-}
-
-/** A path split into the directory prefix (with trailing slash) and basename. */
-export function splitPath(path: string): { dir: string; base: string } {
-  const at = path.lastIndexOf('/');
-  if (at < 0) return { dir: '', base: path };
-  return { dir: path.slice(0, at + 1), base: path.slice(at + 1) };
-}
 
 /** `owner/name` from a `https://github.com/owner/name` url, when it is one. */
 export function repositorySlug(

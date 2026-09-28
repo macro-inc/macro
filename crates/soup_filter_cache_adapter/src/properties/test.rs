@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 const QUERY: &str = include_str!("test/project.graphql");
 const SET: &str = include_str!("test/set.graphql");
+const FAVORITE: &str = include_str!("test/favorite.graphql");
 const VIEWER: &str = "macro|properties@example.com";
 fn id(n: u128) -> String {
     Uuid::from_u128(n).to_string()
@@ -22,7 +23,7 @@ fn property(n: u128, option: u128) -> Value {
 }
 fn data() -> Value {
     json!({"user": {"id": VIEWER, "soup": {"items": [{
-        "__typename": "GraphqlSoupProject", "id": id(100), "cacheProjection": null,
+        "__typename": "GraphqlSoupProject", "id": id(100), "isFavorited": true, "cacheProjection": null,
         "ownerId": VIEWER, "parentId": null, "createdAt": "2025-01-01T00:00:00Z", "updatedAt": "2025-01-02T00:00:00Z", "notifications": [],
         "properties": [property(1, 11), property(2, 22)],
     }]}}})
@@ -40,6 +41,110 @@ fn filters(property: Option<Value>) -> Value {
         filters["propertiesFilter"] = property;
     }
     filters
+}
+
+#[test]
+fn favorites_membership_changes_optimistically_and_rolls_back_without_a_new_query() {
+    pollster::block_on(async {
+        let mut engine =
+            Engine::new(cache_turso::TursoStorage::open_in_memory("favorites").unwrap());
+        write(&mut engine, QUERY, &Map::new(), &data(), VIEWER).await;
+        let mut filter = filters(None);
+        filter["favoritesOnly"] = json!(true);
+        let crate::SoupFilterCompileOutcome::Supported(query) =
+            crate::compile_current_filter_request(filter, "UPDATED_AT", "DESC", 100).unwrap()
+        else {
+            panic!("favorite filter must be supported");
+        };
+        assert_eq!(
+            engine
+                .reconcile_predicate_index(&query, &[])
+                .await
+                .unwrap()
+                .value
+                .keys,
+            vec![key()]
+        );
+        let vars = json!({"entity":{"type":"PROJECT","id":id(100)},"favorite":false})
+            .as_object()
+            .unwrap()
+            .clone();
+        let removal = json!({"setFavorite":{"result":{"__typename":"GraphqlMutationSuccess","effects":[{
+            "__typename":"SoupUpdated","item":{"__typename":"GraphqlSoupProject","id":id(100),"isFavorited":false}
+        }]}}});
+        let core = crate::optimistic_projection_mutations(&removal, 0);
+        let projections =
+            augment_optimistic(engine.storage(), FAVORITE, None, &vars, &removal, core)
+                .await
+                .unwrap();
+        let queued = engine
+            .enqueue_optimistic_mutation_with_projections(
+                None,
+                BeginOptimisticWrite {
+                    identity_bindings: &[],
+                    uuid: "00000000-0000-7000-8000-000000000007",
+                    query: FAVORITE,
+                    operation_name: None,
+                    variables: &vars,
+                    data: &removal,
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
+                MutationClaimRequest {
+                    owner: "runner".into(),
+                    now_ms: 0,
+                    lease_expires_at_ms: 1000,
+                },
+                projections,
+            )
+            .await
+            .unwrap();
+        assert!(
+            engine
+                .reconcile_predicate_index(&query, &[])
+                .await
+                .unwrap()
+                .value
+                .keys
+                .is_empty()
+        );
+        // Unrelated properties remain live while the favorite write is pending.
+        assert!(matches(&mut engine, literal(1, 11)).await);
+        let InitialClaimOutcome::Claimed(claim) = queued.initial_claim else {
+            panic!("initial claim")
+        };
+        engine
+            .rollback_optimistic_write(
+                queued.transaction_id,
+                MutationClaimToken {
+                    owner: "runner".into(),
+                    generation: claim.lease_generation,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            engine
+                .reconcile_predicate_index(&query, &[])
+                .await
+                .unwrap()
+                .value
+                .keys,
+            vec![key()]
+        );
+        write(&mut engine, FAVORITE, &vars, &removal, VIEWER).await;
+        assert!(
+            engine
+                .reconcile_predicate_index(&query, &[])
+                .await
+                .unwrap()
+                .value
+                .keys
+                .is_empty()
+        );
+        assert!(matches(&mut engine, literal(1, 11)).await);
+    });
 }
 fn literal(definition: u128, option: u128) -> Value {
     json!({"literal":{"propertyDefinitionId": id(definition), "value":{"selectOption":id(option)}}})
@@ -355,7 +460,7 @@ fn property_optimism_only_patches_the_modified_definition() {
         else {
             panic!("property patch expected")
         };
-        assert_eq!(profile, &vocabulary::profile_v5());
+        assert_eq!(profile, &vocabulary::profile_v6());
         assert_eq!(exact.len(), 3);
         assert!(
             exact

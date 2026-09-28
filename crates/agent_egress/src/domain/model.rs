@@ -619,6 +619,7 @@ impl EgressTarget {
     pub fn name(&self) -> String {
         match self {
             Self::McpServer(McpDestination::Macro) => "macro".to_owned(),
+            Self::McpServer(McpDestination::Preview) => "macro-preview".to_owned(),
             Self::McpServer(McpDestination::Connected(slug)) => slug.as_str().to_owned(),
             Self::GitHubGit { endpoint } => format!("git {}", endpoint.path_and_query()),
         }
@@ -632,6 +633,8 @@ impl EgressTarget {
 /// is no reserved word to shadow, and no connected app a name could hide.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum McpDestination {
+    /// Internal, session-scoped live preview tools.
+    Preview,
     /// Macro's own MCP server, available to every session.
     Macro,
     /// One of the owner's Pipedream-connected apps.
@@ -651,6 +654,9 @@ impl McpDestination {
     /// same egress URLs a sandbox is, so it reads them the same way the
     /// router does rather than being told the answer a second way.
     pub fn from_path(path: &str) -> Option<Self> {
+        if path == "/mcp-preview" {
+            return Some(Self::Preview);
+        }
         if path == MACRO_MCP_PATH {
             return Some(Self::Macro);
         }

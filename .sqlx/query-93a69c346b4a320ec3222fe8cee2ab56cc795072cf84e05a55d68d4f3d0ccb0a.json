@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"PdfHighlightAnchor\" SET text = 'edited words' WHERE uuid = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "93a69c346b4a320ec3222fe8cee2ab56cc795072cf84e05a55d68d4f3d0ccb0a"
+}

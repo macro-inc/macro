@@ -1,6 +1,14 @@
 import type { NotificationType } from '@core/types';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import type { NotificationStack } from '@notifications';
+import {
+  entityDiscussionVerb,
+  isEntityDiscussionEvent,
+} from '@notifications/entity-discussion';
+import {
+  getNotificationAgentSender,
+  getUniqueAgentSenders,
+} from '@notifications/notification-sender';
 import { createMemo } from 'solid-js';
 import type { Notification } from '../types/notification';
 import {
@@ -57,13 +65,20 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
   // Sender display labels for the notification/stack. GitHub PR senders are
   // always named by the GitHub login carried in the notification metadata —
   // never by a linked Macro user's name, even when the notification has a
-  // `sender_id`. Macro senders resolve to their display name.
+  // `sender_id`. Macro senders resolve to their display name; agents, which
+  // have no `sender_id`, are named from the metadata.
   // Memoized so the per-sender name resolution (which has side effects: it
   // queues a fetch and registers a reactive effect) runs once per dependency
   // change rather than on every call from the description() formatters.
   const senderLabels = createMemo((): string[] => {
     if (props.notification) {
-      const tag = props.notification.notification_metadata.tag;
+      const metadata = props.notification.notification_metadata;
+      if (
+        isEntityDiscussionEvent(metadata) &&
+        metadata.content.senderDisplayName
+      )
+        return [metadata.content.senderDisplayName];
+      const tag = metadata.tag;
       if (isGithubNotificationType(tag)) {
         const login = getGithubSenderLogin(props.notification);
         return login ? [login] : [];
@@ -71,14 +86,39 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
       if (props.notification.sender_id) {
         return [macroFirstName(props.notification.sender_id)];
       }
-      return [];
+      const agent = getNotificationAgentSender(props.notification);
+      return agent ? [agent.name] : [];
     }
     if (props.stack) {
+      if (
+        props.stack.type === 'initiative_discussion' ||
+        props.stack.type === 'crm_discussion'
+      ) {
+        return [
+          ...new Set(
+            props.stack.notifications.flatMap((notification) => {
+              const meta = notification.notification_metadata;
+              if (
+                isEntityDiscussionEvent(meta) &&
+                meta.content.senderDisplayName
+              )
+                return [meta.content.senderDisplayName];
+              return notification.sender_id
+                ? [macroFirstName(notification.sender_id)]
+                : [];
+            })
+          ),
+        ];
+      }
       if (isGithubNotificationType(props.stack.type)) {
         return getUniqueGithubLogins(props.stack.notifications);
       }
       const macroIds = getUniqueSenderIds(props.stack.notifications);
-      return macroIds.map(macroFirstName);
+      const agents = getUniqueAgentSenders(props.stack.notifications);
+      return [
+        ...macroIds.map(macroFirstName),
+        ...agents.map((agent) => agent.name),
+      ];
     }
     return [];
   });
@@ -96,10 +136,15 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
 
     // Single notification: "Peter mentioned you"
     if (isSingleNotification()) {
+      const metadata = (props.notification ?? props.stack?.notifications[0])
+        ?.notification_metadata;
+      const action = isEntityDiscussionEvent(metadata)
+        ? entityDiscussionVerb(metadata)
+        : getActionVerb(type);
       if (sender && type !== 'ai_response') {
-        return `${sender} ${getActionVerb(type)}`;
+        return `${sender} ${action}`;
       }
-      return getActionVerb(type);
+      return action;
     }
 
     // Stack with multiple senders

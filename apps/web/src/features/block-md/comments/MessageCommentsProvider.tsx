@@ -1,3 +1,4 @@
+import { URL_PARAMS } from '@block-md/constants';
 import {
   type CommentId,
   commentView,
@@ -17,6 +18,7 @@ import {
   DELETE_COMMENT_COMMAND,
   MARK_SELECTED_COMMENT_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
+import { useParamNavigationCount } from '@core/component/ParamsProvider';
 import { useUserId } from '@core/context/user';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { CommentNode } from '@macro-inc/lexical-core';
@@ -34,8 +36,10 @@ import {
 } from 'lexical';
 import {
   type Accessor,
+  createComputed,
   createEffect,
   createMemo,
+  on,
   onCleanup,
   untrack,
   useContext,
@@ -183,7 +187,27 @@ export const MessageCommentsProvider: VoidComponent<{
       );
     });
     element.toggleAttribute('data-comment-inactive', inactive);
+    // Resolved discussions keep their range but drop the highlight; an
+    // overlapping open or unloaded discussion keeps it.
+    const resolved = node.getIDs().every((id) => {
+      const live = threads.filter(
+        (thread) =>
+          thread.state.anchor?.type === 'markdown' &&
+          thread.state.anchor.mark_id === id &&
+          !thread.state.deleted_at
+      );
+      return live.length > 0 && live.every((thread) => thread.state.resolved);
+    });
+    element.toggleAttribute('data-comment-resolved', resolved);
   };
+
+  const refreshMarkPresentation = (markId: string) =>
+    editor.getEditorState().read(() => {
+      for (const [key, element] of Object.entries(mountedMarks[markId] ?? {})) {
+        const node = $getNodeByKey<CommentNode>(key);
+        if (node && element) updateMarkPresentation(node, element);
+      }
+    });
 
   const removeThreadPlacement = (state: MessageThread['state']) => {
     if (!state.deleted_at && state.anchor !== null) return;
@@ -460,6 +484,7 @@ export const MessageCommentsProvider: VoidComponent<{
         element?.classList.remove('draft');
         element?.removeAttribute('data-comment-inactive');
       }
+      untrack(() => refreshMarkPresentation(anchor.id));
       setMarks(anchor.id, anchor);
     }
 
@@ -477,18 +502,33 @@ export const MessageCommentsProvider: VoidComponent<{
     }
   });
 
-  // Navigate to the comment named by the URL `comment_id`, once, after comments
-  // load. Latched on the raw `comment_id` (not `target.messageId()`, which also
-  // tracks the resolve query) so a settling GET cannot re-arm and steal focus
-  // from a later user action such as opening a thread or starting a draft.
-  let handledComment: string | undefined;
+  // Navigate to the comment named by the URL `comment_id`, once per
+  // navigation, after comments load. Latched on navigations of `comment_id`
+  // (not `target.messageId()`, which also tracks the resolve query) so a
+  // settling GET cannot re-arm and steal focus from a later user action such as
+  // opening a thread or starting a draft, while a repeat click on a link to the
+  // same comment still navigates. Once a link has navigated the block, a value
+  // change without a navigation is the URL `comment_id` showing through after a
+  // navigation that cleared it, and is not a request to go there.
+  const commentNavigationCount = useParamNavigationCount(URL_PARAMS.commentId);
+  let navigation = 0;
+  let handledNavigation: number | undefined;
+  createComputed(
+    on(
+      [() => props.activeComment?.(), commentNavigationCount],
+      ([comment, count], previous) => {
+        const [previousComment, previousCount] = previous ?? [];
+        if (
+          count !== previousCount ||
+          (count === 0 && comment !== previousComment)
+        )
+          navigation += 1;
+      }
+    )
+  );
   createEffect(() => {
     const rawComment = props.activeComment?.() ?? undefined;
-    if (!rawComment) {
-      handledComment = undefined;
-      return;
-    }
-    if (rawComment === handledComment) return;
+    if (!rawComment || navigation === handledNavigation) return;
 
     // The following reads resolve asynchronously; the effect re-runs and
     // completes the navigation once they are ready, then latches.
@@ -507,7 +547,7 @@ export const MessageCommentsProvider: VoidComponent<{
       // Resolved as unanchored (a Discussion root): nothing to open in the margin.
       activeCommentThreadSignal.set(null);
       setHighlightedId(null);
-      handledComment = rawComment;
+      handledNavigation = navigation;
       return;
     }
 
@@ -521,7 +561,7 @@ export const MessageCommentsProvider: VoidComponent<{
       firstEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     activeCommentThreadSignal.set(comment.threadId);
-    handledComment = rawComment;
+    handledNavigation = navigation;
   });
 
   autoRegister(

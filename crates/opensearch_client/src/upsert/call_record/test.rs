@@ -4,7 +4,7 @@ fn segment() -> UpsertCallRecordSegmentArgs {
     UpsertCallRecordSegmentArgs {
         call_id: "call1".to_string(),
         transcript_id: "seg1".to_string(),
-        channel_id: "channel1".to_string(),
+        channel_id: Some("channel1".to_string()),
         participant_ids: vec!["macro|gab@macro.com".to_string()],
         channel_name: Some("Standup".to_string()),
         name: Some("Weekly standup".to_string()),
@@ -67,4 +67,16 @@ fn child_doc_body_has_no_properties_or_name() {
     assert!(doc.get("properties").is_none());
     assert!(doc.get("name").is_none());
     assert_eq!(doc["call_relation"]["parent"], "call1");
+}
+
+#[test]
+fn standalone_call_indexes_without_a_channel() {
+    let mut seg = segment();
+    seg.channel_id = None;
+    seg.channel_name = None;
+    let doc = parent_doc_body(&seg);
+    assert!(doc["channel_id"].is_null());
+    assert!(doc.get("channel_name").is_none());
+    assert_eq!(doc["name"], "Weekly standup");
+    assert_eq!(doc["entity_id"], "call1");
 }

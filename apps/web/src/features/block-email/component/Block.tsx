@@ -1,6 +1,7 @@
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { ContentLoading } from '@components/app/ContentLoading';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
@@ -20,7 +21,8 @@ export default function BlockEmail() {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
-  const threadData = createEmailThreadSource(threadId, threadQuery).thread;
+  const source = createEmailThreadSource(threadId, threadQuery);
+  const threadData = source.thread;
 
   // Email threads are absent from quick access, so the entity the block-level
   // commands act on has to come from here. Gated on isSuccess so the
@@ -64,7 +66,7 @@ export default function BlockEmail() {
   };
 
   return (
-    <Suspense>
+    <Suspense fallback={<ContentLoading />}>
       <DocumentBlockContainer title={title() ?? 'Email'}>
         <div class="size-full" tabIndex={-1}>
           <EmailThreadLoadGate
@@ -77,8 +79,13 @@ export default function BlockEmail() {
           >
             <Show when={threadId()}>
               {(id) => (
-                <Suspense>
-                  <EmailBlockAdapter title={title()} threadId={id} />
+                <Suspense fallback={<ContentLoading />}>
+                  <EmailBlockAdapter
+                    title={title()}
+                    threadId={id}
+                    source={source}
+                    threadTransport={() => threadQuery.transport}
+                  />
                 </Suspense>
               )}
             </Show>

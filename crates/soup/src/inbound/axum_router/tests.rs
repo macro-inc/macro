@@ -225,6 +225,15 @@ impl SoupService for MockSoup {
 struct MockEmail;
 
 impl EmailService for MockEmail {
+    async fn set_thread_archived(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _id: uuid::Uuid,
+        _archived: bool,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn mark_thread_unread(
         &self,
         _macro_id: MacroUserIdStr<'static>,
@@ -692,6 +701,15 @@ struct MockEmailLinkResult {
 }
 
 impl EmailService for MockEmailLinkResult {
+    async fn set_thread_archived(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _id: uuid::Uuid,
+        _archived: bool,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn mark_thread_unread(
         &self,
         _macro_id: MacroUserIdStr<'static>,

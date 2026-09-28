@@ -1,6 +1,7 @@
+import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
 import type { ApiThread } from '@service-email/generated/schemas';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo, on } from 'solid-js';
 import type { EmailThreadSource } from '../context/email-thread-context';
 import type { EmailThread } from '../core/email-thread';
 
@@ -14,6 +15,7 @@ export function toEmailThread(thread: ApiThread): EmailThread {
     latest_inbound_message_ts: thread.latest_inbound_message_ts,
     link_id: thread.link_id,
     messages: thread.messages.map((message) => ({
+      calendar_invitations: message.calendar_invitations,
       attachments: message.attachments.map((attachment) => ({
         content_id: attachment.content_id,
         db_id: attachment.db_id,
@@ -119,6 +121,34 @@ export function createEmailThreadSource(
     }
   );
   const thread = () => snapshot().thread;
+  // Memo equality prevents ordinary email refreshes from revalidating calendar state.
+  const scheduling = createMemo(
+    () => {
+      const current = thread();
+      return (
+        current && {
+          threadId: current.db_id,
+          invitations: JSON.stringify(
+            current.messages
+              .filter((message) => message.calendar_invitations?.length)
+              .map((message) => [message.db_id, message.calendar_invitations])
+          ),
+        }
+      );
+    },
+    undefined,
+    {
+      equals: (a, b) =>
+        a?.threadId === b?.threadId && a?.invitations === b?.invitations,
+    }
+  );
+  // Only a change inside an already-loaded thread, never its first load or a switch.
+  createEffect(
+    on(scheduling, (next, previous) => {
+      if (next && next.threadId === previous?.threadId)
+        invalidateInvitationScheduling(next.threadId);
+    })
+  );
   return {
     id: () => thread()?.db_id ?? query.resolvedThreadId ?? threadId(),
     thread,

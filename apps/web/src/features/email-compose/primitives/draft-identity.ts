@@ -51,7 +51,9 @@ function observeAvailableDraftIdentity(
         current.kind !== 'none' &&
         current.draftId === result.draft.db_id &&
         current.threadId === result.draft.thread_db_id &&
-        current.queued === (result.persistence === 'queued')
+        current.queued === (result.persistence === 'queued') &&
+        (result.persistence === 'queued' ||
+          current.inboxId === result.draft.link_id)
       )
         return;
       session.dispatch({
@@ -60,6 +62,7 @@ function observeAvailableDraftIdentity(
         identity: {
           draftId: result.draft.db_id,
           threadId: result.draft.thread_db_id,
+          inboxId: result.draft.link_id,
           persistence: result.persistence,
         },
       });

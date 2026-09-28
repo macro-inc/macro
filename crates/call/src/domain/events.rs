@@ -20,7 +20,7 @@ pub struct CallStartedMetadata {
     /// Identifier of the started call.
     pub call_id: Uuid,
     /// Identifier of the channel containing the call.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// User who created the call.
     pub created_by: MacroUserIdStr<'static>,
     /// Time at which the call was created.
@@ -45,7 +45,7 @@ pub struct CallRecordArchivedMetadata {
     /// Identifier shared by the active call and archived call record.
     pub call_id: Uuid,
     /// Identifier of the channel containing the call record.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// User who created the call.
     pub created_by: MacroUserIdStr<'static>,
     /// Time at which the call started.
@@ -68,7 +68,7 @@ pub struct CallRecordUpdatedMetadata {
     /// Identifier of the updated call record.
     pub call_id: Uuid,
     /// Identifier of the channel containing the call record.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// User who updated the record, or `None` for an internal caller.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
     /// New custom display name, or `None` when unchanged.
@@ -83,7 +83,7 @@ pub struct CallRecordDeletedMetadata {
     /// Identifier of the deleted call record.
     pub call_id: Uuid,
     /// Identifier of the channel that contained the call record.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// User who deleted the record, or `None` for an internal caller.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
 }
@@ -94,7 +94,7 @@ pub struct CallRecordSummarizedMetadata {
     /// Identifier of the summarized call record.
     pub call_id: Uuid,
     /// Identifier of the channel containing the call record.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// Whether an AI-generated display name was persisted with the summary.
     pub ai_name_generated: bool,
 }
@@ -105,7 +105,7 @@ pub struct CallRecordingReadyMetadata {
     /// Identifier of the call record whose recording is ready.
     pub call_id: Uuid,
     /// Identifier of the channel containing the call record.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
 }
 
 /// Lifecycle and recording events published to [`MacroCallsTopic`].

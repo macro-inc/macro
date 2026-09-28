@@ -30,6 +30,9 @@ pub(crate) struct ResolvedImage {
 pub(crate) trait MarkdownImageResolver: Send + Sync {
     async fn resolve_static(&self, url: &str) -> Option<ResolvedImage>;
     async fn resolve_dss(&self, user_id: &MacroUserIdStr<'_>, id: &str) -> Option<ResolvedImage>;
+    /// Resolve an image URL built from the configured static file service and
+    /// an attachment ID returned by an authorized channel read.
+    async fn resolve_channel_image(&self, url: &str) -> Option<ResolvedImage>;
 }
 
 #[cfg(test)]
@@ -42,12 +45,22 @@ impl MarkdownImageResolver for () {
     async fn resolve_dss(&self, _user_id: &MacroUserIdStr<'_>, _id: &str) -> Option<ResolvedImage> {
         None
     }
+
+    async fn resolve_channel_image(&self, _url: &str) -> Option<ResolvedImage> {
+        None
+    }
 }
 
 #[async_trait]
 impl MarkdownImageResolver for ToolServiceContext {
     async fn resolve_static(&self, url: &str) -> Option<ResolvedImage> {
         fetch_public_and_encode(url).await
+    }
+
+    async fn resolve_channel_image(&self, url: &str) -> Option<ResolvedImage> {
+        // Unlike arbitrary markdown URLs, these URLs come from server config.
+        // Allow the configured local static file service during development.
+        fetch_and_encode(url).await
     }
 
     async fn resolve_dss(&self, user_id: &MacroUserIdStr<'_>, id: &str) -> Option<ResolvedImage> {

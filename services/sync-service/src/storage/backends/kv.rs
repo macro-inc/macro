@@ -56,6 +56,12 @@ impl SnapshotStorage for Kv {
         Ok(snapshot)
     }
 
+    async fn delete_snapshot(&self) -> worker::Result<()> {
+        let key = format!("{}/{}.snapshot", self.document_id, self.document_id);
+        crate::timeout_ez!(self.inner.delete(&key))
+            .with_context(|| format!("failed to delete snapshot: {key}"))
+    }
+
     #[tracing::instrument(skip_all, ret)]
     async fn has_snapshot(&self) -> worker::Result<bool> {
         Ok(!crate::timeout_ez!(

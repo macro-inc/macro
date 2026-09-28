@@ -13,23 +13,23 @@ export const TabbedControl: ParentComponent<
 > = (props) => {
   return (
     <KSegmentedControl
-      class="w-full text-sm rounded-xs border border-edge-muted relative overflow-hidden"
+      class="w-full text-sm rounded-full relative"
       value={props.value}
       defaultValue={props.defaultValue ?? props.list[0]?.value}
       onChange={props.onChange}
       disabled={props.disabled}
     >
       <div class="relative" role="presentation">
-        <div class="flex" role="presentation">
+        <div class="flex h-8" role="presentation">
           <For each={props.list}>
             {(item) => (
               <KSegmentedControl.Item
                 value={item.value}
                 disabled={props.disabled}
-                class="border-r border-edge-muted last:border-r-0"
+                class="relative flex-1 rounded-full has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus data-disabled:pointer-events-none data-disabled:opacity-50"
               >
                 <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
-                <KSegmentedControl.ItemLabel class="relative text-ink-muted/70 size-full px-2.5 py-1 text-xs font-medium data-checked:text-ink data-checked:bg-edge hover:text-ink hover:bg-ink/6 data-checked:hover:bg-edge block">
+                <KSegmentedControl.ItemLabel class="relative flex size-full items-center justify-center rounded-full border border-transparent px-4 text-xs font-medium text-ink-extra-muted data-checked:text-ink data-checked:bg-active data-checked:border-edge-frame hover:text-ink select-none transition-colors duration-120 motion-reduce:transition-none">
                   {item.label}
                 </KSegmentedControl.ItemLabel>
               </KSegmentedControl.Item>

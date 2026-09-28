@@ -14,6 +14,8 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 import { queryClient } from '../client';
+import { getSoupEntityById, optimisticUpdateSoupEntity } from '../soup/cache';
+import { soupKeys } from '../soup/keys';
 import { withCallbacks } from '../utils';
 
 import {
@@ -60,6 +62,8 @@ export function favoriteEntityType(
       return 'crm_company';
     case 'crm_contact':
       return 'crm_contact';
+    case 'foreign':
+      return 'foreign_entity';
     default:
       return undefined;
   }
@@ -156,9 +160,27 @@ export function invalidateFavorites() {
     return refreshActiveGraphqlFavoritesQueries();
   }
 
-  return queryClient.invalidateQueries({
-    queryKey: favoriteKeys.list._def,
-  });
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: favoriteKeys.list._def }),
+    queryClient.invalidateQueries({
+      queryKey: soupKeys._def,
+      predicate: (query) =>
+        query.queryKey.some(
+          (part) =>
+            part !== null &&
+            typeof part === 'object' &&
+            'favorites_only' in part &&
+            part.favorites_only === true
+        ),
+    }),
+  ]).then(() => undefined);
+}
+
+function updateSoupFavorite(entityId: string, favorite: boolean) {
+  const item = getSoupEntityById(entityId);
+  return item
+    ? optimisticUpdateSoupEntity({ ...item, is_favorited: favorite })
+    : undefined;
 }
 
 type FavoriteMutationContext = { rollback: () => void } | undefined;
@@ -194,6 +216,7 @@ export function useAddFavoriteMutation(callbacks?: AddFavoriteCallbacks) {
             queryKey: favoriteKeys.list._def,
           });
           const previous = readLists();
+          const soupUpdate = updateSoupFavorite(args.entityId, true);
           const optimistic = pendingFavorite(args);
           writeLists((prev, filter) =>
             favoriteMatchesFilter(optimistic, filter)
@@ -204,7 +227,10 @@ export function useAddFavoriteMutation(callbacks?: AddFavoriteCallbacks) {
               : prev
           );
           return {
-            rollback: () => restoreLists(previous),
+            rollback: () => {
+              restoreLists(previous);
+              soupUpdate?.rollback();
+            },
           };
         },
         onError: (_error, _args, context) => {
@@ -245,6 +271,7 @@ export function useRemoveFavoriteMutation(callbacks?: RemoveFavoriteCallbacks) {
             queryKey: favoriteKeys.list._def,
           });
           const previous = readLists();
+          const soupUpdate = updateSoupFavorite(args.entityId, false);
           const keep = (favorite: Favorite) =>
             !(
               favorite.entityType === args.entityType &&
@@ -255,7 +282,10 @@ export function useRemoveFavoriteMutation(callbacks?: RemoveFavoriteCallbacks) {
             favorites: prev.favorites.filter(keep),
           }));
           return {
-            rollback: () => restoreLists(previous),
+            rollback: () => {
+              restoreLists(previous);
+              soupUpdate?.rollback();
+            },
           };
         },
         onError: (_error, _args, context) => {

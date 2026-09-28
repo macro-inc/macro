@@ -30,7 +30,7 @@ import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { Show, Suspense } from 'solid-js';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
-import type { MarkdownBlockSpec, MarkdownData } from '../definition';
+import type { MarkdownData } from '../definition';
 import { OldOverlay } from '../history/OldOverlay';
 import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
@@ -78,18 +78,8 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const isInstructions = () =>
     instructionsMdId.isSuccess && documentId === instructionsMdId.data;
   const markdownState = createMarkdownDocumentState();
-  const { setRevisions, setRewriting } = markdownState.rewrite;
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: markdownState.params.navigate,
-    setPatches: ({
-      patches,
-    }: Parameters<MarkdownBlockSpec['setPatches']>[0]) => {
-      setRewriting(false);
-      setRevisions(patches);
-    },
-    setIsRewriting: () => {
-      setRewriting(true);
-    },
   });
   const notificationSource = useGlobalNotificationSource();
 

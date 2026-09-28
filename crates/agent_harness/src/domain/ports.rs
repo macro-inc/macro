@@ -15,9 +15,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{HarnessError, Result};
 use super::model::{
-    AgentKind, AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, DeclinedMention,
-    HarnessCommand, PriorMessage, ProvisionedEgress, ReachableRepository, SandboxEgress,
-    SessionAnnouncement, SessionBlocker, SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, ConversationContext,
+    DeclinedMention, HarnessCommand, ProvisionedEgress, ReachableRepository, ResolvedReply,
+    SandboxEgress, SessionAnnouncement, SessionBlocker, SpawnContainer,
 };
 use super::notifications::PlannedNotification;
 use super::sandbox::SandboxResizeEffect;
@@ -117,6 +117,21 @@ pub trait PermissionPolicySource: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<PermissionPolicyConfig>> + Send;
 }
 
+/// Loads a persona's choice of whether it is a coding agent.
+///
+/// Read when a turn is announced or its reply resolved, like
+/// [`PermissionPolicySource`] is read on attach, so changing the agent's
+/// setting takes effect on its next turn. The domain applies the choice
+/// with [`crate::domain::model::is_coding_agent`].
+pub trait CodingAgentSource: Send + Sync + 'static {
+    /// The persona's setting for `bot`; `None` only for a fixed system bot,
+    /// which has no persona.
+    fn coding_agent_choice(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = anyhow::Result<Option<bool>>> + Send;
+}
+
 /// Durable attach/detach bookkeeping for harness runtime connections.
 ///
 /// The registry itself is in-process liveness; this is what lets the rest of
@@ -155,23 +170,25 @@ pub trait MessagePromptContext: Send + Sync + 'static {
         origin: &super::model::AnnounceOrigin,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Read up to ten preceding live messages with a fresh access check.
-    fn preceding_messages(
+    /// Read the prompt's discussion, the channel activity around it, what the
+    /// prompt replies to, and the comment anchor it sits on, with a fresh
+    /// access check.
+    fn conversation_context(
         &self,
         actor: &MacroUserIdStr<'static>,
         origin: &super::model::AnnounceOrigin,
-    ) -> impl Future<Output = Result<Vec<PriorMessage>>> + Send;
+    ) -> impl Future<Output = Result<ConversationContext>> + Send;
 }
 
-/// Composes an agent prompt from raw markdown and optional channel history.
+/// Composes an agent prompt from raw markdown and optional conversation context.
 pub trait AgentPromptComposer: Send + Sync + 'static {
     /// Return the markdown that should be delivered to the agent runtime.
-    /// `None` sanitizes a prompt without adding a channel-context node.
+    /// `None` sanitizes a prompt without adding a conversation-context node.
     fn compose(
         &self,
         prompt_markdown: &str,
         parent: Option<&messages::domain::models::MessageParent>,
-        messages: Option<&[PriorMessage]>,
+        context: Option<&ConversationContext>,
     ) -> impl Future<Output = Result<String>> + Send;
 }
 
@@ -253,13 +270,25 @@ impl AgentSessionNotifier for NoopAgentSessionNotifier {
     }
 }
 
-/// Posts a pointer to a new agent session into its originating thread.
+/// Speaks for an agent session in the thread that prompted it.
+///
+/// What gets said depends on the session's [`AgentKind`]: a coding agent's
+/// turn is announced as a magic chip that renders the session live, and a
+/// chat agent's as a pending reply that [`Self::resolve`] later turns into
+/// the answer. The domain names the kind and the facts; the adapter owns
+/// what either looks like.
 pub trait SessionAnnouncer: Send + Sync + 'static {
-    /// Publish one session announcement, returning the message it became.
+    /// Post the message a turn is answered through, returning what it became.
     fn announce(
         &self,
         announcement: SessionAnnouncement,
     ) -> impl Future<Output = Result<AnnouncedMessage>> + Send;
+
+    /// Replace a chat agent's pending reply with how its turn ended.
+    ///
+    /// A coding agent's magic chip renders the turn itself, so there is
+    /// nothing to replace and this does nothing for one.
+    fn resolve(&self, resolution: ResolvedReply) -> impl Future<Output = Result<()>> + Send;
 
     /// Tell a thread why its mention opened no session.
     ///
@@ -314,6 +343,14 @@ pub trait RuntimeConnections: Send + Sync + 'static {
 /// the owner's MCP servers needs their rows. What the domain keeps is *when* -
 /// once, at spawn, for the session's own owner.
 pub trait SandboxEgressProvisioner: Send + Sync + 'static {
+    /// Internal session tools at an address reachable by an external runtime.
+    fn external_mcp_servers(
+        &self,
+        egress: &SandboxEgress,
+    ) -> Vec<agent_client_protocol::schema::v1::McpServer> {
+        vec![egress.internal_mcp_server(), egress.preview_mcp_server()]
+    }
+
     /// The egress environment for one session, on behalf of `owner`, and the
     /// hash its session row must carry for that environment to mean anything.
     ///

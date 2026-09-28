@@ -1,10 +1,8 @@
 //! Agent session access extractor.
 //!
-//! A session's permissions are entirely its own `entity_access` rows: the
-//! owner with owner access, and - when the session was opened by a mention - the
-//! channel that mention was posted in as editor. The dedicated channel a
-//! session owns is deliberately not consulted; who participates in it says
-//! nothing about who may act on the session.
+//! Sessions use their canonical grants, link permissions, and inherited document
+//! access. Public links allow anonymous viewing; control requests still require
+//! authentication. Session channel participation does not itself grant access.
 
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -119,19 +117,23 @@ where
             });
         }
 
-        let Some(macro_user_id) = macro_user_id else {
-            return Err(ExtractorError::Unauthorized);
-        };
-
         let permission = service
             .get_entity_permission(
-                Some(&macro_user_id),
+                macro_user_id.as_deref(),
                 &session_id,
                 EntityType::AgentSession,
                 None,
             )
             .await
             .map_err(ExtractorError::from)?;
+
+        let permission = if macro_user_id.is_none() {
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::View,
+            }
+        } else {
+            permission
+        };
 
         if !permission.satisfies::<T>() {
             return Err(ExtractorError::Unauthorized);
@@ -143,7 +145,9 @@ where
                     entity_id: session_id,
                     entity_type: EntityType::AgentSession,
                 },
-                auth: EntityAccessAuth::Authenticated(macro_user_id),
+                auth: macro_user_id
+                    .map(EntityAccessAuth::Authenticated)
+                    .unwrap_or(EntityAccessAuth::Unauthenticated),
                 entity_permission: permission,
                 _marker: PhantomData,
             },

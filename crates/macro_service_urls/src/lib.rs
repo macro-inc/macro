@@ -561,6 +561,12 @@ service_url! {
             dev: "https://dev-gateway.macro.com/agent-harness",
             prod: "https://gateway.macro.com/agent-harness",
         },
+        /// Scheduled action service API URL.
+        pub ScheduledActionServiceUrl {
+            local: "http://localhost:8099",
+            dev: "https://dev-gateway.macro.com/scheduled-action",
+            prod: "https://gateway.macro.com/scheduled-action",
+        },
         /// Sandbox-facing agent harness egress proxy URL.
         /// Override the local default when sandbox clients need a Docker-network
         /// address or a public tunnel rather than the host's loopback address.
@@ -625,5 +631,14 @@ service_url! {
             dev: "https://ai-editing-worker-dev.macroverse.workers.dev",
             prod: "https://ai-editing-worker.macroverse.workers.dev",
         },
+    }
+}
+
+service_url! {
+    /// Control and internal MCP surface of the live preview service.
+    pub struct PreviewGatewayUrl {
+        local: "http://localhost:8110",
+        dev: "https://dev-gateway.macro.com/preview",
+        prod: "https://gateway.macro.com/preview",
     }
 }

@@ -121,6 +121,20 @@ describe('call resolution signaling', () => {
 });
 
 describe('getCallRecordResolution', () => {
+  it('does not publish a channel ring resolution for a standalone meeting', async () => {
+    const { getCallRecordResolution } = await import('../call-resolution');
+    expect(
+      getCallRecordResolution(
+        {
+          callId: 'standalone-call',
+          channelId: null,
+          isActive: false,
+          participants: [],
+        },
+        'macro|person@example.com'
+      )
+    ).toBeNull();
+  });
   it('resolves an active call after the user has joined, even if they left', async () => {
     const { getCallRecordResolution } = await import('../call-resolution');
 

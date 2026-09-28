@@ -121,13 +121,14 @@ async function cachedThreadIdentity(threadId: string) {
  * thrown as a ThrownResultError with typed result codes.
  */
 export async function fetchGraphqlEmailThread(
-  threadId: string
+  threadId: string,
+  offset = 0
 ): Promise<ApiThread> {
   const client = getGraphqlSoupClient();
   const identity = await cachedThreadIdentity(threadId);
   const variables: EmailThreadPageQueryVariables = {
     threadId: identity.canonical,
-    offset: 0,
+    offset,
     limit: DEFAULT_THREAD_MESSAGES_LIMIT,
   };
   const result = await client

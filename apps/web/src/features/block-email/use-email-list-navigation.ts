@@ -37,7 +37,7 @@ export function useEmailListNavigation(
     const list = source();
     if (list) return list.entities();
     const from = panel?.handle.referredFrom();
-    if (from !== 'mail' && from !== 'inbox') return [];
+    if (from !== 'mail' && from !== 'home') return [];
     return soup?.rows().map((row) => row.original) ?? [];
   };
   const target = (direction: -1 | 1) =>

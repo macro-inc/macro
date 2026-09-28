@@ -263,8 +263,26 @@ pub trait RunStream: Sync {
     > + Send;
 }
 
+/// Host operation receiving repository facts independently of ACP presentation.
+pub trait WorkingBranchReporter: Send + Sync {
+    /// Persist the authoritative branch for the reported repository.
+    fn set_working_branch<'a>(
+        &'a self,
+        repository_url: &'a str,
+        branch: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<(), rootcause::Report>> + Send + 'a>>;
+}
+
 /// Deliver one translated update to the session's client.
 pub trait SessionNotifier {
+    /// Report a provider repository's branch to the host's session operation.
+    fn set_working_branch(
+        &self,
+        session: &SessionId,
+        repository_url: &str,
+        branch: &str,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
     /// Report the provider's PR to the host's shared session operation.
     fn set_pull_request(
         &self,

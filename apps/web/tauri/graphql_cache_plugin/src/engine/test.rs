@@ -41,6 +41,32 @@ fn spawn_handle() -> EngineHandle {
     EngineHandle::new(storage, None)
 }
 
+#[test]
+fn storage_generation_survives_native_reopening_and_rotates_after_clear() {
+    let dir = tempfile::tempdir().unwrap();
+    let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
+    let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+    let first = block_on(handle.current_storage_generation()).unwrap();
+    assert_eq!(
+        block_on(handle.clone().current_storage_generation()).unwrap(),
+        first
+    );
+    handle.shutdown().unwrap();
+    let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+    assert_eq!(
+        block_on(handle.current_storage_generation()).unwrap(),
+        first
+    );
+    block_on(handle.clear()).unwrap();
+    let replacement = block_on(handle.current_storage_generation()).unwrap();
+    assert_ne!(replacement, first);
+    assert_eq!(
+        block_on(handle.current_storage_generation()).unwrap(),
+        replacement
+    );
+    handle.shutdown().unwrap();
+}
+
 fn write(
     handle: &EngineHandle,
     origin: Option<&str>,

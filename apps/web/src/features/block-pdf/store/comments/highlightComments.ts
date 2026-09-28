@@ -3,9 +3,7 @@ import { useCurrentPageViewport } from '@block-pdf/signal/pdfViewer';
 import {
   createPdfDraftThreadId,
   type PdfComment,
-  type PdfReply,
   type PdfRoot,
-  type ViewerCommentType,
 } from '@block-pdf/type/comments';
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
 import { useUserId } from '@core/context/user';
@@ -19,7 +17,7 @@ import {
   HighlightType,
   type IHighlight,
 } from '../../model/Highlight';
-import { sortComments } from '../commentsResource';
+import { anchoredThread } from './anchoredThread';
 import { useDeleteNewComments } from './commentOperations';
 
 const getHighlightPos = (highlight: IHighlight, viewportHeight: number) => {
@@ -31,52 +29,6 @@ const getHighlightPos = (highlight: IHighlight, viewportHeight: number) => {
     console.error('Error getting highlight pos', e, highlight);
     return null;
   }
-};
-
-const getHighlightThread = (
-  highlight: IHighlight
-): { root: PdfRoot; replies: PdfReply[] } | null => {
-  const commentType: ViewerCommentType = 'highlight';
-
-  const thread = highlight.thread;
-  if (!thread) return null;
-
-  const comments = [...thread.comments].sort(sortComments);
-
-  const rootComment = comments[0];
-
-  const commentBase = {
-    type: commentType,
-    isNew: false,
-    threadId: rootComment.threadId,
-    rootId: rootComment.commentId,
-    anchorId: highlight.uuid,
-  };
-
-  const replies: PdfReply[] = [];
-  for (let i = 1; i < comments.length; i++) {
-    const comment = comments[i];
-    replies.push({
-      ...commentBase,
-      id: comment.commentId,
-      createdAt: comment.createdAt,
-      owner: comment.owner,
-      author: comment.sender || comment.owner,
-      text: comment.text,
-    });
-  }
-
-  const root: PdfRoot = {
-    ...commentBase,
-    id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
-    owner: rootComment.owner,
-    author: rootComment.sender || rootComment.owner,
-    text: rootComment.text,
-    children: replies.map((r) => r.id),
-  };
-
-  return { root, replies };
 };
 
 export const useHighlightComments = () => {
@@ -133,7 +85,8 @@ export const useHighlightComments = () => {
           continue;
         }
 
-        const highlightThread = getHighlightThread(highlight);
+        if (!highlight.thread) continue;
+        const highlightThread = anchoredThread('highlight', highlight.thread);
         if (!highlightThread) continue;
 
         const { root, replies } = highlightThread;

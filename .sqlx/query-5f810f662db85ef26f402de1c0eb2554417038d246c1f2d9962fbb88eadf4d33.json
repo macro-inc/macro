@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_session SET working_branch = 'cursor/no-pr', repo_url = 'https://github.com/example/example' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5f810f662db85ef26f402de1c0eb2554417038d246c1f2d9962fbb88eadf4d33"
+}

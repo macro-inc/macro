@@ -17,10 +17,9 @@ use channels::domain::{
 };
 use cowlike::CowLike;
 use crm::domain::service::CrmService;
-use doppleganger::Mirror;
 use either::Either;
 use email::domain::{
-    models::{EnrichedEmailThreadPreview, GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
+    models::{GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
     ports::EmailPreviewServiceReadOnly,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -52,10 +51,6 @@ use models_soup::{
     call_record::SoupCallRecord,
     comms::{SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
-    email_thread::{
-        SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview,
-        SoupLabel,
-    },
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
     reminder::SoupReminder,
@@ -66,6 +61,9 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
+
+mod agent_metadata;
+mod favorites;
 
 #[cfg(test)]
 mod tests;
@@ -217,6 +215,9 @@ pub struct SoupImpl<T, U, V, C, K, Crm, F, Rem> {
     foreign_entity_service: F,
     /// the interface for interacting with reminders
     reminders_service: Rem,
+    /// Optional captured branch facts supplied by the owning changes domain.
+    agent_branches: Option<Arc<dyn agent_changes::domain::ports::SessionBranchReader>>,
+    favorites: Option<Arc<dyn favorites::FavoriteReader>>,
 }
 
 impl<T, U, V, C, K, Crm, F, Rem> SoupImpl<T, U, V, C, K, Crm, F, Rem>
@@ -252,7 +253,42 @@ where
             crm_service,
             foreign_entity_service,
             reminders_service,
+            agent_branches: None,
+            favorites: None,
         }
+    }
+
+    /// Attach persisted working-branch facts for agent rows.
+    pub fn with_agent_branches(
+        mut self,
+        reader: impl agent_changes::domain::ports::SessionBranchReader,
+    ) -> Self {
+        self.agent_branches = Some(Arc::new(reader));
+        self
+    }
+
+    /// Attach the owning favorites service for viewer-scoped query filtering.
+    pub fn with_favorites<S: ::favorites::domain::ports::FavoritesService>(
+        mut self,
+        service: Arc<S>,
+    ) -> Self {
+        self.favorites = Some(Arc::new(favorites::Reader(service)));
+        self
+    }
+
+    async fn favorite_entities(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        ast: Option<&EntityFilterAst>,
+    ) -> Result<Option<Vec<Entity<'static>>>, SoupErr> {
+        if ast.and_then(|ast| ast.favorites_only) != Some(true) {
+            return Ok(None);
+        }
+        let reader = self
+            .favorites
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Soup favorites reader is not configured"))?;
+        Ok(Some(reader.read(user).await?))
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -454,6 +490,12 @@ where
             Some((s, f)) => (Some(s), f),
         };
 
+        let include_initiatives = item_filters::ast::initiative::initiatives_requested(
+            filters
+                .as_ref()
+                .and_then(|filter| filter.initiative_filter.as_deref()),
+        );
+
         let res = self
             .frecency
             .get_frecency_page(FrecencyPageRequest {
@@ -464,7 +506,11 @@ where
             })
             .await?;
 
-        let entities: Vec<_> = res.ids().map(|f| f.entity.copied()).collect();
+        let entities: Vec<_> = res
+            .ids()
+            .filter(|f| include_initiatives || f.entity.entity_type != EntityType::Initiative)
+            .map(|f| f.entity.copied())
+            .collect();
 
         let res = self
             .handle_soup_by_ids(
@@ -563,7 +609,7 @@ where
         let mut email_ids = Vec::new();
         for candidate in &touched {
             match candidate.entity.entity_type {
-                EntityType::Document | EntityType::Chat => {
+                EntityType::Document | EntityType::Chat | EntityType::Initiative => {
                     main_entities.push(candidate.entity.copied())
                 }
                 // Projects are rows of this feed in both soup types, but the
@@ -839,7 +885,8 @@ where
                 EntityType::Document
                 | EntityType::Chat
                 | EntityType::CalendarEvent
-                | EntityType::AgentSession => main_entities.push(candidate.entity.copied()),
+                | EntityType::AgentSession
+                | EntityType::Initiative => main_entities.push(candidate.entity.copied()),
                 // Same split as the touched feed: the expanded by-ids query
                 // omits project rows, so they hydrate unexpanded separately.
                 EntityType::Project => match soup_type {
@@ -1059,26 +1106,10 @@ where
         let items: Vec<SoupItem<()>> = email_response
             .items
             .into_iter()
-            .map(
-                |EnrichedEmailThreadPreview {
-                     thread,
-                     attachments,
-                     labels,
-                     mut frecency_score,
-                     participants,
-                     ..
-                 }| {
-                    frecency_scores.push(frecency_score.take());
-                    let soup_email = SoupEnrichedEmailThreadPreview {
-                        thread: SoupEmailThreadPreview::mirror(thread),
-                        attachments: Vec::<SoupAttachment>::mirror(attachments),
-                        participants: Vec::<SoupContact>::mirror(participants),
-                        labels: Vec::<SoupLabel>::mirror(labels),
-                        extra: (),
-                    };
-                    SoupItem::EmailThread(soup_email)
-                },
-            )
+            .map(|mut preview| {
+                frecency_scores.push(preview.frecency_score.take());
+                SoupItem::EmailThread(preview.into())
+            })
             .collect();
 
         Ok(Either::Right(items.into_iter().zip(frecency_scores).map(
@@ -1514,7 +1545,20 @@ where
         R: Clone + Serialize + Send,
     {
         let entity_filter = req.filters().clone();
-        let req = req.into_ast()?;
+        let mut req = req.into_ast()?;
+        if req.entity_ast().and_then(|ast| ast.favorites_only) == Some(true)
+            && !matches!(&req.cursor, SoupQuery::Simple(_))
+        {
+            return Err(SoupErr::AstErr(item_filters::ast::ExpandErr::ApiAst(
+                "favorites_only requires a timestamp sort".into(),
+            )));
+        }
+        let favorite_entities = self.favorite_entities(&req.user, req.entity_ast()).await?;
+        if let Some(entities) = &favorite_entities {
+            req.cursor = req
+                .cursor
+                .map(|ast| ast.map(|ast| favorites::apply(ast, entities)));
+        }
         let limit = req.limit.clamp(1, 500);
 
         // CRM-scoped visibility (team-wide email scope or hidden CRM
@@ -1531,17 +1575,35 @@ where
         }
 
         // Borrow before email's builder consumes team_receipt.
-        let crm_company_request = req.build_crm_company_request(&team_receipt);
+        let mut crm_company_request = req.build_crm_company_request(&team_receipt);
         let foreign_entity_source_ids = req.build_foreign_entity_source_ids(team_receipt.as_ref());
+        let metadata_source_ids = foreign_entity_source_ids.clone();
+        let metadata_user = req.user.to_string();
         let foreign_entity_query = req.build_foreign_entity_query();
         let email_request = req.build_email_request(team_receipt);
         let comms_request = req.build_comms_request();
         let comms_thread_request = req.build_comms_thread_request();
         let call_request = req.build_call_request();
-        let reminder_request = req.build_reminder_request(limit.into());
+        let mut reminder_request = req.build_reminder_request(limit.into());
+        if let Some(entities) = &favorite_entities {
+            crm_company_request = crm_company_request.and_then(|mut request| {
+                favorites::intersect(
+                    &mut request.company_ids,
+                    favorites::ids(entities, EntityType::CrmCompany),
+                )
+                .then_some(request)
+            });
+            reminder_request = reminder_request.and_then(|mut request| {
+                favorites::intersect(
+                    &mut request.reminder_ids,
+                    favorites::ids(entities, EntityType::Reminder),
+                )
+                .then_some(request)
+            });
+        }
         let sort_direction = req.sort_direction;
 
-        match req.cursor {
+        let output: Result<SoupOutput<R, SoupCandidate>, SoupErr> = match req.cursor {
             SoupQuery::Simple(SimpleQueryInner(cursor)) => {
                 let sort_method = *cursor.sort_method();
 
@@ -1682,7 +1744,23 @@ where
                     next_cursor,
                 )))
             }
-        }
+        };
+        let mut output = output?;
+        let items = match &mut output {
+            SoupOutput::Simple(page) => &mut page.items,
+            SoupOutput::Frecency(page) => &mut page.items,
+            SoupOutput::Touched(page) => &mut page.items,
+            SoupOutput::Notified(page) => &mut page.items,
+        };
+        agent_metadata::enrich(
+            &self.foreign_entity_service,
+            self.agent_branches.as_deref(),
+            metadata_user,
+            metadata_source_ids,
+            items,
+        )
+        .await?;
+        Ok(output)
     }
 }
 
@@ -1803,9 +1881,17 @@ where
     #[tracing::instrument(err, skip(self, req))]
     async fn get_user_soup_grouped(
         &self,
-        req: GroupedSortRequest<'_>,
+        mut req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         let user_id = req.user_id.clone();
+        if let Some(entities) = self
+            .favorite_entities(&user_id, Some(req.cursor.filter()))
+            .await?
+        {
+            req.cursor = req
+                .cursor
+                .map_filter(|ast| favorites::apply(ast, &entities));
+        }
         let items = self.handle_grouped_soup_request(req).await?;
         self.populate_grouped_items(user_id, items).await
     }

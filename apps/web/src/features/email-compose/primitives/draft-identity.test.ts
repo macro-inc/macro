@@ -127,6 +127,7 @@ describe('durable draft identity', () => {
       async (): Promise<ReadResult> => ({
         draft: message('server', {
           thread_db_id: 'server-thread',
+          link_id: 'server-inbox',
           is_draft: true,
         }),
         persistence: 'committed',
@@ -138,6 +139,7 @@ describe('durable draft identity', () => {
     await vi.waitFor(() => expect(root.session.serverConfirmed()).toBe(true));
     expect(root.session.draftId()).toBe('server');
     expect(root.session.threadId()).toBe('server-thread');
+    expect(root.session.inboxId()).toBe('server-inbox');
     await Promise.resolve();
     expect(read.mock.calls.length).toBeLessThanOrEqual(2);
     root.dispose();

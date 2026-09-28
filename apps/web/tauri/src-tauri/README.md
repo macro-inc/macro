@@ -32,6 +32,14 @@ focused diagnostic, not startup/performance measurements. Persistent-cache start
 and explicit integrity checks are described in the
 [cache guide](../../../../crates/client/README.md#startup-and-integrity-checks).
 
+The native workspace also optimizes the `turso_core` dependency in Debug builds
+and disables only that dependency's internal debug assertions. Its per-cell B-tree
+validation otherwise makes large read-only filter queries unrepresentative of
+release execution. The app and cache adapters remain debuggable, and their schema,
+codec, scope, and queued-write validation is unchanged. Root-workspace storage tests
+still exercise the ordinary Debug VM; native integration tests exercise this
+optimized dependency profile.
+
 ## iOS 27 scene lifecycle
 
 Apps built with the iOS 27 SDK must use the scene lifecycle. Keep the
@@ -95,6 +103,12 @@ cargo tauri android build
 The `beforeBuildCommand` is `just build-tauri`, which runs `bun run build` and
 emits the frontend into `dist`. Tauri then packages that output
 according to `tauri.conf.json`.
+
+GraphQL hydration checkpoints require the native
+`graphql_cache_current_storage_generation` command. When shipping this frontend
+through the bundle updater, set `MIN_NATIVE_BUILD` to the first native build that
+includes that command. Older binaries must receive a native update before this
+bundle; they cannot validate a saved hydration cursor against the cache database.
 
 ## Automated offline tests (Linux)
 

@@ -26,8 +26,10 @@ import type {
   PreviewAgentSessionsResponse,
   RenameAgentSessionRequest,
   SandboxSizeBody,
+  SharePermissionV2,
   StartResponse,
   StatusResponse,
+  UpdateSharePermissionRequestV2,
 } from './schemas';
 
 /**
@@ -1062,6 +1064,137 @@ export const renameAgentSession = async (
     status: res.status,
     headers: res.headers,
   } as renameAgentSessionResponse;
+};
+
+/**
+ * @summary Read sharing settings for a session the caller can view.
+ */
+export type getAgentSessionPermissionsResponse200 = {
+  data: SharePermissionV2;
+  status: 200;
+};
+
+export type getAgentSessionPermissionsResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getAgentSessionPermissionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSessionPermissionsResponseSuccess =
+  getAgentSessionPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionPermissionsResponseError = (
+  | getAgentSessionPermissionsResponse403
+  | getAgentSessionPermissionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionPermissionsResponse =
+  | getAgentSessionPermissionsResponseSuccess
+  | getAgentSessionPermissionsResponseError;
+
+export const getGetAgentSessionPermissionsUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/permissions`;
+};
+
+export const getAgentSessionPermissions = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<getAgentSessionPermissionsResponse> => {
+  const res = await fetch(getGetAgentSessionPermissionsUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionPermissionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionPermissionsResponse;
+};
+
+/**
+ * @summary Update link, channel, or team sharing after owner authorization.
+ */
+export type updateAgentSessionPermissionsResponse200 = {
+  data: SharePermissionV2;
+  status: 200;
+};
+
+export type updateAgentSessionPermissionsResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type updateAgentSessionPermissionsResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type updateAgentSessionPermissionsResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type updateAgentSessionPermissionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type updateAgentSessionPermissionsResponseSuccess =
+  updateAgentSessionPermissionsResponse200 & {
+    headers: Headers;
+  };
+export type updateAgentSessionPermissionsResponseError = (
+  | updateAgentSessionPermissionsResponse400
+  | updateAgentSessionPermissionsResponse403
+  | updateAgentSessionPermissionsResponse409
+  | updateAgentSessionPermissionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateAgentSessionPermissionsResponse =
+  | updateAgentSessionPermissionsResponseSuccess
+  | updateAgentSessionPermissionsResponseError;
+
+export const getUpdateAgentSessionPermissionsUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/permissions`;
+};
+
+export const updateAgentSessionPermissions = async (
+  sessionId: string,
+  updateSharePermissionRequestV2: UpdateSharePermissionRequestV2,
+  options?: RequestInit
+): Promise<updateAgentSessionPermissionsResponse> => {
+  const res = await fetch(getUpdateAgentSessionPermissionsUrl(sessionId), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateSharePermissionRequestV2),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateAgentSessionPermissionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateAgentSessionPermissionsResponse;
 };
 
 /**

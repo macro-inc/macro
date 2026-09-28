@@ -1,7 +1,7 @@
 import type { UserIconProps } from '@core/component/UserIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import { type MacroId as MacroIdType, tryMacroId } from '@core/user';
-import { type Accessor, Show } from 'solid-js';
+import { tryMacroId } from '@core/user';
+import { Show } from 'solid-js';
 import { InCallAvatarPlaceholderShell } from './InCallAvatarPlaceholder';
 import { profilePictureIdForMember } from './profile-picture-id-for-member';
 import type { InCallPanelMember, UseInCallPanelResult } from './types';
@@ -20,32 +20,22 @@ export function InCallParticipantAvatar(props: {
 
   const size = () => props.size ?? 'md';
 
-  const userIconId = (raw: string): MacroIdType => {
-    const t = raw.trim();
-    return (tryMacroId(t) ?? t) as MacroIdType;
+  const userIconId = () => {
+    const raw = rawIdentity();
+    return raw ? tryMacroId(raw.trim()) : undefined;
   };
 
   return (
     <Show
-      when={rawIdentity}
+      when={userIconId()}
       keyed
-      fallback={<InCallAvatarPlaceholderShell size={size()} />}
+      fallback={
+        <InCallAvatarPlaceholderShell size={size()} variant="placeholder" />
+      }
     >
-      {(raw) => {
-        const id =
-          typeof raw === 'function'
-            ? (raw as Accessor<string | undefined>)()
-            : raw;
-        if (!id) return <InCallAvatarPlaceholderShell size={size()} />;
-        return (
-          <UserIcon
-            id={userIconId(id)}
-            size={size()}
-            suppressClick
-            showTooltip={false}
-          />
-        );
-      }}
+      {(id) => (
+        <UserIcon id={id} size={size()} suppressClick showTooltip={false} />
+      )}
     </Show>
   );
 }

@@ -1,4 +1,5 @@
 import { isCoderHarness } from '@app/features/agents-view/core/agent-kind';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import { isClaudeBotId } from '@core/constant/claudeAgent';
 import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
@@ -100,10 +101,14 @@ export function showsSessionHarness(session: {
   return isCoderHarness(sessionHarnessSlug(session));
 }
 
-/** A model's display name, or its id when the runtime lists no name for it. */
+/**
+ * A model's display name. Runtimes that keep no name for a model report its
+ * slug as the name, so the house label reads the id instead of showing
+ * `claude-sonnet-5` where the rest of the app says "Sonnet 5".
+ */
 export function modelDisplayName(
   id: string,
   available: readonly { id: string; name: string }[]
 ): string {
-  return available.find((model) => model.id === id)?.name ?? id;
+  return modelLabel(id, available.find((model) => model.id === id)?.name);
 }

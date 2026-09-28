@@ -46,9 +46,14 @@ vi.mock('../../ui', () => ({
     subtitle?: string;
     trailing?: JSX.Element;
     status: string;
+    hasContent?: boolean;
     children?: JSX.Element;
   }) => (
-    <div data-testid="tool-card" data-status={props.status}>
+    <div
+      data-testid="tool-card"
+      data-status={props.status}
+      data-expandable={props.hasContent ?? true}
+    >
       <span data-testid="title">{props.title}</span>
       <span data-testid="subtitle">{props.subtitle}</span>
       <span data-testid="trailing">{props.trailing}</span>
@@ -329,6 +334,29 @@ describe('ElicitationPart', () => {
     expect(getByTestId('trailing').textContent).toBe('Answered');
     expect(getByTestId('body').textContent).toContain('blue');
     expect(getByTestId('body').textContent).not.toContain('Red');
+  });
+
+  it('keeps unrecognized answer payloads out of the disclosure', () => {
+    const { getByTestId } = render(() => (
+      <ElicitationPart
+        turn={0}
+        part={part({
+          outcome: {
+            kind: 'accepted',
+            answers: [
+              {
+                name: 'unknown',
+                label: 'Unsupported answer',
+                value: { kind: 'unrecognized', raw: { hiddenPayload: 42 } },
+              },
+            ],
+          },
+        })}
+      />
+    ));
+    expect(getByTestId('tool-card').dataset.expandable).toBe('false');
+    expect(getByTestId('trailing').textContent).toBe('Answered');
+    expect(getByTestId('body').textContent).toBe('');
   });
 
   it('a url request shows the host and opens only after consent', async () => {

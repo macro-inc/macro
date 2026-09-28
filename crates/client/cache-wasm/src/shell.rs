@@ -951,6 +951,18 @@ impl CacheEngine {
         })
     }
 
+    /// Returns the durable cache generation, initializing it when absent.
+    #[wasm_bindgen(js_name = currentStorageGeneration)]
+    pub fn current_storage_generation(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let result = state.engine_mut()?.current_storage_generation().await;
+            let generation = state.engine_result(result)?;
+            Ok(JsValue::from_str(&generation.to_string()))
+        })
+    }
+
     /// Returns the opaque identity bound to this cache, or `null` when no
     /// identity-bearing response has been stored yet.
     #[wasm_bindgen(js_name = boundIdentity)]

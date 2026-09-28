@@ -1,8 +1,4 @@
-import { entityDetailBlockType } from '@app/components/entity-detail/EntityDetail';
-import {
-  entityDetailTarget,
-  useEntityDetailNavigationStack,
-} from '@app/components/entity-detail/EntityDetailNavigationStack';
+import { entityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { makeShareAction } from '@app/features/next-soup/actions';
 import {
   markReminderSeenOnOpen,
@@ -15,6 +11,7 @@ import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
@@ -25,6 +22,7 @@ import {
 } from '@core/util/upload';
 import type { Accessor } from 'solid-js';
 import type { DriveHostActions } from './context/drive-context';
+import { useDriveDetailNavigation } from './drive-detail-navigation';
 
 /** App-specific navigation, upload and sharing adapters for the Drive workspace. */
 export function createDriveHostActions(options: {
@@ -35,7 +33,7 @@ export function createDriveHostActions(options: {
 
   const layout = useSplitLayout();
 
-  const navigation = useEntityDetailNavigationStack();
+  const navigation = useDriveDetailNavigation();
 
   const notificationSource = useGlobalNotificationSource();
 
@@ -81,14 +79,7 @@ export function createDriveHostActions(options: {
           fallbackName: entity.name,
         });
 
-        if (
-          entityDetailBlockType(target) &&
-          navigation.shouldNavigate(target, { event })
-        ) {
-          navigation.reset(target);
-
-          return;
-        }
+        if (navigation.openRoot(target, { event })) return;
       }
 
       void openEntityInSplitFromUnifiedList(entity, {
@@ -109,31 +100,39 @@ export function createDriveHostActions(options: {
 
       if (favorite.entityType === 'document') {
         const block = favoriteBlockName(favorite);
+        let subType:
+          | { type: 'task'; is_completed: boolean }
+          | { type: 'snippet' | 'skill' }
+          | undefined;
+        if (block === 'task') {
+          subType = { type: block, is_completed: false };
+        } else if (block === 'snippet' || block === 'skill') {
+          subType = { type: block };
+        }
 
         const target = entityDetailTarget.document({
           id: favorite.entityId,
           fileType: favorite.fileType ?? undefined,
-          subType:
-            block === 'snippet' || block === 'skill'
-              ? { type: block }
-              : undefined,
+          subType,
           fallbackName: name,
         });
 
         if (
-          entityDetailBlockType(target) &&
-          navigation.shouldNavigate(target, { event })
-        ) {
-          navigation.reset(target);
-
+          navigation.openRoot(target, {
+            event,
+            location: { kind: 'tab', tab: 'owned' },
+          })
+        )
           return;
-        }
       }
 
-      layout.openWithSplit(favoriteSplitContent(favorite), {
+      const result = layout.openWithSplit(favoriteSplitContent(favorite), {
         referredFrom: 'sidebar',
         preferNewSplit: event.shiftKey,
       });
+      if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+        toast.alert('Content already open');
+      }
     },
 
     openFolderInNewSplit: (folder) => {

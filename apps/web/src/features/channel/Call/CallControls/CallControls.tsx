@@ -27,7 +27,7 @@ export function CallControls(props: CallControlsProps) {
   const nativeCall = useMaybeNativeCallState();
 
   return (
-    <Show when={() => readWhen(props.when) && !nativeCall?.snapshot()}>
+    <Show when={readWhen(props.when) && !nativeCall?.snapshot()}>
       <Show
         when={props.variant === 'panel-small'}
         fallback={<CallControlsDefaultAndPanelRow onLeave={props.onLeave} />}

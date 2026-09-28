@@ -1,7 +1,7 @@
 use async_graphql::{Context, ID, Object};
 use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
-use graphql_common::{GraphqlPropertyEntityType, parse_id};
+use graphql_common::{GraphqlCacheDeletion, GraphqlPropertyEntityType, parse_id};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
@@ -12,6 +12,9 @@ use std::{marker::PhantomData, sync::Arc};
 use uuid::Uuid;
 
 use crate::objects::GraphqlProperty;
+
+#[cfg(test)]
+mod delete_test;
 
 /// Mutation root for entity property writes.
 #[derive(Default)]
@@ -37,6 +40,14 @@ pub struct EntityPropertyOptionDelta {
 
 /// GraphQL boundary for setting an entity property.
 pub trait EntityPropertyWriter: Send + Sync + 'static {
+    /// Delete one property assignment after checking edit access to its entity.
+    fn delete_entity_property(
+        &self,
+        entity_type: model_entity::EntityType,
+        entity_id: String,
+        entity_property_id: Uuid,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
     /// Set or attach one property on an entity.
     fn set_entity_property(
         &self,
@@ -64,6 +75,15 @@ pub trait EntityPropertyWriter: Send + Sync + 'static {
 pub struct NoOpEntityPropertyWriter;
 
 impl EntityPropertyWriter for NoOpEntityPropertyWriter {
+    async fn delete_entity_property(
+        &self,
+        _entity_type: model_entity::EntityType,
+        _entity_id: String,
+        _entity_property_id: Uuid,
+    ) -> Result<(), rootcause::Report> {
+        Err(rootcause::report!("property writer is not configured"))
+    }
+
     async fn set_entity_property(
         &self,
         _entity_type: model_entity::EntityType,
@@ -114,6 +134,29 @@ where
     P: PropertiesService,
     A: EntityAccessService,
 {
+    async fn delete_entity_property(
+        &self,
+        entity_type: model_entity::EntityType,
+        entity_id: String,
+        entity_property_id: Uuid,
+    ) -> Result<(), rootcause::Report> {
+        let access = self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                &self.user_id,
+                None,
+                &entity_id,
+                entity_type,
+            )
+            .await
+            .map_err(|err| rootcause::report!(err))?;
+        Ok(self
+            .properties_service
+            .delete_entity_property(&access, entity_property_id)
+            .await
+            .map_err(|err| rootcause::report!(err))?)
+    }
+
     async fn set_entity_property(
         &self,
         entity_type: model_entity::EntityType,
@@ -210,7 +253,9 @@ pub enum GraphqlPropertyTargetEntityType {
     Company,
     /// Document target, including tasks and snippets.
     Document,
-    /// Project target.
+    /// Initiative target, displayed as a Project in the application.
+    Initiative,
+    /// Folder project target.
     Project,
     /// Email thread target.
     Thread,
@@ -227,6 +272,7 @@ impl GraphqlPropertyTargetEntityType {
             Self::Chat => model_entity::EntityType::Chat,
             Self::Company => model_entity::EntityType::CrmCompany,
             Self::Document => model_entity::EntityType::Document,
+            Self::Initiative => model_entity::EntityType::Initiative,
             Self::Project => model_entity::EntityType::Project,
             Self::Thread => model_entity::EntityType::EmailThread,
             Self::User => model_entity::EntityType::User,
@@ -384,6 +430,26 @@ impl<T> PropertiesMutationRoot<T>
 where
     T: EntityPropertyWriter,
 {
+    /// Remove a property assignment and identify its normalized cache record.
+    async fn delete_entity_property(
+        &self,
+        ctx: &Context<'_>,
+        entity_type: GraphqlPropertyTargetEntityType,
+        entity_id: String,
+        entity_property_id: ID,
+    ) -> async_graphql::Result<GraphqlCacheDeletion> {
+        let writer = ctx.data::<T>()?;
+        let assignment_id = parse_id(entity_property_id.clone(), "entityPropertyId")?;
+        writer
+            .delete_entity_property(entity_type.into_model(), entity_id, assignment_id)
+            .await
+            .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+        Ok(GraphqlCacheDeletion::new(
+            "GraphqlProperty",
+            entity_property_id,
+        ))
+    }
+
     /// Set or attach one property on an entity.
     async fn set_entity_property(
         &self,
@@ -476,6 +542,15 @@ mod tests {
     }
 
     impl EntityPropertyWriter for CapturingWriter {
+        async fn delete_entity_property(
+            &self,
+            _entity_type: model_entity::EntityType,
+            _entity_id: String,
+            _entity_property_id: Uuid,
+        ) -> Result<(), rootcause::Report> {
+            Ok(())
+        }
+
         async fn set_entity_property(
             &self,
             entity_type: model_entity::EntityType,

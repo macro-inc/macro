@@ -50,18 +50,24 @@ export function AgentComposer(props: {
     metadata,
     pending,
     queue,
+    session,
     sendNext,
     turn,
     registerQuoteInsert,
   } = useAgentSession();
   const changes = useOptionalAgentChanges();
+  const readOnly = () => session()?.canEdit === false;
 
   // The fold speculates the action the moment it is issued, so success is
   // observed there; only a refusal needs saying here.
-  const act = (action: AgentAction, failure: string) => {
-    void issue(action)?.then((result) => {
-      if (result.isErr()) toast.failure(failure);
-    });
+  const act = async (action: AgentAction, failure: string) => {
+    if (readOnly()) return;
+    try {
+      const result = await issue(action);
+      if (result?.isErr()) toast.failure(failure);
+    } catch {
+      toast.failure(failure);
+    }
   };
 
   // A turn is open in some form: the send button becomes a stop square and
@@ -95,17 +101,20 @@ export function AgentComposer(props: {
   // agent can only reach a file by a URL it can fetch. The chips and the
   // upload flow are the channel composer's.
   const attachmentTracker = createInputAttachmentTracker();
-  const attachFiles = (files: File[]) =>
+  const attachFiles = (files: File[]) => {
+    if (readOnly()) return;
     void uploadInputAttachments({
       files,
       tracker: attachmentTracker,
       uploadFile: (file) =>
         uploadFile(file, 'static', { hideProgressIndicator: true }),
     });
+  };
   // Attachments ride the prompt action itself, so they take the same path as
   // the text: issued once, speculated by the fold, and queued server-side
   // behind a running turn with the files still on them.
   const send = (markdown: string, attachments: InputAttachmentData[]) => {
+    if (readOnly()) return;
     // Queued review notes ride this send: taking them here marks them sent
     // before the prompt is issued, so a second Enter cannot post them again
     // as their own queued prompt (which would then stop-and-flush).
@@ -113,7 +122,10 @@ export function AgentComposer(props: {
     const prompt = [markdown, notes]
       .filter((part) => part.length > 0)
       .join('\n\n');
-    act(promptActionOf(prompt, attachments), 'The message could not be sent');
+    void act(
+      promptActionOf(prompt, attachments),
+      'The message could not be sent'
+    );
     attachmentTracker.clearAttachments();
   };
 
@@ -144,8 +156,13 @@ export function AgentComposer(props: {
         <div class="pb-1.5">
           <QueuedPrompts
             items={queuedItems()}
-            onEdit={(actionId, prompt) => void queue.edit(actionId, prompt)}
-            onRemove={(actionId) => void queue.remove(actionId)}
+            disabled={readOnly()}
+            onEdit={(actionId, prompt) => {
+              if (!readOnly()) void queue.edit(actionId, prompt);
+            }}
+            onRemove={(actionId) => {
+              if (!readOnly()) void queue.remove(actionId);
+            }}
             onNavigateBelow={() => focusInput?.()}
             registerFocusFromBelow={(focus) => {
               focusQueueBottom = focus;
@@ -173,7 +190,12 @@ export function AgentComposer(props: {
         )}
       </For>
       <Input
-        placeholder="Message the agent, @mention anything"
+        placeholder={
+          readOnly()
+            ? 'You have view-only access to this agent session'
+            : 'Message the agent, @mention anything'
+        }
+        readOnly={readOnly()}
         autofocus={props.autofocus}
         busy={busy()}
         hasQueuedMessages={queuedItems().length > 0}
@@ -190,11 +212,15 @@ export function AgentComposer(props: {
         // Prompts go straight to the service, so sending needs a session to
         // post to — a block whose create is still on the wire can be typed
         // into, but not sent from, until the id lands.
-        disabled={loadFailed() || pending()}
+        disabled={loadFailed() || pending() || readOnly()}
         commands={() => metadata()?.availableCommands ?? []}
         onSend={send}
-        onStop={() => act({ type: 'stop' }, 'The agent could not be stopped')}
-        onSendNext={sendNext}
+        onStop={() =>
+          void act({ type: 'stop' }, 'The agent could not be stopped')
+        }
+        onSendNext={() => {
+          if (!readOnly()) sendNext();
+        }}
         attachments={attachmentTracker.attachments()}
         onAttachFiles={attachFiles}
         onRemoveAttachment={(attachment) =>
@@ -216,9 +242,12 @@ export function AgentComposer(props: {
             model={metadata()?.model ?? null}
             changingTo={changingModel(messages(), metadata()?.model ?? null)}
             options={metadata()?.supportedModels ?? []}
-            disabled={loadFailed()}
+            disabled={loadFailed() || readOnly()}
             onSelect={(model) =>
-              act({ type: 'setModel', model }, 'The model could not be changed')
+              void act(
+                { type: 'setModel', model },
+                'The model could not be changed'
+              )
             }
           />
         }

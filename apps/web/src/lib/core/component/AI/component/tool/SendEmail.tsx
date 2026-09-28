@@ -120,7 +120,7 @@ function DraftPreviewButton(props: {
   );
 }
 
-function SentEmailResponse(props: {
+export function SentEmailResponse(props: {
   args: SendEmail;
   chatId: string;
   messageId: string;
@@ -143,12 +143,7 @@ function SentEmailResponse(props: {
               </Suspense>
             </div>
             <span class="shrink-0 text-ink-muted">
-              <CaretRight
-                class={cn(
-                  'size-4 transition-transform',
-                  'group-open:rotate-90'
-                )}
-              />
+              <CaretRight class={cn('size-4', 'group-open:rotate-90')} />
             </span>
           </div>
         </BaseTool>
@@ -167,7 +162,7 @@ function SentEmailResponse(props: {
   );
 }
 
-function DraftEmailResponse(props: {
+export function DraftEmailResponse(props: {
   args: SendEmail;
   draftId: string;
   renderContext: Parameters<typeof BaseTool>[0]['renderContext'];

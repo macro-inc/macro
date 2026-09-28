@@ -1,3 +1,5 @@
+use authentication_service::service::signup_policy::SignupPolicyDenial;
+
 use super::*;
 
 #[test]
@@ -147,11 +149,22 @@ fn development_allowlist(value: Option<&'static str>) -> DevelopmentSignupAllowl
     }
 }
 
+const ALLOWLIST_SETTING_CASES: [Option<&str>; 5] = [
+    None,
+    Some(""),
+    Some(" \t "),
+    Some("not-json-with-secret@example.test"),
+    Some(r#"["allowed.user@example.test"]"#),
+];
+
+const UNLISTED_PUBLIC_EMAIL: &str = "unlisted.user@example.test";
+
 #[test]
 fn develop_signup_policy_requires_configured_allowlist() {
     for value in [None, Some(""), Some(" \t ")] {
-        let error = resolve_signup_policy(Environment::Develop, &development_allowlist(value))
-            .expect_err("Develop should require a nonblank allowlist setting");
+        let error =
+            resolve_signup_policy(Environment::Develop, false, &development_allowlist(value))
+                .expect_err("Develop should require a nonblank allowlist setting");
 
         assert!(
             error
@@ -165,6 +178,7 @@ fn develop_signup_policy_requires_configured_allowlist() {
 fn develop_signup_policy_uses_configured_allowlist() {
     let policy = resolve_signup_policy(
         Environment::Develop,
+        false,
         &development_allowlist(Some(
             r#"["Allowed.User@example.test", "allowed.user@example.test"]"#,
         )),
@@ -175,6 +189,10 @@ fn develop_signup_policy_uses_configured_allowlist() {
     policy
         .authorize_public_email("allowed.user@example.test")
         .expect("configured email should be allowed");
+    assert_eq!(
+        policy.authorize_public_email(UNLISTED_PUBLIC_EMAIL),
+        Err(SignupPolicyDenial::PublicEmailNotAllowed)
+    );
 }
 
 #[test]
@@ -182,6 +200,7 @@ fn develop_signup_policy_rejects_malformed_allowlist_without_leaking_value() {
     let configured_value = "not-json-with-secret@example.test";
     let error = resolve_signup_policy(
         Environment::Develop,
+        false,
         &development_allowlist(Some(configured_value)),
     )
     .expect_err("malformed Develop allowlist should be rejected");
@@ -193,18 +212,32 @@ fn develop_signup_policy_rejects_malformed_allowlist_without_leaking_value() {
 }
 
 #[test]
-fn production_and_local_signup_policy_ignore_allowlist_setting() {
-    for environment in [Environment::Production, Environment::Local] {
-        let policy = resolve_signup_policy(
-            environment,
-            &development_allowlist(Some("not-json-with-secret@example.test")),
-        )
-        .expect("non-Develop environments should not parse the allowlist setting");
+fn develop_signup_policy_bypass_ignores_allowlist_setting() {
+    for value in ALLOWLIST_SETTING_CASES {
+        let policy =
+            resolve_signup_policy(Environment::Develop, true, &development_allowlist(value))
+                .expect("Develop bypass should not parse the allowlist setting");
 
         assert_eq!(policy.allowed_email_count(), None);
-        policy
-            .authorize_public_email("anyone@example.test")
-            .expect("non-Develop environments should allow all public signups");
+        assert_eq!(policy.authorize_public_email(UNLISTED_PUBLIC_EMAIL), Ok(()));
+    }
+}
+
+#[test]
+fn production_and_local_signup_policy_ignore_allowlist_and_bypass() {
+    for environment in [Environment::Production, Environment::Local] {
+        for bypass in [false, true] {
+            for value in ALLOWLIST_SETTING_CASES {
+                let policy =
+                    resolve_signup_policy(environment, bypass, &development_allowlist(value))
+                        .expect("non-Develop environments should not parse the allowlist setting");
+
+                assert_eq!(policy.allowed_email_count(), None);
+                policy
+                    .authorize_public_email("anyone@example.test")
+                    .expect("non-Develop environments should allow all public signups");
+            }
+        }
     }
 }
 

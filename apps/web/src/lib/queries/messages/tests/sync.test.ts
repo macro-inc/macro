@@ -27,7 +27,6 @@ vi.mock('@service-storage/messages', async (importOriginal) => ({
 
 import { registerNonce } from '../../nonce';
 import { MessageNonceKeys, messageKeys } from '../keys';
-import { replaceTargetMessageId } from '../reconcile';
 import { applyMessage, applyThreadState, handleMessageEvent } from '../sync';
 import {
   getThreadRepliesQueryKey,
@@ -77,7 +76,7 @@ afterEach(() => {
   testQueryClient.clear();
   clearTypingIndicators();
 });
-describe.each(['channel', 'document'] as const)(
+describe.each(['channel', 'document', 'initiative', 'crm_company'] as const)(
   '%s uses the shared live cache',
   (type) => {
     const parent: MessageParent = { type, id: 'source' };
@@ -337,7 +336,7 @@ describe.each(['channel', 'document'] as const)(
       ).toEqual(['root']);
     });
     it(
-      type === 'document'
+      type !== 'channel'
         ? "loads a live root's thread state instead of refetching the timeline"
         : 'applies a live root without a metadata refetch',
       async () => {
@@ -346,21 +345,32 @@ describe.each(['channel', 'document'] as const)(
         const rootState = {
           ...state,
           root_id: 'newer-root',
-          anchor: { type: 'markdown', mark_id: 'mark' } as const,
+          anchor:
+            type === 'document'
+              ? ({ type: 'markdown', mark_id: 'mark' } as const)
+              : null,
+        };
+        // An agent's comment: the thread endpoint returns the same
+        // bot_profile the timeline does, never a pre-derived sender.
+        const agentRoot: Message = {
+          ...message(parent, 'newer-root'),
+          sender_id: 'bot|00000000-0000-0000-0000-000000000001',
+          bot_profile: { name: 'Bingus', avatar_url: null },
+          triggered_by: 'macro|b@example.com',
         };
         mocks.thread.mockResolvedValue({
-          root: message(parent, 'newer-root'),
+          root: agentRoot,
           state: rootState,
           replies: [],
         });
         const invalidate = vi.spyOn(testQueryClient, 'invalidateQueries');
         handleMessageEvent({
           parent,
-          actor: 'macro|b@example.com',
+          actor: agentRoot.sender_id,
           nonce: null,
           change: {
             type: 'posted',
-            message: message(parent, 'newer-root'),
+            message: agentRoot,
             mentions: [],
             notification_policy: 'Default',
           },
@@ -368,19 +378,33 @@ describe.each(['channel', 'document'] as const)(
         const newestRoot = () =>
           testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
             .pages[0].items[0];
-        if (type === 'document') {
+        const agentSender = expect.objectContaining({
+          type: 'bot',
+          name: 'Bingus',
+          triggered_by: 'macro|b@example.com',
+        });
+        expect(newestRoot().sender).toEqual(agentSender);
+        if (type !== 'channel') {
           expect(mocks.thread).toHaveBeenCalledWith(parent, 'newer-root');
           await vi.waitFor(() =>
-            expect(newestRoot().state.anchor).toEqual(rootState.anchor)
+            expect(
+              testQueryClient.getQueryData<MessageThread>(
+                getThreadRepliesQueryKey(parent, 'newer-root')
+              )?.state
+            ).toEqual(rootState)
           );
-          expect(
-            testQueryClient.getQueryData<MessageThread>(
-              getThreadRepliesQueryKey(parent, 'newer-root')
-            )?.state
-          ).toEqual(rootState);
+          expect(newestRoot().state.anchor).toEqual(rootState.anchor);
+          const thread = testQueryClient.getQueryData<MessageThread>(
+            getThreadRepliesQueryKey(parent, 'newer-root')
+          );
+          expect(thread?.state).toEqual(rootState);
+          // The margin renders this cached root, so the agent must keep its
+          // name here too rather than falling back to a generic "Bot".
+          expect(thread?.root.sender).toEqual(agentSender);
         } else {
           expect(mocks.thread).not.toHaveBeenCalled();
           expect(newestRoot().id).toBe('newer-root');
+          expect(newestRoot().state.anchor).toBeNull();
         }
         // Only the soft invalidation that leaves mounted timelines alone may run.
         for (const [filters] of invalidate.mock.calls) {
@@ -558,26 +582,40 @@ describe.each(['channel', 'document'] as const)(
       expect(threadReplies()).toEqual([]);
       unsubscribe();
     });
-    it('keeps an own reply whose id is remapped while the fetch is in flight', async () => {
-      const { settleEmpty, threadReplies, unsubscribe } =
-        await expandThreadWithPendingFetch();
-
-      // An own reply is inserted optimistically, then its id is remapped to the
-      // server id (as the send mutation does) before the fetch settles.
-      applyMessage(message(parent, 'optimistic', 'root'), 'posted');
-      replaceTargetMessageId(
-        parent,
-        { kind: 'thread_reply', messageId: 'optimistic', threadId: 'root' },
-        'server-id'
+    it('derives senders for a thread fetched on its own', async () => {
+      mocks.thread.mockReset();
+      const agent = 'bot|00000000-0000-0000-0000-000000000001';
+      mocks.thread.mockResolvedValue({
+        state,
+        root: {
+          ...message(parent, 'root'),
+          sender_id: agent,
+          bot_profile: { name: 'Bingus', avatar_url: null },
+        },
+        replies: [
+          {
+            ...message(parent, 'reply', 'root'),
+            sender_id: agent,
+            bot_profile: { name: 'Bingus', avatar_url: null },
+            triggered_by: 'macro|b@example.com',
+          },
+          message(parent, 'human-reply', 'root'),
+        ],
+      });
+      const thread = await testQueryClient.fetchQuery(
+        threadRepliesQueryOptions(parent, 'root')
       );
-      await settleEmpty();
-
-      // The deferred re-apply matches the reply by its current preview id, so it
-      // lands under the server id rather than being lost to the remap.
-      expect(threadReplies()).toEqual([
-        expect.objectContaining({ id: 'server-id' }),
+      expect(thread.root.sender).toEqual(
+        expect.objectContaining({ type: 'bot', name: 'Bingus' })
+      );
+      expect(thread.replies.map((reply) => reply.sender)).toEqual([
+        expect.objectContaining({
+          type: 'bot',
+          name: 'Bingus',
+          triggered_by: 'macro|b@example.com',
+        }),
+        { type: 'user', id: 'macro|a@example.com', triggered_by: undefined },
       ]);
-      unsubscribe();
     });
     it('skips the sender nonce and scopes ephemeral typing to the parent and root', () => {
       seed();

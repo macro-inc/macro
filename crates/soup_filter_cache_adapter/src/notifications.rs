@@ -278,7 +278,7 @@ async fn retain_complete_parents<S: Storage>(
                     if document.record_key == *record_key
                         && (document.profile == *profile
                             || (*profile == vocabulary::profile_v4()
-                                && document.profile == vocabulary::profile_v5()))
+                                && document.profile == vocabulary::profile_v6()))
                         && document.partition == *partition
             )
         })

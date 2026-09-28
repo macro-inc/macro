@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            grant_row.source_type AS \"source_type!: EntityAccessSourceType\",\n            grant_row.source_id,\n            grant_row.access_level AS \"access_level!: AccessLevel\",\n            grant_row.granted_from_project_id\n        FROM calendar_events event\n        JOIN entity_access grant_row\n          ON grant_row.entity_id = event.id\n         AND grant_row.entity_type = 'calendar_event'\n         AND grant_row.source_type = 'channel'\n        JOIN comms_channel_participants participant\n          ON participant.channel_id::text = grant_row.source_id\n         AND participant.user_id = $2\n         AND participant.left_at IS NULL\n        WHERE event.id = $1\n          AND event.status <> 'cancelled'\n          AND event.visibility IN ('default', 'public')\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_type!: EntityAccessSourceType",
+        "type_info": {
+          "Custom": {
+            "name": "entity_access_source_type",
+            "kind": {
+              "Enum": [
+                "channel",
+                "team",
+                "user",
+                "bot"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "granted_from_project_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "1f9328ecb53d4f78cbceb65c7b092a5bd85efe81fc60714924fedbf29b30434c"
+}

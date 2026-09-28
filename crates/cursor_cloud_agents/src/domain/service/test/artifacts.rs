@@ -267,12 +267,7 @@ async fn a_reloaded_session_re_announces_the_same_artifacts() {
         harness.journal.clone(),
         FakeArtifactStore::new(),
     ));
-    restored.restore_session(
-        session.clone(),
-        Some(CursorAgentId::new("bc-fake")),
-        None,
-        None,
-    );
+    restored.restore_session(session.clone(), Some(CursorAgentId::new("bc-fake")), None);
     restored
         .replay_session(&session)
         .await

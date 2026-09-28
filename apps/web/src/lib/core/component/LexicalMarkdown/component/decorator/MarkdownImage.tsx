@@ -45,6 +45,7 @@ import {
 } from '../../plugins/media';
 import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { MediaButtons } from './MediaButtons';
+import { MediaLoadingPlaceholder } from './MediaLoadingPlaceholder';
 import { ResizeHandle } from './ResizeHandle';
 
 type ImageState = 'loading' | 'ok' | 'error';
@@ -316,7 +317,10 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           crossorigin="anonymous"
           class={cn(
             'h-full object-contain',
-            (state() === 'loading' || state() === 'error') && 'invisible'
+            (state() === 'loading' || state() === 'error') && 'invisible',
+            state() === 'loading' &&
+              !effectiveDims()[0] &&
+              'absolute inset-0 size-0'
           )}
           draggable={true}
           use:internalDrag={true}
@@ -337,9 +341,16 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         </Show>
 
         <Show when={state() === 'loading'}>
-          <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
-            <Spinner />
-          </div>
+          <Show
+            when={effectiveDims()[0] > 0}
+            fallback={
+              <MediaLoadingPlaceholder kind="image" label={props.alt} />
+            }
+          >
+            <div class="absolute top-0 left-0 size-full flex flex-col justify-center items-center gap-2 text-ink-extra-muted bg-hover/50">
+              <Spinner />
+            </div>
+          </Show>
         </Show>
 
         <Show when={uploading() && state() !== 'error'}>

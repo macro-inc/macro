@@ -3,18 +3,21 @@
  *
  * Differences from `@urql/exchange-graphcache`:
  * - cache reads are **async** (the cache is disk-backed, possibly in another
- *   worker/process), so operations needing the network are re-injected into
- *   the forward pipeline through a queue after the read resolves;
+ *   worker/process). Cache-first misses enter the network queue after reading;
+ *   cache-and-network queries start the network without waiting for storage;
  * - invalidation is push-based: the host emits "these operation keys must
  *   re-execute" (local sibling writes, other tabs/webviews, external
  *   invalidations) and the exchange re-executes them as `cache-first`.
  *
  * Request policies:
  * - `cache-first` (default): hit → emit; miss → network.
- * - `cache-and-network`: hit → emit with `stale: true`, then network.
- *   (`toPromise()` ignores stale results, so imperative callers keep
- *   network-fresh semantics for free.)
+ * - `cache-and-network`: read and fetch concurrently; a cache hit may emit with
+ *   `stale: true` only before newer results supersede that read. (`toPromise()`
+ *   ignores stale results, so imperative callers keep network-fresh semantics.)
  * - `network-only`: skip read; response still written to cache.
+ * - Foreground network query results publish before persistence. Their private
+ *   metadata carries a revision acknowledgement for local reconciliation; writes
+ *   remain ordered, and acknowledgements never replay the response payload.
  * - `cache-only`: hit → emit; miss → emit `data: undefined`, no network.
  *
  * Mutations:
@@ -70,12 +73,14 @@ import {
   isOwnerEpochLostError,
   type QueryRevalidationWire,
 } from '../protocol';
+import { createDeferredQueryRereads } from './deferred-query-rereads';
 import {
   compileEntityResolvers,
   type EntityResolverConfig,
 } from './entity-resolvers';
 import {
   normalizedEntityKey,
+  notifyOptimisticMutationEnqueued,
   optimisticContextOf,
   withOptimisticMutationDisposition,
 } from './optimistic';
@@ -104,7 +109,12 @@ const NORMALIZED_CACHE_RESULT_METADATA_KEY = '__macroNormalizedCache';
 
 /** Private authority metadata attached by the normalized-cache exchange. */
 export type NormalizedCacheResultMetadata =
-  | { source: 'live-network'; revision?: CacheRevision }
+  | {
+      source: 'live-network';
+      revision?: CacheRevision;
+      /** Local-only acknowledgement; never rejects or republishes response data. */
+      persistence?: Promise<CacheRevision | undefined>;
+    }
   | { source: 'normalized-cache-hit' }
   | { source: 'affected-cache-reread' };
 
@@ -119,8 +129,17 @@ export function normalizedCacheResultMetadata(
     return { source };
   }
   if (source !== 'live-network') return;
-  const revision = (metadata as { revision?: unknown }).revision;
-  return isCacheRevision(revision) ? { source, revision } : { source };
+  const { revision, persistence } = metadata as {
+    revision?: unknown;
+    persistence?: unknown;
+  };
+  return {
+    source,
+    ...(isCacheRevision(revision) ? { revision } : {}),
+    ...(persistence instanceof Promise
+      ? { persistence: persistence as Promise<CacheRevision | undefined> }
+      : {}),
+  };
 }
 
 function withResultMetadata(
@@ -442,60 +461,72 @@ export function normalizedCacheExchange(
       recoveryPromise?: Promise<void>;
     };
     type QueryState = {
+      /** Includes background persistence for dependency/replacement ordering. */
       networkBoundQueries: number;
+      networkRequestsInFlight: number;
       replacementFallback: boolean;
       deferredAffected: boolean;
       completedReplacementFallback: boolean;
       networkRegistrationSatisfied: boolean;
       retainedReplacementFallback?: RetainedReplacementFallback;
       networkResultVersion: number;
-      queryResultTurn?: Promise<void>;
+      cacheReadVersion: number;
+      networkError?: CombinedError;
     };
+    // Keep write ordering across teardown/remount, including imperative queries
+    // that unsubscribe as soon as the early network result reaches toPromise().
+    const queryResultTurns = new Map<number, Promise<void>>();
     const queryStates = new Map<number, QueryState>();
     const queryState = (key: number): QueryState => {
       let state = queryStates.get(key);
       if (!state) {
         state = {
           networkBoundQueries: 0,
+          networkRequestsInFlight: 0,
           replacementFallback: false,
           deferredAffected: false,
           completedReplacementFallback: false,
           networkRegistrationSatisfied: false,
           networkResultVersion: 0,
+          cacheReadVersion: 0,
         };
         queryStates.set(key, state);
       }
       return state;
     };
 
-    const acquireQueryResultTurn = async (key: number): Promise<() => void> => {
+    // Async reads must not resurrect a torn-down operation, overwrite a newer
+    // network result, or undo a subsequent optimistic/affected cache reread.
+    const beginCacheRead = (key: number): (() => boolean) => {
       const state = queryState(key);
-      const previous = state.queryResultTurn ?? Promise.resolve();
+      const version = ++state.cacheReadVersion;
+      return () =>
+        activeOps.has(key) &&
+        queryStates.get(key) === state &&
+        state.cacheReadVersion === version;
+    };
+
+    const acquireQueryResultTurn = async (key: number): Promise<() => void> => {
+      const previous = queryResultTurns.get(key) ?? Promise.resolve();
       let release!: () => void;
       const current = new Promise<void>((resolve) => {
         release = resolve;
       });
-      state.queryResultTurn = current;
+      queryResultTurns.set(key, current);
       await previous;
       return () => {
         release();
-        if (
-          queryStates.get(key) === state &&
-          state.queryResultTurn === current
-        ) {
-          state.queryResultTurn = undefined;
-        }
+        if (queryResultTurns.get(key) === current) queryResultTurns.delete(key);
       };
     };
 
     const invalidateOlderRetainedFallback = async (
-      key: number,
+      state: QueryState,
       version: number
     ): Promise<void> => {
       while (true) {
-        const state = queryStates.get(key);
-        const retained = state?.retainedReplacementFallback;
-        if (!state || !retained || retained.version >= version) return;
+        const retained = state.retainedReplacementFallback;
+        if (!retained || retained.version >= version) return;
         retained.invalidated = true;
         retained.readyPending = false;
         if (retained.recoveryPromise) {
@@ -607,6 +638,11 @@ export function normalizedCacheExchange(
     const emitAffectedWhileNetworkBound = (key: number): void => {
       const operation = activeOps.get(key);
       if (!operation) return;
+      const state = queryState(key);
+      // Supersede the initial cache snapshot. An affected reread carries newer
+      // local/optimistic state, so let it complete even if network persistence
+      // finishes first; only teardown/remount may discard that update.
+      state.cacheReadVersion += 1;
       void host
         .readQuery({
           opKey: operation.key,
@@ -618,16 +654,39 @@ export function normalizedCacheExchange(
         })
         .then((read) => {
           const active = activeOps.get(key);
-          if (read.kind !== 'hit' || !active) return;
+          if (read.kind !== 'hit' || !active || queryStates.get(key) !== state)
+            return;
           // Preserve the authoritative request while immediately surfacing the
           // newer local view. Its eventual result still gets the deferred
           // cache reread below when it could not register fresh dependencies.
           emitAffectedResult(
-            cacheResult(active, read.data, true, 'affected-cache-reread')
+            cacheResult(
+              active,
+              read.data,
+              state.networkRequestsInFlight > 0,
+              'affected-cache-reread'
+            )
           );
         })
         .catch((error) => options.onCacheError?.(error, operation));
     };
+
+    const affectedRereads = createDeferredQueryRereads(
+      (key, registrationOnly) => {
+        if (!activeOps.has(key)) return;
+        const state = queryStates.get(key);
+        // A request or worker replacement may have started while this read was
+        // deferred. Re-check current state instead of replaying a stale action.
+        if (state?.retainedReplacementFallback) {
+          recoverRetainedReplacementFallback(key);
+        } else if (state && state.networkBoundQueries > 0) {
+          state.deferredAffected = true;
+          if (!state.replacementFallback) emitAffectedWhileNetworkBound(key);
+        } else {
+          reexecuteAffected(key, registrationOnly);
+        }
+      }
+    );
 
     const unsubscribePush = host.onOpsAffected((opKeys) => {
       for (const key of opKeys) {
@@ -639,7 +698,7 @@ export function normalizedCacheExchange(
             !state.replacementFallback &&
             !state.retainedReplacementFallback
           ) {
-            emitAffectedWhileNetworkBound(key);
+            affectedRereads.request(key);
           }
           continue;
         }
@@ -650,7 +709,7 @@ export function normalizedCacheExchange(
           recoverRetainedReplacementFallback(key);
           continue;
         }
-        reexecuteAffected(key, registrationOnly);
+        affectedRereads.request(key, registrationOnly);
       }
     });
 
@@ -662,15 +721,19 @@ export function normalizedCacheExchange(
         makeSubject<Operation>();
 
       const enqueueQueryForward = (op: Operation): void => {
-        queryState(op.key).networkBoundQueries += 1;
+        const state = queryState(op.key);
+        state.networkBoundQueries += 1;
+        state.networkRequestsInFlight += 1;
+        state.networkError = undefined;
         enqueueForward(op);
       };
 
       const finishNetworkQuery = (
         key: number,
+        state: QueryState,
         replacementRegistrationSatisfied: boolean
       ): void => {
-        const state = queryState(key);
+        if (queryStates.get(key) !== state) return;
         const remaining = state.networkBoundQueries - 1;
         if (remaining > 0) {
           state.networkBoundQueries = remaining;
@@ -686,8 +749,8 @@ export function normalizedCacheExchange(
           if (!replacementRegistrationSatisfied) {
             if (state.retainedReplacementFallback) {
               recoverRetainedReplacementFallback(key);
-            } else {
-              reexecuteAffected(key, true);
+            } else if (activeOps.has(key)) {
+              affectedRereads.request(key, true);
             }
           }
         } else if (replacementFallback) {
@@ -707,17 +770,31 @@ export function normalizedCacheExchange(
         }
       >();
       const subscriptionEffectChains = new Map<number, Promise<void>>();
+      // Teardown invalidates queued effects, including when the same operation
+      // is immediately resubscribed after a back/forward-cache restore.
+      const subscriptionGenerations = new Map<number, object>();
       let attemptInFlight = false;
       let drainRunning = false;
+      let drainRequested = false;
       let deferredUntil: number | undefined;
       let drainTimer: ReturnType<typeof setTimeout> | undefined;
 
       function scheduleDrain(delayMs = 0): void {
         if (drainTimer !== undefined) clearTimeout(drainTimer);
-        drainTimer = setTimeout(() => {
-          drainTimer = undefined;
-          void drainQueue();
-        }, delayMs);
+        drainTimer = setTimeout(
+          () => {
+            drainTimer = undefined;
+            void drainQueue();
+          },
+          drainRequested ? 0 : delayMs
+        );
+      }
+
+      function wakeDrain(): void {
+        // Keep the wakeup until the runner can claim again. An interrupted
+        // claim/settlement may still be unwinding and scheduling its backoff.
+        drainRequested = true;
+        scheduleDrain();
       }
 
       function resolveLiveOperationsAsQueued(): void {
@@ -824,8 +901,15 @@ export function normalizedCacheExchange(
         }
         if (drainRunning) return;
         drainRunning = true;
+        drainRequested = false;
         try {
           const now = Date.now();
+          // A wakeup probes immediately, but must retain a future retry
+          // deadline if the durable head is not eligible yet. Consume expired
+          // hints so a head leased by another runner cannot cause a busy loop.
+          if (deferredUntil !== undefined && deferredUntil <= now) {
+            deferredUntil = undefined;
+          }
           const claimed = await host.claimNextMutation(
             queueOwner,
             now,
@@ -833,10 +917,15 @@ export function normalizedCacheExchange(
           );
           if (!claimed) {
             resolveLiveOperationsAsQueued();
+            // Short retries keep their deadline; uncertain five-minute lease
+            // backoffs must not prevent regular polling after a wakeup.
             scheduleDrain(
               deferredUntil === undefined
                 ? EMPTY_QUEUE_POLL_MS
-                : Math.max(0, deferredUntil - Date.now())
+                : Math.min(
+                    EMPTY_QUEUE_POLL_MS,
+                    Math.max(0, deferredUntil - Date.now())
+                  )
             );
             return;
           }
@@ -849,6 +938,7 @@ export function normalizedCacheExchange(
           scheduleDrain(EMPTY_QUEUE_POLL_MS);
         } finally {
           drainRunning = false;
+          if (drainRequested) scheduleDrain();
         }
       }
 
@@ -890,13 +980,18 @@ export function normalizedCacheExchange(
           enqueueForward(hydrationTransportOperation(op));
           return undefined;
         }
+        const readState = queryState(op.key);
+        const isCurrentRead = beginCacheRead(op.key);
         const policy = op.context.requestPolicy;
         if (policy === 'network-only') {
           enqueueQueryForward(op);
           return undefined;
         }
+        const registrationOnly =
+          op.context[REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY] === true;
+        let networkForwarded = false;
         try {
-          const read = await host.readQuery({
+          const pendingRead = host.readQuery({
             opKey: op.key,
             query: queryText(op),
             operationName: operationName(op),
@@ -907,29 +1002,44 @@ export function normalizedCacheExchange(
                 ? 'user-visible'
                 : undefined,
           });
+          // Admit the cache read first, but never wait for the worker's queue
+          // before starting a request that needs the network regardless.
+          if (policy === 'cache-and-network' && !registrationOnly) {
+            networkForwarded = true;
+            enqueueQueryForward(op);
+          }
+          const read = await pendingRead;
+          if (!isCurrentRead()) return undefined;
           if (read.kind === 'hit') {
-            const stale = policy === 'cache-and-network';
-            if (stale) enqueueQueryForward(op);
-            return cacheResult(op, read.data, stale);
+            const state = queryState(op.key);
+            const stale = networkForwarded && state.networkRequestsInFlight > 0;
+            return {
+              ...cacheResult(op, read.data, stale),
+              // A fast offline failure must not discard a slower usable cache
+              // hit, nor may that hit erase the failed revalidation's error.
+              error: networkForwarded ? state.networkError : undefined,
+            };
           }
           if (policy === 'cache-only') {
             return cacheResult(op, undefined, false);
           }
         } catch (error) {
           options.onCacheError?.(error, op);
-          if (isOwnerEpochLostError(error)) {
-            queryState(op.key).replacementFallback = true;
+          if (
+            isOwnerEpochLostError(error) &&
+            queryStates.get(op.key) === readState &&
+            (isCurrentRead() || readState.networkBoundQueries > 0)
+          ) {
+            readState.replacementFallback = true;
           }
+          if (!isCurrentRead()) return undefined;
           // `cache-only` must never touch the network, even when the cache
           // itself fails — degrade to an empty result instead.
           if (policy === 'cache-only') {
             return cacheResult(op, undefined, false);
           }
         }
-        if (op.context[REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY] === true) {
-          return undefined;
-        }
-        enqueueQueryForward(op);
+        if (!networkForwarded && !registrationOnly) enqueueQueryForward(op);
         return undefined;
       }
 
@@ -938,6 +1048,7 @@ export function normalizedCacheExchange(
         op: Operation
       ): Promise<OperationResult | undefined> {
         if (host.disabled) {
+          notifyOptimisticMutationEnqueued(op);
           enqueueForward(op);
           return undefined;
         }
@@ -1042,6 +1153,7 @@ export function normalizedCacheExchange(
             resolveRoute: resolve,
           });
         });
+        notifyOptimisticMutationEnqueued(op);
         try {
           await match(enqueue.initialClaim)
             .with({ kind: 'claimed' }, ({ mutation }) =>
@@ -1070,9 +1182,11 @@ export function normalizedCacheExchange(
       /** Applies operation cache effects serially and isolates every failure. */
       async function applyOperationCacheEffects(
         op: Operation,
-        effects: CacheEffect[]
+        effects: CacheEffect[],
+        isCurrent: () => boolean = () => true
       ): Promise<void> {
         for (const effect of effects) {
+          if (!isCurrent()) return;
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
@@ -1092,20 +1206,110 @@ export function normalizedCacheExchange(
         }
       }
 
+      // Persistence is still ordered/durable, but foreground query consumers do
+      // not await it. The acknowledgement carries only a revision: replaying the
+      // old payload here would overwrite later network or optimistic results.
+      async function persistQueryResult(
+        result: OperationResult,
+        state: QueryState,
+        resultVersion: number
+      ): Promise<CacheRevision | undefined> {
+        const op = result.operation;
+        const releaseTurn = await acquireQueryResultTurn(op.key);
+        const reportError = (error: unknown): void => {
+          try {
+            options.onCacheError?.(error, op);
+          } catch {
+            // A diagnostic callback must not reject an unobserved background
+            // acknowledgement or prevent releasing this query's write turn.
+          }
+        };
+        try {
+          await invalidateOlderRetainedFallback(state, resultVersion);
+          // Resolver failures must not persist partial nulls as authoritative absence.
+          if (result.data == null || result.error) return undefined;
+          const isActive = () =>
+            queryStates.get(op.key) === state && activeOps.has(op.key);
+          const writeArgs = {
+            opKey: op.key,
+            query: queryText(op),
+            operationName: operationName(op),
+            variables: op.variables as Record<string, unknown> | undefined,
+            entityResolvers,
+            data: result.data,
+            identity: options.extractIdentity?.(result.data),
+            registerDependencies: isActive(),
+          };
+          const retained: RetainedReplacementFallback | undefined =
+            result.error === undefined && result.hasNext !== true && isActive()
+              ? {
+                  version: resultVersion,
+                  writeArgs,
+                  readyPending: false,
+                  recovering: false,
+                  invalidated: false,
+                }
+              : undefined;
+          if (retained && state.replacementFallback) {
+            state.retainedReplacementFallback = retained;
+          }
+          try {
+            const write = await host.writeQuery(writeArgs);
+            const deletion = await deleteReportedRecords(result);
+            state.networkRegistrationSatisfied = writeArgs.registerDependencies;
+            if (state.retainedReplacementFallback === retained) {
+              state.retainedReplacementFallback = undefined;
+            }
+            return deletion?.revision ?? write.revision;
+          } catch (error) {
+            reportError(error);
+            // An old-owner failure can arrive after this write started. Retain
+            // only the latest successful response for replacement registration.
+            if (
+              retained &&
+              isActive() &&
+              state.networkResultVersion === resultVersion &&
+              (state.replacementFallback || isOwnerEpochLostError(error))
+            ) {
+              state.replacementFallback = true;
+              state.retainedReplacementFallback = retained;
+            }
+            return undefined;
+          }
+        } catch (error) {
+          reportError(error);
+          return undefined;
+        } finally {
+          try {
+            if (result.hasNext !== true) {
+              const registered = state.networkRegistrationSatisfied;
+              state.networkRegistrationSatisfied = false;
+              finishNetworkQuery(op.key, state, registered);
+            }
+          } catch (error) {
+            reportError(error);
+          } finally {
+            releaseTurn();
+          }
+        }
+      }
+
+      async function deleteReportedRecords(result: OperationResult) {
+        const op = result.operation;
+        if (result.error || result.hasNext || result.data == null) return;
+        try {
+          const keys = options.deletedRecordKeys?.(result) ?? [];
+          if (keys.length) return await host.deleteRecords(keys);
+        } catch (error) {
+          options.onCacheError?.(error, op);
+        }
+      }
+
       async function writeThrough(
         result: OperationResult
       ): Promise<OperationResult> {
         const op = result.operation;
-        const deleteReportedRecords = async () => {
-          if (result.error || result.hasNext || result.data == null) return;
-          try {
-            const keys = options.deletedRecordKeys?.(result) ?? [];
-            if (keys.length) return await host.deleteRecords(keys);
-          } catch (error) {
-            options.onCacheError?.(error, op);
-          }
-        };
-        let output =
+        const output =
           op.kind === 'query'
             ? withResultMetadata(result, { source: 'live-network' })
             : result;
@@ -1116,8 +1320,15 @@ export function normalizedCacheExchange(
           // result after its effects settle.
           const previousEffects =
             subscriptionEffectChains.get(op.key) ?? Promise.resolve();
+          const generation = subscriptionGenerations.get(op.key);
           const effects = previousEffects.then(() =>
-            applyOperationCacheEffects(op, operationCacheEffects(result.data))
+            applyOperationCacheEffects(
+              op,
+              operationCacheEffects(result.data),
+              () =>
+                generation !== undefined &&
+                subscriptionGenerations.get(op.key) === generation
+            )
           );
           subscriptionEffectChains.set(op.key, effects);
           try {
@@ -1139,7 +1350,7 @@ export function normalizedCacheExchange(
               identity: options.extractIdentity?.(result.data),
               entityResolvers,
             });
-            const deletion = await deleteReportedRecords();
+            const deletion = await deleteReportedRecords(result);
             return withResultMetadata(
               {
                 ...result,
@@ -1162,74 +1373,23 @@ export function normalizedCacheExchange(
             };
           }
         } else if (op.kind === 'query') {
-          const releaseTurn = await acquireQueryResultTurn(op.key);
-          try {
-            const state = queryState(op.key);
-            const resultVersion = state.networkResultVersion + 1;
-            state.networkResultVersion = resultVersion;
-            // Every newer result supersedes an older retained payload, even an
-            // error or intermediate streamed result with no cache write.
-            await invalidateOlderRetainedFallback(op.key, resultVersion);
-            // A resolver failure may replace a valid relation with null. Keep
-            // the last usable cache snapshot rather than persisting that null
-            // as authoritative absence.
-            if (result.data != null && !result.error) {
-              const readArgs = {
-                opKey: op.key,
-                query: queryText(op),
-                operationName: operationName(op),
-                variables: op.variables as Record<string, unknown> | undefined,
-                entityResolvers,
-              };
-              const writeArgs = {
-                ...readArgs,
-                data: result.data,
-                identity: options.extractIdentity?.(result.data),
-                registerDependencies: activeOps.has(op.key),
-              };
-              const retained: RetainedReplacementFallback | undefined =
-                result.error === undefined &&
-                result.hasNext !== true &&
-                activeOps.has(op.key) &&
-                state.replacementFallback
-                  ? {
-                      version: resultVersion,
-                      writeArgs,
-                      readyPending: false,
-                      recovering: false,
-                      invalidated: false,
-                    }
-                  : undefined;
-              if (retained) {
-                // Install before the first write: replacement-ready pushes can
-                // arrive synchronously while the cache attempt is settling.
-                state.retainedReplacementFallback = retained;
-              }
-              try {
-                const write = await host.writeQuery(writeArgs);
-                const deletion = await deleteReportedRecords();
-                output = withResultMetadata(result, {
-                  source: 'live-network',
-                  revision: deletion?.revision ?? write.revision,
-                });
-                state.networkRegistrationSatisfied =
-                  writeArgs.registerDependencies;
-                if (state.retainedReplacementFallback === retained) {
-                  state.retainedReplacementFallback = undefined;
-                }
-              } catch (error) {
-                options.onCacheError?.(error, op);
-              }
-            }
-            if (result.hasNext !== true) {
-              const registrationSatisfied = state.networkRegistrationSatisfied;
-              state.networkRegistrationSatisfied = false;
-              finishNetworkQuery(op.key, registrationSatisfied);
-            }
-          } finally {
-            if (!activeOps.has(op.key)) queryStates.delete(op.key);
-            releaseTurn();
+          const state = queryState(op.key);
+          const version = ++state.networkResultVersion;
+          if (result.hasNext !== true) {
+            state.networkRequestsInFlight = Math.max(
+              0,
+              state.networkRequestsInFlight - 1
+            );
           }
+          state.networkError = result.error;
+          // Publication, not persistence, supersedes an older cache snapshot.
+          // A failed network request still permits a slower offline cache hit.
+          if (result.data != null && !result.error) state.cacheReadVersion += 1;
+          const persistence = persistQueryResult(result, state, version);
+          return withResultMetadata(result, {
+            source: 'live-network',
+            persistence,
+          });
         } else if (op.kind === 'mutation') {
           const attempt = queueAttemptOf(op);
           if (attempt) {
@@ -1297,7 +1457,7 @@ export function normalizedCacheExchange(
                     data: result.data,
                   }
                 );
-                await deleteReportedRecords();
+                await deleteReportedRecords(result);
                 if (committed.kind === 'committed-superseded') {
                   replacementTransactionId = committed.replacementTransactionId;
                   disposition = 'superseded';
@@ -1350,7 +1510,7 @@ export function normalizedCacheExchange(
               op,
               operationCacheEffects(result.data)
             );
-            await deleteReportedRecords();
+            await deleteReportedRecords(result);
           }
           if (optimistic) {
             return withOptimisticMutationDisposition(result, {
@@ -1398,9 +1558,14 @@ export function normalizedCacheExchange(
         shared,
         filter((op) => op.kind !== 'query' && op.kind !== 'mutation'),
         tap((op) => {
+          if (op.kind === 'subscription') {
+            subscriptionGenerations.set(op.key, {});
+          }
           if (op.kind === 'teardown') {
+            subscriptionGenerations.delete(op.key);
             activeOps.delete(op.key);
             queryStates.delete(op.key);
+            affectedRereads.forget(op.key);
             host.teardown(op.key).catch(() => undefined);
           }
         })
@@ -1414,8 +1579,12 @@ export function normalizedCacheExchange(
 
       if (!host.disabled) {
         scheduleDrain();
+        // Includes BFCache restoration, even with no active query keys. The
+        // host gates claims on initialization; durable leases still decide
+        // which head is runnable after reconnecting.
+        host.onCacheGenerationChanged(wakeDrain);
         if (typeof addEventListener === 'function') {
-          addEventListener('online', () => scheduleDrain());
+          addEventListener('online', wakeDrain);
         }
       }
       void unsubscribePush;

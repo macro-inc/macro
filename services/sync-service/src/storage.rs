@@ -1,10 +1,13 @@
 use backends::Storage;
+use macro_sync_service_jwt::session::SessionKind;
 use snapshot::SnapshotStorage;
 use tracing::trace;
 use worker::{Env, Error, Result, State};
 
 use crate::{
-    state::DocumentState, storage::backends::durable_kv::DurableKVStorage, timeit, timeit_log,
+    state::{DocumentState, ImportedUpdate},
+    storage::backends::durable_kv::DurableKVStorage,
+    timeit, timeit_log,
 };
 
 pub mod backends;
@@ -14,6 +17,7 @@ pub mod snapshot;
 pub struct SessionStorage {
     snapshot_storage: Storage,
     oplog: DurableKVStorage,
+    kind: SessionKind,
 }
 
 /// Outbound adapter for atomic document updates, sharing the websocket log.
@@ -45,17 +49,20 @@ impl crate::domain::document::DocumentUpdatePort for DocumentUpdateStorage<'_> {
 }
 
 impl SessionStorage {
-    pub fn new(snapshot_storage: Storage, oplog: DurableKVStorage) -> Self {
+    pub fn new(snapshot_storage: Storage, oplog: DurableKVStorage, kind: SessionKind) -> Self {
         Self {
             snapshot_storage,
             oplog,
+            kind,
         }
     }
 
     /// Load document state and apply any pending ops
     pub async fn load_document_state(&self) -> Result<DocumentState> {
         let snapshot = self.get_snapshot().await;
-        let state = match (snapshot, cfg!(feature = "create-default-state")) {
+        let allow_default =
+            self.kind == SessionKind::Document && cfg!(feature = "create-default-state");
+        let state = match (snapshot, allow_default) {
             (Ok(snapshot), _) => DocumentState::try_from_snapshot(snapshot.as_slice()),
             (Err(_e), true) => {
                 let state = DocumentState::new();
@@ -114,13 +121,12 @@ impl SessionStorage {
         Ok(res)
     }
 
-    /// Append a new pending operation to the operation log and return the
-    /// Lexical node IDs that were touched (for blame tracking).
+    /// Persist an update and return its change status and touched Lexical nodes.
     pub async fn append_pending_operation(
         &self,
         operation: &[u8],
         document_state: &DocumentState,
-    ) -> Result<Vec<String>> {
+    ) -> Result<ImportedUpdate> {
         self.oplog.apply_op(document_state, operation).await
     }
 

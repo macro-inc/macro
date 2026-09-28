@@ -431,6 +431,18 @@ impl EngineHandle {
         self.inner.lock().await.engine.current_revision()
     }
 
+    /// Returns the durable cache generation, initializing it when absent.
+    pub async fn current_storage_generation(&self) -> Result<String, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .current_storage_generation()
+            .await
+            .map(|generation| generation.to_string())
+            .map_err(|error| error.to_string())
+    }
+
     /// Cache read; registers `op_id` as active when given.
     pub async fn read(
         &self,

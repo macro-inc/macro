@@ -73,7 +73,11 @@ function closeCallNotification(callId: string) {
  * but take the ring over if the audible tab goes away mid-ring (see
  * `ring-coordination.ts`).
  */
-function startCallRinger(callId: string, shouldStop: () => boolean): Ringer {
+export function startCallRinger(
+  callId: string,
+  shouldStop: () => boolean,
+  maxDurationMs = MAX_RING_DURATION_MS
+): Ringer {
   stopCallRinger(callId);
 
   let participation: RingParticipation | undefined;
@@ -83,7 +87,7 @@ function startCallRinger(callId: string, shouldStop: () => boolean): Ringer {
   participation = participateInRing({
     callId,
     shouldStop,
-    maxDurationMs: MAX_RING_DURATION_MS,
+    maxDurationMs,
     ring: (end) => startRingingLoop(shouldStop, playRingSound(), end).stop,
     onEnd: () => {
       if (activeCallRingers.get(callId) === ringer) {

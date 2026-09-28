@@ -811,7 +811,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     const firstWorker = new FakeWorker();
     const workers = [firstWorker, new FakeWorker()];
     const dedicatedFactory = vi.fn(() => workers.shift() as FakeWorker);
-    const replacements: number[] = [];
+    const replacements = vi.fn();
     const terminalErrors: string[] = [];
     const adapter = createCacheCoordinatorPageAdapter({
       scope: 'scope',
@@ -821,7 +821,7 @@ describe('CacheCoordinatorPageAdapter', () => {
         port: coordinatorPort as unknown as MessagePort,
       }),
       createDedicatedWorker: dedicatedFactory,
-      onEngineReplaced: (epoch) => replacements.push(epoch),
+      onEngineReplaced: replacements,
       onTerminalError: (error) => terminalErrors.push(error.message),
     });
     const started = adapter.start();
@@ -833,11 +833,13 @@ describe('CacheCoordinatorPageAdapter', () => {
       ...version,
       kind: 'engine-replaced',
       ownerEpoch: 1,
+      openOutcome: 'opened-existing',
     });
     coordinatorPort.receive({
       ...version,
       kind: 'engine-replaced',
       ownerEpoch: 1,
+      openOutcome: 'reset-corrupt',
     });
     coordinatorPort.receive({
       ...version,
@@ -848,7 +850,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     });
     coordinatorPort.receive(election(1));
 
-    expect(replacements).toEqual([1]);
+    expect(replacements).toHaveBeenCalledExactlyOnceWith(1, 'opened-existing');
     expect(dedicatedFactory).toHaveBeenCalledOnce();
     expect(firstWorker.messages).toHaveLength(1);
     expect(firstWorker.messages[0]?.message).toMatchObject({

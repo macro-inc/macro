@@ -43,6 +43,10 @@ import {
   fetchGraphqlEmailThread,
   mapGraphqlThreadError,
 } from './graphql/thread';
+import {
+  archiveEmailThread,
+  type EmailArchiveDisposition,
+} from './integration';
 import { emailKeys } from './keys';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
@@ -112,6 +116,45 @@ export async function fetchAndCacheThread(
 
   if (result.isErr()) return err(result.error as any);
   return ok({ thread: result.value });
+}
+
+/**
+ * Read authoritative thread pages directly from REST, without GraphQL's
+ * in-flight deduplication or offline cache fallback. Drafts have no internal
+ * date and sort after sent messages, so continue until the requested message
+ * is present or the server has no more pages.
+ */
+export async function fetchFreshEmailThread(
+  threadId: string,
+  requiredMessageId?: string
+): Promise<Thread> {
+  let offset = 0;
+  let merged: Thread | undefined;
+
+  while (true) {
+    const page = (
+      await throwOnErr(() =>
+        emailClient.getThread({
+          thread_id: threadId,
+          offset,
+          limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+        })
+      )
+    ).thread;
+
+    merged = merged
+      ? { ...page, messages: [...merged.messages, ...page.messages] }
+      : page;
+
+    if (
+      !requiredMessageId ||
+      page.messages.some((message) => message.db_id === requiredMessageId) ||
+      page.messages.length < DEFAULT_THREAD_MESSAGES_LIMIT
+    ) {
+      return merged;
+    }
+    offset += page.messages.length;
+  }
 }
 
 /**
@@ -425,6 +468,7 @@ type ArchiveThreadParams = {
 };
 type ArchiveThreadContext = {
   previousData: InfiniteData<Thread, number> | undefined;
+  disposition?: EmailArchiveDisposition;
 };
 
 /** Optimistically set `inbox_visible` when archiving a thread. */
@@ -469,8 +513,9 @@ export async function trackExternalThreadArchive(
     threadId,
     archive,
   });
+  let disposition: unknown;
   try {
-    await archived;
+    disposition = await archived;
   } catch {
     if (previousData) {
       queryClient.setQueryData(
@@ -479,10 +524,12 @@ export async function trackExternalThreadArchive(
       );
     }
   } finally {
-    queryClient.invalidateQueries({
-      queryKey: emailKeys.threadMessages(threadId).queryKey,
-    });
-    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    if (disposition !== 'queued') {
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(threadId).queryKey,
+      });
+      queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    }
   }
 }
 
@@ -491,16 +538,17 @@ export async function trackExternalThreadArchive(
  * call, rollback on failure, invalidate on settle. Mirrors what
  * `useUndoableArchiveThreadMutation` does through its mutation callbacks.
  */
-async function replayThreadArchive(params: ArchiveThreadParams): Promise<void> {
+async function replayThreadArchive(
+  params: ArchiveThreadParams
+): Promise<EmailArchiveDisposition> {
   const { previousData } = await threadArchiveOnMutate(params);
+  let disposition: EmailArchiveDisposition | undefined;
   try {
-    await throwOnErr(
-      async () =>
-        await emailClient.flagArchived(
-          { id: params.threadId, value: params.archive },
-          params.linkId
-        )
+    disposition = await archiveEmailThread(
+      { id: params.threadId, value: params.archive },
+      params.linkId
     );
+    return disposition;
   } catch (err) {
     if (previousData) {
       queryClient.setQueryData(
@@ -510,10 +558,12 @@ async function replayThreadArchive(params: ArchiveThreadParams): Promise<void> {
     }
     throw err;
   } finally {
-    queryClient.invalidateQueries({
-      queryKey: emailKeys.threadMessages(params.threadId).queryKey,
-    });
-    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    if (disposition !== 'queued') {
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(params.threadId).queryKey,
+      });
+      queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    }
   }
 }
 
@@ -527,29 +577,27 @@ export function useUndoableArchiveThreadMutation(options: {
   /** Bind side effects (e.g. an undo toast) to the pushed undo entry. */
   onPushed?: (
     handle: UndoHandle,
-    params: ArchiveThreadParams
+    params: ArchiveThreadParams,
+    disposition: () => EmailArchiveDisposition | undefined
   ) => { onUndone?: () => void; onRedone?: () => void } | void;
   onError?: (params: ArchiveThreadParams) => void;
 }) {
   return useUndoableMutation<
-    void,
+    EmailArchiveDisposition,
     Error,
     ArchiveThreadParams,
     ArchiveThreadContext
   >(() => ({
     mutationFn: async (params: ArchiveThreadParams) => {
-      await throwOnErr(
-        async () =>
-          await emailClient.flagArchived(
-            {
-              id: params.threadId,
-              value: params.archive,
-            },
-            params.linkId
-          )
+      return await archiveEmailThread(
+        { id: params.threadId, value: params.archive },
+        params.linkId
       );
     },
     onMutate: async (params) => await threadArchiveOnMutate(params),
+    onSuccess: (disposition, _params, context) => {
+      if (context) context.disposition = disposition;
+    },
     onError: (_err, params, context) => {
       if (context?.previousData) {
         queryClient.setQueryData(
@@ -559,17 +607,27 @@ export function useUndoableArchiveThreadMutation(options: {
       }
       options.onError?.(params);
     },
-    onSettled: (_data, _error, params) => {
+    onSettled: (disposition, _error, params) => {
+      if (disposition === 'queued') return;
       queryClient.invalidateQueries({
         queryKey: emailKeys.threadMessages(params.threadId).queryKey,
       });
       queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     },
-    undoFn: async (params) =>
-      replayThreadArchive({ ...params, archive: !params.archive }),
-    redoFn: async (params) => replayThreadArchive(params),
+    undoFn: async (params, context) => {
+      const disposition = await replayThreadArchive({
+        ...params,
+        archive: !params.archive,
+      });
+      if (context) context.disposition = disposition;
+    },
+    redoFn: async (params, context) => {
+      const disposition = await replayThreadArchive(params);
+      if (context) context.disposition = disposition;
+    },
     undoLabel: (params) => (params.archive ? 'Mark Done' : 'Mark Not Done'),
-    onPushed: (handle, params) => options.onPushed?.(handle, params),
+    onPushed: (handle, params, context) =>
+      options.onPushed?.(handle, params, () => context?.disposition),
   }));
 }
 
@@ -672,6 +730,9 @@ function _useScheduleMessageMutation(
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
           });
+          queryClient.invalidateQueries({
+            queryKey: emailKeys.scheduledMessages._def,
+          });
         },
       },
       callbacks
@@ -710,6 +771,11 @@ export function useUnscheduleMessageMutation(
             void queryClient
               .invalidateQueries({
                 queryKey: emailKeys.previews._def,
+              })
+              .catch(Telemetry.error);
+            void queryClient
+              .invalidateQueries({
+                queryKey: emailKeys.scheduledMessages._def,
               })
               .catch(Telemetry.error);
           } catch (error) {

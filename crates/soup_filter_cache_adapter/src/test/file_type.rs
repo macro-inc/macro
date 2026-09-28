@@ -41,6 +41,7 @@ fn item(index: usize) -> Value {
     );
     item["fileType"] = json!(FILE_TYPES[index]);
     item["properties"] = json!([]);
+    item["isFavorited"] = json!(false);
     item
 }
 fn filters(document: Value) -> Value {
@@ -149,7 +150,7 @@ fn expressions() -> Vec<Value> {
 async fn seed<S: PredicateIndexStorage>(engine: &mut Engine<S>) {
     let query = SUPPLEMENT_BACKFILL
         .replace("user {", "user { id")
-        .replace("fileType", "fileType properties { id }");
+        .replace("fileType", "fileType isFavorited properties { id }");
     let data = json!({"user":{"id":"viewer","soup":{"items":(0..FILE_TYPES.len()).map(item).collect::<Vec<_>>()}}});
     let vars = serde_json::Map::new();
     let projections =

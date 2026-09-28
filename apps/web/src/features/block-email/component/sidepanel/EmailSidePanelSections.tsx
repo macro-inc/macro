@@ -6,6 +6,7 @@ import {
 } from '@app/features/property/side-panel/properties';
 import { SidePanel } from '@components/app/side-panel';
 import { References } from '@core/component/References';
+import { queryReadyGate } from '@queries/gate';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { Show, Suspense } from 'solid-js';
 
@@ -61,10 +62,7 @@ function ReferencesSectionConditional(props: { threadId: string }) {
 
   // This condition sits outside the section's Suspense boundary. A pending
   // resource read here would hide the surrounding email view on reconnect.
-  const count = () =>
-    references.isSuccess || references.isError
-      ? (references.data?.length ?? 0)
-      : 0;
+  const count = () => (queryReadyGate(references) ? references.data.length : 0);
 
   return (
     <Show when={count() > 0}>

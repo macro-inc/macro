@@ -39,7 +39,7 @@
 mod test;
 
 use crate::domain::artifact::{ArtifactListing, CollectedArtifact, inline_text, mime_type};
-use crate::domain::error::SessionError;
+use crate::domain::error::{PromptRefusal, SessionError};
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput, ReplayMachine};
 use crate::domain::model::{
@@ -163,6 +163,18 @@ const STREAM_RECONNECT_ATTEMPTS: usize = 5;
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
 const BUSY_ATTEMPTS: usize = 450;
 
+/// How long a prompt waits for the turn gate while a background mirror is
+/// following a run started elsewhere, before giving up.
+///
+/// The same budget as [`BUSY_ATTEMPTS`], because it is the same wait seen
+/// from one step earlier: the mirror follows exactly the run that Cursor
+/// would answer `agent_busy` for. Observed live (prod, 2026-09-27): a mirror
+/// following a run Cursor never ended held the gate for hours, the prompt
+/// behind it never started, and everything queued after it never sent. The
+/// wait has to end somewhere the person can see.
+const GATE_WAIT_BUDGET: std::time::Duration =
+    std::time::Duration::from_secs(BUSY_ATTEMPTS as u64 * POLL_INTERVAL.as_secs());
+
 /// How long a turn that saw no new artifacts waits before listing once more.
 ///
 /// Cursor uploads a run's artifacts as the run finishes, so the listing can
@@ -259,30 +271,41 @@ fn captured_content(
         .collect()
 }
 
-/// Restate a repository rejection as something the person who prompted can
-/// act on, leaving every other failure exactly as it arrived.
+/// Restate a rejection the person who prompted can act on - a repository
+/// Cursor cannot reach, a Cursor account out of budget - in their terms,
+/// leaving every other failure exactly as it arrived.
 ///
 /// The result is a [`SessionError::Rejected`], so it takes the same path a
 /// [`PromptRejected`](crate::domain::error::PromptRejected) already takes:
-/// the prompt is journalled as aborted and the message travels to the client
+/// the prompt is journalled as aborted and the refusal travels to the client
 /// as the `session/prompt` error. Cursor's own body stays in the tracing event —
 /// it names codes and ids that mean nothing to a reader of the chip.
-fn explain_repository_rejection(error: SessionError) -> SessionError {
+fn explain_rejection(error: SessionError) -> SessionError {
     let SessionError::Cursor(report) = &error else {
         return error;
     };
-    let Some(unavailable) =
+    if let Some(unavailable) =
         report.downcast_current_context::<crate::domain::error::RepositoryUnavailable>()
-    else {
-        return error;
-    };
-    tracing::warn!(
-        repo = %unavailable.repo,
-        reason = %unavailable.reason,
-        detail = %unavailable.detail,
-        "cursor rejected the prompt: it could not use the session's repository"
-    );
-    SessionError::Rejected(unavailable.user_message())
+    {
+        tracing::warn!(
+            repo = %unavailable.repo,
+            reason = %unavailable.reason,
+            detail = %unavailable.detail,
+            "cursor rejected the prompt: it could not use the session's repository"
+        );
+        return SessionError::Rejected(PromptRefusal::plain(unavailable.user_message()));
+    }
+    if let Some(exceeded) =
+        report.downcast_current_context::<crate::domain::error::UsageLimitExceeded>()
+    {
+        tracing::warn!(
+            code = %exceeded.code,
+            detail = %exceeded.detail,
+            "cursor rejected the prompt: the account's usage limit is exhausted"
+        );
+        return SessionError::Rejected(exceeded.refusal());
+    }
+    error
 }
 
 /// Whether a failed create is a definite refusal — the prompt never ran, so
@@ -393,6 +416,17 @@ struct SessionState {
     /// whenever Cursor happens to end the stream. Replaced per turn, so a
     /// cancel can never carry into the next one.
     cancel: tokio_util::sync::CancellationToken,
+    /// Fired by cancel; awaited by the background mirror of a run started
+    /// elsewhere ([`CursorSessionService::sync_foreign_runs`]).
+    ///
+    /// Separate from `cancel`, which belongs to the turn: a mirror holds the
+    /// turn gate while a prompt may already be waiting behind it with its own
+    /// token installed, and a stop has to reach both. Replaced per mirror
+    /// sweep, so a stop can never carry into the next one. A stop is the only
+    /// thing that fires it — a prompt arriving behind the mirror waits for
+    /// it instead, because giving up on a run started from cursor.com would
+    /// leave that conversation's run marked abandoned and cancel it.
+    mirror_cancel: tokio_util::sync::CancellationToken,
     /// The model this session's next run will use.
     ///
     /// `None` means "whatever this user's own Cursor settings resolve to" —
@@ -418,15 +452,6 @@ struct SessionState {
 struct Session {
     /// ACP working directory, used by the standalone repository chooser.
     cwd: PathBuf,
-    /// The model id this session was using before the process restarted, when
-    /// it was restored and had one. An id rather than a [`ModelChoice`]: only
-    /// the id is persisted, and its params must be re-resolved against the
-    /// live model table anyway, which can have drifted across the restart.
-    ///
-    /// May also be a value that was never a Cursor id at all — the harness
-    /// seeds its session records with a deployment slug like `claude` — so
-    /// resolution tolerates a miss instead of trusting this.
-    restored_model_id: Option<String>,
     /// Serializes turns against background foreign-run syncs, so a mirror of
     /// cursor.com activity never interleaves its frames with a live turn's.
     /// A prompt waits on it; a sync skips its tick instead. Never held by
@@ -451,6 +476,14 @@ pub struct CursorSessionService<Cursor, Notifier, Chooser, Store> {
     /// A model id this deployment pins, applied to every new session. `None`
     /// leaves the choice to Cursor's own default resolution.
     default_model_id: Option<String>,
+    /// The model this one session runs on, from the host's own session record:
+    /// what its owner picked for it, or the slug the host seeded it with.
+    /// Outranks [`Self::default_model_id`], which is only what a session gets
+    /// when nobody said otherwise.
+    ///
+    /// A whole service per session is how the hosted deployment serves them,
+    /// so this sits beside the deployment default rather than on [`Session`].
+    host_model_id: Option<String>,
     /// `GET /v1/models`, fetched once. The table is static for the life of a
     /// process and every `session/new` would otherwise re-fetch it.
     models: tokio::sync::Mutex<Option<Vec<CursorModel>>>,
@@ -480,6 +513,7 @@ where
             sessions: Mutex::new(HashMap::new()),
             next_session: Mutex::new(0),
             default_model_id: None,
+            host_model_id: None,
             models: tokio::sync::Mutex::new(None),
         }
     }
@@ -495,6 +529,20 @@ where
         self
     }
 
+    /// Pin the model this session runs on, by id, ahead of the deployment
+    /// default.
+    ///
+    /// The host's session record, which holds the model its owner chose for
+    /// this session - before it ever ran, or by selecting one mid-session -
+    /// and otherwise whatever slug the host seeded the record with. Resolved
+    /// like any other id, so a value that is not a Cursor model is no opinion
+    /// and the deployment default still answers.
+    #[must_use]
+    pub fn with_host_model(mut self, model_id: Option<String>) -> Self {
+        self.host_model_id = model_id;
+        self
+    }
+
     /// Open a session.
     ///
     /// No repository is chosen here: a session's repository follows from what
@@ -504,7 +552,6 @@ where
     pub fn new_session(&self, cwd: &Path, mcp_servers: Vec<McpServer>) -> SessionId {
         let session = Arc::new(Session {
             cwd: cwd.to_path_buf(),
-            restored_model_id: None,
             turn_gate: Arc::new(tokio::sync::Mutex::new(())),
             state: Mutex::new(SessionState {
                 mcp_servers,
@@ -611,36 +658,40 @@ where
         {
             return Ok(Some(model));
         }
-        // The restored id outranks the deployment default: it is what this
-        // session was actually using before the restart, and the default is
-        // what a session gets when nobody ever said otherwise.
-        let fallback_id = session
-            .restored_model_id
-            .as_deref()
-            .or(self.default_model_id.as_deref());
-        let Some(fallback_id) = fallback_id else {
-            return Ok(None);
-        };
-        // A failure to *fetch* the model table degrades like a failed lookup
-        // in it: the fallback is a preference, and Cursor being unreachable
-        // for `GET /v1/models` must cost the preference, never the prompt —
-        // the run itself may well still work.
-        let choice = match self.resolve_model_id(fallback_id).await {
-            Ok(choice) => choice,
-            Err(error) => {
-                tracing::warn!(
-                    fallback_id,
-                    %error,
-                    "could not resolve the fallback model; using Cursor's default"
-                );
-                None
-            }
-        };
-        let Some(choice) = choice else {
-            return Ok(None);
-        };
-        session.state.lock().expect("session state poisoned").model = Some(choice.clone());
-        Ok(Some(choice))
+        // Session before deployment: the session's own id is what its owner
+        // chose for it (or was using before a restart), and the default is
+        // what a session gets when nobody ever said otherwise. Each is only a
+        // preference, so one that resolves to nothing hands the question to
+        // the next rather than answering it with silence.
+        for fallback_id in [
+            self.host_model_id.as_deref(),
+            self.default_model_id.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            // A failure to *fetch* the model table degrades like a failed
+            // lookup in it: the fallback is a preference, and Cursor being
+            // unreachable for `GET /v1/models` must cost the preference, never
+            // the prompt — the run itself may well still work.
+            let choice = match self.resolve_model_id(fallback_id).await {
+                Ok(choice) => choice,
+                Err(error) => {
+                    tracing::warn!(
+                        fallback_id,
+                        %error,
+                        "could not resolve the fallback model; using Cursor's default"
+                    );
+                    None
+                }
+            };
+            let Some(choice) = choice else {
+                continue;
+            };
+            session.state.lock().expect("session state poisoned").model = Some(choice.clone());
+            return Ok(Some(choice));
+        }
+        Ok(None)
     }
 
     /// The id resolved to a choice Cursor will accept, or `None` for an id
@@ -729,6 +780,7 @@ where
             cursor.run.id = tracing::field::Empty,
             agent.turn.stop_reason = tracing::field::Empty,
             agent.turn.outcome = tracing::field::Empty,
+            agent.turn.gate_wait_ms = tracing::field::Empty,
         ),
         err,
     )]
@@ -763,19 +815,71 @@ where
         // this turn's never interleave — but never behind another turn: ACP
         // makes a concurrent prompt the client's error, not a queue. The
         // holder is told apart by active_run, which only turns set.
-        let _turn = match session.turn_gate.try_lock() {
-            Ok(guard) => guard,
-            Err(_) => {
-                if session
-                    .state
-                    .lock()
-                    .expect("session state poisoned")
-                    .active_run
-                    .is_some()
-                {
-                    return Err(SessionError::TurnAlreadyActive(session_id.clone()));
+        let gate = session.turn_gate.try_lock().ok();
+        if gate.is_none()
+            && session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .active_run
+                .is_some()
+        {
+            return Err(SessionError::TurnAlreadyActive(session_id.clone()));
+        }
+        // This pending prompt owns cancellation before any wait it can be
+        // parked in — the gate, the model lookup, historical recovery. A stop
+        // has to land while the prompt is waiting behind a mirror, and the
+        // mirror can hold the gate for as long as the run it follows lives;
+        // installing the token after the gate would have that stop fire an
+        // old token and then be erased by the reset here. Only after the
+        // active-turn check, which must never clobber a live turn's token.
+        let cancel = {
+            let mut state = session.state.lock().expect("session state poisoned");
+            state.cancelled = false;
+            state.cancel = tokio_util::sync::CancellationToken::new();
+            state.cancel.clone()
+        };
+        let _turn = match gate {
+            Some(guard) => guard,
+            None => {
+                // The wait is on the turn span, not only in a log line: it
+                // is the one place a turn's time goes that no Cursor call
+                // accounts for, and a trace of a slow turn has to show it.
+                let waiting_since = std::time::Instant::now();
+                let span = tracing::Span::current();
+                tracing::info!(
+                    "waiting for the turn gate behind a mirror of a run started elsewhere"
+                );
+                tokio::select! {
+                    biased;
+                    () = cancel.cancelled() => {
+                        // Nothing to journal: the prompt never reached the
+                        // gate, so it never became part of this session's
+                        // record. The client's own transcript has it.
+                        let waited_ms = waiting_since.elapsed().as_millis() as u64;
+                        span.record("agent.turn.gate_wait_ms", waited_ms);
+                        tracing::info!(waited_ms, "stopped while waiting for the turn gate");
+                        return Ok(StopReason::Cancelled);
+                    }
+                    guard = session.turn_gate.lock() => {
+                        let waited_ms = waiting_since.elapsed().as_millis() as u64;
+                        span.record("agent.turn.gate_wait_ms", waited_ms);
+                        tracing::info!(waited_ms, "acquired the turn gate");
+                        guard
+                    }
+                    () = tokio::time::sleep(GATE_WAIT_BUDGET) => {
+                        span.record("agent.turn.gate_wait_ms", GATE_WAIT_BUDGET.as_millis() as u64);
+                        tracing::warn!(
+                            waited_secs = GATE_WAIT_BUDGET.as_secs(),
+                            "gave up waiting for the turn gate; a mirror is still following a run started elsewhere"
+                        );
+                        return Err(SessionError::Rejected(PromptRefusal::plain(
+                            "Cursor is still busy with a run started outside Macro, and Macro \
+                             stopped waiting for it. Send another message once that run has \
+                             finished, or stop the session to interrupt it.",
+                        )));
+                    }
                 }
-                session.turn_gate.lock().await
             }
         };
 
@@ -789,14 +893,6 @@ where
                 "Cursor session must load successfully before prompting"
             )));
         }
-        // This pending prompt owns cancellation before any model lookup or
-        // historical recovery can wait. Recovery cannot clear a received stop.
-        let cancel = {
-            let mut state = session.state.lock().expect("session state poisoned");
-            state.cancelled = false;
-            state.cancel = tokio_util::sync::CancellationToken::new();
-            state.cancel.clone()
-        };
         // A failed model lookup proves no prompt was executed. Do it before
         // reserving the durable intent, so load does not see false ambiguity.
         let model = self.effective_model(session_id).await?;
@@ -808,7 +904,7 @@ where
             .agent
             .clone();
         if let Some(agent) = &prior_agent {
-            self.backfill_foreign_runs(session_id, &session, agent, None)
+            self.backfill_foreign_runs(session_id, &session, agent, None, &cancel)
                 .await?;
         }
         // Preserve original content before the provider creates remote work.
@@ -908,15 +1004,14 @@ where
                     // request there, which no later correction undoes.
                     Err(error) => {
                         tracing::warn!(error = ?error, "could not choose a repository for this session");
-                        Err(SessionError::Rejected(
-                            "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection."
-                                .to_owned(),
-                        ))
+                        Err(SessionError::Rejected(PromptRefusal::plain(
+                            "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection.",
+                        )))
                     }
                 }
             }
         };
-        let (agent, run) = match created.map_err(explain_repository_rejection) {
+        let (agent, run) = match created.map_err(explain_rejection) {
             Ok(created) => created,
             Err(error) => {
                 if is_prompt_rejection(&error) {
@@ -936,7 +1031,7 @@ where
                     // the agent can see.
                     if creating_agent {
                         let reason = match &error {
-                            SessionError::Rejected(message) => Some(message.clone()),
+                            SessionError::Rejected(refusal) => Some(refusal.message.clone()),
                             _ => None,
                         };
                         session
@@ -968,7 +1063,7 @@ where
         }
         // Acceptance is durable even if recovery of an older run fails. Do
         // not observe/project the new run until every older run is reconciled.
-        self.backfill_foreign_runs(session_id, &session, &agent, Some(&run))
+        self.backfill_foreign_runs(session_id, &session, &agent, Some(&run), &cancel)
             .await?;
         // The turn span is the only place all three identities meet, and it
         // is what makes a Macro session joinable to the cursor.com run that
@@ -1012,7 +1107,7 @@ where
         // up on a run still going, not a prompt refused before it ran.
         let interrupted = match &outcome {
             Err(SessionError::Cursor(error)) => Some(error.to_string()),
-            Err(SessionError::Rejected(message)) => Some(message.clone()),
+            Err(SessionError::Rejected(refusal)) => Some(refusal.message.clone()),
             _ => None,
         };
         if let Some(interrupted) = interrupted {
@@ -1097,6 +1192,11 @@ where
             // the turn. The POST below is the notification that asks for that
             // frame.
             state.cancel.cancel();
+            // And the background mirror, if one is following a run started
+            // elsewhere: that run is cancelled below like any other, and a
+            // mirror left waiting for a `result` Cursor never sends would
+            // hold the turn gate — and every prompt behind it — for good.
+            state.mirror_cancel.cancel();
             (state.agent.clone(), state.active_run.clone())
         };
         // No agent yet: the session's first prompt is still creating one, so
@@ -1184,9 +1284,8 @@ where
         id: SessionId,
         agent: Option<CursorAgentId>,
         repo: Option<RepoUrl>,
-        model_id: Option<String>,
     ) {
-        self.restore_session_with_watermark(id, agent, repo, model_id, None);
+        self.restore_session_with_watermark(id, agent, repo, None);
     }
 
     /// Restore a session together with its durable run-delivery checkpoint.
@@ -1195,7 +1294,6 @@ where
         id: SessionId,
         agent: Option<CursorAgentId>,
         repo: Option<RepoUrl>,
-        model_id: Option<String>,
         last_run: Option<CursorRunId>,
     ) {
         // No MCP servers here on purpose: the host never had the truth to
@@ -1203,7 +1301,6 @@ where
         // restates it on `session/load`, which is where it re-enters.
         let session = Arc::new(Session {
             cwd: PathBuf::new(),
-            restored_model_id: model_id,
             turn_gate: Arc::new(tokio::sync::Mutex::new(())),
             state: Mutex::new(SessionState {
                 repo,
@@ -1677,13 +1774,12 @@ where
                 attempts = POLL_ATTEMPTS,
                 "gave up waiting; Cursor still reports a non-terminal status"
             );
-            return Err(SessionError::Rejected(
+            return Err(SessionError::Rejected(PromptRefusal::plain(
                 "Cursor has been working on this for over two hours and Macro stopped \
                  waiting. Send another message to continue: if Cursor has finished by \
                  then, that message picks up what it did, and if not, the run is \
-                 cancelled and the conversation starts fresh from there."
-                    .into(),
-            ));
+                 cancelled and the conversation starts fresh from there.",
+            )));
         };
         if strict
             && !session
@@ -1900,12 +1996,22 @@ where
     }
 
     /// Catch up foreign runs through the same journal path as local prompts.
+    ///
+    /// `cancel` is the stop that ends a run still going: the turn's own token
+    /// when a prompt is catching up before it runs, the mirror's when the
+    /// host's sweep is. A run already finished is read to its end regardless
+    /// — the stream loop consults the token only where it waits — so a stop
+    /// never costs the recovery of history that is there to be had, only the
+    /// following of a run that has not ended. That run is left as a turn
+    /// leaves one it gave up on: interrupted, to be mirrored in once it does
+    /// end, and never blocking the prompt behind it again.
     async fn backfill_foreign_runs(
         &self,
         session_id: &SessionId,
         session: &Session,
         agent: &CursorAgentId,
         current_run: Option<&CursorRunId>,
+        cancel: &tokio_util::sync::CancellationToken,
     ) -> Result<bool, SessionError> {
         self.ensure_journal(session_id, session).await?;
         let last = session
@@ -1955,6 +2061,10 @@ where
             .filter(|r| !r.status.is_terminal() && abandoned.contains(&r.id))
             .map(|r| r.id.clone())
             .collect();
+        let listing_status: std::collections::HashMap<_, _> = listings
+            .iter()
+            .map(|r| (r.id.clone(), r.status.clone()))
+            .collect();
         let mut runs = Vec::new();
         // A pending run omitted by the provider listing still has to recover.
         for run in &pending {
@@ -1973,19 +2083,44 @@ where
         let mirrored = !runs.is_empty();
         for run in &runs {
             if !reconciled.contains(run) {
-                // A cancelled prior prompt must not cancel its recovery.
-                self.ingest_run(
-                    session_id,
-                    session,
-                    agent,
-                    run,
-                    &tokio_util::sync::CancellationToken::new(),
-                    IngestMode {
-                        emit: false,
-                        ..IngestMode::LIVE
-                    },
-                )
-                .await?;
+                // Before the ingestion, not after: a run still going is
+                // followed to its end, however long that is, holding the
+                // turn gate the whole way. The first sign of one must not be
+                // a stream warning an hour in - it is this line, with the
+                // run's status as Cursor lists it right now.
+                let status = listing_status.get(run);
+                let still_running = status.is_some_and(|status| !status.is_terminal());
+                let started = std::time::Instant::now();
+                tracing::info!(
+                    %agent,
+                    %run,
+                    cursor.run.status = ?status,
+                    cursor.run.still_running = still_running,
+                    cursor.run.listed = status.is_some(),
+                    "recovering a run started elsewhere"
+                );
+                let outcome = self
+                    .ingest_run(
+                        session_id,
+                        session,
+                        agent,
+                        run,
+                        cancel,
+                        IngestMode {
+                            emit: false,
+                            ..IngestMode::LIVE
+                        },
+                    )
+                    .await;
+                tracing::info!(
+                    %agent,
+                    %run,
+                    cursor.run.still_running = still_running,
+                    elapsed_ms = started.elapsed().as_millis() as u64,
+                    outcome = ?outcome.as_ref().map_err(ToString::to_string),
+                    "finished recovering a run started elsewhere"
+                );
+                outcome?;
             }
             let complete = session
                 .state
@@ -1995,6 +2130,13 @@ where
                 .iter()
                 .any(|e| e.run.as_ref() == Some(run) && e.input == JournalInput::Reconciled);
             if !complete {
+                // A stop ended the following, not a failure: what was
+                // captured is still shown, and the prompt behind this (if
+                // any) answers Cancelled rather than failing.
+                if cancel.is_cancelled() {
+                    tracing::info!(%agent, %run, "stopped following a run started elsewhere");
+                    break;
+                }
                 return Err(rootcause::report!("Cursor run {run} remains unreconciled").into());
             }
         }
@@ -2263,9 +2405,10 @@ where
                 state.ready_for_sync = false;
                 SessionError::Journal(error)
             })?;
-        let (updates, completion, pull_request) = {
+        let (updates, completion, pull_request, working_branches) = {
             let mut state = session.state.lock().expect("session state poisoned");
             let previous_pr = state.machine.pull_request_url().map(str::to_owned);
+            let previous_branches = state.machine.working_branches().clone();
             let before = run.and_then(|run| state.machine.terminal_status(run));
             state.journal_entries.push(entry.clone());
             let SessionState {
@@ -2294,9 +2437,27 @@ where
                 .pull_request_url()
                 .filter(|url| Some(*url) != previous_pr.as_deref())
                 .map(str::to_owned);
-            (updates, completion, pull_request)
+            let working_branches: Vec<_> = state
+                .machine
+                .working_branches()
+                .iter()
+                .filter(|(repository, branch)| previous_branches.get(*repository) != Some(*branch))
+                .map(|(repository, branch)| (repository.clone(), branch.clone()))
+                .collect();
+            (updates, completion, pull_request, working_branches)
         };
         if emit {
+            for (repository, branch) in working_branches {
+                self.notifier
+                    .set_working_branch(id, &repository, &branch)
+                    .await
+                    .map_err(|error| {
+                        let mut state = session.state.lock().expect("session state poisoned");
+                        state.capture_failed = true;
+                        state.ready_for_sync = false;
+                        SessionError::Journal(error)
+                    })?;
+            }
             if let Some(url) = pull_request {
                 self.notifier
                     .set_pull_request(id, &url)
@@ -2509,6 +2670,11 @@ where
         // to a disconnected session by loading it, so a load that refuses is
         // also every future prompt refused as disconnected, with no way back.
         let (machine, updates) = history_projection(&entries, HistoryGap::IsServedAnyway)?;
+        for (repository, branch) in machine.working_branches() {
+            self.notifier
+                .set_working_branch(id, repository, branch)
+                .await?;
+        }
         if let Some(url) = machine.pull_request_url() {
             self.notifier.set_pull_request(id, url).await?;
         }
@@ -2571,8 +2737,15 @@ where
             let Some(agent) = agent else {
                 continue;
             };
+            // Fresh per sweep: a stop that landed between sweeps has nothing
+            // left to end, and must not end the next one.
+            let cancel = {
+                let mut state = session.state.lock().expect("session state poisoned");
+                state.mirror_cancel = tokio_util::sync::CancellationToken::new();
+                state.mirror_cancel.clone()
+            };
             if let Err(error) = self
-                .backfill_foreign_runs(&session_id, &session, &agent, None)
+                .backfill_foreign_runs(&session_id, &session, &agent, None, &cancel)
                 .await
             {
                 tracing::warn!(%session_id, %agent, %error, "could not mirror cursor.com runs");

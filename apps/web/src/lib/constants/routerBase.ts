@@ -6,7 +6,7 @@ export const ROUTER_BASE_CONCAT = isTauri() ? '/' : '/app/';
 
 /**
  * Strip the router base from a `location.pathname` (which includes it, e.g.
- * `/app/component/inbox`) so it can be compared to — and reused with — the
+ * `/app/home`) so it can be compared to — and reused with — the
  * base-relative paths that `navigate()` and route definitions use.
  */
 export const toBaseRelative = (pathname: string): string => {

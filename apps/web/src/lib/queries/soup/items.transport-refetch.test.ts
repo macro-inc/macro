@@ -90,6 +90,7 @@ vi.mock('./graphql/grouped-items', () => ({
 }));
 
 import { refreshActiveGraphqlSoupQueries } from './graphql/active-queries';
+import { createGraphqlSoupAstItemsQuery } from './graphql/items';
 import {
   type SoupAstItemsData,
   type SoupAstItemsPage,
@@ -125,6 +126,20 @@ describe('Soup refetch transport selection', () => {
   afterEach(() => {
     disposeRoot?.();
     disposeRoot = undefined;
+  });
+
+  it('forwards the channel list projection only to the flat GraphQL query', () => {
+    createRoot((dispose) => {
+      disposeRoot = dispose;
+      useSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true, graphqlProjection: 'channel-list' })
+      );
+    });
+    const options = vi
+      .mocked(createGraphqlSoupAstItemsQuery)
+      .mock.calls[0][1]();
+    expect(options.projection).toBe('channel-list');
   });
 
   it('preserves fetched page coverage when optimistic inserts change cached membership', async () => {

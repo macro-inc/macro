@@ -140,7 +140,7 @@ export function createDraftPersistence(options: {
       if (session.isStale(epoch)) return;
       session.dispatch({ type: 'saved', epoch, identity: saved });
       if (!saved.draftId) return;
-      const inbox = { inboxId: input.inboxId };
+      const inbox = { inboxId: saved.inboxId };
       if (saved.persistence === 'queued') {
         // REST cannot resolve client handles. Keep local files for the next
         // committed save, which also waits for all uploads before sending.

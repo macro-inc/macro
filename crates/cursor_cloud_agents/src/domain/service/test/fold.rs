@@ -38,7 +38,7 @@ pub(super) async fn replay_with_runs(
         journal,
         crate::domain::ports::NoArtifactStore,
     ));
-    service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None, None);
+    service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None);
     let (agent, mut client) = Channel::duplex();
     let task = tokio::spawn(serve_transport(service.clone(), notifier, agent));
     let mut log = Vec::new();

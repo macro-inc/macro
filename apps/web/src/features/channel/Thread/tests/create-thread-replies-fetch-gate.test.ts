@@ -4,7 +4,7 @@ import {
   createThreadRepliesFetchGate,
   THREAD_REPLIES_FETCH_DEBOUNCE_MS,
 } from '../create-thread-replies-fetch-gate';
-import { DEFAULT_VISIBLE_REPLY_COUNT } from '../utils/thread-reply-indicator-helpers';
+import { DEFAULT_VISIBLE_REPLY_GROUP_COUNT } from '../utils/thread-reply-indicator-helpers';
 
 type FixtureOptions = {
   isExpanded?: boolean;
@@ -50,7 +50,7 @@ describe('createThreadRepliesFetchGate', () => {
 
   it('waits 300ms before enabling an ordinary thread reply fetch', async () => {
     const fixture = createFixture({
-      replyCount: DEFAULT_VISIBLE_REPLY_COUNT + 1,
+      replyCount: DEFAULT_VISIBLE_REPLY_GROUP_COUNT + 1,
     });
     await flushEffects();
 

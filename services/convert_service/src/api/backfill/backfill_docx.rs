@@ -117,8 +117,8 @@ async fn process_docx(
                 serde_json::from_value(bom_parts).context("unable to serialize bom parts")?;
 
             // check if the converted item exists in s3
-            let owner = document.owner.principal_id();
-            let key = build_docx_to_pdf_converted_document_key(&owner, &document.document_id);
+            let key =
+                build_docx_to_pdf_converted_document_key(&document.owner, &document.document_id);
 
             let exists = s3_client
                 .exists(document_storage_bucket, &key)
@@ -168,8 +168,8 @@ async fn process_docx(
             let zipped_docx = zip_bom_parts(bom_parts_with_content).await?;
 
             let from_key = build_temp_docx_key(&document.document_id);
-            let owner = document.owner.principal_id();
-            let to_key = build_docx_to_pdf_converted_document_key(&owner, &document.document_id);
+            let to_key =
+                build_docx_to_pdf_converted_document_key(&document.owner, &document.document_id);
 
             s3_client
                 .put(document_storage_bucket, &from_key, &zipped_docx)

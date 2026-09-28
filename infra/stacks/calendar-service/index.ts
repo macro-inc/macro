@@ -139,4 +139,4 @@ export const calendarServiceUrl = calendarService.domain;
 
 export const calendarServiceGatewayUrl = `https://${
   stack === 'prod' ? '' : `${stack}-`
-}gateway.${BASE_DOMAIN}/calendar-service`;
+}gateway.${BASE_DOMAIN}/calendar`;

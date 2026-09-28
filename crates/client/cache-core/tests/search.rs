@@ -1,7 +1,7 @@
 use cache_core::engine::{BeginOptimisticWrite, Engine};
 use cache_core::search::{SearchCursor, SearchProfile, SearchRequest};
 use cache_core::store::{InMemoryStorage, Storage};
-use cache_core::value::{CacheValue, EntityKey, Record};
+use cache_core::value::{CacheNumber, CacheValue, EntityKey, Record};
 use pollster::block_on;
 use serde_json::{Value as Json, json};
 
@@ -147,6 +147,61 @@ fn text_search_loads_compact_catalog_once_and_never_scans_records() {
                 .unwrap()
                 .documents
                 .is_empty()
+        );
+    });
+}
+
+#[test]
+fn matching_dms_rank_above_documents_without_changing_recent_browse() {
+    block_on(async {
+        let mut storage = InMemoryStorage::new();
+        let entries = [
+            ("GraphqlSoupDocument", "doc-1", "Alex proposal", 1_000),
+            ("GraphqlSoupChannel", "dm-1", "Alex", 900),
+        ]
+        .map(|(typename, id, name, timestamp)| {
+            let mut record = Record::default();
+            record
+                .fields
+                .insert("__typename".into(), CacheValue::String(typename.into()));
+            record
+                .fields
+                .insert("name".into(), CacheValue::String(name.into()));
+            record.fields.insert(
+                "updatedAt".into(),
+                CacheValue::Number(CacheNumber::PosInt(timestamp)),
+            );
+            if typename == "GraphqlSoupChannel" {
+                record.fields.insert(
+                    "channelType".into(),
+                    CacheValue::String("direct_message".into()),
+                );
+            }
+            (EntityKey::entity(typename, &[id]), record)
+        });
+        storage.put_batch(entries.into()).await.unwrap();
+        let mut engine = Engine::new(storage);
+
+        let mut search = request("alex", 1);
+        search.buckets = vec!["document".into(), "dm".into()];
+        let matches = engine.search(&search).await.unwrap();
+        assert_eq!(
+            matches.documents[0].record_key.as_ref(),
+            "GraphqlSoupChannel:dm-1"
+        );
+
+        search.query = "proposal".into();
+        let matches = engine.search(&search).await.unwrap();
+        assert_eq!(
+            matches.documents[0].record_key.as_ref(),
+            "GraphqlSoupDocument:doc-1"
+        );
+
+        search.query.clear();
+        let recent = engine.search(&search).await.unwrap();
+        assert_eq!(
+            recent.documents[0].record_key.as_ref(),
+            "GraphqlSoupDocument:doc-1"
         );
     });
 }

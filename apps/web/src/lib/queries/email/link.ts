@@ -8,6 +8,7 @@ import { emailClient } from '@service-email/client';
 import type { ListLinksResponse } from '@service-email/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
+import { queryReadyGate } from '../gate';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
 
@@ -67,8 +68,8 @@ export function usePrimaryEmailLinkId() {
   return createMemo(() => {
     // Offline GraphQL mail can render before this REST lookup completes.
     // Reading its pending resource would suspend the surrounding email view.
-    if (!linksQuery.isSuccess && !linksQuery.isError) return undefined;
-    return findPrimaryEmailLinkId(linksQuery.data?.links ?? [], userId());
+    if (!queryReadyGate(linksQuery)) return undefined;
+    return findPrimaryEmailLinkId(linksQuery.data.links ?? [], userId());
   });
 }
 
@@ -92,9 +93,9 @@ export function useEmailSignature(
   const linksQuery = useEmailLinksQuery();
   return createMemo(() => {
     const id = linkId();
-    if (!id) return undefined;
+    if (!id || !queryReadyGate(linksQuery)) return undefined;
     return (
-      linksQuery.data?.links.find((link) => link.id === id)?.settings
+      linksQuery.data.links.find((link) => link.id === id)?.settings
         .signature ?? undefined
     );
   });

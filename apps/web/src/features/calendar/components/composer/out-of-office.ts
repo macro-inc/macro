@@ -1,4 +1,4 @@
-import type { OutOfOfficeAutoDeclineMode } from '@service-email/generated/schemas/outOfOfficeAutoDeclineMode';
+import type { OutOfOfficeAutoDeclineMode } from '@service-calendar/generated/schemas/outOfOfficeAutoDeclineMode';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
 import { match } from 'ts-pattern';
 

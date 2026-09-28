@@ -32,6 +32,7 @@ export function MessageActions(props: {
     >
       <Show when={!props.hiddenActions?.includes('reply')}>
         <Button
+          size="icon-sm"
           class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
           noTouchResize
           onClick={onChangeReplyType('reply-all')}
@@ -42,6 +43,7 @@ export function MessageActions(props: {
       </Show>
       <Show when={!props.hiddenActions?.includes('forward')}>
         <Button
+          size="icon-sm"
           class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
           noTouchResize
           onClick={onChangeReplyType('forward')}

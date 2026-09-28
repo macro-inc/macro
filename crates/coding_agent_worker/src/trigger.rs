@@ -5,7 +5,8 @@
 
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentTriggerEventName, AgentTriggerTopicEvent, OpeningMention, SessionMessage,
+    AgentSessionRequestedEvent, AgentTriggerEventName, AgentTriggerTopicEvent,
+    NewAgentSessionEvent, OpeningMention, SessionMessage,
 };
 use bot_id::BotId;
 use macro_event_broker::Event;
@@ -41,6 +42,18 @@ pub enum TriggerWork {
         /// The mention's text: the first prompt, and the announcement quote.
         content: String,
     },
+    /// Open a session somebody asked for from the composer, under the id
+    /// they are waiting on. No thread, so nothing is announced anywhere;
+    /// the app shows the session directly and sends its own first prompt
+    /// through the session once this create answers.
+    OpenRequested {
+        /// The id to create the session under.
+        session: AgentSessionId,
+        /// The agent the session runs for.
+        bot: BotId,
+        /// Who asked; owns the session.
+        sender: MacroUserIdStr<'static>,
+    },
     /// Forward a message into a session that already exists, serving it
     /// first if this daemon is not already. Just the prompt: the harness
     /// service announces the reply into its channel from the trigger event
@@ -69,6 +82,20 @@ pub enum Skipped {
 /// Translate one trigger event into this daemon's work, or a reason to skip.
 pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Skipped> {
     match event {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::Requested(
+            AgentSessionRequestedEvent {
+                bot_id,
+                session_id,
+                owner,
+            },
+        )) => {
+            let sender = MacroUserIdStr::try_from(owner).map_err(|_| Skipped::NotFromUser)?;
+            Ok(TriggerWork::OpenRequested {
+                session: session_id,
+                bot: bot_id,
+                sender,
+            })
+        }
         AgentTriggerTopicEvent::New(event) => {
             let Some(OpeningMention { bot_id, message }) = event.mention() else {
                 return Err(Skipped::Unrecognized);

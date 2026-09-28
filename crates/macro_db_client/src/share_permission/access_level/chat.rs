@@ -63,9 +63,8 @@ pub async fn get_highest_access_level_for_chats(
                         sp."linkShare" = 'TEAM'
                         AND EXISTS (
                             SELECT 1
-                            FROM team_user owner_team
-                            WHERE owner_team.user_id = c."userId"
-                                AND owner_team.team_id::text = ANY(
+                            FROM owner_team(c."userId") owner_team
+                            WHERE owner_team.team_id::text = ANY(
                                     SELECT source_id FROM user_source_ids
                                 )
                         )

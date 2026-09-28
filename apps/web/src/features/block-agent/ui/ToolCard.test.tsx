@@ -10,6 +10,34 @@ vi.mock('@phosphor/caret-right.svg', () => ({ default: () => <svg /> }));
 afterEach(cleanup);
 
 describe('ToolCard', () => {
+  it('shows a result summary and only shimmers while the tool is active', async () => {
+    const [status, setStatus] = createSignal<
+      'running' | 'completed' | 'failed'
+    >('running');
+    const view = render(() => (
+      <ToolCard
+        title="Search"
+        status={status()}
+        icon={<svg data-testid="search-icon" />}
+      >
+        Search results
+      </ToolCard>
+    ));
+    expect(view.getByTestId('search-icon')).toBeTruthy();
+    expect(view.queryByText('Succeeded')).toBeNull();
+    expect(view.container.querySelector('.magic-chip-shimmer')).toBeTruthy();
+    setStatus('completed');
+    expect(view.getByText('Succeeded')).toBeTruthy();
+    await waitFor(() =>
+      expect(view.container.querySelector('.magic-chip-shimmer')).toBeNull()
+    );
+    setStatus('failed');
+    expect(view.getByText('Failed')).toBeTruthy();
+    expect(view.getByRole('button').getAttribute('aria-expanded')).toBe(
+      'false'
+    );
+  });
+
   it('constructs expensive content only on expansion and disposes it on close', async () => {
     const mounted = vi.fn();
     const disposed = vi.fn();

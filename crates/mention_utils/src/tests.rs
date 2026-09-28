@@ -78,7 +78,7 @@ fn parse_single_user_mention() {
     let input = r#"<m-user-mention>{"userId":"macro|rithy@macro.com","email":"rithy@macro.com"}</m-user-mention>"#;
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id }))
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id, .. }))
     ] => {
         assert_eq!(user_id.as_ref(), "macro|rithy@macro.com");
     });
@@ -90,9 +90,9 @@ fn parse_multiple_user_mentions() {
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
         TextSegment::Plain("Hello "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id: uid1 })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id: uid1, .. })),
         TextSegment::Plain(" and "),
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id: uid2 })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id: uid2, .. })),
     ] => {
         assert_eq!(uid1.as_ref(), "macro|a@b.com");
         assert_eq!(uid2.as_ref(), "macro|c@d.com");
@@ -115,7 +115,7 @@ fn parse_bare_uuid_bot_mention() {
     let input = r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention> there will come a day when I shall liberate you"#;
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id, .. })),
         TextSegment::Plain(" there will come a day when I shall liberate you"),
     ] => {
         assert_eq!(user_id.into_bot().unwrap().as_uuid().to_string(), "00000000-0000-0000-0000-00000000a1a1");
@@ -127,7 +127,7 @@ fn parse_prefixed_bot_mention() {
     let input = r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000a1a1","email":"Macro"}</m-user-mention>"#;
     let out = ParsedXmlText::parse(input).unwrap();
     assert_matches!(out.0, [
-        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id })),
+        TextSegment::Xml(XmlTag::User(ParsedUserMention { user_id, .. })),
     ] => {
         assert_eq!(user_id.as_ref(), "bot|00000000-0000-0000-0000-00000000a1a1");
     });
@@ -139,6 +139,56 @@ fn bot_mention_renders_display_name() {
     let parsed = ParsedXmlText::parse(input).unwrap();
     let rendered = PlainTextFormatter::format_xml_text(parsed).0;
     assert_eq!(rendered, "hi Macro ok");
+}
+
+#[test]
+fn cursor_bot_mention_renders_cursor_not_macro() {
+    let input = r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000c5c5","email":"Cursor","displayName":"Cursor"}</m-user-mention> investigate this"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Cursor investigate this");
+}
+
+#[test]
+fn bot_mention_prefers_display_name_over_email() {
+    let input = r#"<m-user-mention>{"userId":"bot|11111111-1111-1111-1111-111111111111","email":"Helper Bot","displayName":"Helper"}</m-user-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Helper");
+}
+
+#[test]
+fn team_bot_mention_renders_email_field_as_name() {
+    let input = r#"<m-user-mention>{"userId":"bot|11111111-1111-1111-1111-111111111111","email":"Helper Bot"}</m-user-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Helper Bot");
+}
+
+#[test]
+fn system_bot_mention_without_name_fields_uses_registry() {
+    let input =
+        r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000c5c5"}</m-user-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Cursor");
+}
+
+#[test]
+fn bot_mention_ignores_blank_name_fields() {
+    let input = r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000c5c5","email":"","displayName":" "}</m-user-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Cursor");
+}
+
+#[test]
+fn unknown_bot_mention_without_name_fields_uses_generic_label() {
+    let input =
+        r#"<m-user-mention>{"userId":"bot|11111111-1111-1111-1111-111111111111"}</m-user-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Bot");
 }
 
 #[test]

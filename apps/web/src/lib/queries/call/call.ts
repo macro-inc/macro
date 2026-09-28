@@ -177,7 +177,7 @@ export function fetchCallRecord(
  * the call is live, the canonical `view` grant once it is archived.
  */
 export function isCallSharedWithTeam(record: CallRecord): boolean {
-  return record.shareWithTeam;
+  return record.channelId != null && record.shareWithTeam;
 }
 
 export function sharePermissionFromCallRecord(
@@ -216,10 +216,13 @@ function patchCachedCallTeamShare(
 ): CallRecord {
   return {
     ...record,
-    shareWithTeam: shared,
-    teamShareAccessLevel: record.isActive
-      ? record.teamShareAccessLevel
-      : buildCallTeamSharePayload(shared).teamShareAccessLevel,
+    shareWithTeam: record.channelId != null && shared,
+    teamShareAccessLevel:
+      record.channelId == null
+        ? null
+        : record.isActive
+          ? record.teamShareAccessLevel
+          : buildCallTeamSharePayload(shared).teamShareAccessLevel,
   };
 }
 

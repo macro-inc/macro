@@ -18,6 +18,8 @@ import type {
   PreviewAgentSessionsResponse,
   SandboxSize,
   SandboxSizeBody,
+  SharePermissionV2,
+  UpdateSharePermissionRequestV2,
 } from './generated/schemas';
 
 export type { SandboxSize, SandboxSizeBody };
@@ -103,6 +105,28 @@ export const agentHarnessServiceClient = {
     return fetchWithToken<AgentSessionResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}`,
       { method: 'GET' }
+    );
+  },
+
+  getPermissions(sessionId: string) {
+    return fetchWithToken<SharePermissionV2>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/permissions`,
+      { method: 'GET' }
+    );
+  },
+
+  updatePermissions(
+    sessionId: string,
+    request: UpdateSharePermissionRequestV2
+  ) {
+    return fetchWithToken<SharePermissionV2>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/permissions`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        errorResponseHandler: sessionError,
+      }
     );
   },
 

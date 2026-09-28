@@ -1,8 +1,8 @@
 import {
   groupHomeEntitiesByDate,
-  inboxGroupTimestamp,
+  homeGroupTimestamp,
   mergeHomeEntities,
-} from '@app/features/inbox-view/queries/inbox-results';
+} from '@app/features/home/queries/home-results';
 import type { Notification } from '@entity/types/notification';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -139,7 +139,7 @@ describe('calendar reminder dates in Home', () => {
   it('keeps content recency when no reminder timestamp is available', () => {
     const entity = mapApiSoupItemToEntity(calendarItem([]));
     expect(entity.notifiedAt).toBeUndefined();
-    expect(inboxGroupTimestamp(entity, context)).toBe(recentSync);
+    expect(homeGroupTimestamp(entity, context)).toBe(recentSync);
   });
 
   it('preserves own-activity ordering and non-notification tabs', () => {
@@ -150,7 +150,7 @@ describe('calendar reminder dates in Home', () => {
     expect(mergeHomeEntities([entity], [entity], context)[0].sortTs).toBe(
       recentSync
     );
-    expect(inboxGroupTimestamp(entity, { ...context, tab: 'reminders' })).toBe(
+    expect(homeGroupTimestamp(entity, { ...context, tab: 'reminders' })).toBe(
       recentSync
     );
   });

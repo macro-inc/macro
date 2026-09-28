@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scheduled_action\n            SET claimed = $1, claim_token = $4, updated_at = now()\n            WHERE id = $2\n              AND (claimed IS NULL OR claimed < $3)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d33f587b2e81db6c6d6c6db12629590b62c522e229149217f4106ff7ba16b101"
+}

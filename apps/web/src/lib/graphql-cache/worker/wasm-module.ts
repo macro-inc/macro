@@ -70,6 +70,7 @@ export type CacheEngineHydrationResult = WriteResult & {
 
 export interface CacheEngine {
   currentRevision(): Promise<CacheRevision>;
+  currentStorageGeneration(): Promise<string>;
   boundIdentity(): Promise<string | null>;
   /** Optional for compatibility engines; absence means unavailable. */
   queueDiagnostics?(): Promise<CacheQueueDiagnostics>;

@@ -17,6 +17,10 @@
 --   a done sent thread the draft resurfaced into the inbox; discarding the
 --   draft must send it back out of the inbox (is_signal stays true via the
 --   SENT label, but inbox_visible/latest_inbound_message_ts reset).
+-- Thread e207 (is_signal=true, stale on purpose): unlabeled message from
+--   Macro's own digest sender (no-reply@notification.macro.com) — Macro
+--   notification emails are never signal, so update_thread_metadata must
+--   clear it, and marking the sender important must not promote it.
 
 INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-000000000e01', 'macro|sigflag_email@example.com', '00000000-0000-0000-0000-000000000e01',
@@ -25,7 +29,8 @@ VALUES ('00000000-0000-0000-0000-000000000e01', 'macro|sigflag_email@example.com
 INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-0000000ce001', '00000000-0000-0000-0000-000000000e01', 'plain@example.com', NOW(), NOW()),
        ('00000000-0000-0000-0000-0000000ce002', '00000000-0000-0000-0000-000000000e01', 'promo@newsletter.com', NOW(), NOW()),
-       ('00000000-0000-0000-0000-0000000ce003', '00000000-0000-0000-0000-000000000e01', 'other@example.com', NOW(), NOW());
+       ('00000000-0000-0000-0000-0000000ce003', '00000000-0000-0000-0000-000000000e01', 'other@example.com', NOW(), NOW()),
+       ('00000000-0000-0000-0000-0000000ce004', '00000000-0000-0000-0000-000000000e01', 'no-reply@notification.macro.com', NOW(), NOW());
 
 INSERT INTO email_labels (id, link_id, provider_label_id, name, created_at)
 VALUES ('00000000-0000-0000-0000-0000000be001', '00000000-0000-0000-0000-000000000e01', 'CATEGORY_PROMOTIONS', 'CATEGORY_PROMOTIONS', NOW()),
@@ -37,7 +42,8 @@ VALUES ('00000000-0000-0000-0000-00000000e201', '00000000-0000-0000-0000-0000000
        ('00000000-0000-0000-0000-00000000e203', '00000000-0000-0000-0000-000000000e01', true, false, true, NOW(), NOW()),
        ('00000000-0000-0000-0000-00000000e204', '00000000-0000-0000-0000-000000000e01', true, false, true, NOW(), NOW()),
        ('00000000-0000-0000-0000-00000000e205', '00000000-0000-0000-0000-000000000e01', true, false, true, NOW(), NOW()),
-       ('00000000-0000-0000-0000-00000000e206', '00000000-0000-0000-0000-000000000e01', true, true, true, NOW(), NOW());
+       ('00000000-0000-0000-0000-00000000e206', '00000000-0000-0000-0000-000000000e01', true, true, true, NOW(), NOW()),
+       ('00000000-0000-0000-0000-00000000e207', '00000000-0000-0000-0000-000000000e01', true, false, true, NOW(), NOW());
 
 INSERT INTO email_messages (id, thread_id, link_id, provider_id, global_id, is_sent, from_contact_id, internal_date_ts,
                             has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
@@ -64,7 +70,10 @@ VALUES ('00000000-0000-0000-0000-00000000e501', '00000000-0000-0000-0000-0000000
         false, true, false, false, NOW(), NOW()),
        ('00000000-0000-0000-0000-00000000e508', '00000000-0000-0000-0000-00000000e206', '00000000-0000-0000-0000-000000000e01',
         NULL, NULL, FALSE, '00000000-0000-0000-0000-0000000ce001', '2025-01-05 17:00:00 +00:00',
-        false, true, false, true, NOW(), NOW());
+        false, true, false, true, NOW(), NOW()),
+       ('00000000-0000-0000-0000-00000000e509', '00000000-0000-0000-0000-00000000e207', '00000000-0000-0000-0000-000000000e01',
+        'provider-msg-e509', 'gid-e509', FALSE, '00000000-0000-0000-0000-0000000ce004', '2025-01-05 18:00:00 +00:00',
+        false, false, false, false, NOW(), NOW());
 
 INSERT INTO email_message_labels (message_id, label_id)
 VALUES ('00000000-0000-0000-0000-00000000e502', '00000000-0000-0000-0000-0000000be001'),

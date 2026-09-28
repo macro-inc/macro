@@ -10,9 +10,16 @@ import { createResizeObserver } from '@solid-primitives/resize-observer';
  * `@core/component/AI/component/input/ChatInput.tsx`.
  */
 
+import {
+  DictationButton,
+  DictationFeedback,
+  DictationPanel,
+} from '@app/features/dictation/components/dictation-controls';
+import { createComposerDictation } from '@app/features/dictation/composer-dictation';
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
@@ -60,6 +67,8 @@ export interface AgentInputProps {
    */
   onSendNext?: () => void;
   disabled?: boolean;
+  /** View-only sessions cannot edit drafts; pending sessions still can. */
+  readOnly?: boolean;
   autofocus?: boolean;
   /**
    * Slash commands the harness advertises (ACP `available_commands_update`);
@@ -116,9 +125,11 @@ export function AgentInput(props: AgentInputProps) {
     setHeight(element.getBoundingClientRect().height);
   });
   useTouchOutsideToDismissKeyboard(() => containerRef);
+  const dictation = createComposerDictation(() => editor.lexical);
 
   const attachments = () => props.attachments ?? [];
-  const canAttach = () => props.onAttachFiles !== undefined && !props.disabled;
+  const canAttach = () =>
+    props.onAttachFiles !== undefined && !props.disabled && !props.readOnly;
   const hasPendingAttachments = () =>
     attachments().some((attachment) => attachment.pending);
   const attachFiles = (files: File[]) => {
@@ -132,7 +143,9 @@ export function AgentInput(props: AgentInputProps) {
   const canSend = () =>
     (markdown().trim().length > 0 || attachments().length > 0) &&
     !hasPendingAttachments() &&
-    !props.disabled;
+    !props.disabled &&
+    !props.readOnly &&
+    !dictation.active();
 
   // The channel composer's chips, drop zone, and overlay read their state
   // from `Input.Root`'s context; this is that context, over this composer's
@@ -143,7 +156,9 @@ export function AgentInput(props: AgentInputProps) {
     attachFiles: async (files) => attachFiles(files),
     toggleFormatRibbon: () => {},
     close: () => {},
-    removeAttachment: (attachment) => props.onRemoveAttachment?.(attachment),
+    removeAttachment: (attachment) => {
+      if (!props.readOnly) props.onRemoveAttachment?.(attachment);
+    },
   };
 
   const send = () => {
@@ -161,11 +176,13 @@ export function AgentInput(props: AgentInputProps) {
   // in flight, or a previous advance the log has not confirmed yet. Attached
   // files are something to send in their own right, so they hold it back too.
   const canSendNext = () =>
+    !dictation.active() &&
     markdown().trim().length === 0 &&
     attachments().length === 0 &&
     props.hasQueuedMessages === true &&
     !props.sendNextHeld &&
     !props.disabled &&
+    !props.readOnly &&
     props.onStop !== undefined;
 
   const sendNext = () => {
@@ -179,6 +196,7 @@ export function AgentInput(props: AgentInputProps) {
   };
 
   const editor = buildConfig('chat')
+    .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agent-input')
     .withMentions({
       showOpenTabs: true,
@@ -227,6 +245,7 @@ export function AgentInput(props: AgentInputProps) {
     props.registerFocus?.(() => editor.controls.focus());
     onCleanup(() => props.registerFocus?.(undefined));
     props.registerQuoteInsert?.((text) => {
+      if (props.readOnly) return;
       // Discrete so the chip is committed to the DOM before focus moves in.
       editor.lexical.update(() => $insertReferencedPaste(text), {
         discrete: true,
@@ -250,6 +269,7 @@ export function AgentInput(props: AgentInputProps) {
   // Taps inside the contenteditable keep their defaults so the caret lands
   // under the finger.
   const focusEditor = (event: Event) => {
+    if (props.readOnly) return;
     const target = event.target as HTMLElement | null;
     if (!target || target.closest('button')) return;
     if (editor.lexical.getRootElement()?.contains(target)) return;
@@ -269,7 +289,12 @@ export function AgentInput(props: AgentInputProps) {
         commands: inputCommands,
       }}
     >
-      <div ref={containerRef} data-keep-keyboard class="flex flex-col gap-1.5">
+      <div
+        ref={containerRef}
+        data-keep-keyboard
+        class="flex flex-col gap-1.5"
+        classList={{ 'opacity-50': props.readOnly }}
+      >
         {/* Desktop: the model pill sits above the box, as it always has. */}
         <Show when={!isTouchDevice() && props.modelControl}>
           <div class="flex items-center px-0.5">{props.modelControl}</div>
@@ -277,7 +302,7 @@ export function AgentInput(props: AgentInputProps) {
         {/* h-auto beats Surface's size-full so the in-flow controls are not
             clipped over the editor (that was Auto sitting on the placeholder). */}
         <ComposerSurface
-          class="h-auto transition-[height] duration-150 ease-out motion-reduce:transition-none"
+          class="relative h-auto transition-[height] duration-150 ease-out motion-reduce:transition-none"
           style={{
             height: height() === undefined ? undefined : `${height()}px`,
           }}
@@ -294,7 +319,12 @@ export function AgentInput(props: AgentInputProps) {
                 hint="Drop files here to send them to the agent"
               />
             </Show>
-            <div ref={setContent} data-composer-content>
+            <div
+              ref={setContent}
+              data-composer-content
+              inert={dictation.active()}
+              classList={{ invisible: dictation.active() }}
+            >
               {/* Chips above the text, media and documents in their own rows,
                   exactly as the channel composer lays them out. */}
               <Input.Attachments kind="media" class="pb-0" />
@@ -324,12 +354,16 @@ export function AgentInput(props: AgentInputProps) {
                 >
                   <ComposerEditor
                     config={editor}
+                    disabled={props.readOnly}
                     placeholder={
                       props.placeholder ??
                       'Message the agent, @mention anything'
                     }
                     autofocus={
-                      !isMobile() && !isTouchDevice() && props.autofocus
+                      !props.readOnly &&
+                      !isMobile() &&
+                      !isTouchDevice() &&
+                      props.autofocus
                     }
                   />
                 </div>
@@ -345,10 +379,14 @@ export function AgentInput(props: AgentInputProps) {
                         file, and the static upload stores any type. */}
                     <Input.AttachFilesAction
                       accept={null}
-                      disabled={props.disabled}
+                      disabled={props.disabled || props.readOnly}
                     />
                   </Show>
-                  <div class="ml-auto shrink-0">
+                  <div class="ml-auto flex shrink-0 items-center gap-[3.75px]">
+                    <DictationButton
+                      dictation={dictation}
+                      disabled={props.disabled || props.readOnly}
+                    />
                     <Show
                       when={canSendNext()}
                       fallback={
@@ -367,6 +405,7 @@ export function AgentInput(props: AgentInputProps) {
                             variant={isTouchDevice() ? 'ghost' : 'strong'}
                             size="icon-composer"
                             label="Stop"
+                            disabled={props.disabled || props.readOnly}
                             onClick={() => props.onStop?.()}
                             class={
                               isTouchDevice()
@@ -394,7 +433,9 @@ export function AgentInput(props: AgentInputProps) {
               </div>
             </div>
           </Input.DropZone>
+          <DictationPanel dictation={dictation} />
         </ComposerSurface>
+        <DictationFeedback dictation={dictation} />
       </div>
     </InputProvider>
   );

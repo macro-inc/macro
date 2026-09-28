@@ -1,21 +1,16 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import {
   QueryClient,
   QueryClientProvider,
   useQuery,
 } from '@tanstack/solid-query';
-import { type JSX, Suspense } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { type JSX, type ParentProps, Suspense } from 'solid-js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EmailSidePanelSections } from './EmailSidePanelSections';
 
-const fetchReferences = vi.hoisted(() => vi.fn());
-
+const mocks = vi.hoisted(() => ({ references: vi.fn() }));
 vi.mock('@queries/storage/attachment-references', () => ({
-  useAttachmentReferencesQuery: () =>
-    useQuery(() => ({
-      queryKey: ['references'],
-      queryFn: fetchReferences,
-    })),
+  useAttachmentReferencesQuery: () => mocks.references(),
 }));
 vi.mock(
   '@app/features/email-thread/context/email-thread-state-context',
@@ -31,35 +26,65 @@ vi.mock('@app/features/property/side-panel/properties', () => ({
   EntityTagsSection: () => null,
 }));
 vi.mock('@core/component/References', () => ({
-  References: () => <div>Loaded references</div>,
+  References: () => <div>Reference details</div>,
 }));
 vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
-    Section: (props: { children: JSX.Element }) => <div>{props.children}</div>,
-    CountTitle: () => null,
-    Loading: () => <div>Loading section</div>,
+    Section: (props: ParentProps<{ title: JSX.Element }>) => (
+      <section>
+        {props.title}
+        {props.children}
+      </section>
+    ),
+    CountTitle: (props: { label: string; count: number }) => (
+      <span>
+        {props.label} ({props.count})
+      </span>
+    ),
+    Loading: () => null,
   },
 }));
 
-afterEach(cleanup);
+const clients: QueryClient[] = [];
+afterEach(() => {
+  cleanup();
+  for (const client of clients.splice(0)) client.clear();
+});
 
-it('keeps the composer visible while sidebar references load', async () => {
-  const { promise, resolve } = Promise.withResolvers<unknown[]>();
-  fetchReferences.mockReturnValue(promise);
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+describe('email optional references', () => {
+  it('does not suspend the email body while references load, then updates the count', async () => {
+    const response = Promise.withResolvers<unknown[]>();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    clients.push(client);
+    mocks.references.mockImplementation(() =>
+      useQuery(() => ({
+        queryKey: ['references-test'],
+        queryFn: () => response.promise,
+      }))
+    );
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Suspense fallback={<div data-testid="loading" />}>
+          <div data-testid="email">
+            Cached body
+            <textarea aria-label="Draft" value="Unsaved reply" />
+            <EmailSidePanelSections threadId="thread" title="Subject" />
+          </div>
+        </Suspense>
+      </QueryClientProvider>
+    ));
+    expect(screen.getByTestId('email').textContent).toContain('Cached body');
+    expect(screen.queryByTestId('loading')).toBeNull();
+    expect(screen.queryByText('Reference details')).toBeNull();
+    const editor = screen.getByRole('textbox');
+    response.resolve([{}, {}]);
+    await waitFor(() =>
+      expect(screen.getByText('References (2)')).toBeTruthy()
+    );
+    expect(screen.getByText('Reference details')).toBeTruthy();
+    expect(screen.getByRole('textbox')).toBe(editor);
+    expect(screen.queryByTestId('loading')).toBeNull();
   });
-  render(() => (
-    <QueryClientProvider client={client}>
-      <Suspense fallback={<div>Hidden email</div>}>
-        <input aria-label="Draft body" />
-        <EmailSidePanelSections threadId="draft-thread" title="Draft" />
-      </Suspense>
-    </QueryClientProvider>
-  ));
-  const editor = screen.getByRole('textbox');
-  expect(screen.queryByText('Hidden email')).toBeNull();
-  resolve([{}]);
-  await screen.findByText('Loaded references');
-  expect(screen.getByRole('textbox')).toBe(editor);
 });

@@ -181,6 +181,8 @@ fn changed_files() -> Step<Use> {
             "#}
             .trim_end(),
         ))
+        .add_with(("json", true))
+        .add_with(("escape_json", false))
         .add_with(("write_output_files", true))
 }
 
@@ -189,11 +191,23 @@ fn detect_affected_services() -> Step<Run> {
         .run(indoc::indoc! {r#"
             services=()
 
+            # The action joins its plain-text output with spaces and no trailing
+            # newline, which `while read` never yields a line from, so read the
+            # JSON list and split it one path per line. `all_modified_files`,
+            # unlike `all_changed_files`, includes deletions.
+            changed_files=.github/outputs/changed_files.txt
+            jq -r '.[]' .github/outputs/all_modified_files.json > "$changed_files"
+
             # Read service config
             config=$(cat .github/services-config.json)
 
             # Check each service for changes
             for service in $(echo "$config" | jq -r '.services | keys[]'); do
+              bootstrap_pending=$(jq -r --arg s "$service" '.services[$s].bootstrap_pending // empty' <<< "$config")
+              if jq -e --arg s "$service" '.services[$s].bootstrap_pending != null' <<< "$config" > /dev/null; then
+                echo "::notice::Deferring $service live infrastructure checks: $bootstrap_pending"
+                continue
+              fi
               service_changed=false
 
               # Workspace/build-system changes can affect every deployable.
@@ -229,7 +243,7 @@ fn detect_affected_services() -> Step<Run> {
                   service_changed=true
                   break
                 fi
-              done < .github/outputs/all_changed_files.txt
+              done < "$changed_files"
 
               # Get all source and stack globs for this service.
               service_paths=$(echo "$config" | jq -r --arg s "$service" \
@@ -246,7 +260,7 @@ fn detect_affected_services() -> Step<Run> {
                       break 2
                     fi
                   done <<< "$service_paths"
-                done < .github/outputs/all_changed_files.txt
+                done < "$changed_files"
               fi
 
               # Match crate/service source against each deployable's workspace
@@ -273,7 +287,7 @@ fn detect_affected_services() -> Step<Run> {
                         service_changed=true
                         break 3
                       fi
-                    done < .github/outputs/all_changed_files.txt
+                    done < "$changed_files"
                   done < <(jq -r --arg c "$crate" '.closures[$c] // empty | .[]' .github/workspace-dep-closures.json)
                 done <<< "$crates"
               fi
@@ -282,6 +296,18 @@ fn detect_affected_services() -> Step<Run> {
                 services+=("$service")
               fi
             done
+
+            # A stack directory no service's `stack_path` claims gets no preview.
+            unmapped=$(sed -n 's|^infra/stacks/\([^/]*\)/.*|\1|p' "$changed_files" | sort -u |
+              while IFS= read -r stack; do
+                if ! jq -e --arg p "infra/stacks/$stack/**" \
+                  'any(.services[]; .stack_path == $p)' <<< "$config" > /dev/null; then
+                  echo "$stack"
+                fi
+              done)
+            if [[ -n "$unmapped" ]]; then
+              echo "::warning::No preview for infra/stacks/{$(paste -sd, <<< "$unmapped")}: no service in .github/services-config.json has that stack_path"
+            fi
 
             if [ ${#services[@]} -eq 0 ]; then
               echo "has-changes=false" >> $GITHUB_OUTPUT

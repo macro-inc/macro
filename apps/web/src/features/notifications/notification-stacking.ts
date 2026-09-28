@@ -1,6 +1,7 @@
 import type { NotificationType } from '@core/types';
 import { compareDateDesc } from '@core/util/date';
 import { match } from 'ts-pattern';
+import { isEntityDiscussionEvent } from './entity-discussion';
 import {
   isChannelNotification,
   isDocumentCommentNotification,
@@ -49,6 +50,7 @@ export function getThreadId(group: NotificationStack): string {
   }
   for (const notification of group.notifications) {
     const threadId = match(notification.notification_metadata)
+      .with({ tag: 'initiative_discussion' }, (m) => m.content.threadId)
       .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId ?? '')
       .with({ tag: 'channel_mention' }, (m) => m.content.threadId ?? '')
       .with({ tag: 'replied_to_document_comment_thread' }, (m) =>
@@ -60,6 +62,7 @@ export function getThreadId(group: NotificationStack): string {
       .with({ tag: 'commented_on_document' }, (m) =>
         m.content.threadId.toString()
       )
+      .with({ tag: 'crm_discussion' }, (m) => m.content.threadId)
       .otherwise(() => '');
     if (threadId) return threadId;
   }
@@ -103,14 +106,30 @@ export function stackNotifications(
   const docMentions = notifications.filter(
     (n) => n.notification_metadata.tag === 'document_mention'
   );
+  // One stack per discussion thread on a project, company or contact.
+  const entityDiscussionThreads = groupBy(
+    notifications.filter((n) =>
+      isEntityDiscussionEvent(n.notification_metadata)
+    ),
+    (n) => {
+      const meta = n.notification_metadata;
+      return isEntityDiscussionEvent(meta)
+        ? `${meta.tag}:${n.entity_id}:${meta.content.threadId}`
+        : n.id;
+    }
+  );
   const others = notifications.filter(
     (n) =>
       !isChannelNotification(n) &&
       !isDocumentCommentNotification(n) &&
-      n.notification_metadata.tag !== 'document_mention'
+      n.notification_metadata.tag !== 'document_mention' &&
+      !isEntityDiscussionEvent(n.notification_metadata)
   );
 
   const groups: NotificationStack[] = [
+    ...[...entityDiscussionThreads.values()].flatMap((items) =>
+      makeStack(items[0].notification_metadata.tag, items)
+    ),
     ...channelStacks,
     ...docCommentStacks,
     ...makeStack('document_mention', docMentions),

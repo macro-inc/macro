@@ -33,11 +33,13 @@ import type {
 } from '../protocol';
 import {
   parseCacheRevision,
+  parseStorageGeneration,
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
 } from '../protocol';
 import type {
   CacheChangeOptions,
+  CacheGenerationChange,
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
@@ -62,7 +64,7 @@ type OpsAffectedPayload = {
   keys: string[];
 };
 
-type CacheChangedPayload = { revision: string };
+type CacheChangedPayload = { revision: string; reset?: boolean };
 
 // Older native binaries omit the advancement bit and still receive OTA JS.
 type NativeHydrationResult = HydrationResult & { revisionAdvanced?: boolean };
@@ -88,6 +90,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
   const cacheChangeSubscribers = new Set<(revision: CacheRevision) => void>();
   const hydrationSubscribers = new Set<(revision: CacheRevision) => void>();
+  const generationChangeSubscribers = new Set<
+    (change: CacheGenerationChange) => void
+  >();
   const settlementSubscribers = new Set<
     (settlement: MutationSettlement) => void
   >();
@@ -164,6 +169,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     listen<CacheChangedPayload>(CACHE_CHANGED_EVENT, (event) => {
       const revision = parseCacheRevision(event.payload.revision);
       observeRevision(revision);
+      if (event.payload.reset) {
+        for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
+      }
       for (const cb of cacheChangeSubscribers) cb(revision);
     }).catch((error) => {
       console.warn('graphql cache change listener failed', error);
@@ -214,6 +222,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       await ready;
       return parseCacheRevision(
         await request<string>('graphql_cache_current_revision', {})
+      );
+    },
+
+    async currentStorageGeneration(): Promise<string> {
+      await ready;
+      return parseStorageGeneration(
+        await request<string>('graphql_cache_current_storage_generation', {})
       );
     },
 
@@ -491,9 +506,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       };
     },
 
-    onCacheGenerationChanged(): () => void {
-      // The native host process owns one engine generation for its lifetime.
-      return () => undefined;
+    onCacheGenerationChanged(
+      cb: (change: CacheGenerationChange) => void
+    ): () => void {
+      generationChangeSubscribers.add(cb);
+      return () => generationChangeSubscribers.delete(cb);
     },
 
     onMutationSettled(
@@ -507,6 +524,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       affectedSubscribers.clear();
       cacheChangeSubscribers.clear();
       hydrationSubscribers.clear();
+      generationChangeSubscribers.clear();
       settlementSubscribers.clear();
       void unlistenOps.then((fn) => fn?.());
       void unlistenCacheChanges.then((fn) => fn?.());

@@ -65,6 +65,11 @@ test('three pages fence graceful, abrupt, stale, and worker-only ownership', asy
     pushReachedAllTabs: true,
     ownerLockContentionEpochs: [1, 2, 3, 4],
     engineReplacedEpochs: [2, 3, 4],
+    replacementStorageOutcomes: [
+      [2, 'opened-existing'],
+      [3, 'reset-storage-uncertain'],
+      [4, 'reset-storage-uncertain'],
+    ],
     protocolErrors: [],
   });
   expect(browserErrors).toEqual([]);
@@ -116,6 +121,7 @@ test('production CacheHost performs fresh init and active reread after owner los
     ],
     oldEpochRejectedBeforeReplacement: true,
     oldRequestReplayCount: 1,
+    replacementStorage: ['reset'],
     replacementActiveKeys: [[7, 9]],
     replacementReadCompleted: true,
     gracefulDrained: true,

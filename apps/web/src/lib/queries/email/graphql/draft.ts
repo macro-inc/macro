@@ -207,6 +207,7 @@ function optimisticDraftEntity(
     bodyHtmlSanitized: args.optimisticBodyHtml,
     bodyMacro: args.bodyMacro ?? null,
     bodyReplyless: null,
+    calendarInvitations: existing?.calendarInvitations ?? [],
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     from: { email: args.senderEmail, name: null, photoUrl: null },

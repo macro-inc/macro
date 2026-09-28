@@ -57,6 +57,12 @@ use crate::{
         },
     },
 };
+use channel_labels::domain::models::{
+    ChannelLabel, ChannelLabelRule, ChannelLabelsList, SmartTagChannelMatch, SmartTagPreview,
+};
+use channel_labels::inbound::axum_router::{
+    CreateChannelLabelRequest, RenameChannelLabelRequest, SetChannelLabelRequest,
+};
 use channels::inbound::axum_router::{
     ApiActivity, ApiAttachmentChannelReference, ApiAttachmentEntityReference,
     ApiAttachmentGenericReference, ApiChannelAttachment, ApiChannelAttachmentsPage,
@@ -150,6 +156,7 @@ use utoipa::OpenApi;
         terms_of_service = "https://macro.com/terms",
     ),
     paths(
+        dictation::inbound::axum_router::transcribe_handler,
         health::health_handler,
         calendar_events::inbound::axum_router::list_occurrences,
         calendar_events::inbound::axum_router::mention_previews,
@@ -298,6 +305,19 @@ use utoipa::OpenApi;
         bots::inbound::channel_webhook_router::post_channel_webhook_handler,
 
         // calls
+        call::inbound::axum_router::meetings::create,
+        call::inbound::axum_router::meetings::update,
+        call::inbound::axum_router::meetings::list,
+        call::inbound::axum_router::meetings::list_active,
+        call::inbound::axum_router::meetings::cancel,
+        call::inbound::axum_router::meetings::share,
+        call::inbound::axum_router::meetings::join,
+        call::inbound::axum_router::meetings::invite,
+        call::inbound::axum_router::meetings::invite_permissions,
+        call::inbound::axum_router::meetings::invite_users,
+        call::inbound::axum_router::meetings::lookup,
+        call::inbound::axum_router::meetings::guest_join,
+        call::inbound::axum_router::meetings::leave,
         call::inbound::axum_router::get_or_create_call_handler,
         call::inbound::axum_router::check_active_call_handler,
         call::inbound::axum_router::get_active_calls_handler,
@@ -348,6 +368,13 @@ use utoipa::OpenApi;
         favorites::inbound::axum_router::add_favorite_handler,
         favorites::inbound::axum_router::remove_favorite_by_entity_handler,
         favorites::inbound::axum_router::reorder_favorites_handler,
+        // channel labels
+        channel_labels::inbound::axum_router::list_channel_labels_handler,
+        channel_labels::inbound::axum_router::preview_smart_tag_handler,
+        channel_labels::inbound::axum_router::create_channel_label_handler,
+        channel_labels::inbound::axum_router::rename_channel_label_handler,
+        channel_labels::inbound::axum_router::delete_channel_label_handler,
+        channel_labels::inbound::axum_router::set_channel_label_handler,
 
         // user api keys
         user_api_key::inbound::axum_router::create_user_api_key_handler,
@@ -520,6 +547,14 @@ use utoipa::OpenApi;
             AddFavoriteRequest,
             FavoriteEntityRef,
             ReorderFavoritesRequest,
+            ChannelLabel,
+            ChannelLabelsList,
+            ChannelLabelRule,
+            SmartTagChannelMatch,
+            SmartTagPreview,
+            CreateChannelLabelRequest,
+            RenameChannelLabelRequest,
+            SetChannelLabelRequest,
             Reminder,
             RemindersList,
             ReminderSchedule,
@@ -717,6 +752,7 @@ use utoipa::OpenApi;
             webhook::domain::models::WebhookFilter,
             webhook::domain::models::WebhookStatus,
             webhook::domain::models::WebhookValidationTestEvent,
+            dictation::inbound::axum_router::TranscribeResponse,
 
             DocumentSubType,
 

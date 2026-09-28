@@ -57,6 +57,8 @@ export type GraphqlGroupedSoupAstItemsQueryArgs = {
 
 export type GraphqlGroupedSoupAstItemsQueryOptions = {
   enabled: boolean;
+  networkPaused?: boolean;
+  keepPreviousData?: boolean;
   showSupportedForeignEntities?: boolean;
 };
 
@@ -111,6 +113,30 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   const [networkRevision, setNetworkRevision] = createSignal<CacheRevision>();
   const [networkInput, setNetworkInput] = createSignal<unknown>();
   const offline = createBrowserOfflineSignal();
+  let networkResultVersion = 0;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  async function acknowledgeNetworkResult(
+    persistence: Promise<CacheRevision | undefined>,
+    queryInput: unknown,
+    version: number
+  ) {
+    try {
+      const revision = await persistence;
+      if (
+        disposed ||
+        version !== networkResultVersion ||
+        queryInput !== input()
+      )
+        return;
+      setNetworkRevision(revision);
+      setNetworkInput(queryInput);
+    } catch {
+      // Keep the local Mail fallback when the network result could not be cached.
+    }
+  }
   const local = createGraphqlSoupAstItemsQuery(
     () => ({ params: args().params, body: args().body }),
     () => ({
@@ -146,8 +172,10 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     const common = {
       query: GroupSoupDocument,
       client: getGraphqlSoupClient(),
-      requestPolicy: 'cache-and-network' as const,
-      keepPreviousData: false,
+      requestPolicy: queryOptions.networkPaused
+        ? ('cache-only' as const)
+        : ('cache-and-network' as const),
+      keepPreviousData: queryOptions.keepPreviousData ?? false,
       onResult: (
         result: import('@urql/core').OperationResult<
           GroupSoupQuery,
@@ -155,10 +183,15 @@ export function createGraphqlGroupedSoupAstItemsQuery(
         >
       ) => {
         const metadata = normalizedCacheResultMetadata(result);
-        if (metadata?.source === 'live-network' && metadata.revision) {
-          setNetworkRevision(metadata.revision);
-          setNetworkInput(queryInput);
-        }
+        if (metadata?.source !== 'live-network') return;
+        const version = ++networkResultVersion;
+        setNetworkRevision(undefined);
+        if (result.error || result.data == null || result.hasNext) return;
+        void acknowledgeNetworkResult(
+          metadata.persistence ?? Promise.resolve(metadata.revision),
+          queryInput,
+          version
+        );
       },
       select: (data: GroupSoupQuery) =>
         mapGraphqlGroupedSoupData(data, groupBy!, {
@@ -199,6 +232,8 @@ export function createGraphqlGroupedSoupAstItemsQuery(
       return;
     if (
       !offline() &&
+      !local.localOptimistic?.() &&
+      networkRevision() !== undefined &&
       networkInput() === input() &&
       networkRevision() === local.localRevision?.()
     )

@@ -15,7 +15,7 @@ mod calendar_watch;
 pub mod swagger;
 
 /// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
-/// alongside `/` so a dedicated ALB keeps working during cutover.
+/// alongside `/`, where the target group's `/health` check probes.
 const GATEWAY_PATH_PREFIX: &str = "/calendar";
 
 /// Build the application and serve it until a shutdown signal arrives.

@@ -94,7 +94,7 @@ impl<Repo: AgentSessionRepo, Access: EntityAccessService, Subscriptions: Session
 }
 
 /// Answers session view access through the entity access service, so a
-/// preview sees the same inherited document access a read route does.
+/// preview sees the same link and inherited document access a read route does.
 #[derive(Clone)]
 pub struct EntityAccessSessionView<Access> {
     access: Access,
