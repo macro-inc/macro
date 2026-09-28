@@ -138,10 +138,12 @@ Project properties live in the shared Details/Properties side panel and honor
 project access. Editors can rename the project; its owner can delete it.
 Deleting a project leaves its tasks in the workspace.
 
-Share uses the existing `To: Email or group` field, optional message, access
-choice, and `Share` action. Owners can open `Manage collaborators` from People.
-The usual team and link-access controls and Copy link action use the same menu
-as other entities. Access changes also apply to the description. Sharing to a
+Share (or Cmd+S) opens the same Share menu as tasks and documents: the
+`To: Email or group` field, optional message, access choice, and `Share`
+action. Only the owner can share; other members get Copy Link. Owners can open
+`Manage collaborators` from People. The usual team and link-access controls and
+Copy link action use the same menu as other entities; copied links open the
+project's Overview. Access changes also apply to the description. Sharing to a
 channel posts a native project chip, which opens the project in Tasks; channel
 attachments list it in their Projects section.
 

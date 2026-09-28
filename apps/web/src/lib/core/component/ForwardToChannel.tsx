@@ -322,6 +322,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   const blockName = () => props.blockName ?? contextBlockName;
   const blockId = () => props.blockId ?? contextBlockId;
   const itemType = () => {
+    if (props.entity) return;
     const name = blockName();
     return name != null ? blockNameToItemType(name) : undefined;
   };
