@@ -12,6 +12,7 @@ import type {
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createContext, useContext } from 'solid-js';
+import type { ToolApprovalController } from '../primitives/create-tool-approval-controller';
 import type { QuoteInsert } from '../ui';
 import type { QueueController } from './create-queue-controller';
 import type { InteractionController } from './interaction';
@@ -73,6 +74,11 @@ export type AgentSessionState = {
   sendNext: () => void;
   /** The live requests, and the action that answers each one. */
   interactions: InteractionController;
+  /**
+   * Tool calls held until the session's owner approves them, made in turns
+   * somebody else prompted.
+   */
+  toolApprovals: ToolApprovalController;
   /**
    * The session's server-side action queue: prompts sent mid-turn wait
    * there and dispatch one per turn end. The server is the only truth —
