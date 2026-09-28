@@ -385,6 +385,16 @@ if (LOCAL_ONLY) {
     'agent-changes-ui',
     lazy(() => import('@app/features/agent-changes/debug/Gallery'))
   );
+
+  registerComponent(
+    'file-tree-ui',
+    lazy(() => import('@app/components/file-tree/debug/FileTreeGallery'))
+  );
+
+  registerComponent(
+    'diff-view-ui',
+    lazy(() => import('@app/components/diff-view/debug/DiffViewGallery'))
+  );
 }
 
 if (import.meta.env.DEV) {
