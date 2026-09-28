@@ -14986,6 +14986,8 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "agent_runtime_protocol",
+ "agent_session",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
@@ -15032,6 +15034,7 @@ dependencies = [
  "models_permissions",
  "notification",
  "rdkafka",
+ "reqwest 0.13.4",
  "rootcause",
  "secretsmanager_client",
  "serde",
