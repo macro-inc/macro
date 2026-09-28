@@ -52,6 +52,7 @@ export function EntityDiscussion(props: {
   /** Where copied message links open: the entity's block and id. */
   link: { type: string; id: string };
   label?: string;
+  legacyCommentLinks?: boolean;
   /**
    * On touch devices, move the composer to the floating accessory region and
    * show the conversation only once it has roots, as the editor page does.
@@ -60,6 +61,10 @@ export function EntityDiscussion(props: {
   editorHasFocus?: boolean;
 }) {
   const params = useUrlParams({ commentId: COMMENT_LINK_PARAM });
+  const commentId = () =>
+    props.legacyCommentLinks === false && /^\d+$/.test(params.commentId() ?? '')
+      ? undefined
+      : params.commentId();
   const floating = () =>
     props.floatingComposerOnTouch === true && isTouchDevice();
   let container: HTMLDivElement | undefined;
@@ -70,12 +75,12 @@ export function EntityDiscussion(props: {
   const commentNavigationCount = useParamNavigationCount(COMMENT_LINK_PARAM);
   const scrollRequest = createMemo(
     () => {
-      const commentId = params.commentId();
-      if (!commentId) return undefined;
+      const target = commentId();
+      if (!target) return undefined;
       const count = commentNavigationCount();
       return {
-        commentId,
-        key: count === 0 ? `url:${commentId}` : `navigation:${count}`,
+        commentId: target,
+        key: count === 0 ? `url:${target}` : `navigation:${count}`,
       };
     },
     undefined,
@@ -102,7 +107,7 @@ export function EntityDiscussion(props: {
         <EntityConversation
           parent={props.parent}
           canWrite={props.canWrite}
-          targetId={params.commentId()}
+          targetId={commentId()}
           targetCleared={targetCleared()}
           onClearTarget={() => setClearedKey(scrollRequest()?.key)}
           label={props.label}

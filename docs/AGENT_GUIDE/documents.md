@@ -255,8 +255,12 @@ open until dismissed so a reply is not lost when moving the pointer.
 
 **Comments** in the document header opens all workbook threads. Range labels
 navigate to the corresponding sheet and cells; deleted-sheet threads remain
-readable. These are the same document annotation comments used by docs/tasks:
-mentions and replies use the existing inbox notifications and comment links.
+readable. **Workbook discussion** contains comments about the whole workbook,
+with its own composer. The pinned composer at the bottom posts on the displayed
+range; **Use selection** changes that range. Both surfaces use the shared message
+controls for replies, edits, deletion, reactions, and attachments. Range threads
+also offer **Resolve** and **Reopen**. Mentions and replies use inbox notifications
+and message links. Older spreadsheet annotation comments are not displayed.
 Opening an inbox notification opens the sidebar and targets its comment/range.
 Comment-only access can post/reply; view-only access can read. Edit/delete applies
 to the author's own comments, and failures retain the input draft. Draft demos

@@ -136,6 +136,28 @@ function discussion(
 }
 
 describe('EntityConversation placement', () => {
+  it('keeps spreadsheet range threads out of the workbook discussion', () => {
+    const view = discussion(
+      [
+        [
+          thread('Workbook topic', null),
+          thread('Range topic', {
+            type: 'spreadsheet',
+            sheetId: 'sheet-1',
+            sheetName: 'Budget',
+            range: 'B4:C9',
+          }),
+        ],
+      ],
+      undefined,
+      { canWrite: true }
+    );
+    expect(view.getByText('Workbook topic')).toBeTruthy();
+    expect(view.queryByText('Range topic')).toBeNull();
+    expect(mocks.capturedParent).toEqual({ type: 'document', id: 'document' });
+    expect(view.getByRole('textbox')).toBeTruthy();
+  });
+
   it('renders the Discussion disclosure as an icon instead of a text glyph', () => {
     const view = discussion([[]]);
     const button = view.getByRole('button', { name: 'Discussion' });

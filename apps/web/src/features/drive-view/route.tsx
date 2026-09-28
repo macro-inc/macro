@@ -1,3 +1,4 @@
+import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
 import {
   createSearchParams,
   defineRoute,
@@ -221,6 +222,8 @@ export const driveSplitRoute = defineRoute({
       return Object.values(MARKDOWN_URL_PARAMS);
     }
     if (type === 'pdf') return Object.values(PDF_URL_PARAMS);
+    if (type === 'spreadsheet')
+      return Object.values(SPREADSHEET_COMMENT_PARAMS);
     if (
       typeof routeParams<{ callId?: string }>(entry.location.route).callId ===
       'string'
