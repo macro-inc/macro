@@ -49,7 +49,8 @@ use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, CommentAnchor, ContextMessage,
     ContextThread, ConversationContext, DeclinedMention, DeliverAction, HarnessCommand,
-    HarnessDefaults, MentionOrigin, OpenSession, SessionBlocker, SessionDefaults, SessionOrigin,
+    HarnessDefaults, MentionOrigin, OpenSession, PromptPeople, SessionBlocker, SessionDefaults,
+    SessionOrigin,
     SessionRepository, SpawnContainer,
 };
 use crate::domain::ports::{
@@ -209,6 +210,7 @@ type PromptCompositionCall = (String, Option<String>, Option<ConversationContext
 struct PromptComposerMock {
     calls: Arc<Mutex<Vec<PromptCompositionCall>>>,
     parents: Arc<Mutex<Vec<Option<MessageParent>>>>,
+    people: Arc<Mutex<Vec<Option<PromptPeople>>>>,
     failure: Arc<Mutex<Option<String>>>,
 }
 
@@ -223,6 +225,10 @@ impl PromptComposerMock {
     fn calls(&self) -> Vec<PromptCompositionCall> {
         self.calls.lock().unwrap().clone()
     }
+
+    fn people(&self) -> Vec<Option<PromptPeople>> {
+        self.people.lock().unwrap().clone()
+    }
 }
 
 impl AgentPromptComposer for PromptComposerMock {
@@ -231,9 +237,11 @@ impl AgentPromptComposer for PromptComposerMock {
         prompt_markdown: &str,
         instructions: Option<&str>,
         parent: Option<&MessageParent>,
+        people: Option<&PromptPeople>,
         context: Option<&ConversationContext>,
     ) -> crate::domain::error::Result<String> {
         self.parents.lock().unwrap().push(parent.cloned());
+        self.people.lock().unwrap().push(people.cloned());
         self.calls.lock().unwrap().push((
             prompt_markdown.to_owned(),
             instructions.map(str::to_owned),
@@ -1244,7 +1252,7 @@ async fn open_announces_while_the_container_is_still_booting() {
 #[tokio::test]
 async fn forward_to_a_live_session_reuses_the_transport() {
     let composer = PromptComposerMock::default();
-    let ((service, _repo, containers, announcer, _runtimes), mut turns) =
+    let ((service, repo, containers, announcer, _runtimes), mut turns) =
         harness_with_signals(PromptContextMock::default(), composer.clone());
     let id = AgentSessionId::new();
     let container = live_session(&service, &containers, id).await;
@@ -1268,6 +1276,28 @@ async fn forward_to_a_live_session_reuses_the_transport() {
             None,
             Some(ConversationContext::default())
         ))
+    );
+    assert_eq!(
+        composer.people(),
+        [
+            Some(PromptPeople {
+                owner: sender(),
+                sender: Some(sender()),
+            }),
+            Some(PromptPeople {
+                owner: sender(),
+                sender: Some(staff_sender()),
+            }),
+        ],
+        "every prompt names the owner and who sent it"
+    );
+    assert_eq!(
+        repo.turn_prompter(id)
+            .await
+            .unwrap()
+            .and_then(|prompter| prompter.user),
+        Some(staff_sender()),
+        "the dispatched turn's prompter is durable before the runtime can act on it"
     );
     assert_eq!(
         prompts(&container.agent())[1],

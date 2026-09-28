@@ -32,12 +32,14 @@ use agent_changes::domain::service::{AgentChangesService, CaptureOnTurnEnd};
 use agent_changes::inbound::axum_router::AgentChangesRouterState;
 use agent_changes::outbound::postgres::PgChangesetRepo;
 use agent_changes::outbound::s3::S3ChangesetBlobStore;
+use agent_egress::domain::approval::ToolApprovalService;
 use agent_egress::domain::service::EgressServiceImpl;
 use agent_egress::outbound::forwarder::ReqwestForwarder;
 use agent_egress::outbound::github_tokens::GithubAppTokens;
 use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, WithMacroMcp};
 use agent_egress::outbound::mcp_credentials::PipedreamMcpCredentials;
 use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
+use agent_egress::outbound::tool_approvals::{PgToolApprovalSignals, PgToolApprovalStore};
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{
     AgentKind, AgentRuntimeConfig, HarnessCommand, HarnessDefaults, SessionDefaults,
@@ -52,6 +54,7 @@ use agent_harness::domain::trigger_router::{
 use agent_harness::inbound::model_load::AgentModelsRouterState;
 use agent_harness::inbound::repositories::AgentRepositoriesRouterState;
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
+use agent_harness::inbound::tool_approvals::{ToolApprovalsRouterState, tool_approvals_router};
 use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
 use agent_harness::outbound::channel_announcer::MessageAnnouncer;
 use agent_harness::outbound::channel_prompt_context::MessagePromptContextAdapter;
@@ -70,6 +73,9 @@ use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
 use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
+use agent_harness::outbound::tool_approvals::{
+    ReleaseHeldCallsOnTurnEnd, SessionToolApprovalAnnouncer,
+};
 use agent_inmem::domain::engine::TurnEngine;
 use agent_inmem::outbound::acp_mcp::AcpMcpConnector;
 use agent_inmem::outbound::egress_mcp::EgressMcpClient;
@@ -421,6 +427,18 @@ async fn run() -> anyhow::Result<()> {
     // The egress proxy: one binary today, its own listener from the start.
     // Shared with the in-memory runtime, which calls it directly rather than
     // through that listener.
+    // Tool calls in a turn somebody other than the owner prompted wait here
+    // for the owner. The rows and their NOTIFY wake a hold on whichever
+    // replica serves it; each state lands in the session's log for its
+    // viewers, and a call that starts waiting notifies the owner.
+    let tool_approvals = Arc::new(ToolApprovalService::new(
+        PgToolApprovalStore::new(pool.clone()),
+        PgToolApprovalSignals::spawn(pool.clone()),
+        SessionToolApprovalAnnouncer::new(
+            sessions.clone(),
+            IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
+        ),
+    ));
     let egress = Arc::new(
         EgressServiceImpl::new(
             StoredTokenSessionAuthority::new(PgAgentSessionRepo::new(
@@ -444,7 +462,8 @@ async fn run() -> anyhow::Result<()> {
                 macro_service_urls::PreviewGatewayUrl::new()?
             ))?,
             matches!(config.environment, Environment::Local),
-        )?,
+        )?
+        .with_owner_approvals(Arc::clone(&tool_approvals)),
     );
 
     // The proxy's public address, read once: the provisioner builds the
@@ -467,8 +486,16 @@ async fn run() -> anyhow::Result<()> {
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
-    let inmem_model_engine: Arc<dyn TurnEngine> =
-        Arc::new(RigTurnEngine::new(pool.clone(), tool_context));
+    // Macro's own tools run in-process here rather than through the egress
+    // proxy, so they are held for the owner by the same approvals.
+    let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(
+        RigTurnEngine::new(pool.clone(), tool_context).with_gate(Arc::new(
+            agent_inmem::outbound::approval_gate::OwnerApprovalGate::new(
+                session_repo.clone(),
+                Arc::clone(&tool_approvals),
+            ),
+        )),
+    );
     // A model provider cannot fetch images from a private local-stack hostname.
     // Resolve its static-file links through the existing attachment service,
     // including links replayed from earlier turns, before calling the model.
@@ -939,7 +966,12 @@ async fn run() -> anyhow::Result<()> {
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
             PgCodingAgentSource::new(PgBotsRepo::new(pool.clone())),
             defaults,
-            Arc::clone(&lifecycle_publisher),
+            // A turn that ends, stops, or is deleted leaves no one waiting on
+            // its held tool calls.
+            ReleaseHeldCallsOnTurnEnd::new(
+                Arc::clone(&lifecycle_publisher),
+                Arc::clone(&tool_approvals),
+            ),
             pending_commands,
             prompt_mentions,
             // Finished / asking / mentioned reach people through the same
@@ -1167,10 +1199,15 @@ async fn run() -> anyhow::Result<()> {
     let sharing = agent_session::inbound::axum_router::sharing::agent_session_sharing_router(
         AgentSessionRouterState::new(
             agent_session::domain::sharing::SessionSharingService::new(session_repo.clone()),
-            entity_access,
+            entity_access.clone(),
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),
     );
+    let tool_approval_answers = tool_approvals_router(ToolApprovalsRouterState::new(
+        tool_approvals,
+        entity_access.clone(),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    ));
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
             api::ApiStates::new(
@@ -1186,7 +1223,8 @@ async fn run() -> anyhow::Result<()> {
             .with_sharing(sharing)
             .with_routine_sessions(routine_sessions)
             .with_capabilities(capabilities)
-            .with_pull_requests(pull_requests),
+            .with_pull_requests(pull_requests)
+            .with_tool_approvals(tool_approval_answers),
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),

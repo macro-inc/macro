@@ -33,6 +33,8 @@ pub struct AgentIdentity {
 
 /// Everything one conversational turn needs.
 pub struct TurnRequest {
+    /// The session the turn belongs to.
+    pub session_id: agent_session::domain::model::AgentSessionId,
     /// The session's owner, whom the turn acts on behalf of: tools run with
     /// their identity and token usage is recorded against them. Both need a
     /// person, which the engine asks of this rather than assumes.

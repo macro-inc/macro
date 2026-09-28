@@ -73,6 +73,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     routine_sessions: Router,
     capabilities: Router,
     pull_requests: Router,
+    tool_approvals: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
 }
 
@@ -101,6 +102,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             routine_sessions: Router::new(),
             capabilities: Router::new(),
             pull_requests: Router::new(),
+            tool_approvals: Router::new(),
             changes,
         }
     }
@@ -132,6 +134,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach the routes associating pull requests with sessions.
     pub fn with_pull_requests(mut self, router: Router) -> Self {
         self.pull_requests = router;
+        self
+    }
+
+    /// Attach the routes answering tool calls held for the owner's approval.
+    pub fn with_tool_approvals(mut self, router: Router) -> Self {
+        self.tool_approvals = router;
         self
     }
 }
@@ -226,6 +234,7 @@ where
         .merge(agent_session_create_router(states.create))
         .merge(states.sharing)
         .merge(states.pull_requests)
+        .merge(states.tool_approvals)
         .merge(agent_changes_router(states.changes));
     Router::new()
         .nest("/agent-sessions", agent_sessions)

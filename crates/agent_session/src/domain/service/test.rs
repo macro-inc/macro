@@ -619,6 +619,21 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.set_egress_token_hash(id, hash).await
     }
 
+    async fn set_turn_prompter(
+        &self,
+        id: AgentSessionId,
+        prompter: &crate::domain::model::TurnPrompter,
+    ) -> Result<()> {
+        self.repo.set_turn_prompter(id, prompter).await
+    }
+
+    async fn turn_prompter(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<Option<crate::domain::model::TurnPrompter>> {
+        self.repo.turn_prompter(id).await
+    }
+
     async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
         self.repo.set_repo_url(id, repo_url).await
     }
@@ -1367,6 +1382,50 @@ async fn marking_disconnected_persists_and_publishes_the_event() {
         }]
     ));
     assert_eq!(realtime.published().len(), 1);
+}
+
+/// A frame recorded out of band - a held tool call - reaches the session's
+/// viewers straight away, not on some later flush nobody will make.
+#[tokio::test]
+async fn a_recorded_frame_is_stored_and_published_at_once() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let realtime = RecordingRealtime::new();
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    let notice = agent_runtime_protocol::domain::tool_approval::ToolApprovalNotice {
+        approval_id: "a1".to_owned(),
+        server_slug: "macro".to_owned(),
+        server_name: "Macro".to_owned(),
+        tool_name: "WebSearch".to_owned(),
+        arguments: serde_json::json!({}),
+        requested_by: None,
+        status: agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus::Pending,
+        resolved_by: None,
+    };
+
+    service
+        .record_frame(session, notice.to_server_message())
+        .await
+        .expect("the frame is recorded");
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, session)
+        .await
+        .expect("stored log can be read");
+    assert_eq!(stored.len(), 1);
+    assert_eq!(
+        realtime.published().len(),
+        1,
+        "viewers hear it without a flush"
+    );
 }
 
 #[tokio::test(start_paused = true)]

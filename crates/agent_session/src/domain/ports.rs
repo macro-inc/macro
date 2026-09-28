@@ -380,6 +380,20 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         hash: &str,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Record who prompted the turn `id` is about to run.
+    fn set_turn_prompter(
+        &self,
+        id: AgentSessionId,
+        prompter: &TurnPrompter,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Who prompted the turn `id` is running or last ran; `None` before its
+    /// first dispatch.
+    fn turn_prompter(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<TurnPrompter>>> + Send;
+
     /// The session a sandbox's egress token stands for, if any still does.
     ///
     /// `egress_token_hash` is the SHA-256 hex of the token as presented, never

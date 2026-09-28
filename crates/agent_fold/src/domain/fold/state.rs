@@ -15,6 +15,7 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
+use agent_runtime_protocol::domain::tool_approval::TOOL_APPROVAL_METHOD;
 use serde::Deserialize;
 
 use super::convert::{content_block_text, param, user_content_part};
@@ -117,6 +118,8 @@ pub(super) struct FoldState {
     pub(super) turns_opened: u32,
     /// Outstanding permission requests, by the id of the request that asked.
     pub(super) pending_permissions: HashMap<RequestId, ToolPath>,
+    /// Tool calls the egress proxy is holding for the owner, by approval id.
+    pub(super) pending_tool_approvals: HashMap<String, ToolPath>,
     /// Outstanding `elicitation/create`s, by the id of the request that
     /// asked: where the question's part sits, so its answer can find it.
     /// Session-wide like [`Self::tool_positions`], since the part may have
@@ -353,6 +356,14 @@ impl FoldState {
                 }
                 // The agent reporting that a URL interaction finished.
                 RawJsonRpcMessage::Notification(notification)
+                    if notification.method.as_ref() == TOOL_APPROVAL_METHOD =>
+                {
+                    self.apply_tool_approval(&notification.method, notification.params.as_ref())
+                        .map_or_else(Vec::new, |(message, metadata)| {
+                            Self::message_and_metadata(message, metadata)
+                        })
+                }
+                RawJsonRpcMessage::Notification(notification)
                     if CompleteElicitationNotification::matches_method(&notification.method) =>
                 {
                     StepChange::message(self.complete_elicitation(notification.params.as_ref()))
@@ -506,6 +517,7 @@ impl FoldState {
     /// Forget live requests at a connection boundary, preserving the transcript.
     fn forget_interactions(&mut self) -> bool {
         self.pending_permissions.clear();
+        self.pending_tool_approvals.clear();
         self.pending_elicitations.clear();
         self.completable_elicitations.clear();
         let changed = !self.metadata.pending_interactions.is_empty();
