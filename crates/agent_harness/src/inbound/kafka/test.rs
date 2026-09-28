@@ -306,21 +306,21 @@ fn a_document_mention_opens_and_follows_up_on_its_document() {
     assert_eq!(prompt.origin.parent, document());
 }
 
-fn assigned_to_task(sender: ChannelSender<'static>) -> AgentTriggerTopicEvent {
+fn assigned_to_task() -> AgentTriggerTopicEvent {
     AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(
         AgentAssignedToTaskEvent {
             bot_id: BotId::TEST_A,
-            message: MessagePostedMetadata {
-                content: "Complete the assigned task".to_owned(),
-                ..document_message(sender)
-            },
+            parent: document(),
+            discussion_id: Uuid::from_u128(2),
+            actor: user(),
+            prompt: "Complete the assigned task".to_owned(),
         },
     ))
 }
 
 #[test]
 fn assigning_a_managed_agent_opens_on_the_task_discussion() {
-    let event = assigned_to_task(ChannelSender::new_from_user(user()));
+    let event = assigned_to_task();
     assert_eq!(agent_trigger_bot_id(&event), Some(BotId::TEST_A));
     let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
         route_agent_trigger(event, runtime(AgentKind::InMemory), &links())
@@ -334,31 +334,15 @@ fn assigning_a_managed_agent_opens_on_the_task_discussion() {
     assert_eq!(open.origin.message_id, Uuid::from_u128(2));
     assert_eq!(open.origin.sender, user());
     assert_eq!(open.origin.content, "Complete the assigned task");
+    assert!(open.origin.reuse_origin_message);
 }
 
 #[test]
 fn assigning_an_external_agent_leaves_session_creation_to_its_runtime() {
     assert_eq!(
-        route_agent_trigger(
-            assigned_to_task(ChannelSender::new_from_user(user())),
-            runtime(AgentKind::External),
-            &links(),
-        )
-        .unwrap_err(),
+        route_agent_trigger(assigned_to_task(), runtime(AgentKind::External), &links(),)
+            .unwrap_err(),
         Skipped::ForeignBot,
-    );
-}
-
-#[test]
-fn assigning_an_agent_requires_a_human_session_owner() {
-    assert_eq!(
-        route_agent_trigger(
-            assigned_to_task(ChannelSender::new_from_bot(BotId::TEST_B)),
-            runtime(AgentKind::InMemory),
-            &links(),
-        )
-        .unwrap_err(),
-        Skipped::NotFromUser,
     );
 }
 

@@ -228,6 +228,7 @@ fn a_snapshot_round_trips_through_the_durable_shape() {
     let session = AgentSessionId::TEST_A;
     let mut entry = prompt_entry("keep me");
     entry.announce = Some(AnnounceOrigin {
+        reuse_origin_message: false,
         parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(0xf0)),
         thread_id: Uuid::from_u128(0xf1),
         message_id: Uuid::from_u128(0xf2),

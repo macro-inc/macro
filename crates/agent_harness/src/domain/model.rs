@@ -17,6 +17,9 @@ use messages::domain::events::MessageEventAttachment;
 /// Where a mention happened.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MentionOrigin {
+    /// Update the existing agent response instead of posting a reply.
+    #[serde(default)]
+    pub reuse_origin_message: bool,
     /// Channel or document the mentioning message was posted in.
     pub parent: messages::domain::models::MessageParent,
     /// Thread the announcement replies into: the mention's thread root.
@@ -349,6 +352,9 @@ pub(crate) use agent_egress::domain::model::is_macro_staff;
 /// answer back into.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AnnounceOrigin {
+    /// Update the existing agent response instead of posting a reply.
+    #[serde(default)]
+    pub reuse_origin_message: bool,
     /// Channel or document the prompt was posted in.
     pub parent: messages::domain::models::MessageParent,
     /// Thread the announcement replies into.
@@ -615,6 +621,8 @@ pub struct AnnouncePrompt {
 /// Facts required to announce one prompt into its originating context.
 #[derive(Debug, Clone)]
 pub struct SessionAnnouncement {
+    /// Update the existing agent response instead of posting a reply.
+    pub reuse_origin_message: bool,
     /// Agent session represented by the announcement.
     pub session_id: AgentSessionId,
     /// The bot the session runs for; the announcement posts as it.

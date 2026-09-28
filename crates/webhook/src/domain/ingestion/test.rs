@@ -1449,19 +1449,11 @@ fn agent_trigger_task_assignment_event() -> Event<AgentTriggerTopicEvent> {
     Event::new(AgentTriggerTopicEvent::New(
         NewAgentSessionEvent::AssignedToTask(AgentAssignedToTaskEvent {
             bot_id: bot_id::BotId::TEST_A,
-            message: messages::domain::events::MessagePostedMetadata {
-                parent: messages::domain::models::MessageParent::parse("document", DOCUMENT_ID)
-                    .unwrap(),
-                message_id: uuid::Uuid::from_u128(2),
-                thread_id: None,
-                root_id: uuid::Uuid::from_u128(2),
-                sender: sender("macro|asker@example.com"),
-                triggered_by: None,
-                content: "Complete the assigned task".to_owned(),
-                mentions: vec![],
-                attachments: vec![],
-                created_at: timestamp(),
-            },
+            parent: messages::domain::models::MessageParent::parse("document", DOCUMENT_ID)
+                .unwrap(),
+            discussion_id: uuid::Uuid::from_u128(2),
+            actor: user_id("macro|asker@example.com"),
+            prompt: "Complete the assigned task".to_owned(),
         }),
     ))
 }

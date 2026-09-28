@@ -117,10 +117,10 @@ fn access(
 
 fn discussion(assignment: &TaskAssignment) -> messages::domain::models::Message {
     messages::domain::models::Message {
-        id: assignment.event_id,
+        id: discussion_id(assignment.event_id, BotId::TEST_A),
         parent: assignment.parent.clone(),
         thread_id: None,
-        sender_id: channel_sender::ChannelSender::new_from_user(assignment.actor.clone()),
+        sender_id: channel_sender::ChannelSender::new_from_bot(BotId::TEST_A),
         triggered_by: None,
         bot_profile: None,
         imported_author: None,
@@ -136,10 +136,10 @@ fn discussion(assignment: &TaskAssignment) -> messages::domain::models::Message 
 }
 
 #[tokio::test]
-async fn opens_a_task_discussion_with_a_stable_id_and_no_mention_trigger() {
+async fn opens_one_bot_response_without_the_private_prompt() {
     use messages::domain::api::MockMessageCommands;
     let assignment = TaskAssignment::from_update(Uuid::now_v7(), &update()).unwrap();
-    let event_id = assignment.event_id;
+    let event_id = discussion_id(assignment.event_id, BotId::TEST_A);
     let mut commands = MockMessageCommands::new();
     let message = discussion(&assignment);
     let expected = message.clone();
@@ -152,21 +152,24 @@ async fn opens_a_task_discussion_with_a_stable_id_and_no_mention_trigger() {
                 && input.id.is_none()
                 && input.thread_id.is_none()
                 && input.mentions.is_empty()
-                && input.content.contains("Fix export")
-                && input
-                    .content
-                    .contains("Include archived rows in CSV exports.")
-                && input.content.contains("task-1")
+                && input.content == "Working on this task…"
+                && access.get_authenticated_bot().unwrap().bot_id() == BotId::TEST_A
                 && input.notification_policy == PostMessageNotificationPolicy::Silent
         })
         .return_once(|_, _, _| Ok(message));
-    let posted = assignment_discussion(&assignment, &brief(), access(&assignment), &commands)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(posted.message_id, expected.id);
+    let posted = assignment_discussion(
+        &assignment,
+        BotId::TEST_A,
+        discussion_id(assignment.event_id, BotId::TEST_A),
+        access(&assignment),
+        &commands,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(posted.id, expected.id);
     assert_eq!(posted.parent, expected.parent);
-    assert_eq!(posted.sender, expected.sender_id);
+    assert_eq!(posted.sender_id, expected.sender_id);
 }
 
 #[tokio::test]
@@ -179,11 +182,17 @@ async fn a_replayed_assignment_reuses_its_persisted_discussion() {
         .expect_post_from_event()
         .once()
         .return_once(|_, _, _| Ok(message));
-    let posted = assignment_discussion(&assignment, &brief(), access(&assignment), &commands)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(posted.message_id, assignment.event_id);
+    let posted = assignment_discussion(
+        &assignment,
+        BotId::TEST_A,
+        discussion_id(assignment.event_id, BotId::TEST_A),
+        access(&assignment),
+        &commands,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(posted.id, discussion_id(assignment.event_id, BotId::TEST_A));
 }
 
 #[tokio::test]
@@ -208,10 +217,16 @@ async fn deleted_or_unrelated_discussions_cannot_start_a_session() {
             .once()
             .return_once(|_, _, _| Ok(message));
         assert!(
-            assignment_discussion(&assignment, &brief(), access(&assignment), &commands)
-                .await
-                .unwrap()
-                .is_none()
+            assignment_discussion(
+                &assignment,
+                BotId::TEST_A,
+                discussion_id(assignment.event_id, BotId::TEST_A),
+                access(&assignment),
+                &commands
+            )
+            .await
+            .unwrap()
+            .is_none()
         );
     }
 }
@@ -226,7 +241,14 @@ async fn a_discussion_failure_does_not_yield_an_opening_message() {
         .once()
         .returning(|_, _, _| Err(MessageError::Forbidden));
     assert!(matches!(
-        assignment_discussion(&assignment, &brief(), access(&assignment), &commands).await,
+        assignment_discussion(
+            &assignment,
+            BotId::TEST_A,
+            discussion_id(assignment.event_id, BotId::TEST_A),
+            access(&assignment),
+            &commands
+        )
+        .await,
         Err(ProcessMessageEventError::Discussion(
             MessageError::Forbidden
         ))
@@ -310,7 +332,7 @@ async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() 
             Box::pin(async { Ok(Some(invocation)) })
         });
     let mut sessions = MockAgentSessionRepo::new();
-    let event_id = assignment.event_id;
+    let event_id = discussion_id(assignment.event_id, bot_id::CODEX_BOT_ID);
     sessions
         .expect_find_for_thread()
         .once()
@@ -333,6 +355,8 @@ async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() 
         .returning(|_| Box::pin(async { Ok(Some(brief())) }));
     let mut commands = MockMessageCommands::new();
     let mut message = discussion(&assignment);
+    message.id = event_id;
+    message.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::CODEX_BOT_ID);
     commands
         .expect_post_from_event()
         .once()
@@ -349,9 +373,20 @@ async fn authorized_assignment_publishes_the_task_brief_for_toolless_runtimes() 
     let metadata = &events[0]["metadata"];
     assert_eq!(metadata["source"], "assigned_to_task");
     assert_eq!(metadata["bot_id"], bot_id::CODEX_BOT_ID.to_string());
-    let prompt = metadata["message"]["content"].as_str().unwrap();
+    let prompt = metadata["prompt"].as_str().unwrap();
     assert!(prompt.contains("Fix export"));
     assert!(prompt.contains("Include archived rows in CSV exports."));
     assert!(prompt.contains(r#""documentId":"task-1""#));
-    assert_eq!(metadata["message"]["parent"]["type"], "document");
+    assert_eq!(metadata["parent"]["type"], "document");
+}
+
+#[test]
+fn assignment_response_ids_are_stable_distinct_uuid_v7s() {
+    let event = Uuid::now_v7();
+    let root = discussion_id(event, BotId::TEST_A);
+    assert_eq!(root, discussion_id(event, BotId::TEST_A));
+    assert_ne!(root, discussion_id(event, BotId::TEST_B));
+    assert_ne!(root, discussion_id(Uuid::now_v7(), BotId::TEST_A));
+    assert_eq!(root.get_version_num(), 7);
+    assert_eq!(&root.as_bytes()[..6], &event.as_bytes()[..6]);
 }

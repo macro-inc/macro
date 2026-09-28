@@ -63,9 +63,14 @@ pub struct AgentMentionedEvent {
 pub struct AgentAssignedToTaskEvent {
     /// The agent assigned to the task.
     pub bot_id: BotId,
-    /// The persisted opening discussion message on the task document, authored
-    /// by the user who assigned the agent and containing the assignment prompt.
-    pub message: MessagePostedMetadata,
+    /// Task whose discussion receives the response.
+    pub parent: MessageParent,
+    /// The single bot-authored root to update with the session response.
+    pub discussion_id: Uuid,
+    /// User who assigned the task and owns the resulting session.
+    pub actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+    /// Private startup prompt, never posted as a discussion message.
+    pub prompt: String,
 }
 
 /// A session somebody asked for from Macro itself - the composer - rather
@@ -102,7 +107,7 @@ pub enum NewAgentSessionEvent {
     Requested(AgentSessionRequestedEvent),
 }
 
-/// The opening discussion message carried by a mention or task assignment.
+/// The opening discussion message carried by a mention.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpeningMention {
     /// The bot that should answer.
@@ -112,8 +117,8 @@ pub struct OpeningMention {
 }
 
 impl NewAgentSessionEvent {
-    /// The opening discussion message, shared by mentions and task assignments;
-    /// `None` for requests without a discussion to answer in.
+    /// The user-authored message behind a mention. Assignments and composer
+    /// requests carry no user discussion message and return `None`.
     #[must_use]
     pub fn mention(&self) -> Option<OpeningMention> {
         match self {
@@ -125,11 +130,7 @@ impl NewAgentSessionEvent {
                 bot_id: mentioned.bot_id,
                 message: mentioned.message.clone(),
             }),
-            Self::AssignedToTask(assigned) => Some(OpeningMention {
-                bot_id: assigned.bot_id,
-                message: assigned.message.clone(),
-            }),
-            Self::Requested(_) => None,
+            Self::AssignedToTask(_) | Self::Requested(_) => None,
         }
     }
 
@@ -247,6 +248,7 @@ impl AgentTriggerTopicEvent {
     #[must_use]
     pub fn bot_id(&self) -> Option<BotId> {
         match self {
+            Self::New(NewAgentSessionEvent::AssignedToTask(assigned)) => Some(assigned.bot_id),
             Self::New(event) => event
                 .mention()
                 .map(|mention| mention.bot_id)

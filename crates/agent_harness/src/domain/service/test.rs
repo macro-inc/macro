@@ -98,6 +98,7 @@ fn open_command() -> OpenSession {
             mcp_servers: AgentMcpServers::OwnerConnections,
         },
         origin: MentionOrigin {
+            reuse_origin_message: false,
             parent: MessageParent::Channel(macro_uuid::generate_uuid_v7()),
             thread_id,
             message_id: thread_id,
@@ -117,6 +118,7 @@ fn forward_message(content: &str) -> DeliverAction {
         AgentAction::prompt(content),
         Some(staff_sender()),
         Some(AnnounceOrigin {
+            reuse_origin_message: false,
             parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xf0)),
             thread_id: macro_uuid::Uuid::from_u128(0xf1),
             message_id: macro_uuid::Uuid::from_u128(0xf2),
@@ -1119,6 +1121,7 @@ async fn a_mention_its_sender_is_not_set_up_for_is_declined_in_the_thread() {
             [DeclinedMention {
                 bot_id,
                 origin: AnnounceOrigin {
+                    reuse_origin_message: false,
                     parent: origin.parent,
                     thread_id: origin.thread_id,
                     message_id: origin.message_id,
@@ -3231,6 +3234,7 @@ async fn an_external_open_with_a_mention_announces_as_the_sessions_bot() {
     let mut request = open_external_request("/srv/agent");
     let bot = request.bot_id;
     request.thread = Some(agent_session::domain::ports::SessionThread {
+        reuse_origin_message: false,
         parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xC1)),
         thread_id: macro_uuid::Uuid::from_u128(0xC2),
         message_id: macro_uuid::Uuid::from_u128(0xC2),
@@ -3276,6 +3280,7 @@ async fn an_external_prompt_announce_posts_into_the_observed_origin() {
             crate::domain::model::AnnouncePrompt {
                 bot_id: bot,
                 origin: AnnounceOrigin {
+                    reuse_origin_message: false,
                     parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xAA)),
                     thread_id: macro_uuid::Uuid::from_u128(0xAB),
                     message_id: macro_uuid::Uuid::from_u128(0xAC),
@@ -3316,6 +3321,7 @@ async fn an_announce_whose_bot_does_not_own_the_session_is_dropped() {
             crate::domain::model::AnnouncePrompt {
                 bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
                 origin: AnnounceOrigin {
+                    reuse_origin_message: false,
                     parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xAA)),
                     thread_id: macro_uuid::Uuid::from_u128(0xAB),
                     message_id: macro_uuid::Uuid::from_u128(0xAC),

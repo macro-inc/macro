@@ -10,7 +10,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::{
     api::MessageCommands,
-    events::MessagePostedMetadata,
     models::{MessageAttribution, MessageParent, PostMessage, PostMessageNotificationPolicy},
     service::MessageWrite,
 };
@@ -52,7 +51,7 @@ pub trait TaskAssignmentContext: Send + Sync + 'static {
 /// One committed assignment change, with only the newly assigned agents.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskAssignment {
-    /// The source event id also identifies the discussion root, including on replay.
+    /// The source event id identifies this assignment, including on replay.
     pub event_id: Uuid,
     /// Task document whose discussion receives the agent's replies.
     pub parent: MessageParent,
@@ -145,8 +144,9 @@ where
         else {
             continue;
         };
+        let discussion_id = discussion_id(assignment.event_id, bot_id);
         if trigger
-            .assignment_has_session(assignment.event_id, bot_id)
+            .assignment_has_session(discussion_id, bot_id)
             .await?
         {
             continue;
@@ -154,14 +154,25 @@ where
         let Some(brief) = context.task_brief(invocation.access().clone()).await? else {
             continue;
         };
-        let Some(message) =
-            assignment_discussion(assignment, &brief, invocation.access().clone(), messages)
-                .await?
+        let Some(message) = assignment_discussion(
+            assignment,
+            bot_id,
+            discussion_id,
+            invocation.access().clone(),
+            messages,
+        )
+        .await?
         else {
             continue;
         };
         let event = AgentSessionMacroEvent::new_session(NewAgentSessionEvent::AssignedToTask(
-            AgentAssignedToTaskEvent { bot_id, message },
+            AgentAssignedToTaskEvent {
+                bot_id,
+                parent: assignment.parent.clone(),
+                discussion_id: message.id,
+                actor: assignment.actor.clone(),
+                prompt: assignment_prompt(assignment, &brief),
+            },
         ));
         publisher
             .send_event(&event)?
@@ -171,14 +182,23 @@ where
     Ok(())
 }
 
-async fn assignment_discussion(
-    assignment: &TaskAssignment,
-    brief: &TaskBrief,
-    access: entity_access::domain::models::EntityAccessReceipt<MessageWrite>,
-    commands: &dyn MessageCommands,
-) -> Result<Option<MessagePostedMetadata>, ProcessMessageEventError> {
-    // Keep the task ID available to agent runtimes while displaying a task link
-    // in the discussion. Escape tag delimiters in user-controlled titles.
+/// Derive one replay-stable UUIDv7 per assigned bot, retaining the event timestamp.
+/// The hashed random bits keep simultaneous agents in separate discussion threads.
+fn discussion_id(event_id: Uuid, bot_id: BotId) -> Uuid {
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::new()
+        .chain_update(event_id.as_bytes())
+        .chain_update(bot_id.as_uuid().as_bytes())
+        .finalize();
+    let mut bytes = *event_id.as_bytes();
+    bytes[6..].copy_from_slice(&hash[..10]);
+    bytes[6] = (bytes[6] & 0x0f) | 0x70;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    Uuid::from_bytes(bytes)
+}
+
+fn assignment_prompt(assignment: &TaskAssignment, brief: &TaskBrief) -> String {
+    // Keep the task ID available to agent runtimes in the private prompt. Escape tag delimiters in user-controlled titles.
     let task_reference = serde_json::json!({
         "documentId": assignment.parent.entity_id(),
         "documentName": brief.title,
@@ -188,20 +208,44 @@ async fn assignment_discussion(
     .to_string()
     .replace('<', "\\u003c")
     .replace('>', "\\u003e");
+    format!(
+        "{}\n\n<m-document-mention>{}</m-document-mention>\n\n{}",
+        include_str!("task_assignment/prompt.md").trim(),
+        task_reference,
+        brief.markdown,
+    )
+}
+
+async fn assignment_discussion(
+    assignment: &TaskAssignment,
+    bot_id: BotId,
+    discussion_id: Uuid,
+    access: entity_access::domain::models::EntityAccessReceipt<MessageWrite>,
+    commands: &dyn MessageCommands,
+) -> Result<Option<messages::domain::models::Message>, ProcessMessageEventError> {
+    use entity_access::domain::models::{BotReceiptScope, EntityAccessReceipt};
+    // Agent availability and the assigning user's capability were checked by
+    // authorize_task_assignment. The response spends that same capability.
+    let access = EntityAccessReceipt::try_new_bot(
+        bot_id.into(),
+        BotReceiptScope::User {
+            acting_user: assignment.actor.clone(),
+        },
+        access.entity().clone(),
+        access.entity_permission().clone(),
+    )
+    .map_err(|_| {
+        ProcessMessageEventError::Discussion(messages::domain::ports::MessageError::Forbidden)
+    })?;
     let message = commands
         .post_from_event(
             access,
-            assignment.event_id,
+            discussion_id,
             PostMessage {
                 id: None,
                 attribution: MessageAttribution::ActingUser,
                 notification_policy: PostMessageNotificationPolicy::Silent,
-                content: format!(
-                    "{}\n\n<m-document-mention>{}</m-document-mention>\n\n{}",
-                    include_str!("task_assignment/prompt.md").trim(),
-                    task_reference,
-                    brief.markdown,
-                ),
+                content: "Working on this task…".to_owned(),
                 thread_id: None,
                 anchor: None,
                 mentions: Vec::new(),
@@ -211,17 +255,13 @@ async fn assignment_discussion(
         )
         .await
         .map_err(ProcessMessageEventError::Discussion)?;
-    // A replay must not resurrect a discussion the user deleted or use
-    // an unrelated message as the assignment's origin.
+    // A replay must not resurrect a response the user deleted.
     if message.deleted_at.is_some()
         || message.parent != assignment.parent
         || message.thread_id.is_some()
-        || message.sender_id.as_user() != Some(&assignment.actor)
+        || message.sender_id.as_bot().map(|id| id.bot_id()) != Some(bot_id)
     {
         return Ok(None);
     }
-    Ok(Some(MessagePostedMetadata::from_message(
-        &message,
-        Vec::new(),
-    )))
+    Ok(Some(message))
 }

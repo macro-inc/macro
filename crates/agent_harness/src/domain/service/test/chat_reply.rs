@@ -406,3 +406,32 @@ mod elicitation {
         );
     }
 }
+
+#[tokio::test]
+async fn task_assignment_reuses_the_agent_root_and_delivers_its_private_prompt() {
+    let ((service, _, containers, announcer, _), turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let mut command = chat_open_command();
+    command.origin.reuse_origin_message = true;
+    command.origin.thread_id = command.origin.message_id;
+    command.origin.content = "Private assignment instructions".to_owned();
+    let root_id = command.origin.message_id;
+    let container =
+        session_with_a_running_turn(&service, &containers, AgentSessionId::new(), command).await;
+    let announced = announcer.announced();
+    assert_eq!(announced.len(), 1);
+    assert!(announced[0].reuse_origin_message);
+    assert_eq!(announced[0].origin_message_id, root_id);
+    assert!(
+        announced[0]
+            .prompted_content
+            .contains("Private assignment instructions")
+    );
+    says(&container.agent(), "Task completed.");
+    container.agent().completes_prompt().await;
+    turns.lifecycle_published(4).await;
+    assert_eq!(
+        one_resolved(&announcer).outcome,
+        ReplyOutcome::Answered("Task completed.".to_owned())
+    );
+}

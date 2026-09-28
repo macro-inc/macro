@@ -66,6 +66,7 @@ where
                 .authorize_origin(
                     &owner_user,
                     &AnnounceOrigin {
+                        reuse_origin_message: thread.reuse_origin_message,
                         parent: thread.parent.clone(),
                         thread_id: thread.thread_id,
                         message_id: thread.message_id,
@@ -121,6 +122,7 @@ where
             let announce = async {
                 let persona = self.inner.reply_persona(&session).await?;
                 let announcement = SessionAnnouncement {
+                    reuse_origin_message: thread.reuse_origin_message,
                     session_id: session.id,
                     bot_id: request.bot_id,
                     is_coding: persona.is_coding,
@@ -435,6 +437,7 @@ where
             .authorize_origin(
                 &origin.sender,
                 &AnnounceOrigin {
+                    reuse_origin_message: origin.reuse_origin_message,
                     parent: origin.parent.clone(),
                     thread_id: origin.thread_id,
                     message_id: origin.message_id,
@@ -461,6 +464,7 @@ where
                 .decline(DeclinedMention {
                     bot_id,
                     origin: AnnounceOrigin {
+                        reuse_origin_message: origin.reuse_origin_message,
                         parent: origin.parent,
                         thread_id: origin.thread_id,
                         message_id: origin.message_id,
@@ -575,6 +579,7 @@ where
                 action: AgentAction::prompt_with_attachments(origin.content, origin.attachments),
                 actor: Some(origin.sender),
                 announce: Some(AnnounceOrigin {
+                    reuse_origin_message: origin.reuse_origin_message,
                     parent: origin.parent,
                     thread_id: origin.thread_id,
                     message_id: origin.message_id,

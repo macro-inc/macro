@@ -2,7 +2,7 @@
 
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentTriggerTopicEvent, OpeningMention, SessionMessage,
+    AgentTriggerTopicEvent, NewAgentSessionEvent, OpeningMention, SessionMessage,
 };
 use bot_id::BotId;
 
@@ -57,6 +57,27 @@ pub fn route_agent_trigger(
     links: &StaticFileLinks,
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(assigned)) => {
+            let Some(runtime) = runtime.filter(|runtime| runtime.kind.is_managed()) else {
+                return Err(Skipped::ForeignBot);
+            };
+            Ok(RoutedTrigger::Command(
+                AgentSessionId::new(),
+                HarnessCommand::Open(OpenSession {
+                    bot_id: assigned.bot_id,
+                    runtime,
+                    origin: MentionOrigin {
+                        reuse_origin_message: true,
+                        parent: assigned.parent,
+                        thread_id: assigned.discussion_id,
+                        message_id: assigned.discussion_id,
+                        sender: assigned.actor,
+                        content: assigned.prompt,
+                        attachments: Vec::new(),
+                    },
+                }),
+            ))
+        }
         AgentTriggerTopicEvent::New(event) => {
             let Some(OpeningMention { bot_id, message }) = event.mention() else {
                 return Err(Skipped::Unrecognized);
@@ -75,6 +96,7 @@ pub fn route_agent_trigger(
                     bot_id,
                     runtime,
                     origin: MentionOrigin {
+                        reuse_origin_message: false,
                         parent: message.parent,
                         // A top-level mention roots its own thread; a mention
                         // inside a thread answers into that thread.
@@ -98,6 +120,7 @@ pub fn route_agent_trigger(
                 return Err(Skipped::Unrecognized);
             };
             let origin = AnnounceOrigin {
+                reuse_origin_message: false,
                 parent: message.parent,
                 thread_id: message.thread_id.unwrap_or(message.message_id),
                 message_id: message.message_id,

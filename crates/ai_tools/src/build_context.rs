@@ -215,10 +215,7 @@ pub async fn build_tool_service_context_from_env(
         sync_service_url,
     ));
     let email_ext_client = Arc::new(EmailServiceClientExternal::new(email_service_url.clone()));
-    let lexical_client = LexicalClient::new(
-        env.document_storage_service_auth_key.to_string(),
-        lexical_service_url,
-    );
+    let lexical_client = LexicalClient::new(env.internal_api_key.to_string(), lexical_service_url);
 
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());

@@ -148,24 +148,21 @@ fn task_assignment_round_trips_and_opens_on_its_discussion() {
     };
     let assigned = NewAgentSessionEvent::AssignedToTask(AgentAssignedToTaskEvent {
         bot_id: BotId::TEST_A,
-        message: message.clone(),
+        parent: message.parent.clone(),
+        discussion_id: message.message_id,
+        actor: message.sender.as_user().unwrap().clone(),
+        prompt: message.content.clone(),
     });
     let published = AgentSessionMacroEvent::new_session(assigned.clone());
     assert_eq!(published.key(), BotId::TEST_A.to_string());
     assert_eq!(published.event().event.bot_id(), Some(BotId::TEST_A));
     assert!(assigned.requested().is_none());
-    assert_eq!(
-        assigned.mention(),
-        Some(OpeningMention {
-            bot_id: BotId::TEST_A,
-            message,
-        })
-    );
+    assert!(assigned.mention().is_none());
 
     let value = serde_json::to_value(&published.event().event).expect("serialize assignment");
     assert_eq!(value["event_type"], "agent_trigger.new");
     assert_eq!(value["metadata"]["source"], "assigned_to_task");
-    assert_eq!(value["metadata"]["message"]["parent"]["type"], "document");
+    assert_eq!(value["metadata"]["parent"]["type"], "document");
     let decoded: AgentTriggerTopicEvent =
         serde_json::from_value(value).expect("deserialize assignment");
     assert_eq!(decoded, published.event().event);

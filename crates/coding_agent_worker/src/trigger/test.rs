@@ -84,6 +84,7 @@ fn document_triggers_become_work_on_the_document() {
     assert_eq!(
         trigger_to_work(opened).expect("a document mention is work"),
         TriggerWork::OpenAndPrompt {
+            reuse_origin_message: false,
             bot: bot_id::BotId::TEST_A,
             sender: sender(),
             parent: document(),
@@ -114,12 +115,16 @@ fn a_task_assignment_opens_and_prompts_in_the_task_discussion() {
     let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(
         AgentAssignedToTaskEvent {
             bot_id: BotId::TEST_A,
-            message: document_message("Complete the assigned task", None),
+            parent: document(),
+            discussion_id: Uuid::from_u128(2),
+            actor: sender(),
+            prompt: "Complete the assigned task".to_owned(),
         },
     ));
     assert_eq!(
         trigger_to_work(event).expect("a task assignment is work"),
         TriggerWork::OpenAndPrompt {
+            reuse_origin_message: true,
             bot: BotId::TEST_A,
             sender: sender(),
             parent: document(),
@@ -131,25 +136,12 @@ fn a_task_assignment_opens_and_prompts_in_the_task_discussion() {
 }
 
 #[test]
-fn a_task_assignment_without_a_human_owner_is_skipped() {
-    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(
-        AgentAssignedToTaskEvent {
-            bot_id: BotId::TEST_A,
-            message: MessagePostedMetadata {
-                sender: ChannelSender::new_from_bot(BotId::TEST_B),
-                ..document_message("Complete the assigned task", None)
-            },
-        },
-    ));
-    assert_eq!(trigger_to_work(event), Err(Skipped::NotFromUser));
-}
-
-#[test]
 fn a_mention_becomes_open_and_prompt_rooting_its_own_thread() {
     let work = trigger_to_work(mention("fix the test")).expect("a mention is work");
     assert_eq!(
         work,
         TriggerWork::OpenAndPrompt {
+            reuse_origin_message: false,
             bot: bot_id::BotId::TEST_A,
             sender: sender(),
             parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(1)),

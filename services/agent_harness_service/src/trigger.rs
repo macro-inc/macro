@@ -73,6 +73,7 @@ pub async fn supervise(
     pool: PgPool,
     kafka_brokers: String,
     internal_api_key: String,
+    document_storage_service_auth_key: String,
     source: TriggerEventSource,
     messages: Arc<dyn MessageServiceApi>,
 ) {
@@ -81,6 +82,7 @@ pub async fn supervise(
             pool.clone(),
             kafka_brokers.clone(),
             internal_api_key.clone(),
+            document_storage_service_auth_key.clone(),
             source,
             messages.clone(),
         )
@@ -96,6 +98,7 @@ async fn run(
     pool: PgPool,
     kafka_brokers: String,
     internal_api_key: String,
+    document_storage_service_auth_key: String,
     source: TriggerEventSource,
     messages: Arc<dyn MessageServiceApi>,
 ) -> anyhow::Result<()> {
@@ -105,7 +108,7 @@ async fn run(
     );
     let task_context = DssTaskAssignmentContext::new(
         DocumentStorageServiceClient::new(
-            internal_api_key,
+            document_storage_service_auth_key,
             DocumentStorageServiceUrl::new()?.to_string(),
         ),
         lexical.clone(),
