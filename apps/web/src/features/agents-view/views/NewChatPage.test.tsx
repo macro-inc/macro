@@ -414,8 +414,8 @@ describe('agent-led new conversation', () => {
 
   it('focuses model search when hovering an agent submenu', async () => {
     page();
-    await hoverAgent('Cursor');
-    const search = screen.getByRole('textbox', { name: 'Search models' });
+    const menu = await hoverAgent('Cursor');
+    const search = menu.getByRole('textbox', { name: 'Search models' });
     await waitFor(() => expect(document.activeElement).toBe(search));
 
     fireEvent.input(search, { target: { value: 'GPT' } });
