@@ -293,7 +293,7 @@ it('retains loaded comments on a pagination failure and removes them immediately
     fetchNextPage: loadMore,
   });
   const view = render(() => (
-    <DocumentConversation
+    <EntityConversation
       parent={{ type: 'initiative', id: 'project' }}
       canWrite
     />
@@ -330,7 +330,7 @@ it('hides cached comments when a linked message denies access and retries the li
     refetch,
   });
   const view = render(() => (
-    <DocumentConversation
+    <EntityConversation
       parent={{ type: 'initiative', id: 'project' }}
       targetId="linked-message"
       canWrite
