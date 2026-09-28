@@ -4,6 +4,7 @@ import '@app/index.css';
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
+import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
 import type { Property, PropertyApiValues } from '@property/types';
@@ -21,7 +22,6 @@ import {
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
-import { ListPropertyValue } from '../components/task-list/ListPropertyValue';
 
 enableGraphqlSoup.override = true;
 const taskIds = [
@@ -116,7 +116,16 @@ function Fixture() {
     variables: { input: { initial: { limit: 2 } } },
     requestPolicy: 'cache-and-network',
   }));
-  const save = useBulkSaveEntityPropertiesMutation();
+  const [successes, setSuccesses] = createSignal(0);
+  const [failures, setFailures] = createSignal(0);
+  const save = useBulkSaveEntityPropertiesMutation({
+    onSuccess: () => {
+      setSuccesses((value) => value + 1);
+    },
+    onError: () => {
+      setFailures((value) => value + 1);
+    },
+  });
   const property = (entityId: string): Property => {
     const raw =
       query.data?.user.soup.items.find((item) => item.id === entityId)
@@ -144,6 +153,10 @@ function Fixture() {
       <p>
         HTTP requests: {requestCount()} · Settled: {settledCount()}
       </p>
+      <p aria-label="Save status">
+        Pending: {save.isPending ? 'yes' : 'no'} · Succeeded: {successes()} ·
+        Failed: {failures()}
+      </p>
       <Show when={query.data} fallback={<p>Loading</p>}>
         <For each={taskIds}>
           {(entityId, index) => (
@@ -166,7 +179,10 @@ function Fixture() {
                     saveOne(entityId, p, { valueType: 'DATE', value }),
                 }}
               >
-                <ListPropertyValue property={property(entityId)} />
+                <ListPropertyValue
+                  property={property(entityId)}
+                  entityId={entityId}
+                />
               </PropertiesProvider>
               <output data-assignment={entityId}>
                 {property(entityId).propertyId}

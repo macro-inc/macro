@@ -243,6 +243,12 @@ unset priority stays unchanged. On success the temporary assignment is replaced
 by the server assignment without a blank cell or duplicate property; failure
 restores the unset cell. Bulk property edits install every optimistic layer before
 the first HTTP response, while network requests retain durable queue ordering.
+The bulk save remains pending until every queued item settles, including while
+offline; queue acceptance alone is not success. Delay the second response after
+the first succeeds: no success callback or refresh should run yet. Then reject
+the second request: the bulk save reports failure, the first task keeps its
+committed value, and only the second task rolls back. Repeat with both requests
+succeeding and with the first failing before the second succeeds.
 
 A self-contained browser regression uses the production list cell, mutation hooks,
 and worker/WASM cache with delayed fixture HTTP (no hosted task edits). From

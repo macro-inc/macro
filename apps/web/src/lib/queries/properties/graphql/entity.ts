@@ -49,6 +49,7 @@ import {
   isTemporaryGraphqlProperty,
 } from '../graphql-optimistic';
 import { buildPropertyAssignmentLinks } from './assignment-links';
+import { observePropertyMutationSettlements } from './mutation-settlements';
 
 /** Builds the exact Soup input used to load one entity's properties. */
 export const buildEntityPropertiesInput = buildGraphqlEntitySoupInput;
@@ -476,7 +477,11 @@ type GraphqlBulkMutationOptions<Context> = {
   ) => void | Promise<void>;
 };
 
-/** Creates one callback-driven urql mutation for a bulk property save. */
+/**
+ * Enqueues every optimistic layer before waiting for HTTP, but keeps the bulk
+ * lifecycle pending until queued saves commit or permanently fail. Replayed
+ * saves retain their submission payload; settlement events carry no response.
+ */
 export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
   options: GraphqlBulkMutationOptions<Context> = {}
 ) {
@@ -498,51 +503,63 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
       let permanentError: Error | undefined;
 
       const pending = [];
-      for (const item of input.properties) {
-        let acknowledge!: () => void;
-        const enqueued = new Promise<void>((resolve) => {
-          acknowledge = resolve;
-        });
-        async function submitSave() {
-          try {
-            const result = await executeGraphqlEntityPropertyMutation(
-              {
-                client,
-                mutation,
-                input: { kind: 'save', ...item },
-                context,
-              },
-              acknowledge
-            );
-            const disposition = mutationDisposition(result);
-            if (disposition.kind === 'committed') {
-              await options.onCommitted?.(item, disposition);
+      const settlements = observePropertyMutationSettlements(
+        getGraphqlCacheHost()
+      );
+      try {
+        for (const item of input.properties) {
+          let acknowledge!: () => void;
+          const enqueued = new Promise<void>((resolve) => {
+            acknowledge = resolve;
+          });
+          async function submitSave() {
+            try {
+              const result = await executeGraphqlEntityPropertyMutation(
+                {
+                  client,
+                  mutation,
+                  input: { kind: 'save', ...item },
+                  context,
+                },
+                acknowledge
+              );
+              acknowledge();
+              const disposition = mutationDisposition(result);
+              if (disposition.kind === 'queued') {
+                await settlements.waitForCommit(disposition.transactionId);
+                await options.onCommitted?.(item, { kind: 'committed' });
+              } else if (disposition.kind === 'committed') {
+                await options.onCommitted?.(item, disposition);
+              }
+              return { kind: 'result' as const, result };
+            } catch (error) {
+              return {
+                kind: 'error' as const,
+                error:
+                  error instanceof Error ? error : new Error(String(error)),
+              };
+            } finally {
+              // Plain clients and failed preparation have no cache acknowledgement.
+              acknowledge();
             }
-            return { kind: 'result' as const, result };
-          } catch (error) {
-            return {
-              kind: 'error' as const,
-              error: error instanceof Error ? error : new Error(String(error)),
-            };
-          } finally {
-            // Plain clients and failed preparation have no cache acknowledgement.
-            acknowledge();
+          }
+          pending.push(submitSave());
+          // Preserve layer ordering for relation recipes, not HTTP completion.
+          await enqueued;
+        }
+        for (const settled of await Promise.all(pending)) {
+          if (settled.kind === 'error') {
+            permanentError ??= settled.error;
+            continue;
+          }
+          latestResult = settled.result;
+          const disposition = mutationDisposition(latestResult);
+          if (disposition.kind === 'permanently-failed') {
+            permanentError ??= disposition.error;
           }
         }
-        pending.push(submitSave());
-        // Preserve layer ordering for relation recipes, not HTTP completion.
-        await enqueued;
-      }
-      for (const settled of await Promise.all(pending)) {
-        if (settled.kind === 'error') {
-          permanentError ??= settled.error;
-          continue;
-        }
-        latestResult = settled.result;
-        const disposition = mutationDisposition(latestResult);
-        if (disposition.kind === 'permanently-failed') {
-          permanentError ??= disposition.error;
-        }
+      } finally {
+        settlements.dispose();
       }
 
       if (!latestResult && permanentError) throw permanentError;

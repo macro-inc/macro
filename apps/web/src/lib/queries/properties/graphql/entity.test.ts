@@ -1,4 +1,5 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import type { MutationSettlement } from '@graphql-cache/protocol';
 import type { Property } from '@property/types';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
@@ -75,6 +76,35 @@ function makeControlledClient() {
   graphqlClientState.current = client;
   return { client, requests };
 }
+
+function makeSettlementHost() {
+  const listeners = new Set<(settlement: MutationSettlement) => void>();
+  const unsubscribe = vi.fn();
+  const unsubscribeGeneration = vi.fn();
+  graphqlClientState.host = {
+    inspectQuery: vi.fn(async () => []),
+    inspectQueryVariants: vi.fn(async () => []),
+    onMutationSettled(callback: (settlement: MutationSettlement) => void) {
+      listeners.add(callback);
+      return () => {
+        listeners.delete(callback);
+        unsubscribe();
+      };
+    },
+    onCacheGenerationChanged: () => unsubscribeGeneration,
+  } as unknown as CacheHost;
+  return {
+    emit: (settlement: MutationSettlement) => {
+      for (const callback of listeners) callback(settlement);
+    },
+    unsubscribe,
+    unsubscribeGeneration,
+  };
+}
+
+afterEach(() => {
+  graphqlClientState.host = undefined;
+});
 
 const EMPTY_DATA = {
   user: { id: 'user-1', soup: { items: [] } },
@@ -272,7 +302,8 @@ describe('GraphQL entity property mutations', () => {
     );
   });
 
-  it('returns optimistic data for saves queued behind a replacement', async () => {
+  it('retains the queued acknowledgement but waits for the replacement to commit', async () => {
+    const settlements = makeSettlementHost();
     const property = {
       propertyId: 'assignment-1',
       propertyDefinitionId: 'definition-1',
@@ -316,18 +347,20 @@ describe('GraphQL entity property mutations', () => {
       result = createGraphqlBulkSaveEntityPropertiesMutation();
     });
 
-    await expect(
-      result.mutateAsync({
-        properties: [
-          {
-            entityType: 'DOCUMENT',
-            entityId: 'document-1',
-            property,
-            apiValues: { valueType: 'STRING', value: 'doing' },
-          },
-        ],
-      })
-    ).resolves.toMatchObject({
+    const pending = result.mutateAsync({
+      properties: [
+        {
+          entityType: 'DOCUMENT',
+          entityId: 'document-1',
+          property,
+          apiValues: { valueType: 'STRING', value: 'doing' },
+        },
+      ],
+    });
+    await vi.waitFor(() => expect(mutation).toHaveBeenCalledOnce());
+    expect(result.isPending).toBe(true);
+    settlements.emit({ transactionId: 'transaction-2', status: 'committed' });
+    await expect(pending).resolves.toMatchObject({
       data: {
         setEntityProperty: expect.objectContaining({ id: 'assignment-1' }),
       },
@@ -428,8 +461,112 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
     expect(save.isPending).toBe(false);
   });
 
+  it.each(['committed', 'permanently-failed'] as const)(
+    'waits for later queued saves and reports their %s settlement',
+    async (status) => {
+      const settlements = makeSettlementHost();
+      const onCommitted = vi.fn();
+      const onSuccess = vi.fn();
+      const onError = vi.fn();
+      const onSettled = vi.fn();
+      let resolveFirst!: () => void;
+      let submitted = 0;
+      const mutation = vi.fn(
+        (
+          _document: unknown,
+          _variables: unknown,
+          context: Record<string, unknown>
+        ) => ({
+          toPromise: async () => {
+            const index = submitted++;
+            (context.normalizedCacheOptimisticEnqueued as () => void)();
+            if (index === 0) {
+              await new Promise<void>((resolve) => {
+                resolveFirst = resolve;
+              });
+            }
+            return {
+              operation: { kind: 'mutation', context } as Operation,
+              data: { setEntityProperty: { id: `assignment-${index}` } },
+              extensions: {
+                normalizedCacheMutationDisposition:
+                  index === 0
+                    ? { kind: 'committed', transactionId: 'first' }
+                    : { kind: 'queued', transactionId: 'second' },
+              },
+              stale: false,
+              hasNext: false,
+            };
+          },
+        })
+      );
+      graphqlClientState.current = { mutation } as unknown as Client;
+      const save = createRoot((rootDispose) => {
+        dispose = rootDispose;
+        return createGraphqlBulkSaveEntityPropertiesMutation({
+          onCommitted,
+          onSuccess,
+          onError,
+          onSettled,
+        });
+      });
+      const property = {
+        propertyId: 'assignment',
+        propertyDefinitionId: 'priority',
+        displayName: 'Priority',
+        valueType: 'SELECT_STRING',
+        isMultiSelect: false,
+      } as Property;
+      const pending = save.mutateAsync({
+        properties: ['task-1', 'task-2'].map((entityId) => ({
+          entityId,
+          entityType: 'TASK',
+          property,
+          apiValues: { valueType: 'SELECT_STRING', values: ['urgent'] },
+        })),
+      });
+      await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(2));
+      resolveFirst();
+      await vi.waitFor(() => expect(onCommitted).toHaveBeenCalledOnce());
+      expect(save.isPending).toBe(true);
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(onSettled).not.toHaveBeenCalled();
+      settlements.emit(
+        status === 'committed'
+          ? { transactionId: 'second', status }
+          : {
+              transactionId: 'second',
+              status,
+              error: 'Second property rejected',
+            }
+      );
+      const result = await pending;
+      expect(save.isPending).toBe(false);
+      if (status === 'committed') {
+        expect(result.error).toBeUndefined();
+        expect(onCommitted).toHaveBeenCalledTimes(2);
+        expect(onCommitted).toHaveBeenLastCalledWith(
+          expect.objectContaining({ entityId: 'task-2' }),
+          { kind: 'committed' }
+        );
+        expect(onSuccess).toHaveBeenCalledOnce();
+        expect(onError).not.toHaveBeenCalled();
+      } else {
+        expect(result.error?.message).toContain('Second property rejected');
+        expect(onCommitted).toHaveBeenCalledOnce();
+        expect(onSuccess).not.toHaveBeenCalled();
+        expect(onError).toHaveBeenCalledOnce();
+      }
+      expect(onSettled).toHaveBeenCalledOnce();
+      expect(settlements.unsubscribe).toHaveBeenCalledOnce();
+      expect(settlements.unsubscribeGeneration).toHaveBeenCalledOnce();
+    }
+  );
+
   it('links a task-grid placeholder when saving unset priority', async () => {
+    makeSettlementHost();
     graphqlClientState.host = {
+      ...graphqlClientState.host,
       inspectQuery: vi.fn(async () => [
         {
           variables: { input: { initial: { limit: 20 } } },
