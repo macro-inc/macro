@@ -19,7 +19,7 @@ import {
   StaticSplitLabel,
 } from '@components/app/split-layout/components/SplitLabel';
 import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
-import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';

@@ -1,6 +1,6 @@
 import { sharedInstance } from '@block-canvas/util/sharedInstance';
 import { getTextNodeHeight } from '@block-canvas/util/style';
-import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { jsonToXML } from '@core/component/LexicalMarkdown/citationsUtils';
 import { resolvePastedMacroAppUrl } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { blockNameToFileExtensions } from '@core/constant/allBlocks';

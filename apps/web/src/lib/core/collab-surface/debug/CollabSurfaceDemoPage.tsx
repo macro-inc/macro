@@ -1,4 +1,4 @@
-import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { Block, type BlockName } from '@core/block';
 import { createSignal, Show } from 'solid-js';
 import { CollabMdSurface } from '../CollabMdSurface';

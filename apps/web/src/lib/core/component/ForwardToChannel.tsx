@@ -1,6 +1,6 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
-import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { useIsAuthenticated } from '@core/auth';
 import {
   type BlockAlias,

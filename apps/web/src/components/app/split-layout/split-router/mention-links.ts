@@ -8,6 +8,7 @@ import {
   parseRoutePathname,
   type SplitReference,
   type SplitRoutesManifest,
+  useOptionalSplitRouter,
 } from '@app/lib/split-router';
 import type { BlockAlias, BlockName } from '@core/block';
 import { parseInternalAppLink } from '@core/util/macroAppUrl';
@@ -76,4 +77,12 @@ export function createMacroMentionLinkResolver(
     });
     return mention;
   };
+}
+
+/** Capture an app-owned resolver at an editor host, then pass it to the editor. */
+export function useMacroMentionLinkResolver():
+  | MacroMentionLinkResolver
+  | undefined {
+  const router = useOptionalSplitRouter();
+  return router && createMacroMentionLinkResolver(router.routes);
 }

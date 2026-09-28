@@ -1,5 +1,5 @@
 import { EmailAttachmentPill } from '@app/features/email-message/components/attachment-pill';
-import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { isInlineMediaFileName } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';

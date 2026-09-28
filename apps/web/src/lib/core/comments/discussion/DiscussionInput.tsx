@@ -14,7 +14,7 @@ import {
   applyInlineFormat,
   applyNodeFormat,
 } from '@channel/Input/utils/formatting';
-import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';

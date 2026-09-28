@@ -1,5 +1,7 @@
-import type { MacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
-import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
+import {
+  type MacroMentionLinkResolver,
+  useMacroMentionLinkResolver,
+} from '@components/app/split-layout/split-router/mention-links';
 import { DocumentMention } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
 import { UserMention } from '@core/component/LexicalMarkdown/component/decorator/UserMention';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
