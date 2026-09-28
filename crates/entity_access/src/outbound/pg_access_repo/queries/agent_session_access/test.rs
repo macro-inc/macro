@@ -154,34 +154,44 @@ async fn session_allowlist_matches_grants_and_respects_requested_ids(pool: PgPoo
         vec!["owner".into(), "channel".into()],
     ] {
         assert_eq!(
-            accessible_session_ids(&pool, &SourceIds(sources), &[])
+            accessible_session_ids(&pool, &SourceIds(sources), &[], "owner")
                 .await
                 .unwrap(),
             vec![session]
         );
     }
     assert!(
-        accessible_session_ids(&pool, &SourceIds(vec!["outsider".into()]), &[])
+        accessible_session_ids(&pool, &SourceIds(vec!["outsider".into()]), &[], "outsider")
             .await
             .unwrap()
             .is_empty()
     );
     assert!(
-        accessible_session_ids(&pool, &SourceIds(vec![]), &[])
+        accessible_session_ids(&pool, &SourceIds(vec![]), &[], "owner")
             .await
             .unwrap()
             .is_empty()
     );
     assert!(
-        accessible_session_ids(&pool, &SourceIds(vec!["channel".into()]), &[unrelated])
-            .await
-            .unwrap()
-            .is_empty()
+        accessible_session_ids(
+            &pool,
+            &SourceIds(vec!["channel".into()]),
+            &[unrelated],
+            "channel"
+        )
+        .await
+        .unwrap()
+        .is_empty()
     );
     assert_eq!(
-        accessible_session_ids(&pool, &SourceIds(vec!["channel".into()]), &[session])
-            .await
-            .unwrap(),
+        accessible_session_ids(
+            &pool,
+            &SourceIds(vec!["channel".into()]),
+            &[session],
+            "channel"
+        )
+        .await
+        .unwrap(),
         vec![session]
     );
     // Revocation must be reflected by the next allowlist query.
@@ -193,9 +203,80 @@ async fn session_allowlist_matches_grants_and_respects_requested_ids(pool: PgPoo
     .await
     .unwrap();
     assert!(
-        accessible_session_ids(&pool, &SourceIds(vec!["channel".into()]), &[])
+        accessible_session_ids(&pool, &SourceIds(vec!["channel".into()]), &[], "channel")
             .await
             .unwrap()
             .is_empty()
+    );
+}
+
+/// Search's allowlist drops an inline session until the viewer has opened it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn hidden_sessions_leave_the_allowlist_until_pinned(pool: PgPool) {
+    let session = uuid::Uuid::now_v7();
+    let viewer = "macro|agent-session-list-viewer@example.com";
+    let macro_user_id = uuid::Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)",
+        macro_user_id,
+        viewer,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "User" ("id", "email", "macro_user_id") VALUES ($1, $1, $2)"#,
+        viewer,
+        macro_user_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session (
+            id, owner_id, bot_id, model, harness, repo_url, workspace, list_hidden
+        )
+        VALUES ($1, $2, '00000000-0000-0000-0000-00000000a9e7', 'model', 'harness', NULL, '/workspace', TRUE)
+        "#,
+        session,
+        viewer,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'agent_session', $2, 'user', 'owner')
+        "#,
+        session,
+        viewer,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(
+        accessible_session_ids(&pool, &SourceIds(vec![viewer.into()]), &[], viewer)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    sqlx::query!(
+        "INSERT INTO agent_session_list_pin (user_id, agent_session_id) VALUES ($1, $2)",
+        viewer,
+        session,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        accessible_session_ids(&pool, &SourceIds(vec![viewer.into()]), &[], viewer)
+            .await
+            .unwrap(),
+        vec![session]
     );
 }

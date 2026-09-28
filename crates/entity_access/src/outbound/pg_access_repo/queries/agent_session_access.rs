@@ -20,6 +20,7 @@ pub async fn accessible_session_ids(
     pool: &PgPool,
     source_ids: &SourceIds,
     requested_ids: &[uuid::Uuid],
+    user_id: &str,
 ) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
     sqlx::query_scalar!(
         r#"
@@ -28,9 +29,23 @@ pub async fn accessible_session_ids(
         WHERE entity_type = 'agent_session'
           AND source_id = ANY($1)
           AND (cardinality($2::uuid[]) = 0 OR entity_id = ANY($2))
+          -- Inline @macro sessions stay out of search until this viewer opens
+          -- them. A grant with no session row (tests, a deleted session) is
+          -- not hidden: the predicate only matches a `list_hidden` row.
+          AND NOT EXISTS (
+              SELECT 1 FROM agent_session s
+              WHERE s.id = entity_access.entity_id
+                AND s.list_hidden
+                AND NOT EXISTS (
+                    SELECT 1 FROM agent_session_list_pin pin
+                    WHERE pin.agent_session_id = s.id
+                      AND pin.user_id = $3
+                )
+          )
         "#,
         &source_ids.0,
         requested_ids,
+        user_id,
     )
     .fetch_all(pool)
     .await
