@@ -8423,9 +8423,12 @@ dependencies = [
  "item_filters",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "model-error-response",
  "models_pagination",
+ "rootcause",
  "serde",
  "serde_json",
  "sqlx",
@@ -17973,6 +17976,7 @@ dependencies = [
 name = "soup_realtime"
 version = "0.1.0"
 dependencies = [
+ "agent_session",
  "broadcast",
  "channels",
  "chat",
@@ -17981,6 +17985,7 @@ dependencies = [
  "email",
  "entity_access",
  "futures",
+ "github_pull_requests",
  "initiative",
  "kafka_util",
  "macro_event_broker",

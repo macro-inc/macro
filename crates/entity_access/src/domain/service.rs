@@ -750,7 +750,8 @@ where
             // A database's audience is exactly its `entity_access` rows, so it
             // resolves the same way a document's does. So is a form's: a public
             // audience is anyone with the link, which no list can name.
-            EntityType::Document
+            EntityType::ForeignEntity
+            | EntityType::Document
             | EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread
