@@ -1,4 +1,8 @@
 import {
+  BlockAliasRegistry,
+  BlockRegistry,
+} from '@app/lib/constants/block-registry';
+import {
   decodeRoute,
   getExternalSearchKeys,
   parseRoutePathname,
@@ -19,36 +23,9 @@ export type MacroMentionLinkResolver = (
   url: string
 ) => MacroMentionLink | undefined;
 
-// Mirror BlockRegistry and BlockAliasRegistry without loading @core/block's BlockLoader.
-const blockTypes = [
-  'call',
-  'calendar',
-  'chat',
-  'write',
-  'pdf',
-  'md',
-  'code',
-  'image',
-  'canvas',
-  'spreadsheet',
-  'channel',
-  'project',
-  'unknown',
-  'video',
-  'email',
-  'contact',
-  'company',
-  'automation',
-  'pr',
-  'agent',
-  'csv',
-  'task',
-  'snippet',
-  'skill',
-] as const satisfies readonly (BlockName | BlockAlias)[];
 const referenceSchema = z.object({
   id: z.string().min(1),
-  type: z.enum(blockTypes),
+  type: z.enum([...BlockRegistry, ...BlockAliasRegistry]),
 });
 const uuidReferenceSchema = referenceSchema.extend({
   id: z.guid(),
