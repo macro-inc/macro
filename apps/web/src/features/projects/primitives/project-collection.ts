@@ -61,7 +61,7 @@ export function createProjectCollection(capabilities: {
   const [dueAfter, setDueAfter] = createSignal(initial?.dueAfter ?? '');
   const [mine, setMine] = createSignal(initial?.mine ?? false);
   const [sort, setSort] = createSignal<NonNullable<ProjectFilters['sort']>>(
-    initial?.sort === 'created' ? 'created' : 'updated'
+    initial?.sort ?? 'updated'
   );
   const [groupBy, setGroupBy] = createSignal<ProjectListGroupBy>(
     initial?.groupBy ?? 'status'

@@ -11,11 +11,7 @@ const snapshotSchema = z.object({
   dueBefore: z.string(),
   dueAfter: z.string(),
   mine: z.boolean(),
-  sort: z
-    .enum(['updated', 'created', 'name', 'due'])
-    .transform((sort) =>
-      sort === 'created' ? ('created' as const) : ('updated' as const)
-    ),
+  sort: z.enum(['updated', 'created']),
   groupBy: z.enum(['none', 'status', 'priority', 'assignee']),
   scrollOffset: z.number().finite().nonnegative(),
   collapsedGroupIds: z.array(z.string()),
