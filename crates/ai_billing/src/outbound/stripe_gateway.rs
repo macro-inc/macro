@@ -337,6 +337,11 @@ impl PaymentGateway for StripePaymentGateway {
         let invoice = Invoice::retrieve(&self.client, &invoice.id, &[])
             .await
             .map_err(payment)?;
+        // Finalization can collect before the caller persists this id. A retry
+        // must recover the paid invoice instead of attempting a forbidden update.
+        if invoice.status == Some(InvoiceStatus::Paid) {
+            return Ok(invoice.id.to_string());
+        }
         let invoice_scope = stamped_scope(&invoice)?;
         let scope = invoice_scope.unwrap_or(request.scope);
         let charge_method = if invoice_scope.is_some_and(|scope| scope != request.scope) {

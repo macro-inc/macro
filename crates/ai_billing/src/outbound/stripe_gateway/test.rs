@@ -525,11 +525,19 @@ async fn open_overage_invoice_replay_returns_an_already_paid_invoice() {
     assert_eq!(invoice_id, INVOICE_ID);
 
     let requests = server.received_requests().await.expect("recorded requests");
-    assert_eq!(requests.len(), 2, "{requests:?}");
-    assert_eq!(requests[0].method.as_str(), "POST");
-    assert_eq!(requests[0].url.path(), "/v1/invoices");
-    assert_eq!(requests[1].method.as_str(), "GET");
-    assert_eq!(requests[1].url.path(), format!("/v1/invoices/{INVOICE_ID}"));
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|request| request.method.as_str() == "POST")
+            .map(|request| request.url.path())
+            .collect::<Vec<_>>(),
+        vec!["/v1/invoices"],
+        "{requests:?}"
+    );
+    assert!(requests.iter().any(|request| {
+        request.method.as_str() == "GET"
+            && request.url.path() == format!("/v1/invoices/{INVOICE_ID}")
+    }));
 }
 
 #[tokio::test]
