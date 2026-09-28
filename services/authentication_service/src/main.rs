@@ -460,6 +460,11 @@ async fn main() -> anyhow::Result<()> {
         GithubPullRequestServiceImpl::new(
             foreign_entity_service,
             PgGithubPullRequestRepo::new(db.clone()),
+        )
+        .with_event_publisher(
+            github_pull_requests::broker::BrokerGithubPullRequestPublisher(
+                macro_event_broker.clone(),
+            ),
         ),
         GithubLinkConfig {
             client_id: config.github_client_id.to_string(),

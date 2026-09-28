@@ -9,7 +9,7 @@ use tracing::{
 
 const PATCH_SELECTION: &str = r#"
     __typename
-    ... on SoupUpdated { item { __typename id displayName cacheProjection ... on GraphqlSoupChat { model } } }
+    ... on SoupUpdated { item { __typename id displayName cacheProjection ... on GraphqlSoupChat { model } ... on GraphqlSoupForeignEntity { sourceMetadata } ... on GraphqlSoupAgentSession { pullRequestState pullRequestId } } }
     ... on GraphqlCacheDeletion { graphqlTypeName entityId }
 "#;
 
@@ -381,4 +381,77 @@ async fn initiative_patches_hydrate_and_delete_the_soup_record() {
     assert_eq!(patches[0]["item"]["id"], id.to_string());
     assert_eq!(patches[1]["graphqlTypeName"], "GraphqlSoupInitiative");
     assert_eq!(patches[1]["entityId"], removed_id.to_string());
+}
+
+#[tokio::test]
+async fn pr_and_linked_session_updates_serialize_current_metadata() {
+    use models_soup::{
+        agent_session::{AgentPullRequestState, SoupAgentSession},
+        foreign_entity::SoupForeignEntity,
+    };
+    let pr_id = Uuid::now_v7();
+    let session_id = Uuid::now_v7();
+    let now = chrono::Utc::now();
+    let soup = CountingSoupService::default();
+    soup.set_raw_response(vec![
+        SoupItem::ForeignEntity(SoupForeignEntity {
+            id: pr_id,
+            foreign_entity_id: "macro/app/pull/7".into(),
+            foreign_entity_source: "github_pull_request".into(),
+            metadata: async_graphql::value!({"title": "Updated PR", "state": "merged"})
+                .into_json()
+                .unwrap(),
+            stored_for_id: VALID_USER_ID.into(),
+            stored_for_auth_entity: "user".into(),
+            created_at: now,
+            updated_at: now,
+        }),
+        SoupItem::AgentSession(SoupAgentSession {
+            id: session_id,
+            name: "Linked session".into(),
+            owner_id: model_owner::Owner::from_principal_str(VALID_USER_ID).unwrap(),
+            bot_id: Uuid::now_v7(),
+            harness: "claude".into(),
+            repo_url: None,
+            repo_branch: None,
+            pull_request_url: Some("https://github.com/macro/app/pull/7".into()),
+            working_branch: None,
+            pull_request_state: Some(AgentPullRequestState::Merged),
+            pull_request_id: Some(pr_id),
+            turn_state: None,
+            thread_id: None,
+            status: "disconnected".into(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            extra: (),
+        }),
+    ]);
+    let calls = soup.raw_calls.clone();
+    let responses = subscription_responses(
+        soup,
+        vec![
+            Patch::Updated(ModelEntityType::ForeignEntity.with_entity_string(pr_id.to_string())),
+            Patch::Updated(
+                ModelEntityType::AgentSession.with_entity_string(session_id.to_string()),
+            ),
+        ],
+    )
+    .await;
+    assert_eq!(responses.len(), 1);
+    assert!(responses[0].errors.is_empty(), "{:?}", responses[0].errors);
+    let data = responses[0].data.clone().into_json().unwrap();
+    let patches = data["soupUpdates"].as_array().unwrap();
+    let pr = patches
+        .iter()
+        .find(|p| p["item"]["id"] == pr_id.to_string())
+        .unwrap();
+    assert_eq!(pr["item"]["sourceMetadata"]["state"], "merged");
+    let session = patches
+        .iter()
+        .find(|p| p["item"]["id"] == session_id.to_string())
+        .unwrap();
+    assert_eq!(session["item"]["pullRequestState"], "MERGED");
+    assert_eq!(session["item"]["pullRequestId"], pr_id.to_string());
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
 }

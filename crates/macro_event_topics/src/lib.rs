@@ -53,6 +53,8 @@ topics! {
     MacroCallsTopic => "macro.calls",
     /// Document lifecycle events (created / updated / deleted / copied).
     MacroDocumentsTopic => "macro.documents",
+    /// Committed GitHub pull request updates.
+    MacroGithubPullRequestsTopic => "macro.github_pull_requests",
     /// User-scoped full Soup items produced from entity updates.
     MacroSoupRealtimeTopic => "macro.soup",
     /// Project lifecycle events (created, updated, deleted, restored, permanently deleted, and uploaded).

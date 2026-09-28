@@ -9,3 +9,6 @@ pub mod kafka_publisher;
 /// Independent Kafka consumer for recipient-targeted Soup messages.
 #[cfg(feature = "consumer")]
 pub mod soup_consumer;
+
+/// Session dependencies for PR updates.
+pub mod agent_sessions;
