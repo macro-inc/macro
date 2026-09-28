@@ -357,7 +357,8 @@ async fn main() -> anyhow::Result<()> {
             lexical_client.clone(),
             &side_effect_clients,
         ),
-    );
+    )
+    .with_image_generator(ai_tools::build_image_generator_from_env());
 
     tracing::info!("initialized document tool context");
 

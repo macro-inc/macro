@@ -6185,6 +6185,7 @@ dependencies = [
  "unicode-segmentation",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 

@@ -295,7 +295,8 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             lexical_client.clone(),
             &side_effect_clients,
         ),
-    );
+    )
+    .with_image_generator(ai_tools::build_image_generator_from_env());
 
     let properties_tool_context = ai_tools::build_properties_tool_context(
         properties_service.clone(),

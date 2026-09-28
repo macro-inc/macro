@@ -5,6 +5,8 @@
 #[cfg(feature = "document_create")]
 pub mod create;
 pub mod editing;
+#[cfg(feature = "ai_tools")]
+pub mod image_generation;
 pub mod markdown;
 pub mod mentions;
 pub mod sync;

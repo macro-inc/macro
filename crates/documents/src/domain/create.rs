@@ -8,6 +8,8 @@
 #[cfg(test)]
 mod test;
 
+#[cfg(feature = "ai_tools")]
+pub mod generated_image;
 pub mod upload;
 
 use anyhow::Context;

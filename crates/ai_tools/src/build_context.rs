@@ -15,8 +15,10 @@ use channels::domain::list_service::ChannelListServiceImpl;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use connection_gateway_client::ConnectionGatewayClient;
 use documents::domain::models::CloudFrontConfig;
+use documents::domain::ports::image_generation::{ImageGenerator, UnconfiguredImageGenerator};
 use documents::inbound::toolset::DocumentToolContext;
 use documents::outbound::editing_worker_client::ReqwestEditingWorkerClient;
+use documents::outbound::gemini_image_generator::GeminiImageGenerator;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use documents::outbound::s3_upload_url::S3UploadUrlAdapter;
 use email::domain::ports::ReadonlyEmailPreviewAdapter;
@@ -72,6 +74,28 @@ maybe_env_var! {
         EnableEmailScheduledQueue,
         EnableGmailOpsQueue,
         EnableNotificationQueue,
+    }
+}
+
+maybe_env_var! {
+    struct GoogleGenerativeAiApiKey;
+}
+
+/// The text-to-image provider for the GenerateImage tool: Gemini's Nano
+/// Banana model when `GOOGLE_GENERATIVE_AI_API_KEY` is set, otherwise the
+/// unconfigured generator, whose calls fail with a clear message rather than
+/// keeping the host from booting.
+pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
+    match GoogleGenerativeAiApiKey::new()
+        .as_ref()
+        .and_then(|key| key.value())
+        .filter(|key| !key.trim().is_empty())
+    {
+        Some(key) => Arc::new(GeminiImageGenerator::new(key.to_string())),
+        None => {
+            tracing::warn!("GOOGLE_GENERATIVE_AI_API_KEY is not set; GenerateImage is disabled");
+            Arc::new(UnconfiguredImageGenerator)
+        }
     }
 }
 
@@ -319,7 +343,8 @@ pub async fn build_tool_service_context_from_env(
             Arc::new(lexical_client.clone()),
             &side_effect_clients,
         ),
-    );
+    )
+    .with_image_generator(build_image_generator_from_env());
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(
         properties_service.clone(),
