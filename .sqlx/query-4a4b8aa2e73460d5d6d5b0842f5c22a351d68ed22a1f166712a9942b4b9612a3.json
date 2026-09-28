@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT parent_entity_type, parent_entity_id FROM comms_messages WHERE id = $1",
+  "query": "SELECT parent_entity_type, parent_entity_id FROM comms_messages\n             WHERE id = $1 AND deleted_at IS NULL",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "d62a7d3f7487685230ddef2396bd289663ced8c302156ee0babcb17a10188659"
+  "hash": "4a4b8aa2e73460d5d6d5b0842f5c22a351d68ed22a1f166712a9942b4b9612a3"
 }

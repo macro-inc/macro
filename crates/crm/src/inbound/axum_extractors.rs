@@ -204,9 +204,8 @@ where
 /// role-to-AccessLevel mapping as the company / contact extractors applies;
 /// hidden parents are invisible to plain members.
 ///
-/// Returns `NotFound` when the comment doesn't exist or isn't on a CRM
-/// record, so cross-team callers can't probe for comment existence; the
-/// message store answers a deleted comment with the same 404.
+/// Returns `NotFound` when the comment doesn't exist, is deleted, or isn't on
+/// a CRM record, so cross-team callers can't probe for comment existence.
 #[derive(Debug)]
 pub struct CrmCommentAccessLevelExtractor<T: RequiredPermission, C, Eas, Auth> {
     /// Capability token authorizing CRM comment service calls.

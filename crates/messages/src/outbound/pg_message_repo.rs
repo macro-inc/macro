@@ -793,7 +793,8 @@ impl MessageRepository for PgMessageRepository {
 
     async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
         let row = sqlx::query!(
-            "SELECT parent_entity_type, parent_entity_id FROM comms_messages WHERE id = $1",
+            "SELECT parent_entity_type, parent_entity_id FROM comms_messages
+             WHERE id = $1 AND deleted_at IS NULL",
             id
         )
         .fetch_optional(&self.pool)

@@ -489,8 +489,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         Ok(state)
     }
 
-    /// The parent a message belongs to, so an adapter addressed only by message
-    /// id can mint that parent's receipt. Grants nothing on its own.
+    /// The parent a live message belongs to, so an adapter addressed only by
+    /// message id can mint that parent's receipt. Grants nothing on its own.
     #[tracing::instrument(err, skip(self))]
     pub async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
         self.repo.parent_of(id).await

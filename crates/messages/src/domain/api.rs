@@ -41,8 +41,8 @@ pub trait MessageReader: Send + Sync + 'static {
         id: i64,
         is_thread: bool,
     ) -> Result<Message, MessageError>;
-    /// The parent a message belongs to, for adapters addressed only by message
-    /// id. Grants nothing: callers mint the parent's receipt before any read.
+    /// The parent a live message belongs to, for adapters addressed only by
+    /// message id. Grants nothing: callers mint the parent's receipt before any read.
     async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError>;
 }
 
