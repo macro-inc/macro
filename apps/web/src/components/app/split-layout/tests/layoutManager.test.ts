@@ -1116,35 +1116,42 @@ describe('layoutManager', () => {
       dispose();
     });
 
-    it('reuses an agent target inside Home', async () => {
-      const { manager, router, dispose } = ingressRouter(
-        '/home/agent/entity/~/search'
-      );
-      await router.settled();
-      const [owner, source] = manager.splits();
-      const ownerRoute = router.route(owner.id);
-      manager.openWithSplit(
-        { type: 'agent', id: 'entity' },
-        {
-          handle: manager.getSplit(source.id),
-          search: searchLocationUpdates('entity', {
-            type: 'agent',
-            messageTurn: 0,
-            author: 'agent',
-          }),
-        }
-      );
-      await router.settled();
-      expect(manager.splits()).toHaveLength(2);
-      expect(router.route(owner.id)).toEqual(ownerRoute);
-      expect(router.route(source.id)?.matches[0].id).toBe('view-search');
-      expect(router.search(owner.id, 'agent-detail')).toMatchObject({
-        messageTurn: ['0'],
-        author: ['agent'],
-      });
-      router.dispose();
-      dispose();
-    });
+    it.each(['/home/agent/entity', '/agents/entity', '/coders/entity'])(
+      'reuses an agent target inside %s while preserving Changes state',
+      async (path) => {
+        const { manager, router, dispose } = ingressRouter(
+          `${path}/~/search?s0.changes.pane=split&s0.changes.style=split`
+        );
+        await router.settled();
+        const [owner, source] = manager.splits();
+        const ownerRoute = router.route(owner.id);
+        manager.openWithSplit(
+          { type: 'agent', id: 'entity' },
+          {
+            handle: manager.getSplit(source.id),
+            search: searchLocationUpdates('entity', {
+              type: 'agent',
+              messageTurn: 0,
+              author: 'agent',
+            }),
+          }
+        );
+        await router.settled();
+        expect(manager.splits()).toHaveLength(2);
+        expect(router.route(owner.id)).toEqual(ownerRoute);
+        expect(router.route(source.id)?.matches[0].id).toBe('view-search');
+        expect(router.search(owner.id, 'agent-detail')).toMatchObject({
+          messageTurn: ['0'],
+          author: ['agent'],
+        });
+        expect(router.search(owner.id, 'changes')).toEqual({
+          pane: ['split'],
+          style: ['split'],
+        });
+        router.dispose();
+        dispose();
+      }
+    );
 
     it('retargets an existing Home channel without replacing Home or its filters', async () => {
       const { manager, router, dispose } = ingressRouter(
