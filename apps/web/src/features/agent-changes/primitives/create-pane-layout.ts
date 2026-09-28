@@ -1,6 +1,6 @@
 /**
- * Pane visibility can be controlled by the host URL; the split width stays
- * local to the reviewer and session.
+ * Pane visibility belongs to the host (see `createPaneViewState`); the split
+ * width and whether the file tree shows stay local to the reviewer and scope.
  */
 
 import type { Accessor } from 'solid-js';
@@ -23,45 +23,44 @@ export type PaneLayoutController = {
   /** Percent of the width the changes pane takes in the split. */
   changesShare: Accessor<number>;
   setChangesShare: (share: number) => void;
+  /** The file tree shows beside the diffs. */
+  treeOpen: Accessor<boolean>;
+  toggleTree: () => void;
   toggle: () => void;
   spotlight: () => void;
   open: () => void;
   close: () => void;
-  backToSplit: () => void;
 };
 
-type StoredLayout = { layout: PaneLayout; share: number };
+type StoredLayout = { share: number; treeOpen: boolean };
 
-const LAYOUTS: readonly PaneLayout[] = ['split', 'agent-only', 'changes-only'];
-
-function parseStored(raw: unknown): StoredLayout | undefined {
+function parseLayout(raw: unknown): StoredLayout | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
-  const { layout, share } = raw as Partial<StoredLayout>;
-  if (!layout || !LAYOUTS.includes(layout)) return undefined;
+  const { share, treeOpen } = raw as { share?: unknown; treeOpen?: unknown };
   return {
-    layout,
-    share: clampChangesShare(typeof share === 'number' ? share : Number.NaN),
+    share:
+      typeof share === 'number'
+        ? clampChangesShare(share)
+        : DEFAULT_CHANGES_SHARE,
+    treeOpen: typeof treeOpen === 'boolean' ? treeOpen : true,
   };
 }
 
 export function createPaneLayout(options: {
   sessionId: Accessor<string | undefined>;
-  layout?: [get: Accessor<PaneLayout>, set: (layout: PaneLayout) => void];
+  layout: [get: Accessor<PaneLayout>, set: (layout: PaneLayout) => void];
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 }): PaneLayoutController {
+  const [layout, setLayout] = options.layout;
   const [stored, setStored] = createPersistedSessionState<StoredLayout>({
     sessionId: options.sessionId,
     namespace: 'agent-changes:layout',
-    initial: () => ({ layout: 'agent-only', share: DEFAULT_CHANGES_SHARE }),
-    parse: parseStored,
+    initial: () => ({ share: DEFAULT_CHANGES_SHARE, treeOpen: true }),
+    parse: parseLayout,
     storage: options.storage,
   });
-  const layout = () => (options.layout ? options.layout[0]() : stored().layout);
-  const setLayout = (next: (layout: PaneLayout) => PaneLayout) => {
-    if (options.layout) options.layout[1](next(layout()));
-    else
-      setStored((previous) => ({ ...previous, layout: next(previous.layout) }));
-  };
+  const move = (next: (current: PaneLayout) => PaneLayout) =>
+    setLayout(next(layout()));
 
   return {
     layout,
@@ -73,10 +72,12 @@ export function createPaneLayout(options: {
         ...previous,
         share: clampChangesShare(share),
       })),
-    toggle: () => setLayout(toggleChanges),
-    spotlight: () => setLayout(toggleSpotlight),
-    open: () => setLayout(ensureChangesVisible),
-    close: () => setLayout(() => 'agent-only'),
-    backToSplit: () => setLayout(() => 'split'),
+    treeOpen: () => stored().treeOpen,
+    toggleTree: () =>
+      setStored((previous) => ({ ...previous, treeOpen: !previous.treeOpen })),
+    toggle: () => move(toggleChanges),
+    spotlight: () => move(toggleSpotlight),
+    open: () => move(ensureChangesVisible),
+    close: () => setLayout('closed'),
   };
 }

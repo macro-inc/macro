@@ -1,8 +1,7 @@
 import { cn } from '@ui';
-import type { FileChangeKind } from '../core/changeset';
-import { statusLetter } from '../core/changeset';
+import { type DiffFileKind, statusLetter } from './model/diff-file';
 
-const LABELS: Record<FileChangeKind, string> = {
+const LABELS: Record<DiffFileKind, string> = {
   added: 'Added',
   modified: 'Modified',
   deleted: 'Deleted',
@@ -10,11 +9,11 @@ const LABELS: Record<FileChangeKind, string> = {
 };
 
 /** The one-letter change status, coloured like the diff it describes. */
-export function StatusLetter(props: { kind: FileChangeKind; class?: string }) {
+export function StatusLetter(props: { kind: DiffFileKind; class?: string }) {
   return (
     <span
       class={cn(
-        'w-3 shrink-0 text-center font-mono text-[10px] font-medium',
+        'w-3 shrink-0 text-center text-xs font-medium',
         props.kind === 'added' && 'text-success',
         props.kind === 'modified' && 'text-blue',
         props.kind === 'deleted' && 'text-failure',

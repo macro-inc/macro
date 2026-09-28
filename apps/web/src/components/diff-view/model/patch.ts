@@ -1,14 +1,14 @@
 /**
- * The patch behind a changeset, parsed once into Pierre's per-file diffs and
- * matched back to the summary's files by path.
+ * A unified patch, parsed once into Pierre's per-file diffs and matched back
+ * to the host's files by path.
  */
 
 import { type FileDiffMetadata, parsePatchFiles } from '@pierre/diffs';
-import type { ChangedFile } from './changeset';
+import type { DiffFile } from './diff-file';
 
-/** One file's parsed diff, or why there is none to render. */
-export type FileDiffEntry = {
-  file: ChangedFile;
+/** One file's parsed diff, or why there is none to draw. */
+export type DiffEntry = {
+  file: DiffFile;
   /** Absent when the patch has no text for the file. */
   diff?: FileDiffMetadata;
   /** Why the diff is absent, in a phrase the card can show. */
@@ -29,11 +29,11 @@ export function parsePatch(patch: string): Map<string, FileDiffMetadata> {
   return byPath;
 }
 
-/** Pair each summary file with its parsed diff, in summary order. */
+/** Pair each file with its parsed diff, in the files' order. */
 export function matchFilesToDiffs(
-  files: readonly ChangedFile[],
+  files: readonly DiffFile[],
   diffs: ReadonlyMap<string, FileDiffMetadata>
-): FileDiffEntry[] {
+): DiffEntry[] {
   return files.map((file) => {
     if (file.binary) return { file, note: 'Binary file' };
     if (file.patchOmitted) {

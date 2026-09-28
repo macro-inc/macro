@@ -103,6 +103,7 @@ permission failures should display a failed tool call without a successful resul
   available agent is selected initially; otherwise Macro is selected.
   Hover an agent (or use the right arrow key) to open its model submenu, with
   the searchable Settings catalog, provider icons, and scrollable **More models**.
+  The submenu focuses the `Search models` field so you can type immediately.
   Clicking an agent directly uses its default; choosing a submenu model selects
   both the agent and that model. A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
@@ -671,19 +672,29 @@ toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it o
 Chat sessions on Macro's in-memory harness have no repository, so they show
 none of this: no **Changes** toggle, pane, hand-off card, or review-notes chip,
 and the title menu offers **Open repository** only when the session has one.
-The URL's `diff` query parameter stores each session's pane state and diff
-layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
-`split` for side-by-side diffs). Copying the URL preserves that view; reload
-and Back/Forward restore it. A plain session URL starts with Changes closed.
-Divider width, collapsed files, and review notes stay local.
-The pane header shows a `head → base` branch pill, a **Unified / Split**
-segmented control (`aria-label="Diff layout"`), a refresh button, the
-**View pull request** button (opens GitHub), and **Expand changes to the full width**
-(spotlight; **Bring the session back** returns to the split) and **Close the
-changes pane**. Below it is a **Collapse all / Expand all** button.
-The body is a file tree (`nav[aria-label="Changed files"]`, directories
-compressed along single-child chains, status letters A/M/D/R and +/− counts)
-next to a scrollable stack of file cards. Expanded cards keep their full height;
+The session's split stores the pane in its own search params:
+`s<N>.changes.pane` (`split`, or `full` when spotlit) and `s<N>.changes.style=split`
+for side-by-side diffs, where `<N>` is the split's index; defaults are left out.
+Copying the URL preserves that view, and reload restores it. Opening and closing
+the pane are Back/Forward steps; switching the diff layout is not. A plain
+session URL starts with Changes closed, and leaving the session or closing its
+split drops the state.
+Divider width, whether the file tree shows, collapsed files, and review notes
+stay local.
+The pane (`[role="region"][aria-label="Changes"]`) has a title row and a
+toolbar. The title row shows **Changes**, the linked pull request's number
+(**View pull request #N** opens GitHub), and the `head → base` range, with only
+the pane's own controls on the right: **Expand changes to the full width**
+(pressed while spotlit; its label becomes **Back to the split**) and **Close the
+changes pane**. The toolbar, shown once there are files, has **Hide file tree /
+Show file tree** and the file count on the left, and on the right the
+**Unified / Split** segmented control (`aria-label="Diff layout"`), **Collapse
+all / Expand all**, and **Refresh pull request changes**.
+The body is a file tree (`[role="group"][aria-label="Changed files"]`, rows
+styled like Drive's folder tree, directories compressed along single-child
+chains with **Collapse / Expand** buttons, each file's +/− counts and status
+letter A/M/D/R; the arrow keys move between rows and Left/Right close and open a
+directory) next to a scrollable stack of file cards. Expanded cards keep their full height;
 **Collapse all / Expand all** hides or restores their bodies. Each card's header has a disclosure
 caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; hover a
 line and click the accent **+** in the gutter (drag for a range) to leave a

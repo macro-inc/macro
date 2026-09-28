@@ -61,6 +61,7 @@ export {
   useCanGo,
   useNavigate,
   useOptionalSplitRouter,
+  useOwnsSearchNamespace,
   useParams,
   useRouteParams,
   useRouteState,

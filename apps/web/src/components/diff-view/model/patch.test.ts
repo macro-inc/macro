@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChangedFile } from './changeset';
+import type { DiffFile } from './diff-file';
 import { matchFilesToDiffs, parsePatch } from './patch';
 
 const PATCH = `diff --git a/src/a.ts b/src/a.ts
@@ -17,7 +17,7 @@ rename from old.txt
 rename to new.txt
 `;
 
-function file(overrides: Partial<ChangedFile>): ChangedFile {
+function file(overrides: Partial<DiffFile>): DiffFile {
   return {
     path: 'src/a.ts',
     kind: 'modified',

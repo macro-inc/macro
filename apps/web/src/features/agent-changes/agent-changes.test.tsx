@@ -45,14 +45,6 @@ vi.mock('./queries/pull-request-stats', () => ({
   createPullRequestStatsSource: () => () => undefined,
 }));
 
-vi.mock('./url-diff-state', () => ({
-  createUrlDiffState: () => {
-    const [layout, setLayout] = createSignal('agent-only');
-    const [diffStyle, setDiffStyle] = createSignal('unified');
-    return { layout, setLayout, diffStyle, setDiffStyle };
-  },
-}));
-
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success() {}, failure() {} },
 }));

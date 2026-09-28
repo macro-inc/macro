@@ -2,13 +2,13 @@ import {
   ViewSidebar,
   CollapsibleSection as WorkspaceSection,
 } from '@app/components/view-shell';
-import { CollapseTransition } from '@app/components/view-shell/CollapseTransition';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {
   createContext,
   createSignal,

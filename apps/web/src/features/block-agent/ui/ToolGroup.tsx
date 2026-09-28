@@ -6,9 +6,9 @@
  * because the cards themselves appear once it opens.
  */
 
-import { CollapseTransition } from '@app/components/view-shell/CollapseTransition';
 import CaretRight from '@phosphor/caret-right.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {
   createEffect,
   createSignal,

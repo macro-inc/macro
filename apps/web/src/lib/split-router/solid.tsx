@@ -14,6 +14,7 @@ import { Dynamic } from 'solid-js/web';
 import { createSplitRouter } from './router';
 import {
   getRouteEntryState,
+  getRouteSearchNamespaces,
   resolveRouteBranch,
   routeParams,
   type SplitRoutesManifest,
@@ -124,6 +125,23 @@ export function useSplitRouterScope<TSplitId>(): Accessor<TSplitId> {
   }
 
   return splitId as Accessor<TSplitId>;
+}
+
+/**
+ * Whether the enclosing split's current route owns search `namespace`, so
+ * `createSearchParams` may write it. False outside a split.
+ */
+export function useOwnsSearchNamespace(namespace: string): Accessor<boolean> {
+  const context = useContext(SplitRouterContext);
+  const splitId = useContext(SplitRouterScopeContext);
+  if (!context || !splitId) return () => false;
+  return () => {
+    context.track(splitId());
+    const route = context.router.route(splitId());
+    if (!route) return false;
+    const owned = getRouteSearchNamespaces(context.router.routes, route);
+    return owned.has('*') || owned.has(namespace);
+  };
 }
 
 export function useNavigate<TSplitId = unknown>(): SplitNavigate<TSplitId> {

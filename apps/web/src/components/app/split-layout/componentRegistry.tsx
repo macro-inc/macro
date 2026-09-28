@@ -473,6 +473,11 @@ if (LOCAL_ONLY) {
     'agent-changes-ui',
     lazy(() => import('@app/features/agent-changes/debug/Gallery'))
   );
+
+  registerComponent(
+    'diff-view-ui',
+    lazy(() => import('@app/components/diff-view/debug/DiffViewGallery'))
+  );
 }
 
 if (import.meta.env.DEV) {
