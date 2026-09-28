@@ -1,3 +1,6 @@
+#[path = "support/http.rs"]
+mod http;
+
 use std::time::Duration;
 
 use anyhow::{Context, ensure};
@@ -13,11 +16,14 @@ use reqwest::{Client, Method, Response};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sqlx::{PgPool, postgres::PgPoolOptions};
+#[path = "support/websocket.rs"]
+mod websocket;
 use tokio::net::TcpStream;
 use tokio::time::{Instant, timeout};
 use tokio_tungstenite::tungstenite::{Error as WebsocketError, Message as WebsocketMessage};
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use uuid::Uuid;
+use websocket::connect_async;
 
 const WEBSOCKET_TIMEOUT: Duration = Duration::from_secs(10);
 const NOTIFICATION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -138,7 +144,7 @@ impl ChannelContractContext {
     async fn load() -> anyhow::Result<Self> {
         let world = TestWorld::load()?;
         let api = ChannelApiClient::from_config(&world.config, &world.services);
-        let http = Client::new();
+        let http = http::http_client()?;
         let pool = connect_db(&world.config).await?;
         let actor = world.seed.smoke_user()?.clone();
         let actor_token = world.token_for(&actor)?;

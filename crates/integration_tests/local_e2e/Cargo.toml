@@ -10,6 +10,7 @@ bot_token = { path = "../../bot_token" }
 futures = { workspace = true }
 local_e2e_test_support = { path = "../../local_e2e_test_support" }
 reqwest = { workspace = true }
+rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["time"] }

@@ -268,6 +268,16 @@ these variables still uses hosted services; `TAURI_DEV_HOST` remains an explicit
 native HMR override. Keep local dev stacks private: same-origin routing does not
 add authentication or make passwordless local login safe to publish.
 
+The backend proxy uses HTTPS with the checked-in local CA. The launcher sets
+`NODE_EXTRA_CA_CERTS` for Vite so its HTTP and WebSocket forwarding verifies
+that certificate. Browsers using the Vite origin do not need to trust the
+backend certificate themselves. Direct browser access to the HTTPS proxy
+requires trusting `infra/local/certs/ca.pem`.
+
+For access from another machine, expose Vite through an HTTPS reverse proxy
+(such as Tailscale Serve). Plain HTTP on a remote hostname cannot retain the
+app's secure login cookies; `http://localhost` is a browser exception.
+
 The stack launches Vite directly with Node (available in the Nix shell), because
 Bun's Node HTTP compatibility currently hangs on Vite's proxied WebSocket
 upgrades. Bun is still used for dependency installation and builds.

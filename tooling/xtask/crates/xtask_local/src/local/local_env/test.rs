@@ -249,7 +249,7 @@ fn static_file_permalinks_go_through_the_instance_proxy() {
         .get("STATIC_FILE_SERVICE_URL")
         .expect("static file permalink base");
     assert!(
-        permalink_base.starts_with("http://localhost:"),
+        permalink_base.starts_with("https://localhost:"),
         "{permalink_base}"
     );
     assert!(permalink_base.ends_with("/static-file"), "{permalink_base}");
@@ -399,8 +399,8 @@ fn mcp_public_url_uses_the_proxy_cognition_route() {
 #[test]
 fn frontend_origin_tracks_how_the_app_is_served() {
     let instance = Instance::derive(None, None).unwrap();
-    let static_env = LocalEnv::for_instance(Mode::Local, &instance, true, None).to_env();
-    let attached_env = LocalEnv::for_instance(Mode::Local, &instance, false, None).to_env();
+    let static_env = LocalEnv::for_instance(Mode::Local, &instance, true, Tunnels::default()).to_env();
+    let attached_env = LocalEnv::for_instance(Mode::Local, &instance, false, Tunnels::default()).to_env();
     assert_eq!(
         static_env.get("FRONTEND_ORIGIN").map(String::as_str),
         Some("https://localhost:8090")

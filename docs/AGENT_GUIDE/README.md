@@ -20,3 +20,8 @@ verified live against a local stack (`just run_local`).
 Local stack conventions used in examples: frontend `http://localhost:<fe>/app`, backend proxy
 `https://localhost:<be>` (checked-in self-signed cert; trust `infra/local/certs/ca.pem`), Mailpit `http://localhost:<mp>` (ports come from the `--instance`;
 e.g. the `lgtm` instance uses 27910 / 27909 / 27908).
+
+For remote browser testing, open an HTTPS URL that forwards to the instance's
+Vite port. Vite trusts the backend proxy CA automatically and forwards API and
+WebSocket requests. Plain HTTP on a remote hostname cannot retain secure login
+cookies. Direct proxy access still requires trusting the checked-in CA.

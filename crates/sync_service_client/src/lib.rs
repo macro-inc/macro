@@ -24,7 +24,11 @@ impl SyncServiceClient {
         let client = {
             let mut builder = reqwest::Client::builder().default_headers(headers);
             if is_local_https(&url) {
-                builder = builder.danger_accept_invalid_certs(true);
+                let ca = reqwest::Certificate::from_pem(include_bytes!(
+                    "../../../infra/local/certs/ca.pem"
+                ))
+                .expect("checked-in local CA must be valid PEM");
+                builder = builder.add_root_certificate(ca);
             }
             builder.build().unwrap()
         };

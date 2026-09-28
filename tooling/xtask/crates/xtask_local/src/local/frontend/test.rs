@@ -13,6 +13,10 @@ fn stack_frontend_uses_same_origin_with_an_instance_specific_server_target() {
             let env: std::collections::HashMap<_, _> =
                 dev_env(&instance, mode, true, false).into_iter().collect();
             assert_eq!(env["VITE_LOCAL_BACKEND_ORIGIN"], "same-origin");
+            assert_eq!(
+                env["NODE_EXTRA_CA_CERTS"],
+                proxy::ca_pem().display().to_string()
+            );
             assert_eq!(env["MACRO_LOCAL_BACKEND_PROXY"], proxy::url(&instance));
             assert_eq!(
                 env["MACRO_LOCAL_BACKEND_ROUTES"],

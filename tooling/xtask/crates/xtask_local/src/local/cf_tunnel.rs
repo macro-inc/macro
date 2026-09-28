@@ -106,9 +106,8 @@ fn open_origin(instance: &Instance, name: &str, origin: &str) -> Result<QuickTun
     let mut cmd = Command::new("cloudflared");
     cmd.args(["tunnel", "--no-autoupdate"]);
     if origin.starts_with("https://") {
-        // Quick tunnels to the local proxy: the origin cert is the checked-in
-        // self-signed material, which Cloudflare's edge does not trust.
-        cmd.arg("--no-tls-verify");
+        // Trust only the checked-in CA for the tunnel's local HTTPS origin.
+        cmd.arg("--origin-ca-pool").arg(super::proxy::ca_pem());
     }
     cmd.args(["--url", origin]);
     let mut child = cmd

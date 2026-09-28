@@ -30,22 +30,18 @@ fn webhook_client_builds_for_the_default_https_target() {
 }
 
 #[tokio::test]
+#[ignore = "requires a running local HTTPS proxy; set LOCAL_E2E_BACKEND_ORIGIN for a named instance"]
 async fn webhook_client_verifies_local_https_when_the_proxy_is_up() {
-    let client = webhook_client("https://localhost:8090/auth/health")
-        .expect("webhook client should trust the checked-in CA");
-    match client
-        .get("https://localhost:8090/auth/health")
+    let origin = macro_env_var::maybe_read_env("LOCAL_E2E_BACKEND_ORIGIN")
+        .unwrap_or_else(|| "https://localhost:8090".to_owned());
+    let url = format!("{origin}/auth/health");
+    let client = webhook_client(&url).expect("webhook client should trust the checked-in CA");
+    let response = client
+        .get(url)
         .send()
         .await
-    {
-        Ok(resp) => assert!(
-            resp.status().is_success(),
-            "proxy health should be 2xx, got {}",
-            resp.status()
-        ),
-        Err(error) if error.is_connect() => {}
-        Err(error) => panic!("local HTTPS webhook client failed TLS: {error:#}"),
-    }
+        .expect("local HTTPS webhook client must verify TLS and reach the proxy");
+    assert!(response.status().is_success(), "proxy health should be 2xx");
 }
 
 #[test]

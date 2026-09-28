@@ -114,6 +114,10 @@ fn dev_env(
         ),
         ("VITE_LOCAL_SERVERS".to_string(), "ALL".to_string()),
         (
+            "NODE_EXTRA_CA_CERTS".to_string(),
+            proxy::ca_pem().display().to_string(),
+        ),
+        (
             "VITE_LOCAL_BACKEND_ORIGIN".to_string(),
             "same-origin".to_string(),
         ),
