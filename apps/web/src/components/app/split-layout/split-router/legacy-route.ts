@@ -394,6 +394,8 @@ export const legacySplitRoute = defineRoute({
     const content = decodeLegacyPair(type, id);
     if (!content) return;
 
+    if (content.type === 'agent') return { namespace: 'agent', id };
+
     if (content.type === 'component') {
       const [section, conversationId] = agentsRouteSegments(content.id) ?? [];
       if (section && conversationId) {

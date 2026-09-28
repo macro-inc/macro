@@ -1,7 +1,8 @@
 import { EntityDetail } from '@app/components/entity-detail/EntityDetail';
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
-import { useParams } from '@app/lib/split-router';
+import { channelsSearch } from '@app/features/channels-view/channels-route';
+import { createSearchParams, useParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { ChannelDetailTopBar } from '@channel/Channel/ChannelDetail';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
@@ -73,7 +74,7 @@ function entityDetailTarget(
 function HomeEntityDetailBody(props: {
   target: EntityDetailTarget;
   value: Accessor<string>;
-  navigationRequest: number;
+  navigationRequest: number | string;
 }) {
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -141,7 +142,7 @@ function HomeEntityDetailBody(props: {
 function HomeDirectDetail(props: {
   target: EntityDetailTarget;
   closePreview: () => void;
-  navigationRequest: number;
+  navigationRequest: number | string;
 }) {
   const value = () => `${props.target.type}:${props.target.id}`;
 
@@ -173,6 +174,7 @@ function HomeDirectDetail(props: {
 /** Home's typed channel and document routes; unsupported locations keep the block preview. */
 export function HomeEntityDetailRouteView() {
   const params = useParams<DetailParams>();
+  const [search] = createSearchParams(channelsSearch);
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
   const { previewTarget, previewNavigationRequest, closePreview } =
@@ -186,7 +188,7 @@ export function HomeEntityDetailRouteView() {
           <HomeDirectDetail
             target={target()}
             closePreview={closePreview}
-            navigationRequest={previewNavigationRequest()}
+            navigationRequest={`${previewNavigationRequest()}:${search.seek}`}
           />
         )}
       </Match>

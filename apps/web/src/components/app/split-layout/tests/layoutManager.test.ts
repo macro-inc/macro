@@ -7,6 +7,7 @@ import {
   emailSplitRoute,
   emailThreadRoute,
 } from '@app/features/email-view/route';
+import { searchLocationUpdates } from '@app/features/next-soup/search-navigation';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { reviewsSplitRoute } from '@app/features/reviews-view/route';
 import {
@@ -25,6 +26,7 @@ import { createRoutesManifest } from '@app/lib/split-router/routes';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { toast } from '@core/component/Toast/Toast';
 import type { BlockOrchestrator } from '@core/orchestrator';
+import type { SearchLocation } from '@entity';
 import { createMemo, createRoot, createSignal } from 'solid-js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -39,6 +41,7 @@ import {
 import { createMobileSwipeLayout } from '../mobile/createMobileSwipeLayout';
 import { createAppSplitRouterMiddleware } from '../split-router/app-middleware';
 import { appSplitRoutes } from '../split-router/app-routes';
+import { createContentNavigator } from '../split-router/content-navigation';
 import { createAppSplitRouterLayout } from '../splitRouterLayout';
 
 // Settings UI imports the app route registry and is unrelated to layout behavior.
@@ -858,9 +861,233 @@ describe('layoutManager', () => {
             isTouchDevice: () => options.touch ?? false,
           }),
         });
+        manager.setContentNavigator(
+          createContentNavigator(manager, router, routes)
+        );
         return { manager, location, router, dispose };
       });
     }
+
+    const searchTargets: {
+      type: SplitContent['type'];
+      target: SearchLocation;
+      namespace: string;
+      fields: Record<string, string[]>;
+      path: string;
+    }[] = [
+      {
+        type: 'channel',
+        target: { type: 'channel', messageId: 'reply', threadId: 'parent' },
+        namespace: 'channels',
+        fields: { messageId: ['reply'], threadId: ['parent'] },
+        path: '/channels/entity',
+      },
+      {
+        type: 'email',
+        target: { type: 'email', messageId: 'message' },
+        namespace: 'email-detail',
+        fields: { messageId: ['message'] },
+        path: '/mail/entity',
+      },
+      {
+        type: 'md',
+        target: { type: 'md', nodeId: 'node' },
+        namespace: 'markdown-detail',
+        fields: { nodeId: ['node'] },
+        path: '/drive/md/entity',
+      },
+      {
+        type: 'pdf',
+        target: {
+          type: 'pdf',
+          searchPage: 3,
+          highlightTerms: ['a'],
+          searchSnippet: 'snippet',
+          searchRawQuery: 'a',
+        },
+        namespace: 'pdf-detail',
+        fields: {
+          page: ['3'],
+          highlightTerms: ['a'],
+          snippet: ['snippet'],
+          query: ['a'],
+        },
+        path: '/drive/pdf/entity',
+      },
+      {
+        type: 'agent',
+        target: { type: 'agent', messageTurn: 0, author: 'user' },
+        namespace: 'agent-detail',
+        fields: {},
+        path: '/agent/entity',
+      },
+      {
+        type: 'call',
+        target: {
+          type: 'call_record',
+          callId: 'entity',
+          transcriptId: 'segment',
+        },
+        namespace: 'call-detail',
+        fields: { transcriptId: ['segment'] },
+        path: '/drive/call/entity',
+      },
+    ];
+
+    it.each(searchTargets)(
+      'routes a $type search target on first open and on reuse',
+      async ({ type, target, namespace, fields, path }) => {
+        const { manager, router, location, dispose } = ingressRouter('/search');
+        await router.settled();
+        const source = manager.getSplit(manager.splits()[0].id)!;
+        const sourceRoute = router.route(source.id);
+        manager.openWithSplit(
+          { type, id: 'entity' },
+          {
+            handle: source,
+            preferNewSplit: true,
+            search: searchLocationUpdates('entity', target),
+          }
+        );
+        await router.settled();
+        expect(manager.splits()).toHaveLength(2);
+        const owner = manager.splits().find((split) => split.id !== source.id)!;
+        expect(router.search(owner.id, namespace)).toMatchObject({
+          ...fields,
+          seek: [expect.any(String)],
+        });
+        expect(location.read().pathname).toContain(path);
+        const firstRequest = router.search(owner.id, namespace)?.seek;
+        manager.openWithSplit(
+          { type, id: 'entity' },
+          {
+            handle: source,
+            preferNewSplit: true,
+            search: searchLocationUpdates('entity', target),
+          }
+        );
+        await router.settled();
+        expect(manager.splits()).toHaveLength(2);
+        expect(router.route(source.id)).toEqual(sourceRoute);
+        expect(router.search(source.id, namespace)).toBeUndefined();
+        expect(router.search(owner.id, namespace)?.seek).not.toEqual(
+          firstRequest
+        );
+        expect(manager.activeSplitId()).toBe(owner.id);
+        router.dispose();
+        dispose();
+      }
+    );
+
+    it.each([false, true])(
+      'preserves native search navigation and list context (animated: %s)',
+      async (animated) => {
+        const { manager, router, dispose } = ingressRouter('/search', {
+          touch: true,
+        });
+        await router.settled();
+        const source = manager.getSplit(manager.splits()[0].id)!;
+        let swipe!: ReturnType<typeof createMobileSwipeLayout>;
+        const disposeSwipe = createRoot((cleanup) => {
+          swipe = createMobileSwipeLayout(manager);
+          return cleanup;
+        });
+        const animate = vi.fn();
+        if (animated) swipe.setForwardNavigationTrigger(animate);
+        manager.openWithSplit(
+          withListNavigationSource({ type: 'channel', id: 'entity' }, source),
+          {
+            handle: source,
+            referredFrom: 'search',
+            search: searchLocationUpdates('entity', {
+              type: 'channel',
+              messageId: 'message',
+            }),
+          }
+        );
+        await router.settled();
+        if (animated) {
+          expect(animate).toHaveBeenCalledOnce();
+          expect(manager.activeSplitId()).toBe(source.id);
+          swipe.completeNavigateForward();
+          await router.settled();
+        }
+        const detail = manager.activeSplit()!;
+        expect(detail.id).not.toBe(source.id);
+        expect(detail.referredFrom()).toBe('search');
+        expect(listNavigationSourceId(detail)).toBe(source.id);
+        expect(router.search(detail.id, 'channels')?.messageId).toEqual([
+          'message',
+        ]);
+        expect(swipe.canGoBack()).toBe(true);
+        swipe.swipeBack();
+        await router.settled();
+        expect(manager.activeSplitId()).toBe(source.id);
+        expect(router.route(source.id)?.matches[0].id).toBe('view-search');
+        router.dispose();
+        disposeSwipe();
+        dispose();
+      }
+    );
+
+    it('reuses an agent target inside Home', async () => {
+      const { manager, router, dispose } = ingressRouter(
+        '/home/agent/entity/~/search'
+      );
+      await router.settled();
+      const [owner, source] = manager.splits();
+      const ownerRoute = router.route(owner.id);
+      manager.openWithSplit(
+        { type: 'agent', id: 'entity' },
+        {
+          handle: manager.getSplit(source.id),
+          search: searchLocationUpdates('entity', {
+            type: 'agent',
+            messageTurn: 0,
+            author: 'agent',
+          }),
+        }
+      );
+      await router.settled();
+      expect(manager.splits()).toHaveLength(2);
+      expect(router.route(owner.id)).toEqual(ownerRoute);
+      expect(router.route(source.id)?.matches[0].id).toBe('view-search');
+      expect(router.search(owner.id, 'agent-detail')).toMatchObject({
+        messageTurn: ['0'],
+        author: ['agent'],
+      });
+      router.dispose();
+      dispose();
+    });
+
+    it('retargets an existing Home channel without replacing Home or its filters', async () => {
+      const { manager, router, dispose } = ingressRouter(
+        '/home/channel/entity/~/search?s0.channels.tab=recents&s0.channels.messageId=old&s0.channels.threadId=old-parent'
+      );
+      await router.settled();
+      const [owner, source] = manager.splits();
+      const ownerRoute = router.route(owner.id);
+      manager.openWithSplit(
+        { type: 'channel', id: 'entity' },
+        {
+          handle: manager.getSplit(source.id),
+          search: searchLocationUpdates('entity', {
+            type: 'channel',
+            messageId: 'new-root',
+          }),
+        }
+      );
+      await router.settled();
+      expect(router.route(owner.id)).toEqual(ownerRoute);
+      expect(router.search(owner.id, 'channels')).toEqual({
+        tab: ['recents'],
+        messageId: ['new-root'],
+        seek: [expect.any(String)],
+      });
+      expect(router.route(source.id)?.matches[0].id).toBe('view-search');
+      router.dispose();
+      dispose();
+    });
 
     it.each([
       { name: 'top-level message' },

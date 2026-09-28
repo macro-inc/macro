@@ -58,6 +58,7 @@ type LayoutTransition = {
 };
 
 type ApplyOptions<TSplitId> = {
+  open?: SplitNavigateOptions<TSplitId>['open'];
   entry: SplitRouterEntry;
   target: TSplitId | 'new-split';
   replace: boolean;
@@ -477,6 +478,7 @@ export function createSplitRouter<TSplitId>(
   const applyEntry = (config: ApplyOptions<TSplitId>): boolean => {
     const previousById = acceptedById();
     const result = layout.apply({
+      open: config.open,
       entry: config.entry,
       target: config.target,
       replace: config.replace,
@@ -872,6 +874,7 @@ export function createSplitRouter<TSplitId>(
         },
         apply: (entry) =>
           applyEntry({
+            open: navigateOptions.open,
             entry,
             target,
             replace: navigateOptions.replace ?? false,

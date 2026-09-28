@@ -669,7 +669,7 @@ without resetting its selections.
 
 ## Search
 
-Sidebar `Search` button → `/app/.../component/search` with a focused query box. Results
+Sidebar `Search` button → `/app/search` with a focused query box. Results
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
@@ -684,11 +684,20 @@ not saved into the view's desktop search or restored entry state. Home and
 top-level Tasks use this same overlay; embedded project task lists retain their
 own search while the dock is open.
 
-Clicking a channel-message result opens Chat at that exact message. A reply result
-opens its thread and targets the reply. Verify with an older result whose message
-is off screen at the bottom of the conversation, including when the channel has
-not been opened yet; the route keeps the message and thread target through the
-transition into Chat.
+Search snippets carry their target in the destination pane's route search. Channel
+messages open Chat at the message (replies open their parent thread); email snippets
+open the matching message, Markdown snippets the matching node, PDFs the matching
+page and highlighted text, agent snippets the matching turn/author, and call
+snippets the matching transcript segment. Plain rows keep their existing behavior:
+email rows open normally, while agent and call content results use their first hit.
+
+Verify both a cold open and a result whose entity is already open in another pane,
+including a Home or Drive detail: reuse keeps that pane's workspace and filters,
+leaves the search pane intact, and scrolls to the target. Scroll away and click the
+same snippet again to verify it re-targets. Repeat with Shift-click and Cmd/Ctrl-click
+(new split and new browser tab), and check Back/Forward restores the earlier target.
+Channel checks should include an older offscreen message, a reply, and then a root
+message to ensure the previous thread target is cleared.
 
 Agent-session results use the robot icon and show a highlighted transcript snippet.
 `Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.

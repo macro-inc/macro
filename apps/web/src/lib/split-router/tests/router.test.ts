@@ -135,6 +135,63 @@ const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve));
 afterEach(() => vi.restoreAllMocks());
 
 describe('split router', () => {
+  it('runs the host opening policy only after acceptance and ignores superseded requests', async () => {
+    const gate = Promise.withResolvers<void>();
+    const layout = createLayout();
+    const router = createSplitRouter({
+      layout,
+      routes,
+      location: createMemorySplitRouterLocation('/drive'),
+      middleware: [
+        ({ cause, to }) =>
+          cause === 'navigate' &&
+          routeParams(to.location.route).folderId === 'slow'
+            ? gate.promise
+            : undefined,
+      ],
+    });
+    await router.settled();
+    const source = layout.snapshot().entries[0].splitId;
+    const open = vi.fn((request: Parameters<Layout['open']>[0]) =>
+      layout.open({ ...request, target: 'new-split' })
+    );
+    router.navigate(source, '/drive/folder/slow', { open });
+    await settle();
+    expect(open).not.toHaveBeenCalled();
+    router.navigate(source, '/drive/folder/accepted', { open });
+    await settle();
+    expect(open).toHaveBeenCalledOnce();
+    expect(layout.snapshot().entries).toHaveLength(2);
+    expect(routeParams(router.route('split-2')!).folderId).toBe('accepted');
+    gate.resolve();
+    await router.settled();
+    expect(open).toHaveBeenCalledOnce();
+    router.dispose();
+  });
+
+  it('updates an existing claim owner without invoking the host opening policy', async () => {
+    const layout = createLayout();
+    const router = createSplitRouter({
+      layout,
+      routes,
+      location: createMemorySplitRouterLocation('/drive/~/drive/folder/owned'),
+    });
+    await router.settled();
+    const [source, owner] = layout.snapshot().entries;
+    const open = vi.fn(layout.open);
+    router.navigate(source.splitId, '/drive/folder/owned', {
+      open,
+      search: { drive: { query: ['new target'] } },
+    });
+    await router.settled();
+    expect(open).not.toHaveBeenCalled();
+    expect(router.search(owner.splitId, 'drive')).toEqual({
+      query: ['new target'],
+    });
+    expect(router.route(source.splitId)?.matches).toHaveLength(1);
+    router.dispose();
+  });
+
   it('becomes ready when a synchronous layout change supersedes async initialization', async () => {
     const layout = createLayout();
     let release!: () => void;

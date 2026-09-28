@@ -19,11 +19,12 @@ import { blockHandleSignal } from '@core/signal/load';
 import type { NotificationSource } from '@notifications/notification-source';
 import { useSearchParams } from '@solidjs/router';
 import { EmptyStatePanel } from '@ui';
-import { createSignal, Show, useContext } from 'solid-js';
+import { createEffect, createSignal, on, Show, useContext } from 'solid-js';
 import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { forgetPendingSession } from '../context/pending-session';
 import { parseAgentMessageTarget } from '../core/search-location';
+import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
 import { AgentComposer } from './AgentComposer';
 import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
@@ -36,8 +37,18 @@ function AgentBlockContent(props: {
   notificationSource: NotificationSource;
 }) {
   const [params] = useSearchParams();
+  const routeTarget = createAgentRouteTarget();
   const [searchTarget, setSearchTarget] = createSignal(
-    parseAgentMessageTarget(params)
+    routeTarget() ?? parseAgentMessageTarget(params)
+  );
+  createEffect(
+    on(
+      routeTarget,
+      (target) => {
+        if (target) setSearchTarget(target);
+      },
+      { defer: true }
+    )
   );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: (params: Record<string, unknown>) => {

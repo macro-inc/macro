@@ -75,5 +75,6 @@ export interface EmailThreadHost {
   isActive?: Accessor<boolean>;
   registerKeyboard?: (handlers: EmailThreadKeyboardHandlers) => void;
   targetMessageId?: Accessor<string | undefined>;
+  targetRequest?: Accessor<string | undefined>;
   focusContainer?: () => void;
 }

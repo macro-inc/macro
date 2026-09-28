@@ -66,6 +66,7 @@ export type PdfDocumentProps = {
   portalScope?: PortalScope;
   permissions: PdfDocumentPermissions;
   locationParams?: LocationSearchParams;
+  navigationTarget?: LocationBlockParams;
   registerMethods?: (methods: Partial<PdfDocumentMethods>) => void;
   children: JSX.Element;
 };
@@ -113,6 +114,13 @@ function PdfDocumentBehavior(props: PdfDocumentProps) {
   const goToInitialLocation = useGoToLinkLocation();
   const goToLocationFromParams = useGoToLinkLocationFromParams();
   let imperativeNavigationQueued = false;
+
+  createEffect(() => {
+    const target = props.navigationTarget;
+    if (!target) return;
+    imperativeNavigationQueued = true;
+    setPendingLocationParams({ ...target });
+  });
 
   props.registerMethods?.({
     goToLocationFromParams: async (params) => {

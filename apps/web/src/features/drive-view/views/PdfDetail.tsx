@@ -8,6 +8,7 @@ import {
 } from '@block-pdf/component/PdfSplitToolbar';
 import { Tabs } from '@block-pdf/component/Tabs';
 import { usePdfDocument } from '@block-pdf/context/pdf-document-context';
+import { createPdfRouteTarget } from '@block-pdf/primitives/create-pdf-route-target';
 import {
   type LocationSearchParams,
   URL_PARAMS,
@@ -132,6 +133,7 @@ export function PdfDetailDocument(props: {
   children?: (context: PdfDetailContext) => JSX.Element;
 }) {
   const [searchParams] = useSearchParams();
+  const target = createPdfRouteTarget(() => props.documentId);
   const permissions = () => getPermissions(props.data.userAccessLevel);
 
   return (
@@ -156,6 +158,7 @@ export function PdfDetailDocument(props: {
           isOwner: props.data.userAccessLevel === 'owner',
         }}
         locationParams={getLocationParams(searchParams)}
+        navigationTarget={target()}
       >
         <PdfDetailContent data={props.data} children={props.children} />
       </PdfDocument>

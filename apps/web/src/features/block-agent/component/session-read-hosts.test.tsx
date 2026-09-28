@@ -60,6 +60,9 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 vi.mock('@core/block', () => ({ useBlockId: () => 'placeholder-session' }));
 vi.mock('@core/orchestrator', () => ({ createMethodRegistration: vi.fn() }));
 vi.mock('@core/signal/load', () => ({ blockHandleSignal: { get: vi.fn() } }));
+vi.mock('../primitives/create-agent-route-target', () => ({
+  createAgentRouteTarget: () => () => undefined,
+}));
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'owner' }));
 vi.mock('@core/util/url', () => ({ openExternalUrl: vi.fn() }));

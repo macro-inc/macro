@@ -3,6 +3,8 @@ import type {
   EmailThreadSource,
 } from '@app/features/email-thread/context/email-thread-context';
 import { URL_PARAMS } from '@app/features/email-thread/core/location';
+import { emailDetailSearch } from '@app/features/email-view/email-route';
+import { createSearchParams } from '@app/lib/split-router';
 import {
   useCanAutofocusSplitContent,
   useSplitPanel,
@@ -17,7 +19,13 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useSearchParams } from '@solidjs/router';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import { TopBar } from './component/TopBar';
 import {
   EmailThreadHostView,
@@ -33,9 +41,11 @@ export function EmailBlockAdapter(props: {
   threadTransport: EmailThreadHostViewProps['threadTransport'];
 }) {
   const [params] = useSearchParams();
+  const [routeSearch] = createSearchParams(emailDetailSearch);
   const rawTarget = params[URL_PARAMS.messageId];
   const [targetMessageId, setTargetMessageId] = createSignal(
-    Array.isArray(rawTarget) ? rawTarget[0] : rawTarget
+    routeSearch.messageId ||
+      (Array.isArray(rawTarget) ? rawTarget[0] : rawTarget)
   );
   const split = useSplitPanel();
   const listNavigation = useEmailListNavigation(props.threadId);
@@ -44,6 +54,16 @@ export function EmailBlockAdapter(props: {
   const hotkeyScope = blockHotkeyScopeSignal.get;
   const focusContainer = () => blockElement()?.focus({ preventScroll: true });
   let targetTimer: ReturnType<typeof setTimeout> | undefined;
+  createEffect(
+    on(
+      () => [routeSearch.messageId, routeSearch.seek],
+      () => {
+        clearTimeout(targetTimer);
+        setTargetMessageId(routeSearch.messageId || undefined);
+      },
+      { defer: true }
+    )
+  );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: (params: Record<string, unknown>) => {
       const id = params[URL_PARAMS.messageId];
@@ -63,6 +83,7 @@ export function EmailBlockAdapter(props: {
   const host: EmailThreadHost = {
     listNavigation,
     targetMessageId,
+    targetRequest: () => routeSearch.seek,
     focusContainer,
     isActive: () => split?.isPanelActive() !== false,
     registerKeyboard: (handlers) => {

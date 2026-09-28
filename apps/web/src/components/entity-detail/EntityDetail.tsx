@@ -66,7 +66,7 @@ export type EntityDetailContext =
 export type EntityDetailProps = {
   target: EntityDetailTarget;
   previewHeaderLeading?: JSX.Element;
-  navigationRequest?: number;
+  navigationRequest?: number | string;
   children?: (context: EntityDetailContext) => JSX.Element;
 };
 
