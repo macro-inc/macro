@@ -1,5 +1,5 @@
 use crate::model::types::Model;
-use rig_core::{client::CompletionClient, providers::anthropic};
+use rig_core::{client::CompletionClient, http_client::HttpClientExt, providers::anthropic};
 use std::sync::Arc;
 
 /// A Claude model bound to the native Anthropic client that serves it.
@@ -7,14 +7,14 @@ use std::sync::Arc;
 /// Carries the parsed [`Model`] id and a shared client. Which provider an id
 /// belongs to is decided by routing (the `anthropic/…` segment), so there is no
 /// id classification here.
-pub struct AnthropicModel<'a> {
+pub struct AnthropicModel<'a, H = rig_core::http_client::ReqwestClient> {
     model: Model<'a>,
-    client: Arc<anthropic::Client>,
+    client: Arc<anthropic::Client<H>>,
 }
 
-impl<'a> AnthropicModel<'a> {
+impl<'a, H: HttpClientExt + Clone + Default + 'static> AnthropicModel<'a, H> {
     /// Bind `model` to the client that serves it.
-    pub fn new(model: Model<'a>, client: Arc<anthropic::Client>) -> Self {
+    pub fn new(model: Model<'a>, client: Arc<anthropic::Client<H>>) -> Self {
         Self { model, client }
     }
 
@@ -25,7 +25,7 @@ impl<'a> AnthropicModel<'a> {
 
     /// The rig completion model for this id. The id is passed verbatim to the
     /// Anthropic API.
-    pub fn completion(&self) -> anthropic::completion::CompletionModel {
+    pub fn completion(&self) -> anthropic::completion::CompletionModel<H> {
         self.client.completion_model(self.model.name().to_string())
     }
 

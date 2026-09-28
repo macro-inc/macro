@@ -5,6 +5,7 @@
 #[cfg(test)]
 mod test;
 
+use crate::model::metering::MeteringContext;
 use crate::model::router::{ModelRouter, RoutedModel};
 use crate::telemetry::{ChatSpanHook, GenAiContext, TracedModel};
 use ai_usage::{UsageContext, UsageRecorder};
@@ -23,8 +24,9 @@ const ONE_SHOT_MAX_TOKENS: u64 = 16_000;
 /// summarization. `model` is anything stringifiable to an api id — an
 /// [`AgentModel`](crate::AgentModel) or a raw string from the frontend.
 ///
-/// Token usage is recorded against `ctx` via `recorder` once the completion
-/// returns. Recording is best-effort and never affects the result.
+/// Aggregate analytics are recorded against `ctx` on success. Activated traffic
+/// must run inside a [`MeteringContext::scope`]; each HTTP attempt is authorized
+/// and its evidence persisted before SDK or structured-output parsing.
 #[tracing::instrument(skip(model, system_prompt, user_message, recorder, ctx), err)]
 pub async fn complete<M: ToString>(
     model: M,
@@ -33,6 +35,7 @@ pub async fn complete<M: ToString>(
     recorder: &dyn UsageRecorder,
     ctx: UsageContext,
 ) -> anyhow::Result<String> {
+    MeteringContext::require_usage(&ctx)?;
     let model = model.to_string();
     let routed = ModelRouter::shared()?.route_or_default(&model);
     let telemetry = telemetry_for(&ctx, &routed);
@@ -90,6 +93,7 @@ pub async fn complete_with_history<M: ToString>(
     recorder: &dyn UsageRecorder,
     ctx: UsageContext,
 ) -> anyhow::Result<String> {
+    MeteringContext::require_usage(&ctx)?;
     let model = model.to_string();
     let routed = ModelRouter::shared()?.route_or_default(&model);
     let telemetry = telemetry_for(&ctx, &routed);
@@ -187,7 +191,7 @@ fn telemetry_for(ctx: &UsageContext, routed: &RoutedModel<'_>) -> GenAiContext {
     telemetry
 }
 
-/// Record the usage of a one-shot completion.
+/// Record aggregate analytics only, never financial evidence.
 fn record(
     recorder: &dyn UsageRecorder,
     ctx: UsageContext,

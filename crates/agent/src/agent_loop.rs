@@ -2,6 +2,7 @@
 use crate::error::AgentError;
 use crate::hook::{BridgeInputs, RegisterFn, ToolRouter, UserToolFinisher};
 use crate::model::PredefinedModel;
+use crate::model::metering::MeteringContext;
 use crate::model::router::{ModelRouter, ProviderAgent};
 use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
@@ -326,6 +327,7 @@ impl AgentLoop {
             model: self.model.clone(),
             request_context,
             telemetry,
+            financial_context: MeteringContext::current(),
         }
     }
 
@@ -372,6 +374,7 @@ pub struct Session {
     model: String,
     request_context: RequestContext,
     telemetry: GenAiContext,
+    financial_context: Option<MeteringContext>,
 }
 
 impl Session {
@@ -421,8 +424,11 @@ impl Session {
             )
         };
         let telemetry = self.telemetry.clone();
-        let result = self
-            .send_message_in(messages)
+        // An explicit per-turn scope wins over the construction-time scope
+        // (for example, a session crossing usage-policy activation at renewal).
+        let financial_context =
+            MeteringContext::current().or_else(|| self.financial_context.clone());
+        let result = MeteringContext::carry(financial_context, self.send_message_in(messages))
             .instrument(span.clone())
             .await;
         if let Err(error) = &result {
@@ -441,6 +447,8 @@ impl Session {
         &mut self,
         messages: Vec<Message>,
     ) -> Result<ChatCompletionStream<'_>, AgentError> {
+        MeteringContext::require_usage(&self.usage_ctx)
+            .map_err(|error| AgentError::Other(error.into()))?;
         self.history = messages;
 
         let Some((prompt, history)) = self.history.split_last() else {

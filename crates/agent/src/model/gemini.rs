@@ -1,5 +1,5 @@
 use crate::model::types::Model;
-use rig_core::{client::CompletionClient, providers::gemini};
+use rig_core::{client::CompletionClient, http_client::HttpClientExt, providers::gemini};
 use std::sync::Arc;
 
 /// A Gemini model bound to the native GenerateContent client that serves it.
@@ -8,14 +8,14 @@ use std::sync::Arc;
 /// turn. The OpenAI-compatible Chat Completions adapter drops that field, so
 /// Google ids route here rather than through
 /// [`super::openai::OpenAiChatCompletionsModel`].
-pub struct GeminiModel<'a> {
+pub struct GeminiModel<'a, H = rig_core::http_client::ReqwestClient> {
     model: Model<'a>,
-    client: Arc<gemini::Client>,
+    client: Arc<gemini::Client<H>>,
 }
 
-impl<'a> GeminiModel<'a> {
+impl<'a, H: HttpClientExt + Clone + 'static> GeminiModel<'a, H> {
     /// Bind `model` to the client that serves it.
-    pub fn new(model: Model<'a>, client: Arc<gemini::Client>) -> Self {
+    pub fn new(model: Model<'a>, client: Arc<gemini::Client<H>>) -> Self {
         Self { model, client }
     }
 
@@ -26,7 +26,7 @@ impl<'a> GeminiModel<'a> {
 
     /// The rig completion model for this id. The id is passed verbatim to the
     /// Gemini API.
-    pub fn completion(&self) -> gemini::completion::CompletionModel {
+    pub fn completion(&self) -> gemini::completion::CompletionModel<H> {
         self.client.completion_model(self.model.name().to_string())
     }
 
