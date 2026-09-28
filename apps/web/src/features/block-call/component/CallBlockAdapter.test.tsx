@@ -1,0 +1,59 @@
+import { cleanup, render } from '@solidjs/testing-library';
+import { createStore } from 'solid-js/store';
+import { afterEach, expect, it, vi } from 'vitest';
+import { CallBlockAdapter } from './CallBlockAdapter';
+
+const state = vi.hoisted(() => ({
+  search: {} as { transcriptId: string; seek: string },
+}));
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
+  createSearchParams: () => [state.search],
+}));
+vi.mock('@app/signal/splitLayout', () => ({
+  globalSplitManager: () => undefined,
+}));
+vi.mock('@core/block', () => ({ useBlockId: () => 'call' }));
+vi.mock('@core/orchestrator', () => ({ createMethodRegistration: () => {} }));
+vi.mock('@core/signal/load', () => ({
+  blockHandleSignal: { get: () => undefined },
+}));
+vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
+vi.mock('@queries/call/call', () => ({
+  useCallRecordQuery: () => ({ data: {} }),
+}));
+vi.mock('@core/component/DocumentBlockContainer', () => ({
+  DocumentBlockContainer: (props: { children: unknown }) => props.children,
+}));
+vi.mock('@components/app/side-panel', () => ({
+  SidePanel: { Layout: (props: { children: unknown }) => props.children },
+}));
+vi.mock('./CallRecording/CallRecordingSplitHeader', () => ({
+  CallRecordingSplitHeader: () => null,
+}));
+vi.mock('./sidepanel/CallSidePanelSections', () => ({
+  CallSidePanelSections: () => null,
+}));
+vi.mock('./CallRecording/CallRecordingBody', () => ({
+  CallRecordingBody: (props: {
+    transcriptTarget?: { transcriptId: string; gen: number };
+  }) => <output>{JSON.stringify(props.transcriptTarget)}</output>,
+}));
+afterEach(cleanup);
+
+it('delivers cold, changed and repeated transcript requests to the legacy call body', () => {
+  const [search, setSearch] = createStore({
+    transcriptId: 'segment',
+    seek: 'first',
+  });
+  state.search = search;
+  const view = render(() => <CallBlockAdapter />);
+  const target = () =>
+    JSON.parse(view.container.querySelector('output')!.textContent!);
+  expect(target()).toEqual({ transcriptId: 'segment', gen: 0 });
+  setSearch('seek', 'repeat');
+  expect(target()).toEqual({ transcriptId: 'segment', gen: 1 });
+  setSearch({ transcriptId: 'another', seek: 'next' });
+  expect(target().transcriptId).toBe('another');
+  expect(target().gen).toBeGreaterThan(1);
+});

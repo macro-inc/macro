@@ -1,3 +1,4 @@
+import { createSearchParams } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   type CallBlockProps,
@@ -11,7 +12,8 @@ import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCallRecordQuery } from '@queries/call/call';
 import { useSearchParams } from '@solidjs/router';
-import { createSignal, Show } from 'solid-js';
+import { createEffect, createSignal, on, Show } from 'solid-js';
+import { callDetailSearch } from '../call-route';
 import { CallRecordingBody } from './CallRecording/CallRecordingBody';
 import { CallRecordingSplitHeader } from './CallRecording/CallRecordingSplitHeader';
 import { CallSidePanelSections } from './sidepanel/CallSidePanelSections';
@@ -21,8 +23,10 @@ export function CallBlockAdapter(props: CallBlockProps) {
   const callRecord = useCallRecordQuery(() => callId);
   const blockHandle = blockHandleSignal.get;
   const [searchParams] = useSearchParams();
+  const [routeSearch] = createSearchParams(callDetailSearch);
 
   const initialTranscriptId = ((): string | undefined => {
+    if (routeSearch.transcriptId) return routeSearch.transcriptId;
     const fromProps = props[URL_PARAMS.transcriptId];
     if (fromProps) return fromProps;
     const isSingleSplit = globalSplitManager()?.splits().length === 1;
@@ -36,6 +40,20 @@ export function CallBlockAdapter(props: CallBlockProps) {
     initialTranscriptId
       ? { transcriptId: initialTranscriptId, gen: 0 }
       : undefined
+  );
+
+  createEffect(
+    on(
+      () => [routeSearch.transcriptId, routeSearch.seek],
+      () => {
+        if (!routeSearch.transcriptId) return;
+        setTranscriptTarget((previous) => ({
+          transcriptId: routeSearch.transcriptId,
+          gen: (previous?.gen ?? 0) + 1,
+        }));
+      },
+      { defer: true }
+    )
   );
 
   createMethodRegistration(blockHandle, {
