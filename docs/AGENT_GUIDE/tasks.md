@@ -140,6 +140,20 @@ it during that delay should not let the earlier save close the new picker.
 A failed save uses the mutation's rollback/error handling; it must not reopen
 the picker or trigger a success refresh.
 
+In the task list, setting an **unset Priority to Urgent** also updates before the
+response, including when no priority assignment exists yet. Verify another task's
+unset priority stays unchanged. On success the temporary assignment is replaced
+by the server assignment without a blank cell or duplicate property; failure
+restores the unset cell. Bulk property edits install every optimistic layer before
+the first HTTP response, while network requests retain durable queue ordering.
+
+A self-contained browser regression uses the production list cell, mutation hooks,
+and worker/WASM cache with delayed fixture HTTP (no hosted task edits). From
+`apps/web`, run `just build-cache-wasm`, then
+`bunx playwright test -c src/features/tasks-view/browser-test/playwright.config.ts`.
+The harness defaults to port 3004; `TASK_PROPERTY_TEST_PORT` can select a verified
+same-worktree dev server.
+
 For multi-tab status checks, open the same task in several browser tabs
 and change status repeatedly in the visible tab. Hidden tabs defer cache-change
 refreshes for Quick Access searches, its channel list, and history, plus
