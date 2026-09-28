@@ -25,7 +25,6 @@ import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelDetailView } from './components/ChannelDetailView';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
-import { createMobileChannelSearchSource } from './mobile-search-source';
 import {
   type ChannelsSources,
   deduplicateChannels,
@@ -33,6 +32,7 @@ import {
   useChannelByIdQuery,
   useChannelsSources,
 } from './queries';
+import { createChannelSearchSource } from './queries/channel-search-source';
 
 const ChannelSourcesContext =
   createContext<ReturnType<typeof useChannelsSources>>();
@@ -49,20 +49,39 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
   const panel = useSplitPanelOrThrow();
   const { state, setMobileTab } = useChannelsView();
   const mobileSearchText = useMobileSearchText(() => '', panel.handle.isActive);
-  const mobileSearchSource = createMobileChannelSearchSource({
+  const mobileSearchSource = createChannelSearchSource({
     text: mobileSearchText,
     scope: () => state.mobileTab,
     source: () => props.sources[state.mobileTab],
   });
   return (
     <ChannelsMobileView
-      source={
-        mobileSearchText().trim()
-          ? mobileSearchSource
-          : props.sources[state.mobileTab]
-      }
+      source={mobileSearchSource}
       tab={state.mobileTab}
       onTabChange={setMobileTab}
+    />
+  );
+}
+
+function DesktopChannelsRail(props: {
+  sources: ChannelsSources;
+  searchOpen: boolean;
+  onSearchOpenChange: (open: boolean) => void;
+}) {
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const searchSource = createChannelSearchSource({
+    text: searchQuery,
+    enabled: () => props.searchOpen,
+    scope: () => 'search',
+    source: () => props.sources.search,
+  });
+  return (
+    <ChannelsRail
+      sources={{ ...props.sources, search: searchSource }}
+      searchQuery={searchQuery()}
+      onSearchQueryChange={setSearchQuery}
+      searchOpen={props.searchOpen}
+      onSearchOpenChange={props.onSearchOpenChange}
     />
   );
 }
@@ -104,11 +123,20 @@ function ChannelsViewRoot() {
                     resizable
                   >
                     <ViewShell.Aside onWidthChangeEnd={setAsideWidth}>
-                      <ChannelsRail
-                        sources={sources}
-                        searchOpen={railSearchOpen()}
-                        onSearchOpenChange={setRailSearchOpen}
-                      />
+                      <Suspense
+                        fallback={
+                          <SpinnerIcon
+                            aria-label="Loading channels"
+                            class="size-5 animate-spin"
+                          />
+                        }
+                      >
+                        <DesktopChannelsRail
+                          sources={sources}
+                          searchOpen={railSearchOpen()}
+                          onSearchOpenChange={setRailSearchOpen}
+                        />
+                      </Suspense>
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
                       <ChannelSourcesContext.Provider value={sources}>

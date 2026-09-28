@@ -85,6 +85,10 @@ vi.mock('./components/ChannelsMobileView', () => ({
   ChannelsMobileView: () => null,
 }));
 vi.mock('./components/rail/ChannelsRail', () => ({ ChannelsRail: () => null }));
+vi.mock('./queries/channel-search-source', () => ({
+  createChannelSearchSource: (options: { source: () => unknown }) =>
+    options.source(),
+}));
 vi.mock('./channels-view-context', () => ({
   ChannelsViewProvider: mocks.pass,
   useChannelsView: () => ({
