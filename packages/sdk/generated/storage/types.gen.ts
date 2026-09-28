@@ -6243,6 +6243,24 @@ export type GetUserHistoryResponse = {
 };
 
 /**
+ * An author among the visible GitHub pull requests.
+ */
+export type GithubAuthorFacet = {
+    /**
+     * Number of visible pull requests the author opened.
+     */
+    count: number;
+    /**
+     * The author's numeric GitHub user id.
+     */
+    githubUserId: string;
+    /**
+     * The author's most recently synced GitHub login, when known.
+     */
+    login?: string | null;
+};
+
+/**
  * Display-ready data for a GitHub pull request associated with a task.
  */
 export type GithubPullRequest = {
@@ -6398,6 +6416,21 @@ export type GithubPullRequestComment = {
 };
 
 /**
+ * Repositories and authors among the GitHub pull requests a caller can see, each with the
+ * number of pull requests it covers.
+ */
+export type GithubPullRequestFacets = {
+    /**
+     * Authors, most pull requests first.
+     */
+    authors: Array<GithubAuthorFacet>;
+    /**
+     * Repositories, most pull requests first.
+     */
+    repositories: Array<GithubRepositoryFacet>;
+};
+
+/**
  * Response containing all GitHub pull requests associated with a task.
  */
 export type GithubPullRequestsResponse = {
@@ -6405,6 +6438,24 @@ export type GithubPullRequestsResponse = {
      * Parsed pull requests, in repository query order.
      */
     pullRequests: Array<GithubPullRequest>;
+};
+
+/**
+ * A repository among the visible GitHub pull requests.
+ */
+export type GithubRepositoryFacet = {
+    /**
+     * Number of visible pull requests in the repository.
+     */
+    count: number;
+    /**
+     * The repository's most recently synced name, as `owner/repo`.
+     */
+    repository: string;
+    /**
+     * The numeric GitHub repository id, which survives renames and transfers.
+     */
+    repositoryId: string;
 };
 
 /**
@@ -15272,6 +15323,27 @@ export type InstallSyncErrors = {
      */
     401: unknown;
 };
+
+export type GetGithubPullRequestFacetsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/facets';
+};
+
+export type GetGithubPullRequestFacetsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestFacetsError = GetGithubPullRequestFacetsErrors[keyof GetGithubPullRequestFacetsErrors];
+
+export type GetGithubPullRequestFacetsResponses = {
+    200: GithubPullRequestFacets;
+};
+
+export type GetGithubPullRequestFacetsResponse = GetGithubPullRequestFacetsResponses[keyof GetGithubPullRequestFacetsResponses];
 
 export type CreateHarnessPairingData = {
     body: CreatePairingRequest;

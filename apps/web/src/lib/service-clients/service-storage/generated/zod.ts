@@ -9807,6 +9807,57 @@ export const getForeignEntityResponse = zod
   .describe('A persisted mapping to an entity owned by an external system.');
 
 /**
+ * @summary List the repositories and authors among the GitHub pull requests visible to the caller.
+ */
+export const getGithubPullRequestFacetsResponse = zod
+  .object({
+    authors: zod
+      .array(
+        zod
+          .object({
+            count: zod
+              .number()
+              .describe('Number of visible pull requests the author opened.'),
+            githubUserId: zod
+              .string()
+              .describe("The author's numeric GitHub user id."),
+            login: zod
+              .string()
+              .nullish()
+              .describe(
+                "The author's most recently synced GitHub login, when known."
+              ),
+          })
+          .describe('An author among the visible GitHub pull requests.')
+      )
+      .describe('Authors, most pull requests first.'),
+    repositories: zod
+      .array(
+        zod
+          .object({
+            count: zod
+              .number()
+              .describe('Number of visible pull requests in the repository.'),
+            repository: zod
+              .string()
+              .describe(
+                "The repository's most recently synced name, as `owner\/repo`."
+              ),
+            repositoryId: zod
+              .string()
+              .describe(
+                'The numeric GitHub repository id, which survives renames and transfers.'
+              ),
+          })
+          .describe('A repository among the visible GitHub pull requests.')
+      )
+      .describe('Repositories, most pull requests first.'),
+  })
+  .describe(
+    'Repositories and authors among the GitHub pull requests a caller can see, each with the\nnumber of pull requests it covers.'
+  );
+
+/**
  * Unauthenticated by design: the daemon has no credential yet - obtaining one
 is the point. The pairing releases nothing until a signed-in user approves
 it, and creation is throttled in the domain service.
