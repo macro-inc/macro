@@ -1,5 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableChannelInvites } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -16,14 +14,12 @@ export function ChannelInviteButton(props: {
   channelName: string;
   channelType?: string;
 }) {
-  const flag = useFeatureFlag(enableChannelInvites);
   const userId = useUserId();
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const [open, setOpen] = createSignal(false);
   const participants = () =>
     participantsQuery.isSuccess ? (participantsQuery.data ?? []) : [];
   const canInvite = () =>
-    flag().enabled &&
     (props.channelType === 'team' || props.channelType === 'private') &&
     participants().some((participant) => participant.user_id === userId());
 
@@ -31,7 +27,7 @@ export function ChannelInviteButton(props: {
     <Show when={canInvite()}>
       <Button
         // On touch the button sits inside a floating header island, which
-        // already draws the pill; an outline border inside it doubles up.
+        // already draws the glass pill; an outline border inside it doubles up.
         variant={isTouchDevice() ? 'ghost' : 'outline'}
         size="sm"
         label="Invite people"

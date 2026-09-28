@@ -255,8 +255,8 @@ function NewTop(props: { channelId: string }) {
       </SplitTitleFileMenu>
       <SplitHeaderRight>
         {/* On mobile the split header is pointer-events-none; only islands
-            take taps. `empty:hidden` drops the pill when the button is not
-            rendered (DMs, non-participants, flag off). */}
+            (glass pills) take taps. `empty:hidden` drops the pill when the
+            button is not offered (DMs, non-participants). */}
         <HeaderIsland class="px-1">
           <ChannelInviteButton
             channelId={props.channelId}

@@ -655,20 +655,20 @@ shows Connecting and waits for that request before registering again.
 ## Channel tabs
 
 Private and team channels show an `Invite` button on the right of both the
-split header and the inline conversation header for current participants. It is
-behind the `enable-channel-invites` flag (on in dev; PostHog elsewhere; override
-with `VITE_ENABLE_CHANNEL_INVITES`), so it is absent when the flag is off. On
-mobile it renders as its own floating pill next to the `Call` pill. Click it to
-open `Invite people to <channel>` using the standard dialog at the
-top of the viewport, matching the create menu and create-channel dialog (a
-drawer on mobile). Choose `Add all members of <team>` to add current teammates
-once, or `Add specific people` to search teammates and enter external email
-addresses using the same recipient picker as channel creation. Existing channel
-members are excluded. `Add` submits; Cancel, Close, or Escape dismisses without
-sending. Failed additions preserve the selection for retry. The team option is
-disabled when no team is available. This action does not enable team auto-join.
-Check opening and reopening, switching options, keyboard recipient selection,
-external email chips, cancellation, and focus restoration before sending invites.
+split header and the inline conversation header for current participants. On
+mobile it renders as its own floating glass pill next to the `Call` pill (the
+split header is `pointer-events-none`, so the button must sit in a
+`HeaderIsland` to be tappable). Click it to open `Invite people to <channel>`
+using the standard dialog at the top of the viewport, matching the create menu
+and create-channel dialog (a drawer on mobile). Choose `Add all members of
+<team>` to add current teammates once, or `Add specific people` to search
+teammates and enter external email addresses using the same recipient picker as
+channel creation. Existing channel members are excluded. `Add` submits; Cancel,
+Close, or Escape dismisses without sending. Failed additions preserve the
+selection for retry. The team option is disabled when no team is available.
+This action does not enable team auto-join. Check opening and reopening,
+switching options, keyboard recipient selection, external email chips,
+cancellation, and focus restoration before sending invites.
 
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Calls` / `Participants`,
 plus `Ask Macro` and `Call` buttons. The `Calls` tab lists recordings for that channel
