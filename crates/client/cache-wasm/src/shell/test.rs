@@ -9,6 +9,28 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
+mod mail_projection;
+
+#[wasm_bindgen_test]
+fn build_info_reports_compiled_versions_without_opening_storage() {
+    let info: serde_json::Value =
+        serde_wasm_bindgen::from_value(cache_build_info().unwrap()).unwrap();
+    assert_eq!(info["packageVersion"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(info["schemaHash"], schema_hash());
+    assert_eq!(
+        info["schemaCompatibilityEpoch"],
+        cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH
+    );
+    assert_eq!(
+        info["formatVersion"],
+        cache_core::codec::CACHE_FORMAT_VERSION
+    );
+    assert_eq!(
+        info["storageSchemaVersion"],
+        cache_turso::STORAGE_SCHEMA_VERSION
+    );
+}
+
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
     user {
         id
@@ -67,9 +89,11 @@ const SOUP_WITH_PROJECTION_QUERY: &str = r#"query SoupWithProjection($input: Sou
         soup(input: $input) {
             nextCursor
             items {
+                properties { id propertyDefinitionId value { __typename ... on GraphqlSelectOptionPropertyValue { optionIds } } }
                 __typename
                 id
                 cacheProjection @cacheOnly
+                notifications { id entityId entityType state }
                 displayName
                 ... on GraphqlSoupDocument {
                     ownerId
@@ -90,9 +114,11 @@ const SOUP_BACKFILL_WITH_PROJECTION_QUERY: &str = r#"query SoupBackfill($input: 
         soup(input: $input) {
             nextCursor
             items {
+                properties { id propertyDefinitionId value { __typename ... on GraphqlSelectOptionPropertyValue { optionIds } } }
                 __typename
                 id
                 cacheProjection @cacheOnly
+                notifications { id entityId entityType state }
                 displayName
                 ... on GraphqlSoupDocument {
                     ownerId
@@ -112,9 +138,11 @@ const SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION: &str = r#"subscription SoupUpda
         __typename
         ... on SoupUpdated {
             item {
+                properties { id propertyDefinitionId value { __typename ... on GraphqlSelectOptionPropertyValue { optionIds } } }
                 __typename
                 id
                 cacheProjection @cacheOnly
+                notifications { id entityId entityType state }
                 displayName
                 ... on GraphqlSoupDocument {
                     ownerId
@@ -179,6 +207,59 @@ fn from_js<T: DeserializeOwned>(value: JsValue) -> T {
 
 async fn resolved(promise: js_sys::Promise) -> JsValue {
     JsFuture::from(promise).await.expect("promise resolves")
+}
+
+fn empty_js_write_result() -> JsWriteResult {
+    JsWriteResult {
+        revision: "0".to_string(),
+        revision_advanced: false,
+        changed: Vec::new(),
+        affected_ops: Vec::new(),
+        reset: false,
+        revalidations: Vec::new(),
+    }
+}
+
+#[wasm_bindgen_test]
+fn tagged_wire_enum_fields_are_camel_case() {
+    assert_eq!(
+        serde_json::to_value(JsMutationUpsertKind::ReplacedPending {
+            removed_transaction_id: "1".to_string(),
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "replaced-pending", "removedTransactionId": "1"})
+    );
+    assert_eq!(
+        serde_json::to_value(JsMutationUpsertKind::AppendedAfterActive {
+            active_transaction_id: "2".to_string(),
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "appended-after-active", "activeTransactionId": "2"})
+    );
+    assert_eq!(
+        serde_json::to_value(JsDeferOptimisticWriteResult::DiscardedSuperseded {
+            replacement_transaction_id: "3".to_string(),
+            result: empty_js_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "3"
+    );
+    assert_eq!(
+        serde_json::to_value(JsCommitOptimisticWriteResult::CommittedSuperseded {
+            replacement_transaction_id: "4".to_string(),
+            result: empty_js_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "4"
+    );
+    assert_eq!(
+        serde_json::to_value(JsRollbackOptimisticWriteResult::DiscardedSuperseded {
+            replacement_transaction_id: "5".to_string(),
+            result: empty_js_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "5"
+    );
 }
 
 async fn assert_closed(promise: js_sys::Promise) {
@@ -252,10 +333,17 @@ fn mutation_variables() -> serde_json::Value {
     }})
 }
 
-fn v2_document_supplement(document_id: &str, is_email_attachment: bool) -> String {
+fn v3_document_supplement(
+    document_id: &str,
+    is_email_attachment: bool,
+    is_important: bool,
+    status_option_ids: Vec<uuid::Uuid>,
+) -> String {
     encode_cache_projection_supplement(&SoupCacheProjectionSupplement::document(
         RecordKey::new(format!("GraphqlSoupDocument:{document_id}")).unwrap(),
         is_email_attachment,
+        is_important,
+        status_option_ids,
     ))
     .unwrap()
 }
@@ -264,6 +352,26 @@ fn projected_document_item(
     document_id: &str,
     owner: &str,
     is_email_attachment: bool,
+    sub_type: Option<&str>,
+    updated_at: i64,
+) -> serde_json::Value {
+    projected_document_item_with_facts(
+        document_id,
+        owner,
+        is_email_attachment,
+        true,
+        Vec::new(),
+        sub_type,
+        updated_at,
+    )
+}
+
+fn projected_document_item_with_facts(
+    document_id: &str,
+    owner: &str,
+    is_email_attachment: bool,
+    is_important: bool,
+    status_option_ids: Vec<uuid::Uuid>,
     sub_type: Option<&str>,
     updated_at: i64,
 ) -> serde_json::Value {
@@ -279,7 +387,18 @@ fn projected_document_item(
     serde_json::json!({
         "__typename": "GraphqlSoupDocument",
         "id": document_id,
-        "cacheProjection": v2_document_supplement(document_id, is_email_attachment),
+        "notifications": [],
+        "properties": if status_option_ids.is_empty() { serde_json::json!([]) } else { serde_json::json!([{
+            "id": format!("status:{document_id}"),
+            "propertyDefinitionId": "00000001-0000-0000-0000-000000000002",
+            "value": {"__typename":"GraphqlSelectOptionPropertyValue", "optionIds": status_option_ids},
+        }]) },
+        "cacheProjection": v3_document_supplement(
+            document_id,
+            is_email_attachment,
+            is_important,
+            status_option_ids,
+        ),
         "displayName": format!("Document {document_id}"),
         "ownerId": owner,
         "projectId": null,
@@ -402,6 +521,70 @@ fn documents_preset_filter(document_filter: serde_json::Value) -> serde_json::Va
             "callFilter": { "literal": { "callId": NIL_ID } },
             "crmCompanyFilter": { "literal": { "id": NIL_ID } },
             "foreignEntityFilter": { "literal": { "id": NIL_ID } }
+        },
+        "sortMethod": "UPDATED_AT",
+        "sortDirection": "DESC",
+        "limit": 100
+    })
+}
+
+fn my_tasks_filter(owner: &str) -> serde_json::Value {
+    const NIL_ID: &str = "00000000-0000-0000-0000-000000000000";
+    const STATUS_PROPERTY_ID: &str = "00000001-0000-0000-0000-000000000002";
+    serde_json::json!({
+        "filters": {
+            "calendarEventFilter": { "literal": { "id": NIL_ID } },
+            "documentFilter": {
+                "and": {
+                    "left": { "literal": { "subType": "TASK" } },
+                    "right": {
+                        "or": {
+                            "left": { "literal": { "owner": owner } },
+                            "right": { "literal": { "importance": true } }
+                        }
+                    }
+                }
+            },
+            "projectFilter": { "literal": { "projectId": NIL_ID } },
+            "chatFilter": { "literal": { "chatId": NIL_ID } },
+            "emailFilter": { "tree": { "literal": { "threadId": NIL_ID } } },
+            "channelFilter": { "literal": { "channelId": NIL_ID } },
+            "channelThreadFilter": { "literal": { "threadId": NIL_ID } },
+            "callFilter": { "literal": { "callId": NIL_ID } },
+            "crmCompanyFilter": { "literal": { "id": NIL_ID } },
+            "foreignEntityFilter": { "literal": { "id": NIL_ID } },
+            "propertiesFilter": {
+                "or": {
+                    "left": {
+                        "literal": {
+                            "propertyDefinitionId": STATUS_PROPERTY_ID,
+                            "value": {
+                                "selectOption": "00000001-0000-0000-0002-000000000001"
+                            }
+                        }
+                    },
+                    "right": {
+                        "or": {
+                            "left": {
+                                "literal": {
+                                    "propertyDefinitionId": STATUS_PROPERTY_ID,
+                                    "value": {
+                                        "selectOption": "00000001-0000-0000-0002-000000000002"
+                                    }
+                                }
+                            },
+                            "right": {
+                                "literal": {
+                                    "propertyDefinitionId": STATUS_PROPERTY_ID,
+                                    "value": {
+                                        "selectOption": "00000001-0000-0000-0002-000000000003"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         },
         "sortMethod": "UPDATED_AT",
         "sortDirection": "DESC",
@@ -634,8 +817,8 @@ async fn operations_preserve_js_boundary_interner_and_ordering() {
 }
 
 #[wasm_bindgen_test(async)]
-async fn soup_updated_v2_supplements_advance_revision_and_recompute_documents_presets_locally() {
-    const SCOPE: &str = "cache-wasm-realtime-documents-v2";
+async fn soup_updated_v3_supplements_advance_revision_and_recompute_documents_presets_locally() {
+    const SCOPE: &str = "cache-wasm-realtime-documents-v3";
     const OWNER: &str = "macro|user@example.com";
     const OTHER_OWNER: &str = "macro|shared@example.com";
     const INITIAL: &str = "00000000-0000-0000-0000-000000000001";
@@ -755,6 +938,151 @@ async fn soup_updated_v2_supplements_advance_revision_and_recompute_documents_pr
     );
     assert_eq!(selected["revision"], "2");
     assert_eq!(selected["records"][0]["record"]["id"], ORDINARY);
+
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn server_baseline_reconciliation_survives_notification_stubs_and_deletions() {
+    const SCOPE: &str = "cache-wasm-server-baseline-reconciliation";
+    const A: &str = "00000000-0000-0000-0000-000000000001";
+    const B: &str = "00000000-0000-0000-0000-000000000002";
+    const STUB: &str = "00000000-0000-0000-0000-000000000003";
+    let key = |id| format!("GraphqlSoupDocument:{id}");
+    let engine = fresh_engine(SCOPE).await;
+    resolved(engine.write_query(
+        write_context(None),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(serde_json::json!({"input": {"initial": {"limit": 100}}})),
+        js(
+            serde_json::json!({"user": {"id": "macro|user@example.com", "soup": {
+                "nextCursor": null, "items": [{"__typename": "GraphqlSoupDocument", "id": STUB}]
+            }}}),
+        ),
+        None,
+    ))
+    .await;
+    resolved(engine.write_query(
+        write_context(None), SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION.into(),
+        Some("SoupUpdatesWithProjection".into()), js(serde_json::json!({})),
+        js(serde_json::json!({"soupUpdates": [
+            {"__typename": "SoupUpdated", "item": projected_document_item(A, "macro|user@example.com", false, None, 10)},
+            {"__typename": "SoupUpdated", "item": projected_document_item(B, "macro|user@example.com", false, None, 30)}
+        ]})), None,
+    )).await;
+    let mut request = documents_preset_filter(
+        serde_json::json!({"literal": {"owner": "macro|user@example.com"}}),
+    );
+    request["limit"] = serde_json::json!(1);
+    let exact: serde_json::Value =
+        from_js(resolved(engine.entity_filter(js(request.clone()))).await);
+    assert_eq!(exact["kind"], "incomplete");
+    request["baseline"] = serde_json::json!([
+        {"key": key(A), "sortTimestamp": "2025-01-01T00:00:00.000010Z"},
+        {"key": key(STUB), "sortTimestamp": "2025-01-01T00:00:00.000020Z"}
+    ]);
+    let result: serde_json::Value =
+        from_js(resolved(engine.entity_filter(js(request.clone()))).await);
+    assert_eq!(
+        result,
+        serde_json::json!({"kind": "reconciled", "revision": "2", "keys": [key(B), key(STUB), key(A)], "retainedKeys": [key(STUB)], "optimistic": false})
+    );
+    resolved(engine.delete_keys(vec![key(A), key(STUB)])).await;
+    let deleted: serde_json::Value = from_js(resolved(engine.entity_filter(js(request))).await);
+    assert_eq!(deleted["keys"], serde_json::json!([key(B)]));
+    assert_eq!(deleted["retainedKeys"], serde_json::json!([]));
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn soup_updated_v3_recomputes_my_tasks_importance_and_status_locally() {
+    const SCOPE: &str = "cache-wasm-realtime-my-tasks-v3";
+    const VIEWER: &str = "macro|viewer@example.com";
+    const OWNER_TASK: &str = "00000000-0000-0000-0000-000000000011";
+    const ASSIGNED_TASK: &str = "00000000-0000-0000-0000-000000000012";
+    const COMPLETED_TASK: &str = "00000000-0000-0000-0000-000000000013";
+    let status =
+        |suffix| uuid::Uuid::parse_str(&format!("00000001-0000-0000-0002-{suffix:012}")).unwrap();
+    let key = |id| format!("GraphqlSoupDocument:{id}");
+    let engine = fresh_engine(SCOPE).await;
+
+    let initial: serde_json::Value = from_js(
+        resolved(engine.write_query(
+            write_context(None),
+            SOUP_WITH_PROJECTION_QUERY.into(),
+            Some("SoupWithProjection".into()),
+            js(serde_json::json!({ "input": { "limit": 100 } })),
+            js(serde_json::json!({
+                "user": {
+                    "id": "user-1",
+                    "soup": {
+                        "nextCursor": null,
+                        "items": [projected_document_item_with_facts(
+                            OWNER_TASK,
+                            VIEWER,
+                            false,
+                            false,
+                            vec![status(1)],
+                            Some("task"),
+                            10,
+                        )]
+                    }
+                }
+            })),
+            Some("user-1".into()),
+        ))
+        .await,
+    );
+    assert_eq!(initial["revision"], "1");
+
+    let updates = [
+        projected_document_item_with_facts(
+            ASSIGNED_TASK,
+            "macro|other@example.com",
+            false,
+            true,
+            vec![status(2)],
+            Some("task"),
+            30,
+        ),
+        projected_document_item_with_facts(
+            COMPLETED_TASK,
+            "macro|other@example.com",
+            false,
+            true,
+            vec![status(4)],
+            Some("task"),
+            20,
+        ),
+    ]
+    .into_iter()
+    .map(|item| serde_json::json!({ "__typename": "SoupUpdated", "item": item }))
+    .collect::<Vec<_>>();
+    let realtime: serde_json::Value = from_js(
+        resolved(engine.write_query(
+            write_context(None),
+            SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION.into(),
+            Some("SoupUpdatesWithProjection".into()),
+            js(serde_json::json!({})),
+            js(serde_json::json!({ "soupUpdates": updates })),
+            None,
+        ))
+        .await,
+    );
+    assert_eq!(realtime["revision"], "2");
+
+    let filtered: serde_json::Value =
+        from_js(resolved(engine.entity_filter(js(my_tasks_filter(VIEWER)))).await);
+    assert_eq!(
+        filtered,
+        serde_json::json!({
+            "kind": "complete",
+            "revision": "2",
+            "keys": [key(ASSIGNED_TASK), key(OWNER_TASK)],
+            "optimistic": false,
+        })
+    );
 
     close_and_destroy(&engine, SCOPE).await;
 }
@@ -959,6 +1287,7 @@ async fn optimistic_v2_patch_is_filterable_after_enqueue_reopen_and_rollback() {
     let enqueue: serde_json::Value = from_js(
         resolved(engine.enqueue_optimistic_mutation(
             None,
+            "00000000-0000-4000-8000-000000000001".into(),
             OPTIMISTIC_DOCUMENT_MUTATION.into(),
             Some("RenameEntities".into()),
             js(serde_json::json!({
@@ -1089,6 +1418,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
     let first: serde_json::Value = from_js(
         resolved(engine.enqueue_optimistic_mutation(
             None,
+            "00000000-0000-4000-8000-000000000002".into(),
             PROPERTY_MUTATION.into(),
             Some("SetEntityProperty".into()),
             js(mutation_variables()),
@@ -1109,6 +1439,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
     let second: serde_json::Value = from_js(
         resolved(engine.enqueue_optimistic_mutation(
             None,
+            "00000000-0000-4000-8000-000000000003".into(),
             PROPERTY_MUTATION.into(),
             Some("SetEntityProperty".into()),
             js(mutation_variables()),
@@ -1211,6 +1542,7 @@ async fn optimistic_commit_reports_affected_ops_and_rejects_settled_or_malformed
     let enqueue: serde_json::Value = from_js(
         resolved(engine.enqueue_optimistic_mutation(
             None,
+            "00000000-0000-4000-8000-000000000004".into(),
             PROPERTY_MUTATION.into(),
             Some("SetEntityProperty".into()),
             js(mutation_variables()),
@@ -1308,6 +1640,7 @@ async fn destroy_recovery_wipes_records_and_queue() {
     .await;
     resolved(engine.enqueue_optimistic_mutation(
         None,
+        "00000000-0000-4000-8000-000000000005".into(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_variables()),
@@ -1523,6 +1856,7 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
         .await;
     assert_reset_required(engine.enqueue_optimistic_mutation(
         None,
+        "00000000-0000-4000-8000-000000000006".into(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_variables()),
@@ -1540,6 +1874,68 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
     assert_reset_required(engine.bound_identity()).await;
 
     resolved(engine.physical_reset()).await;
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn mail_page_errors_preserve_reset_latching_and_recovery() {
+    const SCOPE: &str = "cache-wasm-mail-page-reset-latch";
+    let engine = fresh_engine(SCOPE).await;
+    let mut request = exact_document_filter("00000000-0000-0000-0000-000000000000");
+    request["filters"]
+        .as_object_mut()
+        .unwrap()
+        .remove("emailFilter");
+    request["mail"] = serde_json::json!({"view":"ALL"});
+
+    // Validation errors must not poison a healthy cache.
+    let mut invalid = request.clone();
+    invalid["limit"] = serde_json::json!(0);
+    let error = JsFuture::from(engine.entity_filter(js(invalid)))
+        .await
+        .expect_err("invalid limit");
+    assert!(
+        !js_sys::Reflect::get(&error, &JsValue::from_str(RESET_REQUIRED_MARKER))
+            .unwrap()
+            .is_truthy()
+    );
+    assert!(!engine.state.lock().await.reset_required);
+
+    // The first read hydrates identity through EngineError rather than reading
+    // the Mail catalog directly. It must preserve the same reset marker.
+    engine.arm_storage_fault(TestStorageFault::GetBatch).await;
+    assert_reset_required(engine.entity_filter(js(request.clone()))).await;
+    assert_reset_required(engine.bound_identity()).await;
+    resolved(engine.physical_reset()).await;
+
+    for fault in [
+        TestStorageFault::GetBatch,
+        TestStorageFault::ReconcilePredicateIndex,
+        TestStorageFault::LoadProjectionStates,
+        TestStorageFault::LoadOptimisticProjections,
+    ] {
+        resolved(engine.write_query(
+            write_context(None),
+            "query MailCatalog { user { id emailLinks { id } } }".into(),
+            Some("MailCatalog".into()),
+            js(serde_json::json!({})),
+            js(serde_json::json!({"user":{"id":"mail-viewer","emailLinks":[]}})),
+            Some("mail-viewer".into()),
+        ))
+        .await;
+        let page: serde_json::Value =
+            from_js(resolved(engine.entity_filter(js(request.clone()))).await);
+        assert_eq!(page["kind"], "mail-page");
+
+        engine.arm_storage_fault(fault).await;
+        assert_reset_required(engine.entity_filter(js(request.clone()))).await;
+        assert_reset_required(engine.bound_identity()).await;
+        assert_reset_required(engine.clear()).await;
+        resolved(engine.physical_reset()).await;
+        let page: serde_json::Value =
+            from_js(resolved(engine.entity_filter(js(request.clone()))).await);
+        assert_eq!(page["kind"], "incomplete");
+    }
     close_and_destroy(&engine, SCOPE).await;
 }
 
@@ -1572,6 +1968,7 @@ async fn physical_reset_serializes_recreates_and_preserves_interner_registration
         .expect("operation is interned before reset");
     resolved(engine.enqueue_optimistic_mutation(
         None,
+        "00000000-0000-4000-8000-000000000007".into(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_variables()),
@@ -1690,6 +2087,7 @@ async fn every_method_rejects_after_consuming_close() {
     .await;
     assert_closed(engine.enqueue_optimistic_mutation(
         None,
+        "00000000-0000-4000-8000-000000000008".into(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_variables()),

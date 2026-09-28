@@ -4,7 +4,7 @@
 //! closely-related cluster of methods, e.g. all CRM comment operations
 //! in [`comments`]).
 
-mod helpers;
+pub(crate) mod helpers;
 
 mod comments;
 mod create_company;

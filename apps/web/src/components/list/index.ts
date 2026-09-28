@@ -8,12 +8,18 @@ export {
   type CreateListSelectionOptions,
   createListController,
   type ListController,
+  type ListSelectionSetOptions,
 } from './create-list-controller';
 export {
   type CreateSelectionStateOptions,
   createSelectionState,
   type SelectionState,
 } from './create-selection-state';
+export {
+  createStaticListDataSource,
+  type ListDataSource,
+} from './list-data-source';
+export { listOwnedSlotName } from './owned-slots';
 export type {
   ListActivateOptions,
   ListActivation,
@@ -29,9 +35,18 @@ export type {
   ListRestoreFocusOptions,
 } from './types';
 export {
+  type ListDetailNavigation,
+  type ListDetailNavigationOptions,
+  type ListDetailNavigationTarget,
+  useListDetailNavigation,
+} from './use-list-detail-navigation';
+export {
   type ListInteractionActivation,
   type ListInteractionActivationIntent,
+  type ListInteractionBeforeMoveEvent,
+  type ListInteractionDisclosure,
   type ListInteractionNavigation,
+  type ListInteractionNavigationEvent,
   type ListScrollHandle,
   type UseListInteractionsOptions,
   useListInteractions,

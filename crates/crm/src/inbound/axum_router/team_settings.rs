@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use axum::{Json, extract::State};
 use entity_access::{
     domain::{models::MemberTeamRole, ports::EntityAccessService},
@@ -32,6 +34,8 @@ pub struct CrmTeamSettingsResponse {
     /// Stage option ids counting as closed deals; absent = the client
     /// falls back to its label heuristic.
     pub closed_stage_ids: Option<Vec<Uuid>>,
+    /// System stage option id to team stage option id for seeded stages.
+    pub legacy_stage_ids: BTreeMap<Uuid, Uuid>,
     /// Team saved views — an opaque JSON array owned by the frontend.
     pub team_views: Value,
     /// Team view applied by default when a member opens the CRM view.
@@ -45,6 +49,7 @@ impl From<CrmTeamSettings> for CrmTeamSettingsResponse {
             move_closed_deals_role: settings.move_closed_deals_role,
             delete_records_role: settings.delete_records_role,
             closed_stage_ids: settings.closed_stage_ids,
+            legacy_stage_ids: settings.legacy_stage_ids,
             team_views: settings.team_views,
             default_team_view_id: settings.default_team_view_id,
         }
@@ -90,6 +95,7 @@ impl From<UpdateCrmTeamSettingsRequest> for CrmTeamSettingsPatch {
             move_closed_deals_role: req.move_closed_deals_role,
             delete_records_role: req.delete_records_role,
             closed_stage_ids: req.closed_stage_ids,
+            legacy_stage_ids: None,
             team_views: req.team_views,
             default_team_view_id: req.default_team_view_id,
         }
@@ -111,11 +117,12 @@ impl From<UpdateCrmTeamSettingsRequest> for CrmTeamSettingsPatch {
 #[tracing::instrument(skip_all, err)]
 pub async fn get_handler<
     C: CrmService,
+    St,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<CrmRouterState<C, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
 ) -> Result<Json<CrmTeamSettingsResponse>, CrmError> {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;
     let settings = state.service.get_team_settings(&receipt).await?;
@@ -144,11 +151,12 @@ pub async fn get_handler<
 #[tracing::instrument(skip_all, err)]
 pub async fn update_handler<
     C: CrmService,
+    St,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<CrmRouterState<C, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Json(req): Json<UpdateCrmTeamSettingsRequest>,
 ) -> Result<Json<CrmTeamSettingsResponse>, CrmError> {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;

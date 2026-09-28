@@ -45,9 +45,3 @@ fn ungrouped_config_uses_unique_internal_groups_without_offset_storage() {
     assert_eq!(first.get("enable.auto.offset.store"), Some("false"));
     assert_eq!(first.get("auto.offset.reset"), None);
 }
-
-#[test]
-fn ungrouped_initial_offsets_are_explicit() {
-    assert_eq!(InitialOffset::Earliest.as_kafka_offset(), Offset::Beginning);
-    assert_eq!(InitialOffset::Latest.as_kafka_offset(), Offset::End);
-}

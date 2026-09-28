@@ -9,6 +9,8 @@ use crate::domain::models::{PatchChatMessageArgs, ResolvedMessageContent, Result
 /// Repository trait for low-level message data access.
 pub trait MessageRepo: Send + Sync + 'static {
     /// Create a new message in a chat, returning the message ID.
+    /// User messages also persist the selected model on the chat atomically;
+    /// later assistant replies must not replace a newer user selection.
     fn create(
         &self,
         chat_id: &str,

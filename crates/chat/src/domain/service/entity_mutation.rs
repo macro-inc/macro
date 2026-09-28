@@ -26,6 +26,7 @@ impl From<ChatErr> for EntityMutationErrorCode {
         match error {
             error @ ChatErr::NotFound => Self::not_found(rootcause::report!(error)),
             error @ ChatErr::BadRequest(_) => Self::invalid(rootcause::report!(error)),
+            error @ ChatErr::Conflict(_) => Self::conflict(rootcause::report!(error)),
             ChatErr::Access(error) => access_error(error),
             error @ ChatErr::Unknown(_) => Self::internal(rootcause::report!(error)),
         }

@@ -1,4 +1,7 @@
-import type { GetTypedNotificationByIdResponses } from '../../../generated/notification/types.gen';
+import type {
+  GetTypedNotificationByIdResponses,
+  NotificationState,
+} from '../../../generated/notification/types.gen';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
@@ -31,13 +34,16 @@ export class Notification extends MacroEntity<NotificationDetail> {
   /** The viewer's notification feed, most recent first, auto-paginated. */
   static list(
     client: MacroClient,
-    opts?: { pageSize?: number },
+    opts?: { pageSize?: number; states?: NotificationState[] },
   ): AsyncGenerator<Notification> {
     return paginate(async (cursor) => {
       const page = unwrap(
         await client.notification.listTypedNotifications({
           query: {
             ...(opts?.pageSize ? { limit: opts.pageSize } : {}),
+            ...(opts?.states !== undefined
+              ? { states: opts.states.join(',') }
+              : {}),
             ...(cursor ? { cursor } : {}),
           },
         }),
@@ -58,8 +64,11 @@ export class Notification extends MacroEntity<NotificationDetail> {
   /** When the notification was last updated. */
   readonly updatedAt = this.field('updated_at');
 
-  /** Whether the notification is marked as done. */
-  readonly done = this.field('done');
+  /** The authoritative lifecycle state, independent of viewing timestamps. */
+  readonly state = this.field('state');
+
+  /** Whether the notification is completed. */
+  readonly done = this.mappedField('state', (state) => state === 'done');
 
   /** Whether the notification has been sent (delivered out of band). */
   readonly sent = this.field('sent');
@@ -83,9 +92,9 @@ export class Notification extends MacroEntity<NotificationDetail> {
   /** The typed notification payload (tagged by event type). */
   readonly metadata = this.field('notification_metadata');
 
-  /** Whether the notification has been seen (viewed at least once). */
+  /** Whether the notification is acknowledged (seen or done). */
   async seen(): Promise<boolean> {
-    return (await this.viewedAt()) !== undefined;
+    return (await this.state()) !== 'unseen';
   }
 
   /** Mark the notification as seen. */

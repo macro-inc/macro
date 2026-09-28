@@ -15,6 +15,10 @@ fn soup_response_schema_exposes_frontend_fields() {
         "threadId: ID!",
         "emailLabels: [GraphqlSoupEmailLabel!]!",
         "emailLinks: [GraphqlEmailLink!]!",
+        "favorites(filter: FavoritesFilterInput): [GraphqlFavorite!]!",
+        "input FavoritesFilterInput {",
+        "entityTypes: [GraphqlEntityType!]! = []",
+        "entityIds: [ID!]! = []",
         "emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread",
         "type GraphqlSoupEmailThread implements GraphqlSoupEntity {",
         "providerId: String",
@@ -56,6 +60,10 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlSoupEmailDraftAttachment {",
         "type GraphqlSoupEmailForwardedAttachment {",
         "type GraphqlSoupCall implements GraphqlSoupEntity {",
+        "type GraphqlSoupAgentSession implements GraphqlSoupEntity {",
+        "bot: GraphqlSessionBot",
+        "type GraphqlSessionBot {",
+        "avatarUrl: String",
         "channelName: String",
         "customName: String",
         "status: String!",
@@ -64,15 +72,30 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlSoupChat implements GraphqlSoupEntity {",
         "deletedAt: String",
         "type GraphqlSoupProject implements GraphqlSoupEntity {",
+        "type GraphqlSoupInitiative implements GraphqlSoupEntity {",
+        "initiativeFilter: GraphqlInitiativeExpr",
+        "descriptionDocumentId: ID",
         "parent: GraphqlEntity",
         "type GraphqlCacheDeletion {",
         "graphqlTypeName: String!",
         "entityId: ID!",
         "type SoupUpdated {",
-        "item: GraphqlSoupEntity",
+        "item: GraphqlSoupEntity!",
         "union SoupPatch = SoupUpdated | GraphqlCacheDeletion",
         "type GraphqlMutationSuccess {",
         "effects: [SoupPatch!]!",
+        "setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!",
+        "setFavorite(entity: EntityRefInput!, favorite: Boolean!): SetFavoritePayload!",
+        "type SetFavoritePayload {",
+        "result: GraphqlEntityMutationResult!",
+        "favorite: GraphqlFavorite",
+        "reorderFavorites(input: ReorderFavoritesInput!): [GraphqlFavorite!]!",
+        "input ReorderFavoritesInput {",
+        "favorites: [EntityRefInput!]!",
+        "type GraphqlFavorite {",
+        "entityType: GraphqlEntityType!",
+        "entityId: ID!",
+        "sortOrder: Float!",
         "recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!",
         "updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!",
         "updateNotificationsForEntity(input: UpdateNotificationsForEntityInput!): [GraphqlNotification!]!",
@@ -83,10 +106,22 @@ fn soup_response_schema_exposes_frontend_fields() {
         "entityId: ID!",
         "markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!",
         "updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!",
+        "saveEmailDraft(input: SaveEmailDraftInput!): SaveEmailDraftPayload!",
+        "deleteEmailDraft(input: DeleteEmailDraftInput!): DeleteEmailDraftPayload!",
         "input MarkEmailThreadSeenInput {",
         "input UpdateEmailThreadLabelInput {",
         "labelId: ID!",
         "value: Boolean!",
+        "input SaveEmailDraftInput {",
+        "draftId: ID!",
+        "input SaveEmailDraftContactInput {",
+        "type SaveEmailDraftPayload {",
+        "draft: GraphqlSoupEmailMessage!",
+        "thread: GraphqlSoupEmailThread!",
+        "input DeleteEmailDraftInput {",
+        "type DeleteEmailDraftPayload {",
+        "deleted: Boolean!",
+        "threadDeleted: Boolean!",
         "enum ChannelActivityType {",
         "enum NotificationUpdateOperation {",
         "MARK_SEEN",
@@ -99,6 +134,8 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlNewNotification {",
         "notification: GraphqlNotification!",
         "type GraphqlUpdatedNotification {",
+        "activityUpdates: GraphqlActivityPatch!",
+        "union GraphqlActivityPatch = GraphqlActivityEvent | GraphqlActivityInvalidation",
         "type GraphqlNotification {",
         "metadata: GraphqlNotifEvent!",
     ] {
@@ -245,6 +282,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "GraphqlSoupDocument",
         "GraphqlSoupChat",
         "GraphqlSoupProject",
+        "GraphqlSoupInitiative",
         "GraphqlSoupEmailThread",
         "GraphqlSoupChannel",
         "GraphqlSoupChannelMessage",
@@ -252,6 +290,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "GraphqlSoupCrmCompany",
         "GraphqlSoupForeignEntity",
         "GraphqlSoupReminder",
+        "GraphqlSoupAgentSession",
     ] {
         let ExtendedType::Object(object) = schema.types.get(name).expect("Soup object exists")
         else {
@@ -272,6 +311,9 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
             !object.fields.contains_key("cacheProjection"),
             "{name} must not carry entity projection metadata"
         );
+        if name == "SoupUpdated" {
+            assert_eq!(object.fields["item"].ty.to_string(), "GraphqlSoupEntity!");
+        }
     }
 }
 
@@ -354,6 +396,74 @@ fn property_values_are_a_typed_union_without_soup_names() {
     );
     assert!(!sdl.contains("GraphqlSoupProperty"));
     assert!(!sdl.contains("GraphqlSoupDataType"));
+}
+
+#[test]
+fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
+    let sdl = crate::build_schema().sdl();
+    let object = |name: &str| {
+        let declaration = format!("type {name}");
+        sdl.split_once(&declaration)
+            .expect("GraphQL object exists")
+            .1
+            .split_once('{')
+            .unwrap()
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0
+    };
+    assert_sdl_line(
+        object("GraphqlUser"),
+        "initiative(initiativeId: ID!): GraphqlSoupInitiative!",
+    );
+    assert!(!object("SoupQueryRoot").contains("initiative"));
+    for field in [
+        "id: ID!",
+        "properties: [GraphqlProperty!]!",
+        "memberIds: [String!]!",
+        "taskIds: [ID!]!",
+        "sharePermission: InitiativeSharePermission!",
+        "taskCount: Int!",
+        "completedTaskCount: Int!",
+    ] {
+        assert_sdl_line(object("GraphqlSoupInitiative"), field);
+    }
+    assert_sdl_line(
+        object("TaskInitiativeReference"),
+        "initiative: GraphqlSoupInitiative",
+    );
+    assert_sdl_line(
+        &sdl,
+        "createInitiative(input: CreateInitiativeInput!): GraphqlSoupInitiative!",
+    );
+    assert_sdl_line(
+        &sdl,
+        "updateInitiative(initiativeId: ID!, input: UpdateInitiativeInput!): GraphqlSoupInitiative!",
+    );
+    for obsolete in [
+        "type GraphqlInitiative {",
+        "type InitiativePage {",
+        "input InitiativePageInput {",
+        "enum InitiativeSort {",
+        "type InitiativePropertySnapshot {",
+        "initiatives(input:",
+    ] {
+        assert!(!sdl.contains(obsolete), "obsolete API remains: {obsolete}");
+    }
+    for duplicate in [
+        "name:",
+        "ownerId:",
+        "createdAt:",
+        "updatedAt:",
+        "userAccessLevel:",
+        "propertySnapshot:",
+    ] {
+        assert!(
+            !object("GraphqlSoupInitiative").contains(duplicate),
+            "duplicate initiative field remains: {duplicate}"
+        );
+    }
 }
 
 /// The exported SDL is a frontend contract: `schema.graphql` feeds the client

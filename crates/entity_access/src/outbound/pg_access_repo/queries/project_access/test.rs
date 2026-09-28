@@ -150,6 +150,36 @@ async fn insert_entity_access(
     Ok(())
 }
 
+async fn insert_team_entity_access(
+    pool: &PgPool,
+    project_id: Uuid,
+    team_id: Uuid,
+    access_level: AccessLevel,
+) -> anyhow::Result<()> {
+    let access_level = access_level.to_string();
+    let team_id = team_id.to_string();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (
+            entity_id,
+            entity_type,
+            source_id,
+            source_type,
+            access_level
+        )
+        VALUES ($1, 'project', $2, 'team', $3::text::"AccessLevel")
+        "#,
+        project_id,
+        team_id,
+        access_level,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 fn anonymous_source_ids() -> SourceIds {
     SourceIds(Vec::new())
 }
@@ -303,6 +333,25 @@ async fn inherited_project_access_is_preserved(pool: PgPool) -> anyhow::Result<(
     .await?;
 
     let access = get_project_access(&pool, &project_id, &authenticated_source_ids(None)).await?;
+
+    assert_eq!(access, Some(AccessLevel::Edit));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn direct_team_grant_without_link_share_grants_teammate_access(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let project_id = setup_project(&pool, None).await?;
+    let team_id = Uuid::new_v4();
+    insert_user(&pool, REQUESTER).await?;
+    insert_team(&pool, team_id, OWNER).await?;
+    add_team_user(&pool, team_id, OWNER, "owner").await?;
+    add_team_user(&pool, team_id, REQUESTER, "member").await?;
+    insert_team_entity_access(&pool, project_id, team_id, AccessLevel::Edit).await?;
+
+    let access =
+        get_project_access(&pool, &project_id, &authenticated_source_ids(Some(team_id))).await?;
 
     assert_eq!(access, Some(AccessLevel::Edit));
     Ok(())

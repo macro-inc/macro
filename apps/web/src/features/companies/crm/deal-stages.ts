@@ -3,19 +3,19 @@
  *
  * The builtin Stage property is a system definition whose options cannot be
  * modified through the API, so team customization works by giving the team
- * its own team-scoped `Stage` property definition (created from CRM
- * settings). When that definition exists, every stage surface — kanban
- * columns, list cells, filters, grouping, the company panel — reads and
- * writes it instead of the system property; otherwise the seeded system
- * stages apply. `useDealStages` is the single source of truth for which set
- * is active.
+ * its own team-scoped `Deal Stage` property definition, written only through
+ * `PUT /crm/stages` from CRM settings. When that definition exists, every
+ * stage surface (kanban columns, list cells, filters, grouping, the company
+ * panel) reads and writes it instead of the system property; otherwise the
+ * seeded system stages apply. `useDealStages` is the single source of truth
+ * for which set is active.
  */
 
 // Imports come from the concrete @entity modules, not the barrel: this
 // module loads inside soup-view-context's import chain, where the barrel
 // can still be mid-initialization (circular import) and its re-exports
 // undefined at module-eval time.
-import { soupPropertyToProperty } from '@entity/extractors-property';
+import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import { getCompanyStageOptionId } from '@entity/utils/company-properties';
 import {
   ALL_COMPANY_STAGE_OPTIONS,
@@ -31,7 +31,9 @@ import { useListPropertiesQuery } from '@queries/properties/definitions';
 import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
 import type { PropertyDefinitionWithOptions } from '@service-properties/generated/schemas/propertyDefinitionWithOptions';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
-import { type Accessor, createMemo } from 'solid-js';
+import { createLazyMemo } from '@solid-primitives/memo';
+import type { Accessor } from 'solid-js';
+import { useTeamCrmConfig } from './team-crm-config';
 
 // Canonical home is `@property/constants` (property pickers filter on it);
 // re-exported here for the CRM-side callers.
@@ -64,13 +66,16 @@ export type DealStages = {
   /**
    * The company's stage within the active set. When the team has custom
    * stages, legacy values stored on the system Stage property are mapped
-   * onto the custom set by label so boards/lists don't blank out after
-   * customizing; moving a card writes the value to the team definition.
+   * onto the custom set (recorded map first, then label) so boards/lists
+   * don't blank out after customizing; moving a card writes the value to
+   * the team definition.
    */
   resolveStage: (entity: CompanyLike) => string | undefined;
   /** Label for an option id in the active set (legacy system ids included). */
   stageLabel: (optionId: string) => string | undefined;
   isLoading: Accessor<boolean>;
+  /** The definitions failed to load and nothing is cached. */
+  isError: Accessor<boolean>;
 };
 
 /** Minimal company shape needed to read stage values. */
@@ -214,19 +219,25 @@ export function useDealStages(): DealStages {
     scope: 'team',
     includeOptions: true,
   }));
+  const teamCrmConfig = useTeamCrmConfig();
 
-  const teamStageDefinition = createMemo(() =>
+  // Shared soup contexts also mount for documents and other non-CRM views.
+  // Only read the query when a stage consumer needs it; actual CRM consumers
+  // retain their Suspense behavior rather than treating pending data as defaults.
+  // Lazy memos keep their creation owner: SplitPanel wraps the soup provider
+  // itself in Suspense, covering provider-owned grouping as well as its children.
+  const teamStageDefinition = createLazyMemo(() =>
     findTeamStageDefinition(teamDefinitionsQuery.data)
   );
 
   // Customized only once the team set actually has stages; an empty custom
   // set keeps the system defaults active (see stages() below).
-  const isCustomized = createMemo(() => {
+  const isCustomized = createLazyMemo(() => {
     const definition = teamStageDefinition();
     return !!definition && stagesFromDefinition(definition).length > 0;
   });
 
-  const stages = createMemo((): DealStage[] => {
+  const stages = createLazyMemo((): DealStage[] => {
     const definition = teamStageDefinition();
     if (!definition) return DEFAULT_STAGES;
     const customStages = stagesFromDefinition(definition);
@@ -235,18 +246,18 @@ export function useDealStages(): DealStages {
     return customStages.length > 0 ? customStages : DEFAULT_STAGES;
   });
 
-  const filterStages = createMemo((): DealStage[] =>
+  const filterStages = createLazyMemo((): DealStage[] =>
     isCustomized() ? stages() : ALL_SYSTEM_STAGES
   );
 
-  const stageDefinitionId = createMemo(() => {
+  const stageDefinitionId = createLazyMemo(() => {
     const definition = teamStageDefinition();
     return definition && stagesFromDefinition(definition).length > 0
       ? definition.definition.id
       : SYSTEM_PROPERTY_IDS.STAGE;
   });
 
-  const stageProperty = createMemo(() => {
+  const stageProperty = createLazyMemo(() => {
     const definition = teamStageDefinition();
     return buildStagePropertyStub(
       definition && stagesFromDefinition(definition).length > 0
@@ -255,9 +266,9 @@ export function useDealStages(): DealStages {
     );
   });
 
-  const stageIds = createMemo(() => new Set(stages().map((s) => s.id)));
+  const stageIds = createLazyMemo(() => new Set(stages().map((s) => s.id)));
 
-  const labelById = createMemo(() => {
+  const labelById = createLazyMemo(() => {
     const map = new Map<string, string>();
     for (const stage of stages()) map.set(stage.id, stage.label);
     return map;
@@ -268,12 +279,12 @@ export function useDealStages(): DealStages {
     if (direct && stageIds().has(direct)) return direct;
     if (stageDefinitionId() === SYSTEM_PROPERTY_IDS.STAGE) return direct;
 
-    // Legacy value on the system Stage property → map by label onto the
-    // custom set (the customize flow seeds the same labels).
     const legacy = getCompanyStageOptionId(
       entity as Parameters<typeof getCompanyStageOptionId>[0]
     );
     if (!legacy) return undefined;
+    const mapped = teamCrmConfig.config().legacyStageIds?.[legacy];
+    if (mapped && stageIds().has(mapped)) return mapped;
     const legacyLabel = getPropertyOptionLabel(legacy)?.toLowerCase();
     if (!legacyLabel) return undefined;
     return stages().find((stage) => stage.label.toLowerCase() === legacyLabel)
@@ -291,6 +302,9 @@ export function useDealStages(): DealStages {
     stageProperty,
     resolveStage,
     stageLabel,
-    isLoading: () => teamDefinitionsQuery.isLoading,
+    isLoading: () =>
+      teamDefinitionsQuery.isPending || teamCrmConfig.isLoading(),
+    isError: () =>
+      teamDefinitionsQuery.isError && teamDefinitionsQuery.data === undefined,
   };
 }

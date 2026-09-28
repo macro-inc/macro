@@ -1,0 +1,132 @@
+import {
+  clause,
+  compileClause,
+  compileFacets,
+  confine,
+  type FacetSelection,
+  mergeAst,
+  NIL_UUID,
+  type TargetExpr,
+} from '@app/features/soup';
+import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
+import { match } from 'ts-pattern';
+import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
+import type { EmailTab } from '../types';
+
+export type EmailQueryContext = {
+  tab: EmailTab;
+  /** `undefined` = every linked inbox; `[]` = none; otherwise email link ids. */
+  inboxIds: string[] | undefined;
+  facets: FacetSelection;
+  facetContext: EmailFacetContext;
+  /** Macro favorite IDs used only by the separate text-search service. */
+  favoriteThreadIds?: readonly string[];
+};
+
+/**
+ * The mailbox slice the server lists for each tab. Mirrors the legacy
+ * `VIEW_TAB_PRESETS.mail` presets.
+ */
+export const emailViewForTab = (tab: EmailTab): string =>
+  match(tab)
+    .with('important', 'noise', () => 'inbox')
+    .with('drafts', () => 'drafts')
+    // Scheduled has a dedicated REST-backed message list. Keep the dormant
+    // Soup source on drafts so its query shape remains valid while disabled.
+    .with('scheduled', () => 'drafts')
+    .with('sent', () => 'sent')
+    .with('favorites', 'calendar', 'shared', 'all', () => 'all')
+    .exhaustive();
+
+const anyThread = (): TargetExpr => clause.not(clause.eq('threadId', NIL_UUID));
+
+// Preserve a shallow tree through both the REST and GraphQL AST compilers.
+// A flat 100-way clause.or becomes a linear tree and exceeds JSON ingress depth.
+function threadIdsClause(ids: readonly string[]): TargetExpr {
+  if (ids.length < 2) return clause.eq('threadId', ids[0] ?? NIL_UUID);
+  const middle = Math.floor(ids.length / 2);
+  return clause.or(
+    threadIdsClause(ids.slice(0, middle)),
+    threadIdsClause(ids.slice(middle))
+  );
+}
+
+// Deliberately no `!isDraft` exclusion here: `isDraft` is thread-level, so
+// excluding it hid whole conversations the moment a reply draft saved (#5940).
+function tabClause(context: EmailQueryContext): TargetExpr {
+  return (
+    match(context.tab)
+      .with('important', () =>
+        clause.and(
+          clause.eq('emailImportance', true),
+          clause.eq('emailShared', 'exclude')
+        )
+      )
+      .with('noise', () =>
+        clause.and(
+          clause.eq('emailImportance', false),
+          clause.eq('emailShared', 'exclude')
+        )
+      )
+      .with('calendar', () =>
+        clause.and(
+          clause.eq('emailShared', 'exclude'),
+          clause.eq('emailCalendarOnly', true)
+        )
+      )
+      .with('shared', () => clause.eq('emailShared', 'only'))
+      // Sent and Drafts are scoped entirely by `emailView`; the server's sent
+      // view already covers every linked inbox, so no sender filter is needed.
+      .with('drafts', 'scheduled', 'sent', 'favorites', 'all', anyThread)
+      .exhaustive()
+  );
+}
+
+/**
+ * Scopes the list to the selected inboxes. No selection means every inbox
+ * (no clause); an explicit empty selection matches nothing, like the legacy
+ * view's `emailLinkId: [NIL_UUID]`.
+ */
+function inboxClause(inboxIds: string[] | undefined): TargetExpr | undefined {
+  if (inboxIds === undefined) return undefined;
+  if (inboxIds.length === 0) return clause.eq('emailLinkId', NIL_UUID);
+
+  return clause.or(...inboxIds.map((id) => clause.eq('emailLinkId', id)));
+}
+
+/** Discovery keeps the server read filter ahead of pagination. ID-scoped
+ * admission lookups drop only read status; all other membership rules remain. */
+export function buildEmailQuery(
+  context: EmailQueryContext,
+  admittedIds?: readonly string[]
+): SoupAstItemsQueryArgs {
+  const expressions = [tabClause(context)];
+  if (admittedIds) {
+    expressions.push(threadIdsClause(admittedIds));
+  }
+  const inbox = inboxClause(context.inboxIds);
+  if (inbox) expressions.push(inbox);
+
+  const base = compileClause(confine({ ef: clause.and(...expressions) }));
+  const refinements = compileFacets(
+    admittedIds ? { ...context.facets, read: [] } : context.facets,
+    EMAIL_FACETS,
+    context.facetContext
+  );
+  const body: SoupAstBody = {
+    ...mergeAst(base, refinements),
+    emailView: emailViewForTab(context.tab),
+    ...(context.tab === 'favorites' ? { favorites_only: true } : {}),
+  };
+
+  // Newest activity first: `updated_at` is the thread's latest message time.
+  return {
+    params: {
+      expand: true,
+      limit: 100,
+      sort_method: 'updated_at',
+      sort_direction: 'desc',
+    },
+    body,
+  };
+}

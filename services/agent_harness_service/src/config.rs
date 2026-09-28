@@ -1,8 +1,12 @@
 //! Configuration for the agent harness service, loaded via the standard
-//! `macro_config` pattern.
+//! `macro_config` pattern so it gets a `doppler_config` validation binary.
+//!
+//! Required env vars are declared here as typed fields. The `doppler_config`
+//! binary loads this `Config` from Doppler for both the dev and prod
+//! environments, surfacing any missing or mistyped values at CI time.
 
 use anyhow::Context;
-use database_env_vars::DatabaseUrl;
+use database_env_vars::{DatabaseUrl, RedisUri};
 pub use macro_env::Environment;
 use macro_uuid::Uuid;
 
@@ -31,6 +35,13 @@ macro_env_var::env_vars!(
     pub struct PipedreamProjectId;
 );
 
+macro_env_var::maybe_env_vars!(
+    /// KMS key for encrypted per-owner Claude OAuth connections.
+    pub struct ClaudeOauthKmsKeyId;
+    /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
+    pub struct CodexOauthKmsKeyId;
+);
+
 /// The Pipedream project environment matching this deployment: production in
 /// prd, development everywhere else.
 fn default_pipedream_environment() -> String {
@@ -44,13 +55,26 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// OAuth encryption key; deployments without a key do not advertise sign-in.
+    pub claude_oauth_kms_key_id: ClaudeOauthKmsKeyId,
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
+    /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
+    pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
     pub kafka_brokers: KafkaBrokers,
+    /// Which committed-post topic feeds the in-process trigger: `messages`
+    /// (the default, channel and document posts) or `channels` (the
+    /// pre-parent channel event, kept until its producer retires it). Never
+    /// both: every channel post is on both topics, so both would evaluate
+    /// each mention twice.
+    #[macro_config_default(agent_trigger::domain::sources::TriggerEventSource::default())]
+    pub agent_trigger_event_source: agent_trigger::domain::sources::TriggerEventSource,
     /// MacroDB connection string; `agent_sessions` lives here.
     pub database_url: DatabaseUrl,
+    /// Shared Redis used for cross-replica command forwarding.
+    pub redis_uri: RedisUri,
     /// Base URL of the Daytona REST API.
     #[macro_config_default(String::from("https://app.daytona.io/api"))]
     pub daytona_api_url: String,
@@ -114,12 +138,6 @@ pub struct Config {
     /// Repository sessions run against, until it becomes per-request data.
     #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
     pub harness_repo_url: String,
-    /// Repository `@cursor` sessions work on. Temporary hardcoding, same as
-    /// `harness_repo_url` — and one repository for everyone is a real limit
-    /// here, since each session runs on its own owner's Cursor account and
-    /// only works if *their* GitHub App installation can see this repo.
-    #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
-    pub cursor_repo_url: String,
     /// Model id stamped onto sessions the in-memory bot opens. Unknown ids
     /// fall back to the agent loop's default model.
     #[macro_config_default(String::from("claude-sonnet-5"))]
@@ -134,18 +152,10 @@ pub struct Config {
     pub port: u16,
     /// Port the sandbox-facing egress proxy is served on.
     ///
-    /// A second listener rather than more routes on `port`: the control routes
-    /// are authenticated as Macro users and reached from inside the platform,
-    /// and the egress routes are authenticated by session token and reached
-    /// from a sandbox running model-authored code. Separate ports keep the two
-    /// separable at the network as well as in the code.
+    /// The shared gateway forwards `/agent-harness-egress/*` to this listener.
+    /// The egress router reads sandbox session tokens from `Authorization`.
     #[macro_config_default(8102)]
     pub egress_port: u16,
-    /// Where a sandbox should dial the egress proxy.
-    ///
-    /// Not derivable from `egress_port`: the sandbox reaches this through
-    /// whatever ingress fronts the deployment, not on the container's own port.
-    pub egress_base_url: String,
     /// OAuth client ID for the Pipedream API.
     pub pipedream_client_id: PipedreamClientId,
     /// OAuth client secret for the Pipedream API.
@@ -161,15 +171,15 @@ pub struct Config {
     /// URL of Pipedream's remote MCP server.
     #[macro_config_default(String::from(pipedream_mcp::outbound::api::DEFAULT_MCP_URL))]
     pub pipedream_mcp_url: String,
-    /// Where the egress proxy reaches Macro's own MCP server (`mcp_service`),
-    /// endpoint path included - e.g. `https://mcp.macro.com/mcp`, or the
-    /// in-network `http://mcp-service:8080/mcp` on a local stack. Cleartext is
-    /// refused at boot unless `ENVIRONMENT=local`.
-    pub macro_mcp_url: String,
     /// RSA key Macro API tokens are signed with.
     pub macro_api_token_private_secret_key: LocalOrRemoteSecret<MacroApiTokenPrivateSecretKey>,
     /// Issuer stamped into minted Macro API tokens.
     pub macro_api_token_issuer: MacroApiTokenIssuer,
+    /// S3 bucket the Changes pane's patches are stored in, one object per
+    /// capture under `agent-sessions/{session}/changes/`. Required: a
+    /// harness that cannot store a patch cannot show a session's changes,
+    /// and that is worth failing at boot rather than on the first capture.
+    pub agent_session_changes_bucket: String,
     /// Client id of the GitHub App installation tokens are minted for.
     pub github_sync_app_client_id: String,
     /// PEM private key of that App.
@@ -177,6 +187,37 @@ pub struct Config {
 }
 
 impl Config {
+    /// Resolve the deployment-injected encryption key. Local stacks use their
+    /// existing LocalStack key with a separate Claude encryption context.
+    pub fn claude_oauth_kms_key_id(&self) -> Option<String> {
+        self.claude_oauth_kms_key_id
+            .value()
+            .filter(|key| !key.trim().is_empty())
+            .map(str::to_owned)
+            .or_else(|| {
+                ClaudeOauthKmsKeyId::new().and_then(|key| {
+                    key.value()
+                        .filter(|key| !key.trim().is_empty())
+                        .map(str::to_owned)
+                })
+            })
+            .or_else(|| {
+                matches!(self.environment, Environment::Local)
+                    .then(|| "alias/macro-local-cursor-api-key".to_owned())
+            })
+    }
+
+    /// Resolve the optional key from Doppler or the deployment-injected environment.
+    pub fn codex_oauth_kms_key_id(&self) -> Option<String> {
+        self.codex_oauth_kms_key_id
+            .value()
+            .map(str::to_owned)
+            .or_else(|| {
+                CodexOauthKmsKeyId::new().and_then(|value| value.value().map(str::to_owned))
+            })
+            .filter(|value| !value.trim().is_empty())
+    }
+
     /// Load the configuration from the environment.
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>()

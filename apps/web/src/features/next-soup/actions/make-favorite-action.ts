@@ -6,7 +6,7 @@ import {
   useFavoritesData,
   useRemoveFavoriteMutation,
 } from '@queries/favorites/favorites';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 /**
  * Toggle an entity in the user's favorites.
@@ -23,6 +23,8 @@ export const makeFavoriteAction = () => {
   const removeMutation = useRemoveFavoriteMutation();
 
   const canExecute = (entity: EntityData): boolean =>
+    (entity.type !== 'foreign' ||
+      entity.foreignSource === 'github_pull_request') &&
     favoriteEntityType(entity.type) !== undefined;
 
   const isFavorited = (entity: EntityData): boolean => {
@@ -82,7 +84,10 @@ export const makeFavoriteAction = () => {
     }
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     // Favoriting doesn't change the list contents; keep selection/focus.
     await execute(entities);
   };

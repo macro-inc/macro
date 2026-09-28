@@ -45,13 +45,13 @@ export function useCompanyQuery(companyId: Accessor<string>) {
   });
 
   const company = createMemo<CrmCompanyEntity | undefined>(() => {
-    const data = query.data;
+    const data = query.isSuccess ? query.data : undefined;
     if (!data) return undefined;
     return responseToEntity(data);
   });
 
-  const contacts = createMemo<CompanyContact[]>(
-    () => query.data?.contacts ?? []
+  const contacts = createMemo<CompanyContact[]>(() =>
+    query.isSuccess ? (query.data?.contacts ?? []) : []
   );
 
   return { query, company, contacts };

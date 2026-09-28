@@ -1,10 +1,9 @@
-import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
-import { mdStore } from '@block-md/signal/markdownBlockData';
 import { mergeRegister } from '@lexical/utils';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
-import { createEffect, For } from 'solid-js';
+import { createEffect, For, useContext } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import {
   autoRegister,
   lazyRegister,
@@ -16,13 +15,7 @@ import {
   type FloatingStyle,
   getFloatingSearchHighlightPosition,
 } from './getFloatingSearchHighlightStyle';
-
-function getFirstChild(htmlEl: ChildNode | null | undefined) {
-  if (htmlEl?.firstChild) {
-    return getFirstChild(htmlEl.firstChild);
-  }
-  return htmlEl;
-}
+import { getSearchHighlightClientRects } from './searchHighlightTarget';
 
 function registerEventListener<K extends keyof HTMLElementEventMap>(
   target: HTMLElement | null,
@@ -39,36 +32,41 @@ function registerEventListener(
   return () => target.removeEventListener(type, listener);
 }
 
-export function SearchHighlight({
-  anchorElem = document.body,
-}: {
+type SearchHighlightItem = {
+  style: FloatingStyle;
+  idx: number | undefined;
+};
+
+export function SearchHighlight(props: {
   anchorElem?: HTMLElement;
+  listOffset: NodekeyOffset[];
+  onStylesChange: (styles: SearchHighlightItem[]) => void;
+  onMatchesChange: (matches: number) => void;
 }): null {
-  const mdData = mdStore.get;
-  const editor = () => mdData.editor;
+  const lexicalWrapper = useContext(LexicalWrapperContext);
+  const editor = () => lexicalWrapper?.editor;
+  const anchorElem = () => props.anchorElem ?? document.body;
   let stateListOffsetRef: NodekeyOffset[] = [];
   let animationFrame: number | undefined;
 
   const updateTextFormatFloatingToolbar = createCallback(
     (listOffset: NodekeyOffset[]) => {
       const newStyles: { style: FloatingStyle; idx: number | undefined }[] = [];
-      let matches = 0;
+      const matches = listOffset.reduce(
+        (max, offset) => Math.max(max, offset.pairKey ?? 0),
+        0
+      );
       listOffset.map((offset: NodekeyOffset) => {
         const editorInstance = editor();
         if (!editorInstance) return;
-        const htmlEl = getFirstChild(
-          editorInstance.getElementByKey(offset.key)?.firstChild
-        );
-        if (!htmlEl) return;
-        const range = document.createRange();
+        const element = editorInstance.getElementByKey(offset.key);
+        if (!element) return;
         try {
-          range.setStart(htmlEl, offset.offset.start);
-          range.setEnd(htmlEl, offset.offset.end);
-          const rects = range.getClientRects();
+          const rects = getSearchHighlightClientRects(element, offset.offset);
           [...rects].map((rect) => {
             const newStyle = getFloatingSearchHighlightPosition(
               rect,
-              anchorElem
+              anchorElem()
             );
             const styleWidth = newStyle.width;
             if (
@@ -77,7 +75,6 @@ export function SearchHighlight({
               ) !== 4
             ) {
               newStyles.push({ style: newStyle, idx: offset.pairKey });
-              matches = Math.max(matches, offset.pairKey ?? 0);
             }
           });
         } catch (error) {
@@ -85,8 +82,8 @@ export function SearchHighlight({
         }
       });
 
-      FindAndReplaceStore.set('styles', newStyles);
-      FindAndReplaceStore.set('matches', matches);
+      props.onStylesChange(newStyles);
+      props.onMatchesChange(matches);
     }
   );
 
@@ -107,7 +104,7 @@ export function SearchHighlight({
   });
 
   createEffect(() => {
-    stateListOffsetRef = FindAndReplaceStore.get.listOffset;
+    stateListOffsetRef = props.listOffset;
     update();
   });
 
@@ -129,7 +126,7 @@ export function SearchHighlight({
   );
 
   autoRegister(
-    registerEventListener(anchorElem.parentElement, 'scroll', update),
+    registerEventListener(anchorElem().parentElement, 'scroll', update),
     () => {
       if (animationFrame !== undefined) {
         cancelAnimationFrame(animationFrame);
@@ -140,18 +137,20 @@ export function SearchHighlight({
   return null;
 }
 
-export function FloatingSearchHighlight(props: { anchorElem?: HTMLElement }) {
+export function FloatingSearchHighlight(props: {
+  anchorElem?: HTMLElement;
+  styles: SearchHighlightItem[];
+  currentMatch: number;
+}) {
   return (
     <Portal mount={props.anchorElem}>
-      <For each={FindAndReplaceStore.get.styles}>
+      <For each={props.styles}>
         {(item) => (
           <div
             style={item.style}
             class={cn(
               'z-10 m-0 text-transparent h-4.5 absolute top-0 left-0 opacity-50 pointer-events-none',
-              item.idx === FindAndReplaceStore.get.currentMatch + 1
-                ? 'bg-accent'
-                : 'bg-accent/50'
+              item.idx === props.currentMatch + 1 ? 'bg-accent' : 'bg-accent/50'
             )}
           />
         )}

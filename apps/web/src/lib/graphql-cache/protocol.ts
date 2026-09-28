@@ -40,6 +40,19 @@ export function parseCacheRevision(value: unknown): CacheRevision {
 
 export const INITIAL_CACHE_REVISION = '0' as CacheRevision;
 
+/** Validates the durable database-generation UUID shared by cache hosts. */
+export function parseStorageGeneration(value: unknown): string {
+  if (
+    typeof value !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      value
+    )
+  ) {
+    throw new TypeError('invalid cache storage generation');
+  }
+  return value;
+}
+
 /** Scheduling hint for latency-sensitive cache reads. */
 export type CacheReadPriority = 'user-visible';
 
@@ -77,15 +90,40 @@ export type SearchCachePage = {
   nextCursor: SearchCursor | null;
 };
 
-/** Exact initial-page request over the canonical GraphQL Soup filter input. */
+/** Maximum server-page membership evidence in one reconciliation request. */
+export const MAX_RECONCILIATION_BASELINE = 5_000;
+
+/** Initial-page candidates, optionally reconciled with same-query server pages. */
 export type EntityFilterCacheArgs = {
   filters: Record<string, unknown>;
   sortMethod: 'CREATED_AT' | 'UPDATED_AT' | 'VIEWED_AT' | 'VIEWED_UPDATED';
   sortDirection: 'ASC' | 'DESC';
   limit: number;
+  /** Omit for exact evaluation; even an empty array requests reconciliation. */
+  baseline?: Array<{ key: string; sortTimestamp: string }>;
+  /** Explicit cached-Mail pagination, independent of server cursors. */
+  mail?: { view: 'ALL' | 'INBOX' | 'DRAFTS' | 'SENT'; cursor?: string };
 };
 
 export type EntityFilterCacheResult =
+  | {
+      kind: 'mail-page';
+      revision: CacheRevision;
+      keys: string[];
+      /** View-correct timestamps aligned with keys, independent of cached previews. */
+      sortTimestamps: string[];
+      nextCursor: string | null;
+      optimistic: boolean;
+    }
+  | { kind: 'stale-cursor'; revision: CacheRevision }
+  | {
+      kind: 'reconciled';
+      revision: CacheRevision;
+      keys: string[];
+      /** Survivors backed only by previous server membership evidence. */
+      retainedKeys: string[];
+      optimistic: boolean;
+    }
   | {
       kind: 'complete';
       revision: CacheRevision;
@@ -266,6 +304,12 @@ export type OptimisticLinkPatchWire = {
     | { kind: 'remove'; entityKey: string }
     | { kind: 'prependUnique'; entityKey: string }
     | {
+        kind: 'upsertByField';
+        entityKey: string;
+        whereField: string;
+        equals: string | number | boolean | null;
+      }
+    | {
         kind: 'removeEmbeddedLink';
         listItem: {
           whereField: string;
@@ -305,6 +349,8 @@ export type HydrationResult =
 export type WriteResult = {
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
+  /** Whether this write advanced `revision`. */
+  revisionAdvanced: boolean;
   /** Entity keys whose records changed. */
   changed: string[];
   /** Registered operation ids affected by the change (origin excluded). */
@@ -329,9 +375,17 @@ export type OptimisticWriteResult = WriteResult & {
   transactionId: string;
 };
 
+/** How a caller UUID changed the durable queue. */
+export type MutationUpsertKind =
+  | { kind: 'inserted' }
+  | { kind: 'replaced-pending'; removedTransactionId: string }
+  | { kind: 'appended-after-active'; activeTransactionId: string };
+
 /** Claimed strict queue head, ready to be forwarded through urql. */
 export type ClaimedMutation = {
   transactionId: string;
+  uuid: string;
+  superseded: boolean;
   leaseGeneration: string;
   query: string;
   operationName?: string;
@@ -349,6 +403,7 @@ export type InitialMutationClaim =
 
 /** Result returned after enqueue and the initial claim attempt complete. */
 export type EnqueueOptimisticMutationResult = OptimisticWriteResult & {
+  upsertKind: MutationUpsertKind;
   initialClaim: InitialMutationClaim;
 };
 
@@ -358,9 +413,38 @@ export type MutationClaim = {
   generation: string;
 };
 
+/** Result of deferring a retryable attempt. */
+export type DeferOptimisticWriteResult =
+  | { kind: 'deferred' }
+  | (WriteResult & {
+      kind: 'discarded-superseded';
+      replacementTransactionId: string;
+    });
+
+/** Result of committing a current or superseded attempt. */
+export type CommitOptimisticWriteResult =
+  | (WriteResult & { kind: 'committed' })
+  | (WriteResult & {
+      kind: 'committed-superseded';
+      replacementTransactionId: string;
+    });
+
+/** Result of rolling back a failed attempt. */
+export type RollbackOptimisticWriteResult =
+  | (WriteResult & { kind: 'rolled-back' })
+  | (WriteResult & {
+      kind: 'discarded-superseded';
+      replacementTransactionId: string;
+    });
+
 /** Final settlement of a previously queued optimistic mutation. */
 export type MutationSettlement =
   | { transactionId: string; status: 'committed' }
+  | {
+      transactionId: string;
+      status: 'superseded';
+      replacementTransactionId: string;
+    }
   | {
       transactionId: string;
       status: 'permanently-failed';
@@ -370,6 +454,7 @@ export type MutationSettlement =
 export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | { kind: 'current-revision' }
+  | { kind: 'current-storage-generation' }
   | {
       kind: 'read';
       opId?: string;
@@ -400,6 +485,7 @@ export type CacheRequest = { id: number } & (
       identity?: string;
     }
   | {
+      /** Background cache warming; ordinary writes do not publish pushes. */
       kind: 'hydrate';
       query: string;
       operationName?: string;
@@ -411,6 +497,7 @@ export type CacheRequest = { id: number } & (
   | {
       kind: 'enqueue-optimistic-mutation';
       originOpId?: string;
+      uuid: string;
       query: string;
       operationName?: string;
       variables?: Record<string, unknown>;
@@ -527,7 +614,8 @@ export type CachePush =
       /** Changed entity keys, for diagnostics/advanced consumers. */
       keys: string[];
     }
-  | { kind: 'cache-changed'; revision: CacheRevision }
+  | { kind: 'cache-changed'; revision: CacheRevision; reset?: boolean }
+  | { kind: 'cache-hydrated'; revision: CacheRevision }
   | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -603,6 +691,12 @@ export function isCachePush(value: unknown): value is CachePush {
       );
     case 'cache-changed':
       return (
+        hasOnlyWireKeys(value, ['kind', 'revision', 'reset']) &&
+        isCacheRevision(value.revision) &&
+        (value.reset === undefined || typeof value.reset === 'boolean')
+      );
+    case 'cache-hydrated':
+      return (
         hasOnlyWireKeys(value, ['kind', 'revision']) &&
         isCacheRevision(value.revision)
       );
@@ -617,6 +711,15 @@ export function isCachePush(value: unknown): value is CachePush {
       }
       if (settlement.status === 'committed') {
         return hasOnlyWireKeys(settlement, ['transactionId', 'status']);
+      }
+      if (settlement.status === 'superseded') {
+        return (
+          hasOnlyWireKeys(settlement, [
+            'transactionId',
+            'status',
+            'replacementTransactionId',
+          ]) && typeof settlement.replacementTransactionId === 'string'
+        );
       }
       return (
         settlement.status === 'permanently-failed' &&

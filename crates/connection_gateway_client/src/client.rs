@@ -10,6 +10,18 @@ use model_entity::Entity;
 mod calendar;
 mod email;
 
+/// How long any one call to the connection gateway may take.
+///
+/// Delivery is best-effort for every caller - the gateway drops frames a
+/// consumer cannot take - so a caller gains nothing by waiting indefinitely,
+/// and some lose a great deal: an agent session's frame writer holds a
+/// one-minute budget per frame and tears the session down when it runs out.
+///
+/// Every endpoint here pushes one realtime message and returns; the slowest
+/// runs a p99 of 81ms in production. This is a backstop against the gateway
+/// itself stalling, not a budget anything is expected to spend.
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
 /// HTTP client for communicating with the connection gateway service.
 #[derive(Clone, Debug)]
 pub struct ConnectionGatewayClient {
@@ -36,6 +48,7 @@ impl ConnectionGatewayClient {
 
         let client = reqwest::Client::builder()
             .default_headers(headers)
+            .timeout(REQUEST_TIMEOUT)
             .build()
             .unwrap();
 

@@ -178,6 +178,18 @@ where
     async fn append_events_to_aggregate(&self) -> Result<EventAggregationStats, anyhow::Error> {
         let events: Vec<_> = self.event_storage.get_unprocessed_events().await?;
 
+        // An idle queue is the steady state, not an edge case, and it has to
+        // end the pass rather than fall through: `get_aggregates_for_users_entities`
+        // builds its filter with `QueryBuilder::push_tuples`, which emits a bare
+        // `IN ()` for an empty batch and fails as a syntax error. That error
+        // propagates out of here before `mark_processed` runs, so the pass would
+        // leave the aggregation lock held until the next tick cleaned it up --
+        // once per poll, on every replica, whenever there is nothing to do.
+        if events.is_empty() {
+            self.event_storage.mark_processed(events).await?;
+            return Ok(EventAggregationStats::default());
+        }
+
         let event_count = events.len();
 
         let ids: Result<Vec<_>, _> = events.iter().map(AggregateId::from_event_record).collect();
@@ -260,5 +272,110 @@ where
             .await
             .map_err(anyhow::Error::from)?;
         Ok(FrecencyPageResponse::new(res))
+    }
+}
+
+#[cfg(test)]
+mod pull_aggregator_tests {
+    use super::*;
+    use crate::domain::ports::UnprocessedEventsRepo;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[derive(Default)]
+    struct Calls {
+        get_unprocessed: AtomicUsize,
+        get_aggregates: AtomicUsize,
+        set_aggregates: AtomicUsize,
+        mark_processed: AtomicUsize,
+    }
+
+    /// Repo that always reports an idle queue, and records which methods the
+    /// service reached.
+    #[derive(Default)]
+    struct IdleRepo {
+        calls: Arc<Calls>,
+    }
+
+    impl UnprocessedEventsRepo for IdleRepo {
+        type Err = anyhow::Error;
+        type EventId = i64;
+
+        async fn get_unprocessed_events(
+            &self,
+        ) -> Result<Vec<EventRecordWithId<'static, i64>>, Self::Err> {
+            self.calls.get_unprocessed.fetch_add(1, Ordering::SeqCst);
+            Ok(Vec::new())
+        }
+
+        async fn mark_processed<'a>(
+            &self,
+            _event: Vec<EventRecordWithId<'a, i64>>,
+        ) -> Result<(), Self::Err> {
+            self.calls.mark_processed.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn get_aggregates_for_users_entities(
+            &self,
+            _aggregates: Vec<AggregateId<'_>>,
+        ) -> Result<Vec<AggregateFrecency>, Self::Err> {
+            self.calls.get_aggregates.fetch_add(1, Ordering::SeqCst);
+            // The real repo would render `IN ()` here and fail; this stands in
+            // for that so the test fails loudly if the short-circuit is lost.
+            Err(anyhow::anyhow!(
+                "get_aggregates_for_users_entities must not be reached for an empty batch"
+            ))
+        }
+
+        async fn set_aggregates(
+            &self,
+            _aggregates: Vec<AggregateFrecency>,
+        ) -> Result<(), Self::Err> {
+            self.calls.set_aggregates.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    struct FixedTime;
+    impl TimeGetter for FixedTime {
+        fn now(&self) -> chrono::DateTime<chrono::Utc> {
+            chrono::Utc::now()
+        }
+    }
+
+    /// An idle queue must end the pass cleanly: no aggregate lookup (which
+    /// would render `IN ()` and fail), `mark_processed` still called so the
+    /// aggregation lock is released, and zeroed stats returned.
+    #[tokio::test]
+    async fn an_empty_batch_short_circuits_and_still_releases_the_lock() {
+        let calls = Arc::new(Calls::default());
+        let service = PullAggregatorImpl::new(
+            IdleRepo {
+                calls: Arc::clone(&calls),
+            },
+            FixedTime,
+        );
+
+        let stats = service
+            .append_events_to_aggregate()
+            .await
+            .expect("an idle queue is not an error");
+
+        assert_eq!(stats.event_count, 0);
+        assert_eq!(stats.existing_aggregate_count, 0);
+        assert_eq!(stats.new_aggregate_count, 0);
+
+        assert_eq!(calls.get_unprocessed.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            calls.get_aggregates.load(Ordering::SeqCst),
+            0,
+            "empty batch must not reach the aggregate lookup"
+        );
+        assert_eq!(calls.set_aggregates.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            calls.mark_processed.load(Ordering::SeqCst),
+            1,
+            "the pass must still be closed out so the lock is released"
+        );
     }
 }

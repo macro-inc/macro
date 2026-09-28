@@ -24,6 +24,7 @@ function isSoupEntityTag(
       'channel_message',
       'channel_thread',
       'automation',
+      'agent_session',
       'calendar_event',
       'foreign',
       'crm_company',
@@ -40,9 +41,14 @@ function isSoupEntityTag(
 // `viewed_updated` sort joins UserHistory generically — so writing
 // these rows is what surfaces recently-opened companies/contacts in
 // Quick Access and the @ mention menu.
+//
+// Foreign entities (GitHub PRs) are intentionally omitted: they are not
+// documents, and posting `/history/document/{id}` 401s because ACL looks
+// up a document that does not exist.
 function shouldTrackInUserHistory(itemType: ItemType): boolean {
   return (
     isCloudStorageItem(itemType) ||
+    itemType === 'agent_session' ||
     itemType === 'crm_company' ||
     itemType === 'crm_contact'
   );

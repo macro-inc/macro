@@ -27,7 +27,7 @@ pub enum HarnessError {
     /// whose session never answers. Closing that needs a way to post a failure
     /// back to the thread, which [`crate::domain::ports::SessionAnnouncer`]
     /// does not have — it announces sessions and nothing else.
-    #[error("connect your Cursor account in Settings → Connections to use @cursor")]
+    #[error("connect your Cursor account in Settings → Agents → Harness to use @cursor")]
     CursorNotConnected,
     /// The agent would not open an ACP session.
     #[error("acp handshake failed: {0}")]
@@ -63,4 +63,25 @@ pub enum HarnessError {
     /// A prompt could not be composed for the agent runtime.
     #[error("failed to compose agent prompt: {0}")]
     PromptComposition(rootcause::Report),
+    /// Forwarding a command to the session's managing replica failed.
+    #[error("failed to forward an agent session command: {0}")]
+    Forward(rootcause::Report),
+    /// The repositories a user reaches through the GitHub App could not be
+    /// listed. Its own variant because the failure is GitHub's, not ours: the
+    /// App's credentials, an installation record, or a call to github.com.
+    #[error("failed to list reachable repositories: {0}")]
+    Repositories(rootcause::Report),
+    /// The named repository is not one the user reaches through the GitHub App.
+    ///
+    /// The same sentence the create-session path uses, so a picker that listed
+    /// a repository the user can no longer reach and a typed URL they never
+    /// could both explain themselves the same way.
+    #[error("repository is not available to this user")]
+    RepositoryUnavailable,
+    /// A bot's persisted agent runtime configuration could not be loaded.
+    #[error("failed to resolve agent runtime configuration: {0}")]
+    RuntimeDirectory(rootcause::Report),
+    /// Who a prompt mentions could not be resolved.
+    #[error("failed to resolve prompt mentions: {0}")]
+    Mentions(rootcause::Report),
 }

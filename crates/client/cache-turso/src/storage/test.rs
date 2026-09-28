@@ -1,4 +1,15 @@
 use super::*;
+
+mod conjunction_cost;
+mod conjunction_semantics;
+mod engine_writes;
+mod fact_lookup_cost;
+mod filter_scope_cost;
+mod filter_scope_semantics;
+mod predicate_cost;
+mod projection_writes;
+mod search_projection;
+mod startup;
 use cache_core::normalize::RecordUpdates;
 use pollster::block_on;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -21,8 +32,26 @@ fn record(value: &str) -> Record {
     record
 }
 
+fn quick_access_document(name: &str, timestamp: u64) -> Record {
+    let mut document = Record::default();
+    document.fields.insert(
+        "__typename".into(),
+        cache_core::value::CacheValue::String("GraphqlSoupDocument".into()),
+    );
+    document.fields.insert(
+        "name".into(),
+        cache_core::value::CacheValue::String(name.into()),
+    );
+    document.fields.insert(
+        "updatedAt".into(),
+        cache_core::value::CacheValue::Number(cache_core::value::CacheNumber::PosInt(timestamp)),
+    );
+    document
+}
+
 fn queued(label: &str) -> NewQueuedMutation {
     NewQueuedMutation {
+        uuid: uuid::Uuid::new_v4(),
         mutation: StoredMutation::new(
             MutationRequest {
                 query: format!("mutation {label} {{ update {{ id }} }}"),
@@ -155,22 +184,10 @@ async fn expect_every_storage_method_latched(
 }
 
 #[test]
-fn search_projection_is_write_through_and_recent_query_uses_projection_index() {
+fn search_projection_is_write_through_and_queries_use_projection_indexes() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("search-projection").unwrap();
-        let mut document = Record::default();
-        document.fields.insert(
-            "__typename".into(),
-            cache_core::value::CacheValue::String("GraphqlSoupDocument".into()),
-        );
-        document.fields.insert(
-            "name".into(),
-            cache_core::value::CacheValue::String("Quarterly Plan".into()),
-        );
-        document.fields.insert(
-            "updatedAt".into(),
-            cache_core::value::CacheValue::Number(cache_core::value::CacheNumber::PosInt(123)),
-        );
+        let document = quick_access_document("Quarterly Plan", 123);
         storage
             .put_batch(vec![
                 (key("GraphqlSoupDocument:d1"), document.clone()),
@@ -247,12 +264,107 @@ fn search_projection_is_write_through_and_recent_query_uses_projection_index() {
         );
         assert!(!details.contains("records"));
 
+        let rowid_plan = driver::query(
+            &storage.connection(),
+            &format!("EXPLAIN QUERY PLAN {SEARCH_ROWID}"),
+            vec![
+                text(SearchProfile::QuickAccessV1.as_str()),
+                text("GraphqlSoupDocument"),
+                text("d1"),
+            ],
+        )
+        .unwrap();
+        let rowid_details = rowid_plan
+            .iter()
+            .filter_map(|row| required_text(row, 3).ok())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            rowid_details.contains("sqlite_autoindex_search_documents_1")
+                && rowid_details.contains("profile=? AND __typename=? AND id=?"),
+            "rowid lookup did not use the complete primary-key index: {rowid_details}"
+        );
+        assert!(
+            !rowid_details.contains("SCAN search_documents"),
+            "rowid lookup scanned the projection table: {rowid_details}"
+        );
+
+        raw_execute(
+            &storage,
+            SEARCH_UPSERT,
+            vec![
+                text("future-profile"),
+                text("GraphqlSoupDocument"),
+                text("d1"),
+                text("document"),
+                text("future profile row"),
+                Value::from_i64(123),
+                text("future-profile-hash"),
+            ],
+        );
         storage
             .delete_batch(&[key("GraphqlSoupDocument:d2")])
             .await
             .unwrap();
         storage
             .put_batch(vec![(key("GraphqlSoupDocument:d1"), record("internal"))])
+            .await
+            .unwrap();
+        assert!(
+            storage
+                .load_search_documents(SearchProfile::QuickAccessV1)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            raw_scalar(
+                &storage,
+                "SELECT COUNT(*) FROM search_documents WHERE profile = 'future-profile' AND __typename = 'GraphqlSoupDocument' AND id = 'd1'",
+            ),
+            1
+        );
+    });
+}
+
+#[test]
+fn search_projection_batches_large_writes_and_keeps_the_last_duplicate() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("search-projection-batches").unwrap();
+        let record_count = SEARCH_WRITE_BATCH_SIZE + 2;
+        let mut entries = (0..record_count)
+            .map(|index| {
+                (
+                    key(&format!("GraphqlSoupDocument:d{index}")),
+                    quick_access_document(&format!("Document {index}"), index as u64),
+                )
+            })
+            .collect::<Vec<_>>();
+        entries.push((key("GraphqlSoupDocument:d0"), record("internal")));
+
+        storage.put_batch(entries).await.unwrap();
+        let loaded = storage
+            .load_search_documents(SearchProfile::QuickAccessV1)
+            .await
+            .unwrap();
+        assert_eq!(loaded.len(), record_count - 1);
+        assert!(
+            loaded
+                .iter()
+                .all(|document| document.record_key.as_ref() != "GraphqlSoupDocument:d0")
+        );
+
+        storage
+            .put_batch(
+                (1..record_count)
+                    .map(|index| {
+                        (
+                            key(&format!("GraphqlSoupDocument:d{index}")),
+                            record("internal"),
+                        )
+                    })
+                    .collect(),
+            )
             .await
             .unwrap();
         assert!(
@@ -312,7 +424,7 @@ fn queue_diagnostics_use_the_created_at_covering_index_at_scale() {
         let storage = TursoStorage::open_in_memory("queue-diagnostics-plan").unwrap();
         raw_execute(
             &storage,
-            "WITH RECURSIVE values_to_insert(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM values_to_insert WHERE value < 10000) INSERT INTO mutation_queue (query, variables_json, created_at_ms) SELECT 'mutation Scale { scale }', '{}', 10001 - value FROM values_to_insert",
+            "WITH RECURSIVE values_to_insert(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM values_to_insert WHERE value < 10000) INSERT INTO mutation_queue (uuid, query, variables_json, created_at_ms) SELECT printf('00000000-0000-4000-8000-%012d', value), 'mutation Scale { scale }', '{}', 10001 - value FROM values_to_insert",
             Vec::new(),
         );
         let plan = driver::query(
@@ -375,10 +487,8 @@ fn fresh_schema_metadata_foreign_keys_quick_check_and_cascade_are_real() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("schema-scope").unwrap();
         assert_eq!(raw_scalar(&storage, "PRAGMA foreign_keys"), 1);
-        let quick = driver::query(&storage.connection(), "PRAGMA quick_check", Vec::new()).unwrap();
-        assert_eq!(quick.len(), 1);
-        assert_eq!(required_text(&quick[0], 0).unwrap(), "ok");
-        assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM meta"), 3);
+        storage.check_integrity().unwrap();
+        assert_eq!(raw_scalar(&storage, "SELECT COUNT(*) FROM meta"), 4);
 
         let violation = driver::execute(
             &storage.connection(),
@@ -408,6 +518,44 @@ fn fresh_schema_metadata_foreign_keys_quick_check_and_cascade_are_real() {
         assert_eq!(
             raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_layers"),
             0
+        );
+    });
+}
+
+#[test]
+fn partial_uuid_index_rejects_two_current_rows_but_allows_superseded_history() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("partial-current-uuid-index").unwrap();
+        let uuid = uuid::Uuid::new_v4();
+        let mut first = queued("First");
+        first.uuid = uuid;
+        let first_id = storage.enqueue_mutation(first).await.unwrap();
+
+        assert!(
+            driver::execute(
+                &storage.connection(),
+                "INSERT INTO mutation_queue (uuid, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4)",
+                vec![text(&uuid.to_string()), text("mutation Duplicate { x }"), text("{}"), Value::from_i64(2)],
+            )
+            .is_err()
+        );
+        raw_execute(
+            &storage,
+            "UPDATE mutation_queue SET superseded = 1 WHERE id = ?1",
+            vec![Value::from_i64(mutation_id_to_sql(first_id).unwrap())],
+        );
+        assert_eq!(
+            raw_execute(
+                &storage,
+                "INSERT INTO mutation_queue (uuid, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4)",
+                vec![
+                    text(&uuid.to_string()),
+                    text("mutation Current { x }"),
+                    text("{}"),
+                    Value::from_i64(3)
+                ],
+            ),
+            1
         );
     });
 }
@@ -776,25 +924,6 @@ fn invalid_shadow_state_requests_reset_on_reopen() {
 }
 
 #[test]
-fn quick_check_requires_exactly_one_ok_text_row() {
-    assert!(validate_quick_check_rows(&[vec![text("ok")]]).is_ok());
-    for rows in [
-        Vec::new(),
-        vec![vec![text("corrupt")]],
-        vec![vec![text("ok")], vec![text("ok")]],
-        vec![vec![text("ok"), text("extra")]],
-        vec![vec![Value::from_i64(1)]],
-    ] {
-        assert_eq!(
-            validate_quick_check_rows(&rows)
-                .unwrap_err()
-                .physical_reset_reason(),
-            Some(PhysicalResetReason::Integrity)
-        );
-    }
-}
-
-#[test]
 fn every_metadata_mismatch_and_missing_schema_requests_physical_reset() {
     block_on(async {
         for (name, sql) in [
@@ -815,6 +944,10 @@ fn every_metadata_mismatch_and_missing_schema_requests_physical_reset() {
             (
                 "queue-diagnostics-index",
                 "DROP INDEX mutation_queue_created_at_ms_idx",
+            ),
+            (
+                "queue-current-uuid-index",
+                "DROP INDEX mutation_queue_current_uuid_idx",
             ),
             ("search-table", "DROP TABLE search_documents"),
             ("search-index", "DROP INDEX search_documents_browse_idx"),
@@ -872,6 +1005,8 @@ fn semantically_equivalent_schema_formatting_is_accepted_on_reopen() {
         )"#,
         r#"create table 'mutation_queue' (
             'id' integer /* AUTOINCREMENT UNIQUE CHECK COLLATE */ primary key autoincrement,
+            "uuid" text not null,
+            [superseded] integer default ((0)) not null,
             "query" text not null,
             [operation_name] text,
             `variables_json` text not null,
@@ -885,6 +1020,7 @@ fn semantically_equivalent_schema_formatting_is_accepted_on_reopen() {
             "created_at_ms" integer not null
         )"#,
         "CREATE INDEX mutation_queue_created_at_ms_idx ON mutation_queue(created_at_ms)",
+        "CREATE UNIQUE INDEX mutation_queue_current_uuid_idx ON mutation_queue(uuid) WHERE superseded = 0",
         r#"create table `optimistic_layers` (
             `mutation_id` integer primary key,
             [optimistic_data_json] text not null,
@@ -1175,8 +1311,9 @@ fn corrupt_keys_blobs_queue_relationships_and_numerics_request_reset() {
         let storage = TursoStorage::open_in_memory("missing-layer").unwrap();
         raw_execute(
             &storage,
-            "INSERT INTO mutation_queue (query, variables_json, created_at_ms) VALUES (?1, ?2, ?3)",
+            "INSERT INTO mutation_queue (uuid, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4)",
             vec![
+                text("00000000-0000-4000-8000-000000000001"),
                 text("mutation Missing { x }"),
                 text("{}"),
                 Value::from_i64(0),
@@ -1257,14 +1394,36 @@ fn corrupt_keys_blobs_queue_relationships_and_numerics_request_reset() {
             );
         }
 
+        for (name, assignment) in [
+            ("invalid-uuid", "uuid = 'not-a-uuid'"),
+            ("invalid-superseded", "superseded = 2"),
+        ] {
+            let mut storage = TursoStorage::open_in_memory(name).unwrap();
+            let id = storage.enqueue_mutation(queued(name)).await.unwrap();
+            raw_execute(
+                &storage,
+                &format!("UPDATE mutation_queue SET {assignment} WHERE id = ?1"),
+                vec![Value::from_i64(mutation_id_to_sql(id).unwrap())],
+            );
+            assert_eq!(
+                storage
+                    .load_mutation_queue()
+                    .await
+                    .unwrap_err()
+                    .physical_reset_reason(),
+                Some(PhysicalResetReason::Invariant)
+            );
+        }
+
         for invalid_id in [0, -1] {
             let storage =
                 TursoStorage::open_in_memory(&format!("invalid-id-{invalid_id}")).unwrap();
             raw_execute(
                 &storage,
-                "INSERT INTO mutation_queue (id, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO mutation_queue (id, uuid, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4, ?5)",
                 vec![
                     Value::from_i64(invalid_id),
+                    text("00000000-0000-4000-8000-000000000002"),
                     text("mutation Invalid { x }"),
                     text("{}"),
                     Value::from_i64(0),
@@ -1587,6 +1746,54 @@ fn record_and_projection_patch_roll_back_together_on_storage_fault() {
             fact.attribute == Token::new("server-relation").unwrap()
                 && fact.value == predicate_index::ExactValue::new([1]).unwrap()
         }));
+    });
+}
+
+#[test]
+fn every_uuid_upsert_fault_rolls_back_queue_layer_and_shadow_changes() {
+    block_on(async {
+        for fault_index in 0..=3 {
+            let mut storage =
+                TursoStorage::open_in_memory(&format!("uuid-upsert-fault-{fault_index}")).unwrap();
+            let uuid = uuid::Uuid::new_v4();
+            let mut first = queued("First");
+            first.uuid = uuid;
+            storage
+                .enqueue_mutation_with_shadow(
+                    first,
+                    vec![pending_projection("Thing:1", "user-1", 10)],
+                )
+                .await
+                .unwrap();
+            let queue_before = storage.load_mutation_queue().await.unwrap();
+            let shadow_before = storage
+                .load_optimistic_projections(&[PredicateRecordKey::new("Thing:1").unwrap()])
+                .await
+                .unwrap();
+
+            let mut replacement = queued("Replacement");
+            replacement.uuid = uuid;
+            storage.arm_fault(TestFault::After {
+                site: TestFaultSite::Enqueue,
+                index: fault_index,
+            });
+            storage
+                .enqueue_mutation_with_shadow(
+                    replacement,
+                    vec![pending_projection("Thing:1", "user-2", 20)],
+                )
+                .await
+                .unwrap_err();
+
+            assert_eq!(storage.load_mutation_queue().await.unwrap(), queue_before);
+            assert_eq!(
+                storage
+                    .load_optimistic_projections(&[PredicateRecordKey::new("Thing:1").unwrap()])
+                    .await
+                    .unwrap(),
+                shadow_before
+            );
+        }
     });
 }
 
@@ -1997,21 +2204,27 @@ fn predicate_query_plan_uses_fact_indexes_and_never_scans_record_blobs() {
             .any(|detail| detail.contains("exact_facts_lookup_idx")),
         "{details:#?}"
     );
-    assert!(
-        details
-            .iter()
-            .any(|detail| detail.contains("integer_facts_lookup_idx")),
-        "{details:#?}"
-    );
     for index in [
-        "optimistic_exact_facts_lookup_idx",
-        "optimistic_integer_facts_lookup_idx",
-        "sort_facts_lookup_idx",
-        "optimistic_sort_facts_lookup_idx",
+        "sqlite_autoindex_integer_facts_1",
+        "sqlite_autoindex_optimistic_exact_facts_1",
+        "sqlite_autoindex_optimistic_integer_facts_1",
     ] {
         assert!(
-            details.iter().any(|detail| detail.contains(index)),
-            "missing {index}: {details:#?}"
+            details.iter().any(|detail| {
+                detail.contains(index) && detail.contains("(document_id=? AND attribute=?")
+            }),
+            "missing document-key fact lookup {index}: {details:#?}"
+        );
+    }
+    for index in [
+        "sqlite_autoindex_sort_facts_1",
+        "sqlite_autoindex_optimistic_sort_facts_1",
+    ] {
+        assert!(
+            details.iter().any(|detail| {
+                detail.contains(index) && detail.contains("(document_id=? AND attribute=?)")
+            }),
+            "missing composite-key sort lookup {index}: {details:#?}"
         );
     }
     assert!(details.iter().all(|detail| !detail.contains("records")));

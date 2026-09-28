@@ -4,6 +4,24 @@ use std::{
 };
 
 use axum::{Router, http::Request};
+
+#[test]
+fn notification_state_query_parameters_are_exact_and_support_unions() {
+    use crate::domain::models::NotificationState::{Done, Seen, Unseen};
+    use axum::extract::Query;
+    for (uri, expected) in [
+        ("/", None),
+        ("/?states=", Some(vec![])),
+        ("/?states=unseen,seen", Some(vec![Unseen, Seen])),
+        ("/?states=done", Some(vec![Done])),
+    ] {
+        let Query(params) = Query::<super::Params>::try_from_uri(&uri.parse().unwrap()).unwrap();
+        assert_eq!(params.states, expected);
+    }
+    assert!(
+        Query::<super::Params>::try_from_uri(&"/?states=seen,invalid".parse().unwrap()).is_err()
+    );
+}
 use hmac::{Hmac, Mac};
 use http_body_util::BodyExt;
 use macro_authorization::{
@@ -129,6 +147,7 @@ impl NotificationReader for AuthenticationTestService {
         &self,
         _user_id: MacroUserIdStr<'_>,
         _entity_refs: Vec<Entity<'static>>,
+        _query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> impl Future<Output = Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report>> + Send
     {
         async { unreachable!("should not be called") }
@@ -613,6 +632,7 @@ impl NotificationReader for PresignedTestService {
         &self,
         _user_id: MacroUserIdStr<'_>,
         _entity_refs: Vec<Entity<'static>>,
+        _query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> impl Future<Output = Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report>> + Send
     {
         async { unreachable!() }
@@ -686,8 +706,7 @@ impl NotificationReader for PresignedTestService {
 
 const HMAC_KEY: &[u8] = b"test-key";
 
-/// The base URL that `Environment::new_or_prod()` (Production) resolves to.
-const NOTIFICATION_BASE_URL: &str = "https://notifications.macro.com";
+const LEGACY_NOTIFICATION_ORIGIN: &str = "https://notifications.macro.com";
 
 fn presigned_router() -> Router {
     let hmac_key = Hmac::<Sha256>::new_from_slice(HMAC_KEY).unwrap();
@@ -699,31 +718,40 @@ fn presigned_router() -> Router {
         authorization_state,
     );
 
-    Router::new()
+    let inner = Router::new()
         .nest(
             "/user_notifications",
             super::router::<PresignedTestService, FakeAuthorizationService, serde_json::Value>(),
         )
-        .with_state(state)
+        .with_state(state);
+    Router::new()
+        .merge(inner.clone())
+        .nest("/notification", inner)
 }
 
-/// Build a presigned disable URL path+query for use as a request URI.
-///
-/// Signs the full absolute URL (`https://notifications.macro.com/...`) and
-/// returns only the path+query portion (e.g. `/user_notifications/preferences/...?id=...&sig=...`).
-fn signed_disable_uri(notification_type: &str, user_id: &str) -> String {
+fn signed_disable_uri_at(origin: &str, notification_type: &str, user_id: &str) -> String {
     let hmac_key = Hmac::<Sha256>::new_from_slice(HMAC_KEY).unwrap();
-    let mut unsigned = url::Url::parse(&format!(
-        "{NOTIFICATION_BASE_URL}/user_notifications/preferences/{notification_type}/disable"
-    ))
-    .unwrap();
-    // Use query_pairs_mut so the encoding matches what SignedUrl::verify expects
-    // (application/x-www-form-urlencoded round-trip).
+    let mut unsigned = crate::domain::models::signing::append_path(
+        url::Url::parse(origin).unwrap(),
+        &format!("/user_notifications/preferences/{notification_type}/disable"),
+    );
     unsigned.query_pairs_mut().append_pair("id", user_id);
     let signed = SignedUrl::new(unsigned, hmac_key);
     let signed_url = signed.as_ref();
-    // Return path + query for use as request URI
     format!("{}?{}", signed_url.path(), signed_url.query().unwrap())
+}
+
+fn signed_disable_uri(notification_type: &str, user_id: &str) -> String {
+    signed_disable_uri_at(LEGACY_NOTIFICATION_ORIGIN, notification_type, user_id)
+}
+
+fn presigned_get(uri: &str, host: &str) -> Request<axum::body::Body> {
+    Request::builder()
+        .uri(uri)
+        .method("GET")
+        .header("host", host)
+        .body(axum::body::Body::empty())
+        .unwrap()
 }
 
 #[tokio::test]
@@ -731,12 +759,10 @@ async fn presigned_disable_succeeds_without_jwt() {
     let router = presigned_router();
     let uri = signed_disable_uri("test_type", "macro|user@example.com");
 
-    let req = Request::builder()
-        .uri(&uri)
-        .method("GET")
-        .body(axum::body::Body::empty())
+    let resp = router
+        .oneshot(presigned_get(&uri, "notifications.macro.com"))
+        .await
         .unwrap();
-    let resp = router.oneshot(req).await.unwrap();
 
     assert_eq!(resp.status(), StatusCode::OK);
     let body = resp.into_body().collect().await.unwrap().to_bytes();
@@ -753,13 +779,24 @@ async fn presigned_disable_succeeds_with_valid_hmac() {
     let uri = signed_disable_uri("test_type", "macro|user@example.com");
 
     let resp = router
-        .oneshot(
-            Request::builder()
-                .uri(&uri)
-                .method("GET")
-                .body(axum::body::Body::empty())
-                .unwrap(),
-        )
+        .oneshot(presigned_get(&uri, "notifications.macro.com"))
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn presigned_disable_succeeds_on_gateway_prefix() {
+    let router = presigned_router();
+    let uri = signed_disable_uri_at(
+        "https://gateway.macro.com/notification",
+        "test_type",
+        "macro|user@example.com",
+    );
+
+    let resp = router
+        .oneshot(presigned_get(&uri, "gateway.macro.com"))
         .await
         .unwrap();
 

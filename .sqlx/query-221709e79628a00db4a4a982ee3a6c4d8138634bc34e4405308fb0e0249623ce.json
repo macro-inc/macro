@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE external_agent_session AS external\n                SET last_run_id = $2,\n                    updated_at = now()\n                FROM agent_session AS session\n                WHERE external.agent_session_id = $1\n                  AND session.id = external.agent_session_id\n                  AND session.manager_replica_id = $3\n                  AND session.manager_fence = $4\n                  AND external.provider = 'cursor'\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "221709e79628a00db4a4a982ee3a6c4d8138634bc34e4405308fb0e0249623ce"
+}

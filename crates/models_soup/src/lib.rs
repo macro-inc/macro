@@ -2,6 +2,8 @@
 
 #![deny(missing_docs)]
 
+/// Agent session models for Soup responses.
+pub mod agent_session;
 /// Calendar event models for Soup responses.
 pub mod calendar_event;
 /// Call record models for Soup responses.
@@ -18,6 +20,8 @@ pub mod document;
 pub mod email_thread;
 /// Foreign entity models for Soup responses.
 pub mod foreign_entity;
+/// Initiative models for Soup responses.
+pub mod initiative;
 /// Unified Soup feed item model.
 pub mod item;
 /// Project models for Soup responses.

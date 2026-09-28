@@ -1,18 +1,11 @@
 import { MAX_ZOOM, MIN_ZOOM } from '@block-canvas/constants';
 import { sharedInstance } from '@block-canvas/util/sharedInstance';
-import {
-  type BlockStore,
-  createBlockEffect,
-  createBlockMemo,
-  createBlockStore,
-  useBlockId,
-  useIsNestedBlock,
-} from '@core/block';
-import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import { createEffect, createSignal } from 'solid-js';
 import { unwrap } from 'solid-js/store';
+import { useCanvasDocument } from '../context/canvas-document-context';
+import { saveCanvasViewLocation } from '../queries/canvas-document';
 import { clamp, easeInOutCubic } from '../util/math';
 import { Rect } from '../util/rectangle';
 import { vec2 } from '../util/vector2';
@@ -31,86 +24,46 @@ export const defaultRenderState = (): RenderState => ({
   containerRect: undefined,
 });
 
-export const renderStateStore: BlockStore<RenderState> = createBlockStore(
-  defaultRenderState()
-);
-
-type AnimationState = {
-  startX: number;
-  startY: number;
-  startScale: number;
-  targetX: number;
-  targetY: number;
-  targetScale: number;
-  startTime: number;
-  duration: number;
-  isAnimating: boolean;
-};
-
-// Create a block store for animation state
-const animationStore = createBlockStore<AnimationState>({
-  startX: 0,
-  startY: 0,
-  startScale: 1,
-  targetX: 0,
-  targetY: 0,
-  targetScale: 1,
-  startTime: 0,
-  duration: 0,
-  isAnimating: false,
-});
-
-export const isAnimating = createBlockMemo(
-  () => animationStore.get.isAnimating
-);
-
-// Create block effect for animation handling
-createBlockEffect(() => {
-  const [animation, setAnimation] = animationStore;
-  const [, setState] = renderStateStore;
-  if (!animation.isAnimating) return;
-
-  const animate = () => {
-    const now = performance.now();
-    const elapsed = now - animation.startTime;
-    const progress = Math.min(elapsed / animation.duration, 1);
-
-    // Apply easing
-    // const t = easeInOutCubic(progress);
-    const t = easeInOutCubic(progress);
-
-    // Interpolate values
-    const x = animation.startX + (animation.targetX - animation.startX) * t;
-    const y = animation.startY + (animation.targetY - animation.startY) * t;
-    const scale =
-      animation.startScale + (animation.targetScale - animation.startScale) * t;
-
-    setState({ x, y, scale });
-
-    if (progress < 1) {
-      requestAnimationFrame(animate);
-    } else {
-      setAnimation('isAnimating', false);
-    }
-  };
-
-  requestAnimationFrame(animate);
-});
-
 /**
- * Modify and read the canvas's render state from a block-scoped closure
+ * Modify and read the canvas's render state from its document-scoped context
  * (usually the top level of a component or a createCallback called from the top
  * level of a component).
  */
 export const useRenderState = sharedInstance(() => {
-  const [state, setState] = renderStateStore;
-  const [, setAnimation] = animationStore;
-  const blockId = useBlockId();
-  const isNestedBlock = useIsNestedBlock();
+  const canvas = useCanvasDocument();
+  const [state, setState] = canvas.state.stores.render;
+  const [animation, setAnimation] = canvas.state.stores.animation;
+  const { documentId, isNested } = canvas;
+
+  createEffect(() => {
+    if (!animation.isAnimating) return;
+
+    const animate = () => {
+      const now = performance.now();
+      const elapsed = now - animation.startTime;
+      const progress = Math.min(elapsed / animation.duration, 1);
+      const t = easeInOutCubic(progress);
+      const x = animation.startX + (animation.targetX - animation.startX) * t;
+      const y = animation.startY + (animation.targetY - animation.startY) * t;
+      const scale =
+        animation.startScale +
+        (animation.targetScale - animation.startScale) * t;
+
+      setState({ x, y, scale });
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        setAnimation('isAnimating', false);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  });
 
   const debouncedSaveState = debounce(() => {
-    if (isNestedBlock) return;
-    saveState(blockId, unwrap(state));
+    if (isNested()) return;
+    void saveCanvasViewLocation(documentId(), unwrap(state));
   }, 500);
 
   const [defferedScale, setDeferredScale] = createSignal(state.scale);
@@ -344,19 +297,3 @@ export const useRenderState = sharedInstance(() => {
     },
   };
 });
-
-async function saveState(
-  blockId: string,
-  state: { x: number; y: number; scale: number }
-) {
-  if (isNaN(state.x) || isNaN(state.y) || isNaN(state.scale)) {
-    return;
-  }
-  await storageServiceClient.upsertDocumentViewLocation({
-    documentId: blockId,
-    location:
-      (state.x !== 0 ? '#x=' + Math.round(state.x) : '') +
-      (state.y !== 0 ? '&y=' + Math.round(state.y) : '') +
-      (state.scale !== 1 ? '&s=' + Math.round(state.scale * 100) : ''),
-  });
-}

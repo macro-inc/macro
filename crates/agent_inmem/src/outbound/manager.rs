@@ -6,6 +6,7 @@
 //! and the conversation store those tasks read.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::channel::Channel;
@@ -13,10 +14,11 @@ use agent_runtime_protocol::domain::connection::{RuntimeConnection, ServerChanne
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 use agent_session::domain::model::AgentSessionId;
 use dashmap::DashMap;
-use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 
 use crate::domain::agent::{AgentState, serve};
-use crate::domain::engine::TurnEngine;
+use crate::domain::engine::{AgentIdentity, TurnEngine};
+use crate::domain::mcp::DynMcpToolConnector;
 use crate::domain::replay::{FrameSource, replay_history};
 use crate::domain::session::{SessionState, SessionStore};
 
@@ -29,9 +31,13 @@ pub struct SessionFacts {
     /// The session the agent serves.
     pub id: AgentSessionId,
     /// The session's owner; turns act on their behalf.
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// Model id stamped on the session row.
     pub model: String,
+    /// The bot's display name and `@` handle, folded into every turn's
+    /// system prompt so the model knows who it is. Looked up from the
+    /// session's bot at attach; `None` only in tests that do not name one.
+    pub identity: Option<AgentIdentity>,
     /// Instructions stamped on the session row, folded into every turn's
     /// system prompt. Immutable for the session's life, so a reattach that
     /// finds a live conversation leaves what is stored alone.
@@ -62,21 +68,52 @@ impl Drop for LiveAgent {
 pub struct InMemAgentManager {
     engine: Arc<dyn TurnEngine>,
     frames: Arc<dyn FrameSource>,
+    mcp: Arc<dyn DynMcpToolConnector>,
+    enable_dev_commands: bool,
     store: Arc<SessionStore>,
     live: DashMap<AgentSessionId, LiveAgent>,
+    /// Each live session's egress token. An in-process session has no
+    /// container environment to read it back from, so the manager is the
+    /// one place it survives spawn; a resume after a restart finds nothing
+    /// here and advertises no servers, exactly like a sandbox whose
+    /// container is gone.
+    tokens: DashMap<AgentSessionId, String>,
 }
 
 impl InMemAgentManager {
     /// A manager running every session's turns through `engine`, rebuilding
-    /// cold sessions' conversations from `frames`.
+    /// cold sessions' conversations from `frames`, and dialing the MCP
+    /// servers each session is handed through `mcp`.
     #[must_use]
-    pub fn new(engine: Arc<dyn TurnEngine>, frames: Arc<dyn FrameSource>) -> Self {
+    pub fn new(
+        engine: Arc<dyn TurnEngine>,
+        frames: Arc<dyn FrameSource>,
+        mcp: Arc<dyn DynMcpToolConnector>,
+    ) -> Self {
         Self {
             engine,
             frames,
+            mcp,
+            enable_dev_commands: false,
             store: Arc::new(SessionStore::new()),
             live: DashMap::new(),
+            tokens: DashMap::new(),
         }
+    }
+
+    /// The egress token `attach` was handed for `session`, if this process
+    /// still holds it.
+    #[must_use]
+    pub fn session_token(&self, session: AgentSessionId) -> Option<String> {
+        self.tokens.get(&session).map(|token| token.clone())
+    }
+
+    /// Enable manual development commands such as `/ask`. Disabled by default;
+    /// the host opts in for its local and development environments.
+    #[must_use]
+    pub fn with_dev_commands(mut self, enabled: bool) -> Self {
+        self.enable_dev_commands = enabled;
+        self
     }
 
     /// Start (or restart) the session's agent and return the transport the
@@ -85,10 +122,20 @@ impl InMemAgentManager {
     /// task - and a session this process has never held (a fresh spawn, or a
     /// resume after a restart) gets its conversation rebuilt from the durable
     /// frame log first.
+    ///
+    /// `session_token` is the egress token minted at spawn; a resume passes
+    /// `None` and keeps whatever spawn stored.
     #[must_use]
-    pub async fn attach(&self, facts: SessionFacts) -> ServerChannel {
+    pub async fn attach(
+        &self,
+        facts: SessionFacts,
+        session_token: Option<String>,
+    ) -> ServerChannel {
         // A replaced agent must die before its successor serves the session.
         self.live.remove(&facts.id);
+        if let Some(token) = session_token {
+            self.tokens.insert(facts.id, token);
+        }
         if !self.store.contains_key(&facts.id) {
             // Loaded before taking the entry so the read never blocks the
             // map; `or_insert_with` still wins any race to create it.
@@ -96,6 +143,7 @@ impl InMemAgentManager {
             self.store.entry(facts.id).or_insert_with(|| SessionState {
                 acp_session_id: facts.acp_session_id.clone(),
                 model: facts.model.clone(),
+                identity: facts.identity.clone(),
                 instructions: facts.instructions.clone(),
                 history,
             });
@@ -110,6 +158,10 @@ impl InMemAgentManager {
             store: Arc::clone(&self.store),
             active_cancel: std::sync::Mutex::new(Vec::new()),
             turn_lock: tokio::sync::Mutex::new(()),
+            mcp: Arc::clone(&self.mcp),
+            mcp_tools: std::sync::Mutex::new(None),
+            client_renders_forms: AtomicBool::new(false),
+            enable_dev_commands: self.enable_dev_commands,
         });
         let session_id = facts.id;
         let task = tokio::spawn(async move {
@@ -137,5 +189,6 @@ impl InMemAgentManager {
     pub fn teardown(&self, session: AgentSessionId) {
         self.live.remove(&session);
         self.store.remove(&session);
+        self.tokens.remove(&session);
     }
 }

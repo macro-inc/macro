@@ -2,7 +2,10 @@
 mod test;
 
 use analytics_client::{MetaActionSource, MetaUserData};
+use std::{collections::HashSet, future::Future};
+
 use anyhow::Context;
+use authentication_service::service::signup_policy::SignupPolicy;
 use axum::{
     extract::{self, State},
     http::StatusCode,
@@ -12,13 +15,18 @@ use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use rand::Rng;
 
 use crate::{
-    api::context::{ApiContext, AuthorizationService},
+    api::{
+        context::{ApiContext, AuthorizationService},
+        signup_policy::signup_forbidden_response,
+    },
     rate_limit_config::RATE_LIMIT_CONFIG,
 };
 use authentication_service::service::user::create_user::create_user;
-use authentication_service::service::user::support_channel_welcome::post_support_channel_welcome;
+use authentication_service::service::user::support_channel_welcome::{
+    AuthorizedSupportChannelMessages, post_support_channel_welcome,
+};
 use channels::domain::{
-    models::{ChannelType, CreateChannelRequest, Sender},
+    models::{ChannelType, CreateChannelRequest},
     ports::ChannelService,
 };
 use favorites::domain::ports::FavoritesService;
@@ -29,11 +37,16 @@ use macro_user_id::{
 };
 use model::authentication::webhooks::{FusionAuthUserWebhook, User as FusionAuthWebhookUser};
 use model_entity::EntityType;
-use std::collections::HashSet;
 use teams::domain::team_repo::TeamService;
 
 /// Macro support team members added to every new user's support channel.
-const MACRO_SUPPORT_EMAILS: [&str; 3] = ["jacob@macro.com", "julia@macro.com", "teo@macro.com"];
+const MACRO_SUPPORT_EMAILS: [&str; 5] = [
+    "jacob@macro.com",
+    "julia@macro.com",
+    "teo@macro.com",
+    "valentina@macro.com",
+    "chaitanya@macro.com",
+];
 
 fn support_channel_name<T: AsRef<str>>(email: &Email<T>) -> String {
     format!("Macro Support x {}", email.local_part())
@@ -88,10 +101,11 @@ pub async fn handler(
             })?;
         }
         "user.create" => {
-            create_user_webhook(&ctx, req).await.map_err(|e| {
-                tracing::error!(error=?e, "unable to user.create");
-                (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
-            })?;
+            dispatch_user_create_webhook(&ctx.signup_policy, req, |req| {
+                create_user_webhook(&ctx, req)
+            })
+            .await
+            .map_err(user_create_webhook_error_response)?;
         }
         "user.email.verified" => {
             verify_user_email_webhook(&ctx, req).await.map_err(|e| {
@@ -106,6 +120,39 @@ pub async fn handler(
     }
 
     Ok(StatusCode::OK.into_response())
+}
+
+enum UserCreateWebhookError {
+    Forbidden,
+    Onboarding(anyhow::Error),
+}
+
+fn user_create_webhook_error_response(error: UserCreateWebhookError) -> Response {
+    match error {
+        UserCreateWebhookError::Forbidden => signup_forbidden_response(),
+        UserCreateWebhookError::Onboarding(e) => {
+            tracing::error!(error=?e, "unable to user.create");
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+        }
+    }
+}
+
+async fn dispatch_user_create_webhook<F, Fut>(
+    signup_policy: &SignupPolicy,
+    req: FusionAuthUserWebhook,
+    onboard_user: F,
+) -> Result<(), UserCreateWebhookError>
+where
+    F: FnOnce(FusionAuthUserWebhook) -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
+    signup_policy
+        .authorize_public_email(&req.event.user.email)
+        .map_err(|_| UserCreateWebhookError::Forbidden)?;
+
+    onboard_user(req)
+        .await
+        .map_err(UserCreateWebhookError::Onboarding)
 }
 
 #[tracing::instrument(skip(ctx, req), err)]
@@ -172,6 +219,18 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         && count >= RATE_LIMIT_CONFIG.create_user_hourly.0
     {
         anyhow::bail!("rate limit exceeded")
+    }
+
+    if let Some((user_id, organization_id)) =
+        macro_db_client::user::get::get_user_profile_by_fusionauth_user_id_and_email(
+            &ctx.db,
+            &fusionauth_user_id,
+            &email,
+        )
+        .await?
+    {
+        tracing::info!(user_id=?user_id, organization_id=?organization_id, "user profile already exists for FusionAuth user");
+        return Ok(());
     }
 
     // check if user exists
@@ -362,6 +421,8 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     tokio::spawn({
         let document_storage_service_client = ctx.document_storage_service_client.clone();
         let channel_service = ctx.channel_service.clone();
+        let channel_messages = ctx.channel_messages.clone();
+        let entity_access_service = ctx.entity_access_service.clone();
         let favorites_service = ctx.favorites_service.clone();
         let user_id = user_id.clone();
         let email = email.clone();
@@ -390,9 +451,8 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
             };
 
             let channel = match channel_service
-                .create_channel(
-                    Sender::new_from_user(owner_id.clone()),
-                    None,
+                .create_system_channel(
+                    owner_id.clone(),
                     CreateChannelRequest {
                         name: Some(support_channel_name),
                         channel_type: ChannelType::Private,
@@ -418,7 +478,9 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to favorite Macro support channel");
             }
 
-            let _ = post_support_channel_welcome(channel_service.as_ref(), &channel.id, owner_id)
+            let welcome_gateway =
+                AuthorizedSupportChannelMessages::new(channel_messages, entity_access_service);
+            let _ = post_support_channel_welcome(&welcome_gateway, &channel.id, owner_id)
                 .await
                 .inspect_err(|e| {
                 tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to post Macro support welcome message");

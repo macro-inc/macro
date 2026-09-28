@@ -1,468 +1,158 @@
-use std::sync::{Arc, Mutex};
-
-use async_trait::async_trait;
-use channels::domain::models::{
-    AttachmentEntityReference, ChannelAttachmentType, ChannelContextMessage, ChannelMessageFilters,
-    ChannelParticipant, MessagePageDirection, MutatedMessage, ResolvedChannelMessage, Sender,
-    ThreadReply,
-};
-use channels::domain::ports::{
-    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelService,
-};
-use chrono::Utc;
-use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{CreatedAt, Query};
-
+use super::super::test::*;
 use super::*;
+use messages::domain::{api::MockMessageServiceApi, models::SimpleMention};
+use std::sync::Mutex;
 
-struct TestChannelService {
-    parent: Option<ChannelContextMessage>,
-    thread_replies: Vec<ThreadReply>,
+struct Classifier {
+    answer: Result<bool, &'static str>,
+    calls: Mutex<Vec<Vec<TranscriptMessage>>>,
 }
-
-impl ChannelService for TestChannelService {
-    fn get_channel_messages(
-        &self,
-        _channel_id: Uuid,
-        _query: Query<Uuid, CreatedAt, ()>,
-        _direction: MessagePageDirection,
-        _limit: u16,
-        _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<MacroUserIdStr<'static>>,
-    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for detector tests") }
-    }
-
-    fn get_channel_attachments(
-        &self,
-        _channel_id: Uuid,
-        _query: Query<Uuid, CreatedAt, ()>,
-        _limit: u16,
-        _attachment_type: Option<ChannelAttachmentType>,
-    ) -> impl Future<Output = Result<ChannelAttachmentsPage, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for detector tests") }
-    }
-
-    fn get_channel_participants(
-        &self,
-        _channel_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for detector tests") }
-    }
-
-    fn get_message_context(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _before: i64,
-        _after: i64,
-    ) -> impl Future<Output = Result<Vec<ChannelContextMessage>, ChannelMessagesErr>> + Send {
-        let messages = self.parent.clone().into_iter().collect::<Vec<_>>();
-        async move { Ok(messages) }
-    }
-
-    fn get_attachment_references(
-        &self,
-        _entity_type: String,
-        _entity_id: String,
-        _user_id: String,
-    ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send
-    {
-        async move { unimplemented!("not needed for detector tests") }
-    }
-
-    fn get_channel_messages_around(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _limit: u16,
-    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for detector tests") }
-    }
-
-    fn get_thread_replies(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<ThreadReply>, ChannelMessagesErr>> + Send {
-        let replies = self.thread_replies.clone();
-        async move { Ok(replies) }
-    }
-
-    fn resolve_message(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-    ) -> impl Future<Output = Result<ResolvedChannelMessage, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for detector tests") }
-    }
-}
-
-struct TestClassifier {
-    result: anyhow::Result<bool>,
-    received: Mutex<Option<Vec<TranscriptMessage>>>,
-}
-
-impl TestClassifier {
-    fn returning(result: anyhow::Result<bool>) -> Self {
-        Self {
-            result,
-            received: Mutex::new(None),
-        }
-    }
-
-    fn received_thread(&self) -> Option<Vec<TranscriptMessage>> {
-        self.received.lock().unwrap().clone()
-    }
-}
-
 #[async_trait]
-impl InferredTriggerClassifier for TestClassifier {
+impl InferredTriggerClassifier for Classifier {
     async fn expects_response(
         &self,
-        _requesting_user: &MacroUserIdStr<'static>,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
         thread: &[TranscriptMessage],
     ) -> anyhow::Result<bool> {
-        *self.received.lock().unwrap() = Some(thread.to_vec());
-        match &self.result {
-            Ok(value) => Ok(*value),
-            Err(err) => anyhow::bail!("{err}"),
-        }
+        self.calls.lock().unwrap().push(thread.to_vec());
+        self.answer.map_err(|error| anyhow::anyhow!(error))
     }
 }
-
-fn user_id(email: &str) -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from(format!("macro|{email}")).unwrap()
+fn classifier(answer: Result<bool, &'static str>) -> Arc<Classifier> {
+    Arc::new(Classifier {
+        answer,
+        calls: Mutex::new(vec![]),
+    })
 }
-
-fn macro_ai_sender_id() -> String {
-    bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string()
-}
-
-fn candidate(
-    channel_id: Uuid,
-    thread_id: Option<Uuid>,
-    sender: Sender,
-    content: &str,
-    mentioned_bot_ids: Vec<bot_id::BotId>,
-) -> ChannelBotTrigger {
-    let now = Utc::now();
-    ChannelBotTrigger {
-        channel_id,
-        message: MutatedMessage {
-            id: Uuid::new_v4(),
-            channel_id,
-            thread_id,
-            sender_id: sender,
-            triggered_by: None,
-            content: content.to_string(),
-            created_at: now,
-            updated_at: now,
-            edited_at: None,
-            deleted_at: None,
-        },
-        mentioned_bot_ids,
-        span: tracing::Span::none(),
-    }
-}
-
-fn parent_message(
-    channel_id: Uuid,
-    id: Uuid,
-    sender_id: &str,
-    content: &str,
-) -> ChannelContextMessage {
-    let now = Utc::now();
-    ChannelContextMessage {
-        id,
-        channel_id,
-        thread_id: None,
-        sender_id: sender_id.to_string(),
-        triggered_by: None,
-        bot_profile: None,
-        content: content.to_string(),
-        created_at: now,
-        updated_at: now,
-        edited_at: None,
-        deleted_at: None,
-    }
-}
-
-fn thread_reply(sender_id: &str, content: &str) -> ThreadReply {
-    let now = Utc::now();
-    ThreadReply {
-        id: Uuid::new_v4(),
-        sender_id: sender_id.to_string(),
-        triggered_by: None,
-        bot_profile: None,
-        content: content.to_string(),
-        created_at: now,
-        updated_at: now,
-        edited_at: None,
-        reactions: Vec::new(),
-        attachments: Vec::new(),
-    }
-}
-
-fn detector(
-    channels: TestChannelService,
-    classifier: Arc<TestClassifier>,
-) -> MentionOrInferredDetector<TestChannelService, TestClassifier> {
-    MentionOrInferredDetector::new(Arc::new(channels), classifier)
-}
-
-fn thread_with_agent_reply(channel_id: Uuid, parent_id: Uuid) -> TestChannelService {
-    TestChannelService {
-        parent: Some(parent_message(
-            channel_id,
-            parent_id,
-            "macro|alice@example.com",
-            "notifications are broken",
-        )),
-        thread_replies: vec![thread_reply(
-            &macro_ai_sender_id(),
-            "what is broken exactly?",
-        )],
-    }
-}
-
 #[tokio::test]
-async fn mention_triggers_each_mentioned_bot_without_classification() {
-    let channel_id = Uuid::new_v4();
-    let other_bot = bot_id::BotId::new_from_uuid(Uuid::new_v4());
-    let classifier = Arc::new(TestClassifier::returning(Ok(true)));
-    let detector = detector(
-        TestChannelService {
-            parent: None,
-            thread_replies: Vec::new(),
-        },
+async fn document_mention_triggers_each_canonical_bot_once_without_classification() {
+    let mut trigger = message(1, None, "@macro help");
+    let mention = SimpleMention {
+        entity_type: "user".into(),
+        entity_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
+    };
+    trigger.mentions = vec![mention.clone(), mention];
+    let classifier = classifier(Ok(false));
+    let detector = MentionOrInferredDetector::new(
+        Arc::new(MockMessageServiceApi::new()),
+        Arc::new(Access::default()),
         classifier.clone(),
     );
-
-    let invocations = detector
-        .detect(&candidate(
-            channel_id,
-            None,
-            Sender::new_from_user(user_id("alice@example.com")),
-            "@macro help",
-            vec![bot_id::MACRO_AI_BOT_ID, other_bot],
-        ))
-        .await;
-
     assert_eq!(
-        invocations,
-        vec![
-            BotInvocation {
-                bot_id: bot_id::MACRO_AI_BOT_ID,
-                trigger: BotTrigger::Mention,
-            },
-            BotInvocation {
-                bot_id: other_bot,
-                trigger: BotTrigger::Mention,
-            },
-        ]
-    );
-    assert!(classifier.received_thread().is_none());
-}
-
-#[tokio::test]
-async fn bot_authored_message_never_triggers() {
-    let channel_id = Uuid::new_v4();
-    let parent_id = Uuid::new_v4();
-    let classifier = Arc::new(TestClassifier::returning(Ok(true)));
-    let detector = detector(
-        thread_with_agent_reply(channel_id, parent_id),
-        classifier.clone(),
-    );
-
-    let invocations = detector
-        .detect(&candidate(
-            channel_id,
-            Some(parent_id),
-            Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
-            "I fixed it",
-            Vec::new(),
-        ))
-        .await;
-
-    assert!(invocations.is_empty());
-    assert!(classifier.received_thread().is_none());
-}
-
-#[tokio::test]
-async fn top_level_message_is_never_inferred() {
-    let channel_id = Uuid::new_v4();
-    let classifier = Arc::new(TestClassifier::returning(Ok(true)));
-    let detector = detector(
-        TestChannelService {
-            parent: None,
-            thread_replies: Vec::new(),
-        },
-        classifier.clone(),
-    );
-
-    let invocations = detector
-        .detect(&candidate(
-            channel_id,
-            None,
-            Sender::new_from_user(user_id("alice@example.com")),
-            "macro agent respond",
-            Vec::new(),
-        ))
-        .await;
-
-    assert!(invocations.is_empty());
-    assert!(classifier.received_thread().is_none());
-}
-
-#[tokio::test]
-async fn thread_without_agent_message_is_never_inferred() {
-    let channel_id = Uuid::new_v4();
-    let parent_id = Uuid::new_v4();
-    let classifier = Arc::new(TestClassifier::returning(Ok(true)));
-    let detector = detector(
-        TestChannelService {
-            parent: Some(parent_message(
-                channel_id,
-                parent_id,
-                "macro|alice@example.com",
-                "anyone looked at this?",
-            )),
-            thread_replies: vec![thread_reply("macro|bob@example.com", "not yet")],
-        },
-        classifier.clone(),
-    );
-
-    let invocations = detector
-        .detect(&candidate(
-            channel_id,
-            Some(parent_id),
-            Sender::new_from_user(user_id("carol@example.com")),
-            "can someone respond",
-            Vec::new(),
-        ))
-        .await;
-
-    assert!(invocations.is_empty());
-    assert!(classifier.received_thread().is_none());
-}
-
-#[tokio::test]
-async fn thread_reply_after_agent_message_infers_when_classifier_agrees() {
-    let channel_id = Uuid::new_v4();
-    let parent_id = Uuid::new_v4();
-    let classifier = Arc::new(TestClassifier::returning(Ok(true)));
-    let detector = detector(
-        thread_with_agent_reply(channel_id, parent_id),
-        classifier.clone(),
-    );
-
-    let invocations = detector
-        .detect(&candidate(
-            channel_id,
-            Some(parent_id),
-            Sender::new_from_user(user_id("alice@example.com")),
-            "it fires twice per message",
-            Vec::new(),
-        ))
-        .await;
-
-    assert_eq!(
-        invocations,
+        detector.detect(&event(&trigger)).await,
         vec![BotInvocation {
             bot_id: bot_id::MACRO_AI_BOT_ID,
-            trigger: BotTrigger::Inferred,
+            trigger: BotTrigger::Mention
         }]
     );
-
-    let thread = classifier.received_thread().expect("classifier called");
-    assert_eq!(
-        thread,
-        vec![
-            TranscriptMessage {
-                from_agent: false,
-                sender: "alice".to_string(),
-                content: "notifications are broken".to_string(),
-            },
-            TranscriptMessage {
-                from_agent: true,
-                sender: bot_id::MACRO_AI_NAME.to_string(),
-                content: "what is broken exactly?".to_string(),
-            },
-            TranscriptMessage {
-                from_agent: false,
-                sender: "alice".to_string(),
-                content: "it fires twice per message".to_string(),
-            },
-        ]
-    );
+    assert!(classifier.calls.lock().unwrap().is_empty());
 }
-
 #[tokio::test]
-async fn classifier_rejection_yields_no_trigger() {
-    let channel_id = Uuid::new_v4();
-    let parent_id = Uuid::new_v4();
-    let classifier = Arc::new(TestClassifier::returning(Ok(false)));
-    let detector = detector(thread_with_agent_reply(channel_id, parent_id), classifier);
-
-    let invocations = detector
-        .detect(&candidate(
-            channel_id,
-            Some(parent_id),
-            Sender::new_from_user(user_id("alice@example.com")),
-            "thanks, I'll take it from here",
-            Vec::new(),
-        ))
-        .await;
-
-    assert!(invocations.is_empty());
-}
-
-#[tokio::test]
-async fn classifier_failure_yields_no_trigger() {
-    let channel_id = Uuid::new_v4();
-    let parent_id = Uuid::new_v4();
-    let classifier = Arc::new(TestClassifier::returning(Err(anyhow::anyhow!(
-        "model down"
-    ))));
-    let detector = detector(thread_with_agent_reply(channel_id, parent_id), classifier);
-
-    let invocations = detector
-        .detect(&candidate(
-            channel_id,
-            Some(parent_id),
-            Sender::new_from_user(user_id("alice@example.com")),
-            "it fires twice per message",
-            Vec::new(),
-        ))
-        .await;
-
-    assert!(invocations.is_empty());
-}
-
-#[tokio::test]
-async fn candidate_message_is_appended_when_missing_from_replies() {
-    let channel_id = Uuid::new_v4();
-    let parent_id = Uuid::new_v4();
-    let classifier = Arc::new(TestClassifier::returning(Ok(true)));
-    let detector = detector(
-        thread_with_agent_reply(channel_id, parent_id),
+async fn bot_authored_messages_never_trigger_another_response() {
+    let mut trigger = message(1, None, "@macro help");
+    trigger.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+    trigger.mentions = vec![SimpleMention {
+        entity_type: "bot".into(),
+        entity_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
+    }];
+    let access = Arc::new(Access::default());
+    access.revoke();
+    let classifier = classifier(Ok(true));
+    let detector = MentionOrInferredDetector::new(
+        Arc::new(MockMessageServiceApi::new()),
+        access,
         classifier.clone(),
     );
-
-    detector
-        .detect(&candidate(
-            channel_id,
-            Some(parent_id),
-            Sender::new_from_user(user_id("bob@example.com")),
-            "u so dumb",
-            Vec::new(),
-        ))
-        .await;
-
-    let thread = classifier.received_thread().expect("classifier called");
-    let last = thread.last().expect("non-empty transcript");
-    assert_eq!(last.sender, "bob");
-    assert_eq!(last.content, "u so dumb");
-    assert!(!last.from_agent);
+    assert!(detector.detect(&event(&trigger)).await.is_empty());
+    assert!(classifier.calls.lock().unwrap().is_empty());
+}
+#[tokio::test]
+async fn root_without_mention_is_never_inferred() {
+    let classifier = classifier(Ok(true));
+    let detector = MentionOrInferredDetector::new(
+        Arc::new(MockMessageServiceApi::new()),
+        Arc::new(Access::default()),
+        classifier.clone(),
+    );
+    assert!(
+        detector
+            .detect(&event(&message(1, None, "hello")))
+            .await
+            .is_empty()
+    );
+    assert!(classifier.calls.lock().unwrap().is_empty());
+}
+#[tokio::test]
+async fn inferred_document_follow_up_requires_prior_agent_participation_and_classifier_agreement() {
+    for (prior_agent, answer, expected) in [
+        (true, Ok(true), true),
+        (false, Ok(true), false),
+        (true, Ok(false), false),
+        (true, Err("provider failed"), false),
+    ] {
+        let root = message(1, None, "question");
+        let mut previous = message(2, Some(root.id), "previous answer");
+        if prior_agent {
+            previous.sender_id =
+                channel_sender::ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+        }
+        let trigger = message(3, Some(root.id), "can you expand on that?");
+        let mut api = MockMessageServiceApi::new();
+        configure_reads(
+            &mut api,
+            &trigger,
+            thread(root, vec![previous, trigger.clone()]),
+        );
+        let classifier = classifier(answer);
+        let detector = MentionOrInferredDetector::new(
+            Arc::new(api),
+            Arc::new(Access::default()),
+            classifier.clone(),
+        );
+        let result = detector.detect(&event(&trigger)).await;
+        assert_eq!(!result.is_empty(), expected);
+        if expected {
+            assert_eq!(result[0].trigger, BotTrigger::Inferred);
+        }
+        assert_eq!(!classifier.calls.lock().unwrap().is_empty(), prior_agent);
+    }
+}
+#[tokio::test]
+async fn access_revocation_suppresses_explicit_and_inferred_document_triggers() {
+    let access = Arc::new(Access::default());
+    access.revoke();
+    let classifier = classifier(Ok(true));
+    let detector = MentionOrInferredDetector::new(
+        Arc::new(MockMessageServiceApi::new()),
+        access,
+        classifier.clone(),
+    );
+    let mut trigger = message(2, Some(Uuid::from_u128(1)), "please continue");
+    assert!(detector.detect(&event(&trigger)).await.is_empty());
+    trigger.mentions.push(SimpleMention {
+        entity_type: "bot".into(),
+        entity_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
+    });
+    assert!(detector.detect(&event(&trigger)).await.is_empty());
+    assert!(classifier.calls.lock().unwrap().is_empty());
+}
+#[tokio::test]
+async fn unavailable_history_cannot_be_replaced_by_an_unverified_event_transcript() {
+    let mut api = MockMessageServiceApi::new();
+    api.expect_get()
+        .once()
+        .returning(|_, _| Err(messages::domain::ports::MessageError::NotFound));
+    let classifier = classifier(Ok(true));
+    let detector = MentionOrInferredDetector::new(
+        Arc::new(api),
+        Arc::new(Access::default()),
+        classifier.clone(),
+    );
+    assert!(
+        detector
+            .detect(&event(&message(2, Some(Uuid::from_u128(1)), "continue")))
+            .await
+            .is_empty()
+    );
+    assert!(classifier.calls.lock().unwrap().is_empty());
 }

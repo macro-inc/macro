@@ -38,7 +38,7 @@ function getPredicateNotifications(
  *
  * Entity-specific logic:
  * - Emails: Uses `isRead` boolean field
- * - Everything else: Has at least one notification with viewedAt === null
+ * - Everything else: Has at least one notification in the unseen state
  */
 export function unreadFilter(notificationSource: NotificationSource) {
   return function (entity: EntityData): boolean {
@@ -48,7 +48,7 @@ export function unreadFilter(notificationSource: NotificationSource) {
 
     const notifications = getPredicateNotifications(entity, notificationSource);
 
-    return notifications?.some((n) => !n.viewed_at) ?? false;
+    return notifications?.some((n) => n.state === 'unseen') ?? false;
   };
 }
 
@@ -57,7 +57,7 @@ export function unreadFilter(notificationSource: NotificationSource) {
  *
  * Entity-specific logic:
  * - Emails: Uses `done` field (derived from !inboxVisible - email is "not done" when in inbox)
- * - Everything else: Has at least one notification with done === false
+ * - Everything else: Has at least one notification in an active state
  */
 export function notDoneFilter(notificationSource: NotificationSource) {
   return function (entity: WithNotification<EntityData>) {
@@ -65,16 +65,16 @@ export function notDoneFilter(notificationSource: NotificationSource) {
 
     const notifications = getPredicateNotifications(entity, notificationSource);
 
-    return notifications?.some(({ done }) => !done);
+    return notifications?.some(({ state }) => state !== 'done');
   };
 }
 
-/** Document filter (markdown, canvas) - excludes tasks */
+/** Native document filter (markdown, canvas, spreadsheets) - excludes tasks */
 export function documentFilter(entity: EntityData): boolean {
   if (entity.type !== 'document') return false;
   if (entity.subType?.type === 'task') return false;
   const fileType = entity.fileType ?? '';
-  return fileType === 'md' || fileType === 'canvas';
+  return ['md', 'canvas', 'spreadsheet'].includes(fileType);
 }
 
 export function taskFilter(entity: EntityData): boolean {
@@ -104,7 +104,7 @@ export function teamsFilter(entity: EntityData): boolean {
 }
 
 export function agentFilter(entity: EntityData): boolean {
-  return entity.type === 'chat';
+  return entity.type === 'chat' || entity.type === 'agent_session';
 }
 
 export function automationFilter(entity: EntityData): boolean {
@@ -118,7 +118,7 @@ export function projectFilter(entity: EntityData): boolean {
 export function fileFilter(entity: EntityData): boolean {
   if (entity.type !== 'document') return false;
   const fileType = entity.fileType ?? '';
-  return !['md', 'canvas'].includes(fileType);
+  return !['md', 'canvas', 'spreadsheet'].includes(fileType);
 }
 
 export function githubPrFilter(entity: EntityData): boolean {
@@ -175,6 +175,14 @@ export function scheduledRemindersFilter(entity: EntityData): boolean {
     !entity.completedAt &&
     new Date(entity.nextRunAt).getTime() > Date.now()
   );
+}
+
+/**
+ * Reminders not yet dealt with — the scheduled ones still ahead and the fired
+ * ones waiting on their owner, together. Everything but Done.
+ */
+export function notDoneRemindersFilter(entity: EntityData): boolean {
+  return entity.type === 'reminder' && !entity.completedAt;
 }
 
 /** Reminders the owner has marked as dealt with. */
@@ -252,13 +260,19 @@ export function filesAndFolderFilter(entity: EntityData): boolean {
 
   if (entity.type === 'document') {
     const fileType = entity.fileType ?? '';
-    return !['md', 'canvas'].includes(fileType);
+    return !['md', 'canvas', 'spreadsheet'].includes(fileType);
   }
 
   return true;
 }
 
 export function activeAgentFilter(entity: EntityData): boolean {
+  if (entity.type === 'agent_session')
+    return (
+      entity.status !== 'no_messages' &&
+      entity.status !== 'disconnected' &&
+      entity.status !== 'session/end'
+    );
   if (entity.type !== 'chat') return false;
 
   // [TODO] Check status of agent

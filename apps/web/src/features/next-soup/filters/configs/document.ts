@@ -35,6 +35,12 @@ const docCanvasFilter = config({
   query: { include: { fileAssoc: ['assoc:canvas'] } },
 });
 
+const docSpreadsheetFilter = config({
+  id: 'doc-spreadsheet',
+  predicate: (e) => isDocumentEntity(e) && e.fileType === 'spreadsheet',
+  query: { include: { fileType: ['spreadsheet'] } },
+});
+
 /**
  * Email attachments filter - filters for documents that are email attachments.
  * Server-side only: `isEmailAttachment` is not available on client entity.
@@ -50,6 +56,7 @@ export const DOCUMENT_CONTEXTUAL_FILTERS = [
   docSnippetFilter,
   docSkillFilter,
   docCanvasFilter,
+  docSpreadsheetFilter,
   emailAttachmentsFilter,
 ] as const;
 
@@ -97,7 +104,8 @@ const fileOtherFilter = config({
   predicate: (e) => {
     if (e.type !== 'document') return false;
     const ft = e.fileType ?? '';
-    if (['md', 'canvas', 'pdf', 'docx'].includes(ft)) return false;
+    if (['md', 'canvas', 'spreadsheet', 'pdf', 'docx'].includes(ft))
+      return false;
     if ((codeFileExtensions as readonly string[]).includes(ft)) return false;
     if ((IMAGE_EXTENSIONS as readonly string[]).includes(ft)) return false;
     if ((VIDEO_EXTENSIONS as readonly string[]).includes(ft)) return false;

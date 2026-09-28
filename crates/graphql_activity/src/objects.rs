@@ -70,6 +70,10 @@ pub enum GraphqlActivityAction {
     ParticipantRemoved(GraphqlActivityParticipantRemoved),
     /// A call was started in the entity (channel).
     CallStarted(GraphqlActivityCallStarted),
+    /// A task was added; references are resolved through authorized project history.
+    TaskAdded(GraphqlActivityTaskAdded),
+    /// A task was removed; references are resolved through authorized project history.
+    TaskRemoved(GraphqlActivityTaskRemoved),
     /// An action outside this deployment's vocabulary, carried through raw.
     Unknown(GraphqlActivityUnknownAction),
 }
@@ -100,6 +104,10 @@ payload_free_action_objects!(
     GraphqlActivityMessaged,
     /// An email message was sent on the thread.
     GraphqlActivitySent,
+    /// A task was added to a project.
+    GraphqlActivityTaskAdded,
+    /// A task was removed from a project.
+    GraphqlActivityTaskRemoved,
 );
 
 /// A property value changed on the entity.
@@ -175,6 +183,8 @@ impl From<RecordedAction> for GraphqlActivityAction {
                     call_id: ID(start.call_id),
                 })
             }
+            RecordedAction::Known(Action::TaskAdded(_)) => Self::TaskAdded(Default::default()),
+            RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved(Default::default()),
             RecordedAction::Unknown { tag, payload } => {
                 Self::Unknown(GraphqlActivityUnknownAction {
                     tag,

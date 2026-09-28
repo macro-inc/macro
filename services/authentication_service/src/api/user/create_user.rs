@@ -6,7 +6,7 @@ use axum::{
 };
 use macro_middleware::tracking::ClientIp;
 
-use crate::api::context::ApiContext;
+use crate::api::{context::ApiContext, signup_policy::signup_forbidden_response};
 
 use model::response::{EmptyResponse, ErrorResponse};
 
@@ -32,6 +32,7 @@ pub struct CreateUserRequest {
         responses(
             (status = 200, body=EmptyResponse),
             (status = 400, body=ErrorResponse),
+            (status = 403, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
         ),
     )]
@@ -43,6 +44,13 @@ pub async fn handler(
 ) -> Result<Response, Response> {
     tracing::info!("create_user");
     let email = req.email.to_lowercase();
+
+    ctx.signup_policy
+        .authorize_public_email(&email)
+        .map_err(|denial| {
+            tracing::warn!(error=?denial, "signup policy denied public user creation");
+            signup_forbidden_response()
+        })?;
 
     let username_exists =
         macro_db_client::macro_user::check_username_exists(&ctx.db, &req.username)

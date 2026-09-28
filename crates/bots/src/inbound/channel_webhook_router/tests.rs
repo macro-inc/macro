@@ -1,14 +1,15 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotKind, BotOwner, BotToken,
-    CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
+    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotKind, BotOwner, BotToken,
+    CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
+    PatchBotRequest, UpdateAgentRequest,
 };
 use axum::{
     Router,
     body::Body,
     http::{Request, StatusCode, header},
 };
-use channels::domain::models::PostMessageResponse;
+use channels::domain::models::{PostMessageRequest, Sender};
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
@@ -24,7 +25,7 @@ use macro_authorization::{
     BotActingUserClaims as AuthorizationBotActingUserClaims, BotAuthentication, BotAuthorizer,
     BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
     MacroAuthorizationServiceImpl, MacroAuthorizationState, MacroUserAuthentication,
-    ValidatedIdentity,
+    NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use rootcause::Report;
@@ -109,7 +110,10 @@ impl TestBotService {
                 expected_token: token.to_string(),
                 bot_id,
             },
-            TestMembershipMode::Unauthorized,
+            TestMembershipMode::Ok {
+                expected_channel_id: channel_id,
+                expected_bot_id: bot_id,
+            },
         )
     }
 
@@ -152,6 +156,27 @@ impl TestBotService {
 }
 
 impl BotService for TestBotService {
+    async fn create_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _req: CreateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn update_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn list_agents(&self, _caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
+        unimplemented!()
+    }
+
     async fn create_bot(
         &self,
         _caller: MacroUserIdStr<'static>,
@@ -280,6 +305,26 @@ impl BotService for TestBotService {
                 Err(BotError::Unauthorized)
             }
         }
+    }
+
+    async fn channel_message_access(
+        &self,
+        bot_id: BotId,
+        channel_id: Uuid,
+    ) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError> {
+        self.ensure_bot_in_channel(bot_id, channel_id).await?;
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            entity_access::domain::models::BotReceiptScope::Channel { channel_id },
+            entity_access::domain::models::Entity {
+                entity_id: channel_id.to_string(),
+                entity_type: EntityType::Channel,
+            },
+            EntityPermission::ChannelRole {
+                role: EntityParticipantRole::Member,
+            },
+        )
+        .map_err(|_| BotError::Unauthorized)
     }
 
     async fn authenticate_token(&self, _token: &str) -> Result<AuthenticatedBot, BotError> {
@@ -449,32 +494,109 @@ impl TestChannelPoster {
     }
 }
 
-impl ChannelMessagePoster for TestChannelPoster {
-    fn post_message(
+#[async_trait::async_trait]
+impl messages::domain::api::MessageCommands for TestChannelPoster {
+    async fn post(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
-        req: PostMessageRequest,
-    ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
-        let calls = self.calls.clone();
-        let mode = self.mode;
-        async move {
-            calls
-                .lock()
-                .expect("posted message mutex poisoned")
-                .push(PostedMessage {
-                    actor,
-                    channel_id,
-                    req,
-                });
-
-            match mode {
-                TestPostMode::Ok => Ok(PostMessageResponse {
-                    id: Uuid::new_v4().to_string(),
-                    nonce: None,
-                }),
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        input: messages::domain::models::PostMessage,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        let actor = match access.auth() {
+            entity_access::domain::models::EntityAccessAuth::Bot(bot) => {
+                Sender::new_from_bot(bot.bot_id())
             }
+            _ => panic!("webhook posts are always bot authored"),
+        };
+        let channel_id: Uuid = access.entity().entity_id.parse().unwrap();
+        let triggered_by = access
+            .acting_user_id()
+            .map(|user| user.as_ref().to_string());
+        self.calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .push(PostedMessage {
+                actor: actor.clone(),
+                channel_id,
+                req: PostMessageRequest {
+                    content: input.content.clone(),
+                    mentions: input.mentions.clone(),
+                    thread_id: input.thread_id,
+                    attachments: Vec::new(),
+                    nonce: input.nonce.clone(),
+                    notification_policy: input.notification_policy,
+                    triggered_by: triggered_by.clone(),
+                },
+            });
+        match self.mode {
+            TestPostMode::Ok => Ok(messages::domain::models::Message {
+                id: Uuid::new_v4(),
+                parent: messages::domain::models::MessageParent::Channel(channel_id),
+                thread_id: input.thread_id,
+                sender_id: actor,
+                imported_author: None,
+                bot_profile: None,
+                mentions: Vec::new(),
+                triggered_by,
+                content: input.content,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+                edited_at: None,
+                deleted_at: None,
+                attachments: Vec::new(),
+                reactions: Vec::new(),
+            }),
         }
+    }
+    async fn patch(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: messages::domain::ports::MessagePatch,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+    async fn delete(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: Option<String>,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+    async fn react(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: String,
+        _: bool,
+        _: Option<String>,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+    async fn typing(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Option<Uuid>,
+        _: bool,
+        _: Option<String>,
+    ) -> Result<(), messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+    async fn patch_thread(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: messages::domain::models::ThreadPatch,
+    ) -> Result<messages::domain::models::ThreadState, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+    async fn delete_thread(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+        _: Option<String>,
+    ) -> Result<messages::domain::models::ThreadState, messages::domain::ports::MessageError> {
+        unimplemented!()
     }
 }
 
@@ -592,6 +714,7 @@ fn authorization_state(
             default_user_id: None,
         },
         bot_authorizer,
+        NoUserApiKeyAuthorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }
@@ -611,7 +734,7 @@ fn router(
 ) -> Router {
     channel_scoped_bot_router(ChannelBotWebhookRouterState::new(
         service,
-        poster,
+        Arc::new(poster),
         TestAccessService::new(role),
         authorization_state(TestBotAuthorizer::rejecting(
             MacroAuthorizationError::InvalidCredentials,
@@ -631,7 +754,7 @@ fn webhook_router_with_authorizer(
 ) -> Router {
     channel_bot_webhook_router(ChannelBotWebhookRouterState::new(
         service,
-        poster,
+        Arc::new(poster),
         TestAccessService::new(EntityParticipantRole::Member),
         authorization_state(bot_authorizer),
     ))

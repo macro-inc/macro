@@ -1,13 +1,13 @@
-import { createBlockSignal } from '@core/block';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { unwrap } from 'solid-js/store';
 import { OPERATION_LOGGING, Tools } from '../constants';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import type { ShapeNode } from '../model/CanvasModel';
 import { useCachedStyle } from '../signal/cachedStyle';
 import { useCanvasHistory } from '../signal/canvasHistory';
 import { useSelection } from '../signal/selection';
 import { useToolManager } from '../signal/toolManager';
-import { highestOrderSignal, useCanvasNodes } from '../store/canvasData';
+import { useCanvasNodes } from '../store/canvasData';
 import { useRenderState } from '../store/RenderState';
 import { sharedInstance } from '../util/sharedInstance';
 import type { Vector2 } from '../util/vector2';
@@ -26,18 +26,16 @@ export type ShapeOperation = Operation & {
   node: ShapeNode;
 };
 
-export const currentShapeOperationSignal = createBlockSignal<ShapeOperation>();
-
 export const useShape = sharedInstance((): Operator => {
   const { pageToCanvas } = useRenderState();
   const { createNode, updateNode, ...nodes } = useCanvasNodes();
   const { deselectAll, deselectNode } = useSelection();
   const [currentShapeOperation, setCurrentShapeOperation] =
-    currentShapeOperationSignal;
+    useCanvasDocument().state.signals.currentShapeOperation;
   const history = useCanvasHistory();
   const cachedStyle = useCachedStyle();
   const { setSelectedTool } = useToolManager();
-  const highestOrder = highestOrderSignal.get;
+  const highestOrder = useCanvasDocument().state.signals.highestOrder[0];
 
   function _applyMousePos(mousePos: Vector2, normalize?: boolean) {
     const op = currentShapeOperation();

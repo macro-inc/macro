@@ -8,6 +8,7 @@
 import type { CrmPermissionRole } from './crmPermissionRole';
 import type { CrmTeamSettingsResponseClosedStageIds } from './crmTeamSettingsResponseClosedStageIds';
 import type { CrmTeamSettingsResponseDefaultTeamViewId } from './crmTeamSettingsResponseDefaultTeamViewId';
+import type { CrmTeamSettingsResponseLegacyStageIds } from './crmTeamSettingsResponseLegacyStageIds';
 
 /**
  * The team's CRM configuration (everything on `team_crm_settings`
@@ -24,6 +25,8 @@ falls back to its label heuristic. */
   delete_records_role: CrmPermissionRole;
   /** Who can change the deal stage set in CRM settings. */
   edit_stages_role: CrmPermissionRole;
+  /** System stage option id to team stage option id for seeded stages. */
+  legacy_stage_ids: CrmTeamSettingsResponseLegacyStageIds;
   /** Who can move deals out of a closed stage. */
   move_closed_deals_role: CrmPermissionRole;
   /** Team saved views — an opaque JSON array owned by the frontend. */

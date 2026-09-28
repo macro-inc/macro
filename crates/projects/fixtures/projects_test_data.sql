@@ -55,3 +55,19 @@ VALUES
     ('10000000-0000-0000-0000-000000000001', 'project', 'macro|viewer@test.com', 'user', 'view'),
     ('20000000-0000-0000-0000-000000000001', 'document', 'macro|viewer@test.com', 'user', 'owner'),
     ('30000000-0000-0000-0000-000000000001', 'chat', 'macro|owner@test.com', 'user', 'owner');
+
+INSERT INTO public.entity (id, entity_type, owner_type, owner_id, created_at, updated_at, deleted_at)
+VALUES
+    ('10000000-0000-0000-0000-000000000001', 'project', 'user', 'macro|owner@test.com', '2024-01-01', '2024-01-05', NULL),
+    ('10000000-0000-0000-0000-000000000002', 'project', 'user', 'macro|owner@test.com', '2024-01-02', '2024-01-02', NULL),
+    ('10000000-0000-0000-0000-000000000003', 'project', 'user', 'macro|owner@test.com', '2024-01-03', '2024-01-03', NULL),
+    ('10000000-0000-0000-0000-000000000004', 'project', 'user', 'macro|owner@test.com', '2024-01-04', '2024-01-04', '2024-02-01'),
+    ('10000000-0000-0000-0000-000000000005', 'project', 'user', 'macro|owner@test.com', '2024-01-05', '2024-01-06', NULL),
+    ('10000000-0000-0000-0000-000000000006', 'project', 'user', 'macro|owner@test.com', '2024-01-06', '2024-01-07', NULL),
+    ('10000000-0000-0000-0000-000000000007', 'project', 'user', 'macro|viewer@test.com', '2024-01-07', '2024-01-08', NULL),
+    ('10000000-0000-0000-0000-000000000008', 'project', 'user', 'macro|owner@test.com', '2024-01-08', '2024-01-09', NULL),
+    ('10000000-0000-0000-0000-000000000009', 'project', 'user', 'macro|owner@test.com', '2024-01-09', '2024-01-10', '2024-02-02'),
+    ('20000000-0000-0000-0000-000000000001', 'document', 'user', 'macro|viewer@test.com', '2024-01-03', '2024-01-03', NULL),
+    ('20000000-0000-0000-0000-000000000002', 'document', 'user', 'macro|owner@test.com', '2024-01-04', '2024-01-04', '2024-02-01'),
+    ('30000000-0000-0000-0000-000000000001', 'chat', 'user', 'macro|owner@test.com', '2024-01-04', '2024-01-04', NULL),
+    ('30000000-0000-0000-0000-000000000002', 'chat', 'user', 'macro|owner@test.com', '2024-01-05', '2024-01-05', '2024-02-01');

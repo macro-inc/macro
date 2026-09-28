@@ -59,7 +59,7 @@ export function entityTypeToItemType(type: EntityType): ItemType | undefined {
     .with('CHAT', () => 'chat')
     .with('CALL_RECORD', () => 'call')
     .with('THREAD', () => 'email')
-    .with('COMPANY', 'USER', 'CALENDAR_EVENT', () => undefined)
+    .with('COMPANY', 'USER', 'CALENDAR_EVENT', 'INITIATIVE', () => undefined)
     .exhaustive();
 }
 
@@ -70,6 +70,7 @@ export function macroEntityToPropertyEntityType(
     .when(isTaskEntity, () => EntityType.DOCUMENT)
     .with({ type: 'channel' }, () => EntityType.CHANNEL)
     .with({ type: 'chat' }, () => EntityType.CHAT)
+    .with({ type: 'initiative' }, () => EntityType.INITIATIVE)
     .with({ type: 'project' }, () => EntityType.PROJECT)
     .with({ type: 'email' }, () => EntityType.THREAD)
     .with({ type: 'document' }, () => EntityType.DOCUMENT)
@@ -80,6 +81,11 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'crm_contact' }, () => {
       // No CONTACT in the properties-service EntityType yet.
       throw new Error('crm contacts do not support properties');
+    })
+    .with({ type: 'agent_session' }, () => {
+      throw new Error(
+        'agent sessions are not property-service mutation targets'
+      );
     })
     .with({ type: 'automation' }, () => {
       throw new Error('automation entities do not support properties');

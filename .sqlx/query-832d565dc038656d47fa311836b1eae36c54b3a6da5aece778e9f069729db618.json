@@ -1,0 +1,122 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT requested.entity_id AS \"requested_id!\",\n               requested.entity_type AS \"requested_type!\",\n               matched.notification_id AS \"notification_id!\",\n               matched.event_item_id AS \"event_item_id!\",\n               matched.event_item_type AS \"event_item_type!\",\n               matched.notification_event_type AS \"notification_event_type!\",\n               matched.sent AS \"sent!\",\n               matched.state AS \"state!: NotificationState\",\n               matched.created_at AS \"created_at!\",\n               matched.viewed_at,\n               matched.notification_metadata,\n               matched.sender_id\n        FROM unnest($2::text[], $3::text[]) requested(entity_id, entity_type)\n        CROSS JOIN LATERAL (\n            SELECT un.notification_id, n.event_item_id, n.event_item_type,\n                   n.notification_event_type, un.sent, un.state,\n                   un.created_at::timestamptz AS created_at,\n                   un.seen_at::timestamptz AS viewed_at,\n                   n.metadata AS notification_metadata, n.sender_id\n            FROM (\n                SELECT n.id FROM notification n\n                WHERE n.event_item_id = requested.entity_id AND n.event_item_type = requested.entity_type\n                UNION\n                SELECT n.id FROM notification n\n                WHERE n.secondary_event_item_id = requested.entity_id AND n.secondary_event_item_type = requested.entity_type\n                UNION\n                SELECT n.id FROM notification n\n                WHERE requested.entity_type = 'channel_message'\n                  AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = requested.entity_id\n            ) candidates\n            JOIN notification n ON n.id = candidates.id\n            JOIN user_notification un ON un.notification_id = n.id\n            WHERE un.user_id = $1\n              AND un.deleted_at IS NULL\n              AND un.state = ANY($4::notification_state[])\n              AND (cardinality($5::text[]) = 0 OR n.notification_event_type = ANY($5))\n            ORDER BY un.created_at DESC, un.notification_id DESC\n            LIMIT $6\n        ) matched\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "requested_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "requested_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "notification_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "event_item_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "event_item_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "notification_event_type!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "sent!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "state!: NotificationState",
+        "type_info": {
+          "Custom": {
+            "name": "notification_state",
+            "kind": {
+              "Enum": [
+                "unseen",
+                "seen",
+                "done"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "viewed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "notification_metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "sender_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TextArray",
+        {
+          "Custom": {
+            "name": "notification_state[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "notification_state",
+                  "kind": {
+                    "Enum": [
+                      "unseen",
+                      "seen",
+                      "done"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      false,
+      true
+    ]
+  },
+  "hash": "832d565dc038656d47fa311836b1eae36c54b3a6da5aece778e9f069729db618"
+}

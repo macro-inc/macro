@@ -1,6 +1,6 @@
 use agent_client_protocol::schema::v1::{
-    ContentChunk, SessionId, TextContent, ToolCall as AcpToolCall, ToolCallStatus, ToolCallUpdate,
-    ToolCallUpdateFields,
+    ContentChunk, ResourceLink, SessionId, TextContent, ToolCall as AcpToolCall, ToolCallStatus,
+    ToolCallUpdate, ToolCallUpdateFields,
 };
 use agent_runtime_protocol::domain::schema::v0::AcpMessage;
 
@@ -37,6 +37,25 @@ fn update_frame(update: SessionUpdate) -> Message {
     }))
     .expect("a notification frame should deserialize");
     Message::ToServer(ToServerMessage::Acp(AcpMessage(raw)))
+}
+
+/// A logged `session/prompt` whose text is followed by one file link.
+fn prompt_frame_with_file(text: &str, name: &str, uri: &str) -> Message {
+    let request = PromptRequest::new(
+        acp_session(),
+        vec![
+            ContentBlock::Text(TextContent::new(text)),
+            ContentBlock::ResourceLink(ResourceLink::new(name, uri)),
+        ],
+    );
+    let raw: RawJsonRpcMessage = serde_json::from_value(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "session/prompt",
+        "params": serde_json::to_value(request).expect("a prompt should serialize"),
+    }))
+    .expect("a request frame should deserialize");
+    Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(raw)))
 }
 
 fn message_chunk(text: &str) -> SessionUpdate {
@@ -79,8 +98,8 @@ fn a_logged_turn_replays_as_the_history_the_live_agent_recorded() {
     else {
         panic!("two full turns should replay, got {history:#?}");
     };
-    assert_eq!(first, "find the roadmap");
-    assert_eq!(second, "thanks");
+    assert_eq!(first.text, "find the roadmap");
+    assert_eq!(second.text, "thanks");
     assert_eq!(
         second_parts.as_slice(),
         [AssistantMessagePart::Text {
@@ -128,13 +147,39 @@ fn a_compact_prompt_drops_everything_recorded_before_it() {
     let [HistoryEntry::User(prompt), HistoryEntry::Assistant(parts)] = history.as_slice() else {
         panic!("only the post-compact turn should replay, got {history:#?}");
     };
-    assert_eq!(prompt, "after");
+    assert_eq!(prompt.text, "after");
     assert_eq!(
         parts.as_slice(),
         [AssistantMessagePart::Text {
             text: "fresh".to_owned()
         }]
     );
+}
+
+#[test]
+fn a_compact_prompt_carrying_a_file_replays_as_an_ordinary_turn() {
+    // Serving the turn kept the conversation (the files make it a real
+    // prompt), so a cold attach must rebuild it the same way - replaying it
+    // as compaction would drop context the live session still had.
+    let history = replay_history(vec![
+        prompt_frame("remember this"),
+        update_frame(message_chunk("noted")),
+        prompt_frame_with_file("/compact", "notes.txt", "https://static.example/file/9"),
+        update_frame(message_chunk("read it")),
+    ]);
+
+    let [
+        HistoryEntry::User(first),
+        HistoryEntry::Assistant(_),
+        HistoryEntry::User(second),
+        HistoryEntry::Assistant(_),
+    ] = history.as_slice()
+    else {
+        panic!("both turns should replay, got {history:#?}");
+    };
+    assert_eq!(first.text, "remember this");
+    assert_eq!(second.text, "/compact");
+    assert_eq!(second.attachments.len(), 1);
 }
 
 #[test]

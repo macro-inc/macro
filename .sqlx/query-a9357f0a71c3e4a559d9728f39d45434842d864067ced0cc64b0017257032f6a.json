@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO calls (id, room_name, created_by, share_permission_id) VALUES ($1, 'test-room', 'macro|owner@test.com', $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a9357f0a71c3e4a559d9728f39d45434842d864067ced0cc64b0017257032f6a"
+}

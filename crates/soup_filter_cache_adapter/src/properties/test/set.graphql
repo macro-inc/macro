@@ -1,0 +1,10 @@
+mutation Set($input: SetEntityPropertyInput!) {
+  setEntityProperty(input: $input) {
+    id propertyDefinitionId
+    value {
+      __typename
+      ... on GraphqlSelectOptionPropertyValue { optionIds }
+      ... on GraphqlEntityReferencePropertyValue { references { entityId } }
+    }
+  }
+}

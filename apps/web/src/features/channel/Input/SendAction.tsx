@@ -27,6 +27,7 @@ export function SendAction(props: SendActionProps) {
 
   return (
     <SendButton
+      appearance="composer"
       tooltip={tooltipText()}
       shortcut="enter"
       aria-label={tooltipText()}

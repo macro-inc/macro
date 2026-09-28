@@ -1,7 +1,7 @@
 import { edgeToCollisionData } from '@block-canvas/util/connectors';
-import { createBlockSignal } from '@core/block';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { OPERATION_LOGGING } from '../constants';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import type { CanvasId, PencilNode } from '../model/CanvasModel';
 import { useSelection } from '../signal/selection';
 import { useToolManager } from '../signal/toolManager';
@@ -29,13 +29,11 @@ export type SelectOperation = Operation & {
   initialSelectedEdges: CanvasId[];
 };
 
-export const currentSelectOperationSignal =
-  createBlockSignal<SelectOperation>();
-
 export const useSelect = sharedInstance((): Operator => {
   const { pageToCanvas } = useRenderState();
   const { setSelectionBox, forceSetSelection } = useSelection();
-  const [currentOperation, setCurrentOperation] = currentSelectOperationSignal;
+  const [currentOperation, setCurrentOperation] =
+    useCanvasDocument().state.signals.currentSelectOperation;
   const nodes = useCanvasNodes();
   const egdes = useCanvasEdges();
   const groups = useCanvasGroups();

@@ -40,34 +40,3 @@ fn target_project_failures_map_to_stable_error_codes() {
         entity_mutation::EntityMutationErrorCode::NotFound(_)
     ));
 }
-
-#[test]
-fn favoritable_kinds_are_an_explicit_allowlist() {
-    for entity_type in [
-        EntityType::User,
-        EntityType::Team,
-        EntityType::ChannelMessage,
-        EntityType::StaticFile,
-        EntityType::CrmContact,
-    ] {
-        assert!(
-            !favoritable(entity_type),
-            "{entity_type} must not be favoritable"
-        );
-    }
-    for entity_type in [
-        EntityType::Document,
-        EntityType::Project,
-        EntityType::Chat,
-        EntityType::Channel,
-        EntityType::EmailThread,
-        EntityType::Call,
-        EntityType::ForeignEntity,
-        EntityType::CrmCompany,
-    ] {
-        assert!(
-            favoritable(entity_type),
-            "{entity_type} must be favoritable"
-        );
-    }
-}

@@ -1,9 +1,11 @@
+use crate::agent_session::SoupAgentSession;
 use crate::calendar_event::SoupCalendarEvent;
 use crate::call_record::SoupCallRecord;
 use crate::crm_company::SoupCrmCompany;
 use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::foreign_entity::SoupForeignEntity;
+use crate::initiative::SoupInitiative;
 use crate::project::SoupProject;
 use crate::reminder::SoupReminder;
 use crate::{
@@ -31,6 +33,8 @@ pub enum SoupItem<T = ()> {
     Chat(SoupChat<T>),
     /// Project item.
     Project(SoupProject<T>),
+    /// Initiative entity.
+    Initiative(SoupInitiative<T>),
     /// Email thread item.
     EmailThread(SoupEnrichedEmailThreadPreview<T>),
     /// Channel item.
@@ -47,6 +51,8 @@ pub enum SoupItem<T = ()> {
     ForeignEntity(SoupForeignEntity),
     /// Reminder item.
     Reminder(SoupReminder<T>),
+    /// Agent session item.
+    AgentSession(SoupAgentSession<T>),
 }
 
 impl<T> SoupItem<T> {
@@ -58,6 +64,9 @@ impl<T> SoupItem<T> {
             }
             SoupItem::Chat(soup_chat) => {
                 EntityType::Chat.with_entity_string(soup_chat.id.to_string())
+            }
+            SoupItem::Initiative(initiative) => {
+                EntityType::Initiative.with_entity_string(initiative.id.to_string())
             }
             SoupItem::Project(soup_project) => {
                 EntityType::Project.with_entity_string(soup_project.id.to_string())
@@ -86,6 +95,9 @@ impl<T> SoupItem<T> {
             SoupItem::Reminder(reminder) => {
                 EntityType::Reminder.with_entity_string(reminder.id.to_string())
             }
+            SoupItem::AgentSession(session) => {
+                EntityType::AgentSession.with_entity_string(session.id.to_string())
+            }
         }
     }
 
@@ -95,15 +107,21 @@ impl<T> SoupItem<T> {
             SoupItem::Document(soup_document) => soup_document.updated_at,
             SoupItem::Chat(soup_chat) => soup_chat.updated_at,
             SoupItem::Project(soup_project) => soup_project.updated_at,
+            SoupItem::Initiative(initiative) => initiative.updated_at,
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.updated_at,
             SoupItem::ChannelThread(thread) => thread.effective_updated_at(),
             // Calls intentionally lack `updated_at`; recency follows their lifecycle timestamps.
             SoupItem::Call(record) => record.ended_at.unwrap_or(record.started_at),
-            SoupItem::CalendarEvent(event) => event.updated_at,
+            // Includes the fired-reminder timestamp so the frecency fallback
+            // cursor agrees with the GREATEST-based recency sort.
+            SoupItem::CalendarEvent(event) => event
+                .last_reminder_fired_at
+                .map_or(event.updated_at, |fired| fired.max(event.updated_at)),
             SoupItem::CrmCompany(company) => company.updated_at,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
             SoupItem::Reminder(reminder) => reminder.updated_at,
+            SoupItem::AgentSession(session) => session.updated_at,
         }
     }
 
@@ -128,6 +146,18 @@ impl<T> SoupItem<T> {
             (SoupItem::Chat(soup_chat), SimpleSortMethod::CreatedAt) => soup_chat.created_at,
             (SoupItem::Chat(soup_chat), SimpleSortMethod::ViewedUpdated) => {
                 soup_chat.viewed_at.unwrap_or(soup_chat.updated_at)
+            }
+            (SoupItem::Initiative(initiative), SimpleSortMethod::ViewedAt) => {
+                initiative.viewed_at.unwrap_or_default()
+            }
+            (SoupItem::Initiative(initiative), SimpleSortMethod::UpdatedAt) => {
+                initiative.updated_at
+            }
+            (SoupItem::Initiative(initiative), SimpleSortMethod::CreatedAt) => {
+                initiative.created_at
+            }
+            (SoupItem::Initiative(initiative), SimpleSortMethod::ViewedUpdated) => {
+                initiative.viewed_at.unwrap_or(initiative.updated_at)
             }
             (SoupItem::Project(soup_project), SimpleSortMethod::ViewedAt) => {
                 soup_project.viewed_at.unwrap_or_default()
@@ -166,7 +196,14 @@ impl<T> SoupItem<T> {
             (SoupItem::Call(record), _) => record.ended_at.unwrap_or(record.started_at),
             (SoupItem::CalendarEvent(event), SimpleSortMethod::CreatedAt) => event.created_at,
             (SoupItem::CalendarEvent(_), SimpleSortMethod::ViewedAt) => DateTime::<Utc>::default(),
-            (SoupItem::CalendarEvent(event), _) => event.updated_at,
+            // A fired alarm is the event's latest activity: without it the row
+            // a reminder surfaces in the inbox would sort at the event's Google
+            // last-modified time, i.e. into the past. Must mirror the SQL sort
+            // expression GREATEST(updated_at, last_reminder_fired_at) or keyset
+            // pagination breaks.
+            (SoupItem::CalendarEvent(event), _) => event
+                .last_reminder_fired_at
+                .map_or(event.updated_at, |fired| fired.max(event.updated_at)),
             (SoupItem::CrmCompany(company), SimpleSortMethod::CreatedAt) => company.created_at,
             (SoupItem::CrmCompany(company), SimpleSortMethod::ViewedAt) => {
                 company.viewed_at.unwrap_or_default()
@@ -183,6 +220,14 @@ impl<T> SoupItem<T> {
             // for — the same way emails always use their precomputed sort_ts.
             // No other ordering means anything for a reminder.
             (SoupItem::Reminder(reminder), _) => reminder.next_run_at,
+            (SoupItem::AgentSession(session), SimpleSortMethod::ViewedAt) => {
+                session.viewed_at.unwrap_or_default()
+            }
+            (SoupItem::AgentSession(session), SimpleSortMethod::UpdatedAt) => session.updated_at,
+            (SoupItem::AgentSession(session), SimpleSortMethod::CreatedAt) => session.created_at,
+            (SoupItem::AgentSession(session), SimpleSortMethod::ViewedUpdated) => {
+                session.viewed_at.unwrap_or(session.updated_at)
+            }
         }
     }
 
@@ -195,6 +240,10 @@ impl<T> SoupItem<T> {
             SoupItem::Document(doc) => {
                 Some(EntityReference::new(doc.id.to_string(), doc.entity_type()))
             }
+            SoupItem::Initiative(initiative) => Some(EntityReference::new(
+                initiative.id.to_string(),
+                PropertiesEntityType::Initiative,
+            )),
             SoupItem::Project(p) => Some(EntityReference::new(
                 p.id.to_string(),
                 PropertiesEntityType::Project,
@@ -223,6 +272,8 @@ impl<T> SoupItem<T> {
             )),
             SoupItem::ForeignEntity(_) => None,
             SoupItem::Reminder(_) => None,
+            // Agent sessions have no properties entity type yet.
+            SoupItem::AgentSession(_) => None,
         }
     }
 
@@ -270,6 +321,7 @@ impl<T> SoupItem<T> {
             SoupItem::Chat(SoupChat {
                 id,
                 name,
+                model,
                 owner_id,
                 project_id,
                 is_persistent,
@@ -281,6 +333,7 @@ impl<T> SoupItem<T> {
             }) => SoupItem::Chat(SoupChat {
                 id,
                 name,
+                model,
                 owner_id,
                 project_id,
                 is_persistent,
@@ -288,6 +341,25 @@ impl<T> SoupItem<T> {
                 updated_at,
                 viewed_at,
                 deleted_at,
+                extra: f(extra),
+            }),
+            SoupItem::Initiative(SoupInitiative {
+                id,
+                name,
+                owner_id,
+                description_document_id,
+                created_at,
+                updated_at,
+                viewed_at,
+                extra,
+            }) => SoupItem::Initiative(SoupInitiative {
+                id,
+                name,
+                owner_id,
+                description_document_id,
+                created_at,
+                updated_at,
+                viewed_at,
                 extra: f(extra),
             }),
             SoupItem::Project(SoupProject {
@@ -342,6 +414,7 @@ impl<T> SoupItem<T> {
                 status,
                 attended,
                 participants,
+                guests,
                 extra,
             }) => SoupItem::Call(SoupCallRecord {
                 call_id,
@@ -357,6 +430,7 @@ impl<T> SoupItem<T> {
                 status,
                 attended,
                 participants,
+                guests,
                 extra: f(extra),
             }),
             SoupItem::CalendarEvent(SoupCalendarEvent {
@@ -377,6 +451,7 @@ impl<T> SoupItem<T> {
                 is_read_only,
                 created_at,
                 updated_at,
+                last_reminder_fired_at,
                 extra,
             }) => SoupItem::CalendarEvent(SoupCalendarEvent {
                 id,
@@ -396,6 +471,7 @@ impl<T> SoupItem<T> {
                 is_read_only,
                 created_at,
                 updated_at,
+                last_reminder_fired_at,
                 extra: f(extra),
             }),
             SoupItem::CrmCompany(SoupCrmCompany {
@@ -449,6 +525,45 @@ impl<T> SoupItem<T> {
                 updated_at,
                 extra: f(extra),
             }),
+            SoupItem::AgentSession(SoupAgentSession {
+                id,
+                name,
+                owner_id,
+                bot_id,
+                harness,
+                repo_url,
+                repo_branch,
+                pull_request_url,
+                working_branch,
+                pull_request_state,
+                pull_request_id,
+                turn_state,
+                thread_id,
+                status,
+                created_at,
+                updated_at,
+                viewed_at,
+                extra,
+            }) => SoupItem::AgentSession(SoupAgentSession {
+                id,
+                name,
+                owner_id,
+                bot_id,
+                harness,
+                repo_url,
+                repo_branch,
+                pull_request_url,
+                working_branch,
+                pull_request_state,
+                pull_request_id,
+                turn_state,
+                thread_id,
+                status,
+                created_at,
+                updated_at,
+                viewed_at,
+                extra: f(extra),
+            }),
         }
     }
 }
@@ -461,6 +576,7 @@ impl<T> Identify for SoupItem<T> {
             SoupItem::Document(soup_document) => soup_document.id,
             SoupItem::Chat(soup_chat) => soup_chat.id,
             SoupItem::Project(soup_project) => soup_project.id,
+            SoupItem::Initiative(initiative) => initiative.id,
             SoupItem::EmailThread(thread) => thread.thread.id,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
             SoupItem::ChannelThread(thread) => thread.id,
@@ -469,6 +585,7 @@ impl<T> Identify for SoupItem<T> {
             SoupItem::CrmCompany(company) => company.id,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
             SoupItem::Reminder(reminder) => reminder.id,
+            SoupItem::AgentSession(session) => session.id,
         }
     }
 }

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id) VALUES (gen_random_uuid(), 'doc', 'doc_source_mixed', 'doc', 'doc1', NULL)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "a07f0622de5a2491d3561e87eff3e856f48779041f64fee910a5dade485c25a8"
+}

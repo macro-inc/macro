@@ -9,7 +9,7 @@ import type { NotificationSource } from '@notifications';
 import { threadCanBeMarkedNotDone } from '@queries/email/thread';
 import { fetchDoneNotificationIdsByEventItemIds } from '@queries/notification/user-notifications';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 type MakeMarkNotDoneOptions = {
   notificationSource: () => NotificationSource;
@@ -105,7 +105,7 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
       // them from the server and merge before restoring.
       const serverNotificationIds =
         await fetchDoneNotificationIdsByEventItemIds(emailIds);
-      await executeMarkEntitiesUndone({
+      const disposition = await executeMarkEntitiesUndone({
         emailIds,
         notificationIds: [
           ...new Set([...notificationIds, ...serverNotificationIds]),
@@ -123,10 +123,13 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
       // and upsert it into the caches (flat, grouped parents, and expanded
       // group queries), then refetch the lists so done-filtered views
       // reconcile membership and ordering.
-      await Promise.all(
-        emailIds.map((id) => refetchSoupEntity(id, 'emailThread'))
-      );
-      invalidateAllSoup();
+      if (disposition !== 'queued') {
+        await Promise.all(
+          emailIds.map((id) => refetchSoupEntity(id, 'emailThread'))
+        );
+        invalidateAllSoup();
+      }
+      return disposition;
     } catch (err) {
       optimistic.rollback();
       toast.failure('Failed to mark as not done');
@@ -139,7 +142,10 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
 
   /** Signature parity with makeMarkDoneAction's executeWithSoup — no
    *  navigation or collapse: the rows stay in place. */
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
   };
 

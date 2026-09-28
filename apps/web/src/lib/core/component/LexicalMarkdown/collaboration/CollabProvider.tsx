@@ -43,6 +43,7 @@ import {
   type NodeIdMappings,
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
+  stripDraftCommentMarks,
 } from '@macro-inc/lexical-core';
 import type { Span } from '@macro-inc/observability';
 import type { NodeKey, UpdateListenerPayload } from 'lexical';
@@ -507,6 +508,8 @@ export function CollabProvider(props: CollabProviderProps) {
           // Indicate that we have completed the first sync
           setDidFirstSync(true);
 
+          let hasAbandonedDrafts = false;
+
           // Initialize the editor with the initial state from the sync service
           if (empty) {
             logSyncService({
@@ -523,9 +526,13 @@ export function CollabProvider(props: CollabProviderProps) {
               context: {},
               message: 'editor init: versioned state',
             });
+            const initialState =
+              state.state as unknown as SerializedEditorState;
+            const stateWithoutDrafts = stripDraftCommentMarks(initialState);
+            hasAbandonedDrafts = stateWithoutDrafts !== initialState;
             const initError = initializeEditorWithVersionedState(
               props.editor,
-              state.state as unknown as SerializedEditorState,
+              stateWithoutDrafts,
               () => loroManager.peerIdStr
             );
             if (initError !== null) {
@@ -544,6 +551,10 @@ export function CollabProvider(props: CollabProviderProps) {
 
           // Start the sync engine
           startSync();
+          // Remove drafts that earlier sessions left in the shared document.
+          if (hasAbandonedDrafts && !readOnly()) {
+            props.editor.dispatchCommand(FORCE_SYNC_COMMAND, undefined);
+          }
           props.setEditorReady(true);
           const documentId = syncSource()!.documentId;
           resumeSpan(documentId)?.event('editor.ready');

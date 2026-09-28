@@ -18,7 +18,13 @@ async fn connection_failure_has_monitorable_context_and_preserves_cause() {
     );
 
     let error = client
-        .edit("test-document", &"test-token".to_owned().into(), "edit")
+        .edit(
+            "test-document",
+            &"test-token".to_owned().into(),
+            "edit",
+            EditMode::Supervised,
+            None,
+        )
         .await
         .err()
         .expect("a connection to a port that is not listening must fail");
@@ -43,7 +49,13 @@ async fn timeout_has_monitorable_context_and_preserves_cause() {
     );
 
     let error = client
-        .edit("test-document", &"test-token".to_owned().into(), "edit")
+        .edit(
+            "test-document",
+            &"test-token".to_owned().into(),
+            "edit",
+            EditMode::Supervised,
+            None,
+        )
         .await
         .err()
         .expect("a worker that never responds must time out");

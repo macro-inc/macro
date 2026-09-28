@@ -3,10 +3,11 @@ import {
   SwipableRowContext,
 } from '@components/app/mobile/SwipableRow';
 import { triggerFocusInput } from '@core/directive/focusInput';
+import type { MessageActions, MessageData } from '@core/messages/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import { type ParentProps, Show, useContext } from 'solid-js';
-import type { MessageActions, MessageData } from './types';
+import { getMessageReplyPreviewTexts } from './browser-selection';
 
 /**
  * The affordance revealed behind a message while it is being swiped. The
@@ -54,7 +55,10 @@ export function MaybeSwipeToReplyRow(
         `[data-input-id="thread-reply-input-${threadId}"] [contenteditable]`
       )
     );
-    void onReply({ message: props.message });
+    void onReply({
+      message: props.message,
+      ...getMessageReplyPreviewTexts(props.message.id),
+    });
   };
 
   return (

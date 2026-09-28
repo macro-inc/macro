@@ -96,12 +96,15 @@ function organizerIconProps(
 
 /** Organizer display: the Macro profile name when resolved, else the source's
  * own name, else the email. Read reactively so it fills in when the user's
- * name cache resolves. */
+ * name cache resolves. The profile lookup falls back to the email for an
+ * address without a profile, such as a shared calendar's, so that fallback
+ * must not win over the name the source supplied. */
 function organizerName(entity: CalendarEventEntity): string {
   const email = entity.organizer?.email;
   const macroId = email ? emailToMacroId(email) : undefined;
   const resolved = macroId ? getDisplayName(macroId).trim() : '';
-  return resolved || entity.organizer?.name || email || '';
+  const profileName = resolved && resolved !== email ? resolved : '';
+  return profileName || entity.organizer?.name || email || '';
 }
 
 const Dot = () => <span class="shrink-0 text-ink/30">·</span>;

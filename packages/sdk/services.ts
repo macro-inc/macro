@@ -7,6 +7,7 @@
 export const services = [
   'agent-harness',
   'auth',
+  'calendar',
   'cognition',
   'connection',
   'contacts',

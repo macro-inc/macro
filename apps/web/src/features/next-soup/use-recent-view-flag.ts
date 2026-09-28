@@ -1,8 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_RECENT_VIEW_FLAG,
-  ENABLE_RECENT_VIEW_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableRecentView } from '@core/constant/featureFlags';
 import type { Accessor } from 'solid-js';
 
 /**
@@ -11,8 +8,6 @@ import type { Accessor } from 'solid-js';
  * never issued.
  */
 export function useRecentViewFlag(): Accessor<boolean> {
-  const flag = useFeatureFlag(ENABLE_RECENT_VIEW_FLAG, {
-    enabledOverride: ENABLE_RECENT_VIEW_OVERRIDE,
-  });
+  const flag = useFeatureFlag(enableRecentView);
   return () => flag().enabled;
 }

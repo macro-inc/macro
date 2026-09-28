@@ -20,7 +20,10 @@ use config::Config;
 use email_formatting::EmailDigestNotification;
 use hmac::{Hmac, Mac};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState,
+    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
+};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_event_broker::{GlobalSpawner, KafkaEventPublisher, MacroEventBrokerService};
@@ -142,6 +145,7 @@ pub async fn main() -> anyhow::Result<()> {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
     )));
 
     let notification_repository =
@@ -345,6 +349,9 @@ pub async fn main() -> anyhow::Result<()> {
 
     api::setup_and_serve(
         ApiContext {
+            item_preferences: ::notification::domain::item_preferences::ItemNotificationPreferenceService::new(
+                ::notification::outbound::item_preferences::PgItemNotificationPreferenceRepository(db.clone()),
+            ),
             internal_api_key: config.internal_api_key.clone(),
             db,
             sns_client: Arc::new(sns_client),

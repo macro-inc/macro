@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE scheduled_action SET configuration_revision = configuration_revision + 1 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6baf01caee63a634cf1fcd5a3667c61cc68a867af310783113d83cd5ed57974d"
+}

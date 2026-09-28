@@ -1,4 +1,4 @@
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use model_owner::Owner;
 use sqlx::{Pool, Postgres};
 
 use model::project::BasicProject;
@@ -24,9 +24,8 @@ pub async fn get_basic_project(
     .try_map(|row| {
         Ok(BasicProject {
             id: row.id,
-            user_id: MacroUserIdStr::parse_from_str(&row.user_id)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
+            user_id: Owner::from_principal_str(&row.user_id)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             parent_id: row.parent_id,
             name: row.name,
             deleted_at: row.deleted_at,

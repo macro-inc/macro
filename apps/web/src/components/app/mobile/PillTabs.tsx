@@ -12,13 +12,10 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { MobileDockButton } from './MobileDockButton';
 import { MobileDockIsland } from './MobileDockIsland';
-import { MobileTouchMenu } from './MobileTouchMenu';
+import { MobileDrawer } from './MobileDrawer';
 import { computeVisiblePillValues } from './pillTabsLayout';
-import { pressPulse } from './pressPulse';
-
-// Keeps the directive import from being tree-shaken / lint-flagged.
-false && pressPulse;
 
 const PILL_CLASS =
   'h-10 shrink-0 whitespace-nowrap rounded-full px-3.5 text-xs font-medium island';
@@ -33,8 +30,8 @@ const MENU_STRIP_CLASS =
 
 const SCROLL_STRIP_CLASS =
   // The scrollport clips at its box, so the vertical padding must cover the
-  // full light-mode island shadow bloom (4px offset + 8px spread + 20px blur
-  // = 32px); the matching negative margin cancels its layout impact. The
+  // island's glass shadow bloom (14px offset + 32px blur - 22px spread, well
+  // inside 32px); the matching negative margin cancels its layout impact. The
   // strip is tap-transparent so the enlarged halo never swallows touches
   // meant for content behind it — the content row re-enables pointer events
   // for the pills. A pointer-events:none scroller receives no native scroll
@@ -63,9 +60,9 @@ type PillTabsProps<T extends string> = {
   value: T | undefined;
   onChange: (value: T) => void;
   /**
-   * Overflow strategy: by default pills that do not fit collapse into an
-   * ellipsis menu; when set the strip scrolls horizontally instead and the
-   * active pill is kept scrolled into view.
+   * Overflow strategy: by default pills that do not fit move into a drawer
+   * opened by an ellipsis button. When set, the strip scrolls horizontally
+   * and the active pill is kept scrolled into view.
    */
   scrollable?: boolean;
   /** Extra classes on the scroll strip (the outer, clipping box). */
@@ -117,7 +114,6 @@ function PillButton<T extends string>(props: {
   return (
     <button
       type="button"
-      use:pressPulse
       data-checked={props.active ? '' : undefined}
       aria-pressed={props.active}
       aria-label={props.item.ariaLabel}
@@ -125,8 +121,8 @@ function PillButton<T extends string>(props: {
         PILL_CLASS,
         props.item.iconOnly && ICON_PILL_CLASS,
         props.active
-          ? 'bg-accent text-surface ring-accent'
-          : 'text-ink-extra-muted'
+          ? 'bg-accent text-surface'
+          : 'bg-chrome text-ink-extra-muted'
       )}
       onPointerDown={(e) => {
         e.preventDefault();
@@ -352,7 +348,7 @@ function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
   );
 }
 
-/** Pills that do not fit move into an ellipsis overflow menu. */
+/** Pills that do not fit move into a drawer opened by the ellipsis button. */
 function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
   const [stripRef, setStripRef] = createSignal<HTMLDivElement>();
   const [measureRef, setMeasureRef] = createSignal<HTMLDivElement>();
@@ -459,24 +455,59 @@ function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
       </For>
       <Show when={overflowItems().length > 0}>
         <MobileDockIsland class="shrink-0">
-          <MobileTouchMenu>
-            <MobileTouchMenu.Trigger icon={DotsThreeIcon} />
-            <MobileTouchMenu.Content>
-              <For each={overflowItems()}>
-                {(item) => (
-                  <MobileTouchMenu.Item
-                    id={item.value}
-                    active={props.value === item.value}
-                    onSelect={() => props.onChange(item.value)}
-                  >
-                    {item.label}
-                  </MobileTouchMenu.Item>
-                )}
-              </For>
-              <MobileTouchMenu.Separator />
-              <MobileTouchMenu.Footer>Tabs</MobileTouchMenu.Footer>
-            </MobileTouchMenu.Content>
-          </MobileTouchMenu>
+          <MobileDrawer
+            side="bottom"
+            preventScroll={false}
+            preventScrollbarShift={false}
+            closeOnOutsidePointerStrategy="pointerdown"
+          >
+            <MobileDrawer.Trigger
+              as={MobileDockButton}
+              ariaLabel="More tabs"
+              icon={DotsThreeIcon}
+              class="size-10"
+              iconClass="size-6 [&_svg]:size-6"
+            />
+            <MobileDrawer.Portal>
+              <MobileDrawer.Overlay />
+              <MobileDrawer.Content aria-label="More tabs">
+                <MobileDrawer.Handle />
+                <MobileDrawer.ScrollBody>
+                  <div class="mx-3 flex flex-col gap-1 px-1">
+                    <For each={overflowItems()}>
+                      {(item) => (
+                        <MobileDrawer.Close
+                          as={MobileDrawer.Item}
+                          // Let text tabs name themselves instead of Close's default label.
+                          aria-label={item.ariaLabel ?? ''}
+                          aria-pressed={props.value === item.value}
+                          class={
+                            props.value === item.value
+                              ? 'text-accent'
+                              : undefined
+                          }
+                          onClick={() => {
+                            hapticImpact('light');
+                            props.onChange(item.value);
+                          }}
+                        >
+                          {item.label}
+                        </MobileDrawer.Close>
+                      )}
+                    </For>
+                    <div class="-mx-1 h-px shrink-0 bg-edge" />
+                    <MobileDrawer.Close
+                      aria-label="Tabs"
+                      class="flex h-9 shrink-0 items-center px-3 text-sm font-medium text-ink-muted"
+                      onClick={() => hapticImpact('light')}
+                    >
+                      Tabs
+                    </MobileDrawer.Close>
+                  </div>
+                </MobileDrawer.ScrollBody>
+              </MobileDrawer.Content>
+            </MobileDrawer.Portal>
+          </MobileDrawer>
         </MobileDockIsland>
       </Show>
       <div

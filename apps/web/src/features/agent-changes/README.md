@@ -1,0 +1,33 @@
+# Pull request diff viewer
+
+`agent-changes.tsx` wires the viewer into agent sessions. The controller and views
+can also be mounted by a PR external entity without an `AgentSessionProvider`.
+
+A host supplies `ChangesSource` and `ChangesHost` from
+`context/agent-changes-context.ts`, creates a controller with `createAgentChanges`,
+and mounts `AgentChangesControllerProvider` around `ChangesPane` or
+`AgentChangesSplit`. Give each host a stable `scopeKey` (for example,
+`pr:<foreign-entity-id>`) to isolate its locally persisted collapse state and notes.
+The optional `agent` capability enables inline note creation and sending; omit it
+for a read-only PR viewer. The optional `canHaveChanges` accessor hides every
+control and the pane while false; the session host reports it from the harness and
+the linked pull request, so a chat-only (in-memory) session or a coding session
+without a pull request yet shows no GitHub chrome. Clipboard, external navigation,
+and notifications are host callbacks.
+
+`views/ChangesPane.tsx` composes the generic `FileTree`
+(`@ui/components/FileTree`) and `DiffView` (`src/components/diff-view`) from the
+controller: tree rows show status letters and counts, file headers add **Copy
+path**, and review notes hang under their lines through `DiffView.Stack`'s
+annotation slot. Another host composes the same components its own way.
+
+The source owns fetching, cache identity, and conversion into the feature's core
+changeset types. A PR entity adapter should resolve its GitHub owner/repository/PR
+number and implement this same contract using shared queries. It does not need to
+construct an agent session. That adapter and its backend endpoint are not yet wired.
+
+Layout and diff style come from `createPaneViewState()` (`pane-view-state.ts`).
+Where the host's route lists `changesSearch.namespace` in its `search`, they live
+in that split's search params (`s0.changes.pane`, `s0.changes.style`), so the
+split router drops them when the split closes or navigates away; anywhere else,
+such as a preview, they are local signals.

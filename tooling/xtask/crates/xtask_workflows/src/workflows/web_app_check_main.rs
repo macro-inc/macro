@@ -11,14 +11,18 @@ use crate::workflows::{
     vars,
 };
 
+#[cfg(test)]
+mod test;
+
 /// Frontend-only jobs share one small Namespace profile with a dedicated cache
 /// tag, so their Nix/Bun state lives on its own volume.
 fn web_runner() -> String {
     runners::Runner::Small.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
-/// Typechecking can compile the Rust binaries used by `gen-api`, so retain the
-/// mid-size profile while sharing the web CI cache volume and remote sccache.
+/// Typechecking can compile the Rust binaries used by `gen-api`, and the app
+/// build compiles the two browser wasm packages, so retain the mid-size
+/// profile while sharing the web CI cache volume and remote sccache.
 fn typecheck_runner() -> String {
     runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
@@ -43,7 +47,6 @@ pub fn web_app_check_main() -> Workflow {
         .add_job("path-check", path_check())
         .add_job("typescript", typescript())
         .add_job("biome-check", biome_check())
-        .add_job("tailwind", tailwind())
         .add_job("test", test())
         .add_job("cycles", cycles())
         .add_job("build", build())
@@ -77,8 +80,11 @@ fn typescript() -> Job {
         ))
         .add_step(generate_api_types())
         .add_step(show_sccache_stats())
+        .add_step(check_dynamic_ui_schema())
         .add_step(check_types())
         .add_step(check_collaboration_types())
+        .add_step(check_lexical_service_types())
+        .add_step(test_lexical_service())
         .add_step(steps::teardown_nix())
 }
 
@@ -90,16 +96,6 @@ fn biome_check() -> Job {
         .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
         .add_step(run_collaboration_biome())
-        .add_step(steps::teardown_nix())
-}
-
-fn tailwind() -> Job {
-    gated_web_job("Theme Hygiene Inspector")
-        .add_step(checkout("Checkout Repo", true))
-        .add_step(steps::mount_web_cache_volume(false))
-        .add_step(steps::setup_nix())
-        .add_step(steps::setup_reqs_web("Setup Prereqs", false))
-        .add_step(check_tailwind_classes())
         .add_step(steps::teardown_nix())
 }
 
@@ -126,11 +122,16 @@ fn cycles() -> Job {
 
 fn build() -> Job {
     gated_web_job("Build")
+        // Match preview/deploy capacity for Vite's chunk-rendering memory peak.
+        .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_cache_volume(false))
+        .add_step(steps::mount_web_build_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
+        .add_step(steps::start_sccache_server())
         .add_step(run_build())
+        .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
@@ -144,7 +145,6 @@ fn status_check() -> Job {
             "path-check".to_string(),
             "typescript".to_string(),
             "biome-check".to_string(),
-            "tailwind".to_string(),
             "test".to_string(),
             "cycles".to_string(),
             "build".to_string(),
@@ -176,6 +176,12 @@ fn checkout(name: &str, full_history: bool) -> Step<Use> {
 fn paths_filter() -> Step<Use> {
     let artifact_paths = crate::workflows::web_artifact_paths::yaml_list("  ");
 
+    // `api_changed` is only the inputs to `bun run gen-api`. xtask, flake.nix,
+    // the Nix dev-shell action, and this workflow file do not change OpenAPI
+    // output, so they must not start Typecheck (which compiles the schema
+    // binaries). The Nix dev-shell action is also omitted from `should_run`
+    // so Typecheck (which is `should_run || api_changed`) stays off for a
+    // shell-only tweak. Workflow YAML drift is `check generated workflows`.
     Step::new("Filter changed paths")
         .uses(
             "dorny",
@@ -186,7 +192,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - '.github/actions/setup-nix-dev-shell/**'\n  - '.github/actions/setup-reqs-web/**'\n  - '.github/workflows/web-app-check-main.yml'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'tooling/xtask/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'flake.nix'\n  - 'flake.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-nix-dev-shell/**'\n  - '.github/actions/setup-reqs-web/**'\n  - '.github/workflows/web-app-check-main.yml'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'crates/ai_tools/src/display_results/schema.generated.json'\n  - '.github/actions/setup-reqs-web/**'\napi_changed:\n  - 'crates/**/*.rs'\n  - 'services/**/*.rs'\n  - 'Cargo.toml'\n  - 'Cargo.lock'\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - '.github/actions/setup-reqs-web/**'\n"
             ),
         ))
 }
@@ -214,10 +220,28 @@ fn check_types() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+fn check_dynamic_ui_schema() -> Step<Run> {
+    Step::new("Check Dynamic UI Schema")
+        .run("bun run check-dynamic-ui-schema")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
 fn check_collaboration_types() -> Step<Run> {
     Step::new("Check Collaboration Package Types")
         .run("bun run type-check")
         .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
+}
+
+fn check_lexical_service_types() -> Step<Run> {
+    Step::new("Check Lexical Service Types")
+        .run("bun run check")
+        .working_directory(xtask_paths::repo_dir!("services/lexical-service"))
+}
+
+fn test_lexical_service() -> Step<Run> {
+    Step::new("Test Lexical Service Endpoints")
+        .run("bun test src")
+        .working_directory(xtask_paths::repo_dir!("services/lexical-service"))
 }
 
 fn run_biome() -> Step<Run> {
@@ -230,12 +254,6 @@ fn run_collaboration_biome() -> Step<Run> {
     Step::new("Run Collaboration Package Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
         .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
-}
-
-fn check_tailwind_classes() -> Step<Run> {
-    Step::new("Check Tailwind Classes")
-        .run("just check-tailwind")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
 fn run_tests() -> Step<Run> {
@@ -267,7 +285,6 @@ fn check_job_results() -> Step<Run> {
         echo "path-check: ${{ needs.path-check.result }}"
         echo "typescript: ${{ needs.typescript.result }}"
         echo "biome-check: ${{ needs.biome-check.result }}"
-        echo "tailwind: ${{ needs.tailwind.result }}"
         echo "test: ${{ needs.test.result }}"
         echo "cycles: ${{ needs.cycles.result }}"
         echo "build: ${{ needs.build.result }}"
@@ -276,7 +293,6 @@ fn check_job_results() -> Step<Run> {
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.typescript.result }}" == "failure" ]] || \
            [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.tailwind.result }}" == "failure" ]] || \
            [[ "${{ needs.test.result }}" == "failure" ]] || \
            [[ "${{ needs.cycles.result }}" == "failure" ]] || \
            [[ "${{ needs.build.result }}" == "failure" ]]; then

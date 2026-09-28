@@ -1,0 +1,20 @@
+# macrod configuration. Pairing adds a bearer token here; keep this file private.
+
+[macro]
+api_url = "https://gateway.macro.com/agent-harness"
+storage_url = "https://gateway.macro.com/dss"
+web_url = "https://macro.com/app"
+
+[identity]
+scope = "private"
+# Allow agents to bypass tool permissions, subject to web confirmation.
+# When enabled, agents can run commands and edit files without approval.
+# Changes apply at the next pairing.
+allow_permission_bypass = false
+
+[harness]
+command = "hermes"
+args = ["acp"]
+
+[workspace]
+path = "."

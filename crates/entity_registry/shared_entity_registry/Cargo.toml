@@ -1,0 +1,14 @@
+[package]
+edition = "2024"
+name = "shared_entity_registry"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+chrono = { workspace = true }
+model-entity = { path = "../../model-entity" }
+model_owner = { path = "../../model_owner" }
+rootcause = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }

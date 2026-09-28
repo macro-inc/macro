@@ -15,8 +15,9 @@ describe('openInNewSplitForMention', () => {
     expect(openInNewSplitForMention(false, true)).toBe(true);
   });
 
-  it('opens in the current split when Option (alt) is held', () => {
-    expect(openInNewSplitForMention(true, true)).toBe(false);
+  it('opens in a new split when Shift is held regardless of the default', () => {
+    expect(openInNewSplitForMention(true, true)).toBe(true);
+    expect(openInNewSplitForMention(true, false)).toBe(true);
   });
 
   it('defaults to current split when there is no event (e.g. touch)', () => {
@@ -26,5 +27,6 @@ describe('openInNewSplitForMention', () => {
   it('always opens in the current split on touch devices', () => {
     vi.mocked(isTouchDevice).mockReturnValue(true);
     expect(openInNewSplitForMention(false, true)).toBe(false);
+    expect(openInNewSplitForMention(true, true)).toBe(false);
   });
 });

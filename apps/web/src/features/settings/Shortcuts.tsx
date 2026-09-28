@@ -1047,7 +1047,7 @@ function ShortcutRow(props: { item: ShortcutItem; spacer?: string }) {
 function ShortcutSectionComponent(props: { section: ShortcutSection }) {
   return (
     <div class="mb-4">
-      <h3 class="text-[15px] font-semibold text-ink mb-1.5 flex items-center gap-2">
+      <h3 class="text-sm font-semibold text-ink mb-1.5 flex items-center gap-2">
         {props.section.title}
       </h3>
       <div class="flex flex-col">
@@ -1088,7 +1088,7 @@ export function Shortcuts() {
 
           {/* Unified List - spans both columns with its own 2-column layout */}
           <div class="@[600px]:col-span-2">
-            <h3 class="text-[15px] font-semibold text-ink mb-1.5 flex items-center gap-2">
+            <h3 class="text-sm font-semibold text-ink mb-1.5 flex items-center gap-2">
               {shortcutSections[2].title}
             </h3>
             <div class="grid grid-cols-1 @[600px]:grid-cols-2 gap-x-8">

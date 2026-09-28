@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CallRecordPreviewDataChannelId } from './callRecordPreviewDataChannelId';
 import type { CallRecordPreviewDataChannelName } from './callRecordPreviewDataChannelName';
 import type { CallRecordPreviewDataCustomName } from './callRecordPreviewDataCustomName';
 import type { CallRecordPreviewDataEndedAt } from './callRecordPreviewDataEndedAt';
@@ -15,7 +16,7 @@ export interface CallRecordPreviewData {
   /** The call identifier. */
   callId: string;
   /** The channel this call belongs to. */
-  channelId: string;
+  channelId?: CallRecordPreviewDataChannelId;
   /** Resolved display name for the channel. */
   channelName?: CallRecordPreviewDataChannelName;
   /** User-supplied or AI-generated display name for the call. Only set on

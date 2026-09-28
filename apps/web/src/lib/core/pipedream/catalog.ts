@@ -37,17 +37,25 @@ export function createPipedreamCatalogSearch(
 
   const query = usePipedreamCatalogQuery(search);
 
-  const entries = (): PipedreamCatalogEntryResponse[] =>
-    (query.data?.pages ?? [])
+  const entries = (): PipedreamCatalogEntryResponse[] => {
+    if (!query.isSuccess) return [];
+    return (query.data?.pages ?? [])
       .flatMap((page) => page.servers)
       .filter(
         (entry) =>
           pipedreamAppAvailableInEnv(entry.app_slug) &&
           !exclude().has(entry.app_slug)
       );
+  };
 
   return { searchInput, onSearchInput, search, query, entries };
 }
+
+/** The two facts connecting needs: which app, and what to call it. */
+export type PipedreamConnectableApp = Pick<
+  PipedreamCatalogEntryResponse,
+  'app_slug' | 'display_name'
+>;
 
 /**
  * Connecting one catalog entry through Pipedream's hosted Connect UI, with
@@ -55,9 +63,13 @@ export function createPipedreamCatalogSearch(
  * surfaces that re-render the row as connected, so callers opt in via
  * `onConnected`.
  */
-export function createPipedreamCatalogConnect(options: {
-  entry: Accessor<PipedreamCatalogEntryResponse>;
-  onConnected?: (entry: PipedreamCatalogEntryResponse) => void;
+export function createPipedreamCatalogConnect<
+  App extends PipedreamConnectableApp,
+>(options: {
+  entry: Accessor<App>;
+  onConnected?: (entry: App) => void;
+  /** Where the Connect iframe mounts; see `openPipedreamConnectUI`. */
+  container?: Accessor<HTMLElement | undefined>;
 }) {
   const [busy, setBusy] = createSignal(false);
 
@@ -69,6 +81,7 @@ export function createPipedreamCatalogConnect(options: {
       const outcome = await connectPipedreamApp({
         appSlug: entry.app_slug,
         serverName: entry.display_name,
+        container: options.container?.(),
       });
       if (outcome === 'connected') {
         options.onConnected?.(entry);

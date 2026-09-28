@@ -2,7 +2,9 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-version = "0.6.3"
+# Rebuild for durable hydration generations, viewed-first search projections,
+# and one canonical initiative GraphQL entity.
+version = "0.6.28"
 
 [features]
 default = []
@@ -37,6 +39,7 @@ serde = { workspace = true }
 serde-wasm-bindgen = { workspace = true }
 serde_json = { workspace = true }
 turso-opfs = { path = "../turso-opfs" }
+uuid = { workspace = true, features = ["js"] }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 

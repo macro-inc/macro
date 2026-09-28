@@ -387,7 +387,7 @@ mod build_pdf_modification_data_tests {
         // Get all comment anchors
         let anchors = sqlx::query!(
             r#"
-            SELECT pa."threadId", pa.uuid, pa.page, pa."originalPage", pa."originalIndex"
+            SELECT pa."threadId" AS "threadId!", pa.uuid, pa.page, pa."originalPage", pa."originalIndex"
             FROM "PdfPlaceableCommentAnchor" pa
             JOIN "Thread" t ON pa."threadId" = t.id
             WHERE t."documentId" = 'document-with-comments'

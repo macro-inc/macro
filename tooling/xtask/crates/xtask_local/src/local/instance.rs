@@ -108,6 +108,12 @@ pub enum Port {
     /// Published on every local instance - it is what the Cursor egress
     /// tunnel points at, and Cursor's cloud is outside the compose network.
     AgentHarnessEgress = 8102,
+    /// Scheduled actions API and dispatcher (default compose port 8099).
+    ScheduledAction = 8099,
+    /// Calendar service API (default compose port 8088). Appended at the end so
+    /// existing per-instance port offsets, which come from declaration order,
+    /// stay stable.
+    Calendar = 8088,
 }
 
 impl Port {

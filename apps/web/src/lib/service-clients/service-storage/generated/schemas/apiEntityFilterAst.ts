@@ -4,11 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ApiEntityFilterAstFavoritesOnly } from './apiEntityFilterAstFavoritesOnly';
 
 /**
  * Wire-format entity filter AST accepted by soup AST endpoints.
  */
 export interface ApiEntityFilterAst {
+  /** Filters applied to agent sessions (wire key `asf`). Like reminders,
+empty/omitted returns **no** agent sessions: they are opt-in, so the
+caller must send `inc`, an id, or an owner to get any. */
+  asf?: unknown;
   /** filters applied to canonical calendar events */
   calf?: unknown;
   /** the filters that should be applied to the call entity */
@@ -39,6 +44,8 @@ tree only; CRM scope is carried by the `ecd` / `eca` sibling
 fields). On this endpoint the email filter stays a bare tree,
 unlike the materialized [`EntityFilterAst`] used for cursors. */
   ef?: unknown;
+  /** Restrict to the authenticated viewer's favorites before pagination when true. */
+  favorites_only?: ApiEntityFilterAstFavoritesOnly;
   /** the filters that should be applied to foreign entity records */
   fef?: unknown;
   /** the filters that should be applied to the project entity */

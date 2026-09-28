@@ -25,13 +25,6 @@ pub struct BackfillMessagePayload {
     pub message_provider_id: String,
 }
 
-/// Dispatch payload for a durable calendar backfill job.
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-pub struct CalendarBackfillPayload {
-    /// Calendar-domain job identifier.
-    pub calendar_job_id: Uuid,
-}
-
 /// Scope envelope for backfill operations that belong to a tracked backfill
 /// job (Init, ListThreads, BackfillThread, BackfillMessage,
 /// UpdateThreadMetadata, BackfillAttachment, FinalizeBackfill). Carries the
@@ -91,9 +84,6 @@ pub enum BackfillOperation {
     BackfillAttachment(JobScopedPayload<BackfillAttachmentPayload>),
     /// Runs durable post-completion attachment, contact, and client-refresh effects.
     FinalizeBackfill(JobScopedPayload<FinalizeBackfillPayload>),
-    /// Fetch calendars, canonical events, and bounded occurrence projections
-    /// from Google Calendar.
-    CalendarGoogleBackfill(LinkScopedPayload<CalendarBackfillPayload>),
     // Seeds the contacts service from one recent sent message. Fanned out
     // one-per-message by the priority pass of ListThreads (which lists the
     // user's last 200 sent messages). The consumer fetches the message and
@@ -139,7 +129,6 @@ impl BackfillOperation {
             BackfillOperation::UpdateThreadMetadata(s) => Some(s.link_id),
             BackfillOperation::BackfillAttachment(s) => Some(s.link_id),
             BackfillOperation::FinalizeBackfill(s) => Some(s.link_id),
-            BackfillOperation::CalendarGoogleBackfill(s) => Some(s.link_id),
             BackfillOperation::SeedSentContact(s) => Some(s.link_id),
             BackfillOperation::PopulateCrmContact(s) => Some(s.link_id),
             BackfillOperation::DepopulateCrmContact(s) => Some(s.link_id),
@@ -160,7 +149,6 @@ impl BackfillOperation {
             BackfillOperation::BackfillAttachment(s) => Some(s.job_id),
             BackfillOperation::FinalizeBackfill(s) => Some(s.job_id),
             BackfillOperation::SeedSentContact(s) => Some(s.job_id),
-            BackfillOperation::CalendarGoogleBackfill(_) => None,
             BackfillOperation::PopulateCrmContact(_)
             | BackfillOperation::DepopulateCrmContact(_)
             | BackfillOperation::PopulateCrmForUser(_)

@@ -1,270 +1,264 @@
 <!doctype html>
-<html
-  xmlns:o="urn:schemas-microsoft-com:office:office"
-  xmlns:v="urn:schemas-microsoft-com:vml"
-  xmlns="http://www.w3.org/1999/xhtml"
->
+<html lang="en" xmlns:o="urn:schemas-microsoft-com:office:office">
   <head>
-    <title>Macro Notification Digest</title>
-    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
-    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta
+      name="format-detection"
+      content="telephone=no, date=no, address=no, email=no"
+    />
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
+    <title>Your Macro updates</title>
     <!--[if mso]>
-      <noscript>
-        <xml>
-          <o:OfficeDocumentSettings>
-            <o:PixelsPerInch>96</o:PixelsPerInch>
-            <o:AllowPNG />
-          </o:OfficeDocumentSettings>
-        </xml>
-      </noscript>
+      <noscript
+        ><xml
+          ><o:OfficeDocumentSettings
+            ><o:PixelsPerInch>96</o:PixelsPerInch
+            ><o:AllowPNG /></o:OfficeDocumentSettings></xml
+      ></noscript>
     <![endif]-->
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..500&display=swap" rel="stylesheet">
-    
+    <style>
+      @media screen and (max-width: 600px) {
+        .email-page {
+          padding: 24px 12px !important;
+        }
+        .email-content {
+          padding: 28px 24px !important;
+        }
+        .email-heading {
+          font-size: 26px !important;
+          line-height: 34px !important;
+        }
+      }
+    </style>
   </head>
   <body
     style="
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      background-color: #f5f5f4;
       -webkit-text-size-adjust: 100%;
       -ms-text-size-adjust: 100%;
-      word-spacing: normal;
-      padding: 0;
-      margin: 0;
     "
   >
-    <div style="padding: 60px 20px; width: 100%">
-      <div
-        style="
-          font-family: &quot;Inter&quot;, sans-serif;
-          background-color: #fcfcfc;
-          border: 1px solid #e0e0e0;
-          box-sizing: border-box;
-          border-radius: 4px;
-          max-width: 570px;
-          overflow: hidden;
-          font-size: 15px;
-          margin: 0 auto;
-          width: 100%;
-        "
-      >
-        <div
-          style="
-            background-color: #f5f5f5;
-            color: #090909;
-            box-sizing: border-box;
-            line-height: 60px;
-            font-size: 18px;
-            /* 26px left so the logo's center (26 + 15) matches the notif
-               bullets' center (20 + 17 + 4 = 41px) */
-            padding: 0 20px 0 26px;
-            height: 60px;
-            width: 100%;
-            font-family: &quot;Inter&quot;, sans-serif;
-          "
-        >
-          <img
-            src="https://macro.com/app/macro-logo-orange.png"
-            width="30"
-            height="20"
-            alt=""
-            style="
-              vertical-align: middle;
-              margin-right: 10px;
-              border: 0;
-            "
-          />You have {{ total_count }} new {% if total_count == 1 %}notification{%
-          else %}notifications{% endif %}
-        </div>
-        <hr
-          style="
-            border-top: 1px dashed #e0e0e0;
-            border-bottom: none;
-            border-right: none;
-            border-left: none;
-            margin: 0;
-          "
-        />
-        <div style="padding: 0 20px 20px 20px; box-sizing: border-box">
-          {% for notif in notifs %}
-          <a
-            style="
-              text-decoration: none;
-              padding: 10px 17px;
-              display: block;
-              color: #090909;
-            "
-            href="https://macro.com"
-            target="_blank"
-          >
-            <table
-              style="border: none; width: 100%; margin-bottom: 4px"
-              cellpadding="0"
-              cellspacing="0"
-            >
-              <tbody>
-                <tr>
-                  <td
-                    style="
-                      vertical-align: middle;
-                      width: 12px;
-                      padding-right: 10px;
-                    "
-                  >
-                    <div
-                      style="
-                        background-color: #ff8f0088;
-                        border: 1px solid #ff8f00;
-                        box-sizing: border-box;
-                        border-radius: 100%;
-                        height: 8px;
-                        width: 8px;
-                      "
-                    ></div>
-                  </td>
-                  <td
-                    style="
-                      vertical-align: middle;
-                      color: #636363;
-                      font-size: 16px;
-                      word-wrap: break-word;
-                      overflow-wrap: break-word;
-                      word-break: break-word;
-                    "
-                  >
-                    {{ notif.title }}
-                  </td>
-                  <td
-                    style="
-                      vertical-align: middle;
-                      text-align: right;
-                      color: #636363;
-                      font-size: 12px;
-                      white-space: nowrap;
-                      padding-left: 10px;
-                    "
-                  >
-                    {{ notif.created_at.format("%Y-%m-%d") }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <table
-              style="border: none; width: 100%; table-layout: fixed"
-              cellpadding="0"
-              cellspacing="0"
-            >
-              <tbody>
-                <tr>
-                  <td
-                    style="
-                      padding-left: 22px;
-                      padding-top: 2px;
-                      color: #090909;
-                      font-size: 16px;
-                      font-family: &quot;Inter&quot;, sans-serif;
-                      font-weight: 400;
-                      line-height: 1.4;
-                      word-wrap: break-word;
-                      overflow-wrap: break-word;
-                      word-break: break-word;
-                    "
-                  >
-                    {{ notif.body }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </a>
-          {% if !loop.last %}
-          <hr
-            style="
-              border-top: 1px dashed #e0e0e0;
-              border-bottom: none;
-              border-right: none;
-              border-left: none;
-              margin: 0;
-            "
-          />
-          {% endif %} {% endfor %}
-
-          {% if num_truncated > 0 %}
-          <div
-            style="
-              padding: 12px 17px;
-              color: #636363;
-              font-size: 14px;
-              text-align: center;
-              font-family: &quot;Inter&quot;, sans-serif;
-            "
-          >
-            and {{ num_truncated }} more notification{% if num_truncated != 1 %}s{% endif %}
-          </div>
-          {% endif %}
-
-          <hr
-            style="
-              border-top: 1px dashed #e0e0e0;
-              border-bottom: none;
-              border-right: none;
-              border-left: none;
-              margin: 0;
-            "
-          />
-
+    <div
+      style="
+        display: none;
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        mso-hide: all;
+      "
+    >
+      You have {{ total_count }} new notification{% if total_count != 1 %}s{%
+      endif %}.
+    </div>
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      bgcolor="#f5f5f4"
+      style="
+        font-family: Arial, Helvetica, sans-serif;
+        color: #222222;
+        mso-table-lspace: 0pt;
+        mso-table-rspace: 0pt;
+      "
+    >
+      <tr>
+        <td class="email-page" align="center" style="padding: 48px 20px">
+          <!--[if mso]><table role="presentation" width="560" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
           <table
-            style="
-              mso-table-lspace: 0pt;
-              mso-table-rspace: 0pt;
-              margin-top: 20px;
-              border: none;
-              width: 100%;
-            "
+            role="presentation"
+            width="100%"
             cellpadding="0"
             cellspacing="0"
+            style="max-width: 560px; table-layout: fixed"
           >
-            <tbody>
-              <tr>
-                <td style="text-align: center">
-                  <a
-                    style="
-                      font-family: &quot;Inter&quot;, sans-serif;
-                      background-color: #ff8f00;
-                      text-decoration: none;
-                      display: inline-block;
-                      white-space: nowrap;
-                      border-radius: 2px;
-                      padding: 8px 48px;
-                      color: #090909;
-                    "
-                    href="https://macro.com"
-                    target="_blank"
-                  >
-                    View in Macro
-                  </a>
-                </td>
-              </tr>
-            </tbody>
+            <tr>
+              <td
+                class="email-content"
+                bgcolor="#ffffff"
+                style="
+                  padding: 36px 40px 40px;
+                  border: 1px solid #e7e7e5;
+                  border-radius: 12px;
+                  overflow-wrap: break-word;
+                  word-wrap: break-word;
+                "
+              >
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  style="margin-bottom: 36px"
+                >
+                  <tr>
+                    <td width="36" style="vertical-align: middle">
+                      <a href="https://macro.com" style="text-decoration: none"
+                        ><img
+                          src="https://static-file-service.macro.com/file/b911aba9-94a6-435c-aa16-8404739f13b0"
+                          width="36"
+                          height="36"
+                          alt="Macro"
+                          style="
+                            display: block;
+                            border: 0;
+                            background-color: #ffffff;
+                            -ms-interpolation-mode: bicubic;
+                          "
+                      /></a>
+                    </td>
+                  </tr>
+                </table>
+                <h1
+                  class="email-heading"
+                  style="
+                    margin: 0 0 16px;
+                    font-size: 28px;
+                    line-height: 36px;
+                    font-weight: 600;
+                    letter-spacing: -0.5px;
+                    color: #222222;
+                  "
+                >
+                  You have {{ total_count }} new notification{% if total_count != 1 %}s{% endif %}
+                </h1>
+                <p
+                  style="
+                    margin: 0 0 20px;
+                    font-size: 16px;
+                    line-height: 26px;
+                    color: #525252;
+                  "
+                >
+                  Here's what's been happening.
+                </p>
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  style="table-layout: fixed; margin-top: 28px"
+                >
+                  {% for notif in notifs %}
+                  <tr>
+                    <td style="padding: 20px 0; border-top: 1px solid #e7e7e5">
+                      <p
+                        style="
+                          margin: 0 0 8px;
+                          color: #737373;
+                          font-size: 12px;
+                          line-height: 18px;
+                        "
+                      >
+                        {{ notif.created_at.format("%Y-%m-%d") }}
+                      </p>
+                      <h2
+                        style="
+                          margin: 0 0 8px;
+                          font-size: 16px;
+                          line-height: 24px;
+                          font-weight: 600;
+                        "
+                      >
+                        <a
+                          href="https://macro.com"
+                          style="color: #222222; text-decoration: none"
+                          >{{ notif.title }}</a
+                        >
+                      </h2>
+                      <p
+                        style="
+                          margin: 0;
+                          color: #525252;
+                          font-size: 15px;
+                          line-height: 24px;
+                          overflow-wrap: break-word;
+                          word-break: break-word;
+                        "
+                      >
+                        {{ notif.body }}
+                      </p>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </table>
+                {% if num_truncated > 0 %}
+                <p
+                  style="
+                    margin: 8px 0 0;
+                    font-size: 14px;
+                    line-height: 22px;
+                    color: #737373;
+                  "
+                >
+                  And {{ num_truncated }} more notification{% if num_truncated
+                  != 1 %}s{% endif %} in Macro.
+                </p>
+                {% endif %}
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  style="margin: 28px 0 8px; max-width: 100%"
+                >
+                  <tr>
+                    <td
+                      bgcolor="#222222"
+                      style="
+                        border-radius: 6px;
+                        text-align: center;
+                        mso-padding-alt: 14px 24px;
+                      "
+                    >
+                      <a
+                        href="https://macro.com"
+                        style="
+                          display: inline-block;
+                          padding: 14px 24px;
+                          border: 1px solid #222222;
+                          border-radius: 6px;
+                          color: #ffffff;
+                          background-color: #222222;
+                          font-size: 15px;
+                          line-height: 20px;
+                          font-weight: 600;
+                          text-decoration: none;
+                          mso-padding-alt: 0;
+                        "
+                        >View in Macro</a
+                      >
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td
+                style="
+                  padding: 24px 16px 0;
+                  text-align: center;
+                  font-size: 12px;
+                  line-height: 20px;
+                  color: #737373;
+                "
+              >
+                You're receiving this because you have new activity in Macro.<br /><a
+                  href="{{ unsubscribe_url.as_ref() }}"
+                  style="color: #525252; text-decoration: underline"
+                  >Unsubscribe from digest emails</a
+                >
+              </td>
+            </tr>
           </table>
-
-          <div
-            style="
-              text-align: center;
-              padding-top: 16px;
-              font-family: &quot;Inter&quot;, sans-serif;
-              font-size: 12px;
-            "
-          >
-            <a
-              style="color: #636363; text-decoration: underline"
-              href="{{ unsubscribe_url.as_ref() }}"
-              target="_blank"
-            >
-              Unsubscribe from digest emails
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
+          <!--[if mso]></td></tr></table><![endif]-->
+        </td>
+      </tr>
+    </table>
   </body>
 </html>

@@ -44,12 +44,17 @@ afterEach(() => {
  */
 function controllerFor(
   initialValue: Partial<EventEditorInitialValues>,
-  options?: Pick<CreateCalendarEventFormControllerOptions, 'isEdit'>
+  options?: Partial<
+    Pick<CreateCalendarEventFormControllerOptions, 'isEdit' | 'calendarOptions'>
+  >
 ) {
   return createRoot((dispose) => {
     disposers.push(dispose);
     return createCalendarEventFormController({
-      initialValue: { ...defaultEditorInitialValues(), ...initialValue },
+      initialValue: {
+        ...defaultEditorInitialValues(new Date(), true),
+        ...initialValue,
+      },
       calendarOptions: () => [
         { id: 'calendar-1', label: 'Calendar', color: '#000000' },
       ],
@@ -148,5 +153,182 @@ describe('pastEventWarning', () => {
       guests: 'guest@example.com',
     });
     expect(ongoing.pastEventWarning()).toBeUndefined();
+  });
+});
+
+describe('conferencing selection', () => {
+  it('defaults new events to Macro without requesting provider conferencing', () => {
+    const controller = controllerFor({ title: 'Planning' });
+    expect(controller.state().conference).toBe('macro');
+    expect(controller.submitValues()?.conferenceChoice).toBe('macro');
+    expect(controller.submitValues()?.conference).toBeUndefined();
+  });
+
+  it('carries changes between Macro, no link, and Google Meet through submission', () => {
+    const controller = controllerFor({ title: 'Planning' });
+    controller.setField('conference', 'none');
+    expect(controller.submitValues()?.conferenceChoice).toBe('none');
+    expect(controller.submitValues()?.conference).toBeUndefined();
+    controller.setField('conference', 'google_meet');
+    expect(controller.submitValues()?.conferenceChoice).toBe('google_meet');
+    expect(controller.submitValues()?.conference).toBe('google_meet');
+    controller.setField('conference', 'macro');
+    expect(controller.submitValues()?.conferenceChoice).toBe('macro');
+    expect(controller.submitValues()?.conference).toBeUndefined();
+  });
+
+  it('clears existing provider conferencing when switching to Macro', () => {
+    const controller = controllerFor(
+      { title: 'Planning', conference: 'google_meet' },
+      { isEdit: true }
+    );
+    controller.setField('conference', 'macro');
+    expect(controller.submitValues()?.conferenceChoice).toBe('macro');
+    expect(controller.submitValues()?.conference).toBe('none');
+  });
+
+  it('keeps an edited event with no meeting link opted out', () => {
+    const controller = controllerFor(
+      { title: 'Planning', conference: 'none' },
+      { isEdit: true }
+    );
+    expect(controller.submitValues()?.conferenceChoice).toBe('none');
+    expect(controller.submitValues()?.conference).toBeUndefined();
+  });
+
+  it('submits preselected Google Meet on new events', () => {
+    const controller = controllerFor({
+      title: 'Planning',
+      conference: 'google_meet',
+    });
+    expect(controller.submitValues()?.conference).toBe('google_meet');
+  });
+});
+
+const MIXED_CALENDARS = () => [
+  { id: 'shared-1', label: 'Team', color: '#000000', isPrimary: false },
+  { id: 'primary-1', label: 'Mine', color: '#000000', isPrimary: true },
+];
+
+describe('out of office', () => {
+  it('keeps the all-day range on switch and defaults the decline mode', () => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const controller = controllerFor({
+      allDay: true,
+      start: today,
+      end: today,
+      title: 'Away',
+    });
+    controller.setEventKind('out_of_office');
+
+    expect(controller.isOutOfOffice()).toBe(true);
+    // The switch keeps all-day; an all-day out-of-office save is encoded as a
+    // full-day timed span, since Google has no date-based out-of-office event.
+    expect(controller.state().allDay).toBe(true);
+    expect(controller.submitValues()?.time.kind).toBe('timed');
+    expect(controller.state().outOfOffice).toEqual({
+      autoDeclineMode: 'decline_none',
+      declineMessage: '',
+    });
+  });
+
+  it('offers only primary calendars and steers the selection onto one', () => {
+    const controller = controllerFor(
+      { ...timedRange(3), title: 'Away', calendarId: 'shared-1' },
+      { calendarOptions: MIXED_CALENDARS }
+    );
+    controller.setEventKind('out_of_office');
+
+    expect(controller.calendarOptions().map((option) => option.id)).toEqual([
+      'primary-1',
+    ]);
+    expect(controller.effectiveCalendarId()).toBe('primary-1');
+
+    controller.setEventKind('default');
+    expect(controller.effectiveCalendarId()).toBe('shared-1');
+  });
+
+  it('creates with the decline settings and without hidden fields', () => {
+    const controller = controllerFor(
+      {
+        ...timedRange(3),
+        title: 'Away',
+        guests: 'guest@example.com',
+        location: 'HQ',
+        description: 'Send help',
+        conference: 'google_meet',
+      },
+      { calendarOptions: MIXED_CALENDARS }
+    );
+    controller.setEventKind('out_of_office');
+    controller.setOutOfOffice({
+      autoDeclineMode: 'decline_all_conflicting_invitations',
+      declineMessage: '  Back Monday  ',
+    });
+
+    const values = controller.submitValues();
+    expect(values?.outOfOffice).toEqual({
+      autoDeclineMode: 'decline_all_conflicting_invitations',
+      declineMessage: 'Back Monday',
+    });
+    expect(values?.guestEmails).toEqual([]);
+    expect(values?.location).toBe('');
+    expect(values?.description).toBe('');
+    expect(values?.conference).toBeUndefined();
+    expect(values?.conferenceChoice).toBe('none');
+    expect(values?.calendarId).toBe('primary-1');
+  });
+
+  it('switching back to a regular event restores the hidden fields', () => {
+    const controller = controllerFor({
+      ...timedRange(3),
+      title: 'Sync',
+      guests: 'guest@example.com',
+      location: 'HQ',
+    });
+    controller.setEventKind('out_of_office');
+    controller.setEventKind('default');
+
+    const values = controller.submitValues();
+    expect(values?.outOfOffice).toBeUndefined();
+    expect(values?.guestEmails).toEqual(['guest@example.com']);
+    expect(values?.location).toBe('HQ');
+    expect(controller.isDirty()).toBe(false);
+  });
+
+  it('edits pass the hidden guest and location values through untouched', () => {
+    const controller = controllerFor(
+      {
+        ...timedRange(3),
+        title: 'Away',
+        eventType: 'out_of_office',
+        guests: 'guest@example.com',
+        location: 'HQ',
+      },
+      { isEdit: true }
+    );
+
+    expect(controller.isDirty()).toBe(false);
+    const values = controller.submitValues();
+    expect(values?.guestEmails).toEqual(['guest@example.com']);
+    expect(values?.location).toBe('HQ');
+  });
+
+  it('edits only patch decline settings the user actually picked', () => {
+    const controller = controllerFor(
+      { ...timedRange(3), title: 'Away', eventType: 'out_of_office' },
+      { isEdit: true }
+    );
+    expect(controller.isDirty()).toBe(false);
+    expect(controller.submitValues()?.outOfOffice).toBeUndefined();
+
+    controller.setOutOfOffice({
+      autoDeclineMode: 'decline_only_new_conflicting_invitations',
+      declineMessage: '',
+    });
+    expect(controller.isDirty()).toBe(true);
+    expect(controller.submitValues()?.outOfOffice).toEqual({
+      autoDeclineMode: 'decline_only_new_conflicting_invitations',
+    });
   });
 });

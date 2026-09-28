@@ -1,5 +1,5 @@
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::DocumentMetadata;
+use model_owner::Owner;
 
 /// Gets all docx files
 #[tracing::instrument(skip(db))]
@@ -81,9 +81,8 @@ pub async fn get_docx_files(
         Ok(DocumentMetadata {
             document_id: row.document_id,
             document_version_id: row.document_version_id,
-            owner: MacroUserIdStr::parse_from_str(&row.owner)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
+            owner: Owner::from_principal_str(&row.owner)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             document_name: row.document_name,
             file_type: row.file_type,
             created_at: row.created_at,

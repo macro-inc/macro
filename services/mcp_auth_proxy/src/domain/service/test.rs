@@ -114,6 +114,38 @@ fn service(store: FakeInflightAuth) -> McpAuthProxyServiceImpl<FakeInflightAuth>
     )
 }
 
+#[test]
+fn protected_resource_metadata_includes_required_resource_url() {
+    let json = service(FakeInflightAuth::default()).protected_resource_metadata();
+    assert_eq!(
+        json,
+        serde_json::json!({
+            "resource": "https://mcp.example.com/mcp",
+            "authorization_server": "https://mcp.example.com",
+            "authorization_servers": ["https://mcp.example.com"],
+        })
+    );
+}
+
+#[test]
+fn protected_resource_metadata_does_not_double_the_mcp_path() {
+    let service = McpAuthProxyServiceImpl::new(
+        "https://gateway.macro.com/mcp".to_owned(),
+        Arc::new(FakeInflightAuth::default()),
+        Arc::new(FakeOAuthProvider {
+            expires_in: UPSTREAM_EXPIRES_IN,
+        }),
+    );
+    assert_eq!(
+        service.protected_resource_metadata(),
+        serde_json::json!({
+            "resource": "https://gateway.macro.com/mcp",
+            "authorization_server": "https://gateway.macro.com/mcp",
+            "authorization_servers": ["https://gateway.macro.com/mcp"],
+        })
+    );
+}
+
 fn issued_code(access_token_expires_at: Option<SystemTime>) -> IssuedAuthorizationCode {
     IssuedAuthorizationCode {
         access_token: AccessToken::from("upstream-access"),

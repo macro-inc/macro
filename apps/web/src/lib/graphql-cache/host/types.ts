@@ -14,6 +14,8 @@ import type {
   CacheReadPriority,
   CacheRevision,
   ClaimedMutation,
+  CommitOptimisticWriteResult,
+  DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
@@ -26,6 +28,7 @@ import type {
   ReadRecordsByKeysArgs,
   ReadRecordsByKeysResult,
   ReadResult,
+  RollbackOptimisticWriteResult,
   SearchCacheArgs,
   SearchCachePage,
   WriteResult,
@@ -67,6 +70,8 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
 }
 
 export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
+  /** Caller-supplied RFC UUID used for explicit safe coalescing. */
+  uuid: string;
   linkPatches?: OptimisticLinkPatchWire[];
   /** Revalidations for relevant cached fields that could not be patched. */
   revalidations?: QueryRevalidationWire[];
@@ -79,6 +84,16 @@ export interface InitialMutationClaimArgs {
   leaseExpiresAtMs: number;
 }
 
+export type CacheChangeOptions = {
+  /** Also observe background hydration without re-executing foreground queries. */
+  includeHydration?: boolean;
+};
+
+/** Engine replacement is independent of whether durable cache data survived. */
+export type CacheGenerationChange = {
+  storage: 'preserved' | 'reset';
+};
+
 export interface CacheHost {
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
@@ -87,6 +102,9 @@ export interface CacheHost {
 
   /** Returns the current revision of the active cache-engine generation. */
   currentRevision(): Promise<CacheRevision>;
+  /** Durable database identity, preserved across engine restarts and replaced
+   * whenever the stored cache is cleared or recreated. */
+  currentStorageGeneration(): Promise<string>;
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
   /** Projects a bounded explicit set of normalized entity keys. */
   readRecordsByKeys(
@@ -97,7 +115,12 @@ export interface CacheHost {
   /** Evaluates an exact initial Soup filter page over complete local projections. */
   entityFilter(args: EntityFilterCacheArgs): Promise<EntityFilterCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
-  /** Stores a query response and returns only fields not marked `@cacheOnly`. */
+  /**
+   * Stores a background query response and returns only fields not marked
+   * `@cacheOnly`. Advances the internal revision for coherent reads without
+   * notifying foreground subscribers unless the write resets cache identity.
+   * Cache-only consumers can opt into hydration via onCacheChanged.
+   */
   hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
   enqueueOptimisticMutation(
@@ -122,19 +145,19 @@ export interface CacheHost {
     claim: MutationClaim,
     nextAttemptAtMs: number,
     error: string
-  ): Promise<void>;
+  ): Promise<DeferOptimisticWriteResult>;
   /** Atomically commits a claimed mutation's real network response. */
   commitOptimisticWrite(
     transactionId: string,
     claim: MutationClaim,
     args: CacheWriteArgs
-  ): Promise<WriteResult>;
+  ): Promise<CommitOptimisticWriteResult>;
   /** Permanently fails a claimed mutation and drops its optimistic layer. */
   rollbackOptimisticWrite(
     transactionId: string,
     claim: MutationClaim,
     error: string
-  ): Promise<WriteResult>;
+  ): Promise<RollbackOptimisticWriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<AffectedOperationsResult>;
   /** Apply explicit server-provided cache-deletion effects. */
@@ -152,12 +175,19 @@ export interface CacheHost {
   onOpsAffected(cb: (opKeys: number[]) => void): () => void;
 
   /** Subscribes whenever the effective normalized-cache view changes. */
-  onCacheChanged(cb: (revision: CacheRevision) => void): () => void;
+  onCacheChanged(
+    cb: (revision: CacheRevision) => void,
+    options?: CacheChangeOptions
+  ): () => void;
 
-  /** Invalidates revision watermarks before a replacement engine is used. */
-  onCacheGenerationChanged(cb: () => void): () => void;
+  /** Reports engine replacements and live storage resets. Durable checkpoints
+   * must also validate currentStorageGeneration on startup: notifications are
+   * not replayed and may precede a subscriber. */
+  onCacheGenerationChanged(
+    cb: (change: CacheGenerationChange) => void
+  ): () => void;
 
-  /** Subscribes to final commit/rollback events for queued mutations. */
+  /** Subscribes to final commit, rollback, or supersession events. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;
 
   dispose(): void;

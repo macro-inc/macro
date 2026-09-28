@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            l.macro_id AS \"mailbox_owner!\",\n            (l.macro_id = $2) AS \"is_owner!\"\n        FROM public.email_threads t\n        JOIN public.email_links l ON l.id = t.link_id\n        WHERE t.id = $1::uuid\n          AND (\n              l.macro_id = $2\n              OR EXISTS (\n                  SELECT 1\n                  FROM public.macro_user_links mul\n                  WHERE mul.link_id = l.id\n                    AND mul.primary_macro_id = $2\n              )\n          )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mailbox_owner!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_owner!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "a37593776fe36baa9236d8f75d1aca053d92bfdd33330dc2f416558b673f844a"
+}

@@ -3,11 +3,15 @@ import { openChatWithMessage } from '@app/features/chat/ChatWithAgentButton';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { getSearchSplit } from '@app/features/next-soup/soup-view/search-controllers';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { TabsInset } from '@core/component/TabsInset';
+import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
+import {
+  enableProjects,
+  USE_MACRO_PR_SUMMARY_BLOCK,
+} from '@core/constant/featureFlags';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import {
@@ -19,10 +23,12 @@ import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { openExternalUrl } from '@core/util/url';
-import { type EntityData, InlineEntity, isGithubPrEntity } from '@entity';
+import { type EntityData, isGithubPrEntity } from '@entity';
+import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import {
+  Badge,
   CommandMenuEmptyState,
   CommandMenuHotkeyHint,
   CommandMenuSearchInput,
@@ -31,6 +37,7 @@ import {
   createCommandListController,
   Dialog,
   Hotkey,
+  Tabs,
 } from '@ui';
 import {
   createEffect,
@@ -46,6 +53,7 @@ import {
   Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { projectRouteId } from '../projects/core/route';
 import { CommandItem } from './CommandItem';
 import { getCategorySearchFilters } from './category-search-filters';
 import { trackCommandUsage } from './recency';
@@ -67,6 +75,7 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'chats', label: 'Agents' },
   { id: 'documents', label: 'Files' },
   { id: 'tasks', label: 'Tasks' },
+  { id: 'projects', label: 'Projects' },
   { id: 'channels', label: 'Channels' },
   { id: 'dms', label: 'People' },
 ];
@@ -99,7 +108,8 @@ export function CommandMenu() {
   });
 
   const handleSelect = (item: CommandMenuItem) => {
-    if (isSearchItem(item) || isAskAiItem(item)) suppressCloseAutoFocus = true;
+    if (isSearchItem(item) || isAskAiItem(item) || item.kind === 'new-project')
+      suppressCloseAutoFocus = true;
   };
 
   return (
@@ -137,8 +147,17 @@ export function CommandMenuInner(props: {
   const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
 
   const analytics = useAnalytics();
+  const projectsFlag = useFeatureFlag(enableProjects);
+  const categories = () =>
+    CATEGORIES.filter(
+      (item) => item.id !== 'projects' || projectsFlag().enabled
+    );
+  const categoryFilter = () =>
+    CommandState.categoryFilter() === 'projects' && !projectsFlag().enabled
+      ? 'all'
+      : CommandState.categoryFilter();
 
-  const { openWithSplit } = useSplitLayout();
+  const { openWithSplit, popoverSplit } = useSplitLayout();
 
   const canOpenInNewSplit = () =>
     globalSplitManager()?.canAppendSplit() ?? false;
@@ -149,11 +168,13 @@ export function CommandMenuInner(props: {
 
   const defaultCommandItems = props.items
     ? undefined
-    : useCommandItems(query, CommandState.categoryFilter, {
+    : useCommandItems(query, categoryFilter, {
         searchActive: CommandState.isOpen,
       });
   const filteredItems = props.items ?? defaultCommandItems!.items;
   const pagination = defaultCommandItems?.pagination;
+  const isLoadingEntities = () =>
+    defaultCommandItems?.isLoadingEntities() ?? false;
   const listController = createCommandListController({
     items: filteredItems,
     selectedIndex: CommandState.selectedIndex,
@@ -169,7 +190,7 @@ export function CommandMenuInner(props: {
   });
 
   createEffect(
-    on([query, CommandState.categoryFilter], () => {
+    on([query, categoryFilter], () => {
       const items = filteredItems();
       const firstIsSearch = items[0] && isSearchItem(items[0]);
       // Skip past the search row only onto a real result — when the query has
@@ -209,7 +230,7 @@ export function CommandMenuInner(props: {
   };
   const selectedIsEntity = () => {
     const item = selectedItem();
-    return item && isEntityItem(item);
+    return item && (isEntityItem(item) || item.kind === 'initiative');
   };
   const selectedIsSearch = () => {
     const item = selectedItem();
@@ -222,6 +243,11 @@ export function CommandMenuInner(props: {
 
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
     if (!item) return;
+    if (
+      (item.kind === 'new-project' || item.kind === 'initiative') &&
+      !projectsFlag().enabled
+    )
+      return;
 
     props.onSelect?.(item);
     if (props.disableDefaultAction) {
@@ -276,14 +302,43 @@ export function CommandMenuInner(props: {
       return;
     }
 
+    if (item.kind === 'new-project') {
+      CommandState.close();
+      CommandState.setQuery('');
+      popoverSplit({ type: 'component', id: 'project-compose' });
+      return;
+    }
+
+    if (item.kind === 'initiative') {
+      openWithSplit(
+        {
+          type: 'component',
+          id: projectRouteId({ id: item.id, section: 'overview' }),
+        },
+        { preferNewSplit: openInNewSplit }
+      );
+      CommandState.close();
+      CommandState.setQuery('');
+      return;
+    }
+
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
       if (isGithubPrEntity(item.data)) {
         if (USE_MACRO_PR_SUMMARY_BLOCK) {
-          openWithSplit(
+          const result = openWithSplit(
             { type: 'pr', id: item.data.id },
-            { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
+            {
+              referredFrom: 'kommand-menu',
+              preferNewSplit: openInNewSplit,
+            }
           );
+          if (
+            result.status === 'reused' &&
+            result.owner !== result.sourceOwner
+          ) {
+            toast.alert('Content already open');
+          }
         } else {
           openExternalUrl(item.data.metadata.url);
         }
@@ -295,7 +350,7 @@ export function CommandMenuInner(props: {
       if (item.data.type !== 'foreign') {
         const blockName = itemToBlockName(item.data);
         if (blockName) {
-          openWithSplit(
+          const result = openWithSplit(
             { type: blockName, id: item.id },
             {
               referredFrom: 'kommand-menu',
@@ -303,6 +358,12 @@ export function CommandMenuInner(props: {
               reopen: blockName === 'channel' ? 'latest' : undefined,
             }
           );
+          if (
+            result.status === 'reused' &&
+            result.owner !== result.sourceOwner
+          ) {
+            toast.alert('Content already open');
+          }
         }
       }
       CommandState.close();
@@ -487,11 +548,11 @@ export function CommandMenuInner(props: {
     scopeId: hotkeyScope,
     description: 'Next category',
     keyDownHandler: () => {
-      const currentIndex = CATEGORIES.findIndex(
-        (c) => c.id === CommandState.categoryFilter()
+      const currentIndex = categories().findIndex(
+        (c) => c.id === categoryFilter()
       );
-      const nextIndex = (currentIndex + 1) % CATEGORIES.length;
-      CommandState.setCategoryFilter(CATEGORIES[nextIndex].id);
+      const nextIndex = (currentIndex + 1) % categories().length;
+      CommandState.setCategoryFilter(categories()[nextIndex].id);
       return true;
     },
     runWithInputFocused: true,
@@ -503,12 +564,12 @@ export function CommandMenuInner(props: {
     scopeId: hotkeyScope,
     description: 'Previous category',
     keyDownHandler: () => {
-      const currentIndex = CATEGORIES.findIndex(
-        (c) => c.id === CommandState.categoryFilter()
+      const currentIndex = categories().findIndex(
+        (c) => c.id === categoryFilter()
       );
       const prevIndex =
-        (currentIndex - 1 + CATEGORIES.length) % CATEGORIES.length;
-      CommandState.setCategoryFilter(CATEGORIES[prevIndex].id);
+        (currentIndex - 1 + categories().length) % categories().length;
+      CommandState.setCategoryFilter(categories()[prevIndex].id);
       return true;
     },
     runWithInputFocused: true,
@@ -551,14 +612,15 @@ export function CommandMenuInner(props: {
     );
   };
 
-  const categoryTabs = CATEGORIES.map((c) => ({
-    value: c.id,
-    label: c.label,
-  }));
+  const categoryTabs = () =>
+    categories().map((c) => ({
+      value: c.id,
+      label: c.label,
+    }));
 
   return (
     <CommandMenuShell
-      class={cn('max-h-[75vh] rounded-xl', props.class)}
+      class={cn('max-h-[75vh]', props.class)}
       ref={setCommandMenuRef}
       depth={props.depth}
     >
@@ -594,17 +656,16 @@ export function CommandMenuInner(props: {
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <CommandMenuShell.Toolbar
           class={cn(
-            'pl-2.5 pr-1.5 pt-2 border-0',
+            'pl-2.5 pr-1.5 pt-2 border-0 bg-transparent',
             isEntityActionMode() && 'gap-1.5'
           )}
         >
           <Show
             when={isEntityActionMode()}
             fallback={
-              <TabsInset
-                depth={1}
-                list={categoryTabs}
-                value={CommandState.categoryFilter()}
+              <Tabs
+                list={categoryTabs()}
+                value={categoryFilter()}
                 onChange={(value) => {
                   if (value) {
                     CommandState.setCategoryFilter(value as CategoryFilter);
@@ -621,6 +682,11 @@ export function CommandMenuInner(props: {
       </Show>
 
       <CommandMenuShell.Body>
+        <Show when={isLoadingEntities() && filteredItems().length > 0}>
+          <div role="status" class="px-4 py-2 text-xs text-ink-muted">
+            Loading results…
+          </div>
+        </Show>
         <div
           class="overflow-hidden transition-[height] duration-60 ease-out p-2"
           style={{ height: `${resultsHeight()}px` }}
@@ -628,7 +694,11 @@ export function CommandMenuInner(props: {
           <Show
             when={filteredItems().length > 0}
             fallback={
-              <CommandMenuEmptyState>No results found</CommandMenuEmptyState>
+              <CommandMenuEmptyState>
+                <Show when={isLoadingEntities()} fallback="No results found">
+                  <span role="status">Loading results…</span>
+                </Show>
+              </CommandMenuEmptyState>
             }
           >
             <VirtualizedCommandList
@@ -645,7 +715,7 @@ export function CommandMenuInner(props: {
         </div>
       </CommandMenuShell.Body>
 
-      <CommandMenuShell.Footer>
+      <CommandMenuShell.Footer class="bg-transparent">
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
             <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
@@ -711,25 +781,10 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
   return (
     <>
       <For each={displayEntities()}>
-        {(entity) => {
-          return (
-            <div
-              class={cn(
-                'bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded',
-                {
-                  'max-w-[50%]': props.entities.length === 2,
-                }
-              )}
-            >
-              <InlineEntity entity={entity} />
-            </div>
-          );
-        }}
+        {(entity) => <EntitySelectionBadge entity={entity} />}
       </For>
       <Show when={remainingCount() > 0}>
-        <div class="text-ink-muted text-xs px-2 py-1">
-          +{remainingCount()} more
-        </div>
+        <Badge size="sm">+{remainingCount()} more</Badge>
       </Show>
     </>
   );

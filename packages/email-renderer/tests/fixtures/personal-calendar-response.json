@@ -1,0 +1,7 @@
+{
+  "name": "personal-calendar-response",
+  "description": "Personal calendar acceptance: theme text and links, remove the pale status banner, and retain the table outline.",
+  "adaptColors": true,
+  "normalizeFonts": true,
+  "html": "<div style=\"background-color:#fef7e0;color:#3c1e0a;border-radius:8px;padding:12px 32px;font-weight:bold\">A guest has accepted this invitation.</div><table style=\"width:100%;margin-top:12px;border:1px solid #dadce0;border-radius:8px;border-spacing:0\"><tr><td style=\"padding:24px 32px\"><h2 style=\"font-size:14px;color:#3c4043;margin:0\">When</h2><p style=\"color:#3c4043;margin-top:4px\">Thursday September 3, 2026 · 7pm – 9pm (Eastern Time)</p><h2 style=\"font-size:14px;color:#3c4043;margin-bottom:4px\">Guests</h2><div style=\"color:#3c4043\">organizer@example.com – organizer<br>Guest</div><a href=\"https://calendar.google.com/\" style=\"color:#1a73e8;font-weight:bold;text-decoration:none\">View all guest info</a></td></tr></table><p style=\"color:#70757a;font-size:12px\">Invitation from <a href=\"https://calendar.google.com/\" style=\"color:#1a73e8\">Google Calendar</a></p>"
+}

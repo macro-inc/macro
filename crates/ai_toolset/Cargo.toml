@@ -13,8 +13,16 @@ async-trait = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
+genai_telemetry = { path = "../genai_telemetry" }
 axum = { workspace = true }
 axum-macros = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tokio-util.workspace = true
+
+[dev-dependencies]
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
+tokio = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }

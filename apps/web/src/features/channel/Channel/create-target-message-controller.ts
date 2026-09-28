@@ -1,11 +1,23 @@
-import {
-  type ChannelMessagesData,
-  getChannelMessagesQueryKey,
-} from '@queries/channel/channel-messages';
+import { createSolidMachine } from '@macro-inc/machine/solid';
 import { queryClient } from '@queries/client';
-import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
-import { createStore } from 'solid-js/store';
-import type { ThreadListNavigation } from './ThreadList';
+import {
+  getMessageTimelineQueryKey,
+  type MessageTimelineData,
+} from '@queries/messages/timeline';
+import { type Accessor, untrack } from 'solid-js';
+import { match } from 'ts-pattern';
+import {
+  activeTargetMessageId,
+  activeTargetMessageReplyId,
+  type Command,
+  type Event,
+  hasPendingElementScroll,
+  initialState,
+  pendingScrollTargetId,
+  pendingTargetReplyId,
+  type State,
+  targetMessageDef,
+} from './target-message';
 
 /**
  * How long a navigation target keeps its accent highlight after its scroll
@@ -20,211 +32,125 @@ type CreateTargetMessageControllerOptions = {
   initialTargetMessageId?: string | undefined;
   initialTargetMessageReplyId?: string | undefined;
   messageKeys: Accessor<string[]>;
-  navigation: Accessor<ThreadListNavigation | undefined>;
-  /**
-   * Whether the ThreadList has completed its initial scroll.
-   *
-   * The controller defers pending scroll execution until this returns `true`
-   * so that a `goToMessage` call that fires while the initial scroll is still
-   * in progress does not get overridden by the initial-scroll retry logic
-   * inside ThreadList.
-   */
-  didInitialScroll: Accessor<boolean>;
+  /** The list publishes its handle after initial layout and positioning. */
+  isReady: Accessor<boolean>;
 };
 
 export type TargetMessageController = ReturnType<
   typeof createTargetMessageController
 >;
 
-type TargetMessageData = {
-  activeTargetMessageId: string | undefined;
-  activeTargetMessageReplyId: string | undefined;
-  loadAroundMessageId: string | undefined;
-  pendingScrollTargetId: string | undefined;
-  pendingTargetReplyId: string | undefined;
-};
-
+/**
+ * Runner for the target-message machine. All decisions live in
+ * `target-message.ts`; this file owns the three things that touch the
+ * world: the flash timer, cache restoration, and the readiness condition.
+ * No effects: readiness is a derivation the selectors consume.
+ */
 export function createTargetMessageController(
   options: CreateTargetMessageControllerOptions
 ) {
-  const initialTargetMessageData: TargetMessageData = {
-    activeTargetMessageId: options.initialTargetMessageId,
-    activeTargetMessageReplyId: options.initialTargetMessageReplyId,
-    loadAroundMessageId: options.initialTargetMessageId,
-    pendingScrollTargetId: options.initialTargetMessageId,
-    pendingTargetReplyId: options.initialTargetMessageReplyId,
-  };
+  const machine = createSolidMachine<State, Event, Command>({
+    initial: initialState({
+      messageId: options.initialTargetMessageId,
+      replyId: options.initialTargetMessageReplyId,
+    }),
+    def: targetMessageDef,
 
-  const [targetMessageData, setTargetMessageData] =
-    createStore<TargetMessageData>(initialTargetMessageData);
+    scopes: {
+      flashing: (_s, dispatch) => {
+        const timer = setTimeout(
+          () => dispatch({ t: 'flash-elapsed' }),
+          TARGETED_MESSAGE_FLASH_MS
+        );
+        return () => clearTimeout(timer);
+      },
+    },
 
-  let flashTimeout: ReturnType<typeof setTimeout> | undefined;
-
-  const cancelFlash = () => {
-    if (flashTimeout === undefined) return;
-    clearTimeout(flashTimeout);
-    flashTimeout = undefined;
-  };
-
-  const syncFlash = () => {
-    cancelFlash();
-
-    const activeTargetMessageId = targetMessageData['activeTargetMessageId'];
-    const hasPendingScroll =
-      targetMessageData['pendingScrollTargetId'] !== undefined ||
-      targetMessageData['pendingTargetReplyId'] !== undefined;
-
-    if (!activeTargetMessageId || hasPendingScroll) return;
-
-    flashTimeout = setTimeout(() => {
-      flashTimeout = undefined;
-      clearActiveTarget(activeTargetMessageId);
-    }, TARGETED_MESSAGE_FLASH_MS);
-  };
-
-  // Highlight and scroll-state changes go through this function so the flash
-  // timer stays synchronized. loadAroundMessageId does not affect highlighting,
-  // so it can be updated directly with setTargetMessageData.
-  const updateTargetMessageData = (patch: Partial<TargetMessageData>) => {
-    setTargetMessageData(patch);
-    syncFlash();
-  };
-
-  onCleanup(cancelFlash);
-
-  const hasMessageLoaded = (messageId: string) =>
-    options.messageKeys().includes(messageId);
-
-  const goToMessage = (messageId: string, replyId?: string) => {
-    const isSameTarget =
-      targetMessageData['activeTargetMessageId'] === messageId;
-    const isSameReplyTarget =
-      targetMessageData['activeTargetMessageReplyId'] === replyId;
-    const isPending = targetMessageData['pendingScrollTargetId'] === messageId;
-
-    if (isSameTarget && isSameReplyTarget && isPending) return;
-
-    updateTargetMessageData({
-      activeTargetMessageId: messageId,
-      activeTargetMessageReplyId: replyId,
-      // TODO: need a better approach where the load around should be undefined
-      // the current approach is a hack to fix rapid navigation race condition
-      loadAroundMessageId: hasMessageLoaded(messageId)
-        ? targetMessageData['loadAroundMessageId']
-        : messageId,
-      pendingScrollTargetId: messageId,
-      pendingTargetReplyId: replyId,
-    });
-  };
-
-  const completePendingScroll = (messageId: string) => {
-    if (targetMessageData['pendingScrollTargetId'] !== messageId) return;
-    updateTargetMessageData({ pendingScrollTargetId: undefined });
-  };
-
-  const completePendingReplyScroll = (messageId: string, replyId: string) => {
-    if (targetMessageData['activeTargetMessageId'] !== messageId) return;
-    if (targetMessageData['pendingTargetReplyId'] !== replyId) return;
-    updateTargetMessageData({ pendingTargetReplyId: undefined });
-  };
-
-  createEffect(
-    on(
-      [
-        options.navigation,
-        () => targetMessageData['pendingScrollTargetId'],
-        options.messageKeys,
-        options.didInitialScroll,
-      ],
-      ([navigation, pendingTargetId, , didInitialScroll]) => {
-        if (!navigation || !pendingTargetId) return;
-        if (!hasMessageLoaded(pendingTargetId)) return;
-
-        // Defer the scroll until the ThreadList has completed its initial
-        // scroll. This prevents a goToMessage call from being overridden by
-        // the initial-scroll retry logic in ThreadList's handleScrollEnd,
-        // which validates position against the *original* scroll target.
-        // The pending target stays queued; once didInitialScroll flips to
-        // true the effect re-fires and executes the scroll.
-        if (!didInitialScroll) return;
-
-        // Channel keeps a pending target's row mounted. Scrolling the whole
-        // row first can land on the wrong part of a tall thread and creates a
-        // visible intermediate position, so the measured root/reply element
-        // performs the only viewport movement.
-        const nestedTarget = !!targetMessageData['pendingTargetReplyId'];
-
-        const restoredDefaultPagination =
-          restoreDefaultChannelPaginationAfterTargetLoad(
+    execute: (cmd, dispatch) => {
+      match(cmd)
+        .with({ t: 'restore-default-pagination' }, (cmd) => {
+          const restored = restoreDefaultChannelPaginationAfterTargetLoad(
             options.channelId(),
-            targetMessageData['loadAroundMessageId']
+            cmd.loadAround
           );
-        if (restoredDefaultPagination) {
-          setTargetMessageData('loadAroundMessageId', undefined);
-        }
-        // Nested replies acknowledge the outer row immediately so their own
-        // measured-element scroll can begin. Root messages stay pending until
-        // ChannelThread positions the message inside its potentially tall row.
-        if (nestedTarget) completePendingScroll(pendingTargetId);
-      }
-    )
-  );
+          if (restored) dispatch({ t: 'pagination-restored' });
+        })
+        .exhaustive();
+    },
 
-  const reset = () => {
-    updateTargetMessageData({
-      activeTargetMessageId: undefined,
-      activeTargetMessageReplyId: undefined,
-      loadAroundMessageId: undefined,
-      pendingScrollTargetId: undefined,
-      pendingTargetReplyId: undefined,
-    });
+    inspect: import.meta.env.DEV
+      ? (from, e, result) =>
+          console.debug('target-message', {
+            from: from.t,
+            event: e.t,
+            to: result === 'ignored' ? 'ignored' : result.state.t,
+          })
+      : undefined,
+  });
+
+  const state = machine.state;
+
+  // A function, not a memo: Channel.tsx constructs this controller before
+  // `messageIndex` exists, so eagerly reading `messageKeys` would throw.
+  // Accessors run after setup and track these inputs from there.
+  const ready = () => {
+    const s = state();
+    return (
+      s.t === 'targeting' &&
+      options.isReady() &&
+      options.messageKeys().includes(s.target.messageId)
+    );
   };
-
-  /**
-   * Clear the active target (and any pending scroll) if it still points at
-   * `messageId`; no-op if navigation has since moved elsewhere. Leaves
-   * `loadAroundMessageId` untouched so pagination is not disturbed.
-   */
-  function clearActiveTarget(messageId: string) {
-    if (targetMessageData['activeTargetMessageId'] !== messageId) return;
-    updateTargetMessageData({
-      activeTargetMessageId: undefined,
-      activeTargetMessageReplyId: undefined,
-      pendingScrollTargetId: undefined,
-      pendingTargetReplyId: undefined,
-    });
-  }
 
   return {
-    activeTargetMessageId: () => targetMessageData['activeTargetMessageId'],
-    activeTargetMessageReplyId: () =>
-      targetMessageData['activeTargetMessageReplyId'],
-    loadAroundMessageId: () => targetMessageData['loadAroundMessageId'],
-    pendingScrollTargetId: () => targetMessageData['pendingScrollTargetId'],
-    pendingTargetReplyId: () => targetMessageData['pendingTargetReplyId'],
+    activeTargetMessageId: () => activeTargetMessageId(state()),
+    activeTargetMessageReplyId: () => activeTargetMessageReplyId(state()),
+    loadAroundMessageId: () => state().loadAround,
+    pendingScrollTargetId: () => pendingScrollTargetId(state(), ready()),
+    pendingTargetReplyId: () => pendingTargetReplyId(state()),
+    hasPendingElementScroll: () => hasPendingElementScroll(state(), ready()),
 
-    goToMessage,
-    completePendingScroll,
-    completePendingReplyScroll,
-    clearActiveTarget,
-    reset,
+    goToMessage: (messageId: string, replyId?: string) =>
+      machine.dispatch({
+        t: 'navigate',
+        target: { messageId, replyId },
+        targetLoaded: untrack(() => options.messageKeys().includes(messageId)),
+        ready: untrack(ready),
+      }),
+    completePendingScroll: (messageId: string) =>
+      machine.dispatch({ t: 'root-scroll-done', messageId }),
+    completePendingReplyScroll: (messageId: string, replyId: string) =>
+      machine.dispatch({ t: 'reply-scroll-done', messageId, replyId }),
+    clearActiveTarget: (messageId: string) =>
+      machine.dispatch({ t: 'release', messageId }),
+    reset: () => machine.dispatch({ t: 'reset' }),
   };
 }
 
+/**
+ * Promote the around-query's data to the default channel query once the
+ * target has been positioned, so subsequent pagination continues from the
+ * loaded window instead of refetching from the bottom. Returns whether
+ * anything was restored. Idempotent: the around variant is removed on success.
+ */
 export function restoreDefaultChannelPaginationAfterTargetLoad(
   channelId: string,
   loadAroundMessageId: string | undefined
 ) {
   if (!loadAroundMessageId) return false;
 
-  const aroundKey = getChannelMessagesQueryKey(channelId, loadAroundMessageId);
-  const defaultKey = getChannelMessagesQueryKey(channelId, null);
-  const aroundData = queryClient.getQueryData<ChannelMessagesData>(aroundKey);
+  const aroundKey = getMessageTimelineQueryKey(
+    { type: 'channel', id: channelId },
+    loadAroundMessageId
+  );
+  const defaultKey = getMessageTimelineQueryKey(
+    { type: 'channel', id: channelId },
+    null
+  );
+  const aroundData = queryClient.getQueryData<MessageTimelineData>(aroundKey);
   if (!aroundData) return false;
 
   queryClient.setQueryData(defaultKey, aroundData);
-  // Remove the around-query variant so it doesn't linger in cache across
-  // component mounts.
   queryClient.removeQueries({ queryKey: aroundKey });
   return true;
 }
@@ -237,8 +163,11 @@ export function restoreDefaultChannelPaginationAfterTargetLoad(
  * centered on an old target — remove it so the query fetches from the bottom.
  */
 export function clearStaleRestoredChannelData(channelId: string) {
-  const defaultKey = getChannelMessagesQueryKey(channelId, null);
-  const cached = queryClient.getQueryData<ChannelMessagesData>(defaultKey);
+  const defaultKey = getMessageTimelineQueryKey(
+    { type: 'channel', id: channelId },
+    null
+  );
+  const cached = queryClient.getQueryData<MessageTimelineData>(defaultKey);
   if (!cached?.pages.length) return;
 
   // Check both the page cursor AND pageParams[0]. After fetchPreviousPage,

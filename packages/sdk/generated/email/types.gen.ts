@@ -302,6 +302,7 @@ export type ApiMessage = {
     body_macro?: string | null;
     body_replyless?: string | null;
     body_text?: string | null;
+    calendar_invitations?: Array<CalendarInvitation>;
     cc: Array<ApiContactInfo>;
     created_at: string;
     db_id: string;
@@ -569,26 +570,10 @@ export type CalendarAttendee = {
 };
 
 /**
- * An attendee supplied to a calendar mutation.
- */
-export type CalendarAttendeeInputBody = {
-    /**
-     * Attendee email address.
-     */
-    email: string;
-    /**
-     * Whether attendance is optional.
-     */
-    isOptional?: boolean;
-};
-
-/**
- * How much of a recurring series a deletion removes.
- */
-export type CalendarDeletionScopeParam = 'all' | 'this_event' | 'this_and_following';
-
-/**
  * A stable, first-class Macro calendar event entity.
+ *
+ * Content fields hold the canonical source's values: the account's primary
+ * calendar copy when one is synced, else the freshest remaining copy.
  */
 export type CalendarEvent = {
     /**
@@ -639,7 +624,7 @@ export type CalendarEvent = {
      */
     id: string;
     /**
-     * Whether the current user can edit the canonical source.
+     * Whether the canonical source's calendar prohibits editing it.
      */
     isReadOnly: boolean;
     /**
@@ -673,6 +658,13 @@ export type CalendarEvent = {
      */
     sequence: number;
     /**
+     * Content of every active copy of this event, canonical first: the
+     * primary calendar's copy, then the freshest. A client picks the copy
+     * whose calendar it is showing and falls back to the first. Populated
+     * only on the read path, so stored projections omit it.
+     */
+    sources?: Array<CalendarEventSourceContent>;
+    /**
      * Event status.
      */
     status: EventStatus;
@@ -699,53 +691,156 @@ export type CalendarEvent = {
 };
 
 /**
- * HTTP error body returned by calendar mutation endpoints.
+ * The content one provider copy of an event carries.
+ *
+ * Google keeps these fields per calendar copy: a shared calendar's copy of a
+ * member's event can have its own title, type, reminders, and access role.
+ * The entity holds its canonical source's values. Every other copy's values
+ * are read from here so a client can show the copy that belongs to the
+ * calendar being viewed.
  */
-export type CalendarMutationApiError = {
+export type CalendarEventSourceContent = {
     /**
-     * Machine-readable failure category.
+     * Calendar this copy lives on.
      */
-    code: CalendarMutationErrorCode;
+    calendarId: string;
     /**
-     * Human-readable failure description.
+     * Provider-reported creator email.
      */
-    message: string;
+    creatorEmail?: string | null;
+    /**
+     * Provider-reported creator display name.
+     */
+    creatorName?: string | null;
+    /**
+     * Optional event body.
+     */
+    description?: string | null;
+    /**
+     * Provider event type.
+     */
+    eventType: EventType;
+    /**
+     * Whether the calendar's access role prohibits editing this copy.
+     */
+    isReadOnly: boolean;
+    /**
+     * Optional physical or virtual location label.
+     */
+    location?: string | null;
+    /**
+     * Reminder configuration of this copy.
+     */
+    reminders: EventReminders;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Availability behavior.
+     */
+    transparency: EventTransparency;
+    /**
+     * Event visibility.
+     */
+    visibility: EventVisibility;
 };
 
 /**
- * Machine-readable failure category for calendar mutations.
+ * Display snapshot of one meaningful VEVENT, owned by the email domain.
  */
-export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed';
+export type CalendarInvitation = {
+    /**
+     * Historical attendee identities and participation metadata.
+     */
+    attendees: Array<InvitationParticipant>;
+    /**
+     * Reply or counter-proposal comment.
+     */
+    comment?: string | null;
+    /**
+     * Validated HTTP(S) conferencing URL; never fetched during rendering.
+     */
+    conference_url?: string | null;
+    /**
+     * Plaintext description, retaining passwords and dial-in instructions.
+     */
+    description?: string | null;
+    /**
+     * Scheduling timestamp in its original spelling.
+     */
+    dtstamp?: string | null;
+    end?: null | InvitationDateTime;
+    /**
+     * Content-derived component identity, stable across repeated extraction.
+     */
+    id: string;
+    /**
+     * Last modification timestamp in its original spelling.
+     */
+    last_modified?: string | null;
+    /**
+     * Plaintext event location.
+     */
+    location?: string | null;
+    /**
+     * Original scheduling method.
+     */
+    method: InvitationMethod;
+    organizer?: null | InvitationParticipant;
+    recurrence_id?: null | InvitationDateTime;
+    /**
+     * Original recurrence identifier spelling and parameters.
+     */
+    recurrence_id_raw?: string | null;
+    /**
+     * Scheduling revision, distinct from delivery order.
+     */
+    sequence: number;
+    start?: null | InvitationDateTime;
+    /**
+     * Original event status.
+     */
+    status?: string | null;
+    /**
+     * Event summary.
+     */
+    title?: string | null;
+    /**
+     * iCalendar UID; never a Google provider event ID.
+     */
+    uid: string;
+};
 
 /**
- * How much of a recurring series an RSVP applies to.
- *
- * Unlike deletion there is no this-and-following variant: the provider
- * cannot express a forward-scoped response, so offering one would be a
- * promise sync could not keep.
+ * A materialized recurrence instance optimized for range queries.
  */
-export type CalendarRsvpScopeParam = 'all' | 'this_event';
-
-/**
- * How much of a recurring series an update applies to.
- *
- * Like RSVPs there is no this-and-following variant: the provider cannot
- * express a forward-scoped edit as one write, and emulating it (truncate
- * the series, insert an edited clone) is non-atomic and re-invites the
- * attendees of the clone. Compose it from a this-and-following deletion
- * and a create when that shape is wanted.
- */
-export type CalendarUpdateScopeParam = 'all' | 'this_event';
+export type CalendarOccurrence = {
+    /**
+     * Owning event entity.
+     */
+    eventId: string;
+    /**
+     * Whether the instance was cancelled.
+     */
+    isCancelled: boolean;
+    /**
+     * Stable key within the event.
+     */
+    occurrenceKey: string;
+    /**
+     * Provider recurrence identifier, when applicable.
+     */
+    recurrenceId?: string | null;
+    /**
+     * Instance time.
+     */
+    time: EventTime;
+};
 
 export type CancelBackfillParams = {
     job_id: string;
 };
-
-/**
- * A requested change to an event's conferencing. Omitting the field leaves
- * the existing conference untouched; only these values change it.
- */
-export type ConferenceChange = 'google_meet' | 'none';
 
 /**
  * The conferencing system backing an event's join URL.
@@ -787,50 +882,6 @@ export type ContactInfoLegacy = {
 
 export type ContactInfoWithInteraction = ContactInfoLegacy & {
     last_interaction: string;
-};
-
-/**
- * Request body creating a calendar event on the requester's calendar.
- */
-export type CreateCalendarEventRequest = {
-    /**
-     * Invited attendees.
-     */
-    attendees?: Array<CalendarAttendeeInputBody>;
-    /**
-     * Exact calendar to create the event on; takes precedence over the
-     * inbox default.
-     */
-    calendarId?: string | null;
-    conference?: null | ConferenceChange;
-    /**
-     * Optional event body.
-     */
-    description?: string | null;
-    /**
-     * Connected inbox whose primary calendar receives the event; defaults
-     * to the requester's primary inbox.
-     */
-    emailLinkId?: string | null;
-    /**
-     * Optional location label.
-     */
-    location?: string | null;
-    /**
-     * Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
-     */
-    recurrenceLines?: Array<string>;
-    reminders?: null | EventReminders;
-    /**
-     * Timed or all-day shape.
-     */
-    time: EventTime;
-    /**
-     * Display title.
-     */
-    title: string;
-    transparency?: null | EventTransparency;
-    visibility?: null | EventVisibility;
 };
 
 /**
@@ -1057,6 +1108,103 @@ export type InitResponse = {
     link_id: string;
 };
 
+/**
+ * Preserve date-only and unresolved times without manufacturing UTC instants.
+ */
+export type InvitationDateTime = {
+    kind: 'date';
+    /**
+     * ISO calendar date.
+     */
+    value: string;
+} | {
+    kind: 'zoned';
+    /**
+     * IANA zone of the original TZID, or UTC.
+     */
+    time_zone: string;
+    /**
+     * RFC3339 instant.
+     */
+    value: string;
+} | {
+    kind: 'unresolved';
+    /**
+     * Original TZID if present.
+     */
+    time_zone?: string | null;
+    /**
+     * ISO local wall time, without an offset.
+     */
+    value: string;
+};
+
+/**
+ * Original scheduling method, including methods unsupported for actions.
+ */
+export type InvitationMethod = 'request' | 'reply' | 'cancel' | 'counter' | 'publish' | 'unknown';
+
+/**
+ * Scheduling participant; saved responses are historical, not current RSVP.
+ */
+export type InvitationParticipant = {
+    /**
+     * Participant calendar address.
+     */
+    email: string;
+    /**
+     * Sender-supplied display name.
+     */
+    name?: string | null;
+    /**
+     * Original PARTSTAT, retaining extensions.
+     */
+    participation_status?: string | null;
+};
+
+/**
+ * Refreshable result, distinct from the immutable email contents.
+ */
+export type InvitationResolution = {
+    kind: 'disconnected';
+} | {
+    kind: 'still_syncing';
+} | {
+    kind: 'cancelled';
+} | {
+    kind: 'unavailable';
+} | {
+    kind: 'no_match';
+} | {
+    kind: 'ambiguous';
+} | {
+    /**
+     * Whether the conference link belongs to the reconciled scheduling target.
+     */
+    can_join: boolean;
+    /**
+     * Whether a response is currently allowed.
+     */
+    can_respond: boolean;
+    /**
+     * Current occurrence-specific content.
+     */
+    event: CalendarEvent;
+    /**
+     * Whether the provider projection trails the email revision.
+     */
+    is_stale: boolean;
+    kind: 'resolved';
+    /**
+     * Original occurrence identity and current time.
+     */
+    occurrence: CalendarOccurrence;
+    /**
+     * Connected address that would respond.
+     */
+    responding_email: string;
+};
+
 export type Label = {
     created_at: string;
     id?: string | null;
@@ -1137,16 +1285,6 @@ export type ListBlockedResponse = {
      * List of email addresses that are currently blocked.
      */
     blocked_emails: Array<string>;
-};
-
-/**
- * Calendars visible to the requester across connected and delegated inboxes.
- */
-export type ListCalendarsResponse = {
-    /**
-     * Primaries and writable calendars first.
-     */
-    calendars: Array<VisibleCalendar>;
 };
 
 export type ListContactsResponse = {
@@ -1260,17 +1398,6 @@ export type PreviewView = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'imp
 export type PreviewViewStandardLabel = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'important' | 'other';
 
 /**
- * A sync run committed changes for `link_id`; viewers should refetch.
- */
-export type RefreshCalendarEvent = {
-    event: 'synced';
-    /**
-     * Connected inbox whose calendars changed.
-     */
-    link_id: string;
-};
-
-/**
  * Payload for the `refresh_email` connection gateway event: identifies the
  * inbox that changed and the kind of change.
  */
@@ -1314,21 +1441,6 @@ export type ResyncResponse = {
      * the one already in progress.
      */
     backfill_job_id: string;
-};
-
-/**
- * Request body setting the requester's RSVP on an event.
- */
-export type RsvpCalendarEventRequest = {
-    /**
-     * Original-start key of the occurrence the response targets.
-     */
-    recurrenceId?: string | null;
-    /**
-     * The response to record for the connected account.
-     */
-    response: AttendeeResponseStatus;
-    scope?: null | CalendarRsvpScopeParam;
 };
 
 /**
@@ -1452,42 +1564,6 @@ export type UnresolvedSignatureImagesError = {
     unresolved_image_count: number;
 };
 
-/**
- * Request body patching an event; omitted fields are left untouched.
- */
-export type UpdateCalendarEventRequest = {
-    /**
-     * Replacement attendee list.
-     */
-    attendees?: Array<CalendarAttendeeInputBody> | null;
-    conference?: null | ConferenceChange;
-    /**
-     * Replacement description; an empty string clears it.
-     */
-    description?: string | null;
-    /**
-     * Replacement location; an empty string clears it.
-     */
-    location?: string | null;
-    /**
-     * Original-start key of the occurrence the update targets.
-     */
-    recurrenceId?: string | null;
-    /**
-     * Replacement recurrence properties; an empty list clears them.
-     */
-    recurrenceLines?: Array<string> | null;
-    reminders?: null | EventReminders;
-    scope?: null | CalendarUpdateScopeParam;
-    time?: null | EventTime;
-    /**
-     * Replacement title; an empty string clears it.
-     */
-    title?: string | null;
-    transparency?: null | EventTransparency;
-    visibility?: null | EventVisibility;
-};
-
 export type UpdateLabelBatchRequest = {
     label_id: string;
     message_ids: Array<string>;
@@ -1563,7 +1639,11 @@ export type UpsertEmailFilterResponse = {
 
 export type UpsertScheduledRequest = {
     /**
-     * The time to send the message (ISO 8601 format)
+     * Per-message signature override; absent uses the inbox's send defaults.
+     */
+    include_signature?: boolean | null;
+    /**
+     * The time to send the message (ISO 8601 format).
      */
     send_time: string;
 };
@@ -1576,265 +1656,6 @@ export type UpsertScheduledResponse = {
 export type UserProvider = 'GMAIL';
 
 export type Value = unknown;
-
-/**
- * A calendar visible to a requester, listed for pickers and filters.
- */
-export type VisibleCalendar = {
-    /**
-     * Provider color.
-     */
-    color?: string | null;
-    /**
-     * Default reminders applied to events that keep `useDefault`.
-     */
-    defaultReminders: Array<EventReminderOverride>;
-    /**
-     * Connected inbox address, for grouping in multi-inbox pickers.
-     */
-    emailAddress: string;
-    /**
-     * Connected inbox that syncs this calendar.
-     */
-    emailLinkId: string;
-    /**
-     * Persisted Macro calendar identifier.
-     */
-    id: string;
-    /**
-     * Whether this is its account's primary calendar.
-     */
-    isPrimary: boolean;
-    /**
-     * Whether the grant can create and modify events on this calendar.
-     */
-    isWritable: boolean;
-    /**
-     * Provider display name.
-     */
-    name: string;
-};
-
-export type ListCalendarsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/calendar/calendars';
-};
-
-export type ListCalendarsErrors = {
-    /**
-     * Authentication required
-     */
-    401: unknown;
-    /**
-     * Transient failure
-     */
-    503: CalendarMutationApiError;
-};
-
-export type ListCalendarsError = ListCalendarsErrors[keyof ListCalendarsErrors];
-
-export type ListCalendarsResponses = {
-    /**
-     * Calendars visible to the requester
-     */
-    200: ListCalendarsResponse;
-};
-
-export type ListCalendarsResponse2 = ListCalendarsResponses[keyof ListCalendarsResponses];
-
-export type CreateCalendarEventData = {
-    body: CreateCalendarEventRequest;
-    path?: never;
-    query?: never;
-    url: '/calendar/events';
-};
-
-export type CreateCalendarEventErrors = {
-    /**
-     * Invalid event fields
-     */
-    400: CalendarMutationApiError;
-    /**
-     * Authentication required
-     */
-    401: unknown;
-    /**
-     * Calendar is read-only or needs reauthorization
-     */
-    403: CalendarMutationApiError;
-    /**
-     * No writable calendar or the provider rejected the event
-     */
-    409: CalendarMutationApiError;
-    /**
-     * Transient provider failure
-     */
-    503: CalendarMutationApiError;
-};
-
-export type CreateCalendarEventError = CreateCalendarEventErrors[keyof CreateCalendarEventErrors];
-
-export type CreateCalendarEventResponses = {
-    /**
-     * The created calendar event
-     */
-    201: CalendarEvent;
-};
-
-export type CreateCalendarEventResponse = CreateCalendarEventResponses[keyof CreateCalendarEventResponses];
-
-export type DeleteCalendarEventData = {
-    body?: never;
-    path: {
-        /**
-         * Calendar event entity id
-         */
-        event_id: string;
-    };
-    query?: {
-        /**
-         * Deletion scope; defaults to the entire event or series.
-         */
-        scope?: CalendarDeletionScopeParam;
-        /**
-         * Original-start key of the occurrence a scoped deletion targets.
-         */
-        recurrenceId?: string;
-    };
-    url: '/calendar/events/{event_id}';
-};
-
-export type DeleteCalendarEventErrors = {
-    /**
-     * Authentication required
-     */
-    401: unknown;
-    /**
-     * Calendar is read-only or needs reauthorization
-     */
-    403: CalendarMutationApiError;
-    /**
-     * Event not found
-     */
-    404: CalendarMutationApiError;
-    /**
-     * The provider rejected the deletion
-     */
-    409: CalendarMutationApiError;
-    /**
-     * Transient provider failure
-     */
-    503: CalendarMutationApiError;
-};
-
-export type DeleteCalendarEventError = DeleteCalendarEventErrors[keyof DeleteCalendarEventErrors];
-
-export type DeleteCalendarEventResponses = {
-    /**
-     * The event was deleted
-     */
-    204: void;
-};
-
-export type DeleteCalendarEventResponse = DeleteCalendarEventResponses[keyof DeleteCalendarEventResponses];
-
-export type UpdateCalendarEventData = {
-    body: UpdateCalendarEventRequest;
-    path: {
-        /**
-         * Calendar event entity id
-         */
-        event_id: string;
-    };
-    query?: never;
-    url: '/calendar/events/{event_id}';
-};
-
-export type UpdateCalendarEventErrors = {
-    /**
-     * Invalid event fields
-     */
-    400: CalendarMutationApiError;
-    /**
-     * Authentication required
-     */
-    401: unknown;
-    /**
-     * Calendar is read-only or needs reauthorization
-     */
-    403: CalendarMutationApiError;
-    /**
-     * Event or targeted occurrence not found
-     */
-    404: CalendarMutationApiError;
-    /**
-     * The provider rejected the update
-     */
-    409: CalendarMutationApiError;
-    /**
-     * Transient provider failure
-     */
-    503: CalendarMutationApiError;
-};
-
-export type UpdateCalendarEventError = UpdateCalendarEventErrors[keyof UpdateCalendarEventErrors];
-
-export type UpdateCalendarEventResponses = {
-    /**
-     * The updated calendar event
-     */
-    200: CalendarEvent;
-};
-
-export type UpdateCalendarEventResponse = UpdateCalendarEventResponses[keyof UpdateCalendarEventResponses];
-
-export type RsvpCalendarEventData = {
-    body: RsvpCalendarEventRequest;
-    path: {
-        /**
-         * Calendar event entity id
-         */
-        event_id: string;
-    };
-    query?: never;
-    url: '/calendar/events/{event_id}/rsvp';
-};
-
-export type RsvpCalendarEventErrors = {
-    /**
-     * Authentication required
-     */
-    401: unknown;
-    /**
-     * Calendar is read-only or needs reauthorization
-     */
-    403: CalendarMutationApiError;
-    /**
-     * Event not found
-     */
-    404: CalendarMutationApiError;
-    /**
-     * The connected account is not an attendee
-     */
-    409: CalendarMutationApiError;
-    /**
-     * Transient provider failure
-     */
-    503: CalendarMutationApiError;
-};
-
-export type RsvpCalendarEventError = RsvpCalendarEventErrors[keyof RsvpCalendarEventErrors];
-
-export type RsvpCalendarEventResponses = {
-    /**
-     * The updated calendar event
-     */
-    200: CalendarEvent;
-};
-
-export type RsvpCalendarEventResponse = RsvpCalendarEventResponses[keyof RsvpCalendarEventResponses];
 
 export type GetAttachmentData = {
     body?: never;
@@ -2129,7 +1950,9 @@ export type UpsertScheduledMessageData = {
 };
 
 export type UpsertScheduledMessageErrors = {
+    400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
 };
@@ -2157,6 +1980,7 @@ export type DeleteScheduledDraftData = {
 export type DeleteScheduledDraftErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
 };
@@ -2940,6 +2764,31 @@ export type GetThreadResponses = {
 };
 
 export type GetThreadResponse2 = GetThreadResponses[keyof GetThreadResponses];
+
+export type GetThreadCalendarInvitationsData = {
+    body?: never;
+    path: {
+        /**
+         * Authorized email thread
+         */
+        thread_id: string;
+    };
+    query?: never;
+    url: '/email/threads/{thread_id}/calendar-invitations';
+};
+
+export type GetThreadCalendarInvitationsErrors = {
+    401: unknown;
+    403: unknown;
+};
+
+export type GetThreadCalendarInvitationsResponses = {
+    200: {
+        [key: string]: InvitationResolution;
+    };
+};
+
+export type GetThreadCalendarInvitationsResponse = GetThreadCalendarInvitationsResponses[keyof GetThreadCalendarInvitationsResponses];
 
 export type UpdateThreadProjectData = {
     body: UpdateThreadProjectRequest;

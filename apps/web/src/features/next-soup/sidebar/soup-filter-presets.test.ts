@@ -8,11 +8,27 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_CALENDAR_UI: () => mocks.calendarUiEnabled,
-  ENABLE_CALENDAR_SEARCH_UI: () => mocks.calendarSearchEnabled,
-  ENABLE_REMINDERS: () => mocks.remindersEnabled,
-  ENABLE_SNIPPETS: () => mocks.snippetsEnabled,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE: false,
+  enableCalendarUi: { key: 'enable-calendar-ui' },
+  enableReminders: { key: 'enable-reminders' },
+  enableSnippets: { key: 'enable-snippets' },
+  enableSupportedSoupForeignEntities: {
+    key: 'enable-supported-soup-foreign-entities',
+  },
+  isCalendarSearchUiEnabled: () => mocks.calendarSearchEnabled,
+  isFeatureEnabled: (flag: { key?: string }) => {
+    switch (flag.key) {
+      case 'enable-calendar-ui':
+        return mocks.calendarUiEnabled;
+      case 'enable-reminders':
+        return mocks.remindersEnabled;
+      case 'enable-snippets':
+        return mocks.snippetsEnabled;
+      case 'enable-supported-soup-foreign-entities':
+        return false;
+      default:
+        return false;
+    }
+  },
 }));
 
 afterEach(() => {
@@ -120,7 +136,7 @@ describe('calendar event scoping', () => {
       getViewPreset('mail', 'important')?.filters.include?.calendarEventId
     ).toEqual([nilId]);
     expect(
-      getViewPreset('inbox', 'all')?.filters.include?.calendarEventId
+      getViewPreset('home', 'all')?.filters.include?.calendarEventId
     ).toEqual([nilId]);
   });
 
@@ -143,7 +159,7 @@ describe('calendar event scoping', () => {
 
 describe('inbox view presets', () => {
   it('opts the signal tab into reminders', () => {
-    const filters = getViewPreset('inbox', 'signal')?.filters;
+    const filters = getViewPreset('home', 'signal')?.filters;
     const ast = compileToAst(queryStateFrom(filters!));
 
     // Reminders are off server-side unless a query names them; this is the ask.
@@ -153,7 +169,7 @@ describe('inbox view presets', () => {
   it('leaves the signal tab alone when the reminders flag is off', () => {
     mocks.remindersEnabled = false;
 
-    const filters = getViewPreset('inbox', 'signal')?.filters;
+    const filters = getViewPreset('home', 'signal')?.filters;
     const ast = compileToAst(queryStateFrom(filters!));
 
     // No `remf` at all, so an unflagged user never hits the reminders service.
@@ -161,18 +177,20 @@ describe('inbox view presets', () => {
   });
 
   it('opts the signal tab into alarmed calendar events', () => {
-    const filters = getViewPreset('inbox', 'signal')?.filters;
+    const filters = getViewPreset('home', 'signal')?.filters;
     const ast = compileToAst(queryStateFrom(filters!));
 
     // Referencing `calf` lifts the nil-id exclusion; only events with a
     // not-done notification come back.
-    expect(ast.calf).toEqual({ l: { nd: false } });
+    expect(ast.calf).toEqual({
+      '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }],
+    });
   });
 
   it('keeps calendar events nil-scoped when the calendar flag is off', () => {
     mocks.calendarUiEnabled = false;
 
-    const filters = getViewPreset('inbox', 'signal')?.filters;
+    const filters = getViewPreset('home', 'signal')?.filters;
     const ast = compileToAst(queryStateFrom(filters!));
 
     expect(ast.calf).toEqual({
@@ -182,7 +200,7 @@ describe('inbox view presets', () => {
 
   it('leaves every other inbox tab without reminders', () => {
     for (const tab of ['noise', 'all']) {
-      const filters = getViewPreset('inbox', tab)?.filters;
+      const filters = getViewPreset('home', tab)?.filters;
       const ast = compileToAst(queryStateFrom(filters!));
       expect(ast.remf, `${tab} should not request reminders`).toBeUndefined();
     }
@@ -297,6 +315,32 @@ describe('tab lists and filter presets agree', () => {
 describe('recent view preset', () => {
   it('forces the touched-by-me server sort', () => {
     expect(getViewPreset('recent')?.sortMethod).toBe('touched_by_me');
+  });
+});
+
+describe('inbox view presets', () => {
+  // `getViewPreset` falls back to the first compatible tab when the requested
+  // one does not resolve, so each check also pins the tab's own predicate.
+  it('orders the notification tabs by latest notification', () => {
+    // The sort is also a filter (rows without a notification are absent),
+    // which matches what Signal and Noise already mean.
+    const signal = getViewPreset('home', 'signal');
+    expect(signal?.clientFilters).toEqual({ and: ['inbox'] });
+    expect(signal?.sortMethod).toBe('notified_at');
+    const noise = getViewPreset('home', 'noise');
+    expect(noise?.clientFilters).toEqual({ and: ['noise'] });
+    expect(noise?.sortMethod).toBe('notified_at');
+  });
+
+  it('keeps recency ordering on the other tabs', () => {
+    // The inbox client sort id is not an API sort method, so these must name
+    // their server sort or the API would fall back to created_at.
+    const all = getViewPreset('home', 'all');
+    expect(all?.clientFilters).toEqual({ and: ['explicit-noise'] });
+    expect(all?.sortMethod).toBe('updated_at');
+    const reminders = getViewPreset('home', 'reminders');
+    expect(reminders?.clientFilters).toEqual({ and: ['reminders-not-done'] });
+    expect(reminders?.sortMethod).toBe('updated_at');
   });
 
   it('never compiles channel or email filter trees', () => {

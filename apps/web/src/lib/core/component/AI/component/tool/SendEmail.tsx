@@ -90,21 +90,24 @@ function DraftPreviewButton(props: {
   subject: string;
   threadId?: string;
 }) {
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
 
   return (
     <button
       class="text-ink text-xs border border-edge-muted rounded-xs hover:bg-hover flex flex-row h-6 px-2 justify-center items-center"
-      onClick={() =>
-        replaceOrInsertSplit({
-          ...(props.threadId
-            ? { type: 'email' as const, id: props.threadId }
-            : {
-                type: 'component' as const,
-                id: 'email-compose',
-                params: { draftID: props.draftId },
-              }),
-        })
+      onClick={(event) =>
+        openWithSplit(
+          {
+            ...(props.threadId
+              ? { type: 'email' as const, id: props.threadId }
+              : {
+                  type: 'component' as const,
+                  id: 'email-compose',
+                  params: { draftID: props.draftId },
+                }),
+          },
+          { activate: true, preferNewSplit: event.shiftKey }
+        )
       }
     >
       <div class="flex justify-start items-center size-3.5 mr-2">
@@ -117,7 +120,7 @@ function DraftPreviewButton(props: {
   );
 }
 
-function SentEmailResponse(props: {
+export function SentEmailResponse(props: {
   args: SendEmail;
   chatId: string;
   messageId: string;
@@ -140,12 +143,7 @@ function SentEmailResponse(props: {
               </Suspense>
             </div>
             <span class="shrink-0 text-ink-muted">
-              <CaretRight
-                class={cn(
-                  'size-4 transition-transform',
-                  'group-open:rotate-90'
-                )}
-              />
+              <CaretRight class={cn('size-4', 'group-open:rotate-90')} />
             </span>
           </div>
         </BaseTool>
@@ -164,7 +162,7 @@ function SentEmailResponse(props: {
   );
 }
 
-function DraftEmailResponse(props: {
+export function DraftEmailResponse(props: {
   args: SendEmail;
   draftId: string;
   renderContext: Parameters<typeof BaseTool>[0]['renderContext'];

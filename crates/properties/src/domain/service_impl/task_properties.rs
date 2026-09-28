@@ -25,6 +25,40 @@ where
     B: MacroEventBroker,
     anyhow::Error: From<R::Err> + From<P::Err> + From<N::Err>,
 {
+    /// Share the initiative through its owner domain before persisting assignees.
+    /// Clearing responsibility leaves previously granted edit access intact,
+    /// just as task assignment does.
+    pub(crate) async fn handle_initiative_assignees_property(
+        &self,
+        access: &EditReceipt,
+        value: &Option<PropertyValue>,
+    ) -> Result<(), PropertiesErr> {
+        let Some(PropertyValue::EntityRef(references)) = value else {
+            return Ok(());
+        };
+        let assignee_ids = references
+            .iter()
+            .map(|reference| {
+                if reference.entity_type != EntityType::User {
+                    return Err(PropertiesErr::Validation(
+                        "Assignees must reference users".to_string(),
+                    ));
+                }
+                MacroUserIdStr::parse_from_str(&reference.entity_id)
+                    .map(|user_id| user_id.into_owned())
+                    .map_err(|error| PropertiesErr::Validation(error.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if assignee_ids.is_empty() {
+            return Ok(());
+        }
+        self.initiative_assignees
+            .as_ref()
+            .ok_or(PropertiesErr::PermissionServiceNotConfigured)?
+            .grant_assignees(access, assignee_ids)
+            .await
+    }
+
     /// Require edit access to every referenced task before linking: linking
     /// mutates the referenced task's Parent Task / Subtasks property, so edit
     /// access to the primary task alone is not enough. Internal (machine)
@@ -36,10 +70,12 @@ where
     ) -> Result<(), PropertiesErr> {
         let user_id = match access.auth() {
             EntityAccessAuth::Internal => return Ok(()),
-            EntityAccessAuth::Authenticated(user_id) => user_id,
-            EntityAccessAuth::Bot(_) | EntityAccessAuth::Unauthenticated => {
+            EntityAccessAuth::Unauthenticated => {
                 return Err(PropertiesErr::PermissionDenied);
             }
+            EntityAccessAuth::Authenticated(_) | EntityAccessAuth::Bot(_) => access
+                .acting_user_id()
+                .ok_or(PropertiesErr::PermissionDenied)?,
         };
         if referenced_task_ids.is_empty() {
             return Ok(());

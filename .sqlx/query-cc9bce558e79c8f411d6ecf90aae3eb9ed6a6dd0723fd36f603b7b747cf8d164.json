@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"account_merge_request\" (\"id\", \"macro_user_id\", \"to_merge_macro_user_id\", \"code\", \"created_at\")\n            VALUES ($1, $2, $3, $4, NOW())\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cc9bce558e79c8f411d6ecf90aae3eb9ed6a6dd0723fd36f603b7b747cf8d164"
+}

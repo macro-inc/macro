@@ -1,0 +1,21 @@
+{
+  "identifier": "com.macro.app.e2e",
+  "productName": "Macro E2E",
+  "build": {
+    "devUrl": "http://localhost:3009",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "windows": [{
+      "label": "main",
+      "title": "Macro E2E",
+      "url": "app/component/mail",
+      "width": 1440,
+      "height": 1000,
+      "resizable": true,
+      "backgroundThrottling": "disabled"
+    }]
+  },
+  "plugins": { "deep-link": { "desktop": { "schemes": ["macro-e2e"] } } }
+}

@@ -5,7 +5,7 @@ import type { LexicalEditor } from 'lexical';
 
 export type ChatAttachmentMention = Pick<
   DocumentMentionInfo,
-  'documentId' | 'documentName' | 'blockName' | 'channelType'
+  'documentId' | 'documentName' | 'blockName' | 'channelType' | 'blockParams'
 >;
 
 export function chatAttachmentMentionToMarkdown(
@@ -14,7 +14,7 @@ export function chatAttachmentMentionToMarkdown(
   return buildMentionMarkdownString({
     type: 'document',
     ...mention,
-    blockParams: {},
+    blockParams: mention.blockParams ?? {},
   });
 }
 

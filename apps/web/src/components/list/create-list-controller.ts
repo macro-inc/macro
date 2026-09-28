@@ -24,6 +24,15 @@ export type CreateListSelectionOptions<TItem> = {
   getKey: (item: TItem, index: number) => ListKey;
 };
 
+export type ListSelectionSetOptions = {
+  range?: boolean;
+};
+
+type ListSelectionRangeSession = {
+  baseline: ReadonlySet<ListKey>;
+  selected: boolean;
+};
+
 export type CreateListControllerOptions<TItem, TMetadata = unknown> = {
   items: () => readonly TItem[];
   /** Unique rendered occurrence identity used by focus and activation. */
@@ -331,6 +340,10 @@ export function createListController<TItem, TMetadata = unknown>(
       initialKeys: options.initialSelectedKeys,
       onChange: options.onSelectionChange,
     });
+  const [selectionAnchor, setSelectionAnchor] = createSignal<
+    ListKey | undefined
+  >();
+  let selectionRangeSession: ListSelectionRangeSession | undefined;
 
   const effectiveSelectionKeys = createMemo<ReadonlySet<ListKey>>(
     () =>
@@ -386,6 +399,62 @@ export function createListController<TItem, TMetadata = unknown>(
     keySelection.replace(next);
   };
 
+  const setSelectionRangeAnchor = (key: ListKey | undefined) => {
+    setSelectionAnchor(key);
+    selectionRangeSession = undefined;
+  };
+
+  const extendSelectionRange = (targetKey: ListKey, selected: boolean) => {
+    const anchorKey = selectionAnchor();
+    if (
+      anchorKey === undefined ||
+      !selectableResult(anchorKey) ||
+      !selectableResult(targetKey)
+    ) {
+      return false;
+    }
+
+    selectionRangeSession ??= {
+      baseline: new Set(keySelection.keys()),
+      selected,
+    };
+    selectRange(
+      anchorKey,
+      targetKey,
+      selectionRangeSession.selected,
+      selectionRangeSession.baseline
+    );
+    return true;
+  };
+
+  const setSelected = (
+    rowKey: ListKey,
+    selected: boolean,
+    selectionOptions: ListSelectionSetOptions = {}
+  ) => {
+    const selectionKey = selectionKeyForRow(rowKey);
+    if (selectionKey === undefined) return false;
+
+    if (selectionOptions.range && selectionAnchor() !== undefined) {
+      return extendSelectionRange(rowKey, selected);
+    }
+
+    if (selected) keySelection.select(selectionKey);
+    else keySelection.deselect(selectionKey);
+    setSelectionRangeAnchor(rowKey);
+    return true;
+  };
+
+  const toggleSelected = (
+    rowKey: ListKey,
+    selectionOptions?: ListSelectionSetOptions
+  ) => setSelected(rowKey, !isRowSelected(rowKey), selectionOptions);
+
+  const clearSelection = () => {
+    keySelection.clear();
+    setSelectionRangeAnchor(undefined);
+  };
+
   const visibleSelectionKeys = createMemo(
     () => new Set(selectableBySelectionKey().keys())
   );
@@ -403,9 +472,11 @@ export function createListController<TItem, TMetadata = unknown>(
       keySelection.replace(
         [...keySelection.keys()].filter((key) => !visible.has(key))
       );
-      return;
+    } else {
+      selectAllVisible();
     }
-    selectAllVisible();
+
+    setSelectionRangeAnchor(undefined);
   };
 
   const focusOptionsForActivation = (
@@ -524,6 +595,8 @@ export function createListController<TItem, TMetadata = unknown>(
       ) => activateResult(itemResultAt(index), activateOptions, true),
     },
     selection: {
+      /** Rendered occurrence used as the origin for range selection. */
+      anchor: selectionAnchor,
       /** Requested logical keys, including identities awaiting item payloads. */
       requestedKeys: keySelection.keys,
       /** Currently resolved logical selection identities. */
@@ -544,11 +617,8 @@ export function createListController<TItem, TMetadata = unknown>(
         const selectionKey = selectionKeyForRow(rowKey);
         if (selectionKey !== undefined) keySelection.deselect(selectionKey);
       },
-      toggle: (rowKey: ListKey) => {
-        const selectionKey = selectionKeyForRow(rowKey);
-        if (selectionKey === undefined) return;
-        keySelection.toggle(selectionKey);
-      },
+      set: setSelected,
+      toggle: toggleSelected,
       selectKey: (selectionKey: ListKey) => {
         if (selectableBySelectionKey().has(selectionKey)) {
           keySelection.select(selectionKey);
@@ -569,11 +639,14 @@ export function createListController<TItem, TMetadata = unknown>(
       /** Restore logical keys before their item payloads are available. */
       restore: keySelection.replace,
       selectRange,
+      extendRange: extendSelectionRange,
+      setAnchor: setSelectionRangeAnchor,
+      clearAnchor: () => setSelectionRangeAnchor(undefined),
       visibleKeys: visibleSelectionKeys,
       allVisibleSelected,
       selectAllVisible,
       toggleAllVisible,
-      clear: keySelection.clear,
+      clear: clearSelection,
       prune: keySelection.prune,
     },
   };

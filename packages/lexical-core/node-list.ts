@@ -14,10 +14,12 @@ import {
   TextNode,
 } from 'lexical';
 import { AgentContextNode } from './nodes/AgentContextNode';
+import { AgentSessionMentionNode } from './nodes/AgentSessionMentionNode';
 import { AwaitNode } from './nodes/AwaitNode';
 import { ClassedBlockNode } from './nodes/ClassedBlockNode';
 import { CommentNode } from './nodes/CommentNode';
 import { CompletionNode } from './nodes/CompletionNode';
+import { ConnectAppNode } from './nodes/ConnectAppNode';
 import { ContactMentionNode } from './nodes/ContactMentionNode';
 import { CustomCodeNode } from './nodes/CustomCodeNode';
 import { DateMentionNode } from './nodes/DateMentionNode';
@@ -36,6 +38,7 @@ import { InlineSearchNode } from './nodes/InlineSearchNode';
 import { MagicChipNode } from './nodes/MagicChipNode';
 import { PasteNode } from './nodes/PasteNode';
 import { PullRequestMentionNode } from './nodes/PullRequestMentionNode';
+import { ReplyTargetNode } from './nodes/ReplyTargetNode';
 import { SearchMatchNode } from './nodes/SearchMatchNode';
 import { SnapshotNode } from './nodes/SnapshotNode';
 import { TagMentionNode } from './nodes/TagMentionNode';
@@ -54,7 +57,8 @@ export type EditorType =
   | 'markdown'
   | 'markdown-sync'
   | 'chat'
-  | 'title';
+  | 'title'
+  | 'calendar';
 
 // Valid nodes must be enumerated at Editor construction. We can set up plugins
 // lazily, but the node list must be specified fully upfront.
@@ -81,6 +85,8 @@ export const SupportedNodeTypes = [
   ContactMentionNode,
   DateMentionNode,
   PullRequestMentionNode,
+  AgentSessionMentionNode,
+  ReplyTargetNode,
   GroupMentionNode,
   InlineSearchNode,
   UnlinkedTextNode,
@@ -107,6 +113,7 @@ export const SupportedNodeTypes = [
   WatermarkNode,
   ThemeMentionNode,
   TagMentionNode,
+  ConnectAppNode,
   UnknownMentionNode,
   AwaitNode,
   MagicChipNode,
@@ -135,5 +142,8 @@ export const RegisteredNodesByType: { [K in EditorType]: ValidNode[] } = {
   markdown: [...SupportedNodeTypes],
   'markdown-sync': [...SupportedNodeTypes],
   chat: exclude([ImageNode, VideoNode]),
+  // Calendar descriptions are provider-supplied HTML from anyone who can write
+  // the event, so the editor must not carry a node that renders raw markup.
+  calendar: exclude([HtmlRenderNode, ImageNode, VideoNode]),
   title: [ParagraphNode, TextNode, InlineSearchNode],
 } as const;

@@ -1,27 +1,47 @@
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import { AgentSession } from '@core/agent-session/AgentSession';
+import { noteSessionActivity } from '@core/agent-session/session-turn';
 import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
+import { WebsocketEvent } from '@macro-inc/collaboration/websocket';
+import { handleAgentSessionChanges } from '@queries/agent-session/changes-sync';
+import { handleAgentSessionQueue } from '@queries/agent-session/queue-sync';
+import {
+  AGENT_SESSION_CHANGES_EVENT,
   AGENT_SESSION_LOG_EVENT,
+  AGENT_SESSION_QUEUE_EVENT,
   AGENT_SESSION_RENAMED_EVENT,
+  AGENT_SESSION_UPDATED_EVENT,
+  type AgentSessionChangesEvent,
   type AgentSessionLogEvent,
+  type AgentSessionQueueEvent,
   type AgentSessionRenamedEvent,
+  type AgentSessionUpdatedEvent,
 } from '@queries/agent-session/realtime-protocol';
-import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
-import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
 import {
-  handleCommsAttachment,
-  handleCommsMessage,
-  handleCommsReaction,
-} from '@queries/channel/sync';
-import { handleCommsTyping } from '@queries/channel/typing';
+  handleAgentSessionRenamed,
+  handleAgentSessionUpdated,
+  invalidateAgentSessionMetadata,
+} from '@queries/agent-session/session-metadata-sync';
+import {
+  handleChannelPictureChanged,
+  invalidateChannelPictures,
+} from '@queries/channel/picture';
 import { invalidateContacts } from '@queries/contacts/contacts';
 import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
+import { handleMessageEvent } from '@queries/messages/sync';
 import {
   applyNotificationStatusUpdate,
   notificationStatusUpdatePayloadSchema,
 } from '@queries/notification/user-notifications';
 import { invalidateAllProperties } from '@queries/properties/tags';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
+import {
+  handlePullRequestUpdated,
+  invalidatePullRequestMentions,
+} from '@queries/storage/pr-mention-sync';
 import { handleTaskDuplicateMatchesUpdated } from '@queries/storage/task-duplicates';
 import { handleRefreshCalendar } from '../calendar/sync';
 // Side-effect import: registers the scheduled-action live-update websocket
@@ -31,8 +51,9 @@ import '@queries/agent-schedule/sync';
 import {
   createConnectionWebsocketEffect,
   parseWebsocketPayload,
+  ws,
 } from '@service-connection/websocket';
-import type { Accessor, ParentProps } from 'solid-js';
+import { type Accessor, onCleanup, type ParentProps } from 'solid-js';
 import { match } from 'ts-pattern';
 
 type SyncProviderProps = ParentProps<{
@@ -51,13 +72,43 @@ function withParsedWebsocketPayload<T>(
 }
 
 export function QuerySyncProvider(props: SyncProviderProps) {
+  ws.addEventListener(WebsocketEvent.Open, invalidateChannelPictures);
+  onCleanup(() =>
+    ws.removeEventListener(WebsocketEvent.Open, invalidateChannelPictures)
+  );
+  // Also cover the first connection: a lookup can finish before the socket opens.
+  ws.addEventListener(WebsocketEvent.Open, invalidateAgentSessionMetadata);
+  onCleanup(() =>
+    ws.removeEventListener(WebsocketEvent.Open, invalidateAgentSessionMetadata)
+  );
+  ws.addEventListener(WebsocketEvent.Open, invalidatePullRequestMentions);
+  onCleanup(() =>
+    ws.removeEventListener(WebsocketEvent.Open, invalidatePullRequestMentions)
+  );
+
   createConnectionWebsocketEffect((data) => {
     match(data)
+      .with({ type: 'github_pull_request_updated' }, () => {
+        withParsedWebsocketPayload(data.type, data.data, (payload) => {
+          void handlePullRequestUpdated(payload);
+        });
+      })
       .with({ type: 'contacts_invalidation' }, () => {
         invalidateContacts();
       })
-      .with({ type: 'comms_message' }, () => {
-        withParsedWebsocketPayload(data.type, data.data, handleCommsMessage);
+      .with({ type: 'message_update' }, () => {
+        withParsedWebsocketPayload<Parameters<typeof handleMessageEvent>[0]>(
+          data.type,
+          data.data,
+          (event) => handleMessageEvent(event, props.userId())
+        );
+      })
+      .with({ type: 'comms_channel_picture' }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleChannelPictureChanged
+        );
       })
       // One frame appended to a live agent session's log. Routed to the
       // channel's fold rather than to any cache: the frame is not a message,
@@ -66,7 +117,19 @@ export function QuerySyncProvider(props: SyncProviderProps) {
         withParsedWebsocketPayload<AgentSessionLogEvent>(
           data.type,
           data.data,
-          handleAgentSessionLog
+          (event) => {
+            AgentSession.ingest(event);
+            if (!AgentSession.get(event.agentSessionId)) {
+              noteSessionActivity(event.agentSessionId);
+            }
+          }
+        );
+      })
+      .with({ type: AGENT_SESSION_UPDATED_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionUpdatedEvent>(
+          data.type,
+          data.data,
+          handleAgentSessionUpdated
         );
       })
       .with({ type: AGENT_SESSION_RENAMED_EVENT }, () => {
@@ -76,25 +139,29 @@ export function QuerySyncProvider(props: SyncProviderProps) {
           handleAgentSessionRenamed
         );
       })
-      .with({ type: 'comms_reaction' }, () => {
-        withParsedWebsocketPayload(data.type, data.data, handleCommsReaction);
-      })
-      .with({ type: 'comms_attachment' }, () => {
-        withParsedWebsocketPayload(data.type, data.data, handleCommsAttachment);
-      })
-      .with({ type: 'comms_typing' }, () => {
-        const userId = props.userId();
-        if (!userId) return;
-        withParsedWebsocketPayload<Parameters<typeof handleCommsTyping>[0]>(
+      // A session's captured changes moved (capture started, landed, or
+      // failed). The event carries no body; the changes summary refetches.
+      .with({ type: AGENT_SESSION_CHANGES_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionChangesEvent>(
           data.type,
           data.data,
-          (payload) => {
-            handleCommsTyping(payload, userId);
+          (event) => {
+            void handleAgentSessionChanges(event);
           }
         );
       })
+      // A session's whole action queue after a change. Full snapshot every
+      // time: once one has arrived on this socket, the socket is the queue's
+      // only writer and the last event wins unconditionally.
+      .with({ type: AGENT_SESSION_QUEUE_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionQueueEvent>(
+          data.type,
+          data.data,
+          handleAgentSessionQueue
+        );
+      })
       .with({ type: 'notification_status_updated' }, () => {
-        if (ENABLE_GRAPHQL_SOUP()) return;
+        if (isFeatureEnabled(enableGraphqlSoup)) return;
         const result = notificationStatusUpdatePayloadSchema.safeParse(
           data.data
         );

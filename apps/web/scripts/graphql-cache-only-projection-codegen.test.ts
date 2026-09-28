@@ -16,6 +16,55 @@ const schema = buildSchema(`
 `);
 
 describe('@cacheOnly result codegen', () => {
+  it('does not generate projections without explicit consumers', async () => {
+    const document = parse(`
+      query UnusedHydration {
+        page { ...PageFields }
+      }
+      fragment PageFields on Page {
+        items @cacheOnly { id }
+        nextCursor
+      }
+    `);
+
+    for (const config of [{}, { cacheOnlyResultOperations: [] }]) {
+      expect(
+        await plugin(
+          schema,
+          [{ document, location: 'test.graphql' }],
+          config,
+          {} as never
+        )
+      ).toBe('');
+    }
+  });
+
+  it('rejects unknown operation names rather than silently omitting a type', async () => {
+    await expect(async () =>
+      plugin(
+        schema,
+        [],
+        { cacheOnlyResultOperations: ['MissingHydration'] },
+        {} as never
+      )
+    ).rejects.toThrow('unknown cache-only result operations: MissingHydration');
+  });
+
+  it('rejects an opted-in operation without cache-only fields', async () => {
+    const document = parse(`query PlainQuery { page { nextCursor } }`);
+
+    await expect(async () =>
+      plugin(
+        schema,
+        [{ document, location: 'test.graphql' }],
+        { cacheOnlyResultOperations: ['PlainQuery'] },
+        {} as never
+      )
+    ).rejects.toThrow(
+      'cache-only result operation PlainQuery has no @cacheOnly fields'
+    );
+  });
+
   it('generates a narrow projection and void for a fully cache-only query', async () => {
     const document = parse(`
       query CursorHydration {
@@ -35,7 +84,7 @@ describe('@cacheOnly result codegen', () => {
     const output = await plugin(
       schema,
       [{ document, location: 'test.graphql' }],
-      {},
+      { cacheOnlyResultOperations: ['CursorHydration', 'VoidHydration'] },
       {} as never
     );
 
@@ -45,9 +94,12 @@ describe('@cacheOnly result codegen', () => {
     expect(output).toContain('export type VoidHydrationResult = void;');
   });
 
-  it('finds cache-only fields inside named fragments', async () => {
+  it('only projects opted-in operations, even when they share cache-only fragments', async () => {
     const document = parse(`
       query NamedFragmentHydration {
+        page { ...PageFields }
+      }
+      query UnusedOperation {
         page { ...PageFields }
       }
       fragment PageFields on Page {
@@ -59,7 +111,7 @@ describe('@cacheOnly result codegen', () => {
     const output = await plugin(
       schema,
       [{ document, location: 'test.graphql' }],
-      {},
+      { cacheOnlyResultOperations: ['NamedFragmentHydration'] },
       {} as never
     );
 
@@ -85,7 +137,7 @@ describe('@cacheOnly result codegen', () => {
     const output = await plugin(
       schema,
       [{ document, location: 'test.graphql' }],
-      {},
+      { cacheOnlyResultOperations: ['MergedFieldHydration'] },
       {} as never
     );
 
@@ -110,7 +162,7 @@ describe('@cacheOnly result codegen', () => {
     const output = await plugin(
       schema,
       [{ document, location: 'test.graphql' }],
-      {},
+      { cacheOnlyResultOperations: ['RecursiveFragmentHydration'] },
       {} as never
     );
 
@@ -136,7 +188,7 @@ describe('@cacheOnly result codegen', () => {
     const output = await plugin(
       schema,
       [{ document, location: 'test.graphql' }],
-      {},
+      { cacheOnlyResultOperations: ['InlineFragmentHydration'] },
       {} as never
     );
 
@@ -165,7 +217,7 @@ describe('@cacheOnly result codegen', () => {
     const output = await plugin(
       schema,
       [{ document, location: 'test.graphql' }],
-      {},
+      { cacheOnlyResultOperations: ['UnionHydration'] },
       {} as never
     );
 

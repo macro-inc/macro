@@ -2,6 +2,8 @@ import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFla
 import type { Entity, NotificationType } from '@core/types';
 import type { NotificationStack } from '@notifications/notification-stacking';
 import type { UnifiedNotification } from '@notifications/types';
+import type { ItemEntity } from '@queries/preview';
+import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { match, P } from 'ts-pattern';
 import type { EntityData } from '../types/entity';
 import type { Notification } from '../types/notification';
@@ -25,7 +27,7 @@ const CHANNEL_NOTIFICATION_TYPES = [
 ] as const;
 
 export function notificationIsRead(notification: UnifiedNotification): boolean {
-  if (notification.viewed_at || notification.done) return true;
+  if (notification.state !== 'unseen') return true;
 
   if (notification.entity_type === 'channel') {
     const notificationType = notification.notification_metadata?.tag ?? '';
@@ -58,6 +60,129 @@ export function toNotificationEntity(entity: EntityData): Entity {
 }
 
 /**
+ * Item types the notification service can mute. Keep aligned with
+ * `MUTED_ENTITY_TYPE_LABELS` and the events that actually fan out.
+ */
+const MUTEABLE_ITEM_TYPES = new Set([
+  'calendar_event',
+  'call',
+  'channel',
+  'chat',
+  'document',
+  'email_thread',
+  'foreign_entity',
+  'project',
+  'reminder',
+  'initiative',
+  'crm_company',
+  'crm_contact',
+]);
+
+/**
+ * Canonical unsubscribe `item_type`. Frontend rows use `email` / `foreign`;
+ * notifications and the mute API store `email_thread` / `foreign_entity`.
+ */
+export function normalizeMuteItemType(type: string): string {
+  return match(type)
+    .with('email', () => 'email_thread')
+    .with('foreign', () => 'foreign_entity')
+    .otherwise((value) => value);
+}
+
+/**
+ * The unsubscribe row that mutes notifications for this entity.
+ *
+ * Uses {@link toNotificationEntity} so the stored item matches the
+ * notification's primary entity — outbound delivery filters unsubscribes by
+ * that entity's `item_id`. Channel threads therefore mute the parent
+ * channel, which is also how their notifications are attached.
+ */
+export function muteItemForEntity(
+  entity: EntityData
+): UserUnsubscribe | undefined {
+  return muteItemForRef(toNotificationEntity(entity));
+}
+
+/** Same mapping for a bare id/type (favorites, already-canonical refs). */
+export function muteItemForRef(entity: {
+  id: string;
+  type: string;
+}): UserUnsubscribe | undefined {
+  const item_type = normalizeMuteItemType(entity.type);
+  if (!MUTEABLE_ITEM_TYPES.has(item_type)) return undefined;
+  return { item_id: entity.id, item_type };
+}
+
+/**
+ * Preview fetch key for a muted item. Only types the preview pipeline
+ * actually serves — reminder and GitHub have no batch preview fetcher.
+ */
+export function muteItemPreviewEntity(
+  item: UserUnsubscribe
+): ItemEntity | undefined {
+  return match<string, ItemEntity | undefined>(
+    normalizeMuteItemType(item.item_type)
+  )
+    .with('email_thread', () => ({ id: item.item_id, type: 'email' }))
+    .with(
+      'channel',
+      'calendar_event',
+      'document',
+      'chat',
+      'project',
+      'call',
+      (type) => ({ id: item.item_id, type })
+    )
+    .otherwise(() => undefined);
+}
+
+export type MuteItemFallbackIconType =
+  | 'calendar'
+  | 'call'
+  | 'channel'
+  | 'chat'
+  | 'default'
+  | 'email'
+  | 'githubPullRequest'
+  | 'md'
+  | 'project'
+  | 'reminder';
+
+/** Icon used before a preview loads, or when the type has no preview. */
+export function muteItemFallbackIconType(
+  itemType: string
+): MuteItemFallbackIconType {
+  return match(normalizeMuteItemType(itemType))
+    .with('channel', 'chat', 'call', 'project', 'reminder', (type) => type)
+    .with('document', () => 'md' as const)
+    .with('email_thread', () => 'email' as const)
+    .with('calendar_event', () => 'calendar' as const)
+    .with('foreign_entity', () => 'githubPullRequest' as const)
+    .otherwise(() => 'default' as const);
+}
+
+export function isMutedItem(
+  muted: readonly UserUnsubscribe[],
+  item: UserUnsubscribe
+): boolean {
+  const type = normalizeMuteItemType(item.item_type);
+  return muted.some(
+    (entry) =>
+      entry.item_id === item.item_id &&
+      normalizeMuteItemType(entry.item_type) === type &&
+      (!entry.snoozed_until || Date.parse(entry.snoozed_until) > Date.now())
+  );
+}
+
+export function entityIsMuted(
+  muted: readonly UserUnsubscribe[],
+  entity: EntityData
+): boolean {
+  const item = muteItemForEntity(entity);
+  return item !== undefined && isMutedItem(muted, item);
+}
+
+/**
  * Filters out invalid notification types that shouldn't be displayed
  */
 export function filterValidNotifications(
@@ -78,7 +203,7 @@ export function filterValidNotifications(
 export function filterNotDoneNotifications(
   notifications: Notification[]
 ): Notification[] {
-  return notifications.filter((n) => !n.done);
+  return notifications.filter((n) => n.state !== 'done');
 }
 
 export function extractNotificationSenderIds(
@@ -115,7 +240,8 @@ export function getNotificationActionText(n: Notification): string {
     .with('document_mention', () => 'mentioned')
     .with('mentioned_in_document_comment', () => 'mentioned')
     .with('replied_to_document_comment_thread', () => 'replied')
-    .with('commented_on_document', () => 'commented')
+    .with('initiative_discussion', () => 'commented')
+    .with('commented_on_document', 'crm_discussion', () => 'commented')
     .with('channel_invite', () => 'invited')
     .with('new_email', () => 'emailed')
     .with('invite_to_team', () => 'invited')
@@ -141,6 +267,9 @@ export function getNotificationActionText(n: Notification): string {
     .with('reminder', () => 'reminder')
     .with('calendar_event_reminder', () => 'starting soon')
     .with('inbox_reauth_required', () => 'needs reconnection')
+    .with('agent_session_settled', () => 'finished')
+    .with('agent_session_waiting_for_input', () => 'asked')
+    .with('agent_session_mentioned', () => 'mentioned')
     .exhaustive();
 }
 
@@ -164,7 +293,9 @@ export function extractMessageContent(notification: Notification): string {
       { tag: 'replied_to_document_comment_thread' },
       (m) => m.content.text || ''
     )
+    .with({ tag: 'initiative_discussion' }, (m) => m.content.text || '')
     .with({ tag: 'commented_on_document' }, (m) => m.content.text || '')
+    .with({ tag: 'crm_discussion' }, (m) => m.content.text || '')
     .with({ tag: 'new_email' }, (m) => m.content.subject || '')
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? '')
     .with({ tag: 'ai_response' }, (m) => m.content.summary || '')
@@ -204,12 +335,18 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'reminder' }, (m) => m.content.description)
     .with({ tag: 'calendar_event_reminder' }, (m) => m.content.title || '')
     .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress || '')
+    .with(
+      { tag: 'agent_session_settled' },
+      (m) => m.content.excerpt || m.content.sessionName
+    )
+    .with({ tag: 'agent_session_waiting_for_input' }, (m) => m.content.question)
+    .with({ tag: 'agent_session_mentioned' }, (m) => m.content.sessionName)
     .exhaustive();
 }
 
 /**
  * Checks if a notification or notification stack is unread
- * A notification is unread if it hasn't been viewed (!viewedAt) and isn't done (!done)
+ * A notification is unread when its lifecycle state is unseen.
  * A notification stack is unread if ANY notification in the stack is unread
  */
 export function isNotificationUnread(

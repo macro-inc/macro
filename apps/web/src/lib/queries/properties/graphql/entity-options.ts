@@ -154,7 +154,7 @@ export async function updateGraphqlEntityPropertyOptions(
     UpdateEntityPropertyOptionsDocument,
     variables,
     { updateEntityPropertyOptions: optimisticProperties },
-    { revalidations }
+    { uuid: crypto.randomUUID(), revalidations }
   ).toPromise();
 
   const disposition = optimisticMutationDispositionOf<

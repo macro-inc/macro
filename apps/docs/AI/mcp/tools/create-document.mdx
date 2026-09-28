@@ -1,18 +1,18 @@
 ---
 title: CreateDocument
-description: "Create a plaintext document."
+description: "Create a plaintext document or a native Macro spreadsheet. For a workbook use fileExtension spreadsheet, empty fileContent, and isTask false; then ReadSpreadsheet and EditSpreadsheet to populate cells, formulas and sheets. Works without an open editor."
 ---
 
 # CreateDocument
 
-Create a plaintext document.
+Create a plaintext document or a native Macro spreadsheet. For a workbook use fileExtension spreadsheet, empty fileContent, and isTask false; then ReadSpreadsheet and EditSpreadsheet to populate cells, formulas and sheets. Works without an open editor.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `documentName` | string | Yes | The name of the document without the file extension |
-| `fileContent` | string | Yes | The string content of the document you are creating. |
-| `fileExtension` | string | Yes | The extension of the plaintext file you are creating. |
+| `fileContent` | string | Yes | The string content of a text document. Must be empty for a native spreadsheet. |
+| `fileExtension` | string | Yes | The extension of a plaintext file, or spreadsheet for a native collaborative workbook. |
 | `isTask` | boolean | No | Whether this document is a task. Only applies to md documents. |
 | `projectId` | string | No | The id of the project (shown as a folder in the app UI) to create the document in. Requires edit access to the project. Omit to create the document at the top level of the user's files. |

@@ -14,10 +14,10 @@ import { createRunCodeTool } from './run-code';
  * tool call costs the coder its whole step — it has to retry from scratch.
  */
 const REAL_PROD_SNIPPETS = {
-  'array of strings (45 of 51 occurrences)': {
-    items: ['first list entry', 'second list entry'],
-  },
-  'array with a single entry': { listItems: ['only entry'] },
+  'array of strings (45 of 51 occurrences)': [
+    { key: 'items', text: ['first list entry', 'second list entry'] },
+  ],
+  'array with a single entry': [{ key: 'items', text: ['only entry'] }],
 } as const;
 
 function setup() {
@@ -46,12 +46,20 @@ function schemaOf(tool: ReturnType<typeof createRunCodeTool>) {
 }
 
 describe('runCode snippets', () => {
-  it('accepts a plain string record', () => {
+  it('accepts a list of string pairs', () => {
+    const parsed = schemaOf(setup().tool).safeParse({
+      code: 'editor.setText("a", snippets.body)',
+      snippets: [{ key: 'body', text: 'text' }],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects the old record shape, which Gemini cannot see the schema of', () => {
     const parsed = schemaOf(setup().tool).safeParse({
       code: 'editor.setText("a", snippets.body)',
       snippets: { body: 'text' },
     });
-    expect(parsed.success).toBe(true);
+    expect(parsed.success).toBe(false);
   });
 
   for (const [name, snippets] of Object.entries(REAL_PROD_SNIPPETS)) {
@@ -69,7 +77,7 @@ describe('runCode snippets', () => {
     await tool.execute!(
       {
         code: 'editor.setText("a", snippets.items)',
-        snippets: { items: ['first', 'second'] },
+        snippets: [{ key: 'items', text: ['first', 'second'] }],
       },
       callOptions
     );
@@ -81,7 +89,10 @@ describe('runCode snippets', () => {
   it('leaves string values untouched', async () => {
     const { tool, applied } = setup();
     await tool.execute!(
-      { code: 'editor.setText("a", snippets.body)', snippets: { body: 'x\ny' } },
+      {
+        code: 'editor.setText("a", snippets.body)',
+        snippets: [{ key: 'body', text: 'x\ny' }],
+      },
       callOptions
     );
     expect(applied[0]).toEqual({ body: 'x\ny' });
@@ -90,7 +101,7 @@ describe('runCode snippets', () => {
   it('still rejects a value that is neither string nor string[]', () => {
     const parsed = schemaOf(setup().tool).safeParse({
       code: 'x',
-      snippets: { body: { nested: true } },
+      snippets: [{ key: 'body', text: { nested: true } }],
     });
     expect(parsed.success).toBe(false);
   });

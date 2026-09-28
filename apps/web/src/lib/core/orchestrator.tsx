@@ -9,7 +9,7 @@ import {
   onMount,
   Suspense,
 } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, unwrap } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import {
   type BlockAlias,
@@ -92,6 +92,7 @@ type BlockInstance = {
   type: BlockName;
   id: string;
   element: () => JSXElement;
+  isMounted: () => boolean;
   nested?: NestedState<any>;
   handle: OwnedBlockHandle<any>;
 };
@@ -104,7 +105,7 @@ type CreateBlockOptions<Name extends BlockName = BlockName> = {
   aliasContext?: BlockAliasContext;
 };
 
-type UnmanagedBlockInstance = Omit<BlockInstance, 'handle'>;
+type UnmanagedBlockInstance = Omit<BlockInstance, 'handle' | 'isMounted'>;
 
 /**
  * Creates an unmanaged block instance
@@ -309,6 +310,8 @@ type CreateBlockInstanceFn = (
 ) => BlockInstance;
 
 export type BlockOrchestrator = {
+  /** Whether a managed block is currently mounted in any surface. */
+  isBlockMounted: (type: BlockName, id: string) => boolean;
   /** Get a publicly accessible handle to a block instance */
   getBlockHandle: GetBlockHandleFn;
   /**
@@ -343,6 +346,18 @@ export type BlockOrchestrator = {
    * already taken.
    */
   rekeyBlockInstance: (type: BlockName, fromId: string, toId: string) => void;
+  /**
+   * Registers a handle for block content mounted without a block container,
+   * such as an entity detail view, so openers that navigate through
+   * [getBlockHandle] reach it. The handle is removed when the calling owner
+   * is disposed.
+   *
+   * Returns undefined while another block holds the id.
+   */
+  registerBlockHandle: <T extends BlockName>(
+    type: T,
+    id: string
+  ) => OwnedBlockHandle<BlockMethodsFor<T>> | undefined;
 };
 
 export function createBlockOrchestrator(): BlockOrchestrator {
@@ -411,7 +426,7 @@ export function createBlockOrchestrator(): BlockOrchestrator {
     opts?: CreateBlockOptions
   ): BlockInstance {
     const key = keyOf(type, id);
-    let existing = instances.get(key);
+    const existing = instances.get(key);
     if (existing) return existing;
 
     const ownedHandle = registerBlock(type, id);
@@ -435,11 +450,29 @@ export function createBlockOrchestrator(): BlockOrchestrator {
       },
     });
 
+    let mounted = false;
+    const mountOnce = () => {
+      if (mounted) {
+        return (
+          <div class="flex size-full items-center justify-center text-sm text-ink-muted">
+            Content already open.
+          </div>
+        );
+      }
+
+      mounted = true;
+      onCleanup(() => {
+        mounted = false;
+      });
+      return element();
+    };
+
     const instance: BlockInstance = {
       key,
       type,
       id,
-      element,
+      element: mountOnce,
+      isMounted: () => mounted,
       nested: opts?.nested,
       handle: ownedHandle,
     };
@@ -467,10 +500,22 @@ export function createBlockOrchestrator(): BlockOrchestrator {
     setBlocks(toId, { ...existing, id: toId });
   }
 
+  function registerBlockHandle<T extends BlockName>(type: T, id: string) {
+    if (unwrap(blocks)[id]) return;
+    const handle = registerBlock(type, id);
+    onCleanup(() => {
+      if (unwrap(blocks)[id]?.handle === handle) setBlocks(id, undefined!);
+    });
+    return handle;
+  }
+
   return {
+    isBlockMounted: (type, id) =>
+      instances.get(keyOf(type, id))?.isMounted() ?? false,
     getBlockHandle,
     createBlockInstance: createManagedBlockInstance,
     rekeyBlockInstance,
+    registerBlockHandle,
   };
 }
 

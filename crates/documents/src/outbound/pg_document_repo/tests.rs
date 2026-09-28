@@ -1,6 +1,9 @@
+use entity_registry::{BotFacts, EntityRegistryResult, OwnerGrantPolicy};
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
@@ -13,9 +16,540 @@ use sqlx::{Pool, Postgres, Row};
 use crate::domain::models::{
     CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs, EmailImportRepoOutcome,
     FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+    InitialLinkShare, NewDocument,
 };
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
+use models_permissions::share_permission::team_share::{
+    TeamShareGrant, TeamShareLevel, TeamShareRequest, authorize_team_share,
+};
+
+#[derive(Clone)]
+struct SponsoredByOwner;
+
+impl BotFacts for SponsoredByOwner {
+    async fn sponsor(&self, _bot: bot_id::BotId) -> EntityRegistryResult<Option<Owner>> {
+        Ok(Some(Owner::User(user_id(TEST_DOCUMENT_OWNER_ID))))
+    }
+}
+
+type TestRepo = PgDocumentRepo<SponsoredByOwner>;
+
+fn test_repo(pool: Pool<Postgres>) -> TestRepo {
+    PgDocumentRepo::new(
+        pool,
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(SponsoredByOwner)),
+    )
+}
+
+#[derive(Clone)]
+struct SponsoredByTeam(uuid::Uuid);
+
+impl BotFacts for SponsoredByTeam {
+    async fn sponsor(&self, _bot: bot_id::BotId) -> EntityRegistryResult<Option<Owner>> {
+        Ok(Some(Owner::Team(self.0)))
+    }
+}
+
+fn team_bot_repo(pool: Pool<Postgres>, team_id: uuid::Uuid) -> PgDocumentRepo<SponsoredByTeam> {
+    let facts = SponsoredByTeam(team_id);
+    PgDocumentRepo::new(
+        pool,
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(facts)),
+    )
+}
+
+async fn set_legacy_team_share(
+    repo: &TestRepo,
+    document_id: &str,
+    enabled: bool,
+) -> Result<crate::domain::models::DocumentTeamShare, crate::domain::models::DocumentError> {
+    let facts = repo.get_team_share_facts(document_id).await?;
+    let command = authorize_team_share(
+        facts.owner.as_user(),
+        &facts,
+        TeamShareRequest {
+            access_level: None,
+            legacy_enabled: Some(enabled),
+        },
+        TeamShareLevel::Edit,
+    )
+    .map_err(|e| crate::domain::models::DocumentError::BadRequest(e.to_string()))?
+    .unwrap();
+    repo.set_team_share(command).await
+}
+
+async fn set_comment_share(repo: &TestRepo) {
+    let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+    let command = authorize_team_share(
+        facts.owner.as_user(),
+        &facts,
+        TeamShareRequest {
+            access_level: Some(Some(AccessLevel::Comment)),
+            legacy_enabled: None,
+        },
+        TeamShareLevel::Edit,
+    )
+    .unwrap()
+    .unwrap();
+    repo.set_team_share(command).await.unwrap();
+}
+
+async fn team_edit_args(repo: &TestRepo, level: Option<AccessLevel>) -> EditDocumentRepoArgs {
+    let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+    let command = authorize_team_share(
+        facts.owner.as_user(),
+        &facts,
+        TeamShareRequest {
+            access_level: Some(level),
+            legacy_enabled: None,
+        },
+        TeamShareLevel::Edit,
+    )
+    .unwrap()
+    .unwrap();
+    EditDocumentRepoArgs {
+        document_id: TEST_DOCUMENT_ID.to_string(),
+        document_name: Some("team-edit".to_string()),
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: Some(Some(LinkShare::Team)),
+            link_share_access_level: Some(Some(AccessLevel::Comment)),
+            team_share_access_level: Some(level),
+            channel_share_permissions: Some(vec![UpdateChannelSharePermission {
+                operation: UpdateOperation::Add,
+                channel_id: "c0000000-0000-0000-0000-000000000001".to_string(),
+                access_level: Some(AccessLevel::View),
+            }]),
+        }),
+        team_share: Some(command),
+        revoke_non_owner_user_access: true,
+        file_type: None,
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn team_edit_exact_levels_omission_and_legacy_preservation(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let mut revision = 0;
+    for level in [AccessLevel::Edit, AccessLevel::Comment, AccessLevel::View] {
+        let args = team_edit_args(&repo, Some(level)).await;
+        repo.edit_document(args).await.unwrap();
+        revision += 1;
+        let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+        assert_eq!(facts.revision, revision);
+        assert_eq!(AccessLevel::from(facts.current.unwrap().level), level);
+        let persisted = sqlx::query_scalar!(
+            r#"SELECT sp.team_share_access_level AS "level: AccessLevel"
+               FROM "SharePermission" sp JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
+               WHERE dp."documentId" = $1"#, TEST_DOCUMENT_ID,
+        ).fetch_one(&pool).await.unwrap();
+        assert_eq!(persisted, Some(level));
+        let direct = sqlx::query_scalar!(
+            r#"SELECT access_level AS "level: AccessLevel" FROM entity_access
+               WHERE entity_id = $1 AND entity_type = 'document' AND source_type = 'team'
+               AND source_id = $2 AND granted_from_project_id IS NULL"#,
+            uuid::Uuid::parse_str(TEST_DOCUMENT_ID).unwrap(),
+            TEST_TEAM_ID.to_string(),
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(direct, level);
+        set_legacy_team_share(&repo, TEST_DOCUMENT_ID, true)
+            .await
+            .unwrap();
+        revision += 1;
+        let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+        assert_eq!(facts.revision, revision);
+        assert_eq!(AccessLevel::from(facts.current.unwrap().level), level);
+
+        let mut args = team_edit_args(&repo, Some(level)).await;
+        args.team_share = None;
+        args.share_permission
+            .as_mut()
+            .unwrap()
+            .team_share_access_level = None;
+        repo.edit_document(args).await.unwrap();
+        assert_eq!(
+            repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap(),
+            facts
+        );
+    }
+    assert_eq!(
+        repo.get_basic_document(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .document_name,
+        "team-edit"
+    );
+    assert_eq!(
+        share_permission_columns(&pool, TEST_DOCUMENT_ID)
+            .await
+            .link_share
+            .as_deref(),
+        Some("TEAM")
+    );
+    for _ in 0..2 {
+        repo.edit_document(team_edit_args(&repo, None).await)
+            .await
+            .unwrap();
+        revision += 1;
+        let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+        assert!(facts.current.is_none());
+        assert_eq!(facts.revision, revision);
+        let remaining = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) as "count!" FROM entity_access
+               WHERE entity_id = $1 AND entity_type = 'document' AND source_type = 'team'
+                 AND granted_from_project_id IS NULL"#,
+            uuid::Uuid::parse_str(TEST_DOCUMENT_ID).unwrap(),
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(remaining, 0);
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn team_edit_stale_command_rolls_back_accompanying_changes(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let args = team_edit_args(&repo, Some(AccessLevel::View)).await;
+    set_legacy_team_share(&repo, TEST_DOCUMENT_ID, true)
+        .await
+        .unwrap();
+    let before = repo.get_basic_document(TEST_DOCUMENT_ID).await.unwrap();
+    let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+    assert!(matches!(
+        repo.edit_document(args).await,
+        Err(crate::domain::models::DocumentError::Conflict(_))
+    ));
+    assert_eq!(
+        repo.get_basic_document(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .document_name,
+        before.document_name
+    );
+    assert_eq!(
+        repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap(),
+        facts
+    );
+    assert_eq!(
+        share_permission_columns(&pool, TEST_DOCUMENT_ID)
+            .await
+            .link_share
+            .as_deref(),
+        Some("PUBLIC")
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn team_edit_channel_failure_rolls_back_metadata_permissions_and_grant(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    insert_non_owner_user_access(&pool).await;
+    let args = team_edit_args(&repo, Some(AccessLevel::View)).await;
+    let before = repo.get_basic_document(TEST_DOCUMENT_ID).await.unwrap();
+    let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+    sqlx::raw_sql(
+        r#"
+        CREATE FUNCTION reject_channel_share() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'injected channel failure'; END $$;
+        CREATE TRIGGER reject_channel_share BEFORE INSERT ON "ChannelSharePermission"
+        FOR EACH ROW EXECUTE FUNCTION reject_channel_share();
+    "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(repo.edit_document(args).await.is_err());
+    assert_eq!(
+        repo.get_basic_document(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .document_name,
+        before.document_name
+    );
+    assert_eq!(
+        repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap(),
+        facts
+    );
+    assert_eq!(
+        share_permission_columns(&pool, TEST_DOCUMENT_ID)
+            .await
+            .link_share
+            .as_deref(),
+        Some("PUBLIC")
+    );
+    assert_eq!(direct_user_access_sources(&pool).await.len(), 2);
+    let team_grants = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1 AND source_type = 'team'",
+        uuid::Uuid::parse_str(TEST_DOCUMENT_ID).unwrap(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(team_grants, Some(0));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn inherited_team_grant_does_not_enable_explicit_toggle(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+           VALUES ($1, 'document', $2, 'team', 'owner', $3)"#,
+        uuid::Uuid::parse_str(TEST_DOCUMENT_ID).unwrap(), TEST_TEAM_ID.to_string(),
+        "d0000000-0000-0000-0000-100000000001",
+    ).execute(&pool).await.unwrap();
+    assert!(
+        !repo
+            .get_team_share(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .shared_with_team
+    );
+    set_legacy_team_share(&repo, TEST_DOCUMENT_ID, true)
+        .await
+        .unwrap();
+    set_legacy_team_share(&repo, TEST_DOCUMENT_ID, false)
+        .await
+        .unwrap();
+    assert!(
+        !repo
+            .get_team_share(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .shared_with_team
+    );
+    let inherited = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1 AND source_type = 'team' AND granted_from_project_id IS NOT NULL",
+        uuid::Uuid::parse_str(TEST_DOCUMENT_ID).unwrap(),
+    ).fetch_one(&pool).await.unwrap();
+    assert_eq!(inherited, Some(1));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn creation_team_consent_is_explicit_and_uses_owner_membership(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    for subtype in [
+        None,
+        Some(document_sub_type::DocumentSubType::Task),
+        Some(document_sub_type::DocumentSubType::Snippet),
+    ] {
+        let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
+        args.document.sub_type = subtype;
+        let document = repo
+            .create_document(args, md_share_permission())
+            .await
+            .unwrap();
+        let facts = repo
+            .get_team_share_facts(&document.document_id)
+            .await
+            .unwrap();
+        assert_eq!(facts.current, None);
+        assert_eq!(facts.revision, 0);
+    }
+
+    insert_second_team(&pool).await;
+    let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, true, Some(SECOND_TEAM_ID));
+    args.document.share_with_team = true;
+    let document = repo
+        .create_document(args, md_share_permission())
+        .await
+        .unwrap();
+    let facts = repo
+        .get_team_share_facts(&document.document_id)
+        .await
+        .unwrap();
+    let grant = facts.current.unwrap();
+    assert_eq!(grant.team_id, TEST_TEAM_ID);
+    assert_eq!(grant.level, TeamShareLevel::Edit);
+    assert_eq!(facts.revision, 1);
+    assert_eq!(
+        repo.get_team_task_metadata(&document.document_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .team_id,
+        SECOND_TEAM_ID
+    );
+    let level = sqlx::query_scalar!(
+        r#"SELECT access_level AS "level: AccessLevel" FROM entity_access
+        WHERE entity_id = $1 AND source_type = 'team' AND granted_from_project_id IS NULL"#,
+        uuid::Uuid::parse_str(&document.document_id).unwrap(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(level, AccessLevel::Edit);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn team_bot_task_does_not_manage_the_sponsor_owner_grant_as_a_share(pool: Pool<Postgres>) {
+    sqlx::query!(
+        r#"
+        INSERT INTO bots (id, kind, team_id, name, handle)
+        VALUES ($1, 'owned', $2, 'Task bot', 'task-bot-owner')
+        "#,
+        bot_id::BotId::TEST_A.as_uuid(),
+        TEST_TEAM_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = team_bot_repo(pool.clone(), TEST_TEAM_ID);
+    let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, true, Some(TEST_TEAM_ID));
+    args.owner = Owner::Bot(bot_id::BotId::TEST_A);
+    args.document.share_with_team = true;
+
+    let document = repo
+        .create_document(args, md_share_permission())
+        .await
+        .unwrap();
+    let facts = repo
+        .get_team_share_facts(&document.document_id)
+        .await
+        .unwrap();
+    assert_eq!(facts.current, None);
+    assert_eq!(facts.revision, 0);
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"
+            SELECT access_level AS "level: AccessLevel"
+            FROM entity_access
+            WHERE entity_id = $1
+              AND source_type = 'team'
+              AND source_id = $2
+              AND granted_from_project_id IS NULL
+            "#,
+            uuid::Uuid::parse_str(&document.document_id).unwrap(),
+            TEST_TEAM_ID.to_string(),
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        AccessLevel::Owner
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn task_creation_failure_rolls_back_all_initialization(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let permissions_before = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM "SharePermission""#)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let id = uuid::Uuid::new_v4();
+    let mut args = create_document_args("macro|no-team@user.com", true, Some(TEST_TEAM_ID));
+    args.document.id = Some(id);
+    args.document.share_with_team = true;
+    assert!(
+        repo.create_document(args, md_share_permission())
+            .await
+            .is_err()
+    );
+    assert!(repo.get_document_metadata(&id.to_string()).await.is_err());
+    assert_eq!(
+        sqlx::query_scalar!(r#"SELECT COUNT(*) FROM "SharePermission""#)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        permissions_before
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1",
+            id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    assert_eq!(count_entity_rows_for_id(&pool, &id.to_string()).await, 0);
+    assert!(team_task_numbers(&pool, TEST_TEAM_ID).await.is_empty());
+
+    sqlx::raw_sql(
+        r#"
+        CREATE FUNCTION reject_team_grant() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'injected team grant failure'; END $$;
+        CREATE TRIGGER reject_team_grant BEFORE INSERT ON entity_access
+        FOR EACH ROW WHEN (NEW.source_type = 'team') EXECUTE FUNCTION reject_team_grant();
+    "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, true, Some(TEST_TEAM_ID));
+    args.document.id = Some(id);
+    args.document.share_with_team = true;
+    assert!(
+        repo.create_document(args, md_share_permission())
+            .await
+            .is_err()
+    );
+    assert!(repo.get_document_metadata(&id.to_string()).await.is_err());
+    assert_eq!(
+        sqlx::query_scalar!(r#"SELECT COUNT(*) FROM "SharePermission""#)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        permissions_before
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1",
+            id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"SELECT COUNT(*) FROM "UserHistory" WHERE "itemId" = $1"#,
+            id.to_string()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"SELECT COUNT(*) FROM "DocumentInstance" WHERE "documentId" = $1"#,
+            id.to_string()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    assert_eq!(count_entity_rows_for_id(&pool, &id.to_string()).await, 0);
+    assert!(team_task_numbers(&pool, TEST_TEAM_ID).await.is_empty());
+}
 
 const TEST_TEAM_ID: uuid::Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000001");
 const SECOND_TEAM_ID: uuid::Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000002");
@@ -35,18 +569,60 @@ fn create_document_args(
     team_id: Option<uuid::Uuid>,
 ) -> CreateDocumentRepoArgs {
     CreateDocumentRepoArgs {
-        id: None,
-        sha: "sha".to_string(),
-        document_name: "task".to_string(),
-        user_id: self::user_id(user_id),
-        file_type: Some(model::document::FileType::Md),
-        project_id: None,
-        team_id,
-        created_at: None,
-        sub_type: is_task.then_some(document_sub_type::DocumentSubType::Task),
-        skip_history: false,
-        attribution: None,
+        owner: Owner::User(self::user_id(user_id)),
+        document: NewDocument {
+            id: None,
+            sha: "sha".to_string(),
+            document_name: "task".to_string(),
+            file_type: Some(model::document::FileType::Md),
+            project_id: None,
+            team_id,
+            share_with_team: false,
+            created_at: None,
+            sub_type: is_task.then_some(document_sub_type::DocumentSubType::Task),
+            skip_history: false,
+            initial_link_share: InitialLinkShare::EntityDefault,
+        },
     }
+}
+
+struct EntityRow {
+    owner_type: String,
+    owner_id: String,
+    entity_type: String,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+async fn fetch_entity_row(pool: &Pool<Postgres>, document_id: &str) -> EntityRow {
+    let row = sqlx::query(
+        r#"
+        SELECT
+            owner_type::text AS owner_type,
+            owner_id,
+            entity_type,
+            deleted_at
+        FROM entity
+        WHERE id = $1
+        "#,
+    )
+    .bind(uuid::Uuid::parse_str(document_id).unwrap())
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    EntityRow {
+        owner_type: row.get("owner_type"),
+        owner_id: row.get("owner_id"),
+        entity_type: row.get("entity_type"),
+        deleted_at: row.get("deleted_at"),
+    }
+}
+
+async fn count_entity_rows_for_id(pool: &Pool<Postgres>, document_id: &str) -> i64 {
+    sqlx::query_scalar("SELECT COUNT(*) FROM entity WHERE id::text = $1")
+        .bind(document_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 /// The no-team default permission for an md document — the repo persists whatever
@@ -56,7 +632,7 @@ fn md_share_permission() -> SharePermissionV2 {
 }
 
 async fn create_task_for_team(
-    repo: &PgDocumentRepo,
+    repo: &TestRepo,
     user_id: &str,
     team_id: uuid::Uuid,
 ) -> model::document::DocumentMetadata {
@@ -116,6 +692,8 @@ async fn insert_github_pr_task(
 struct SharePermissionColumns {
     link_share: Option<String>,
     link_share_access_level: Option<String>,
+    team_share_access_level: Option<AccessLevel>,
+    team_share_team_id: Option<uuid::Uuid>,
 }
 
 async fn share_permission_columns(
@@ -127,7 +705,9 @@ async fn share_permission_columns(
         r#"
         SELECT
             sp."linkShare" as "link_share?",
-            sp."linkShareAccessLevel"::text as "link_share_access_level?"
+            sp."linkShareAccessLevel"::text as "link_share_access_level?",
+            sp.team_share_access_level as "team_share_access_level?: AccessLevel",
+            sp.team_share_team_id as "team_share_team_id?"
         FROM "SharePermission" sp
         JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
         WHERE dp."documentId" = $1
@@ -231,7 +811,7 @@ async fn insert_second_team(pool: &Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_get_document_metadata(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     // Document exists
     let metadata = repo
@@ -240,7 +820,10 @@ async fn test_get_document_metadata(pool: Pool<Postgres>) {
         .unwrap();
     assert_eq!(metadata.document_id, "d0000000-0000-0000-0000-000000000001");
     assert_eq!(metadata.document_name, "test_document_name");
-    assert_eq!(metadata.owner.as_ref(), "macro|user@user.com");
+    assert_eq!(
+        metadata.owner,
+        Owner::from_principal_str("macro|user@user.com").unwrap()
+    );
     assert_eq!(metadata.document_version_id, 1);
     assert_eq!(metadata.file_type, Some("txt".to_string()));
 
@@ -254,7 +837,7 @@ async fn test_get_document_metadata(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_get_basic_document(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     let basic = repo
         .get_basic_document("d0000000-0000-0000-0000-000000000001")
@@ -262,7 +845,10 @@ async fn test_get_basic_document(pool: Pool<Postgres>) {
         .unwrap();
     assert_eq!(basic.document_id, "d0000000-0000-0000-0000-000000000001");
     assert_eq!(basic.document_name, "test_document_name");
-    assert_eq!(basic.owner.as_ref(), "macro|user@user.com");
+    assert_eq!(
+        basic.owner,
+        Owner::from_principal_str("macro|user@user.com").unwrap()
+    );
     assert_eq!(basic.file_type, Some("txt".to_string()));
 
     // Not found
@@ -274,22 +860,92 @@ async fn test_get_basic_document(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_soft_delete_document(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+async fn get_document_metadata_and_basic_document_decode_bot_and_team_owners(pool: Pool<Postgres>) {
+    const BOT_OWNER: &str = "bot|00000000-0000-0000-0000-00000000a1a1";
+    const TEAM_OWNER: &str = "00000000-0000-0000-0000-00000000a2a2";
 
-    repo.soft_delete_document("d0000000-0000-0000-0000-000000000001")
+    sqlx::query(
+        r#"
+        INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ($1, $2, $3), ($4, $5, $6)
+        ON CONFLICT (id) DO NOTHING
+        "#,
+    )
+    .bind(BOT_OWNER)
+    .bind("bot-owner-fixture@example.com")
+    .bind(uuid::Uuid::parse_str("a1111111-1111-1111-1111-111111111111").unwrap())
+    .bind(TEAM_OWNER)
+    .bind("team-owner-fixture@example.com")
+    .bind(uuid::Uuid::parse_str("a2222222-2222-2222-2222-222222222222").unwrap())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(r#"UPDATE "Document" SET owner = $1 WHERE id = $2"#)
+        .bind(BOT_OWNER)
+        .bind(TEST_DOCUMENT_ID)
+        .execute(&pool)
         .await
         .unwrap();
 
-    // Verify deleted_at is set
+    let repo = test_repo(pool.clone());
+    let metadata = repo.get_document_metadata(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(
+        metadata.owner,
+        Owner::from_principal_str(BOT_OWNER).unwrap()
+    );
+    let basic = repo.get_basic_document(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(basic.owner, Owner::from_principal_str(BOT_OWNER).unwrap());
+
+    sqlx::query(r#"UPDATE "Document" SET owner = $1 WHERE id = $2"#)
+        .bind(TEAM_OWNER)
+        .bind(TEST_DOCUMENT_ID)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let metadata = repo.get_document_metadata(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(
+        metadata.owner,
+        Owner::from_principal_str(TEAM_OWNER).unwrap()
+    );
+    let basic = repo.get_basic_document(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(basic.owner, Owner::from_principal_str(TEAM_OWNER).unwrap());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_soft_delete_document(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let document_id = TEST_DOCUMENT_ID;
+    let mut transaction = pool.begin().await.unwrap();
+    entity_registry_db_utils::insert_entity(
+        &mut transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            uuid::Uuid::parse_str(document_id).unwrap(),
+            entity_registry_db_utils::RegisteredEntityType::Document,
+            model_owner::Owner::User(user_id(TEST_DOCUMENT_OWNER_ID)),
+        ),
+    )
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
+
+    repo.soft_delete_document(document_id).await.unwrap();
+
     let row = sqlx::query!(
         r#"SELECT "deletedAt"::timestamptz as deleted_at FROM "Document" WHERE id = $1"#,
-        "d0000000-0000-0000-0000-000000000001"
+        document_id
     )
     .fetch_one(&pool)
     .await
     .unwrap();
     assert!(row.deleted_at.is_some());
+
+    let entity = fetch_entity_row(&pool, document_id).await;
+    assert!(entity.deleted_at.is_some());
 }
 
 #[sqlx::test(
@@ -310,7 +966,7 @@ async fn test_update_document_modified(pool: Pool<Postgres>) {
     .await
     .unwrap();
 
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
     let before = repo
         .get_document_metadata(document_id)
         .await
@@ -334,7 +990,7 @@ async fn test_update_document_modified(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_get_latest_document_version_id(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     let (version_id, _uploaded) = repo
         .get_latest_document_version_id("d0000000-0000-0000-0000-000000000001")
@@ -348,7 +1004,7 @@ async fn test_get_latest_document_version_id(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_get_document_version_id(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     let (version_id, _uploaded) = repo
         .get_document_version_id("d0000000-0000-0000-0000-000000000001")
@@ -362,7 +1018,7 @@ async fn test_get_document_version_id(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_get_user_view_location(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     // No view location exists
     let location = repo
@@ -380,7 +1036,7 @@ async fn test_get_user_view_location(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_create_document_writes_link_share_fields(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let document = repo
         .create_document(
             create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
@@ -400,7 +1056,7 @@ async fn test_create_document_writes_link_share_fields(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_create_document_persists_resolved_team_share_permission(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let document = repo
         .create_document(
             create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
@@ -423,9 +1079,10 @@ async fn test_create_document_persists_resolved_team_share_permission(pool: Pool
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_edit_document_name(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: Some("new-name".to_string()),
         project_id: None,
@@ -448,7 +1105,7 @@ async fn test_edit_document_name(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     repo.edit_document(EditDocumentRepoArgs {
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
@@ -457,6 +1114,7 @@ async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
         share_permission: None,
         revoke_non_owner_user_access: false,
         file_type: Some(FileTypeUpdate::Set(model::document::FileType::Rs)),
+        team_share: None,
     })
     .await
     .unwrap();
@@ -473,7 +1131,7 @@ async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_edit_document_clear_file_type(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     repo.edit_document(EditDocumentRepoArgs {
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
@@ -482,6 +1140,7 @@ async fn test_edit_document_clear_file_type(pool: Pool<Postgres>) {
         share_permission: None,
         revoke_non_owner_user_access: false,
         file_type: Some(FileTypeUpdate::Clear),
+        team_share: None,
     })
     .await
     .unwrap();
@@ -498,9 +1157,10 @@ async fn test_edit_document_clear_file_type(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_edit_document_project(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
         project_id: Some("d0000000-0000-0000-0000-100000000001".to_string()),
@@ -526,10 +1186,11 @@ async fn test_edit_document_project(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     // First set a project
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
         project_id: Some("d0000000-0000-0000-0000-100000000001".to_string()),
@@ -551,6 +1212,7 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
 
     // Then remove it by passing empty string
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
         project_id: Some("".to_string()),
@@ -573,16 +1235,18 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_edit_document_public_to_null_revokes_non_owner_access(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: None,
         project_id: None,
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: Some(None),
             link_share_access_level: Some(None),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
         revoke_non_owner_user_access: true,
@@ -606,16 +1270,18 @@ async fn test_edit_document_public_to_null_revokes_non_owner_access(pool: Pool<P
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_edit_document_public_to_team_revokes_non_owner_access(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: None,
         project_id: None,
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: Some(Some(LinkShare::Team)),
             link_share_access_level: Some(Some(AccessLevel::Comment)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
         revoke_non_owner_user_access: true,
@@ -639,7 +1305,7 @@ async fn test_edit_document_public_to_team_revokes_non_owner_access(pool: Pool<P
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
@@ -649,8 +1315,10 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
+        team_share: None,
         revoke_non_owner_user_access: false,
         file_type: None,
     })
@@ -669,8 +1337,10 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: Some(None),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
+        team_share: None,
         revoke_non_owner_user_access: false,
         file_type: None,
     })
@@ -694,16 +1364,18 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: Some("renamed".to_string()),
+        team_share: None,
         project_id: Some("d0000000-0000-0000-0000-100000000001".to_string()),
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: Some(Some(LinkShare::Public)),
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
         revoke_non_owner_user_access: false,
@@ -737,13 +1409,11 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
-    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    set_comment_share(&repo).await;
 
-    // All 3 team members should have access rows
+    // The owner and team have independent direct access rows.
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
     let rows = sqlx::query!(
         r#"
@@ -780,7 +1450,7 @@ async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgre
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_get_team_ids_for_user_returns_empty_when_user_not_on_team(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     let team_ids = repo
         .get_team_ids_for_user("macro|no-team@user.com")
@@ -795,15 +1465,18 @@ async fn test_get_team_ids_for_user_returns_empty_when_user_not_on_team(pool: Po
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_share_with_team_idempotent(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
-    // Call twice — second call should be a no-op
-    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
-    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    // Repeated consent advances revision without duplicating grants.
+    set_comment_share(&repo).await;
+    set_comment_share(&repo).await;
+    assert_eq!(
+        repo.get_team_share_facts(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .revision,
+        2
+    );
 
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
     let count = sqlx::query_scalar!(
@@ -826,7 +1499,7 @@ async fn test_share_with_team_idempotent(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_team_share_roundtrip(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let document_id = "d0000000-0000-0000-0000-000000000001";
 
     // Unshared by default, but the owner's team resolves
@@ -835,7 +1508,9 @@ async fn test_team_share_roundtrip(pool: Pool<Postgres>) {
     assert!(!state.shared_with_team);
 
     // Share grants the team Edit access
-    let state = repo.set_team_share(document_id, true).await.unwrap();
+    let state = set_legacy_team_share(&repo, document_id, true)
+        .await
+        .unwrap();
     assert_eq!(state.team_id, Some(TEST_TEAM_ID));
     assert!(state.shared_with_team);
 
@@ -858,7 +1533,9 @@ async fn test_team_share_roundtrip(pool: Pool<Postgres>) {
     assert!(state.shared_with_team);
 
     // Unshare removes the team row
-    let state = repo.set_team_share(document_id, false).await.unwrap();
+    let state = set_legacy_team_share(&repo, document_id, false)
+        .await
+        .unwrap();
     assert!(!state.shared_with_team);
 
     let count = sqlx::query_scalar!(
@@ -876,37 +1553,156 @@ async fn test_team_share_roundtrip(pool: Pool<Postgres>) {
     assert_eq!(count, 0);
 }
 
+async fn insert_untracked_team_grant(pool: &Pool<Postgres>, level: AccessLevel) {
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           VALUES ($1, 'document', $2, 'team', $3)"#,
+        uuid::Uuid::parse_str(TEST_DOCUMENT_ID).unwrap(),
+        TEST_TEAM_ID.to_string(),
+        level as _,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn direct_team_grant_levels(pool: &Pool<Postgres>) -> Vec<Option<String>> {
+    sqlx::query_scalar!(
+        r#"SELECT access_level::text FROM entity_access
+           WHERE entity_id = $1 AND entity_type = 'document' AND source_type = 'team'
+             AND granted_from_project_id IS NULL"#,
+        uuid::Uuid::parse_str(TEST_DOCUMENT_ID).unwrap(),
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_set_team_share_upgrades_existing_team_grant(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
-    let document_id = "d0000000-0000-0000-0000-000000000001";
+async fn historical_team_grant_is_adopted_as_explicit_consent(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    // A task shared before canonical state existed: a direct Comment grant, NULL level.
+    insert_untracked_team_grant(&pool, AccessLevel::Comment).await;
 
-    // Existing Comment-level team grant (e.g. from task creation)
-    repo.share_with_team(&TEST_TEAM_ID, document_id)
+    // Reading adopts the grant exactly once; a second read changes nothing.
+    assert!(
+        repo.get_team_share(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .shared_with_team
+    );
+    let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(
+        facts.current,
+        Some(TeamShareGrant {
+            team_id: TEST_TEAM_ID,
+            level: TeamShareLevel::Comment,
+        })
+    );
+    assert_eq!(facts.revision, 1);
+    assert_eq!(
+        repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap(),
+        facts
+    );
+    let columns = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+    assert_eq!(columns.team_share_access_level, Some(AccessLevel::Comment));
+    assert_eq!(columns.team_share_team_id, Some(TEST_TEAM_ID));
+
+    // The owner's legacy enable keeps the adopted level instead of conflicting.
+    let state = set_legacy_team_share(&repo, TEST_DOCUMENT_ID, true)
         .await
         .unwrap();
+    assert!(state.shared_with_team);
+    let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(facts.revision, 2);
+    assert_eq!(facts.current.unwrap().level, TeamShareLevel::Comment);
+    assert_eq!(
+        direct_team_grant_levels(&pool).await,
+        vec![Some("comment".to_string())]
+    );
 
-    // Toggling share on upgrades the team row to Edit
-    repo.set_team_share(document_id, true).await.unwrap();
+    // Disabling removes the adopted grant like any managed grant.
+    set_legacy_team_share(&repo, TEST_DOCUMENT_ID, false)
+        .await
+        .unwrap();
+    assert!(
+        !repo
+            .get_team_share(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .shared_with_team
+    );
+    assert!(direct_team_grant_levels(&pool).await.is_empty());
+}
 
-    let doc_uuid = macro_uuid::string_to_uuid(document_id).unwrap();
-    let rows = sqlx::query!(
-        r#"
-        SELECT access_level::text as "access_level"
-        FROM entity_access
-        WHERE entity_id = $1 AND entity_type = 'document'
-          AND source_type = 'team'
-        "#,
-        doc_uuid,
-    )
-    .fetch_all(&pool)
-    .await
-    .unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].access_level, Some("edit".to_string()));
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn untracked_grant_after_canonical_history_still_conflicts(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    set_comment_share(&repo).await;
+    set_legacy_team_share(&repo, TEST_DOCUMENT_ID, false)
+        .await
+        .unwrap();
+    assert!(direct_team_grant_levels(&pool).await.is_empty());
+
+    // A grant appearing after canonical history is an anomaly, not legacy consent.
+    insert_untracked_team_grant(&pool, AccessLevel::Comment).await;
+    assert!(
+        !repo
+            .get_team_share(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .shared_with_team
+    );
+    assert!(matches!(
+        set_legacy_team_share(&repo, TEST_DOCUMENT_ID, true).await,
+        Err(crate::domain::models::DocumentError::Conflict(_))
+    ));
+    let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(facts.current, None);
+    assert_eq!(facts.revision, 2);
+    assert_eq!(
+        direct_team_grant_levels(&pool).await,
+        vec![Some("comment".to_string())]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn owner_level_historical_grant_is_not_adopted(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    insert_untracked_team_grant(&pool, AccessLevel::Owner).await;
+
+    // Owner is not a team-share level, so the row stays untracked and conflicts.
+    assert!(
+        !repo
+            .get_team_share(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .shared_with_team
+    );
+    assert_eq!(
+        repo.get_team_share_facts(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .revision,
+        0
+    );
+    assert!(matches!(
+        set_legacy_team_share(&repo, TEST_DOCUMENT_ID, true).await,
+        Err(crate::domain::models::DocumentError::Conflict(_))
+    ));
+    assert_eq!(
+        direct_team_grant_levels(&pool).await,
+        vec![Some("owner".to_string())]
+    );
 }
 
 #[sqlx::test(
@@ -914,7 +1710,7 @@ async fn test_set_team_share_upgrades_existing_team_grant(pool: Pool<Postgres>) 
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_team_share_no_team_owner(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     // Create a document owned by a user without a team
     let metadata = repo
@@ -929,9 +1725,13 @@ async fn test_team_share_no_team_owner(pool: Pool<Postgres>) {
     assert_eq!(state.team_id, None);
     assert!(!state.shared_with_team);
 
-    // Sharing is a no-op when the owner has no team
-    let state = repo
-        .set_team_share(&metadata.document_id, true)
+    // Enabling fails without a team, but an explicit clear still succeeds.
+    assert!(
+        set_legacy_team_share(&repo, &metadata.document_id, true)
+            .await
+            .is_err()
+    );
+    let state = set_legacy_team_share(&repo, &metadata.document_id, false)
         .await
         .unwrap();
     assert_eq!(state.team_id, None);
@@ -943,7 +1743,7 @@ async fn test_team_share_no_team_owner(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_share_with_team_skips_user_with_existing_direct_access(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
 
@@ -960,9 +1760,7 @@ async fn test_share_with_team_skips_user_with_existing_direct_access(pool: Pool<
     .await
     .unwrap();
 
-    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    set_comment_share(&repo).await;
 
     // teammate1 should still have just their original edit row, not a second comment row
     let rows = sqlx::query!(
@@ -986,12 +1784,10 @@ async fn test_share_with_team_skips_user_with_existing_direct_access(pool: Pool<
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_share_with_explicit_team_id(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+async fn test_share_with_owner_team(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
 
-    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    set_comment_share(&repo).await;
 
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
     let rows = sqlx::query!(
@@ -1028,7 +1824,7 @@ async fn test_share_with_explicit_team_id(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_create_first_task_assigns_team_task_id_one(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     let metadata = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
     let task_metadata = repo
@@ -1047,7 +1843,7 @@ async fn test_create_first_task_assigns_team_task_id_one(pool: Pool<Postgres>) {
 )]
 async fn test_get_document_id_by_team_task_number(pool: Pool<Postgres>) {
     insert_second_team(&pool).await;
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     let first_team_task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
     let second_team_task =
@@ -1078,7 +1874,7 @@ async fn test_get_document_id_by_team_task_number(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_create_multiple_tasks_same_team_assigns_sequence(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     for _ in 0..3 {
         create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
@@ -1093,7 +1889,7 @@ async fn test_create_multiple_tasks_same_team_assigns_sequence(pool: Pool<Postgr
 )]
 async fn test_create_tasks_different_teams_have_independent_sequences(pool: Pool<Postgres>) {
     insert_second_team(&pool).await;
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
 
     create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
     create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
@@ -1108,7 +1904,7 @@ async fn test_create_tasks_different_teams_have_independent_sequences(pool: Pool
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_concurrent_task_creates_same_team_get_unique_numbers(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let mut handles = Vec::new();
 
     for _ in 0..8 {
@@ -1133,7 +1929,7 @@ async fn test_concurrent_task_creates_same_team_get_unique_numbers(pool: Pool<Po
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_non_task_document_does_not_create_team_task_row(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     let metadata = repo
         .create_document(
@@ -1156,7 +1952,7 @@ async fn test_non_task_document_does_not_create_team_task_row(pool: Pool<Postgre
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_task_without_team_id_does_not_create_team_task_row(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     let metadata = repo
         .create_document(
@@ -1179,7 +1975,7 @@ async fn test_task_without_team_id_does_not_create_team_task_row(pool: Pool<Post
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_deleting_document_cascades_team_task_row(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let metadata = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
 
     repo.delete_document_by_id(&metadata.document_id)
@@ -1207,15 +2003,40 @@ async fn test_deleting_document_cascades_team_task_row(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
+async fn test_delete_document_by_id_removes_entity_row(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let document_id = TEST_DOCUMENT_ID;
+    let mut transaction = pool.begin().await.unwrap();
+    entity_registry_db_utils::insert_entity(
+        &mut transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            uuid::Uuid::parse_str(document_id).unwrap(),
+            entity_registry_db_utils::RegisteredEntityType::Document,
+            model_owner::Owner::User(user_id(TEST_DOCUMENT_OWNER_ID)),
+        ),
+    )
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
+
+    repo.delete_document_by_id(document_id).await.unwrap();
+
+    assert_eq!(count_entity_rows_for_id(&pool, document_id).await, 0);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
 async fn test_copying_task_allocates_new_team_task_number(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let original = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
 
     let copied = repo
         .copy_document(
             CopyDocumentRepoArgs {
                 original_document: original,
-                user_id: user_id("macro|user@user.com"),
+                owner: Owner::User(user_id("macro|user@user.com")),
                 document_name: "copied task".to_string(),
                 file_type: Some(model::document::FileType::Md),
                 team_id: Some(TEST_TEAM_ID),
@@ -1240,7 +2061,7 @@ async fn test_copying_task_allocates_new_team_task_number(pool: Pool<Postgres>) 
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_get_branch_name_context_prefers_github_and_team_task(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     sqlx::query!(
         r#"
         UPDATE team
@@ -1282,7 +2103,7 @@ async fn test_get_branch_name_context_prefers_github_and_team_task(pool: Pool<Po
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_get_branch_name_context_falls_back_for_unknown_user(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     let context = repo
         .get_branch_name_context(
@@ -1303,7 +2124,7 @@ async fn test_get_branch_name_context_falls_back_for_unknown_user(pool: Pool<Pos
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_get_github_pull_request_keys_orders_and_parses(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
     let other_task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
     let task_short_id = short_id_for_document_id(&task.document_id);
@@ -1408,16 +2229,18 @@ async fn test_get_github_pull_request_keys_orders_and_parses(pool: Pool<Postgres
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_edit_document_channel_share_creates_user_item_access(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let channel_id = "c0000000-0000-0000-0000-000000000001";
 
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
         project_id: None,
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: None,
+            team_share_access_level: None,
             channel_share_permissions: Some(vec![UpdateChannelSharePermission {
                 operation: UpdateOperation::Add,
                 channel_id: channel_id.to_string(),
@@ -1481,16 +2304,18 @@ async fn test_edit_document_channel_share_creates_user_item_access(pool: Pool<Po
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let channel_id = "c0000000-0000-0000-0000-000000000001";
 
     let make_args = || EditDocumentRepoArgs {
+        team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
         project_id: None,
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: None,
+            team_share_access_level: None,
             channel_share_permissions: Some(vec![UpdateChannelSharePermission {
                 operation: UpdateOperation::Add,
                 channel_id: channel_id.to_string(),
@@ -1527,165 +2352,12 @@ async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
         "Should still have exactly 1 channel row after idempotent upsert"
     );
 }
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(
-        path = "../../../fixtures",
-        scripts("document_pdf_comments_and_highlights")
-    )
-)]
-async fn test_fetch_document_comments(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgDocumentRepo::new(pool);
-
-    // Test fetching comments for document-with-comments (which has 3 threads and 7 comments)
-    let comment_threads = repo.get_document_comments("document-with-comments").await?;
-
-    // Verify we got all threads
-    assert_eq!(comment_threads.len(), 4);
-
-    // Map threads by ID for easier testing
-    let thread_map: std::collections::HashMap<i64, &crate::domain::models::CommentThread> =
-        comment_threads
-            .iter()
-            .map(|t| (t.thread.thread_id, t))
-            .collect();
-
-    // Check thread 1001 (unresolved with 3 comments)
-    let thread_1001 = thread_map.get(&1001).expect("Thread 1001 should exist");
-    assert_eq!(thread_1001.comments.len(), 3);
-    assert!(!thread_1001.thread.resolved);
-
-    // Check thread 1002 (resolved with 3 comments)
-    let thread_1002 = thread_map.get(&1002).expect("Thread 1002 should exist");
-    assert_eq!(thread_1002.comments.len(), 3);
-    assert!(thread_1002.thread.resolved);
-
-    // Check thread 1003 (unresolved with 1 comment)
-    let thread_1003 = thread_map.get(&1003).expect("Thread 1003 should exist");
-    assert_eq!(thread_1003.comments.len(), 1);
-    assert!(!thread_1003.thread.resolved);
-
-    // Check specific comment content for thread 1001
-    let first_comment = &thread_1001.comments[0];
-    assert_eq!(first_comment.text, "Initial question on page 1");
-    assert_eq!(first_comment.sender, Some("user@user.com".to_string()));
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(
-        path = "../../../fixtures",
-        scripts("document_pdf_comments_and_highlights")
-    )
-)]
-async fn test_fetch_document_comments_empty(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgDocumentRepo::new(pool);
-
-    // This document ID doesn't exist in our fixture, so should return empty results
-    let comment_threads = repo.get_document_comments("non-existent-document").await?;
-
-    // Verify we got an empty list
-    assert_eq!(comment_threads.len(), 0);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(
-        path = "../../../fixtures",
-        scripts("document_pdf_comments_and_highlights")
-    )
-)]
-async fn test_thread_deletion(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgDocumentRepo::new(pool.clone());
-
-    // First verify we have 2 threads in document-delete-test
-    let threads_before = repo.get_document_comments("document-delete-test").await?;
-    assert_eq!(threads_before.len(), 2);
-
-    // Now mark one thread as deleted
-    sqlx::query!(
-        r#"
-        UPDATE "Thread"
-        SET "deletedAt" = NOW()
-        WHERE "id" = 3001
-        "#
-    )
-    .execute(&pool)
-    .await?;
-
-    // Fetch comments again - deleted threads should be filtered out
-    let threads_after = repo.get_document_comments("document-delete-test").await?;
-
-    // Verify only one thread remains and it's the correct one
-    assert_eq!(threads_after.len(), 1);
-    assert_eq!(threads_after[0].thread.thread_id, 3002);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(
-        path = "../../../fixtures",
-        scripts("document_pdf_comments_and_highlights")
-    )
-)]
-async fn test_comment_deletion(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = PgDocumentRepo::new(pool.clone());
-
-    // First verify thread 1001 has 3 comments
-    let threads_before = repo.get_document_comments("document-with-comments").await?;
-    let thread_1001_before = threads_before
-        .iter()
-        .find(|t| t.thread.thread_id == 1001)
-        .expect("Thread 1001 should exist");
-    assert_eq!(thread_1001_before.comments.len(), 3);
-
-    // Now mark one comment as deleted
-    sqlx::query!(
-        r#"
-        UPDATE "Comment"
-        SET "deletedAt" = NOW()
-        WHERE "id" = 10001
-        "#
-    )
-    .execute(&pool)
-    .await?;
-
-    // Fetch comments again - deleted comments should be filtered out
-    let threads_after = repo.get_document_comments("document-with-comments").await?;
-    let thread_1001_after = threads_after
-        .iter()
-        .find(|t| t.thread.thread_id == 1001)
-        .expect("Thread 1001 should exist");
-
-    // Verify one comment was filtered out
-    assert_eq!(thread_1001_after.comments.len(), 2);
-
-    // Verify the remaining comments are the ones we expect
-    let comment_ids: Vec<i64> = thread_1001_after
-        .comments
-        .iter()
-        .map(|c| c.comment_id)
-        .collect();
-    assert!(comment_ids.contains(&10002));
-    assert!(comment_ids.contains(&10003));
-    assert!(!comment_ids.contains(&10001));
-
-    Ok(())
-}
-
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_get_project_name(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     let name = repo
         .get_project_name("d0000000-0000-0000-0000-100000000001")
@@ -1702,7 +2374,7 @@ async fn test_get_project_name(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_get_project_children(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     let children = repo
         .get_project_children("d0000000-0000-0000-0000-100000000001")
@@ -1729,7 +2401,7 @@ async fn test_get_project_children(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_get_project_children_empty(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool);
+    let repo = test_repo(pool);
 
     let children = repo
         .get_project_children("d0000000-0000-0000-0000-100000000002")
@@ -1743,6 +2415,56 @@ fn pdf_share_permission() -> SharePermissionV2 {
     SharePermissionV2::new_document_share_permission(Some(model::document::FileType::Pdf), None)
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn email_import_does_not_initialize_team_consent(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let attachments = insert_email_attachments(&pool, 1).await;
+    let mut args = import_email_document_args(TEST_DOCUMENT_OWNER_ID, "import", attachments[0]);
+    args.document.share_with_team = true;
+    let mut permission = pdf_share_permission();
+    permission.team_share_access_level = Some(AccessLevel::Edit);
+    let EmailImportRepoOutcome::Created(document) = repo
+        .import_email_attachment_document(args, permission)
+        .await
+        .unwrap()
+    else {
+        panic!("expected a new import");
+    };
+    let facts = repo
+        .get_team_share_facts(&document.document_id)
+        .await
+        .unwrap();
+    assert_eq!(facts.current, None);
+    assert_eq!(facts.revision, 0);
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS "count!" FROM "UserHistory" WHERE "itemId" = $1"#,
+            document.document_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) AS "count!"
+            FROM "ItemLastAccessed"
+            WHERE item_id = $1 AND item_type = 'document'
+            "#,
+            document.document_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        0
+    );
+}
+
 fn import_email_document_args(
     owner: &str,
     sha: &str,
@@ -1750,18 +2472,19 @@ fn import_email_document_args(
 ) -> ImportEmailAttachmentRepoArgs {
     ImportEmailAttachmentRepoArgs {
         email_attachment_id,
-        create: CreateDocumentRepoArgs {
+        owner: user_id(owner),
+        document: NewDocument {
             id: None,
             sha: sha.to_string(),
             document_name: "contract".to_string(),
-            user_id: user_id(owner),
             file_type: Some(model::document::FileType::Pdf),
             project_id: None,
             team_id: None,
+            share_with_team: false,
             created_at: None,
             sub_type: None,
             skip_history: true,
-            attribution: None,
+            initial_link_share: InitialLinkShare::EntityDefault,
         },
     }
 }
@@ -1866,7 +2589,7 @@ async fn document_email_rows(pool: &Pool<Postgres>, document_id: &str) -> Vec<uu
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_import_email_attachment_reuses_document_by_sha(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let attachments = insert_email_attachments(&pool, 2).await;
     let sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -1901,7 +2624,7 @@ async fn test_import_email_attachment_reuses_document_by_sha(pool: Pool<Postgres
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_import_email_attachment_same_attachment_id_reuses_document(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let attachments = insert_email_attachments(&pool, 1).await;
     let sha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
@@ -1936,14 +2659,14 @@ async fn test_import_email_attachment_same_attachment_id_reuses_document(pool: P
 async fn test_import_email_attachment_does_not_reuse_non_email_document_by_sha(
     pool: Pool<Postgres>,
 ) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let attachments = insert_email_attachments(&pool, 1).await;
     let sha = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 
     let mut uploaded = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
-    uploaded.sha = sha.to_string();
-    uploaded.file_type = Some(model::document::FileType::Pdf);
-    uploaded.document_name = "manual-upload".to_string();
+    uploaded.document.sha = sha.to_string();
+    uploaded.document.file_type = Some(model::document::FileType::Pdf);
+    uploaded.document.document_name = "manual-upload".to_string();
 
     let uploaded_doc = repo
         .create_document(uploaded, pdf_share_permission())
@@ -1966,7 +2689,7 @@ async fn test_import_email_attachment_does_not_reuse_non_email_document_by_sha(
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_import_email_attachment_does_not_reuse_other_owner_sha(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let attachments = insert_email_attachments(&pool, 2).await;
     let sha = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 
@@ -1998,7 +2721,7 @@ async fn test_import_email_attachment_does_not_reuse_other_owner_sha(pool: Pool<
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_create_document_does_not_reuse_email_document_by_sha(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let attachments = insert_email_attachments(&pool, 1).await;
     let sha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 
@@ -2011,9 +2734,9 @@ async fn test_create_document_does_not_reuse_email_document_by_sha(pool: Pool<Po
         .unwrap();
 
     let mut created = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
-    created.sha = sha.to_string();
-    created.file_type = Some(model::document::FileType::Pdf);
-    created.document_name = "same-sha-upload".to_string();
+    created.document.sha = sha.to_string();
+    created.document.file_type = Some(model::document::FileType::Pdf);
+    created.document.document_name = "same-sha-upload".to_string();
 
     let created_doc = repo
         .create_document(created, pdf_share_permission())
@@ -2029,7 +2752,7 @@ async fn test_create_document_does_not_reuse_email_document_by_sha(pool: Pool<Po
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
 async fn test_import_email_attachment_only_reuses_latest_instance_sha(pool: Pool<Postgres>) {
-    let repo = PgDocumentRepo::new(pool.clone());
+    let repo = test_repo(pool.clone());
     let attachments = insert_email_attachments(&pool, 3).await;
     let old_sha = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
     let new_sha = "1111111111111111111111111111111111111111111111111111111111111111";
@@ -2075,4 +2798,491 @@ async fn test_import_email_attachment_only_reuses_latest_instance_sha(pool: Pool
     assert_eq!(document_id, reused_latest.metadata().document_id);
     assert!(matches!(superseded, EmailImportRepoOutcome::Created(_)));
     assert_ne!(document_id, superseded.metadata().document_id);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn create_document_registers_entity_row(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let document = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    let entity = fetch_entity_row(&pool, &document.document_id).await;
+    assert_eq!(entity.entity_type, "document");
+    assert_eq!(entity.owner_type, "user");
+    assert_eq!(entity.owner_id, TEST_DOCUMENT_OWNER_ID);
+    assert_eq!(entity.deleted_at, None);
+    assert_eq!(
+        count_entity_rows_for_id(&pool, &document.document_id).await,
+        1
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn copy_document_registers_distinct_entity_row(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let original = create_task_for_team(&repo, TEST_DOCUMENT_OWNER_ID, TEST_TEAM_ID).await;
+
+    let copied = repo
+        .copy_document(
+            CopyDocumentRepoArgs {
+                original_document: original.clone(),
+                owner: Owner::User(user_id(TEST_DOCUMENT_OWNER_ID)),
+                document_name: "copied task".to_string(),
+                file_type: Some(model::document::FileType::Md),
+                team_id: Some(TEST_TEAM_ID),
+            },
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    assert_ne!(original.document_id, copied.document_id);
+
+    let source = fetch_entity_row(&pool, &original.document_id).await;
+    let copy = fetch_entity_row(&pool, &copied.document_id).await;
+    assert_eq!(source.entity_type, "document");
+    assert_eq!(copy.entity_type, "document");
+    assert_eq!(source.owner_type, "user");
+    assert_eq!(copy.owner_type, "user");
+    assert_eq!(source.owner_id, TEST_DOCUMENT_OWNER_ID);
+    assert_eq!(copy.owner_id, TEST_DOCUMENT_OWNER_ID);
+    assert_eq!(source.deleted_at, None);
+    assert_eq!(copy.deleted_at, None);
+    assert_eq!(
+        count_entity_rows_for_id(&pool, &original.document_id).await,
+        1
+    );
+    assert_eq!(
+        count_entity_rows_for_id(&pool, &copied.document_id).await,
+        1
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn import_email_created_registers_one_entity_row(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let attachments = insert_email_attachments(&pool, 1).await;
+    let sha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+    let created = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(created, EmailImportRepoOutcome::Created(_)));
+    let document_id = &created.metadata().document_id;
+    let entity = fetch_entity_row(&pool, document_id).await;
+    assert_eq!(entity.entity_type, "document");
+    assert_eq!(entity.owner_type, "user");
+    assert_eq!(entity.owner_id, TEST_DOCUMENT_OWNER_ID);
+    assert_eq!(entity.deleted_at, None);
+    assert_eq!(count_entity_rows_for_id(&pool, document_id).await, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn import_email_reuse_keeps_one_entity_row_on_original(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let attachments = insert_email_attachments(&pool, 2).await;
+    let sha = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+    let first = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+    let sha_reuse = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[1]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+    let same_attachment = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(first, EmailImportRepoOutcome::Created(_)));
+    assert!(matches!(sha_reuse, EmailImportRepoOutcome::Reused(_)));
+    assert!(matches!(same_attachment, EmailImportRepoOutcome::Reused(_)));
+    let original_id = first.metadata().document_id.clone();
+    assert_eq!(original_id, sha_reuse.metadata().document_id);
+    assert_eq!(original_id, same_attachment.metadata().document_id);
+    assert_eq!(count_entity_rows_for_id(&pool, &original_id).await, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn soft_delete_document_sets_entity_deleted_at(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let document = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    repo.soft_delete_document(&document.document_id)
+        .await
+        .unwrap();
+
+    let entity = fetch_entity_row(&pool, &document.document_id).await;
+    assert!(entity.deleted_at.is_some());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn delete_document_by_id_removes_entity_row(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let document = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    repo.delete_document_by_id(&document.document_id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        count_entity_rows_for_id(&pool, &document.document_id).await,
+        0
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn soft_delete_and_hard_delete_tolerate_missing_entity_row(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+
+    repo.soft_delete_document(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(count_entity_rows_for_id(&pool, TEST_DOCUMENT_ID).await, 0);
+
+    let document = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM entity WHERE id::text = $1")
+        .bind(&document.document_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    repo.soft_delete_document(&document.document_id)
+        .await
+        .unwrap();
+    repo.delete_document_by_id(&document.document_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        count_entity_rows_for_id(&pool, &document.document_id).await,
+        0
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn task_snippet_and_skill_register_one_document_entity_row(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let task = create_task_for_team(&repo, TEST_DOCUMENT_OWNER_ID, TEST_TEAM_ID).await;
+    assert_eq!(count_entity_rows_for_id(&pool, &task.document_id).await, 1);
+    assert_eq!(
+        fetch_entity_row(&pool, &task.document_id).await.entity_type,
+        "document"
+    );
+    assert_eq!(
+        task.sub_type,
+        Some(document_sub_type::DocumentSubType::Task)
+    );
+
+    for sub_type in [
+        document_sub_type::DocumentSubType::Snippet,
+        document_sub_type::DocumentSubType::Skill,
+    ] {
+        let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
+        args.document.sub_type = Some(sub_type);
+        let document = repo
+            .create_document(args, md_share_permission())
+            .await
+            .unwrap();
+        assert_eq!(document.sub_type, Some(sub_type));
+        assert_eq!(
+            count_entity_rows_for_id(&pool, &document.document_id).await,
+            1
+        );
+        assert_eq!(
+            fetch_entity_row(&pool, &document.document_id)
+                .await
+                .entity_type,
+            "document"
+        );
+    }
+}
+
+const TEST_BOT_ID: &str = "bot|00000000-0000-0000-0000-00000000b07a";
+
+fn owned_document_args(owner: Owner) -> CreateDocumentRepoArgs {
+    let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
+    args.owner = owner;
+    args
+}
+
+fn copy_args(original: &model::document::DocumentMetadata, owner: Owner) -> CopyDocumentRepoArgs {
+    CopyDocumentRepoArgs {
+        original_document: original.clone(),
+        owner,
+        document_name: "copy".to_string(),
+        file_type: Some(model::document::FileType::Md),
+        team_id: None,
+    }
+}
+
+fn principal(kind: &str, id: &str) -> (String, String) {
+    (kind.to_string(), id.to_string())
+}
+
+#[derive(Debug, PartialEq)]
+struct OwnershipRecords {
+    owner: Owner,
+    registered_owner: (String, String),
+    owner_grants: Vec<(String, String)>,
+    user_history_rows: i64,
+}
+
+async fn ownership_records(
+    repo: &TestRepo,
+    pool: &Pool<Postgres>,
+    document_id: &str,
+) -> OwnershipRecords {
+    let entity = fetch_entity_row(pool, document_id).await;
+    let owner_grants = sqlx::query!(
+        r#"
+        SELECT source_type::text AS "source_type!", source_id
+        FROM entity_access
+        WHERE entity_id = $1 AND access_level = 'owner'
+        ORDER BY source_type::text
+        "#,
+        uuid::Uuid::parse_str(document_id).unwrap(),
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.source_type, row.source_id))
+    .collect();
+    let user_history_rows = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM "UserHistory" WHERE "itemId" = $1"#,
+        document_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    OwnershipRecords {
+        owner: repo.get_document_metadata(document_id).await.unwrap().owner,
+        registered_owner: (entity.owner_type, entity.owner_id),
+        owner_grants,
+        user_history_rows,
+    }
+}
+
+fn ownership_cases() -> [(Owner, OwnershipRecords); 2] {
+    [
+        (
+            Owner::User(user_id(TEST_DOCUMENT_OWNER_ID)),
+            OwnershipRecords {
+                owner: Owner::User(user_id(TEST_DOCUMENT_OWNER_ID)),
+                registered_owner: principal("user", TEST_DOCUMENT_OWNER_ID),
+                owner_grants: vec![principal("user", TEST_DOCUMENT_OWNER_ID)],
+                user_history_rows: 1,
+            },
+        ),
+        (
+            Owner::Bot(bot_id::BotId::TEST_A),
+            OwnershipRecords {
+                owner: Owner::Bot(bot_id::BotId::TEST_A),
+                registered_owner: principal("bot", TEST_BOT_ID),
+                owner_grants: vec![
+                    principal("bot", TEST_BOT_ID),
+                    principal("user", TEST_DOCUMENT_OWNER_ID),
+                ],
+                user_history_rows: 0,
+            },
+        ),
+    ]
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn create_records_the_owner_its_grants_and_user_only_history(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    for (owner, expected) in ownership_cases() {
+        let document = repo
+            .create_document(owned_document_args(owner), md_share_permission())
+            .await
+            .unwrap();
+        assert_eq!(
+            ownership_records(&repo, &pool, &document.document_id).await,
+            expected
+        );
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn copy_records_the_copy_owner_its_grants_and_user_only_history(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let original = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+    for (owner, expected) in ownership_cases() {
+        let copied = repo
+            .copy_document(copy_args(&original, owner), md_share_permission())
+            .await
+            .unwrap();
+        assert_eq!(
+            ownership_records(&repo, &pool, &copied.document_id).await,
+            expected
+        );
+    }
+    assert_eq!(
+        ownership_records(&repo, &pool, &original.document_id)
+            .await
+            .owner_grants,
+        vec![principal("user", TEST_DOCUMENT_OWNER_ID)]
+    );
+}
+
+#[derive(Debug, PartialEq)]
+struct TestBotRows {
+    documents: i64,
+    entities: i64,
+    grants: i64,
+}
+
+async fn test_bot_rows(pool: &Pool<Postgres>) -> TestBotRows {
+    sqlx::query_as!(
+        TestBotRows,
+        r#"
+        SELECT
+            (SELECT COUNT(*) FROM "Document" WHERE owner = $1) AS "documents!",
+            (SELECT COUNT(*) FROM entity WHERE owner_id = $1) AS "entities!",
+            (SELECT COUNT(*) FROM entity_access WHERE source_id = $1) AS "grants!"
+        "#,
+        TEST_BOT_ID,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn failed_sponsor_grant_leaves_no_bot_owned_rows(pool: Pool<Postgres>) {
+    let repo = test_repo(pool.clone());
+    let original = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+    let bot = Owner::Bot(bot_id::BotId::TEST_A);
+    sqlx::raw_sql(
+        r#"
+        CREATE FUNCTION reject_sponsor_grant() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'injected sponsor grant failure'; END $$;
+        CREATE TRIGGER reject_sponsor_grant BEFORE INSERT ON entity_access
+        FOR EACH ROW WHEN (NEW.source_type = 'user') EXECUTE FUNCTION reject_sponsor_grant();
+    "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(
+        repo.create_document(owned_document_args(bot.clone()), md_share_permission())
+            .await
+            .is_err()
+    );
+    assert!(
+        repo.copy_document(copy_args(&original, bot.clone()), md_share_permission())
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        test_bot_rows(&pool).await,
+        TestBotRows {
+            documents: 0,
+            entities: 0,
+            grants: 0,
+        }
+    );
+
+    sqlx::raw_sql("DROP TRIGGER reject_sponsor_grant ON entity_access")
+        .execute(&pool)
+        .await
+        .unwrap();
+    repo.create_document(owned_document_args(bot.clone()), md_share_permission())
+        .await
+        .unwrap();
+    repo.copy_document(copy_args(&original, bot), md_share_permission())
+        .await
+        .unwrap();
+    assert_eq!(
+        test_bot_rows(&pool).await,
+        TestBotRows {
+            documents: 2,
+            entities: 2,
+            grants: 2,
+        }
+    );
 }

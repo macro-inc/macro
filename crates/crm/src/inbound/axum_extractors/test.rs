@@ -526,6 +526,16 @@ fn test_router(
     comment_entity: Option<(CrmCommentEntityType, Uuid)>,
 ) -> (Router, FakeEntityAccessService, FakeCrmService) {
     let crm_service = FakeCrmService::new(comment_entity);
+    let mut messages = messages::domain::api::MockMessageServiceApi::new();
+    let calls = crm_service.comment_calls.clone();
+    let parent = comment_entity.map(|(kind, id)| match kind {
+        CrmCommentEntityType::CrmCompany => messages::domain::models::MessageParent::CrmCompany(id),
+        CrmCommentEntityType::CrmContact => messages::domain::models::MessageParent::CrmContact(id),
+    });
+    messages.expect_parent_of().returning(move |id| {
+        calls.lock().expect("comment calls lock poisoned").push(id);
+        Ok(parent.clone())
+    });
     let authorization_service = MacroAuthorizationServiceImpl::new(
         FakeJwtValidator,
         InternalAuthConfig {
@@ -533,13 +543,20 @@ fn test_router(
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        macro_authorization::NoUserApiKeyAuthorizer,
     );
-    let state: CrmRouterState<FakeCrmService, FakeEntityAccessService, TestAuthorizationService> =
-        CrmRouterState {
-            service: Arc::new(crm_service.clone()),
-            entity_access_service: Arc::new(entity_access.clone()),
-            authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
-        };
+    let state: CrmRouterState<
+        FakeCrmService,
+        (),
+        FakeEntityAccessService,
+        TestAuthorizationService,
+    > = CrmRouterState {
+        service: Arc::new(crm_service.clone()),
+        stage_service: Arc::new(()),
+        entity_access_service: Arc::new(entity_access.clone()),
+        authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
+        messages: Arc::new(messages),
+    };
     let router = Router::new()
         .route("/companies/{company_id}", get(company_handler))
         .route("/company-without-id/{other_id}", get(company_handler))

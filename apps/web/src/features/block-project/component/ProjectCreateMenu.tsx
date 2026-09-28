@@ -1,3 +1,4 @@
+import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -37,6 +38,26 @@ type CreateBlockSpec = {
 };
 
 const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
+  {
+    label: 'Spreadsheet',
+    blockName: 'spreadsheet',
+    hotkeyToken: TOKENS.create.spreadsheet,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon
+          targetType="spreadsheet"
+          size="shrinkFill"
+          theme="monochrome"
+        />
+      </div>
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const documentId = await createSpreadsheetDocument({ projectId });
+      if (!documentId) throw new Error('Failed to create spreadsheet');
+      return documentId;
+    },
+  },
   {
     label: 'Note',
     blockName: 'md' as BlockName,
@@ -216,6 +237,7 @@ function ProjectCreateDialog(props: {
 }) {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
+  const spreadsheetAccess = useSpreadsheetAccess();
 
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
@@ -225,7 +247,12 @@ function ProjectCreateDialog(props: {
             <Dialog.Title class="text-base font-semibold text-ink pb-3">
               Create in {props.name}
             </Dialog.Title>
-            <For each={BLOCK_CREATE_SPECS}>
+            <For
+              each={BLOCK_CREATE_SPECS.filter(
+                (spec) =>
+                  spec.blockName !== 'spreadsheet' || spreadsheetAccess()
+              )}
+            >
               {(spec) => (
                 <button
                   class="flex items-center gap-2 py-1 text-sm hover:bg-hover w-full text-left min-h-11"
@@ -267,23 +294,27 @@ function MenuItem(props: MenuItemProps) {
 function MenuContent(props: { projectId: string }) {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
+  const spreadsheetAccess = useSpreadsheetAccess();
 
-  const items: MenuItemProps[] = BLOCK_CREATE_SPECS.map((spec) => ({
-    label: spec.label,
-    Icon: spec.icon,
-    action: () =>
-      createBlock({
-        blockName: spec.blockName,
-        loading: spec.loading,
-        createFn: () => spec.createFn(props.projectId),
-        params: spec.params,
-      }),
-  }));
+  const items = (): MenuItemProps[] =>
+    BLOCK_CREATE_SPECS.filter(
+      (spec) => spec.blockName !== 'spreadsheet' || spreadsheetAccess()
+    ).map((spec) => ({
+      label: spec.label,
+      Icon: spec.icon,
+      action: () =>
+        createBlock({
+          blockName: spec.blockName,
+          loading: spec.loading,
+          createFn: () => spec.createFn(props.projectId),
+          params: spec.params,
+        }),
+    }));
 
   return (
     <Dropdown.Content class="min-w-max">
       <Dropdown.Group>
-        <For each={items}>{(item) => <MenuItem {...item} />}</For>
+        <For each={items()}>{(item) => <MenuItem {...item} />}</For>
       </Dropdown.Group>
     </Dropdown.Content>
   );
@@ -338,3 +369,5 @@ export function ProjectCreateMenu(props: { id: string }) {
     </Dropdown>
   );
 }
+
+import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';

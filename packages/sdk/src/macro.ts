@@ -1,6 +1,7 @@
 import type { MacroOpts } from './config';
 import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
 import { BotsNamespace } from './entities/bots/namespace';
+import { CalendarNamespace } from './entities/calendar/namespace';
 import { CallRecordNamespace } from './entities/calls/namespace';
 import { ChannelNamespace } from './entities/channels/namespace';
 import { ChatNamespace } from './entities/chats/namespace';
@@ -22,6 +23,7 @@ import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
 
 export type { MacroOpts } from './config';
+export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
   type Interpolation,
@@ -37,6 +39,7 @@ export {
 export class Macro<T extends MacroOpts = MacroOpts> {
   readonly agentSessions: AgentSessionNamespace;
   readonly bots: BotsNamespace;
+  readonly calendar: CalendarNamespace;
   readonly calls: CallRecordNamespace;
   readonly channels: ChannelNamespace;
   readonly chats: ChatNamespace;
@@ -53,9 +56,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   readonly teams: TeamNamespace;
   readonly users: UserNamespace;
   readonly webhooks: WebhooksNamespace;
-  declare readonly events: T extends { webhookSecret: string }
-    ? MacroEvents
-    : undefined;
+  readonly events: MacroEvents;
   /** Base URL of the Macro web app, used to build entity URLs. */
   readonly webAppUrl: string;
   /** Direct access to the underlying hey-api service clients. */
@@ -68,6 +69,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this._client = client;
     this.agentSessions = new AgentSessionNamespace(client);
     this.bots = new BotsNamespace(client);
+    this.calendar = new CalendarNamespace(client);
     this.calls = new CallRecordNamespace(client);
     this.channels = new ChannelNamespace(client);
     this.chats = new ChatNamespace(client);
@@ -84,7 +86,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.teams = new TeamNamespace(client);
     this.users = new UserNamespace(client);
     this.webhooks = new WebhooksNamespace(client);
-    (this as { events?: MacroEvents }).events = client.events;
+    this.events = client.events;
     this.webAppUrl = client.webAppUrl;
   }
 

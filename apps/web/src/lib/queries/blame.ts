@@ -1,4 +1,4 @@
-import { ENABLE_GIT_BLAME } from '@core/constant/featureFlags';
+import { enableGitBlame, isFeatureEnabled } from '@core/constant/featureFlags';
 import { syncServiceClient } from '@service-sync/client';
 import { useQuery } from '@tanstack/solid-query';
 
@@ -16,7 +16,7 @@ export function useNodeBlameQuery(
       if (!res.isOk()) throw new Error('blame_not_found');
       return res.value;
     },
-    enabled: ENABLE_GIT_BLAME() && nodeId() !== null,
+    enabled: isFeatureEnabled(enableGitBlame) && nodeId() !== null,
     staleTime: Infinity,
     retry: false,
   }));

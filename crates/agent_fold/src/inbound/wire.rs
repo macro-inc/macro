@@ -38,6 +38,10 @@ pub struct FoldedMessage {
     parts: Vec<MessagePart>,
     /// How the turn ended, absent while it remains in flight.
     stop: Option<StopReason>,
+    /// Derived from an action this client issued that the log has not yet
+    /// confirmed. A reader shows it as sending; it flips off in place when
+    /// the confirmed frame arrives.
+    pending: bool,
 }
 
 impl FoldedMessage {
@@ -51,6 +55,7 @@ impl FoldedMessage {
             request_id: message.request_id.map(|id| id.to_string()),
             parts: message.parts.into_inner(),
             stop: message.stop,
+            pending: message.pending,
         }
     }
 }
@@ -73,6 +78,11 @@ pub enum FoldedStreamEvent {
         /// The message as it now stands.
         message: FoldedMessage,
     },
+    /// Replace all messages for this session, including removal of old rows.
+    Replace {
+        /// The complete committed conversation.
+        messages: Vec<FoldedMessage>,
+    },
     /// The session's metadata changed; here it is in full.
     Metadata {
         /// The metadata as it now stands.
@@ -90,6 +100,13 @@ impl FoldedStreamEvent {
             },
             FoldEvent::MessageUpdate(message) => Self::Update {
                 message: FoldedMessage::new(session, message.into_owned()),
+            },
+            FoldEvent::MessagesReplaced(messages) => Self::Replace {
+                messages: messages
+                    .into_owned()
+                    .into_iter()
+                    .map(|message| FoldedMessage::new(session, message))
+                    .collect(),
             },
             FoldEvent::MetadataUpdated(metadata) => Self::Metadata {
                 metadata: metadata.into_owned(),

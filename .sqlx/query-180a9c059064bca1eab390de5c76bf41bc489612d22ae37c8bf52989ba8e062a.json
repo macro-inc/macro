@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"PdfPlaceableCommentAnchor\" a SET root_id = tm.root_id\n           FROM migrated_comment_thread_id tm\n           WHERE a.\"threadId\" = tm.thread_id AND a.\"documentId\" = ANY($1)\n             AND a.root_id IS DISTINCT FROM tm.root_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "180a9c059064bca1eab390de5c76bf41bc489612d22ae37c8bf52989ba8e062a"
+}

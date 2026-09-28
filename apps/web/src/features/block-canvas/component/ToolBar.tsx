@@ -4,7 +4,6 @@ import {
 } from '@block-canvas/model/CanvasModel';
 import { useCachedStyle } from '@block-canvas/signal/cachedStyle';
 import { useToolManager } from '@block-canvas/signal/toolManager';
-import { useIsNestedBlock } from '@core/block';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   ENABLE_CANVAS_FILES,
@@ -14,8 +13,6 @@ import {
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { useCanEdit } from '@core/signal/permissions';
 import CaretDown from '@phosphor/caret-down.svg';
 import Cursor from '@phosphor/cursor.svg';
 import Hand from '@phosphor/hand.svg';
@@ -24,10 +21,11 @@ import ZoomIn from '@phosphor/magnifying-glass-plus.svg';
 import PencilSimple from '@phosphor/pencil-simple.svg';
 import Rectangle from '@phosphor/rectangle.svg';
 import Text from '@phosphor/text-t.svg';
-import { Button, cn, Dropdown, Hotkey } from '@ui';
+import { Button, ButtonGroup, Dropdown, Hotkey, Toolbar } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { Tools } from '../constants';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import { FileSelector } from './FileSelector';
 import {
   ConnectorBezierArrows,
@@ -35,16 +33,13 @@ import {
   ConnectorStraightArrows,
 } from './icons-custom/ArrowIcons';
 import { MediaSelector } from './MediaSelector';
-import { connectorTypeMenuTriggerSignal } from './TopBar';
 
 const ConnectorTypeSubMenu = (props: {
   onSelect: (connectionStye: EdgeConnectionStyle) => void;
 }) => {
-  const SmallCaretDown = () => (
-    <CaretDown style={{ width: '12px' }} class="text-ink-muted" />
-  );
+  const state = useCanvasDocument().state.signals;
   const [connectorTypeMenuTrigger, setConnectorTypeMenuTrigger] =
-    connectorTypeMenuTriggerSignal;
+    state.connectorTypeMenuTrigger;
 
   return (
     <Dropdown
@@ -52,13 +47,8 @@ const ConnectorTypeSubMenu = (props: {
       open={connectorTypeMenuTrigger()}
       onOpenChange={setConnectorTypeMenuTrigger}
     >
-      <Dropdown.Trigger
-        variant="ghost"
-        size="icon-md"
-        style={{ width: '12px', margin: '0 -2px 0 -4px' }}
-        tabIndex={-1}
-      >
-        <SmallCaretDown />
+      <Dropdown.Trigger size="icon-sm" label="Connector options" tabIndex={-1}>
+        <CaretDown class="size-3 text-ink-muted" />
       </Dropdown.Trigger>
       <Dropdown.Content>
         <Dropdown.Group>
@@ -108,15 +98,14 @@ const ConnectorTypeSubMenu = (props: {
 };
 
 export function ToolBar() {
-  const baseCanEdit = useCanEdit();
-  const isNested = useIsNestedBlock();
-  const canEdit = () => baseCanEdit() && !isNested;
+  const canvas = useCanvasDocument();
+  const canEdit = () => canvas.canEdit() && !canvas.isNested();
   const toolManager = useToolManager();
   const cachedStyle = useCachedStyle();
   const { activeTool } = toolManager;
   const [connectorTypeMenuTrigger, setConnectorTypeMenuTrigger] =
-    connectorTypeMenuTriggerSignal;
-  const scopeId = blockHotkeyScopeSignal.get;
+    canvas.state.signals.connectorTypeMenuTrigger;
+  const scopeId = canvas.hotkeyScope;
 
   const [connectionStyle, setConnectionStyle] =
     createSignal<EdgeConnectionStyle>('straight');
@@ -179,18 +168,15 @@ export function ToolBar() {
   });
 
   return (
-    <ScopedPortal scope="block">
+    <ScopedPortal scope={canvas.portalScope()}>
       {/* Full-frame mobile/tablet: rest above the floating bottom chrome. */}
-      <div class="absolute left-1/2 bottom-2 touch:bottom-[calc(var(--mobile-content-inset-bottom,0)+0.5rem)] flex flex-row p-1 bg-surface border border-edge -translate-x-1/2">
-        <div
-          class={cn(
-            'flex flex-row items-center space-x-2',
-            canEdit() && 'border-r border-edge'
-          )}
-        >
-          <Button
+      <Toolbar
+        size="icon-sm"
+        class="absolute left-1/2 bottom-2 touch:bottom-[calc(var(--mobile-content-inset-bottom,0)+0.5rem)] -translate-x-1/2"
+      >
+        <Toolbar.Group>
+          <Toolbar.Button
             variant={activeTool() === Tools.Grab ? 'accent' : 'ghost'}
-            size="icon-md"
             label="Hand tool"
             hotkey={TOKENS.canvas.handTool}
             onClick={() => {
@@ -198,16 +184,15 @@ export function ToolBar() {
             }}
           >
             <Hand />
-          </Button>
+          </Toolbar.Button>
 
           <Show when={!isTouchDevice()}>
-            <Button
+            <Toolbar.Button
               variant={
                 activeTool() === Tools.ZoomIn || activeTool() === Tools.ZoomOut
                   ? 'accent'
                   : 'ghost'
               }
-              size="icon-md"
               label="Zoom"
               hotkey={TOKENS.canvas.zoomInTool}
               /* scuffed: previously also showed a second row
@@ -218,11 +203,11 @@ export function ToolBar() {
               }}
             >
               {activeTool() === Tools.ZoomOut ? <ZoomOut /> : <ZoomIn />}
-            </Button>
+            </Toolbar.Button>
           </Show>
 
           <Show when={canEdit()}>
-            <Button
+            <Toolbar.Button
               variant={
                 activeTool() === Tools.Select ||
                 activeTool() === Tools.Resize ||
@@ -230,7 +215,6 @@ export function ToolBar() {
                   ? 'accent'
                   : 'ghost'
               }
-              size="icon-md"
               label="Move"
               hotkey={TOKENS.canvas.selectTool}
               onClick={() => {
@@ -238,14 +222,14 @@ export function ToolBar() {
               }}
             >
               <Cursor />
-            </Button>
+            </Toolbar.Button>
           </Show>
-        </div>
+        </Toolbar.Group>
         <Show when={canEdit()}>
-          <div class="flex flex-row px-2 items-center space-x-2">
-            <Button
+          <Toolbar.Divider />
+          <Toolbar.Group>
+            <Toolbar.Button
               variant={activeTool() === Tools.Shape ? 'accent' : 'ghost'}
-              size="icon-md"
               label="Rectangle"
               hotkey={TOKENS.canvas.shapeTool}
               onClick={() => {
@@ -253,11 +237,10 @@ export function ToolBar() {
               }}
             >
               <Rectangle />
-            </Button>
+            </Toolbar.Button>
 
-            <Button
+            <Toolbar.Button
               variant={activeTool() === Tools.Pencil ? 'accent' : 'ghost'}
-              size="icon-md"
               label="Pencil"
               hotkey={TOKENS.canvas.pencilTool}
               onClick={() => {
@@ -265,29 +248,30 @@ export function ToolBar() {
               }}
             >
               <PencilSimple />
-            </Button>
+            </Toolbar.Button>
 
-            <Button
-              variant={activeTool() === Tools.Line ? 'accent' : 'ghost'}
-              size="icon-md"
-              label="Connector"
-              hotkey={TOKENS.canvas.lineTool}
-              onClick={() => {
-                toolManager.setSelectedTool(Tools.Line);
-              }}
-            >
-              <Dynamic component={connectorIcon()} />
-            </Button>
-            <ConnectorTypeSubMenu onSelect={onSelectConnectionStyle} />
+            <ButtonGroup variant="outline" size="icon-sm">
+              <Button
+                variant={activeTool() === Tools.Line ? 'accent' : 'outline'}
+                label="Connector"
+                hotkey={TOKENS.canvas.lineTool}
+                onClick={() => {
+                  toolManager.setSelectedTool(Tools.Line);
+                }}
+              >
+                <Dynamic component={connectorIcon()} />
+              </Button>
+              <ButtonGroup.Divider />
+              <ConnectorTypeSubMenu onSelect={onSelectConnectionStyle} />
+            </ButtonGroup>
 
             <Show when={ENABLE_CANVAS_TEXT}>
-              <Button
+              <Toolbar.Button
                 variant={
                   activeTool() === Tools.Text || activeTool() === Tools.Typing
                     ? 'accent'
                     : 'ghost'
                 }
-                size="icon-md"
                 label="Text"
                 hotkey={TOKENS.canvas.textTool}
                 onClick={() => {
@@ -295,21 +279,22 @@ export function ToolBar() {
                 }}
               >
                 <Text />
-              </Button>
+              </Toolbar.Button>
             </Show>
-          </div>
+          </Toolbar.Group>
         </Show>
-        <Show when={canEdit()}>
-          <div class="flex flex-row px-2 items-center space-x-2 border-l border-edge">
+        <Show when={canEdit() && (ENABLE_CANVAS_IMAGES || ENABLE_CANVAS_FILES)}>
+          <Toolbar.Divider />
+          <Toolbar.Group>
             <Show when={ENABLE_CANVAS_IMAGES}>
               <MediaSelector />
             </Show>
             <Show when={ENABLE_CANVAS_FILES}>
               <FileSelector />
             </Show>
-          </div>
+          </Toolbar.Group>
         </Show>
-      </div>
+      </Toolbar>
     </ScopedPortal>
   );
 }

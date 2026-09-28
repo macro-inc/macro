@@ -100,6 +100,33 @@ describe('createListController', () => {
     });
   });
 
+  it('owns range anchors and resets the range session with selection', () => {
+    withRoot(() => {
+      const values = [item('a'), item('b'), item('c')];
+      const list = createListController({
+        items: () => values,
+        getKey: (value: Item) => value.id,
+      });
+
+      list.selection.set('a', true);
+      expect(list.selection.anchor()).toBe('a');
+
+      list.selection.set('c', true, { range: true });
+      expect([...list.selection.keys()]).toEqual(['a', 'b', 'c']);
+
+      list.selection.set('b', true, { range: true });
+      expect([...list.selection.keys()]).toEqual(['a', 'b']);
+
+      list.selection.clear();
+      expect(list.selection.count()).toBe(0);
+      expect(list.selection.anchor()).toBeUndefined();
+
+      list.selection.set('c', true);
+      list.selection.set('b', true, { range: true });
+      expect([...list.selection.keys()]).toEqual(['c', 'b']);
+    });
+  });
+
   it('selects logical items independently from rendered occurrences', () => {
     withRoot(() => {
       const [items, setItems] = createSignal<readonly Item[]>([

@@ -12,6 +12,7 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, patch, post},
 };
+use axum_extra::extract::Query;
 use entity_access::domain::{
     models::{AccessError, AnyEntityPermission, EntityAccessReceipt, OwnerAccessLevel},
     ports::EntityAccessService,
@@ -151,15 +152,23 @@ pub struct UpdateReminderRequest {
 }
 
 /// Query params for listing reminders.
-#[derive(Debug, Deserialize, utoipa::IntoParams)]
+///
+/// `entityType` and `entityId` both repeat. Values of one key are
+/// alternatives, and the two keys are combined. Either key alone is valid,
+/// leaving the other dimension unconstrained, so the single pair clients send
+/// today keeps its old meaning.
+#[derive(Debug, Default, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
 #[into_params(parameter_in = Query)]
 pub struct ListRemindersParams {
-    /// Restrict to reminders attached to this entity type. Requires `entityId`.
-    #[param(inline)]
-    pub entity_type: Option<EntityType>,
-    /// Restrict to reminders attached to this entity id. Requires `entityType`.
-    pub entity_id: Option<String>,
+    /// Restrict to reminders attached to an entity of these types.
+    #[param(inline, style = Form, explode)]
+    #[serde(default)]
+    pub entity_type: Vec<EntityType>,
+    /// Restrict to reminders attached to these entity ids.
+    #[param(style = Form, explode)]
+    #[serde(default)]
+    pub entity_id: Vec<String>,
     /// Include reminders that have already fired.
     #[serde(default)]
     pub include_completed: bool,
@@ -178,9 +187,18 @@ pub struct ReminderIdParams {
     pub id: Uuid,
 }
 
-/// Pair an optional entity type and id into an entity, rejecting half-supplied
-/// associations and blank ids before they reach the domain. Applies to both
-/// create and list, so a filter can never carry an empty entity id.
+/// Parse filter ids to match the UUID-backed `entity_id` column.
+fn parse_filter_entity_ids(entity_ids: Vec<String>) -> Result<Vec<Uuid>, ReminderError> {
+    entity_ids
+        .iter()
+        .map(|entity_id| {
+            Uuid::parse_str(entity_id.trim())
+                .map_err(|_| ReminderError::BadRequest("entityId must be a uuid".to_string()))
+        })
+        .collect()
+}
+
+/// Pair an optional entity type and id, rejecting half-supplied associations.
 fn build_entity(
     entity_type: Option<EntityType>,
     entity_id: Option<String>,
@@ -258,7 +276,7 @@ async fn mint_entity_receipt<Eas: EntityAccessService>(
 pub async fn list_reminders_handler<S, Eas, Auth>(
     State(state): State<RemindersRouterState<S, Eas, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    axum::extract::Query(params): axum::extract::Query<ListRemindersParams>,
+    Query(params): Query<ListRemindersParams>,
 ) -> Result<Json<RemindersList>, ReminderError>
 where
     S: RemindersService,
@@ -266,7 +284,8 @@ where
     Auth: MacroAuthorizationService,
 {
     let filter = ReminderFilter {
-        entity: build_entity(params.entity_type, params.entity_id)?,
+        entity_types: params.entity_type,
+        entity_ids: parse_filter_entity_ids(params.entity_id)?,
         include_completed: params.include_completed,
         cursor: params
             .cursor

@@ -2,10 +2,20 @@
 use super::models::{
     NormalizedWebhookEvent, WEBHOOK_EVENT_QUEUE_MESSAGE_VERSION, WebhookEventQueueMessage,
 };
-use super::models::{WebhookFilter, WebhookFilters};
+use super::models::{WebhookFilter, WebhookFilters, WebhookScope};
 #[cfg(feature = "ports")]
 use chrono::{DateTime, Utc};
 use serde_json::json;
+
+#[test]
+fn webhook_scope_strum_names_match_serde() {
+    for scope in [WebhookScope::User, WebhookScope::Team] {
+        let serde_name = serde_json::to_value(scope).unwrap();
+        assert_eq!(serde_name, json!(scope.to_string()));
+        assert_eq!(scope.to_string().parse::<WebhookScope>().unwrap(), scope);
+    }
+    assert!("workspace".parse::<WebhookScope>().is_err());
+}
 
 #[test]
 fn deserializes_filter_with_events_and_ids() {

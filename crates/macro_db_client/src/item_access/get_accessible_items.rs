@@ -11,7 +11,7 @@ use sqlx::{Pool, Postgres};
 #[cfg_attr(
     not(test),
     cached(
-        time = 30,
+        time = 10,
         result = true,
         key = "String",
         convert = r#"{ format!("{}-{}-{}", user_id, item_type_filter.as_deref().unwrap_or("all"), exclude_owned) }"#

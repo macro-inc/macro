@@ -42,6 +42,8 @@ name = "search_processing_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+agent_session = { path = "../../crates/agent_session", default-features = false, features = ["outbound"] }
+agent_fold = { path = "../../crates/agent_fold" }
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
@@ -59,7 +61,9 @@ http-body-util = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util", optional = true }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization" }
+macro_authorization = { path = "../../crates/macro_authorization", features = [
+  "postgres",
+] }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }
@@ -81,6 +85,7 @@ document_sub_type = { path = "../../crates/document_sub_type" }
 documents = { path = "../../crates/documents", default-features = false, optional = true }
 doppler-config = { workspace = true }
 model = { path = "../../crates/model" }
+model_owner = { path = "../../crates/model_owner" }
 s3_key = { path = "../../crates/s3_key" }
 models_email = { path = "../../crates/models_email" }
 model_file_type = { path = "../../crates/model_file_type" }

@@ -401,7 +401,7 @@ fn test_tag_filter_expr_ands_with_existing_propf() {
 #[test]
 fn test_from_soup_item_resolves_tags_via_caller_map() {
     use crate::domain::models::SoupPropertiesField;
-    use macro_user_id::user_id::MacroUserIdStr;
+    use model_owner::Owner;
     use models_properties::service::property_definition::PropertyDefinition;
     use models_properties::service::property_value::PropertyValue;
     use models_properties::service::tag_sets::{AppliedTag, TagScope};
@@ -440,7 +440,7 @@ fn test_from_soup_item_resolves_tags_via_caller_map() {
     let doc = SoupDocument {
         id: Uuid::new_v4(),
         document_version_id: 1,
-        owner_id: MacroUserIdStr::try_from("macro|user1@test.com".to_string()).unwrap(),
+        owner_id: Owner::try_from("macro|user1@test.com".to_string()).unwrap(),
         name: "tagged.md".to_string(),
         file_type: None,
         sha: None,

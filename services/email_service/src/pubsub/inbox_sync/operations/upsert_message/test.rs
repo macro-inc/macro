@@ -195,30 +195,6 @@ fn suppresses_existing_immutable_non_drafts() {
 }
 
 #[test]
-fn macro_staff_gets_all_inbox_new_email_policy() {
-    assert_eq!(
-        new_email_notify_policy(&id("macro|teo@macro.com")),
-        NewEmailNotifyPolicy::AllInbox
-    );
-}
-
-#[test]
-fn macro_staff_plus_alias_gets_all_inbox_new_email_policy() {
-    assert_eq!(
-        new_email_notify_policy(&id("macro|teo+notify@macro.com")),
-        NewEmailNotifyPolicy::AllInbox
-    );
-}
-
-#[test]
-fn customer_gets_signal_only_new_email_policy() {
-    assert_eq!(
-        new_email_notify_policy(&id("macro|user@example.com")),
-        NewEmailNotifyPolicy::SignalOnly
-    );
-}
-
-#[test]
 fn staff_recipients_are_split_onto_the_apns_path() {
     let (staff, customers) = partition_email_push_recipients(HashSet::from([
         id("macro|teo@macro.com"),
@@ -242,19 +218,82 @@ fn customer_only_recipients_do_not_take_the_apns_path() {
     assert_eq!(customers, HashSet::from([id("macro|user@example.com")]));
 }
 
-#[test]
-fn all_inbox_preview_filter_is_thread_only() {
-    let thread_id = Uuid::nil();
-    match new_email_preview_filter(thread_id, NewEmailNotifyPolicy::AllInbox) {
-        Expr::Literal(EmailLiteral::ThreadId(id)) => assert_eq!(id, thread_id),
-        other => panic!("expected thread-only filter, got {other:?}"),
+fn email_notification_builder(
+    recipient: &str,
+) -> SendNotificationRequestBuilder<'static, NewEmailMetadata> {
+    SendNotificationRequestBuilder {
+        notification_entity: EntityType::EmailThread.with_entity_string(Uuid::nil().to_string()),
+        secondary_notification_entity: None,
+        notification: NewEmailMetadata {
+            sender: Some("Sender".to_string()),
+            to_email: "staff@macro.com".to_string(),
+            thread_id: Uuid::nil().to_string(),
+            subject: "Subject".to_string(),
+            snippet: "Snippet".to_string(),
+        },
+        sender_id: Some(id("macro|sender@example.com")),
+        recipient_ids: HashSet::from([id(recipient)]),
     }
 }
 
 #[test]
-fn signal_only_preview_filter_requires_importance_and_unshared() {
+fn noise_requests_preserve_rows_without_realtime_delivery() {
+    // A staff inbox may also notify a non-staff delegate. Neither recipient
+    // partition should receive GraphQL/gateway events for the Noise tier.
+    for recipient in ["macro|staff@macro.com", "macro|delegate@example.com"] {
+        let builder = email_notification_builder(recipient);
+        let original = serde_json::to_value(&builder).unwrap();
+        let request = NewEmailTier::StaffInbox.notification_request(builder);
+        let request = serde_json::to_value(request).unwrap();
+
+        assert_eq!(request["send_conn_gateway"], false);
+        assert!(request["build_apns"].is_null());
+        assert!(request["build_email"].is_null());
+        assert!(request["uuid_to_write"].is_string());
+        for field in [
+            "notification_entity",
+            "secondary_notification_entity",
+            "sender_id",
+            "recipient_ids",
+        ] {
+            assert_eq!(request["req"][field], original[field]);
+        }
+        assert_eq!(request["req"]["notification"]["tag"], "new_email");
+        assert_eq!(
+            request["req"]["notification"]["content"],
+            original["notification"]
+        );
+    }
+}
+
+#[test]
+fn signal_requests_keep_realtime_delivery_for_both_recipient_partitions() {
+    for recipient in ["macro|staff@macro.com", "macro|customer@example.com"] {
+        let request =
+            NewEmailTier::Signal.notification_request(email_notification_builder(recipient));
+        let request = serde_json::to_value(request).unwrap();
+
+        assert_eq!(request["send_conn_gateway"], true);
+        // The staff branch adds APNS separately; customer requests stay realtime-only.
+        assert!(request["build_apns"].is_null());
+    }
+}
+
+#[test]
+fn signal_staff_requests_keep_apns_and_realtime_delivery() {
+    let request = NewEmailTier::Signal
+        .notification_request(email_notification_builder("macro|staff@macro.com"))
+        .with_apns();
+    let request = serde_json::to_value(request).unwrap();
+
+    assert_eq!(request["send_conn_gateway"], true);
+    assert!(request["build_apns"].is_object());
+}
+
+#[test]
+fn signal_filter_requires_importance_and_unshared() {
     let thread_id = Uuid::nil();
-    match new_email_preview_filter(thread_id, NewEmailNotifyPolicy::SignalOnly) {
+    match signal_filter(thread_id) {
         Expr::And(thread, rest) => {
             assert!(matches!(
                 *thread,

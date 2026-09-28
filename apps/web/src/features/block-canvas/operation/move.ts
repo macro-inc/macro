@@ -1,7 +1,7 @@
-import { createBlockSignal } from '@core/block';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { batch, untrack } from 'solid-js';
 import { OPERATION_LOGGING, Tools } from '../constants';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import { useCanvasHistory } from '../signal/canvasHistory';
 import { useSelection } from '../signal/selection';
 import { useToolManager } from '../signal/toolManager';
@@ -23,11 +23,9 @@ export type MoveOperation = Operation & {
   edgePositions: Record<string, { from?: Vector2; to?: Vector2 }>;
 };
 
-export const currentMoveOperationSignal = createBlockSignal<MoveOperation>();
-
 export const useMove = sharedInstance((): Operator => {
   const [currentMoveOperation, setCurrentMoveOperation] =
-    currentMoveOperationSignal;
+    useCanvasDocument().state.signals.currentMoveOperation;
   const { selectedNodes, selectedEdges } = useSelection();
   const { pageToCanvas } = useRenderState();
   const { updateNode, ...nodes } = useCanvasNodes();

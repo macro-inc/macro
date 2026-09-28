@@ -1,5 +1,7 @@
 use super::*;
 
+mod exclusions;
+
 fn extract(expr: &Expr<ReminderLiteral>) -> Option<ReminderFilterExtract> {
     let mut out = ReminderFilterExtract::default();
     extract_reminder_filter(expr, &mut out).then_some(out)

@@ -58,6 +58,15 @@
         "call_recording_preview_handler"
       ]
     },
+    "calendar-service": {
+      "source_paths": [
+        "services/calendar_service/**"
+      ],
+      "stack_path": "infra/stacks/calendar-service/**",
+      "deploy_binaries": [
+        "calendar_service"
+      ]
+    },
     "connection-gateway": {
       "source_paths": [
         "services/connection_gateway/**"
@@ -113,6 +122,7 @@
         "services/document_storage_service/**",
         "crates/call/**",
         "crates/github/**",
+        "crates/initiative/**",
         "crates/reminders/**",
         "services/delete_chat_handler/**",
         "services/docx_unzip_handler/**",

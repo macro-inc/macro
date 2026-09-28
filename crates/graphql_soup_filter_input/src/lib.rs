@@ -20,6 +20,7 @@ use item_filters::{
     CallStatus, SharedEmailFilter,
     ast::{
         CrmScope, EmailFilterAst, EntityFilterAst,
+        agent_session::AgentSessionLiteral,
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
@@ -29,6 +30,7 @@ use item_filters::{
         document::DocumentLiteral,
         email::{Email, EmailLiteral},
         foreign_entity::ForeignEntityLiteral,
+        initiative::InitiativeLiteral,
         project::ProjectLiteral,
         properties::{EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
         reminder::ReminderLiteral,
@@ -36,6 +38,8 @@ use item_filters::{
 };
 use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
 use model_file_type::FileType;
+use model_owner::Owner;
+use notification_state::graphql::GraphqlNotificationState;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -47,7 +51,10 @@ mod test;
 /// Maximum accepted GraphQL filter expression depth.
 pub const MAX_FILTER_DEPTH: usize = 64;
 /// Maximum accepted JSON values in one GraphQL filter input.
-pub const MAX_FILTER_NODES: usize = 2_048;
+/// JSON literal/Boolean wrappers need more nodes than the resulting expression:
+/// combined Files associations expand the finite file-type registry past 2,048
+/// JSON values while staying inside the cache's 2,048-expression-node budget.
+pub const MAX_FILTER_NODES: usize = 4_096;
 /// Maximum bytes accepted in one string value.
 pub const MAX_FILTER_STRING_BYTES: usize = 16 * 1_024;
 /// Maximum aggregate bytes across string values.
@@ -159,6 +166,12 @@ fn parse_id(id: ID, field: &str) -> InputResult<Uuid> {
 fn parse_macro_user_id(value: String, field: &str) -> InputResult<MacroUserIdStr<'static>> {
     MacroUserIdStr::parse_from_str(&value)
         .map(CowLike::into_owned)
+        .map_err(|err| InputError::new(format!("invalid {field} `{value}`: {err}")))
+}
+
+/// Parse an owner principal — a user, bot, or team — with a field-specific error.
+fn parse_owner(value: String, field: &str) -> InputResult<Owner> {
+    Owner::from_principal_str(&value)
         .map_err(|err| InputError::new(format!("invalid {field} `{value}`: {err}")))
 }
 
@@ -288,6 +301,8 @@ enum GraphqlPropertyEntityType {
     Company,
     /// Document entity.
     Document,
+    /// Initiative entity.
+    Initiative,
     /// Project entity.
     Project,
     /// Task entity.
@@ -313,6 +328,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Task => Self::Task,
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
+            GraphqlPropertyEntityType::Initiative => Self::Initiative,
             other @ GraphqlPropertyEntityType::CallRecord => return Err(other),
         })
     }
@@ -323,6 +339,8 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GraphqlEntityFilterAst {
+    /// Restrict results to the authenticated viewer's favorites when true.
+    favorites_only: Option<bool>,
     /// The calendar event filter to apply.
     calendar_event_filter: Option<GraphqlCalendarEventExpr>,
     /// The document filter to apply.
@@ -345,6 +363,10 @@ pub struct GraphqlEntityFilterAst {
     foreign_entity_filter: Option<GraphqlForeignEntityExpr>,
     /// The reminder filter to apply.
     reminder_filter: Option<GraphqlReminderExpr>,
+    /// The agent session filter to apply.
+    agent_session_filter: Option<GraphqlAgentSessionExpr>,
+    /// The initiative filter to apply. Initiatives are opt-in.
+    initiative_filter: Option<GraphqlInitiativeExpr>,
     /// The properties filter to apply.
     properties_filter: Option<GraphqlFilterPropertiesExpr>,
 }
@@ -362,6 +384,7 @@ impl GraphqlEntityFilterAst {
     /// Convert an input whose serialized representation already passed ingress bounds.
     fn into_ast_unchecked(self) -> InputResult<EntityFilterAst> {
         Ok(EntityFilterAst {
+            favorites_only: self.favorites_only,
             calendar_event_filter: optional_tree(self.calendar_event_filter)?,
             document_filter: optional_tree(self.document_filter)?,
             project_filter: optional_tree(self.project_filter)?,
@@ -377,7 +400,9 @@ impl GraphqlEntityFilterAst {
             crm_company_filter: optional_tree(self.crm_company_filter)?,
             foreign_entity_filter: optional_tree(self.foreign_entity_filter)?,
             reminder_filter: optional_tree(self.reminder_filter)?,
+            agent_session_filter: optional_tree(self.agent_session_filter)?,
             properties_filter: optional_tree(self.properties_filter)?,
+            initiative_filter: optional_tree(self.initiative_filter)?,
         })
     }
 }
@@ -414,10 +439,8 @@ enum GraphqlCalendarEventLiteral {
     Attendee(String),
     /// Organizer email.
     Organizer(String),
-    /// Notification done state for the requester.
-    NotificationDone(bool),
-    /// Notification seen state for the requester.
-    NotificationSeen(bool),
+    /// Exact notification state for the requester.
+    NotificationState(GraphqlNotificationState),
 }
 
 impl IntoFilterExpr<CalendarEventLiteral> for GraphqlCalendarEventLiteral {
@@ -436,8 +459,7 @@ impl IntoFilterExpr<CalendarEventLiteral> for GraphqlCalendarEventLiteral {
             Self::EndsAfter(value) => CalendarEventLiteral::EndsAfter(parse_date(value)?),
             Self::Attendee(email) => CalendarEventLiteral::Attendee(email.to_ascii_lowercase()),
             Self::Organizer(email) => CalendarEventLiteral::Organizer(email.to_ascii_lowercase()),
-            Self::NotificationDone(done) => CalendarEventLiteral::NotificationDone(done),
-            Self::NotificationSeen(seen) => CalendarEventLiteral::NotificationSeen(seen),
+            Self::NotificationState(state) => CalendarEventLiteral::NotificationState(state.into()),
         }))
     }
 }
@@ -503,6 +525,13 @@ filter_expr_input!(
     GraphqlReminderLiteral,
     ReminderLiteral,
     "ReminderFilterExpr"
+);
+filter_expr_input!(
+    GraphqlAgentSessionExpr,
+    GraphqlAgentSessionBinaryExpr,
+    GraphqlAgentSessionLiteral,
+    AgentSessionLiteral,
+    "AgentSessionFilterExpr"
 );
 /// GraphQL input representing the email filter ast.
 #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
@@ -597,14 +626,13 @@ enum GraphqlDocumentLiteral {
     Id(ID),
     /// The project id option.
     ProjectId(ID),
-    /// The owner option.
+    /// The owner principal option — a user (`macro|<email>`), a bot
+    /// (`bot|<uuid>`), or a team (a bare hyphenated uuid).
     Owner(String),
     /// The importance option.
     Importance(bool),
-    /// The notification done option.
-    NotificationDone(bool),
-    /// The notification seen option.
-    NotificationSeen(bool),
+    /// Exact notification state for the requester.
+    NotificationState(GraphqlNotificationState),
     /// The include cbm atm nc option.
     IncludeCbmAtmNc(bool),
     /// The sub type option.
@@ -637,10 +665,9 @@ impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
             ),
             Self::Id(id) => DocumentLiteral::Id(parse_id(id, "id")?),
             Self::ProjectId(id) => DocumentLiteral::ProjectId(parse_id(id, "projectId")?),
-            Self::Owner(owner) => DocumentLiteral::Owner(parse_macro_user_id(owner, "owner")?),
+            Self::Owner(owner) => DocumentLiteral::Owner(parse_owner(owner, "owner")?),
             Self::Importance(importance) => DocumentLiteral::Importance(importance),
-            Self::NotificationDone(done) => DocumentLiteral::NotificationDone(done),
-            Self::NotificationSeen(seen) => DocumentLiteral::NotificationSeen(seen),
+            Self::NotificationState(state) => DocumentLiteral::NotificationState(state.into()),
             Self::IncludeCbmAtmNc(include) => DocumentLiteral::IncludeCbmAtmNc(include),
             Self::SubType(sub_type) => DocumentLiteral::SubType(sub_type.into_model()),
             Self::IsEmailAttachment(value) => DocumentLiteral::IsEmailAttachment(value),
@@ -662,6 +689,8 @@ enum GraphqlDocumentSubType {
     Snippet,
     /// The skill option.
     Skill,
+    /// The initiative description option.
+    InitiativeDescription,
 }
 
 impl GraphqlDocumentSubType {
@@ -671,6 +700,7 @@ impl GraphqlDocumentSubType {
             Self::Task => DocumentSubType::Task,
             Self::Snippet => DocumentSubType::Snippet,
             Self::Skill => DocumentSubType::Skill,
+            Self::InitiativeDescription => DocumentSubType::InitiativeDescription,
         }
     }
 }
@@ -684,14 +714,13 @@ enum GraphqlProjectLiteral {
     ProjectId(ID),
     /// The project id self option.
     ProjectIdSelf(ID),
-    /// The owner option.
+    /// The owner principal option — a user (`macro|<email>`), a bot
+    /// (`bot|<uuid>`), or a team (a bare hyphenated uuid).
     Owner(String),
     /// The importance option.
     Importance(bool),
-    /// The notification done option.
-    NotificationDone(bool),
-    /// The notification seen option.
-    NotificationSeen(bool),
+    /// Exact notification state for the requester.
+    NotificationState(GraphqlNotificationState),
     /// The created at option.
     CreatedAt(GraphqlDateLiteral),
     /// The updated at option.
@@ -706,10 +735,9 @@ impl IntoFilterExpr<ProjectLiteral> for GraphqlProjectLiteral {
             Self::ProjectIdSelf(id) => {
                 ProjectLiteral::ProjectIdSelf(parse_id(id, "projectIdSelf")?)
             }
-            Self::Owner(owner) => ProjectLiteral::Owner(parse_macro_user_id(owner, "owner")?),
+            Self::Owner(owner) => ProjectLiteral::Owner(parse_owner(owner, "owner")?),
             Self::Importance(importance) => ProjectLiteral::Importance(importance),
-            Self::NotificationDone(done) => ProjectLiteral::NotificationDone(done),
-            Self::NotificationSeen(seen) => ProjectLiteral::NotificationSeen(seen),
+            Self::NotificationState(state) => ProjectLiteral::NotificationState(state.into()),
             Self::CreatedAt(date) => ProjectLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => ProjectLiteral::UpdatedAt(date.into_ast()?),
         };
@@ -728,14 +756,13 @@ enum GraphqlChatLiteral {
     Role(GraphqlChatRole),
     /// The chat id option.
     ChatId(ID),
-    /// The owner option.
+    /// The owner principal option — a user (`macro|<email>`), a bot
+    /// (`bot|<uuid>`), or a team (a bare hyphenated uuid).
     Owner(String),
     /// The importance option.
     Importance(bool),
-    /// The notification done option.
-    NotificationDone(bool),
-    /// The notification seen option.
-    NotificationSeen(bool),
+    /// Exact notification state for the requester.
+    NotificationState(GraphqlNotificationState),
     /// The created at option.
     CreatedAt(GraphqlDateLiteral),
     /// The updated at option.
@@ -749,10 +776,9 @@ impl IntoFilterExpr<ChatLiteral> for GraphqlChatLiteral {
             Self::ProjectId(id) => ChatLiteral::ProjectId(parse_id(id, "projectId")?),
             Self::Role(role) => ChatLiteral::Role(role.into_model()),
             Self::ChatId(id) => ChatLiteral::ChatId(parse_id(id, "chatId")?),
-            Self::Owner(owner) => ChatLiteral::Owner(parse_macro_user_id(owner, "owner")?),
+            Self::Owner(owner) => ChatLiteral::Owner(parse_owner(owner, "owner")?),
             Self::Importance(importance) => ChatLiteral::Importance(importance),
-            Self::NotificationDone(done) => ChatLiteral::NotificationDone(done),
-            Self::NotificationSeen(seen) => ChatLiteral::NotificationSeen(seen),
+            Self::NotificationState(state) => ChatLiteral::NotificationState(state.into()),
             Self::CreatedAt(date) => ChatLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => ChatLiteral::UpdatedAt(date.into_ast()?),
         };
@@ -805,10 +831,12 @@ enum GraphqlEmailLiteral {
     ProjectId(String),
     /// The importance option.
     Importance(bool),
-    /// The notification done option.
-    NotificationDone(bool),
-    /// The notification seen option.
-    NotificationSeen(bool),
+    /// Exact notification state for the requester.
+    NotificationState(GraphqlNotificationState),
+    /// The email thread read flag, independent of notification state.
+    Read(bool),
+    /// Inbox visibility: false selects archived (done) mail, independently of notifications.
+    InboxVisible(bool),
     /// The shared option.
     Shared(GraphqlSharedEmailFilter),
     /// The calendar only option.
@@ -817,6 +845,8 @@ enum GraphqlEmailLiteral {
     CreatedAt(GraphqlDateLiteral),
     /// The updated at option.
     UpdatedAt(GraphqlDateLiteral),
+    /// The per-viewer viewed at option.
+    ViewedAt(GraphqlDateLiteral),
 }
 
 impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
@@ -831,12 +861,14 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::Owner(id) => EmailLiteral::Owner(parse_id(id, "owner")?),
             Self::ProjectId(id) => EmailLiteral::ProjectId(id),
             Self::Importance(importance) => EmailLiteral::Importance(importance),
-            Self::NotificationDone(done) => EmailLiteral::NotificationDone(done),
-            Self::NotificationSeen(seen) => EmailLiteral::NotificationSeen(seen),
+            Self::NotificationState(state) => EmailLiteral::NotificationState(state.into()),
+            Self::Read(read) => EmailLiteral::Read(read),
+            Self::InboxVisible(visible) => EmailLiteral::InboxVisible(visible),
             Self::Shared(shared) => EmailLiteral::Shared(shared.into_model()),
             Self::CalendarOnly(calendar_only) => EmailLiteral::CalendarOnly(calendar_only),
             Self::CreatedAt(date) => EmailLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => EmailLiteral::UpdatedAt(date.into_ast()?),
+            Self::ViewedAt(date) => EmailLiteral::ViewedAt(date.into_ast()?),
         };
         Ok(Expr::val(literal))
     }
@@ -921,10 +953,8 @@ enum GraphqlChannelLiteral {
     /// active participant; its presence widens the candidate set to team channels
     /// of the user's teams they have not joined.
     IsParticipant(bool),
-    /// The notification done option.
-    NotificationDone(bool),
-    /// The notification seen option.
-    NotificationSeen(bool),
+    /// Exact notification state for the requester.
+    NotificationState(GraphqlNotificationState),
 }
 
 impl IntoFilterExpr<ChannelLiteral> for GraphqlChannelLiteral {
@@ -944,8 +974,7 @@ impl IntoFilterExpr<ChannelLiteral> for GraphqlChannelLiteral {
             }
             Self::Importance(importance) => ChannelLiteral::Importance(importance),
             Self::IsParticipant(is_participant) => ChannelLiteral::IsParticipant(is_participant),
-            Self::NotificationDone(done) => ChannelLiteral::NotificationDone(done),
-            Self::NotificationSeen(seen) => ChannelLiteral::NotificationSeen(seen),
+            Self::NotificationState(state) => ChannelLiteral::NotificationState(state.into()),
         };
         Ok(Expr::val(literal))
     }
@@ -991,10 +1020,8 @@ enum GraphqlChannelThreadLiteral {
     RootSender(String),
     /// The participant option.
     Participant(String),
-    /// The notification done option.
-    NotificationDone(bool),
-    /// The notification seen option.
-    NotificationSeen(bool),
+    /// Exact notification state for the requester.
+    NotificationState(GraphqlNotificationState),
 }
 
 impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
@@ -1009,8 +1036,7 @@ impl IntoFilterExpr<ChannelThreadLiteral> for GraphqlChannelThreadLiteral {
             Self::Participant(participant) => {
                 ChannelThreadLiteral::Participant(parse_macro_user_id(participant, "participant")?)
             }
-            Self::NotificationDone(done) => ChannelThreadLiteral::NotificationDone(done),
-            Self::NotificationSeen(seen) => ChannelThreadLiteral::NotificationSeen(seen),
+            Self::NotificationState(state) => ChannelThreadLiteral::NotificationState(state.into()),
         };
         Ok(Expr::val(literal))
     }
@@ -1114,6 +1140,42 @@ impl IntoFilterExpr<ReminderLiteral> for GraphqlReminderLiteral {
     }
 }
 
+/// GraphQL input representing the agent session literal.
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GraphqlAgentSessionLiteral {
+    /// Opt this query into agent sessions at all. Agent sessions are off by
+    /// default, so without this (or an `id`/`owner`) Soup omits them entirely.
+    /// Must be `true`; there is no literal for excluding agent sessions, that
+    /// is the default.
+    Include(bool),
+    /// The id option.
+    Id(ID),
+    /// The owner principal option — a user (`macro|<email>`), a bot
+    /// (`bot|<uuid>`), or a team (a bare hyphenated uuid).
+    Owner(String),
+}
+
+impl IntoFilterExpr<AgentSessionLiteral> for GraphqlAgentSessionLiteral {
+    /// Convert this value into the expr representation.
+    fn into_expr(self) -> InputResult<Expr<AgentSessionLiteral>> {
+        let literal = match self {
+            // `include: false` is the default, not a literal — accepting it
+            // would opt the query in, the opposite of what was asked.
+            Self::Include(false) => {
+                return Err(InputError::new(
+                    "agent session `include` must be true; omit the filter to exclude agent sessions",
+                ));
+            }
+            Self::Include(true) => AgentSessionLiteral::Include,
+            Self::Id(id) => AgentSessionLiteral::Id(parse_id(id, "id")?),
+            Self::Owner(owner) => AgentSessionLiteral::Owner(parse_owner(owner, "owner")?),
+        };
+        Ok(Expr::val(literal))
+    }
+}
+
 /// GraphQL input representing the crm company literal.
 #[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
 #[derive(Serialize, Deserialize)]
@@ -1149,10 +1211,8 @@ enum GraphqlForeignEntityLiteral {
     ForeignEntitySource(String),
     /// The includes me option.
     IncludesMe(bool),
-    /// The notification done option.
-    NotificationDone(bool),
-    /// The notification seen option.
-    NotificationSeen(bool),
+    /// Exact notification state for the requester.
+    NotificationState(GraphqlNotificationState),
 }
 
 impl IntoFilterExpr<ForeignEntityLiteral> for GraphqlForeignEntityLiteral {
@@ -1168,8 +1228,53 @@ impl IntoFilterExpr<ForeignEntityLiteral> for GraphqlForeignEntityLiteral {
                     "ForeignEntityLiteral.includesMe must be true",
                 ));
             }
-            Self::NotificationDone(done) => ForeignEntityLiteral::NotificationDone(done),
-            Self::NotificationSeen(seen) => ForeignEntityLiteral::NotificationSeen(seen),
+            Self::NotificationState(state) => ForeignEntityLiteral::NotificationState(state.into()),
+        };
+        Ok(Expr::val(literal))
+    }
+}
+
+filter_expr_input!(
+    GraphqlInitiativeExpr,
+    GraphqlInitiativeBinaryExpr,
+    GraphqlInitiativeLiteral,
+    InitiativeLiteral,
+    "InitiativeFilterExpr"
+);
+
+/// GraphQL input for selecting initiatives through Soup.
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GraphqlInitiativeLiteral {
+    /// Opt into initiatives; must be true. Omit the filter to exclude them.
+    Include(bool),
+    /// Match an initiative identifier.
+    Id(ID),
+    /// Match the owning principal.
+    Owner(String),
+    /// Match a case-insensitive substring of the name.
+    NameContains(String),
+    /// Match projects due before this RFC 3339 timestamp.
+    DueBefore(String),
+    /// Match projects due after this RFC 3339 timestamp.
+    DueAfter(String),
+}
+
+impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
+    fn into_expr(self) -> InputResult<Expr<InitiativeLiteral>> {
+        let literal = match self {
+            Self::Include(false) => {
+                return Err(InputError::new(
+                    "initiative `include` must be true; omit the filter to exclude initiatives",
+                ));
+            }
+            Self::Include(true) => InitiativeLiteral::Include,
+            Self::Id(id) => InitiativeLiteral::Id(parse_id(id, "id")?),
+            Self::Owner(owner) => InitiativeLiteral::Owner(parse_owner(owner, "owner")?),
+            Self::NameContains(name) => InitiativeLiteral::NameContains(name),
+            Self::DueBefore(date) => InitiativeLiteral::DueBefore(GraphqlDateLiteral::parse(date)?),
+            Self::DueAfter(date) => InitiativeLiteral::DueAfter(GraphqlDateLiteral::parse(date)?),
         };
         Ok(Expr::val(literal))
     }

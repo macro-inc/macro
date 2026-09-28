@@ -39,7 +39,7 @@ import type { PropertyApiValues } from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, Hotkey, Scroll, ToggleSwitch } from '@ui';
+import { Button, EntityComposer, Scroll, ToggleSwitch } from '@ui';
 import {
   $getRoot,
   $getSelection,
@@ -77,10 +77,19 @@ import {
   saveTaskComposerDraft,
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
+import { EditorSystemMessage } from './EditorSystemMessage';
 import { InlinePropertyValue } from './InlinePropertyValue';
 import { SimilarTasksSection } from './TaskDuplicateList';
 
 type ComposerTagLayoutMode = 'bottom' | 'title';
+
+/**
+ * Wrapper for controls that sit beside the composer title (the inline tags
+ * pill) so they stay centered on the title's *first* line rather than drifting
+ * to the middle of a title that wraps onto several lines. `h-7` matches the
+ * `text-xl/7` line box of {@link ComposeTaskTitleEditor}; keep the two in sync.
+ */
+export const COMPOSER_TITLE_LINE_CLASS = 'flex h-7 shrink-0 items-center';
 
 function composerTitleNavigationPlugin(
   bodyEditor: Accessor<LexicalEditor | undefined>,
@@ -283,7 +292,7 @@ export function ComposeTaskTitleEditor(props: {
     <div class="relative w-full">
       <div
         contentEditable={!props.disabled()}
-        class="ph-no-capture w-full text-xl font-medium outline-none whitespace-pre-wrap wrap-break-word"
+        class="ph-no-capture w-full text-xl/7 font-medium outline-none whitespace-pre-wrap wrap-break-word [&_p]:my-0! [&_p:empty]:min-h-7"
         ref={(el) => {
           props.ref?.(el);
           onElementConnect(el, () => onConnect(el));
@@ -302,7 +311,7 @@ export function ComposeTaskTitleEditor(props: {
         portalScope={props.portalScope}
       />
       <Show when={showPlaceholder()}>
-        <div class="pointer-events-none absolute top-1.5 text-xl font-medium text-ink-placeholder">
+        <div class="pointer-events-none absolute top-0 text-xl/7 font-medium text-ink-placeholder">
           New task
         </div>
       </Show>
@@ -323,6 +332,8 @@ export type ComposeTaskSuccess = {
 };
 
 export interface ComposeTaskProps {
+  /** Replaces how the task is created, e.g. to also add it to a project. */
+  createTask?: typeof createTaskWithProperties;
   onCreateTask?: (title: string, content: string) => void;
   onClose?: () => void;
   initialTitle?: string;
@@ -463,6 +474,16 @@ export function ComposeTask(props: ComposeTaskProps) {
     });
   });
 
+  // A title-mode pill that ends a picker session with no tags left has nothing
+  // to show, so drop it back to the property row instead of leaving an empty
+  // "Tags" chip beside the title. Collapsing on the session end rather than on
+  // the tag removal itself keeps the open picker from unmounting under the user.
+  const handleTitleTagPickerActive = (active: boolean) => {
+    if (active) return;
+    if (composerTags.appliedTags().length > 0) return;
+    setTagLayoutMode('bottom');
+  };
+
   const deleteTitleTagsAtStart = () => {
     if (tagLayoutMode() !== 'title') return false;
     clearComposerTags();
@@ -515,6 +536,14 @@ export function ComposeTask(props: ComposeTaskProps) {
     });
   };
 
+  // A retry keeps how this composer creates tasks, not its one-shot callbacks.
+  const reopenForRetry = () =>
+    popoverSplit({
+      type: 'component',
+      id: 'task-compose',
+      params: { createTask: props.createTask },
+    });
+
   const handleCreateTask = async () => {
     if (isCreating()) return;
 
@@ -549,21 +578,19 @@ export function ComposeTask(props: ComposeTaskProps) {
         propertyValues: structuredClone(unwrap(propertyValues)),
       };
       clearTaskComposerDraft();
-      // Close the dialog immediately
-      splitPanel.handle.close();
-      props.onClose?.();
-      console.log(
-        '[ComposeTask] dispatching onCreateStart, hasHandler=',
-        Boolean(props.onCreateStart)
-      );
-      props.onCreateStart?.({ title: taskTitle, content: taskContent });
-
-      const createdTask = await createTaskWithProperties(
+      const createdTask = await (props.createTask ?? createTaskWithProperties)(
         taskTitle,
         taskContent,
         properties,
         createDefinitions(),
-        (params) => upsertToHistoryMutation.mutate(params)
+        (params) => upsertToHistoryMutation.mutate(params),
+        {
+          onMutate: () => {
+            splitPanel.handle.close();
+            props.onClose?.();
+            props.onCreateStart?.({ title: taskTitle, content: taskContent });
+          },
+        }
       );
 
       setIsCreating(false);
@@ -572,7 +599,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         props.onCreateFailure?.();
         // Restore the draft and re-open so the user can retry
         saveTaskComposerDraft(draftSnapshot);
-        popoverSplit({ type: 'component', id: 'task-compose' });
+        reopenForRetry();
         return;
       }
 
@@ -586,15 +613,18 @@ export function ComposeTask(props: ComposeTaskProps) {
       return;
     }
 
-    resetTitleAndBody();
-    setIsCreating(false);
-
-    const createdTask = await createTaskWithProperties(
+    const createdTask = await (props.createTask ?? createTaskWithProperties)(
       taskTitle,
       taskContent,
       properties,
       createDefinitions(),
-      (params) => upsertToHistoryMutation.mutate(params)
+      (params) => upsertToHistoryMutation.mutate(params),
+      {
+        onMutate: () => {
+          resetTitleAndBody();
+          setIsCreating(false);
+        },
+      }
     );
 
     if (!createdTask) {
@@ -629,20 +659,24 @@ export function ComposeTask(props: ComposeTaskProps) {
     };
     clearTaskComposerDraft();
 
-    splitPanel.handle.close();
-    props.onClose?.();
+    let split: ReturnType<typeof openWithSplit>['split'];
 
-    const split = openWithSplit(
-      { type: 'component', id: 'loading' },
-      { referredFrom: 'launcher', preferNewSplit: true }
-    );
-
-    const createdTask = await createTaskWithProperties(
+    const createdTask = await (props.createTask ?? createTaskWithProperties)(
       taskTitle,
       taskContent,
       properties,
       createDefinitions(),
-      (params) => upsertToHistoryMutation.mutate(params)
+      (params) => upsertToHistoryMutation.mutate(params),
+      {
+        onMutate: () => {
+          splitPanel.handle.close();
+          props.onClose?.();
+          split = openWithSplit(
+            { type: 'component', id: 'loading' },
+            { referredFrom: 'launcher', preferNewSplit: true }
+          ).split;
+        },
+      }
     );
 
     setIsCreating(false);
@@ -650,7 +684,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     if (!createdTask) {
       split?.goBack();
       saveTaskComposerDraft(draftSnapshot);
-      popoverSplit({ type: 'component', id: 'task-compose' });
+      reopenForRetry();
       return;
     }
 
@@ -737,6 +771,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   onMount(() => {
+    splitPanel.handle.setDisplayName('New task');
     const container = containerRef();
     if (container) {
       attachHotkeys(container);
@@ -768,6 +803,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     .withCode()
     .withMedia({ fileDrop: true })
     .withSelectionData()
+    .withFloatingFormatMenu()
     .withHistory()
     .onChange(setContent)
     .onFocusLeave({
@@ -785,12 +821,8 @@ export function ComposeTask(props: ComposeTaskProps) {
     splitPanel.handle.isPopover() ? 'local' : 'block';
 
   return (
-    <div
-      class="portal-scope flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4"
-      tabIndex={-1}
-      ref={setContainerRef}
-    >
-      <div class="flex items-center gap-1">
+    <EntityComposer.Root tabIndex={-1} ref={setContainerRef}>
+      <EntityComposer.Header>
         <div class="flex-1 flex items-center">
           <Show when={splitPanel?.handle.isPopover()}>
             <Button
@@ -798,7 +830,7 @@ export function ComposeTask(props: ComposeTaskProps) {
               disabled={isCreating()}
               tabIndex={-1}
               tooltip="Continue editing in split"
-              size="icon-sm"
+              size="icon-composer"
             >
               <ArrowsOutIcon />
             </Button>
@@ -822,20 +854,23 @@ export function ComposeTask(props: ComposeTaskProps) {
             onMouseDown={handleClose}
             tabIndex={-1}
             tooltip="Close"
-            size="icon-sm"
+            size="icon-composer"
           >
             <XIcon />
           </Button>
         </Show>
-      </div>
-      <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div class="shrink-0 flex gap-2 items-center px-2 mb-4">
+      </EntityComposer.Header>
+      <EntityComposer.Main>
+        <EntityComposer.Title>
           <Show when={tagLayoutMode() === 'title'}>
-            <InlineTagsPill
-              docTags={composerTags}
-              showPlaceholder
-              class="shrink-0"
-            />
+            <div class={COMPOSER_TITLE_LINE_CLASS}>
+              <InlineTagsPill
+                docTags={composerTags}
+                showPlaceholder
+                class="shrink-0"
+                onActiveChange={handleTitleTagPickerActive}
+              />
+            </div>
           </Show>
           <ComposeTaskTitleEditor
             value={title}
@@ -858,9 +893,9 @@ export function ComposeTask(props: ComposeTaskProps) {
               titleEditorRoot = el;
             }}
           />
-        </div>
+        </EntityComposer.Title>
 
-        <div class="overflow-auto scrollbar-hidden mb-6 min-h-24 grow px-2">
+        <EntityComposer.Body>
           <Scroll>
             <MarkdownShell
               config={editorConfig}
@@ -874,7 +909,7 @@ export function ComposeTask(props: ComposeTaskProps) {
               portalScope={portalScope()}
             />
           </Scroll>
-        </div>
+        </EntityComposer.Body>
 
         <Suspense fallback={<div class="h-7" />}>
           <PropertiesProvider
@@ -886,8 +921,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             onPropertyDeleted={() => {}}
             saveHandler={saveHandler}
           >
-            <div
-              class="flex min-h-7 flex-row flex-wrap items-center gap-2 text-sm m-px"
+            <EntityComposer.Properties
               on:keydown={(e) => {
                 const target = e.target as HTMLElement;
                 const container = e.currentTarget;
@@ -930,20 +964,22 @@ export function ComposeTask(props: ComposeTaskProps) {
               <Show when={tagLayoutMode() === 'bottom'}>
                 <InlineTagsPill docTags={composerTags} showPlaceholder />
               </Show>
-            </div>
+            </EntityComposer.Properties>
             <Modals />
           </PropertiesProvider>
         </Suspense>
-      </div>
+      </EntityComposer.Main>
 
       <Show when={errorMessage()}>
         <div class="w-full border-b border-edge-muted" />
         <div class="p-2">
-          <div class="text-sm text-failure-ink px-3 py-2">{errorMessage()}</div>
+          <EditorSystemMessage variant="error">
+            {errorMessage()}
+          </EditorSystemMessage>
         </div>
       </Show>
 
-      <div class="shrink-0 flex justify-between items-end gap-2">
+      <EntityComposer.Footer>
         <input
           ref={(el) => {
             attachInputRef = el;
@@ -958,7 +994,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           onMouseDown={() => attachInputRef?.click()}
           tabIndex={-1}
           tooltip="Attach image or video"
-          size="icon-sm"
+          size="icon-composer"
         >
           <PaperclipIcon />
         </Button>
@@ -969,24 +1005,21 @@ export function ComposeTask(props: ComposeTaskProps) {
             checked={createMore()}
             label="Create More"
           />
-          <Button
+          <EntityComposer.Submit
             onClick={handleCreateTask}
             disabled={title().trim().length === 0 || isCreating()}
-            variant={title().trim().length === 0 ? 'ghost' : 'accent'}
-            depth={3}
-            class="gap-3 rounded-lg border-0"
+            hasContent={title().trim().length > 0}
           >
             Create Task
-            <Hotkey shortcut="cmd+enter" theme="current" />
-          </Button>
+          </EntityComposer.Submit>
         </div>
-      </div>
+      </EntityComposer.Footer>
 
       <SimilarTasksSection
         title={title}
         content={content}
         onOpenTask={handleOpenSimilarTask}
       />
-    </div>
+    </EntityComposer.Root>
   );
 }

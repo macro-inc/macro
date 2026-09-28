@@ -82,6 +82,8 @@ export async function createMarkdownFile(
 }
 
 type CreateTaskArgs = {
+  /** Composite mutations revalidate after their final write. */
+  revalidateSoup?: boolean;
   title?: string;
   content?: string;
   projectId?: string;
@@ -165,10 +167,11 @@ async function createTaskResponse(args?: CreateTaskArgs) {
     fileType: 'md',
     subType: { type: 'task', is_completed: false },
   });
-  refetchSoupEntity(documentId, 'document', {
-    ownTouch: true,
-    refreshGraphql: true,
-  });
+  if (args?.revalidateSoup !== false)
+    refetchSoupEntity(documentId, 'document', {
+      ownTouch: true,
+      refreshGraphql: true,
+    });
 
   analytics.track('create_entity', {
     entityType: 'task',
@@ -299,8 +302,10 @@ export async function createCodeFileFromText({
   language,
   title,
   source,
+  projectId,
 }: {
   code: string;
+  projectId?: string;
   title?: string;
   extension?: CodeFileExtension;
   language?: string;
@@ -344,6 +349,7 @@ export async function createCodeFileFromText({
   const mimeType = 'text/plain';
 
   const maybeCode = await storageServiceClient.createDocument({
+    projectId,
     documentName: title ?? 'New Code File',
     fileType: finalExtension,
     sha: sha,

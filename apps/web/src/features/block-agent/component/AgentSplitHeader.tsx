@@ -1,48 +1,56 @@
+import { ChangesToggle } from '@app/features/agent-changes/agent-changes';
+import { useBlockEntityCommands } from '@app/features/next-soup/actions/use-block-entity-commands';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import { toast } from '@core/component/Toast/Toast';
-import { useUserId } from '@core/context/user';
+import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
+import { Permissions } from '@core/component/SharePermissions';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
-import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
+import { openExternalUrl } from '@core/util/url';
+import type { AgentSessionEntity } from '@entity';
+import ShareIcon from '@icon/share.svg';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
-import LinkIcon from '@phosphor/link.svg';
-import TreeStructure from '@phosphor/tree-structure.svg';
-import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { AgentPullRequestChip } from './AgentPullRequestChip';
 import {
-  ORIGIN_THREAD_DRAWER_ID,
-  sessionOriginThread,
-} from '../context/origin-thread';
+  harnessTitle,
+  sessionHarnessTitle,
+  sessionRepositoryUrl,
+} from './compose-agent-session-options';
 
-/** 'claude-code' → 'Claude Code'; the fallback when the fold has no title. */
-export function harnessTitle(harness: string | undefined): string {
-  if (!harness) return 'Agent session';
-  return harness
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+export { harnessTitle, sessionRepositoryUrl };
+
+/** Shared title precedence for standalone and workspace agent sessions. */
+export function agentSessionTitle(
+  session: AgentSessionResponse | undefined,
+  transcriptTitle?: string | null
+): string {
+  const name = session?.name;
+  if (name && name !== 'Agent Session') return name;
+  return transcriptTitle ?? name ?? sessionHarnessTitle(session ?? {});
 }
 
 /**
  * Agent-session identity in the split header chrome plus the standard split
- * toolbar, matching the PR block's shape for non-document blocks: static
- * label (names the split tab), copy-link tool, and a file menu with the
- * session's repository.
+ * toolbar: static label, shared entity actions, the session's pull request
+ * once one exists, and external-provider links.
+ *
+ * Rename lives on the title menu (channel / automation), not on a tap of
+ * the name — `StaticSplitLabel` without `onRename` so a touch tap opens
+ * the dropdown instead of an inline editor.
  */
 export function AgentSplitHeader(props: {
   session: AgentSessionResponse | undefined;
@@ -52,47 +60,62 @@ export function AgentSplitHeader(props: {
   // The session, not `useBlockId()`: a block created from the launcher mounts
   // against a placeholder and keeps reporting it (see `Block.tsx`), so the
   // block id is the one thing here that is not a shareable session id.
-  const { sessionId } = useAgentSession();
-  const userId = useUserId();
-  const title = () => {
-    const persistedName = props.session?.name;
-    if (persistedName && persistedName !== 'Agent Session')
-      return persistedName;
-    return props.title ?? persistedName ?? harnessTitle(props.session?.harness);
-  };
-  const originThreadDrawer = useDrawerControl(ORIGIN_THREAD_DRAWER_ID);
+  const { sessionId, metadata, userId } = useAgentSession();
+  const title = () => agentSessionTitle(props.session, props.title);
+  const permissions = () =>
+    userId() && props.session?.ownerId === userId()
+      ? Permissions.OWNER
+      : props.session?.canEdit
+        ? Permissions.CAN_EDIT
+        : Permissions.CAN_VIEW;
 
-  const rename = async (name: string) => {
+  const entity = (): AgentSessionEntity | undefined => {
+    const session = props.session;
     const id = sessionId();
-    if (!id) return;
-    const result = await agentHarnessServiceClient.rename(id, name);
-    if (result.isErr()) {
-      toast.failure('Failed to rename agent session');
-      return;
-    }
-    handleAgentSessionRenamed({ agentSessionId: id, name });
+    if (!session || !id) return undefined;
+    return {
+      type: 'agent_session',
+      id,
+      name: title(),
+      ownerId: session.ownerId,
+      botId: session.botId,
+      status:
+        session.status.kind === 'event'
+          ? session.status.event
+          : session.status.kind,
+    };
   };
+  useBlockEntityCommands({ resolveEntity: entity });
+  const openShare = useShareModal(() => {
+    const session = entity();
+    if (!session) return;
+    return {
+      id: session.id,
+      name: title(),
+      owner: session.ownerId,
+      itemType: 'agent_session',
+      blockAlias: 'agent',
+      userPermissions: permissions(),
+    };
+  });
 
-  const copyLink = async () => {
-    const id = sessionId();
-    if (!id) return;
-    await navigator.clipboard.writeText(
-      buildSimpleEntityUrl({ type: 'agent', id })
-    );
-    toast.success('Link copied to clipboard');
-  };
+  const shareTools: BlockTool[] = [
+    {
+      label: 'Share',
+      icon: ShareIcon,
+      action: openShare,
+      condition: () => Boolean(entity()),
+      buttonComponent: () => (
+        <ShareTrigger onClick={openShare} id={sessionId()} />
+      ),
+    },
+  ];
 
   const tools: BlockTool[] = [
     {
-      label: 'Discussion Thread',
-      icon: TreeStructure,
-      action: originThreadDrawer.toggle,
-      isActive: originThreadDrawer.isOpen,
-      condition: () => sessionOriginThread(props.session) !== undefined,
-    },
-    {
       label: () => {
         const provider = props.session?.external?.provider;
+        if (provider === 'claude-cloud') return 'Open in Claude';
         if (!provider) return 'Open externally';
         return `Open in ${provider.charAt(0).toUpperCase()}${provider.slice(1)}`;
       },
@@ -103,34 +126,33 @@ export function AgentSplitHeader(props: {
       },
       condition: () => Boolean(props.session?.external?.url),
     },
-    {
-      label: 'Copy link',
-      icon: LinkIcon,
-      action: copyLink,
-      // Nothing to link to until the session exists.
-      condition: () => sessionId() !== undefined,
-    },
   ];
 
-  const ops: FileOperation[] = [
-    {
-      label: 'Open repository',
-      icon: GitBranch,
-      action: () => {
-        const url = props.session?.repoUrl;
-        if (url) openExternalUrl(url);
-      },
+  const openRepository: FileOperation = {
+    label: 'Open repository',
+    icon: GitBranch,
+    action: () => {
+      const url = sessionRepositoryUrl(props.session);
+      if (url) openExternalUrl(url);
     },
+  };
+  const ops = (): FileOperation[] => [
+    { op: 'rename' },
+    { op: 'delete' },
+    ...(sessionRepositoryUrl(props.session) ? [openRepository] : []),
   ];
 
   return (
     <>
       <SplitHeaderLeft>
         <StaticSplitLabel
-          iconType="agent"
+          icon={
+            <ProviderIcon
+              model={metadata()?.model ?? props.session?.model}
+              class="size-4 shrink-0"
+            />
+          }
           label={title()}
-          onRename={props.session?.ownerId === userId() ? rename : undefined}
-          renameAriaLabel="Agent session name"
         />
       </SplitHeaderLeft>
 
@@ -138,9 +160,13 @@ export function AgentSplitHeader(props: {
           would push non-Share tools onto a second toolbar row. Markup
           mirrors its own header-tools branch; on mobile the tools collapse
           into the title menu via `menuTools` below instead. */}
-      <Show when={!isMobile()}>
-        <SplitHeaderRight>
-          <div class="order-[1000] flex items-center gap-1">
+      <SplitHeaderRight>
+        <div class="order-[1000] flex items-center gap-1.5">
+          <Show when={props.session?.pullRequestUrl}>
+            {(url) => <AgentPullRequestChip url={url()} />}
+          </Show>
+          <Show when={!isMobile()}>
+            <ChangesToggle />
             <For each={tools}>
               {(tool) => (
                 <Show when={!tool.condition || tool.condition()}>
@@ -148,16 +174,18 @@ export function AgentSplitHeader(props: {
                 </Show>
               )}
             </For>
-          </div>
-        </SplitHeaderRight>
-      </Show>
+          </Show>
+        </div>
+      </SplitHeaderRight>
 
       <ResponsiveBlockToolbar
-        tools={[]}
+        tools={shareTools}
         menuTools={tools}
-        ops={ops}
+        ops={entity() ? ops() : []}
         id={sessionId() ?? ''}
-        itemType="foreign"
+        itemType="agent_session"
+        entity={entity()}
+        permissions={permissions()}
         name={title()}
       />
     </>

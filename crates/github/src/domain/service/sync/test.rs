@@ -15,9 +15,7 @@ use document_sub_type::DocumentSubType;
 use documents::domain::models::EditDocumentServiceArgs;
 use documents::domain::{
     content::{DocumentContent, DocumentContentLocation},
-    models::{
-        CreateDocumentRepoArgs, DocumentError, ImportEmailAttachmentRepoArgs, LocationQueryParams,
-    },
+    models::{DocumentError, ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument},
     ports::DocumentService,
     response::{
         CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
@@ -37,6 +35,7 @@ use foreign_entity::domain::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentBasic, DocumentMetadata};
 use model_entity::Entity;
+use model_owner::CreationPrincipal;
 use models_permissions::share_permission::access_level::AccessLevel;
 use notification::domain::{
     models::{Notification, NotificationResult, SendNotificationRequest},
@@ -108,7 +107,7 @@ impl StubDocumentService {
         DocumentMetadata {
             document_id: document_id.to_string(),
             document_version_id: 1,
-            owner: MacroUserIdStr::try_from_email("test@example.com").unwrap(),
+            owner: "macro|test@example.com".to_string().try_into().unwrap(),
             document_name: "My Task".to_string(),
             file_type: Some("md".to_string()),
             sha: None,
@@ -211,8 +210,8 @@ impl DocumentService for StubDocumentService {
     }
     async fn create_document(
         &self,
-        _user_id: MacroUserIdStr<'static>,
-        _args: CreateDocumentRepoArgs,
+        _principal: &CreationPrincipal,
+        _document: NewDocument,
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         unimplemented!()
@@ -220,7 +219,6 @@ impl DocumentService for StubDocumentService {
 
     async fn import_email_attachment(
         &self,
-        _user_id: MacroUserIdStr<'static>,
         _args: ImportEmailAttachmentRepoArgs,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         unimplemented!()
@@ -272,7 +270,7 @@ impl DocumentService for StubDocumentService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         _document_context: DocumentBasic,
-        _user_id: MacroUserIdStr<'static>,
+        _principal: &CreationPrincipal,
         _document_name: String,
         _query_version_id: Option<i64>,
         _sync_version_id: Option<model::sync_service::SyncServiceVersionID>,
@@ -280,16 +278,9 @@ impl DocumentService for StubDocumentService {
         unimplemented!()
     }
 
-    async fn get_document_comments(
-        &self,
-        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<documents::domain::models::CommentThread>, DocumentError> {
-        unimplemented!()
-    }
-
     async fn handle_task_properties(
         &self,
-        _user_id: MacroUserIdStr<'static>,
+        _principal: &CreationPrincipal,
         _document_id: &str,
         _request: &documents::domain::models::CreateTaskRequest,
     ) -> Result<(), DocumentError> {
@@ -578,6 +569,26 @@ impl GithubSyncRepo for StubSyncRepo {
             .unwrap_or_default();
         member_ids.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
         Ok(member_ids)
+    }
+
+    async fn get_installation_ids_for_sources(
+        &self,
+        macro_id: &str,
+        team_ids: &[uuid::Uuid],
+    ) -> Result<Vec<String>, Self::Err> {
+        let rows = self.installation_source_rows.lock().unwrap();
+        let mut installation_ids: Vec<String> = rows
+            .iter()
+            .filter(|(_, sources)| {
+                sources.iter().any(|source| match source {
+                    GithubAppInstallationSource::User(user) => user == macro_id,
+                    GithubAppInstallationSource::Team(team) => team_ids.contains(team),
+                })
+            })
+            .map(|(installation_id, _)| installation_id.clone())
+            .collect();
+        installation_ids.sort();
+        Ok(installation_ids)
     }
 
     async fn get_installation_sources(
@@ -924,6 +935,15 @@ impl GithubSyncClient for StubSyncClient {
 
         Ok(self.open_pull_requests.lock().unwrap().clone())
     }
+
+    async fn list_repository_branches(
+        &self,
+        _access_token: &str,
+        _owner: &str,
+        _repository: &str,
+    ) -> Result<Vec<String>, GithubError> {
+        unimplemented!("the sync service does not list repository branches")
+    }
 }
 
 fn foreign_entity_id_from_receipt(
@@ -1156,6 +1176,7 @@ type TestGithubSyncService = GithubSyncServiceImpl<
     StubSyncClient,
     StubForeignEntityService,
     StubNotificationIngress,
+    StubRealtime,
 >;
 type TestServiceWithForeignEntityService = (TestGithubSyncService, Arc<StubForeignEntityService>);
 
@@ -1189,6 +1210,7 @@ fn make_sync_service_with_repo_and_notification_ingress(
         notification_ingress,
         repo,
         StubSyncClient::new(),
+        StubRealtime::default(),
     )
 }
 
@@ -1211,6 +1233,7 @@ fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocum
         StubNotificationIngress::new(),
         StubSyncRepo::new(),
         StubSyncClient::new(),
+        StubRealtime::default(),
     );
     (service, doc_service)
 }
@@ -5776,4 +5799,112 @@ async fn repeated_installation_association_is_idempotent() {
             installation_setup_user().into()
         )]
     );
+}
+
+#[derive(Default)]
+struct StubRealtime {
+    fail_sends: bool,
+    events: std::sync::Mutex<Vec<(Vec<MacroUserIdStr<'static>>, ForeignEntity)>>,
+}
+
+impl crate::domain::ports::GithubSyncRealtime for StubRealtime {
+    async fn publish_pull_request(
+        &self,
+        recipients: &[MacroUserIdStr<'static>],
+        entity: &ForeignEntity,
+    ) -> Result<(), GithubError> {
+        if self.fail_sends {
+            return Err(GithubError::Internal(anyhow::anyhow!(
+                "gateway unavailable"
+            )));
+        }
+        self.events
+            .lock()
+            .unwrap()
+            .push((recipients.to_vec(), entity.clone()));
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn realtime_publishes_saved_entities_only_to_their_source_members() {
+    let team = macro_uuid::generate_uuid_v7();
+    let repo = StubSyncRepo::new()
+        .with_team_members(team, vec!["macro|actor@user.com", "macro|reader@user.com"]);
+    let service = make_sync_service_with_repo(repo);
+    let pull_request: EnrichedGithubPullRequest = serde_json::from_value(
+        expected_pull_request_metadata("PR", GithubPullRequestStatus::Open, None, None),
+    )
+    .unwrap();
+    let sources = vec![
+        GithubAppInstallationSource::Team(team),
+        GithubAppInstallationSource::User("macro|owner@user.com".to_string()),
+    ];
+    service
+        .upsert_enriched_pull_request_foreign_entities(pull_request.clone(), &sources)
+        .await;
+    let stored = service.foreign_entity_service.foreign_entities();
+    {
+        let events = service.realtime.events.lock().unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].1, stored[0]);
+        assert_eq!(events[1].1, stored[1]);
+        let recipients: HashSet<_> = events[0].0.iter().map(|id| id.as_ref()).collect();
+        assert_eq!(
+            recipients,
+            HashSet::from(["macro|actor@user.com", "macro|reader@user.com"])
+        );
+        assert_eq!(
+            events[1].0.iter().map(|id| id.as_ref()).collect::<Vec<_>>(),
+            vec!["macro|owner@user.com"]
+        );
+    }
+    let mut merged = pull_request;
+    merged.status = Some(GithubPullRequestStatus::Merged);
+    service
+        .upsert_enriched_pull_request_foreign_entities(merged, &sources)
+        .await;
+    let events = service.realtime.events.lock().unwrap();
+    assert_eq!(events.len(), 4);
+    assert_eq!(events[2].1.id, stored[0].id);
+    assert_eq!(events[2].1.metadata["status"], "merged");
+}
+
+#[tokio::test]
+async fn realtime_does_not_publish_to_an_empty_or_invalid_source() {
+    let service = make_sync_service();
+    let pull_request: EnrichedGithubPullRequest = serde_json::from_value(
+        expected_pull_request_metadata("PR", GithubPullRequestStatus::Open, None, None),
+    )
+    .unwrap();
+    service
+        .upsert_enriched_pull_request_foreign_entities(
+            pull_request,
+            &[
+                GithubAppInstallationSource::Team(macro_uuid::generate_uuid_v7()),
+                GithubAppInstallationSource::User("invalid".to_string()),
+            ],
+        )
+        .await;
+    assert!(service.realtime.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn realtime_delivery_failure_keeps_the_saved_mapping() {
+    let mut service = make_sync_service();
+    service.realtime.fail_sends = true;
+    let pull_request: EnrichedGithubPullRequest = serde_json::from_value(
+        expected_pull_request_metadata("PR", GithubPullRequestStatus::Open, None, None),
+    )
+    .unwrap();
+    let upserts = service
+        .upsert_enriched_pull_request_foreign_entities(
+            pull_request,
+            &[GithubAppInstallationSource::User(
+                "macro|owner@user.com".to_string(),
+            )],
+        )
+        .await;
+    assert_eq!(upserts.len(), 1);
+    assert_eq!(service.foreign_entity_service.foreign_entities().len(), 1);
 }

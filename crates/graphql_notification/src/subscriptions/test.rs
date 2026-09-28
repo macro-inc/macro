@@ -73,7 +73,7 @@ fn task_assignment(
         notification_event_type: "task_assigned".to_string(),
         entity: EntityType::Document.with_entity_string("task-1".to_string()),
         sent: true,
-        done: false,
+        state: notification::domain::models::NotificationState::Unseen,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),
@@ -154,7 +154,7 @@ async fn notification_updates_streams_updated_notifications() {
     );
     let mut responses = Box::pin(schema.execute_stream(
         async_graphql::Request::new(
-            "subscription { notificationUpdates { __typename ... on GraphqlUpdatedNotification { notification { id done viewedAt } } } }",
+            "subscription { notificationUpdates { __typename ... on GraphqlUpdatedNotification { notification { id state viewedAt } } } }",
         )
         .data(user_id.clone()),
     ));
@@ -175,7 +175,7 @@ async fn notification_updates_streams_updated_notifications() {
     let update = &data["notificationUpdates"];
     assert_eq!(update["__typename"], "GraphqlUpdatedNotification");
     assert_eq!(update["notification"]["id"], notification_id.to_string());
-    assert_eq!(update["notification"]["done"], false);
+    assert_eq!(update["notification"]["state"], "UNSEEN");
     assert_eq!(update["notification"]["viewedAt"], serde_json::Value::Null);
 }
 

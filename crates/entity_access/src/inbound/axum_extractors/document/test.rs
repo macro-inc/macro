@@ -29,6 +29,7 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::DocumentBasic;
+use model_owner::Owner;
 use model_user::UserContext;
 use rootcause::Report;
 
@@ -166,7 +167,7 @@ fn document(deleted: bool) -> DocumentBasic {
     let mut document = DocumentBasic {
         document_id: DOCUMENT_ID.to_string(),
         document_name: "Test document".to_string(),
-        owner: MacroUserIdStr::parse_from_str(OWNER_ID).expect("owner id should be valid"),
+        owner: Owner::from_principal_str(OWNER_ID).expect("owner id should be valid"),
         file_type: None,
         sub_type: None,
         branched_from_id: None,
@@ -274,6 +275,54 @@ async fn authenticated_owner_bypasses_access_lookup() {
         }
     ));
     assert!(state.entity_access.calls().is_empty());
+}
+
+#[tokio::test]
+async fn bot_owner_does_not_take_user_owner_fast_path() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let mut document = document(false);
+    document.owner = Owner::from_principal_str("bot|00000000-0000-0000-0000-00000000a1a1")
+        .expect("bot owner should be valid");
+
+    let extracted = extract::<EditAccessLevel>(request(Some("valid"), document), &state)
+        .await
+        .expect("non-owner should fall through to entity_access");
+
+    assert!(matches!(
+        extracted.entity_access_receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    ));
+    assert_eq!(state.entity_access.calls().len(), 1);
+    assert_eq!(
+        state.entity_access.calls()[0].user_id.as_deref(),
+        Some(USER_ID)
+    );
+}
+
+#[tokio::test]
+async fn team_owner_does_not_take_user_owner_fast_path() {
+    let state = TestState::new(Some(AccessLevel::View));
+    let mut document = document(false);
+    document.owner = Owner::from_principal_str("01234567-89ab-cdef-0123-456789abcdef")
+        .expect("team owner should be valid");
+
+    let extracted = extract::<ViewAccessLevel>(request(Some("valid"), document), &state)
+        .await
+        .expect("non-owner should fall through to entity_access");
+
+    assert!(matches!(
+        extracted.entity_access_receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    ));
+    assert_eq!(state.entity_access.calls().len(), 1);
+    assert_eq!(
+        state.entity_access.calls()[0].user_id.as_deref(),
+        Some(USER_ID)
+    );
 }
 
 #[tokio::test]

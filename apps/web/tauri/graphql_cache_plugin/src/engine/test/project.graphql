@@ -1,0 +1,20 @@
+query NativeProject {
+  user {
+    id
+    soup(input: { initial: { limit: 100 } }) {
+      items {
+        __typename
+        id
+        cacheProjection
+        ... on GraphqlSoupProject {
+          ownerId
+          parentId
+          createdAt
+          updatedAt
+          notifications { __typename id }
+          properties { id }
+        }
+      }
+    }
+  }
+}

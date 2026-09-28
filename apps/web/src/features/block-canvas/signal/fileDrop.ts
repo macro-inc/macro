@@ -4,10 +4,7 @@ import type {
   CanvasEntityStyle,
   ShapeType,
 } from '@block-canvas/model/CanvasModel';
-import {
-  highestOrderSignal,
-  useCanvasNodes,
-} from '@block-canvas/store/canvasData';
+import { useCanvasNodes } from '@block-canvas/store/canvasData';
 import { useRenderState } from '@block-canvas/store/RenderState';
 import {
   parseScale,
@@ -15,25 +12,23 @@ import {
   svgEntityStyles,
 } from '@block-canvas/util/svg';
 import { type Vector2, vec2 } from '@block-canvas/util/vector2';
-import { createBlockSignal } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { CANVAS_SVG_IMPORT } from '@core/constant/featureFlags';
 import { uploadFile } from '@core/util/upload';
 import { nanoid } from 'nanoid';
 import { createSignal } from 'solid-js';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import { getTextNodeHeight } from '../util/style';
 import { useCachedStyle } from './cachedStyle';
 import { useCanvasHistory } from './canvasHistory';
 import { useToolManager } from './toolManager';
-
-export const canvasDraggingSignal = createBlockSignal(false);
 
 export const useCanvasFileDrop = () => {
   const [fileDropPos, setFileDropPos] = createSignal(vec2(0, 0));
   const { clientToCanvas } = useRenderState();
   const nodes = useCanvasNodes();
   const { setSelectedTool } = useToolManager();
-  const highestOrder = highestOrderSignal.get;
+  const highestOrder = useCanvasDocument().state.signals.highestOrder[0];
   const history = useCanvasHistory();
 
   const cachedStyle = useCachedStyle();

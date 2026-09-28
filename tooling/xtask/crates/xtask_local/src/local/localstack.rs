@@ -70,40 +70,49 @@ async fn provision_async(url: &str) -> Result<()> {
 /// stops one user's ciphertext decrypting under another user's id is live
 /// locally too, and a local stack is a fair test of it.
 async fn create_kms_keys(kms: &aws_sdk_kms::Client) -> Result<()> {
-    let alias = resources::CURSOR_API_KEY_KMS_ALIAS;
     let existing = kms
         .list_aliases()
         .send()
         .await
         .context("listing kms aliases")?;
-    if existing
-        .aliases()
-        .iter()
-        .any(|entry| entry.alias_name() == Some(alias))
-    {
-        return Ok(());
-    }
-
-    let key = kms
-        .create_key()
-        .description("Cursor API key encryption key (local)")
-        .send()
-        .await
-        .context("creating the cursor api key kms key")?;
-    let key_id = key
-        .key_metadata()
-        .map(|metadata| metadata.key_id())
-        .context("kms create_key returned no key metadata")?;
-
-    ignore_exists(
-        kms.create_alias()
-            .alias_name(alias)
-            .target_key_id(key_id)
+    for (alias, description) in [
+        (
+            resources::CURSOR_API_KEY_KMS_ALIAS,
+            "Cursor API key encryption key (local)",
+        ),
+        (
+            resources::CODEX_OAUTH_KMS_ALIAS,
+            "ChatGPT OAuth envelope encryption key (local)",
+        ),
+    ] {
+        if existing
+            .aliases()
+            .iter()
+            .any(|entry| entry.alias_name() == Some(alias))
+        {
+            continue;
+        }
+        let key = kms
+            .create_key()
+            .description(description)
             .send()
             .await
-            .map(|_| ()),
-        &format!("kms alias {alias}"),
-    )
+            .context("creating local kms key")?;
+        let key_id = key
+            .key_metadata()
+            .map(|metadata| metadata.key_id())
+            .context("kms create_key returned no key metadata")?;
+        ignore_exists(
+            kms.create_alias()
+                .alias_name(alias)
+                .target_key_id(key_id)
+                .send()
+                .await
+                .map(|_| ()),
+            &format!("kms alias {alias}"),
+        )?;
+    }
+    Ok(())
 }
 
 async fn create_queues(sqs: &aws_sdk_sqs::Client) -> Result<()> {

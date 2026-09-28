@@ -8,7 +8,7 @@ use notification::domain::service::NotificationIngress;
 
 use crate::domain::{
     models::{EnrichedGithubPullRequest, ValidatedGithubWebhookEvent},
-    ports::{GithubSyncClient, GithubSyncRepo},
+    ports::{GithubSyncClient, GithubSyncRealtime, GithubSyncRepo},
 };
 
 use super::{GithubSyncServiceImpl, PullRequestForeignEntityUpsert};
@@ -29,7 +29,8 @@ impl<
     C: GithubSyncClient,
     F: ForeignEntityService,
     N: NotificationIngress,
-> GithubSyncServiceImpl<D, R, C, F, N>
+    P: GithubSyncRealtime,
+> GithubSyncServiceImpl<D, R, C, F, N, P>
 {
     /// Notify pull request participants when an associated GitHub check run finishes.
     ///

@@ -65,14 +65,6 @@ pub trait EntityMutationService: Send + Sync + 'static {
         actor: EntityMutationActor,
         requests: Vec<DuplicateEntityRequest>,
     ) -> impl Future<Output = Vec<MutateEntitiesResult>> + Send;
-
-    /// Add or remove an entity from the actor's favorites.
-    fn set_favorite(
-        &self,
-        actor: EntityMutationActor,
-        entity: Entity<'static>,
-        favorite: bool,
-    ) -> impl Future<Output = MutateEntitiesResult> + Send;
 }
 
 /// Schema-only implementation used when no mutation services are wired.
@@ -152,16 +144,5 @@ impl EntityMutationService for UnavailableEntityMutationService {
             "duplication",
             requests.into_iter().map(|request| request.entity),
         )
-    }
-
-    async fn set_favorite(
-        &self,
-        _actor: EntityMutationActor,
-        entity: Entity<'static>,
-        _favorite: bool,
-    ) -> MutateEntitiesResult {
-        Err(EntityMutationErrorCode::unsupported(
-            report!(entity).attach("favorites"),
-        ))
     }
 }

@@ -91,6 +91,22 @@ where
             return Err(error);
         }
 
+        // The delivered alarm is what puts the event into the owner's inbox,
+        // and recency-sorted listings position it by this timestamp. Non-fatal:
+        // a stale sort position is no reason to fail (and redeliver) a
+        // notification that already went out.
+        if let Err(error) = self
+            .repo
+            .record_reminder_fired(due.firing.event_id, now)
+            .await
+        {
+            tracing::error!(
+                error = ?error,
+                event_id = %due.firing.event_id,
+                "failed to record a calendar reminder delivery time; the event keeps its previous sort position",
+            );
+        }
+
         self.repo.complete_reminder_delivery(&due.firing).await?;
         Ok(CalendarReminderDeliveryOutcome::Delivered)
     }

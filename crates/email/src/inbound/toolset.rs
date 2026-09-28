@@ -3,6 +3,7 @@
 mod get_thread;
 mod list_inboxes;
 mod list_labels;
+mod send_confirmed_email;
 mod send_email;
 mod set_sender_policy;
 mod update_thread_labels;
@@ -15,6 +16,8 @@ use crate::domain::{
     ports::{EmailService, GmailTokenProvider},
 };
 use ai_toolset::{AsyncToolCollection, ToolCallError};
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -22,6 +25,7 @@ use std::sync::Arc;
 pub use get_thread::{GetThread, GetThreadResponse};
 pub use list_inboxes::{ListInboxes, ListInboxesResponse, ToolInbox};
 pub use list_labels::{ListLabels, ListLabelsResponse, ToolLabel};
+pub use send_confirmed_email::SendConfirmedEmail;
 pub use send_email::{SendEmail, SendEmailResponse};
 pub use set_sender_policy::{SetSenderPolicy, SetSenderPolicyResponse, ToolSenderPolicy};
 pub use update_thread_labels::{UpdateThreadLabels, UpdateThreadLabelsResponse};
@@ -94,6 +98,8 @@ pub struct EmailToolContext<
     pub token_provider: Arc<G>,
     /// The entity access service for verifying thread access.
     pub entity_access_service: Arc<E>,
+    /// Renders model-authored markdown into the HTML an email body carries.
+    pub lexical_client: Arc<lexical_client::LexicalClient>,
 }
 
 impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> Clone
@@ -104,17 +110,24 @@ impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> Clone
             service: self.service.clone(),
             token_provider: self.token_provider.clone(),
             entity_access_service: self.entity_access_service.clone(),
+            lexical_client: self.lexical_client.clone(),
         }
     }
 }
 
 impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> EmailToolContext<T, G, E> {
     /// Create a new email tool context.
-    pub fn new(service: Arc<T>, token_provider: Arc<G>, entity_access_service: Arc<E>) -> Self {
+    pub fn new(
+        service: Arc<T>,
+        token_provider: Arc<G>,
+        entity_access_service: Arc<E>,
+        lexical_client: Arc<lexical_client::LexicalClient>,
+    ) -> Self {
         Self {
             service,
             token_provider,
             entity_access_service,
+            lexical_client,
         }
     }
 
@@ -135,6 +148,31 @@ impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> EmailToolCo
             })
     }
 
+    /// Resolves a `SendEmail` body into base64url HTML, rendering the model's
+    /// Markdown through the lexical service when no composer already did.
+    pub async fn render_body(&self, body: &str) -> Result<ResolvedToolBody, ToolCallError> {
+        if decode_composer_html(body).is_some() {
+            return Ok(ResolvedToolBody {
+                html: body.to_owned(),
+                text: None,
+            });
+        }
+
+        let rendered = self
+            .lexical_client
+            .markdown_to_html(body)
+            .await
+            .map_err(|e| ToolCallError {
+                description: format!("Failed to render the email body: {e}"),
+                internal_error: e,
+            })?;
+
+        Ok(ResolvedToolBody {
+            html: URL_SAFE_NO_PAD.encode(rendered.html),
+            text: Some(rendered.text),
+        })
+    }
+
     /// Resolve a Gmail OAuth access token for the given link.
     pub async fn resolve_access_token(&self, link: &Link) -> Result<String, ToolCallError> {
         self.token_provider
@@ -147,17 +185,53 @@ impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> EmailToolCo
     }
 }
 
-/// Create the full email toolset including SendEmail.
+/// A `SendEmail` body resolved into what [`CreateDraftInput`] expects.
+///
+/// [`CreateDraftInput`]: crate::domain::models::CreateDraftInput
+pub struct ResolvedToolBody {
+    /// Base64url-encoded HTML, the encoding the domain decodes.
+    pub html: String,
+    /// The plain-text alternative, when this tool rendered the body and so
+    /// has one. A composer-supplied body carries its own, or none.
+    pub text: Option<String>,
+}
+
+/// True when `body` is the base64url HTML a composer exported, rather than
+/// the Markdown the model writes.
+///
+/// The two hosts that finish `SendEmail` disagree about this field: the chat
+/// and agent-session composers replace it with their exported HTML before the
+/// tool runs, while a host that answers the review without a composer leaves
+/// the model's Markdown in place. Real Markdown does not survive a base64url
+/// decode - a space alone is outside the alphabet - and composer output is
+/// always an element, so decoding and looking for a tag separates them.
+fn decode_composer_html(body: &str) -> Option<String> {
+    let decoded = URL_SAFE_NO_PAD.decode(body.as_bytes()).ok()?;
+    let decoded = String::from_utf8(decoded).ok()?;
+    decoded.trim_start().starts_with('<').then_some(decoded)
+}
+
+/// The full email toolset, for hosts that finish user tools: the deferring
+/// `SendEmail`, which a composer or review card confirms, beside
+/// `SendConfirmedEmail`, which sends on a confirmation the user already
+/// gave in conversation. Both are always registered; the prompt decides
+/// which fits the surface the prompt came from.
 pub fn email_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
 where
     T: EmailService,
     G: GmailTokenProvider,
     E: EntityAccessService,
 {
-    mcp_toolset().add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
+    mcp_toolset()
+        .add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
+        .add_tool::<SendConfirmedEmail, EmailToolContext<T, G, E>>()
 }
 
-/// Email toolset for the MCP server — excludes SendEmail.
+/// Email toolset for hosts without a composer (the MCP server and the
+/// channel-mention bot) — excludes both sending tools: `SendEmail`'s draft
+/// only a composer can review and send, and `SendConfirmedEmail` is for the
+/// in-process agent's conversation turns, not for MCP clients with their
+/// own confirmation policy.
 pub fn mcp_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
 where
     T: EmailService,

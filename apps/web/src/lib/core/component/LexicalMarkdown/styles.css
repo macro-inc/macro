@@ -228,6 +228,33 @@ ol.static-md.depth-6 > li:not(.list-none)::before {
   text-decoration-thickness: max(0.1em, 1px);
 }
 
+.md-subscript,
+.md-superscript {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+.md-subscript {
+  bottom: -0.25em;
+}
+
+.md-superscript {
+  top: -0.5em;
+}
+
+/* Active editors already get semantic sub/sup wrappers from Lexical. */
+sub > .md-subscript,
+sup > .md-superscript {
+  bottom: auto;
+  font-size: inherit;
+  line-height: inherit;
+  position: static;
+  top: auto;
+  vertical-align: inherit;
+}
+
 .md-inline-mention > div {
   display: contents;
 }
@@ -533,6 +560,18 @@ in a cell — move the indent inside the box so markers stay visible.
   margin-top: -1rem;
 }
 
+/*
+A ReplyTarget preview acts as a header for the message body that follows it, so
+pull the next block up close. This only shrinks the *following* block's top
+margin, leaving the reply target's own margins untouched -- so spacing against
+the container (and when the reply target is the last block) stays exactly as it
+would naturally be.
+Scoped under .md to outrank the block's Tailwind `mt-4`.
+*/
+.md [data-reply-target-node] + * {
+  margin-top: 0.375rem;
+}
+
 mark {
   color: currentColor;
   background-color: unset;
@@ -568,6 +607,23 @@ mark {
 .md-mark.draft.comment:not(.local) {
   background: unset;
   border-bottom: unset;
+}
+
+.md-mark.comment[data-comment-inactive] {
+  background: unset;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.md-mark.comment[data-comment-resolved] {
+  background: unset;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.md-mark.selected.comment[data-comment-resolved] {
+  border-bottom: 2px dotted oklch(from var(--color-yellow) l c h / 0.5);
+  padding-bottom: 2px;
 }
 
 .md-no-comments {

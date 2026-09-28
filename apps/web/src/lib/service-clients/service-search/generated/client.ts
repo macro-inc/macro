@@ -6,7 +6,7 @@
  */
 import type {
   ErrorResponse,
-  SimpleUnifiedSearchBaseResponse,
+  SimpleSearchResponse,
   SimpleUnifiedSearchParams,
   UnifiedSearchParams,
   UnifiedSearchRequest,
@@ -94,7 +94,7 @@ export const unifiedSearch = async (
 This is a simple search where we do not group your results by entity id.
  */
 export type simpleUnifiedSearchResponse200 = {
-  data: SimpleUnifiedSearchBaseResponse;
+  data: SimpleSearchResponse;
   status: 200;
 };
 

@@ -1,4 +1,5 @@
-import { EntityActivitySectionConditional } from '@app/features/activity/EntityActivitySection';
+import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
+import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
@@ -9,8 +10,8 @@ import {
   SidePanel,
   useSidePanel,
 } from '@components/app/side-panel';
+import { EntityDetailsGrid } from '@components/app/side-panel/EntityDetailsGrid';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { ProgressMeter } from '@core/component/LexicalMarkdown/component/status/Progress';
@@ -22,24 +23,24 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
-import { UserIcon } from '@core/component/UserIcon';
 import {
-  ENABLE_HISTORY_COMPONENT,
+  enableHistoryComponent,
+  isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import type { Entity, EntityType } from '@core/types';
-import { getDisplayName, tryMacroId } from '@core/user';
-import { type DateValue, formatDate } from '@core/util/date';
+import { isMobile } from '@core/mobile/isMobile';
+import type { Entity } from '@core/types';
+import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { useNotificationsForEntity } from '@notifications';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import ClockIcon from '@phosphor/clock.svg';
 import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
+import { queryReadyGate } from '@queries/gate';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import {
@@ -51,7 +52,6 @@ import {
   useSetDocumentTeamShareMutation,
 } from '@queries/storage/team-share';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
-import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn, InlineCheckbox } from '@ui';
 import {
@@ -62,16 +62,13 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { useMarkdownDocument } from '../../context/markdown-document-context';
 import { useHistory } from '../../history/HistoryContext';
 import { HistoryScrubber } from '../../history/HistoryScrubber';
 import { HistorySessionList } from '../../history/HistorySessionList';
-import { mdStore } from '../../signal/markdownBlockData';
+import { DispatchAgentButton } from '../DispatchAgentMenu';
+import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
-
-interface MarkdownSidePanelSectionsProps {
-  canEdit: boolean;
-  documentName: string;
-}
 
 /**
  * Renders all three SidePanel sections for the markdown block:
@@ -79,32 +76,51 @@ interface MarkdownSidePanelSectionsProps {
  * - Details (always shown)
  * - Stats (hidden for tasks)
  */
-export function MarkdownSidePanelSections(
-  props: MarkdownSidePanelSectionsProps
-) {
-  const blockName = useBlockAliasedName();
-  const rawBlockName = useBlockName();
-  const blockId = useBlockId();
-  const isTask = () => blockName === 'task';
-  const isSnippet = () => blockName === 'snippet';
-
-  const itemType = blockNameToItemType(rawBlockName);
-  const entity = (): Entity => ({ id: blockId, type: itemType as EntityType });
+export function MarkdownSidePanelSections() {
+  const { documentId, kind, permissions } = useMarkdownDocument();
+  const canEdit = permissions.canEdit;
+  const { displayName } = useMarkdownName();
+  const isTask = () => kind() === 'task';
+  const isSnippet = () => kind() === 'snippet';
+  const entity = (): Entity => ({
+    id: documentId(),
+    type: 'document',
+  });
   const propertiesEntityType = (): PropertiesEntityType =>
-    blockName === 'task' ? 'TASK' : 'DOCUMENT';
+    isTask() ? 'TASK' : 'DOCUMENT';
 
   return (
     <>
+      <SidePanel.Section
+        id="document-ai-actions"
+        title="Actions"
+        defaultOpen
+        order={0}
+      >
+        <div class="m-px flex items-center justify-start gap-2">
+          <AskMacroButton
+            entity={{
+              type: 'document',
+              id: documentId(),
+              name: displayName() ?? '',
+              fileType: 'md',
+            }}
+          />
+          <Show when={isTask() && !isMobile()}>
+            <DispatchAgentButton showPrimaryLabel />
+          </Show>
+        </div>
+      </SidePanel.Section>
       <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
-        <DetailsSectionContent />
+        <DetailsSectionContent documentId={documentId()} />
       </SidePanel.Section>
       <Show when={isSnippet()}>
-        <SnippetSharingOwnerSectionConditional documentId={blockId} />
+        <SnippetSharingOwnerSectionConditional documentId={documentId()} />
       </Show>
       <EntityTagsSection
-        entityId={blockId}
+        entityId={documentId()}
         entityType={propertiesEntityType()}
-        canEdit={props.canEdit}
+        canEdit={canEdit()}
         order={20}
       />
       <SidePanel.Section
@@ -114,8 +130,10 @@ export function MarkdownSidePanelSections(
         order={25}
       >
         <PropertiesSectionContent
-          canEdit={props.canEdit}
-          documentName={props.documentName}
+          documentId={documentId()}
+          isTask={isTask()}
+          canEdit={canEdit()}
+          documentName={displayName() ?? ''}
         />
       </SidePanel.Section>
       <Show when={!isTask()}>
@@ -123,19 +141,19 @@ export function MarkdownSidePanelSections(
           <StatsSectionContent />
         </SidePanel.Section>
       </Show>
-      <Show when={ENABLE_HISTORY_COMPONENT()}>
+      <Show when={isFeatureEnabled(enableHistoryComponent)}>
         <SidePanel.Section id="history" title="History" order={35}>
           <HistorySectionContent />
         </SidePanel.Section>
       </Show>
       <EntityActivitySectionConditional
-        entityId={blockId}
+        entityId={documentId()}
         entityType={propertiesEntityType()}
         order={40}
       />
-      <GithubSectionConditional documentId={blockId} isTask={isTask()} />
+      <GithubSectionConditional documentId={documentId()} isTask={isTask()} />
       <NotificationsSectionConditional entity={entity()} />
-      <ReferencesSectionConditional documentId={blockId} />
+      <ReferencesSectionConditional documentId={documentId()} />
       <Show when={isTask()}>
         <TaskDuplicateMatchesSidePanelSection />
       </Show>
@@ -326,9 +344,8 @@ function SnippetSharingSectionContent(props: { documentId: string }) {
 // Details Section
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DetailsSectionContent() {
-  const blockId = useBlockId();
-  const query = useDocumentMetadataQuery(() => blockId);
+function DetailsSectionContent(props: { documentId: string }) {
+  const query = useDocumentMetadataQuery(() => props.documentId);
   const metadata = createMemo(() => query.data);
 
   return (
@@ -352,14 +369,11 @@ function DetailsGrid(props: {
   updatedAt: () => DateValue | null | undefined;
 }) {
   return (
-    <SidePanel.Grid>
-      <Show when={props.owner()}>
-        {(ownerId) => (
-          <SidePanel.Row label="Owner">
-            <OwnerValue ownerId={ownerId()} />
-          </SidePanel.Row>
-        )}
-      </Show>
+    <EntityDetailsGrid
+      ownerId={props.owner()}
+      createdAt={props.createdAt()}
+      updatedAt={props.updatedAt()}
+    >
       <Show when={props.folder()}>
         {(folder) => (
           <SidePanel.Row label="Folder">
@@ -367,27 +381,13 @@ function DetailsGrid(props: {
           </SidePanel.Row>
         )}
       </Show>
-      <Show when={props.createdAt()}>
-        {(created) => (
-          <SidePanel.Row label="Created">
-            <DateValueDisplay value={created()} />
-          </SidePanel.Row>
-        )}
-      </Show>
-      <Show when={props.updatedAt()}>
-        {(updated) => (
-          <SidePanel.Row label="Last updated">
-            <DateValueDisplay value={updated()} />
-          </SidePanel.Row>
-        )}
-      </Show>
-    </SidePanel.Grid>
+    </EntityDetailsGrid>
   );
 }
 
 function FolderLink(props: { projectId: string; projectName: string }) {
-  const open = createCallback((e: MouseEvent) => {
-    openDocument('project', props.projectId, undefined, !e.shiftKey);
+  const open = createCallback(() => {
+    openDocument('project', props.projectId, undefined, true);
   });
   const navHandlers = useSplitNavigationHandler<HTMLSpanElement>(open);
   return (
@@ -405,41 +405,20 @@ function FolderLink(props: { projectId: string; projectName: string }) {
   );
 }
 
-function OwnerValue(props: { ownerId: string }) {
-  const displayName = () => getDisplayName(tryMacroId(props.ownerId));
-  return (
-    <SidePanel.Pill>
-      <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
-      <span class="truncate">{displayName()}</span>
-    </SidePanel.Pill>
-  );
-}
-
-function DateValueDisplay(props: { value: DateValue }) {
-  return (
-    <SidePanel.Pill>
-      <ClockIcon class="size-3 shrink-0" />
-      <span class="truncate">
-        {formatDate(props.value, { showTime: true })}
-      </span>
-    </SidePanel.Pill>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Properties Section
 // ─────────────────────────────────────────────────────────────────────────────
 
 function PropertiesSectionContent(props: {
+  documentId: string;
+  isTask: boolean;
   canEdit: boolean;
   documentName: string;
 }) {
-  const blockId = useBlockId();
-  const mdData = mdStore.get;
+  const { state } = useMarkdownDocument();
+  const mdData = state.editor.md;
 
-  const blockName = useBlockAliasedName();
-  const entityType: PropertiesEntityType =
-    blockName === 'task' ? 'TASK' : 'DOCUMENT';
+  const entityType: PropertiesEntityType = props.isTask ? 'TASK' : 'DOCUMENT';
 
   const [pinnedPropertyIds, setPinnedPropertyIds] = createSignal<string[]>([]);
 
@@ -478,11 +457,13 @@ function PropertiesSectionContent(props: {
 
   return (
     <EntityPropertiesSection
-      entityId={blockId}
+      entityId={props.documentId}
       entityType={entityType}
       canEdit={props.canEdit}
       documentName={props.documentName}
-      defaultPinnedPropertyIds={() => getDefaultPinnedProperties(blockName)}
+      defaultPinnedPropertyIds={() =>
+        props.isTask ? getDefaultPinnedProperties('task') : []
+      }
       pinnedPropertyIds={pinnedPropertyIds}
       pinnedPropertyDefinitionOrder={PINNED_ORDER}
       onPropertyPinned={handlePropertyPinned}
@@ -506,7 +487,8 @@ const PINNED_ORDER: readonly string[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StatsSectionContent() {
-  const md = mdStore.get;
+  const { state } = useMarkdownDocument();
+  const md = state.editor.md;
 
   return (
     <Show
@@ -552,7 +534,7 @@ function NotificationsSectionConditional(props: { entity: Entity }) {
   );
   const count = createMemo(() => notifications().length);
   const unreadCount = createMemo(
-    () => notifications().filter((n) => !n.viewed_at).length
+    () => notifications().filter((n) => n.state === 'unseen').length
   );
 
   return (
@@ -585,7 +567,7 @@ function ReferencesSectionConditional(props: { documentId: string }) {
     () => 'document'
   );
 
-  const count = createMemo(() => references.data?.length ?? 0);
+  const count = () => (queryReadyGate(references) ? references.data.length : 0);
 
   return (
     <Show when={count() > 0}>

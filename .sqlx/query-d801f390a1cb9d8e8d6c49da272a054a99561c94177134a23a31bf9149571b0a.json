@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_message_threads (\n               root_id, parent_entity_type, parent_entity_id, user_id, resolved,\n               import_metadata, created_at, updated_at, deleted_at\n           )\n           SELECT root.id,\n               CASE WHEN t.contact_id IS NULL THEN 'crm_company' ELSE 'crm_contact' END,\n               COALESCE(t.contact_id, t.company_id)::text,\n               t.owner, t.resolved,\n               jsonb_build_object('source', 'crm_thread', 'legacy_thread_id', t.id),\n               t.created_at, t.updated_at, t.deleted_at\n           FROM crm_thread t\n           CROSS JOIN LATERAL (\n               SELECT c.id FROM crm_comment c\n               WHERE c.thread_id = t.id\n               ORDER BY c.created_at, c.id\n               LIMIT 1\n           ) root\n           ON CONFLICT (root_id) DO UPDATE SET\n               user_id = EXCLUDED.user_id,\n               resolved = EXCLUDED.resolved,\n               import_metadata = EXCLUDED.import_metadata,\n               created_at = EXCLUDED.created_at,\n               updated_at = EXCLUDED.updated_at,\n               deleted_at = EXCLUDED.deleted_at\n           WHERE (comms_message_threads.import_metadata IS NULL\n                  OR (comms_message_threads.import_metadata->>'source' = 'crm_thread'\n                      AND comms_message_threads.updated_at <= EXCLUDED.updated_at))\n             AND (comms_message_threads.import_metadata,\n                  comms_message_threads.user_id, comms_message_threads.resolved,\n                  comms_message_threads.created_at, comms_message_threads.updated_at,\n                  comms_message_threads.deleted_at)\n                 IS DISTINCT FROM\n                 (EXCLUDED.import_metadata, EXCLUDED.user_id, EXCLUDED.resolved,\n                  EXCLUDED.created_at, EXCLUDED.updated_at, EXCLUDED.deleted_at)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "d801f390a1cb9d8e8d6c49da272a054a99561c94177134a23a31bf9149571b0a"
+}

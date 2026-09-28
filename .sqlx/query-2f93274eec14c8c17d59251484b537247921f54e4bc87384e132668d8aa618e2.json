@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id AS action_id, owner, enabled, configuration_revision,\n                   event_filters AS \"event_filters!\", event_activated_at AS \"event_activated_at!\"\n            FROM scheduled_action\n            WHERE enabled AND trigger_type = 'events'\n              AND ($1::uuid IS NULL OR id > $1)\n              AND event_activated_at <= $2\n              AND event_filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($3::text)))\n              AND jsonb_path_exists(event_filters,\n                  '$[*] ? (@.events[*] == $event && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',\n                  jsonb_build_object('event', $3::text, 'id', $4::text))\n            ORDER BY id\n            LIMIT $5\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "action_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "configuration_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "event_filters!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "event_activated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "2f93274eec14c8c17d59251484b537247921f54e4bc87384e132668d8aa618e2"
+}

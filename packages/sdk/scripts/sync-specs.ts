@@ -4,6 +4,7 @@ import { services } from '../services';
 const serviceClientDirectories = {
   'agent-harness': 'service-agent-harness',
   auth: 'service-auth',
+  calendar: 'service-calendar',
   cognition: 'service-cognition',
   connection: 'service-connection',
   contacts: 'service-contacts',
@@ -24,13 +25,12 @@ const serviceClientsDirectory = path.resolve(
 const specsDirectory = path.resolve(import.meta.dirname, '../specs');
 
 for (const service of services) {
+  const destination = path.join(specsDirectory, `${service}.json`);
   const source = path.join(
     serviceClientsDirectory,
     serviceClientDirectories[service],
     'openapi.json',
   );
-  const destination = path.join(specsDirectory, `${service}.json`);
-
   await Bun.write(destination, Bun.file(source));
   console.log(`Synced ${service}`);
 }

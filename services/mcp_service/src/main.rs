@@ -7,6 +7,7 @@
 mod config;
 mod context;
 mod markdown_images;
+mod tool_response;
 mod tool_service;
 use anyhow::Context;
 use config::Config;
@@ -35,6 +36,8 @@ async fn main() -> anyhow::Result<()> {
     // Base URL of the Macro web app, used to build links to Macro items in MCP
     // responses.
     let item_base_url = config.app_base_url.as_ref().to_string();
+    let static_file_base_url =
+        url::Url::parse(macro_service_urls::StaticFileServiceUrl::new()?.as_ref())?;
 
     let event_broker_tracker = TaskTracker::new();
     let context = build_context(&config, event_broker_tracker.clone()).await?;
@@ -42,11 +45,12 @@ async fn main() -> anyhow::Result<()> {
     // Create the MCP service with authenticated tool handler
     let mcp_service = StreamableHttpService::new(
         move || {
-            let tools = ai_tools::mcp_tools();
+            let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp);
             Ok(AuthenticatedToolService::new(
                 tools.toolset,
                 context.tool_context.clone(),
                 item_base_url.clone(),
+                static_file_base_url.clone(),
             ))
         },
         Arc::new(LocalSessionManager::default()),
@@ -55,6 +59,8 @@ async fn main() -> anyhow::Result<()> {
                 context.mcp_public_host.clone(),
                 "localhost".into(),
                 "127.0.0.1".into(),
+                "gateway.macro.com".into(),
+                "dev-gateway.macro.com".into(),
             ]);
             config.stateful_mode = false;
             config.json_response = true;

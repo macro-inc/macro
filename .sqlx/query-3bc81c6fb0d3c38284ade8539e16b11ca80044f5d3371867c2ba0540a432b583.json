@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n        EXISTS(SELECT 1 FROM comms_messages WHERE id = ANY($1)) AS \"messages!\",\n        EXISTS(SELECT 1 FROM comms_message_threads WHERE root_id = ANY($1)) AS \"threads!\",\n        EXISTS(SELECT 1 FROM comms_attachments WHERE message_id = ANY($1)) AS \"attachments!\",\n        EXISTS(SELECT 1 FROM comms_reactions WHERE message_id = ANY($1)) AS \"reactions!\",\n        EXISTS(SELECT 1 FROM comms_entity_mentions WHERE source_entity_type = 'message' AND source_entity_id = ANY($2)) AS \"mentions!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "messages!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "threads!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "attachments!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "reactions!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "mentions!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "3bc81c6fb0d3c38284ade8539e16b11ca80044f5d3371867c2ba0540a432b583"
+}

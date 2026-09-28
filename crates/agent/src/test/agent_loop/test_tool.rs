@@ -111,6 +111,42 @@ async fn tool_call_error_emits_call_and_error_response() {
     assert_eq!(result.content(), "done", "the loop should continue");
 }
 
+/// Invalid tool arguments
+/// A call whose arguments don't match the tool's input schema must come back to
+/// the model as a typed error naming what was wrong, so it can correct the call
+/// instead of retrying the same input.
+#[tokio::test]
+async fn invalid_tool_arguments_emit_error_naming_the_problem() {
+    let model = tool_then_done([MockStreamEvent::tool_call(
+        "call-1",
+        "echo_tool",
+        serde_json::json!({ "value": 123 }),
+    )]);
+    let toolset = util::single_tool_set::<EchoTool, ()>();
+    let mut session = util::session(toolset, Arc::new(()), model).await;
+
+    let result = util::drive(&mut session, "call echo with a bad argument").await;
+
+    let call = result
+        .tool_calls()
+        .into_iter()
+        .find(|call| call.name == "echo_tool")
+        .expect("the mistyped call should be emitted");
+    let response = result
+        .tool_response(&call.id)
+        .expect("the mistyped call's response should be emitted");
+    assert!(
+        matches!(response, ToolResponse::Err { description, .. } if description.contains("expected a string")),
+        "the error should carry the serde detail, got {response:?}"
+    );
+    assert!(
+        result.error.is_none(),
+        "invalid arguments must not stop the loop, got {:?}",
+        result.error
+    );
+    assert_eq!(result.content(), "done", "the loop should continue");
+}
+
 /// Parallel tool call success
 /// Multiple tool calls are executed in one turn. They all succeed. The call/response eventsa re all emitted
 #[tokio::test]

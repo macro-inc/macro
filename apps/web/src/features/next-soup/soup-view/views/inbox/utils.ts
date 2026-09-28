@@ -4,14 +4,6 @@ import {
   soupPropertyToProperty,
 } from '@entity/extractors-property/property-helpers';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import {
-  differenceInDays,
-  differenceInMilliseconds,
-  differenceInMonths,
-  differenceInWeeks,
-  differenceInYears,
-  format,
-} from 'date-fns';
 import { match } from 'ts-pattern';
 
 /**
@@ -51,40 +43,34 @@ export function scopeThreadNotifications(
   };
 }
 
+/** Which metadata field carries the preview text, per notification kind. */
+const NOTIFICATION_CONTENT_FIELD: Partial<
+  Record<Notification['notification_metadata']['tag'], string>
+> = {
+  channel_mention: 'messageContent',
+  channel_message_send: 'messageContent',
+  channel_message_reply: 'messageContent',
+  mentioned_in_document_comment: 'text',
+  replied_to_document_comment_thread: 'text',
+  commented_on_document: 'text',
+  new_email: 'snippet',
+  ai_response: 'summary',
+  github_pr_comment: 'commentSnippet',
+  github_pr_mention: 'textSnippet',
+  github_pr_review: 'reviewSnippet',
+  agent_session_settled: 'excerpt',
+  agent_session_waiting_for_input: 'question',
+};
+
 function notificationContent(notification: Notification): string | undefined {
+  const field =
+    NOTIFICATION_CONTENT_FIELD[notification.notification_metadata.tag];
+  if (!field) return undefined;
   const content = notification.notification_metadata.content as
-    | {
-        messageContent?: string;
-        text?: string;
-        snippet?: string;
-        summary?: string;
-        commentSnippet?: string;
-        textSnippet?: string;
-        reviewSnippet?: string;
-      }
+    | Record<string, unknown>
     | undefined;
-  switch (notification.notification_metadata.tag) {
-    case 'channel_mention':
-    case 'channel_message_send':
-    case 'channel_message_reply':
-      return content?.messageContent;
-    case 'mentioned_in_document_comment':
-    case 'replied_to_document_comment_thread':
-    case 'commented_on_document':
-      return content?.text;
-    case 'new_email':
-      return content?.snippet || undefined;
-    case 'ai_response':
-      return content?.summary;
-    case 'github_pr_comment':
-      return content?.commentSnippet;
-    case 'github_pr_mention':
-      return content?.textSnippet;
-    case 'github_pr_review':
-      return content?.reviewSnippet;
-    default:
-      return undefined;
-  }
+  const value = content?.[field];
+  return typeof value === 'string' && value ? value : undefined;
 }
 
 export function getNotificationTag(notification?: Notification) {
@@ -173,33 +159,6 @@ export function getInboxTaskProperties(entity: EntityData) {
     )
   );
   return keyProperties.length ? keyProperties : undefined;
-}
-
-export function formatCompactRelativeTimestamp(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  const now = new Date();
-  const ageMs = Math.max(0, differenceInMilliseconds(now, date));
-  const seconds = Math.floor(ageMs / 1000);
-  if (seconds < 60) return format(date, 'p');
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-
-  const days = differenceInDays(now, date);
-  if (days < 7) return `${Math.max(1, days)}d`;
-
-  const weeks = differenceInWeeks(now, date);
-  if (weeks < 5) return `${Math.max(1, weeks)}w`;
-
-  const months = differenceInMonths(now, date);
-  if (months < 12) return `${Math.max(1, months)}mo`;
-
-  return `${Math.max(1, differenceInYears(now, date))}y`;
 }
 
 export function getFirstName(value: string) {

@@ -1,0 +1,113 @@
+import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { TagDot } from '@property/tags/TagDot';
+import type { PropertyDefinitionDomain } from '@property/types';
+import { For, Show } from 'solid-js';
+import type { ActivityAction } from '../core/event';
+import {
+  propertyValueLabel,
+  selectOptionEntries,
+} from '../queries/property-value';
+
+type PropertyChangedAction = Extract<
+  ActivityAction,
+  { kind: 'property-changed' }
+>;
+
+/**
+ * "changed Status: In Progress → Completed" — the property-changed verb
+ * phrase with the definition name and value labels resolved. Select values
+ * render as the property system's option pills (system option icons, tag
+ * colors); scalars render as text. Falls back word by word: unknown
+ * definition → "a property", unlabelable values → plain "changed"/"cleared"
+ * wording. `from` is rendered only when the source event carried it (most
+ * producers don't yet). Stays on one line: values truncate, never wrap.
+ */
+export function PropertyChangeText(props: {
+  action: PropertyChangedAction;
+  definition: PropertyDefinitionDomain | undefined;
+  capitalize?: boolean;
+  valueLabel?: (raw: unknown) => string | undefined;
+}) {
+  const definition = () => props.definition;
+  const name = () => definition()?.displayName ?? 'a property';
+  const cleared = () =>
+    props.action.to === null || props.action.to === undefined;
+  const label = (raw: unknown) =>
+    props.valueLabel?.(raw) ?? propertyValueLabel(raw, definition());
+  const hasFrom = () => label(props.action.from) !== undefined;
+  const hasTo = () => !cleared() && label(props.action.to) !== undefined;
+
+  return (
+    <span class="inline-flex min-w-0 max-w-full items-center gap-1">
+      <span class="shrink-0">
+        {cleared()
+          ? props.capitalize
+            ? 'Cleared'
+            : 'cleared'
+          : props.capitalize
+            ? 'Changed'
+            : 'changed'}
+      </span>
+      <span class="shrink-0 font-medium text-ink">{name()}</span>
+      <Show when={hasFrom()}>
+        <span class="shrink-0">from</span>
+        <PropertyValueDisplay
+          raw={props.action.from}
+          definition={definition()}
+          valueLabel={props.valueLabel}
+        />
+      </Show>
+      <Show when={hasTo()}>
+        <span class="shrink-0">to</span>
+        <PropertyValueDisplay
+          raw={props.action.to}
+          definition={definition()}
+          valueLabel={props.valueLabel}
+        />
+      </Show>
+    </span>
+  );
+}
+
+/**
+ * One stored property value: select options as the house option pills
+ * (system option icon or tag color dot + label), everything else as text.
+ */
+function PropertyValueDisplay(props: {
+  raw: unknown;
+  definition: PropertyDefinitionDomain | undefined;
+  valueLabel?: (raw: unknown) => string | undefined;
+}) {
+  const options = () => selectOptionEntries(props.raw, props.definition);
+
+  return (
+    <Show
+      when={options()}
+      fallback={
+        <span class="min-w-0 truncate font-medium text-ink">
+          {props.valueLabel?.(props.raw) ??
+            propertyValueLabel(props.raw, props.definition)}
+        </span>
+      }
+    >
+      {(entries) => (
+        <span class="inline-flex min-w-0 items-center gap-1">
+          <For each={entries()}>
+            {(entry) => (
+              <span class="inline-flex min-w-0 max-w-[20ch] items-center gap-1 rounded-full px-1.5 py-0.5 text-ink text-xs leading-tight ring ring-edge-muted/50 ring-inset">
+                <PropertyValueIcon
+                  optionId={entry.id}
+                  class="size-3 shrink-0"
+                />
+                <Show when={entry.color}>
+                  {(color) => <TagDot color={color()} class="size-2" />}
+                </Show>
+                <span class="truncate">{entry.label}</span>
+              </span>
+            )}
+          </For>
+        </span>
+      )}
+    </Show>
+  );
+}

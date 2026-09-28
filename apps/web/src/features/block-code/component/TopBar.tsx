@@ -4,41 +4,32 @@ import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@components/app/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { SplitToolbarRight } from '@components/app/split-layout/components/SplitToolbar';
-import { useIsAuthenticated } from '@core/auth';
-import { useBlockId } from '@core/block';
-import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
-import {
-  REFERENCES_DRAWER_ID,
-  ReferencesButton,
-} from '@core/component/ReferencesModal';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
-import { blockTextSignal } from '@core/signal/load';
+import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/wide-share.svg';
+import IconShared from '@icon/share.svg';
 import Download from '@phosphor/download-simple.svg';
-import Info from '@phosphor/info.svg';
-import Quotes from '@phosphor/quotes.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { TabbedControl } from '@ui';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
-import type { CodeBlockMode } from './Block';
+import type { CodeBlockMode } from './CodeContent';
 import { CodeFileTypeChip } from './CodeFileTypeChip';
+import { CodeModeControl } from './CodeModeControl';
 
 export const TopBar: Component<{
   isHtmlFile: boolean;
@@ -47,16 +38,21 @@ export const TopBar: Component<{
 }> = (props) => {
   const analytics = useAnalytics();
 
-  const isAuth = useIsAuthenticated();
-
   const blockId = useBlockId();
   const text = blockTextSignal.get;
   const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
 
-  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
-  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
-  const shareCtx = useShareDialogContext();
+  const blockAlias = useBlockAliasedName();
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: blockId,
+    blockAlias,
+    itemType: 'document',
+    name: name() ?? '',
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
 
   const downloadDocument = createCallback(() => {
     const content = text();
@@ -67,11 +63,6 @@ export const TopBar: Component<{
   });
 
   const ops: FileOperation[] = [
-    {
-      label: 'Details',
-      icon: Info,
-      action: detailsControl.toggle,
-    },
     { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },
@@ -86,24 +77,11 @@ export const TopBar: Component<{
 
   const tools: BlockTool[] = [
     {
-      label: 'References',
-      icon: Quotes,
-      action: referencesControl.toggle,
-      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
-      buttonComponent: () => (
-        <ReferencesButton
-          documentId={blockId}
-          documentName={name()}
-          buttonSize="sm"
-        />
-      ),
-    },
-    {
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
-      buttonComponent: () => <ShareTrigger />,
+      action: openShare,
+      buttonComponent: () => <ShareTrigger onClick={openShare} />,
       focusTarget: getShareDrawerRecipientInput,
     },
   ];
@@ -118,13 +96,9 @@ export const TopBar: Component<{
 
       <Show when={props.isHtmlFile && !isMobile()}>
         <SplitToolbarRight order={-1}>
-          <TabbedControl
-            list={[
-              { value: 'render', label: 'Render' },
-              { value: 'code', label: 'Code' },
-            ]}
-            value={props.mode}
-            onChange={(value) => props.onModeChange(value as CodeBlockMode)}
+          <CodeModeControl
+            mode={props.mode}
+            onModeChange={props.onModeChange}
           />
         </SplitToolbarRight>
       </Show>

@@ -47,13 +47,13 @@ export function CalendarGridSkeleton(props: {
           class="grid shrink-0 border-b border-edge-muted"
           style={{ 'grid-template-columns': dayColumns() }}
         >
-          <div class="flex h-8 items-center justify-end pr-2">
+          <div class="flex h-12 items-center justify-end pr-2">
             <div class="h-2 w-7 rounded-full bg-skeleton" />
           </div>
           <For each={days()}>
             {() => (
-              <div class="h-8 border-l border-edge-muted px-1 py-2">
-                <div class="h-full w-1/3 rounded bg-skeleton" />
+              <div class="h-12 border-l border-edge-muted px-1 py-2">
+                <div class="h-5 w-1/3 rounded bg-skeleton" />
               </div>
             )}
           </For>

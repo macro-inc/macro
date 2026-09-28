@@ -1,8 +1,10 @@
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
-import clickOutside from '@core/directive/clickOutside';
+import { ContentLoading } from '@components/app/ContentLoading';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog, Panel } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   type SplitFileMenuActionGroups,
@@ -16,8 +18,10 @@ import type {
   SplitId,
   SplitMount,
 } from '../layoutManager';
+import { createOwnedSlots } from '../utils/createOwnedSlots';
+import { focusPopoverInput } from '../utils/focusPopoverInput';
 
-false && clickOutside;
+false;
 
 type PopoverSplitData = {
   id: string;
@@ -37,10 +41,12 @@ export function PopoverSplitRenderer(props: {
   return (
     <For each={activePopovers()}>
       {(popover) => (
-        <PopoverSplitModal
-          popover={popover}
-          onClose={() => props.onClosePopover?.(popover.id)}
-        />
+        <Suspense>
+          <PopoverSplitModal
+            popover={popover}
+            onClose={() => props.onClosePopover?.(popover.id)}
+          />
+        </Suspense>
       )}
     </For>
   );
@@ -51,6 +57,7 @@ function PopoverSplitModal(props: {
   onClose: () => void;
 }) {
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
+  const [displayName, setDisplayName] = createSignal(props.popover.content.id);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
@@ -58,6 +65,7 @@ function PopoverSplitModal(props: {
     createSignal<() => void>();
   const [titleFileMenuActions, setTitleFileMenuActions] =
     createSignal<SplitFileMenuActionGroups>();
+  const ownedSlots = createOwnedSlots();
 
   const stubHandle: SplitHandle = {
     id: props.popover.id as SplitId,
@@ -73,41 +81,33 @@ function PopoverSplitModal(props: {
     isActive: () => true,
     isFirst: () => true,
     isLast: () => true,
-    displayName: () => props.popover.content.id,
-    setDisplayName: () => {},
+    displayName,
+    setDisplayName,
     toggleSpotlight: () => {},
     isSpotLight: () => false,
     isPopover: () => true,
-    isViewerSplit: () => false,
-    isControllerSplit: () => false,
     replace: () => {},
-    // A popover has no URL and no history to rewrite.
+    // A popover has no history to rewrite.
     adoptContentId: () => {},
+    updateCurrentEntry: () => {},
     removeFromHistory: () => {},
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
     previousContent: () => null,
     history: () => [],
-    getUrlSegments: () => [],
-    getUrl: () => '',
     meta: () =>
       props.popover.mount.kind === 'component'
-        ? (props.popover.mount as any).meta
+        ? props.popover.mount.meta
         : undefined,
     updateMeta:
       props.popover.mount.kind === 'component'
-        ? (props.popover.mount as any).updateMeta
+        ? props.popover.mount.updateMeta
         : undefined,
     referredFrom: () => null,
     lastNavigationCause: () => 'fresh',
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},
     currentEntryState: () => undefined,
-    canEngagePreview: () => false,
-    engagePreview: () => {},
-    disengagePreview: () => {},
-    resetPreview: () => {},
-    viewerId: () => undefined,
   };
 
   const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(
@@ -134,6 +134,7 @@ function PopoverSplitModal(props: {
     setTitleFileMenuTrigger,
     titleFileMenuActions,
     setTitleFileMenuActions,
+    replaceOwnedSlot: ownedSlots.replace,
     headerCollapser: { register: () => () => {} },
     toolbarCollapser: { register: () => () => {} },
   };
@@ -148,30 +149,66 @@ function PopoverSplitModal(props: {
     },
   });
 
+  const attachPanel = (element: HTMLElement) => {
+    setPanelRef(element);
+    bindHotKeyDom(element);
+  };
+  const onOpenChange = (open: boolean) => {
+    if (!open) props.onClose();
+  };
+  const Content = () => (
+    <SplitPanelContext.Provider value={stubPanelContext}>
+      <SoupContextProvider>
+        <Show when={props.popover.mount}>
+          <Panel.Body>
+            <Suspense fallback={<ContentLoading />}>
+              <Dynamic component={props.popover.mount.element} />
+            </Suspense>
+          </Panel.Body>
+        </Show>
+      </SoupContextProvider>
+    </SplitPanelContext.Provider>
+  );
+
   return (
-    <Dialog
-      open={props.popover.isOpen}
-      onOpenChange={(open) => {
-        if (!open) {
-          props.onClose();
-        }
-      }}
-      contentRef={(r) => {
-        setPanelRef(r);
-        bindHotKeyDom(r);
-      }}
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <Dialog
+          open={props.popover.isOpen}
+          onOpenChange={onOpenChange}
+          contentRef={attachPanel}
+          onOpenAutoFocus={(event) => focusPopoverInput(event, panelRef())}
+        >
+          <Panel
+            hideBorder
+            class="bg-transparent rounded-[inherit] *:max-h-[75vh]"
+          >
+            <Content />
+          </Panel>
+        </Dialog>
+      }
     >
-      <Panel depth={2} class="rounded-xl bg-dialog *:max-h-[75vh]">
-        <SplitPanelContext.Provider value={stubPanelContext}>
-          <SoupContextProvider>
-            <Show when={props.popover.mount}>
-              <Panel.Body>
-                <Dynamic component={props.popover.mount.element} />
-              </Panel.Body>
-            </Show>
-          </SoupContextProvider>
-        </SplitPanelContext.Provider>
-      </Panel>
-    </Dialog>
+      <MobileDrawer
+        side="bottom"
+        open={props.popover.isOpen}
+        onOpenChange={onOpenChange}
+        onInitialFocus={(event) => focusPopoverInput(event, panelRef())}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.Content
+            ref={attachPanel}
+            aria-label={displayName()}
+            maxHeight={92}
+          >
+            <MobileDrawer.Handle />
+            <MobileDrawer.ScrollBody>
+              <Content />
+            </MobileDrawer.ScrollBody>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+    </Show>
   );
 }

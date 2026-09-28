@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 export const makeCopyEntityIdAction = () => {
   const canExecute = (_entity: EntityData): boolean => {
@@ -22,7 +22,10 @@ export const makeCopyEntityIdAction = () => {
     await executeById(entity.id);
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
   };
 

@@ -1,10 +1,8 @@
 import type { DateValue } from '@core/util/date';
 import type { SubType } from '@entity';
+import type { Property } from '@property/types';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
-import type {
-  ApiChannelContextMessage,
-  ItemType,
-} from '@service-storage/client';
+import type { ItemType } from '@service-storage/client';
 import type { CalendarMentionEvent } from '@service-storage/generated/schemas/calendarMentionEvent';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 
@@ -47,6 +45,19 @@ type PreviewProjectAccess = {
   channelType?: never;
 } & BasePreviewItem<'project'>;
 
+/** Properties and viewer permission loaded by the same operation as a preview. */
+export type PreviewDocumentMetadata = {
+  properties: Property[];
+  canEdit: boolean;
+};
+
+/** Undefined properties mean the rich preview is pending, not a REST fallback. */
+export type PreviewDocumentProperties = {
+  properties: Property[] | undefined;
+  canEdit: boolean;
+  refetch: () => Promise<void>;
+};
+
 type PreviewDocumentAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
@@ -55,9 +66,11 @@ type PreviewDocumentAccess = {
   fileType?: FileType;
   subType?: SubType;
   channelType?: never;
+  /** Absent on lightweight cache seeds and REST previews. */
+  documentMetadata?: PreviewDocumentMetadata;
 } & BasePreviewItem<'document'>;
 
-export type MessageContext = ApiChannelContextMessage;
+export type MessageContext = import('@service-storage/messages').Message;
 
 export type PreviewChannelAccess = {
   access: Extract<AccessType, 'access'>;
@@ -67,6 +80,7 @@ export type PreviewChannelAccess = {
   fileType?: never;
   subType?: never;
   channelType?: ChannelType;
+  profilePictureId?: string | null;
   messageContext?: MessageContext | undefined;
 } & BasePreviewItem<'channel'>;
 

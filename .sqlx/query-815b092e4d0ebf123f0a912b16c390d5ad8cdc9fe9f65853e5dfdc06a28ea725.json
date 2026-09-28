@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level::text\n        FROM entity_access\n        WHERE entity_id = $1\n        AND entity_type = 'agent_session'\n        AND source_id = ANY($2)\n\n        UNION ALL\n\n        SELECT sp.\"linkShareAccessLevel\"::text\n        FROM agent_session s\n        JOIN \"SharePermission\" sp ON sp.id = s.share_permission_id\n        WHERE s.id = $1\n          AND sp.\"linkShareAccessLevel\" IS NOT NULL\n          AND (\n              sp.\"linkShare\" = 'PUBLIC'\n              OR (\n                  sp.\"linkShare\" = 'TEAM'\n                  AND EXISTS (\n                      SELECT 1 FROM team_user owner_team\n                      WHERE owner_team.user_id = s.owner_id\n                        AND owner_team.team_id::text = ANY($2)\n                  )\n              )\n          )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "815b092e4d0ebf123f0a912b16c390d5ad8cdc9fe9f65853e5dfdc06a28ea725"
+}

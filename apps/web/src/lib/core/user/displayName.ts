@@ -115,7 +115,14 @@ async function fetchDisplayNames(ids: string[]): Promise<UserNameItem[]> {
   });
   if (result.isErr()) {
     console.error('Failed to fetch user display names');
-    return [];
+    // Mark as not-loading with an expired timestamp so the next access
+    // retries the fetch instead of getting stuck showing the email
+    // fallback forever (see `ensureUserNameItem`'s `cacheExpired` check).
+    return ids.map((id) => ({
+      _createdAt: new Date(0),
+      id,
+      loading: false,
+    }));
   }
 
   const data = result.value;

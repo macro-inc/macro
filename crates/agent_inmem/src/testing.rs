@@ -3,7 +3,10 @@
 use agent::{AgentError, StreamPart};
 use tokio::sync::mpsc;
 
-use crate::domain::engine::{TurnEngine, TurnRequest};
+use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
+
+/// Models advertised by shared test engines.
+pub(crate) const TEST_MODELS: &[&str] = &["test-model", "other-model"];
 
 /// An engine that plays back a script of parts for every turn.
 pub(crate) struct ScriptedEngine {
@@ -19,8 +22,12 @@ pub(crate) struct RecordedTurn {
     pub(crate) model: String,
     /// The conversation, flattened to text per message.
     pub(crate) messages: Vec<String>,
+    /// Every image URL attached across the conversation, in order.
+    pub(crate) images: Vec<String>,
     /// The session's instructions, as handed to the engine.
     pub(crate) instructions: Option<String>,
+    /// Who the agent is, as handed to the engine.
+    pub(crate) identity: Option<AgentIdentity>,
 }
 
 impl ScriptedEngine {
@@ -37,6 +44,10 @@ impl ScriptedEngine {
 }
 
 impl TurnEngine for ScriptedEngine {
+    fn supported_models(&self) -> &[&str] {
+        TEST_MODELS
+    }
+
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
         self.requests
             .lock()
@@ -48,7 +59,22 @@ impl TurnEngine for ScriptedEngine {
                     .iter()
                     .map(|message| message.content.message_text_with_tools())
                     .collect(),
+                images: request
+                    .messages
+                    .iter()
+                    .filter_map(|message| message.attachments.as_ref())
+                    .flat_map(|attachments| attachments.parts().iter())
+                    .filter_map(|resolved| resolved.as_ref().ok())
+                    .flat_map(|content| content.content.iter())
+                    .filter_map(|part| match part {
+                        attachment::AttachmentPart::Image(
+                            attachment::image::ImageData::StaticUrl(url),
+                        ) => Some(url.clone()),
+                        _ => None,
+                    })
+                    .collect(),
                 instructions: request.instructions.clone(),
+                identity: request.identity.clone(),
             });
         let (parts, receiver) = mpsc::channel(64);
         let script = self.script.clone();
@@ -67,6 +93,10 @@ impl TurnEngine for ScriptedEngine {
 pub(crate) struct HangingEngine;
 
 impl TurnEngine for HangingEngine {
+    fn supported_models(&self) -> &[&str] {
+        TEST_MODELS
+    }
+
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
         let (parts, receiver) = mpsc::channel(1);
         tokio::spawn(async move {

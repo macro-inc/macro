@@ -1,5 +1,8 @@
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import { isWithNotification } from '@entity/types/notification';
 import {
@@ -13,7 +16,7 @@ import {
   toNotificationEntityRef,
   updateNotificationsForEntities,
 } from '@queries/notification/entity-mutations';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 type MakeMarkNotificationsReadOptions = {
   notificationSource: () => NotificationSource;
@@ -57,7 +60,7 @@ export const makeMarkNotificationsReadAction = (
   const execute = async (entities: EntityData[]) => {
     const notificationsById = new Map<string, UnifiedNotification>();
     const entityRefs: NotificationEntityRef[] = [];
-    const useEntityMutations = ENABLE_GRAPHQL_SOUP();
+    const useEntityMutations = isFeatureEnabled(enableGraphqlSoup);
     let targetCount = 0;
 
     for (const entity of entities) {
@@ -106,7 +109,10 @@ export const makeMarkNotificationsReadAction = (
   };
 
   /** Rows remain in place; this only updates their notification read state. */
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
   };
 

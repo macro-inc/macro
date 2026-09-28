@@ -1,8 +1,8 @@
-import PhoneCallIcon from '@icon/wide-call.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
+import FileIcon from '@phosphor/file.svg';
 import FilePdfIcon from '@phosphor/file-pdf.svg';
-import FileTextIcon from '@phosphor/file-text.svg';
-import HashIcon from '@phosphor/hash.svg';
+import HashIcon from '@phosphor/hash-straight.svg';
+import PhoneCallIcon from '@phosphor/phone-call.svg';
 import { match } from 'ts-pattern';
 import { type ContentHitData, hitHasSender } from '../types/search';
 
@@ -20,10 +20,10 @@ export function getSenderId(hit: ContentHitData): string | undefined {
  */
 export function getSearchIcon(hit: ContentHitData) {
   return match(hit)
-    .with({ type: 'md' }, () => FileTextIcon)
+    .with({ type: 'md' }, () => FileIcon)
     .with({ type: 'pdf' }, () => FilePdfIcon)
     .with({ type: 'channel' }, () => HashIcon)
     .with({ type: 'email' }, () => EnvelopeIcon)
     .with({ type: 'call_record' }, () => PhoneCallIcon)
-    .otherwise(() => FileTextIcon);
+    .otherwise(() => FileIcon);
 }

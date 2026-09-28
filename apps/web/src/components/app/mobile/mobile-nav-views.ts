@@ -6,7 +6,7 @@
  */
 export const MOBILE_NAV_VIEW_IDS = [
   'search',
-  'inbox',
+  'home',
   'calendar',
   'mail',
   'channels',
@@ -14,6 +14,7 @@ export const MOBILE_NAV_VIEW_IDS = [
   'agents',
   'tasks',
   'calls',
+  'companies',
   'settings',
 ] as const;
 

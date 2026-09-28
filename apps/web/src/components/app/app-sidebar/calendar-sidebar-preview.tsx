@@ -1,23 +1,20 @@
-import { useOpenEventComposer } from '@app/features/block-calendar/components/use-open-event-composer';
-import {
-  CALENDAR_BLOCK_ID,
-  type CalendarBlockProps,
-} from '@app/features/block-calendar/types';
 import type { CalendarGridHandle } from '@app/features/calendar/components/CalendarGrid';
 import { CalendarGridSkeleton } from '@app/features/calendar/components/CalendarGridSkeleton';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
-import type {
-  CalendarEvent,
-  CalendarTimeFormat,
+import {
+  type CalendarEvent,
+  type CalendarTimeFormat,
+  isCalendarEventVisible,
 } from '@app/features/calendar/types';
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { groupCalendarSourcesByAccount } from '@app/features/calendar/utils/calendar-source-groups';
 import {
   formatCalendarTime,
   getDefaultCalendarTimeFormat,
 } from '@app/features/calendar/utils/time-format';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { useSplitLayout } from '@components/app/split-layout/layout';
+import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
+import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { HoverCard } from '@core/component/HoverCard';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { openExternalUrl } from '@core/util/url';
@@ -163,9 +160,17 @@ function EventSummary(props: {
         <div class="flex min-w-0 items-start gap-2">
           <span
             aria-hidden="true"
-            class="mt-0.5 size-3 shrink-0 rounded-sm"
-            style={{ 'background-color': props.event.calendar.color }}
-          />
+            class="mt-0.5 flex size-3 shrink-0 gap-px overflow-hidden rounded-sm"
+          >
+            <For each={props.event.visibleCalendars}>
+              {(calendar) => (
+                <span
+                  class="min-w-0 flex-1"
+                  style={{ 'background-color': calendar.color }}
+                />
+              )}
+            </For>
+          </span>
           <div class="min-w-0">
             <h3 class="truncate text-sm font-semibold text-ink">
               {props.event.title}
@@ -207,7 +212,6 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
   const [timeFormat, setTimeFormat] = createSignal<CalendarTimeFormat>(
     getDefaultCalendarTimeFormat()
   );
-  const layout = useSplitLayout();
   const openEventComposer = useOpenEventComposer();
   const { sourceById, sources } = useCalendarSources();
   const isSourceVisible = (sourceId: string) =>
@@ -228,35 +232,24 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
       else next.add(sourceId);
       return next;
     });
-    if (!visible && selectedEvent()?.calendar.id === sourceId) {
+    const selected = selectedEvent();
+    if (
+      !visible &&
+      selected &&
+      !isCalendarEventVisible(selected, isSourceVisible)
+    ) {
       setSelectedEventId(undefined);
     }
   };
-  const openEventInCalendar = async (event: CalendarEvent) => {
-    const params: CalendarBlockProps = {
-      eventId: event.eventId,
-      occurrenceKey: event.occurrenceKey,
-      range: range(),
-    };
-    const manager = globalSplitManager();
-    const existing = manager?.getSplitByContent('calendar', CALENDAR_BLOCK_ID);
-    if (existing) {
-      existing.activate();
-    } else {
-      layout.openWithSplit(
-        { type: 'calendar', id: CALENDAR_BLOCK_ID, params },
-        {
-          allowDuplicate: false,
-          mergeHistory: false,
-          referredFrom: 'sidebar',
-        }
-      );
-    }
-
-    const calendarHandle = await manager
-      ?.getOrchestrator()
-      .getBlockHandle(CALENDAR_BLOCK_ID, 'calendar');
-    await calendarHandle?.goToLocationFromParams(params);
+  const openEventInCalendar = (event: CalendarEvent) => {
+    openCalendarView(
+      {
+        eventId: event.eventId,
+        occurrenceKey: event.occurrenceKey,
+        range: range(),
+      },
+      { referredFrom: 'sidebar' }
+    );
   };
 
   return (
@@ -303,6 +296,7 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
         <ScrollIndicators
           scrollRef={scrollElement}
           appearance="gradient"
+          gradientColor="panel"
           noBorderStart
           noBorderEnd
         />
@@ -313,10 +307,10 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
               aria-label="New event"
               label="New event"
               tooltipPlacement="top"
-              variant="ghost"
+              variant="outline"
               size="icon-md"
               depth={4}
-              class="rounded-lg bg-surface shadow-menu ring ring-edge-muted"
+              class="rounded-lg bg-surface"
               onClick={() => openEventComposer()}
             >
               <PlusIcon class="size-4" />
@@ -326,10 +320,10 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
                 aria-label="Calendar settings"
                 label="Calendar settings"
                 tooltipPlacement="top"
-                variant="ghost"
+                variant="outline"
                 size="icon-md"
                 depth={4}
-                class="rounded-lg bg-surface shadow-menu ring ring-edge-muted"
+                class="rounded-lg bg-surface"
               >
                 <GearIcon class="size-4" />
               </Dropdown.Trigger>
@@ -350,22 +344,21 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
                       class="max-h-52 w-56 overflow-y-auto"
                     >
                       <Dropdown.Group>
-                        <For each={sources()}>
-                          {(source) => (
+                        <For each={groupCalendarSourcesByAccount(sources())}>
+                          {(group) => (
                             <Dropdown.CheckboxItem
-                              checked={isSourceVisible(source.id)}
+                              checked={group.calendars.every((source) =>
+                                isSourceVisible(source.id)
+                              )}
                               closeOnSelect={false}
-                              onChange={(visible) =>
-                                setSourceVisibility(source.id, visible)
-                              }
+                              onChange={(visible) => {
+                                for (const source of group.calendars) {
+                                  setSourceVisibility(source.id, visible);
+                                }
+                              }}
                             >
-                              <span
-                                aria-hidden="true"
-                                class="size-2.5 shrink-0 rounded-sm"
-                                style={{ 'background-color': source.color }}
-                              />
                               <span class="min-w-0 flex-1 truncate">
-                                {source.name}
+                                {group.emailAddress}
                               </span>
                             </Dropdown.CheckboxItem>
                           )}
@@ -461,7 +454,7 @@ export function CalendarSidebarPreview(
         <Surface
           depth={2}
           hideBorder
-          class="h-[min(24rem,calc(100vh-2rem))] w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl shadow-menu ring ring-edge"
+          class="menu-surface h-[min(24rem,calc(100vh-2rem))] w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl"
         >
           <div
             class="size-full"

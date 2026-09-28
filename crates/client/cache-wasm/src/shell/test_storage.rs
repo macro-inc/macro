@@ -1,24 +1,25 @@
 use cache_core::predicate::{
-    OptimisticShadowReconciliation, PredicateIndexStorage, PredicateQueryResult,
-    ProjectionMutation, ProjectionState,
+    OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
+    PredicateQueryResult, ProjectionMutation, ProjectionState,
 };
 use cache_core::queue::{
-    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
-    QueuedMutation,
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationUpsertResult,
+    NewQueuedMutation, QueuedMutation,
 };
 use cache_core::search::{SearchCursor, SearchDocument, SearchProfile};
 use cache_core::store::{QueueDiagnostics, Storage};
 use cache_core::value::{EntityKey, Record};
 use cache_turso::{PhysicalResetReason, TursoStorage, TursoStorageError};
-use predicate_index::{
-    EffectiveOptimisticProjection, PendingOptimisticProjection, RecordKey, ValidatedIndexQuery,
-};
+use predicate_index::{EffectiveOptimisticProjection, RecordKey, ValidatedIndexQuery};
 use std::sync::atomic::{AtomicU8, Ordering};
 
 #[derive(Clone, Copy)]
 pub(super) enum TestStorageFault {
     GetBatch = 1,
     ClaimNextMutation = 2,
+    ReconcilePredicateIndex = 3,
+    LoadProjectionStates = 4,
+    LoadOptimisticProjections = 5,
 }
 
 pub(super) struct BrowserStorage {
@@ -105,13 +106,14 @@ impl Storage for BrowserStorage {
             .await
     }
 
-    async fn enqueue_mutation_with_shadow(
+    async fn upsert_mutation_with_shadow(
         &mut self,
         entry: NewQueuedMutation,
-        projections: Vec<PendingOptimisticProjection>,
-    ) -> Result<MutationId, Self::Error> {
+        now_ms: i64,
+        reconciliation: OptimisticUpsertReconciliation,
+    ) -> Result<MutationUpsertResult, Self::Error> {
         self.inner
-            .enqueue_mutation_with_shadow(entry, projections)
+            .upsert_mutation_with_shadow(entry, now_ms, reconciliation)
             .await
     }
 
@@ -119,6 +121,7 @@ impl Storage for BrowserStorage {
         &self,
         keys: &[RecordKey],
     ) -> Result<Vec<Option<ProjectionState>>, Self::Error> {
+        self.take(TestStorageFault::LoadProjectionStates)?;
         self.inner.load_projection_states(keys).await
     }
 
@@ -126,6 +129,7 @@ impl Storage for BrowserStorage {
         &self,
         keys: &[RecordKey],
     ) -> Result<Vec<Option<EffectiveOptimisticProjection>>, Self::Error> {
+        self.take(TestStorageFault::LoadOptimisticProjections)?;
         self.inner.load_optimistic_projections(keys).await
     }
 
@@ -216,6 +220,15 @@ impl Storage for BrowserStorage {
 }
 
 impl PredicateIndexStorage for BrowserStorage {
+    async fn reconcile_predicate_index(
+        &self,
+        query: &ValidatedIndexQuery,
+        baseline: &[cache_core::predicate::reconciliation::PredicateBaselineEntry],
+    ) -> Result<cache_core::predicate::reconciliation::PredicateReconciliation, Self::Error> {
+        self.take(TestStorageFault::ReconcilePredicateIndex)?;
+        self.inner.reconcile_predicate_index(query, baseline).await
+    }
+
     async fn delete_batch_with_projections(
         &mut self,
         keys: &[EntityKey<'static>],
@@ -223,6 +236,16 @@ impl PredicateIndexStorage for BrowserStorage {
     ) -> Result<(), Self::Error> {
         self.inner
             .delete_batch_with_projections(keys, projection_keys)
+            .await
+    }
+
+    async fn delete_batch_with_projection_changes(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .delete_batch_with_projection_changes(keys, projections)
             .await
     }
 

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_messages (\n               id, parent_entity_type, parent_entity_id, sender_id, content,\n               created_at, updated_at, deleted_at\n           )\n           SELECT tm.root_id, 'document', t.\"documentId\", t.owner, '',\n               t.\"createdAt\" AT TIME ZONE 'UTC', t.\"updatedAt\" AT TIME ZONE 'UTC',\n               COALESCE(t.\"deletedAt\", t.\"updatedAt\")\n           FROM \"Thread\" t\n           JOIN migrated_comment_thread_id tm ON tm.thread_id = t.id\n           WHERE t.\"documentId\" = ANY($1)\n             AND NOT EXISTS (SELECT 1 FROM \"Comment\" c WHERE c.\"threadId\" = t.id)\n           ON CONFLICT (id) DO UPDATE SET\n               updated_at = EXCLUDED.updated_at,\n               deleted_at = EXCLUDED.deleted_at\n           WHERE comms_messages.updated_at <= EXCLUDED.updated_at\n             AND (comms_messages.updated_at, comms_messages.deleted_at)\n                 IS DISTINCT FROM (EXCLUDED.updated_at, EXCLUDED.deleted_at)\n           RETURNING (xmax = 0) AS \"inserted!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "inserted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "038db5b91138c574e5927816834bdedef8ac3d00b378999c7370d1b6f8ec22be"
+}

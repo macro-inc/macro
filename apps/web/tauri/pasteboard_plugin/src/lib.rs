@@ -17,6 +17,12 @@ struct StagePasteboardImagePayload {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PasteboardText {
+    pub text: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StagedPasteboardImage {
     pub token: Option<String>,
     pub name: Option<String>,
@@ -28,6 +34,13 @@ pub struct StagedPasteboardImage {
 pub struct Pasteboard<R: Runtime>(PluginHandle<R>);
 
 impl<R: Runtime> Pasteboard<R> {
+    #[cfg(target_os = "ios")]
+    fn read_pasteboard_text(&self) -> Result<PasteboardText, String> {
+        self.0
+            .run_mobile_plugin("readPasteboardText", ())
+            .map_err(|error| error.to_string())
+    }
+
     #[cfg(target_os = "ios")]
     fn stage_pasteboard_image(
         &self,
@@ -52,6 +65,20 @@ pub trait PasteboardExt<R: Runtime> {
 impl<R: Runtime, T: Manager<R>> PasteboardExt<R> for T {
     fn pasteboard(&self) -> &Pasteboard<R> {
         self.state::<Pasteboard<R>>().inner()
+    }
+}
+
+#[command]
+async fn read_pasteboard_text<R: Runtime>(app: AppHandle<R>) -> Result<PasteboardText, String> {
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = app;
+        Err("pasteboard plugin is only available on iOS".to_string())
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        app.pasteboard().read_pasteboard_text()
     }
 }
 
@@ -82,7 +109,10 @@ async fn stage_pasteboard_image<R: Runtime>(
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("pasteboard")
-        .invoke_handler(tauri::generate_handler![stage_pasteboard_image])
+        .invoke_handler(tauri::generate_handler![
+            read_pasteboard_text,
+            stage_pasteboard_image
+        ])
         .setup(|_app, _api| {
             #[cfg(target_os = "ios")]
             {

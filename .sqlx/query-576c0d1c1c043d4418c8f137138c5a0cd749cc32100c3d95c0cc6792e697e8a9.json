@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"count!\" FROM \"Thread\" t\n           JOIN migrated_comment_thread_id tm ON tm.thread_id = t.id\n           JOIN LATERAL (\n               SELECT cm.message_id FROM \"Comment\" c\n               JOIN migrated_comment_id cm ON cm.comment_id = c.id\n               WHERE c.\"threadId\" = t.id\n               ORDER BY c.\"order\" NULLS LAST, c.\"createdAt\", c.id LIMIT 1\n           ) first ON true\n           WHERE t.\"documentId\" = ANY($1) AND first.message_id <> tm.root_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "576c0d1c1c043d4418c8f137138c5a0cd749cc32100c3d95c0cc6792e697e8a9"
+}

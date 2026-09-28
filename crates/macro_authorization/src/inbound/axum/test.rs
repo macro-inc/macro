@@ -37,10 +37,13 @@ const BOT_ID: BotId = BotId::new_from_uuid(Uuid::from_u128(1));
 const BOT_TOKEN_ID: Uuid = Uuid::from_u128(2);
 const BOT_TEAM_ID: Uuid = Uuid::from_u128(3);
 const ACCESS_TOKEN_COOKIE: &str = "macro-access-token";
+const API_KEY_USER_ID: &str = "macro|api-key@example.com";
+const VALID_USER_API_KEY: &str = "mak_valid";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum AuthorizationCall {
     Jwt(String),
+    UserApiKey(String),
     Bot {
         token: String,
         bot_scope: BotScope,
@@ -80,6 +83,22 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             "malformed-user" => Ok(user_context("not-a-macro-user-id", None)),
             "empty-user" => Ok(user_context("", None)),
             "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
+            _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
+        }
+    }
+
+    async fn authorize_user_api_key(
+        &self,
+        api_key: &str,
+    ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        self.calls
+            .lock()
+            .expect("calls lock poisoned")
+            .push(AuthorizationCall::UserApiKey(api_key.to_string()));
+
+        match api_key {
+            VALID_USER_API_KEY => Ok(user_context(API_KEY_USER_ID, Some(42))),
+            "mak_unavailable" => Err(Report::new(MacroAuthorizationError::Unavailable)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         }
     }
@@ -411,6 +430,10 @@ fn bot_request(path: &str, token: &str) -> ::axum::http::request::Builder {
     request(path)
         .header(BOT_TOKEN_HEADER, token)
         .header(BOT_SCOPE_HEADER, BotScope::User.as_str())
+}
+
+fn user_api_key_request(path: &str, key: &str) -> ::axum::http::request::Builder {
+    request(path).header(USER_API_KEY_HEADER, key)
 }
 
 fn empty_body(request: ::axum::http::request::Builder) -> Request<Body> {
@@ -1228,6 +1251,198 @@ fn bot_header_constants_use_the_resolved_names() {
     assert_eq!(
         BOT_FOR_ORGANIZATION_ID_HEADER,
         "x-macro-bot-for-organization-id"
+    );
+}
+
+#[test]
+fn user_api_key_header_constant_uses_the_resolved_name() {
+    assert_eq!(USER_API_KEY_HEADER, "x-macro-user-api-key");
+}
+
+#[tokio::test]
+async fn user_api_key_authenticates_as_the_user() {
+    let (router, service) = test_router();
+
+    for path in ["/user", "/required", "/required/user-only"] {
+        let (status, body) = send(
+            &router,
+            empty_body(user_api_key_request(path, VALID_USER_API_KEY)),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "path {path}");
+        assert_eq!(body["acting_entity"], API_KEY_USER_ID);
+        if path != "/required/user-only" {
+            assert_eq!(body["macro_user_id"], API_KEY_USER_ID);
+        }
+    }
+
+    assert_eq!(
+        service.calls(),
+        [
+            AuthorizationCall::UserApiKey(VALID_USER_API_KEY.to_string()),
+            AuthorizationCall::UserApiKey(VALID_USER_API_KEY.to_string()),
+            AuthorizationCall::UserApiKey(VALID_USER_API_KEY.to_string()),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn user_api_key_is_forbidden_for_bot_and_internal_only_policies() {
+    let (router, service) = test_router();
+
+    for path in ["/required/bot-only", "/required/internal-only"] {
+        let (status, body) = send(
+            &router,
+            empty_body(user_api_key_request(path, VALID_USER_API_KEY)),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "path {path}");
+        assert_eq!(body, json!({ "message": "forbidden" }));
+    }
+
+    assert_eq!(
+        service.calls(),
+        [
+            AuthorizationCall::UserApiKey(VALID_USER_API_KEY.to_string()),
+            AuthorizationCall::UserApiKey(VALID_USER_API_KEY.to_string()),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn invalid_user_api_key_is_unauthorized() {
+    let (router, service) = test_router();
+    let (status, body) = send(
+        &router,
+        empty_body(user_api_key_request("/required", "mak_invalid")),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::UserApiKey("mak_invalid".to_string())]
+    );
+}
+
+#[tokio::test]
+async fn unavailable_user_api_key_lookup_is_internal_server_error() {
+    let (router, service) = test_router();
+    let (status, body) = send(
+        &router,
+        empty_body(user_api_key_request("/required", "mak_unavailable")),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(body, json!({ "message": "internal server error" }));
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::UserApiKey("mak_unavailable".to_string())]
+    );
+}
+
+#[tokio::test]
+async fn empty_user_api_key_header_is_unauthorized_without_a_service_call() {
+    let (router, service) = test_router();
+    let (status, body) = send(
+        &router,
+        empty_body(user_api_key_request("/required", "   ")),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn user_api_key_combined_with_other_explicit_credentials_is_ambiguous() {
+    let (router, service) = test_router();
+    let requests = [
+        empty_body(
+            user_api_key_request("/required", VALID_USER_API_KEY)
+                .header("authorization", "Bearer valid"),
+        ),
+        empty_body(
+            bot_request("/required", "bot-acting").header(USER_API_KEY_HEADER, VALID_USER_API_KEY),
+        ),
+        empty_body(
+            request("/required")
+                .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+                .header(USER_API_KEY_HEADER, VALID_USER_API_KEY),
+        ),
+        empty_body(
+            request("/required?macro-api-token=query")
+                .header(USER_API_KEY_HEADER, VALID_USER_API_KEY),
+        ),
+    ];
+
+    for request in requests {
+        let (status, body) = send(&router, request).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body, json!({ "message": "ambiguous credentials" }));
+    }
+
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn user_api_key_wins_over_ambient_cookies() {
+    let (router, service) = test_router();
+    let (status, body) = send(
+        &router,
+        empty_body(
+            user_api_key_request("/user", VALID_USER_API_KEY)
+                .header("cookie", format!("{ACCESS_TOKEN_COOKIE}=cookie")),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["macro_user_id"], API_KEY_USER_ID);
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::UserApiKey(
+            VALID_USER_API_KEY.to_string()
+        )]
+    );
+}
+
+#[tokio::test]
+async fn optional_extractor_rejects_an_invalid_user_api_key() {
+    let (router, service) = test_router();
+    let (status, body) = send(
+        &router,
+        empty_body(user_api_key_request("/optional", "mak_invalid")),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, json!({ "message": "unauthorized" }));
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::UserApiKey("mak_invalid".to_string())]
+    );
+}
+
+#[tokio::test]
+async fn optional_extractor_accepts_a_valid_user_api_key() {
+    let (router, service) = test_router();
+    let (status, body) = send(
+        &router,
+        empty_body(user_api_key_request("/optional", VALID_USER_API_KEY)),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["macro_user_id"], API_KEY_USER_ID);
+    assert_eq!(
+        service.calls(),
+        [AuthorizationCall::UserApiKey(
+            VALID_USER_API_KEY.to_string()
+        )]
     );
 }
 

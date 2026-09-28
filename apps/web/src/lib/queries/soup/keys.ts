@@ -4,6 +4,7 @@ import type { SoupAstItemsQueryArgs, SoupItemsQueryArgs } from './items';
 import type { SearchSoupQueryArgs } from './search';
 
 export const soupKeys = createQueryKeys('soup', {
+  crmPeople: (teamId: string) => [teamId],
   items: (args: SoupItemsQueryArgs) => ({
     queryKey: [args.params, args.body],
   }),

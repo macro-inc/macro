@@ -3,6 +3,7 @@ import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { markdownToPlainText } from '@macro-inc/lexical-core';
 import { themeReactive } from '../theme/signals/themeReactive';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
+import { isEntityDiscussionEvent } from './entity-discussion';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
 import {
   getNotificationAction,
@@ -39,14 +40,42 @@ function getAccentColorForIcon(): string {
   return `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
 }
 
+/**
+ * Who the notification reads as being from. Agent notifications have no user
+ * sender - a bot is not a user - so the bot (or, for a mention, the author)
+ * named in the metadata stands in.
+ */
+async function resolveActorName(
+  notification: UnifiedNotification,
+  resolveUserName: UserNameResolver
+): Promise<string | undefined> {
+  const meta = notification.notification_metadata;
+  if (
+    meta.tag === 'agent_session_settled' ||
+    meta.tag === 'agent_session_waiting_for_input'
+  ) {
+    return meta.content.botName;
+  }
+  if (isEntityDiscussionEvent(meta) && meta.content.senderDisplayName) {
+    return meta.content.senderDisplayName;
+  }
+  if (meta.tag === 'agent_session_mentioned') {
+    return meta.content.mentionedBy
+      ? await resolveUserName(meta.content.mentionedBy)
+      : meta.content.botName;
+  }
+  return notification.sender_id
+    ? await resolveUserName(notification.sender_id)
+    : undefined;
+}
+
 export async function toPlatformNotificationData(
   notification: UnifiedNotification,
   resolveUserName: UserNameResolver,
   resolveDocumentName: DocumentNameResolver
 ): Promise<PlatformNotificationData | null> {
-  const actorId = notification.sender_id;
   const actor =
-    (actorId ? await resolveUserName(actorId) : undefined) ??
+    (await resolveActorName(notification, resolveUserName)) ??
     USER_NAME_FALLBACK;
 
   const showTarget = shouldShowNotificationTarget(notification);

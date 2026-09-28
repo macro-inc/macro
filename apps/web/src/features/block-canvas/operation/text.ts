@@ -1,13 +1,13 @@
-import { createBlockSignal } from '@core/block';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { batch } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { OPERATION_LOGGING } from '../constants';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import type { TextNode } from '../model/CanvasModel';
 import { useCachedStyle } from '../signal/cachedStyle';
 import { useCanvasHistory } from '../signal/canvasHistory';
 import { useSelection } from '../signal/selection';
-import { highestOrderSignal, useCanvasNodes } from '../store/canvasData';
+import { useCanvasNodes } from '../store/canvasData';
 import { useRenderState } from '../store/RenderState';
 import { sharedInstance } from '../util/sharedInstance';
 import type { Vector2 } from '../util/vector2';
@@ -24,17 +24,15 @@ export type TextOperation = Operation & {
   node: TextNode;
 };
 
-export const currentTextOperationSignal = createBlockSignal<TextOperation>();
-
 export const useText = sharedInstance((): Operator => {
   const { pageToCanvas } = useRenderState();
   const { createNode, updateNode, ...nodes } = useCanvasNodes();
   const { deselectNode } = useSelection();
   const [currentTextOperation, setCurrentTextOperation] =
-    currentTextOperationSignal;
+    useCanvasDocument().state.signals.currentTextOperation;
   const history = useCanvasHistory();
   const cachedStyle = useCachedStyle();
-  const highestOrder = highestOrderSignal.get;
+  const highestOrder = useCanvasDocument().state.signals.highestOrder[0];
 
   function _applyMousePos(mousePos: Vector2, normalize?: boolean) {
     const op = currentTextOperation();

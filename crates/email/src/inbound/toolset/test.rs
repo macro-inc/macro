@@ -83,6 +83,44 @@ fn test_send_email_schema_validation() {
     );
 }
 
+/// The confirmed variant takes exactly `SendEmail`'s fields plus the
+/// confirmation, and the confirmation is required: the schema is the gate.
+#[test]
+fn send_confirmed_email_is_send_email_plus_a_required_confirmation() {
+    let confirmed = generate_validated_input_schema::<SendConfirmedEmail>().unwrap();
+    let plain = generate_validated_input_schema::<SendEmail>().unwrap();
+    assert_eq!(confirmed.name, "SendConfirmedEmail");
+    assert!(
+        confirmed.description.contains("userConfirmation"),
+        "{}",
+        confirmed.description
+    );
+
+    let confirmed = confirmed.schema.to_value();
+    let plain = plain.schema.to_value();
+    let properties = |schema: &serde_json::Value| {
+        let mut names: Vec<String> = schema["properties"]
+            .as_object()
+            .expect("an object schema")
+            .keys()
+            .cloned()
+            .collect();
+        names.sort();
+        names
+    };
+    let mut expected = properties(&plain);
+    expected.push("userConfirmation".to_owned());
+    expected.sort();
+    assert_eq!(properties(&confirmed), expected);
+    assert!(
+        confirmed["required"]
+            .as_array()
+            .expect("required is an array")
+            .contains(&serde_json::json!("userConfirmation")),
+        "{confirmed:#}"
+    );
+}
+
 #[test]
 fn test_get_thread_schema_validation() {
     let result = generate_validated_input_schema::<GetThread>();
@@ -184,4 +222,51 @@ fn resolve_inbox_selector_rejects_unknown_address() {
         "{}",
         err.description
     );
+}
+
+/// The composer's export, as `prepareEmailBody` encodes it: base64url of the
+/// body element's outer HTML, unpadded.
+fn composer_body(html: &str) -> String {
+    URL_SAFE_NO_PAD.encode(html)
+}
+
+#[test]
+fn composer_html_is_recognized_and_left_alone() {
+    let encoded = composer_body("<body><p>hello</p></body>");
+
+    let decoded = decode_composer_html(&encoded).expect("composer body");
+
+    assert_eq!(decoded, "<body><p>hello</p></body>");
+}
+
+#[test]
+fn model_markdown_is_not_mistaken_for_composer_html() {
+    // Whitespace and punctuation put real prose outside the base64url
+    // alphabet, so the decode fails before the tag check matters.
+    for body in [
+        "Hello world",
+        "Hi Dana,\n\nFollowing up on the **Q3 migration**.",
+        "- one\n- two",
+        "# Heading",
+    ] {
+        assert!(
+            decode_composer_html(body).is_none(),
+            "markdown treated as composer html: {body}"
+        );
+    }
+}
+
+#[test]
+fn base64_that_decodes_to_prose_is_not_treated_as_html() {
+    // A single word can be valid base64url by accident; only markup counts.
+    let encoded = composer_body("just prose, no markup");
+
+    assert!(decode_composer_html(&encoded).is_none());
+}
+
+#[test]
+fn leading_whitespace_before_the_tag_still_counts_as_html() {
+    let encoded = composer_body("\n  <div>hi</div>");
+
+    assert!(decode_composer_html(&encoded).is_some());
 }

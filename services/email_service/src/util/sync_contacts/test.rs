@@ -107,6 +107,58 @@ fn assert_published_batches(thread_count: usize, expected_batch_sizes: &[usize])
     assert_eq!(published_thread_ids, thread_ids);
 }
 
+fn other_contact(email: Option<&str>, name: Option<&str>) -> Contact {
+    Contact {
+        id: Uuid::from_u128(1),
+        link_id: Uuid::from_u128(2),
+        name: name.map(str::to_owned),
+        email_address: email.map(str::to_owned),
+        original_photo_url: None,
+        sfs_photo_url: None,
+    }
+}
+
+#[test]
+fn other_contact_at_a_shared_sender_address_keeps_no_name() {
+    let contact = normalize_other_contact(other_contact(
+        Some("notifications@cal.com"),
+        Some("Nathan Flurry"),
+    ));
+
+    assert_eq!(contact.name, None);
+    assert_eq!(
+        contact.email_address.as_deref(),
+        Some("notifications@cal.com")
+    );
+}
+
+#[test]
+fn other_contact_at_a_personal_address_keeps_its_name() {
+    let contact = normalize_other_contact(other_contact(
+        Some("nathan@example.com"),
+        Some("Nathan Flurry"),
+    ));
+
+    assert_eq!(contact.name.as_deref(), Some("Nathan Flurry"));
+}
+
+#[test]
+fn other_contact_drops_the_relay_suffix_from_its_name() {
+    let contact = normalize_other_contact(other_contact(
+        Some("nathan@example.com"),
+        Some("Nathan Flurry via Cal.com"),
+    ));
+
+    assert_eq!(contact.name.as_deref(), Some("Nathan Flurry"));
+}
+
+#[test]
+fn other_contact_without_an_address_is_left_alone() {
+    let contact = normalize_other_contact(other_contact(None, Some("Nathan Flurry")));
+
+    assert_eq!(contact.name.as_deref(), Some("Nathan Flurry"));
+}
+
 #[tokio::test]
 async fn publishes_no_batches_for_zero_threads() {
     assert_published_batches(0, &[]);

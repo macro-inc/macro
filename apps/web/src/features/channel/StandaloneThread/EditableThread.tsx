@@ -1,16 +1,16 @@
 import { useUserId } from '@core/context/user';
-import { useDeleteMessageMutation } from '@queries/channel/message';
+import { useDeleteMessageMutation } from '@queries/messages/mutations';
 import {
   useAddReactionMutation,
   useRemoveReactionMutation,
-} from '@queries/channel/reaction';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+} from '@queries/messages/reactions';
+import type { MessageListItem } from '@service-storage/messages';
 import { createSignal, Show } from 'solid-js';
 import { createChannelMessageActions } from '../Channel/create-channel-message-actions';
 import { createDeleteMessageConfirmation } from '../Channel/create-delete-message-confirmation';
 import type { InputHandle, InputSnapshot } from '../Input';
 import { Thread } from '../Thread';
-import { buildQuoteReplyValue } from '../Thread/utils/message-actions';
+import { buildReplyTargetValue } from '../Thread/utils/message-actions';
 import { channelReplyInputOffsetX } from '../Thread/utils/thread-rail-geometry';
 import { useStandaloneThread } from './context';
 import { StandaloneThread } from './StandaloneThread';
@@ -18,7 +18,7 @@ import { StandaloneThread } from './StandaloneThread';
 type EditableThreadProps = {
   channelId: string;
   messageId: string;
-  data?: ApiChannelMessage;
+  data?: MessageListItem;
 };
 
 function EditableThreadInner() {
@@ -38,17 +38,20 @@ function EditableThreadInner() {
   );
 
   const getMessageActions = createChannelMessageActions({
-    channelId: ctx.channelId,
+    parent: () => ({ type: 'channel', id: ctx.channelId() }),
     userId,
     deleteMessage: deleteConfirmation.requestDelete,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
-    onReply: ({ message }) => {
+    onReply: ({ message, selectedText, renderedText }) => {
       if (message.thread_id) {
         const current = replyInputState();
         const nextSnapshot: InputSnapshot = {
-          value: buildQuoteReplyValue({
-            quotedContent: message.content,
+          value: buildReplyTargetValue({
+            channelId: ctx.channelId(),
+            message,
+            selectedText,
+            renderedText,
             existingValue: current?.value,
           }),
           mentions: current?.mentions ?? [],
@@ -87,7 +90,7 @@ function EditableThreadInner() {
           <Thread.ReplyInput
             connectorRail="thread"
             offsetX={channelReplyInputOffsetX}
-            channelId={ctx.channelId()}
+            parent={{ type: 'channel', id: ctx.channelId() }}
             messageId={ctx.messageId()}
             replyInputState={replyInputState}
             setReplyInputState={setReplyInputState}

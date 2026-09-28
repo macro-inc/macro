@@ -9,6 +9,7 @@ pub async fn get_unsubscribed_item_users(
         SELECT u.user_id
         FROM user_notification_item_unsubscribe u
         WHERE u.item_id = $1
+          AND (u.snoozed_until IS NULL OR u.snoozed_until > NOW())
         "#,
         item_id
     )
@@ -31,7 +32,7 @@ pub async fn upsert_unsubscribed_item_user(
         r#"
         INSERT INTO user_notification_item_unsubscribe (user_id, item_id, item_type)
         VALUES ($1, $2, $3)
-        ON CONFLICT (user_id, item_id) DO NOTHING
+        ON CONFLICT (user_id, item_id) DO UPDATE SET snoozed_until = NULL
         "#,
         user_id,
         item_id,

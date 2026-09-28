@@ -1,8 +1,7 @@
-import { edgesStore, nodesStore } from '@block-canvas/store/nodesStore';
 import { sharedInstance } from '@block-canvas/util/sharedInstance';
-import { createBlockSignal } from '@core/block';
 import { batch, untrack } from 'solid-js';
 import { reconcile, unwrap } from 'solid-js/store';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import type { CanvasEdge, CanvasId, CanvasNode } from '../model/CanvasModel';
 import {
   renderQueue,
@@ -12,7 +11,7 @@ import {
 import type { Renderable } from '../util/renderQueue';
 import { useSelection } from './selection';
 
-type Snapshot = {
+export type Snapshot = {
   renderQueue: Renderable[];
   allNodes: Record<CanvasId, CanvasNode>;
   allEdges: Record<string, CanvasEdge>;
@@ -22,21 +21,20 @@ type Snapshot = {
 };
 
 const MAX_HISTORY_LENGTH = 40;
-const historySignal = createBlockSignal<Snapshot[]>([]);
-const currentHistorySignal = createBlockSignal<Snapshot | undefined>(undefined);
-const currentStateIndex = createBlockSignal<number>(-1);
 
 export const useCanvasHistory = sharedInstance(createHistory);
 
 function createHistory() {
+  const canvasState = useCanvasDocument().state;
+  const state = canvasState.signals;
   const nodes = useCanvasNodes();
   const edges = useCanvasEdges();
   const selection = useSelection();
-  const [history, setHistory] = historySignal;
-  const [current, setCurrent] = currentHistorySignal;
-  const [currentIndex, setCurrentIndex] = currentStateIndex;
-  const [allNodes, setNodeStore] = nodesStore;
-  const [allEdges, setEdgeStore] = edgesStore;
+  const [history, setHistory] = state.history;
+  const [current, setCurrent] = state.currentHistory;
+  const [currentIndex, setCurrentIndex] = state.currentHistoryIndex;
+  const [allNodes, setNodeStore] = canvasState.stores.nodes;
+  const [allEdges, setEdgeStore] = canvasState.stores.edges;
   const queue = renderQueue();
 
   function createSnapshot(): Snapshot {

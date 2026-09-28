@@ -1,10 +1,14 @@
+import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { toast } from '@core/component/Toast/Toast';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   emailToMacroId,
   getDisplayName,
   getInitialsFromName,
 } from '@core/user';
+import { writeClipboardData } from '@core/util/dataTransfer';
 import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
 import { Collapsible } from '@kobalte/core/collapsible';
@@ -13,6 +17,7 @@ import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
+import CopyIcon from '@phosphor/copy.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import MapPinIcon from '@phosphor/map-pin.svg';
 import PhoneIcon from '@phosphor/phone.svg';
@@ -25,6 +30,7 @@ import XIcon from '@phosphor/x.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
+import { createCallback } from '@solid-primitives/rootless';
 import { Avatar, Button, cn } from '@ui';
 import {
   type Accessor,
@@ -38,6 +44,11 @@ import { Dynamic } from 'solid-js/web';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
 import { isSameLocalDate, parseLocalDate } from '../utils/calendar-date';
 import {
+  parseMacroAppLink,
+  sanitizeCalendarDescription,
+} from '../utils/calendar-description';
+import { safeConferenceUrl } from '../utils/conference-link';
+import {
   type CalendarPerson,
   eventAttribution,
 } from '../utils/event-attribution';
@@ -50,6 +61,10 @@ import {
   REMINDER_METHOD_POPUP,
   resolveReminderOverrides,
 } from '../utils/event-reminders';
+import {
+  calendarMacroCallUrl,
+  removeCalendarMacroCall,
+} from '../utils/macro-call-link';
 import { formatRecurrenceDescription } from '../utils/recurrence';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
@@ -279,12 +294,17 @@ function ScrollableAttendeeList(props: { attendees: CalendarAttendee[] }) {
 
   return (
     <div class="relative min-w-0 flex-1">
-      <div ref={setScrollContainer} class="max-h-40 overflow-y-auto pr-4">
+      <div
+        ref={setScrollContainer}
+        class="max-h-40 overflow-y-auto pr-4 mobile:max-h-none mobile:overflow-visible mobile:pr-0"
+      >
         <div class="flex flex-col gap-3">
           <CalendarAttendeeList attendees={props.attendees} />
         </div>
       </div>
-      <ScrollIndicators scrollRef={scrollContainer} appearance="gradient" />
+      <Show when={!isMobile()}>
+        <ScrollIndicators scrollRef={scrollContainer} appearance="gradient" />
+      </Show>
     </div>
   );
 }
@@ -311,19 +331,6 @@ function formatEventSchedule(
   return isSameLocalDate(start, end)
     ? `${formatDate.format(start)} · ${formatCalendarTime(start, timeFormat)}–${formatCalendarTime(end, timeFormat)}`
     : `${formatDate.format(start)}, ${formatCalendarTime(start, timeFormat)}–${formatDate.format(end)}, ${formatCalendarTime(end, timeFormat)}`;
-}
-
-function safeConferenceUrl(value: string | undefined) {
-  if (!value) return undefined;
-
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' || url.protocol === 'http:'
-      ? url.toString()
-      : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 /**
@@ -374,7 +381,7 @@ function EventRemindersItem(props: {
     resolveReminderOverrides(
       props.event.reminders,
       props.defaultReminders,
-      props.event.eventType
+      props.event.reminderEventType ?? props.event.eventType
     ).toSorted((a, b) => a.minutes - b.minutes)
   );
 
@@ -489,17 +496,42 @@ export function EventDetails(props: {
   timeFormat: CalendarTimeFormat;
   defaultReminders?: EventReminderOverride[];
 }) {
-  const conferenceUrl = createMemo(() =>
-    safeConferenceUrl(props.event.conferenceUrl)
+  const macroMeetingUrl = () => calendarMacroCallUrl(props.event);
+  const conferenceUrl = createMemo(
+    () => macroMeetingUrl() ?? safeConferenceUrl(props.event.conferenceUrl)
   );
   const conferenceLabel = () =>
-    props.event.conferenceProvider === 'google_meet'
-      ? 'Join Google Meet'
-      : 'Join meeting';
+    macroMeetingUrl()
+      ? 'Join Macro call'
+      : props.event.conferenceProvider === 'google_meet'
+        ? 'Join Google Meet'
+        : 'Join meeting';
   const attribution = createMemo(() => eventAttribution(props.event));
   const originalTimeZone = createMemo(() =>
     formatOriginalTimeZone(props.event, props.timeFormat)
   );
+  const eventContent = createMemo(() =>
+    removeCalendarMacroCall(props.event, macroMeetingUrl())
+  );
+  const descriptionHtml = createMemo(() =>
+    sanitizeCalendarDescription(eventContent().description)
+  );
+  const openDescriptionLink = createCallback((event: MouseEvent) => {
+    const anchor = (event.target as Element | null)?.closest('a[href]');
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    event.preventDefault();
+    const target = parseMacroAppLink(anchor.href);
+    if (target) {
+      openDocument(
+        target.blockName,
+        target.documentId,
+        undefined,
+        event.shiftKey
+      );
+      return;
+    }
+    openExternalUrl(anchor.href);
+  });
   const recurrenceDescription = createMemo(() => {
     const description = formatRecurrenceDescription(
       props.event.recurrenceLines
@@ -513,15 +545,21 @@ export function EventDetails(props: {
   });
 
   return (
-    <div class="grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] gap-x-4 gap-y-5 p-1 text-sm text-ink-muted sm:grid-cols-[1rem_minmax(0,1fr)] sm:gap-x-3 sm:gap-y-3 sm:text-xs">
+    <div class="ph-no-capture grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] gap-x-4 gap-y-5 p-1 text-sm text-ink-muted sm:grid-cols-[1rem_minmax(0,1fr)] sm:gap-x-3 sm:gap-y-3 sm:text-xs">
       <span
         aria-hidden="true"
         class="mt-0.5 flex size-5 items-center justify-center sm:size-4"
       >
-        <span
-          class="size-4 rounded-sm sm:size-3"
-          style={{ 'background-color': props.event.calendar.color }}
-        />
+        <span class="flex size-4 gap-px overflow-hidden rounded-sm sm:size-3">
+          <For each={props.event.visibleCalendars}>
+            {(calendar) => (
+              <span
+                class="min-w-0 flex-1"
+                style={{ 'background-color': calendar.color }}
+              />
+            )}
+          </For>
+        </span>
       </span>
       <div class="flex min-w-0 flex-col gap-1">
         <div class="select-text text-lg font-semibold leading-snug text-ink sm:text-base">
@@ -530,6 +568,11 @@ export function EventDetails(props: {
         <div class="select-text text-sm text-ink-muted sm:text-xs">
           {formatEventSchedule(props.event, props.timeFormat)}
         </div>
+        <Show when={props.event.eventType === 'out_of_office'}>
+          <div class="select-text text-sm text-ink-extra-muted sm:text-xs">
+            Out of office
+          </div>
+        </Show>
         <Show when={recurrenceDescription()}>
           {(description) => (
             <div class="select-text text-sm text-ink-extra-muted sm:text-xs">
@@ -542,17 +585,33 @@ export function EventDetails(props: {
       <Show when={conferenceUrl()}>
         {(url) => (
           <div class="contents">
-            <VideoCameraIcon class="size-5 self-center text-ink-extra-muted sm:size-4" />
-            <Button
-              fullWidth
-              variant="cta"
-              size="sm"
-              class="h-8 rounded-lg [&_svg]:size-3.5!"
-              onClick={() => openExternalUrl(url())}
-            >
-              {conferenceLabel()}
-              <ArrowSquareOutIcon />
-            </Button>
+            <VideoCameraIcon class="mt-2 size-5 text-ink-extra-muted sm:size-4" />
+            <div class="flex min-w-0 items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-8 min-w-0 rounded-lg bg-hover text-ink not-touch:not-disabled:hover:bg-active [&_svg]:size-3.5!"
+                onClick={() => openExternalUrl(url())}
+              >
+                {conferenceLabel()}
+                <ArrowSquareOutIcon />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="shrink-0"
+                label="Copy call link"
+                onClick={async () => {
+                  if (await writeClipboardData({ 'text/plain': url() })) {
+                    toast.success('Call link copied');
+                  } else {
+                    toast.failure('Could not copy call link');
+                  }
+                }}
+              >
+                <CopyIcon class="size-3.5" />
+              </Button>
+            </div>
           </div>
         )}
       </Show>
@@ -565,17 +624,19 @@ export function EventDetails(props: {
         )}
       </Show>
 
-      <Show when={props.event.location?.trim()}>
+      <Show when={eventContent().location.trim()}>
         {(location) => <EventLocationItem location={location()} />}
       </Show>
 
-      <Show when={props.event.description}>
-        {(description) => (
+      <Show when={descriptionHtml()}>
+        {(html) => (
           <div class="contents">
             <TextAlignLeftIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
-            <p class="select-text leading-relaxed text-ink-muted">
-              {description()}
-            </p>
+            <div
+              class="select-text leading-relaxed text-ink-muted [&_a]:text-accent [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
+              innerHTML={html()}
+              onClick={openDescriptionLink}
+            />
           </div>
         )}
       </Show>
@@ -598,9 +659,15 @@ export function EventDetails(props: {
   );
 }
 
-/** Displays attendees in a full-width collapsible popover section. */
+/**
+ * Displays attendees in a full-width collapsible popover section. `actions`
+ * are icon buttons for the header row's trailing edge — the copy-emails and
+ * email-guests pair Google Calendar puts there — rendered beside the
+ * disclosure trigger rather than inside it, since a button cannot nest one.
+ */
 export function EventAttendeesSection(props: {
   attendees: CalendarAttendee[];
+  actions?: JSX.Element;
 }) {
   return (
     <Show when={props.attendees.length > 0}>
@@ -608,17 +675,20 @@ export function EventAttendeesSection(props: {
         defaultOpen
         class="border-edge-muted text-sm text-ink-muted sm:border-t sm:text-xs"
       >
-        <Collapsible.Trigger class="group flex w-full items-center gap-4 px-4 py-4 text-left hover:bg-hover hover:text-ink sm:gap-3">
-          <UsersIcon class="size-5 shrink-0 text-ink-extra-muted sm:size-4" />
-          <span>
-            {props.attendees.length}{' '}
-            {plural('attendee', props.attendees.length)}
-          </span>
-          <CaretDownIcon
-            aria-hidden="true"
-            class="ml-auto size-3 shrink-0 -rotate-90 text-ink-extra-muted transition-transform group-data-expanded:rotate-0"
-          />
-        </Collapsible.Trigger>
+        <div class="flex items-center pr-2">
+          <Collapsible.Trigger class="group flex min-w-0 flex-1 items-center gap-4 py-4 pl-4 pr-2 text-left hover:bg-hover hover:text-ink sm:gap-3">
+            <UsersIcon class="size-5 shrink-0 text-ink-extra-muted sm:size-4" />
+            <span>
+              {props.attendees.length}{' '}
+              {plural('attendee', props.attendees.length)}
+            </span>
+            <CaretDownIcon
+              aria-hidden="true"
+              class="size-3 shrink-0 -rotate-90 text-ink-extra-muted transition-transform group-data-expanded:rotate-0"
+            />
+          </Collapsible.Trigger>
+          <div class="flex shrink-0 items-center gap-1">{props.actions}</div>
+        </div>
         <Collapsible.Content class="data-closed:hidden">
           <div class="flex gap-4 pb-3 pl-4 pt-1.5 sm:gap-3">
             <span aria-hidden="true" class="size-5 shrink-0 sm:size-4" />

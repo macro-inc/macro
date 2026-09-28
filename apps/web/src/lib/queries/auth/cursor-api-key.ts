@@ -26,9 +26,12 @@ const NOT_CONNECTED: CursorApiKeyStatus = {
  * enough to render "connected" or "not connected" — which is all the settings
  * surface needs.
  */
-export function useCursorApiKeyStatusQuery() {
+export function useCursorApiKeyStatusQuery(
+  enabled: () => boolean = () => true
+) {
   return useQuery(() => ({
     queryKey: authKeys.cursorApiKeyStatus.queryKey,
+    enabled: enabled(),
     queryFn: async () =>
       throwOnErr(async () => await authServiceClient.getCursorApiKeyStatus()),
     placeholderData: NOT_CONNECTED,
@@ -57,8 +60,8 @@ export function useSaveCursorApiKey() {
 /**
  * Forgets the stored Cursor API key.
  *
- * This does not revoke anything at Cursor; see the button's copy in
- * `CursorConnectionSection`.
+ * This does not revoke anything at Cursor; the Harness settings copy makes
+ * that distinction explicit.
  */
 export function useDisconnectCursorApiKey() {
   return useMutation(() => ({
@@ -73,7 +76,7 @@ export function useDisconnectCursorApiKey() {
 }
 
 /**
- * The models the user's Cursor account offers, for the settings dropdown.
+ * The models the user's Cursor account offers, for agent configuration.
  *
  * Enabled only once a key is registered: the endpoint asks Cursor live through
  * that key, and a keyless account has nothing to list. Kept fresh for a while

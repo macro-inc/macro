@@ -25,10 +25,6 @@ use super::{Mode, arch, env_layer, frontend, mailpit, proxy, sdk_webhook, snapsh
 pub struct UpArgs {
     #[command(flatten)]
     pub run: RunArgs,
-    /// Neither restore from nor save an init snapshot — always run the full
-    /// migrate/kickstart/index init.
-    #[arg(long)]
-    pub no_snapshot: bool,
     /// Stop after the infra bring-up + init (and the snapshot save/restore):
     /// no app services, proxy, or frontend. This is the CI bake mode — the
     /// app services need the Doppler-sourced env (AWS endpoints, shared
@@ -148,6 +144,17 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         clear_state(&instance)?;
     }
 
+    // Same collector/browser bring-up as `run_stack`, and for the same reason:
+    // before `prepare` so the env probe wires `OTEL_EXPORTER_OTLP_ENDPOINT`.
+    // A CI bake (`--infra-only`) has no services to trace and no one driving
+    // a browser, so it skips both.
+    if !args.infra_only {
+        super::ensure_tracing_backend(&stage, args.run.traces)?;
+        if args.run.with_chrome {
+            super::ensure_headless_chrome(&stage);
+        }
+    }
+
     // Same full-delete/full-create overlap as `run_stack`: tear the previous
     // stack down in the background while the host-side build runs.
     let teardown = (!stage.is_dry_run()).then(|| {
@@ -181,16 +188,15 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     }
     let fe_build = (static_frontend && !stage.is_dry_run()).then(|| {
         let instance = instance.clone();
-        std::thread::spawn(move || {
-            frontend::build_static(&Stage::from_env().quiet(), &instance, mode)
-        })
+        let stage = stage.background();
+        std::thread::spawn(move || frontend::build_static(&stage, &instance, mode))
     });
 
     // The init snapshot decision: hash the init-defining inputs (possible only
     // after `prepare` wrote the kickstart) and check for a stored snapshot.
     // Restores skip migrate/kickstart/index-init; a cold init saves one for
     // next time — that's how the cache seeds itself.
-    let snapshot_plan = (!args.no_snapshot && !stage.is_dry_run())
+    let snapshot_plan = (!args.run.no_snapshot && !stage.is_dry_run())
         .then(|| snapshot::Plan::compute(&instance))
         .transpose()?;
 
@@ -282,6 +288,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     } else {
         mailpit::direct_ui_url(&instance)
     };
+    stage.print_timings("bring-up");
     summary::print(mode, &instance, &env, &frontend_url, &mailpit_url, None);
     stage.note(&format!(
         "  headless: `just stack status`, `just stack update`, `just stack down`{}",
@@ -319,10 +326,11 @@ fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
             no_frontend: false,
             enable_onboarding: false,
             verbose: args.verbose,
-            traces: None,
+            no_snapshot: false,
+            traces: super::cli::TracesBackend::default(),
+            with_chrome: false,
             with_cf_tunnel: false,
         },
-        no_snapshot: false,
         infra_only: false,
         json: args.json,
     };
@@ -347,6 +355,9 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
         args.env.env_file.as_deref(),
         state.frontend == "static",
         None,
+        // `update` doesn't know the original `--traces` choice; keep the
+        // running stack's wiring keyed on the port probe as before.
+        true,
     )?;
     let remounted = if let Some(source) = args.binaries_dir.as_deref() {
         let new = super::build::BinariesDir::classify(source)?;

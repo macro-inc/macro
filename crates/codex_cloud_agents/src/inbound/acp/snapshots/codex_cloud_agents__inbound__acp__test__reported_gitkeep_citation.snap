@@ -1,0 +1,13 @@
+---
+source: crates/codex_cloud_agents/src/inbound/acp/test.rs
+expression: updates
+---
+[
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "## Status\n\nIt’s going well! I inspected the repository, and it is currently an **empty placeholder/test repository** rather than an implemented project.\n\n### What’s in the repository?\n\n- The current branch is `work`.\n- The Git history contains one commit: **“Initialize repository.”**\n- The only tracked file is an empty `.gitkeep`, which is commonly used to retain an otherwise empty directory in Git. `.gitkeep:1`\n- There is no README, source code, dependency manifest, tests, or configured Git remote, so the repository does not yet have a defined application purpose.\n"
+    }
+  }
+]

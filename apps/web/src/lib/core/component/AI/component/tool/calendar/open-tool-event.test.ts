@@ -7,7 +7,7 @@ import {
 
 const openCalendarEventSplit = vi.hoisted(() => vi.fn());
 
-vi.mock('@block-calendar/open-calendar-event', () => ({
+vi.mock('@app/features/calendar-view/open-calendar-event', () => ({
   openCalendarEventSplit,
 }));
 

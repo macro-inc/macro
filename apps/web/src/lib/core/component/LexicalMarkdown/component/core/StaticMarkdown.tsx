@@ -12,8 +12,10 @@ import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
   type AgentContextNode,
+  type AgentSessionMentionNode,
   type AwaitNode,
   type ClassedBlockNode,
+  type ConnectAppNode,
   type ContactMentionNode,
   type DateMentionNode,
   DEFAULT_LANGUAGE,
@@ -27,6 +29,7 @@ import {
   type MagicChipNode,
   normalizedLanguage,
   type PasteNode,
+  type ReplyTargetNode,
   type SnapshotNode,
   SupportedNodeTypes,
   type TagMentionNode,
@@ -71,16 +74,20 @@ import {
 } from '@core/constant/featureFlags';
 import type { MarkNode } from '@lexical/mark';
 import type { SearchMatchNode } from '@macro-inc/lexical-core/nodes/SearchMatchNode';
-import { getCachedItemPreview } from '@queries/preview';
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
 import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
+import { AgentSessionMention as AgentSessionMentionDecorator } from '../decorator/AgentSessionMention';
 import { Await as AwaitDecorator } from '../decorator/Await';
+import { ConnectApp as ConnectAppDecorator } from '../decorator/ConnectApp';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
-import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
+import {
+  DocumentMention as DocumentMentionDecorator,
+  DocumentMentionStatic,
+} from '../decorator/DocumentMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
 import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
 import { LazyDecorator } from '../decorator/LazyDecorator';
@@ -88,6 +95,7 @@ import { MagicChip as MagicChipDecorator } from '../decorator/MagicChip';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { PasteNode as PasteNodeDecorator } from '../decorator/PasteNode';
+import { ReplyTarget as ReplyTargetDecorator } from '../decorator/ReplyTarget';
 import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';
 import { TagMention as TagMentionDecorator } from '../decorator/TagMention';
 import { ThemeMention as ThemeMentionDecorator } from '../decorator/ThemeMention';
@@ -231,6 +239,7 @@ function getTextClassName(
     | TextNode
     | UserMentionNode
     | DocumentMentionNode
+    | AgentSessionMentionNode
     | ContactMentionNode
     | DateMentionNode
     | WatermarkNode,
@@ -356,13 +365,6 @@ const UserMention: TypedRenderableEntity<UserMentionNode> = {
   ),
 };
 
-const MentionPlaceholder = () => (
-  <span class="pointer-events-none inline-block align-baseline opacity-60">
-    <span class="relative top-[0.125em] size-[1em] inline-block mx-1 bg-current/15 rounded-xs" />
-    <span class="inline-block w-12 h-[0.9em] align-baseline bg-current/10 rounded-sm" />
-  </span>
-);
-
 const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
   guard: (node: LexicalNode): node is DocumentMentionNode =>
     node.__type === 'document-mention',
@@ -375,15 +377,19 @@ const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
         key,
         theme: props.theme,
       });
-    const shouldRenderLazy =
-      options.lazy &&
-      getCachedItemPreview(componentProps.documentId) === undefined;
+    const shouldRenderLazy = options.lazy;
 
     return (
       <span class={getTextClassName(props.node, props.theme)}>
         {shouldRenderLazy ? (
           <LazyDecorator
-            placeholder={<MentionPlaceholder />}
+            placeholder={
+              <DocumentMentionStatic
+                {...componentProps}
+                key={key}
+                theme={props.theme}
+              />
+            }
             render={mention}
           />
         ) : (
@@ -394,12 +400,40 @@ const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
   },
 };
 
+const AgentSessionMention: TypedRenderableEntity<AgentSessionMentionNode> = {
+  guard: (node: LexicalNode): node is AgentSessionMentionNode =>
+    node.__type === 'agent-session-mention',
+  render: (props) => (
+    <span class={getTextClassName(props.node, props.theme)}>
+      {AgentSessionMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
 const ThemeMention: TypedRenderableEntity<ThemeMentionNode> = {
   guard: (node: LexicalNode): node is ThemeMentionNode =>
     node.__type === 'theme-mention',
   render: (props) => (
     <span>
       {ThemeMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const ConnectApp: TypedRenderableEntity<ConnectAppNode> = {
+  guard: (node: LexicalNode): node is ConnectAppNode =>
+    node.__type === 'connect-app',
+  render: (props) => (
+    <span>
+      {ConnectAppDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
         theme: props.theme,
@@ -508,16 +542,31 @@ const AgentContext: TypedRenderableEntity<AgentContextNode> = {
   ),
 };
 
-const MagicChip: TypedRenderableEntity<MagicChipNode> = {
-  guard: (node: LexicalNode): node is MagicChipNode =>
-    node.__type === 'magic-chip',
+const ReplyTarget: TypedRenderableEntity<ReplyTargetNode> = {
+  guard: (node: LexicalNode): node is ReplyTargetNode =>
+    node.__type === 'reply-target',
   render: (props) => (
-    <div class="max-w-full">
-      <MagicChipDecorator
+    // `data-reply-target-node` mirrors the editor block wrapper so the shared
+    // spacing rule applies in static markdown too.
+    <div
+      class="max-w-full"
+      data-reply-target-node={props.node.__targetMessageId}
+    >
+      <ReplyTargetDecorator
         {...props.node.exportComponentProps()}
         key={props.node.getKey()}
         theme={props.theme}
       />
+    </div>
+  ),
+};
+
+const MagicChip: TypedRenderableEntity<MagicChipNode> = {
+  guard: (node: LexicalNode): node is MagicChipNode =>
+    node.__type === 'magic-chip',
+  render: (props) => (
+    <div class="min-w-0 max-w-full overflow-x-hidden">
+      <MagicChipDecorator {...props.node.exportComponentProps()} />
     </div>
   ),
 };
@@ -755,7 +804,10 @@ const Equation: TypedRenderableEntity<EquationNode> = {
   guard: (node: LexicalNode): node is EquationNode =>
     node.__type === 'equation',
   render: (props) => (
-    <EquationDecorator equation={props.node.__equation} inline={true} />
+    <EquationDecorator
+      equation={props.node.__equation}
+      inline={props.node.__inline}
+    />
   ),
 };
 
@@ -867,12 +919,14 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(LineBreak),
   eraseRenderableEntity(UserMention),
   eraseRenderableEntity(DocumentMention),
+  eraseRenderableEntity(AgentSessionMention),
   eraseRenderableEntity(DocumentCard),
   eraseRenderableEntity(ContactMention),
   eraseRenderableEntity(DateMention),
   eraseRenderableEntity(GroupMention),
   eraseRenderableEntity(Await),
   eraseRenderableEntity(AgentContext),
+  eraseRenderableEntity(ReplyTarget),
   eraseRenderableEntity(MagicChip),
   eraseRenderableEntity(Snapshot),
   eraseRenderableEntity(Image),
@@ -881,6 +935,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(Equation),
   eraseRenderableEntity(ThemeMention),
   eraseRenderableEntity(TagMention),
+  eraseRenderableEntity(ConnectApp),
   eraseRenderableEntity(UnknownMention),
   eraseRenderableEntity(Watermark),
   eraseRenderableEntity(Paste),

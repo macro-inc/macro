@@ -1,11 +1,6 @@
+import { useCurrentPageNumber } from '@block-pdf/signal/pdfViewer';
 import {
-  useCurrentPageNumber,
-  viewerHasVisiblePagesSignal,
-} from '@block-pdf/signal/pdfViewer';
-import {
-  activeTabIdSignal,
   MAX_TAB_COUNT,
-  tabDataStore,
   useCreateTab,
   useDeleteTab,
   useNavigateToTab,
@@ -13,11 +8,11 @@ import {
 import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
 import { For, Show } from 'solid-js';
+import { usePdfDocument } from '../context/pdf-document-context';
+import { usePdfViewer } from '../context/pdf-viewer-context';
 
 interface IInternalTabProps {
   label: string;
-  location: string;
-  index: number;
   id: number;
   tabCount: number;
   clickHandler: () => void;
@@ -25,13 +20,11 @@ interface IInternalTabProps {
 }
 
 function Tab(props: IInternalTabProps) {
-  const [activeTabId] = activeTabIdSignal;
+  const activeTabId = usePdfDocument().tabs.activeId;
   const currentPageNumber = useCurrentPageNumber();
 
   const active = () => props.id === activeTabId();
 
-  // TODO (seamus) Tab label should be able to pull information from pdf
-  // section data.
   const label = () => (active() ? `Page ${currentPageNumber()}` : props.label);
 
   return (
@@ -57,27 +50,27 @@ function Tab(props: IInternalTabProps) {
 }
 
 export function Tabs() {
-  const [tabs] = tabDataStore;
+  const pdf = usePdfDocument();
+  const tabs = pdf.tabs.items;
+  const viewerHasVisiblePages = usePdfViewer().root.hasVisiblePages;
   const createTab = useCreateTab();
   const deleteTab = useDeleteTab();
   const navigate = useNavigateToTab();
   return (
-    <Show when={viewerHasVisiblePagesSignal.get()}>
+    <Show when={viewerHasVisiblePages()}>
       <div class="w-full h-7 rounded-full flex px-1.5 shrink items-center">
         <For each={tabs}>
-          {(tab, index) => (
+          {(tab) => (
             <Tab
               label={tab.label}
-              location={tab.locationHash || ''}
-              index={index()}
               id={tab.id}
-              tabCount={tabs.length}
+              tabCount={pdf.tabs.count()}
               clickHandler={() => navigate(tab.id)}
               deleteTab={() => deleteTab(tab.id)}
             />
           )}
         </For>
-        <Show when={tabs.length < MAX_TAB_COUNT}>
+        <Show when={pdf.tabs.count() < MAX_TAB_COUNT}>
           <button
             onClick={() => createTab()}
             class="shrink-0 p-2 aspect-square rounded-lg flex items-center justify-center hover:bg-hover hover-transition-bg"

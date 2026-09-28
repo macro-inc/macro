@@ -1,5 +1,5 @@
-import AnthropicIcon from '@core/component/AI/assets/anthropic.svg';
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
+import ClaudeIcon from '@icon/wide-claude.svg';
 
 /**
  * Frontend-owned set of model ids. These are the `provider/model` ids the
@@ -11,7 +11,9 @@ import OpenAiIcon from '@core/component/AI/assets/openai.svg';
 export const Model = {
   sonnet5: 'anthropic/claude-sonnet-5',
   opus5: 'anthropic/claude-opus-5',
+  fable51: 'anthropic/claude-fable-5-1',
   haiku45: 'anthropic/claude-haiku-4-5',
+  gpt6Astra: 'openai/gpt-6-astra',
   gpt56: 'openai/gpt-5.6',
   gpt56Mini: 'openai/gpt-5.6-mini',
 } as const;
@@ -21,6 +23,11 @@ export type Model = (typeof Model)[keyof typeof Model];
 /** Alias kept for existing call sites. */
 export type TModel = Model;
 
+/** Models intentionally hidden from chat model pickers. */
+export function isModelPickerOption(modelId: string): boolean {
+  return modelId !== Model.fable51;
+}
+
 type ExhaustiveMap = {
   [K in TModel]: any;
 };
@@ -28,18 +35,49 @@ type ExhaustiveMap = {
 export const MODEL_PRETTYNAME: ExhaustiveMap = {
   'anthropic/claude-sonnet-5': 'Sonnet 5',
   'anthropic/claude-opus-5': 'Opus 5',
+  'anthropic/claude-fable-5-1': 'Fable 5.1',
   'anthropic/claude-haiku-4-5': 'Haiku 4.5',
+  'openai/gpt-6-astra': 'GPT-6 Astra',
   'openai/gpt-5.6': 'GPT-5.6',
   'openai/gpt-5.6-mini': 'GPT-5.6 mini',
 } as const;
 
 export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
-  'anthropic/claude-sonnet-5': AnthropicIcon,
-  'anthropic/claude-opus-5': AnthropicIcon,
-  'anthropic/claude-haiku-4-5': AnthropicIcon,
+  'anthropic/claude-sonnet-5': ClaudeIcon,
+  'anthropic/claude-opus-5': ClaudeIcon,
+  'anthropic/claude-fable-5-1': ClaudeIcon,
+  'anthropic/claude-haiku-4-5': ClaudeIcon,
+  'openai/gpt-6-astra': OpenAiIcon,
   'openai/gpt-5.6': OpenAiIcon,
   'openai/gpt-5.6-mini': OpenAiIcon,
 };
+
+/**
+ * How fast each model draws down a paid plan's included AI, relative to the
+ * default model (Sonnet 5 = 1). Mirrors the per-token rates in `ai_pricing`
+ * (output price, which dominates chat cost): Haiku $5, Sonnet $10, Opus $25,
+ * Fable $50, GPT-6 Astra $50, GPT-5.6 $30, GPT-5.6 mini $4.50 per million
+ * tokens. Shown in the picker so choosing a heavy model is a deliberate trade.
+ */
+export const MODEL_USAGE_MULTIPLIER: { [K in TModel]: number } = {
+  'anthropic/claude-sonnet-5': 1,
+  'anthropic/claude-opus-5': 2.5,
+  'anthropic/claude-fable-5-1': 5,
+  'anthropic/claude-haiku-4-5': 0.5,
+  'openai/gpt-6-astra': 5,
+  'openai/gpt-5.6': 3,
+  'openai/gpt-5.6-mini': 0.45,
+};
+
+/**
+ * The picker's usage hint for a model: "2.5× usage" for models that burn the
+ * allowance faster than the default, nothing for the default and cheaper.
+ */
+export function modelUsageHint(model: TModel): string | undefined {
+  const multiplier = MODEL_USAGE_MULTIPLIER[model];
+  if (multiplier <= 1) return undefined;
+  return `${Number.isInteger(multiplier) ? multiplier : multiplier.toFixed(1)}× usage`;
+}
 
 /** Default model for paid users. */
 export const DEFAULT_MODEL: TModel = Model.sonnet5;
@@ -51,14 +89,20 @@ export const DEFAULT_MODEL: TModel = Model.sonnet5;
  */
 export const FREE_DEFAULT_MODEL: TModel = Model.haiku45;
 
-/** Models a paid user may select — the full set. */
-export const PAID_MODELS: readonly TModel[] = Object.values(Model);
+/**
+ * Models a paid user may select. Fable remains a known model so persisted
+ * chats can still be parsed, but it is intentionally absent from the picker.
+ */
+export const PAID_MODELS: readonly TModel[] =
+  Object.values(Model).filter(isModelPickerOption);
 
 /**
  * Models a free user may select. Free users only get the fast model
  * (`FREE_DEFAULT_MODEL`); every other model is paid-only and shows locked in
  * the selector, where selecting one opens the paywall instead of being sent
- * and rejected by the backend.
+ * and rejected by the backend. The heavy models (Opus, Fable, GPT-6 Astra)
+ * are on every paid plan; they just draw the included AI down faster, see
+ * `MODEL_USAGE_MULTIPLIER`.
  */
 export const FREE_MODELS: readonly TModel[] = [FREE_DEFAULT_MODEL];
 
@@ -76,7 +120,9 @@ export function modelsForPlan(hasPaidAccess: boolean): readonly TModel[] {
 export const MODEL_PROVIDER: ExhaustiveMap = {
   'anthropic/claude-sonnet-5': 'anthropic',
   'anthropic/claude-opus-5': 'anthropic',
+  'anthropic/claude-fable-5-1': 'anthropic',
   'anthropic/claude-haiku-4-5': 'anthropic',
+  'openai/gpt-6-astra': 'openai',
   'openai/gpt-5.6': 'openai',
   'openai/gpt-5.6-mini': 'openai',
 } as const;
@@ -113,9 +159,6 @@ export function alternateProviderModel(
   excluded.add(MODEL_PROVIDER[current]);
 
   const candidates = options?.candidates;
-  const pool =
-    candidates && candidates.length > 0
-      ? candidates
-      : (Object.values(Model) as readonly TModel[]);
+  const pool = candidates && candidates.length > 0 ? candidates : PAID_MODELS;
   return pool.find((id) => !excluded.has(MODEL_PROVIDER[id]));
 }

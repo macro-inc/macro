@@ -55,7 +55,7 @@ export const LanguageDefinitions: Record<
   plaintext: {
     label: 'Plain Text',
     show: true,
-    aliases: ['text'],
+    aliases: ['text', 'txt'],
   },
   javascript: {
     label: 'JavaScript',
@@ -220,6 +220,8 @@ const fileExtensionToMdSupportedLanguage: Record<string, SupportedLanguage> = {
   fish: 'bash',
   svg: 'svg',
   xml: 'svg',
+  txt: 'plaintext',
+  log: 'plaintext',
 };
 
 // Language aliases to file extensions (for create.ts compatibility)

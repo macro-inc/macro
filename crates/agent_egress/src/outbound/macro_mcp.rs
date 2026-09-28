@@ -22,7 +22,7 @@ use std::sync::Mutex;
 use url::Url;
 
 use crate::domain::error::EgressError;
-use crate::domain::model::{BearerToken, McpDestination, UpstreamCall};
+use crate::domain::model::{BearerToken, McpDestination, McpResolution, UpstreamCall};
 use crate::domain::ports::McpCredentials;
 
 #[cfg(test)]
@@ -150,20 +150,19 @@ where
         &self,
         owner: &MacroUserIdStr<'static>,
         destination: &McpDestination,
-    ) -> Result<UpstreamCall, EgressError> {
+    ) -> Result<McpResolution, EgressError> {
         if *destination != McpDestination::Macro {
             return self.inner.resolve(owner, destination).await;
         }
 
         let token = BearerToken::new(self.token(owner).await?);
-        if self.local_cleartext && self.url.scheme() != "https" {
-            Ok(UpstreamCall::bearer_over_local_cleartext(
-                self.url.clone(),
-                token,
-            ))
+        // Every session has Macro's own server; there is no grant to lack.
+        let call = if self.local_cleartext && self.url.scheme() != "https" {
+            UpstreamCall::bearer_over_local_cleartext(self.url.clone(), token)
         } else {
-            UpstreamCall::bearer(self.url.clone(), token)
-        }
+            UpstreamCall::bearer(self.url.clone(), token)?
+        };
+        Ok(McpResolution::Connected(call))
     }
 }
 

@@ -15,6 +15,7 @@ const EXCLUDE: string[] = [NIL_UUID];
 
 // Base filter that excludes all entity types by default
 export const QUERY_FILTERS_BASE: SoupItemsQueryFilters = {
+  agent_session_filters: { ids: EXCLUDE },
   calendar_event_filters: { calendar_event_ids: EXCLUDE },
   call_filters: { call_ids: EXCLUDE },
   channel_filters: { channel_ids: EXCLUDE },
@@ -166,6 +167,37 @@ export function filterSoupItemByRequestBody(
       { tag: 'reminder' },
       ({ data }) => !isIdFilteredOut(body.reminder_filters?.ids, data.id)
     )
+    .with({ tag: 'initiative' }, ({ data }) => {
+      const filters = body.initiative_filters;
+      // Match the server's opt-in rule; cached projects never leak into tasks
+      // or folders when an older Soup caller has no initiative filter.
+      const optedIn =
+        filters?.include === true ||
+        Boolean(filters?.initiative_ids?.length) ||
+        Boolean(filters?.owners?.length) ||
+        (filters?.name !== undefined && filters.name !== null) ||
+        (filters?.due_after !== undefined && filters.due_after !== null) ||
+        (filters?.due_before !== undefined && filters.due_before !== null);
+      return (
+        optedIn &&
+        !isIdFilteredOut(filters?.initiative_ids, data.id) &&
+        !isValueFilteredOut(filters?.owners, data.ownerId)
+      );
+    })
+    .with({ tag: 'agentSession' }, ({ data }) => {
+      const filters = body.agent_session_filters;
+      // Agent sessions are opt-in on the server: a body that neither includes
+      // them nor names ids or owners returns none.
+      const optedIn =
+        filters?.include === true ||
+        Boolean(filters?.ids?.length) ||
+        Boolean(filters?.owners?.length);
+      return (
+        optedIn &&
+        !isIdFilteredOut(filters?.ids, data.id) &&
+        !isValueFilteredOut(filters?.owners, data.ownerId)
+      );
+    })
     .exhaustive();
 }
 
@@ -182,6 +214,11 @@ function queryIncludeToRequestBody(query: Query): SoupBody {
       document_ids: include.documentId,
       owners: include.documentOwnerId,
       sub_types: include.subType,
+    },
+    agent_session_filters: {
+      ids: include.agentSessionId,
+      owners: include.agentSessionOwnerId,
+      include: include.includeAgentSessions,
     },
     chat_filters: { chat_ids: include.chatId },
     channel_filters: {

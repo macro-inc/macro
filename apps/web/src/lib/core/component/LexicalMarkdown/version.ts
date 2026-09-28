@@ -17,5 +17,12 @@
  * Version 2.4 - Aug 2026. MagicChipNode: block response surface, channelId optional for standalone sessions.
  * Version 2.5 - Aug 2026. Added expandable AgentContextNode.
  * Version 2.6 - Aug 2026. PasteNode origin: pasted (default) or referenced.
+ * Version 3.0 - Sep 2026. Added ReplyTargetNode.
+ * Version 4.0 - Sep 2026. Added AgentSessionMentionNode.
+ * Version 3.1 - Sep 2026. Added ConnectAppNode (agent "connect this app" chip).
+ * Version 4.1 - Sep 2026. Expandable session mentions reuse Magic Chip with a null message lock for the latest turn.
+ * Version 4.2 - Sep 2026. ConnectAppNode: optional `target` (connections | harness) so the chip can connect Cursor.
+ * Version 4.3 - Sep 2026. ReplyTargetNode references a message parent (channel or document) instead of a channel id.
+ * Version 4.4 - Sep 2026. Expanded agent session mentions are block decorators with node selection.
  */
-export const MARKDOWN_VERSION_COUNTER = 2.6;
+export const MARKDOWN_VERSION_COUNTER = 4.4;

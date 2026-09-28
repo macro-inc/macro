@@ -1,5 +1,5 @@
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -19,16 +19,13 @@ pub enum ProjectLiteral {
     ProjectIdSelf(Uuid),
     /// the owner of the project
     #[serde(rename = "o")]
-    Owner(MacroUserIdStr<'static>),
+    Owner(Owner),
     /// this node value filters by project importance. false short-circuits to match nothing.
     #[serde(rename = "imp")]
     Importance(bool),
-    /// this node value filters by notification done state for projects.
-    #[serde(rename = "nd")]
-    NotificationDone(bool),
-    /// this node value filters by notification seen state for projects.
+    /// An entity has a non-deleted notification in this exact state.
     #[serde(rename = "ns")]
-    NotificationSeen(bool),
+    NotificationState(crate::NotificationState),
     /// this node value filters by project createdAt timestamp
     #[serde(rename = "ca")]
     CreatedAt(DateLiteral),
@@ -66,23 +63,21 @@ impl ExpandFrame<ProjectLiteral> for ProjectFilters {
 
         let owners = owners
             .iter()
-            .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
+            .map(|s| Owner::from_principal_str(s))
             .try_expand(|r| r.map(ProjectLiteral::Owner), Expr::or)?;
 
         let importance_node = importance.map(|imp| Expr::Literal(ProjectLiteral::Importance(imp)));
-        let notification_done_node = notification_filters
-            .done
-            .map(|done| Expr::Literal(ProjectLiteral::NotificationDone(done)));
-        let notification_seen_node = notification_filters
-            .seen
-            .map(|seen| Expr::Literal(ProjectLiteral::NotificationSeen(seen)));
+        let notification_state_node = notification_filters
+            .into_unique_states()
+            .into_iter()
+            .map(|state| Expr::Literal(ProjectLiteral::NotificationState(state)))
+            .reduce(Expr::or);
 
         Ok([
             project_ids,
             owners,
             importance_node,
-            notification_done_node,
-            notification_seen_node,
+            notification_state_node,
         ]
         .into_iter()
         .fold_with(Expr::and))

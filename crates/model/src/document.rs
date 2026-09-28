@@ -4,6 +4,7 @@ pub mod response;
 mod test;
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
 use schemars::JsonSchema;
 use utoipa::ToSchema;
 
@@ -52,6 +53,8 @@ pub enum BasicDocumentSubType {
     Snippet {},
     /// A skill document — markdown instructions for AI
     Skill {},
+    /// The description document of an initiative
+    InitiativeDescription {},
 }
 
 impl BasicDocumentSubType {
@@ -64,6 +67,7 @@ impl BasicDocumentSubType {
             }),
             DocumentSubType::Snippet => Some(Self::Snippet {}),
             DocumentSubType::Skill => Some(Self::Skill {}),
+            DocumentSubType::InitiativeDescription => Some(Self::InitiativeDescription {}),
         }
     }
 }
@@ -83,7 +87,7 @@ pub struct BasicDocument {
     /// The owner of the document
     #[schema(value_type = String)]
     #[sqlx(try_from = "String")]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The name of the document
     #[serde(rename = "name", alias = "documentName")]
     pub document_name: String,
@@ -172,7 +176,7 @@ pub struct DocumentMetadata {
     #[schema(value_type = String)]
     #[sqlx(try_from = "String")]
     #[schemars(with = "String")]
-    pub owner: MacroUserIdStr<'static>,
+    pub owner: Owner,
     /// The name of the document
     pub document_name: String,
     /// The file type of the document (file extension)
@@ -228,7 +232,7 @@ impl DocumentMetadata {
     pub fn new_docx(
         document_id: &str,
         document_bom_id: i64,
-        owner: MacroUserIdStr<'static>,
+        owner: Owner,
         document_name: &str,
         file_type: &str,
         document_family_id: Option<i64>,
@@ -268,7 +272,7 @@ impl DocumentMetadata {
     pub fn new_document(
         document_id: &str,
         document_instance_id: i64,
-        owner: MacroUserIdStr<'static>,
+        owner: Owner,
         document_name: &str,
         file_type: Option<FileType>,
         sha: &str,
@@ -326,6 +330,8 @@ pub enum DocumentPreviewDataSubType {
     Snippet {},
     /// A skill document — markdown instructions for AI
     Skill {},
+    /// The description document of an initiative
+    InitiativeDescription {},
 }
 
 impl DocumentPreviewDataSubType {
@@ -338,6 +344,7 @@ impl DocumentPreviewDataSubType {
             }),
             DocumentSubType::Snippet => Some(Self::Snippet {}),
             DocumentSubType::Skill => Some(Self::Skill {}),
+            DocumentSubType::InitiativeDescription => Some(Self::InitiativeDescription {}),
         }
     }
 }

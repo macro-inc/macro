@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_messages m SET deleted_at = now(), updated_at = now()\n           FROM migrated_comment_id cm\n           WHERE cm.message_id = m.id AND cm.document_id = ANY($1) AND m.deleted_at IS NULL\n             AND NOT EXISTS (SELECT 1 FROM \"Comment\" c WHERE c.id = cm.comment_id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e9f33d6edca87d88c7403b13d19fe3aa835c20b17993e9e8cdabfe20ed5efa34"
+}

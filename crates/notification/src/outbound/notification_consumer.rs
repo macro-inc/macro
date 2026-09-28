@@ -7,7 +7,7 @@
 #[cfg(test)]
 mod test;
 
-use std::{borrow::Cow, marker::PhantomData, time::Duration};
+use std::{marker::PhantomData, time::Duration};
 
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
 use macro_event_broker::{
@@ -18,12 +18,7 @@ use rootcause::prelude::{Report, ResultExt as _};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::domain::{
-    models::{
-        PatchDelete, UserNotificationRow,
-        websocket_notification_event::{
-            JsonNotificationMacroEvent, NotificationTopicEvent, WebSocketNotificationMetadata,
-        },
-    },
+    models::websocket_notification_event::{JsonNotificationMacroEvent, NotificationTopicEvent},
     ports::NotificationTopicEventConsumer,
 };
 
@@ -114,79 +109,10 @@ where
 
             return match event {
                 DeclaredMacroEvent::JsonNotificationMacroEvent(event) => {
-                    decode_typed_event(event.into_topic_event())
+                    event.into_topic_event().deserialize_metadata()
                 }
             };
         }
-    }
-}
-
-fn decode_typed_event<T>(
-    event: NotificationTopicEvent<'static, serde_json::Value>,
-) -> Result<NotificationTopicEvent<'static, T>, Report>
-where
-    T: Clone + Serialize + DeserializeOwned + Send + Sync + 'static,
-{
-    match event {
-        NotificationTopicEvent::WebSocketDeliveryRequested(WebSocketNotificationMetadata {
-            notifications,
-        }) => Ok(NotificationTopicEvent::WebSocketDeliveryRequested(
-            WebSocketNotificationMetadata {
-                notifications: notifications
-                    .into_iter()
-                    .map(decode_notification_row)
-                    .collect::<Result<Vec<_>, _>>()?,
-            },
-        )),
-        NotificationTopicEvent::NotificationStatusUpdatedForUsers { users, update } => {
-            Ok(NotificationTopicEvent::NotificationStatusUpdatedForUsers { users, update })
-        }
-        NotificationTopicEvent::NotificationStatusesUpdatedForUser { user, updates } => {
-            Ok(NotificationTopicEvent::NotificationStatusesUpdatedForUser {
-                user,
-                updates: updates
-                    .into_iter()
-                    .map(decode_update)
-                    .collect::<Result<Vec<_>, _>>()?,
-            })
-        }
-    }
-}
-
-fn decode_notification_row<T>(
-    row: UserNotificationRow<serde_json::Value>,
-) -> Result<UserNotificationRow<T>, Report>
-where
-    T: DeserializeOwned,
-{
-    Ok(row.try_map(|metadata| {
-        serde_json::from_value(metadata).context("failed to decode notification metadata")
-    })?)
-}
-
-fn decode_status_notification_row<T>(
-    row: UserNotificationRow<serde_json::Value>,
-) -> Result<UserNotificationRow<T>, Report>
-where
-    T: DeserializeOwned,
-{
-    Ok(row
-        .into_tagged()
-        .deserialize_metadata::<T>()
-        .context("failed to decode tagged notification status metadata")?)
-}
-
-fn decode_update<T>(
-    update: PatchDelete<uuid::Uuid, Cow<'static, UserNotificationRow<serde_json::Value>>>,
-) -> Result<PatchDelete<uuid::Uuid, Cow<'static, UserNotificationRow<T>>>, Report>
-where
-    T: Clone + DeserializeOwned + 'static,
-{
-    match update {
-        PatchDelete::Patch { diff } => Ok(PatchDelete::Patch {
-            diff: Cow::Owned(decode_status_notification_row(diff.into_owned())?),
-        }),
-        PatchDelete::Delete { id } => Ok(PatchDelete::Delete { id }),
     }
 }
 

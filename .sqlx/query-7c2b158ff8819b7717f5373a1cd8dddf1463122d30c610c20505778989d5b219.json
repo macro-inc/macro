@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO task_initiative (task_id, initiative_id)\n        SELECT dst.document_id, $1\n        FROM UNNEST($2::text[]) AS t(task_id)\n        JOIN document_sub_type dst\n            ON dst.document_id = t.task_id AND dst.sub_type = 'task'\n        ON CONFLICT (task_id) DO UPDATE\n        SET initiative_id = EXCLUDED.initiative_id, created_at = now()\n        RETURNING task_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "task_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7c2b158ff8819b7717f5373a1cd8dddf1463122d30c610c20505778989d5b219"
+}

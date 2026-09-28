@@ -5,8 +5,8 @@ use std::{
 
 use async_graphql::dataloader::{DataLoader, Loader};
 use email::domain::{
-    models::{EmailThreadMetadata, Message, ParsedMessage},
-    ports::{EmailContentService, EmailThreadMetadataService},
+    models::{EmailThreadMailProjection, EmailThreadMetadata, Message, ParsedMessage},
+    ports::{EmailContentService, EmailThreadMailProjectionService, EmailThreadMetadataService},
 };
 use entity_access::domain::{models::AccessError, ports::EntityAccessService};
 use futures::future::join_all;
@@ -16,6 +16,7 @@ use uuid::Uuid;
 pub(crate) const MAX_EMAIL_CONTENT_KEYS: usize = 20;
 pub(crate) const MAX_EMAIL_CONTENT_MESSAGES: usize = 100;
 const MAX_EMAIL_THREAD_METADATA_KEYS: usize = 500;
+const MAX_EMAIL_THREAD_MAIL_PROJECTION_KEYS: usize = 500;
 
 /// Canonical metadata loaded for one Soup email thread.
 #[derive(Debug, Clone)]
@@ -38,14 +39,35 @@ pub trait SoupEmailThreadMetadataEdgeReader: Send + Sync + 'static {
     ) -> impl Future<Output = HashMap<Uuid, EmailThreadMetadataLoad>> + Send + 'a;
 }
 
+/// Mail projection data loaded for one Soup email thread.
+#[derive(Debug, Clone)]
+pub enum EmailThreadMailProjectionLoad {
+    /// The Mail projection data was found.
+    Found(Arc<EmailThreadMailProjection>),
+    /// The thread was absent or inaccessible.
+    Missing,
+    /// An internal failure occurred. Details are logged, never exposed.
+    Failed,
+}
+
+/// Reader used by offline Mail cache facts and canonical preview fields.
+pub trait SoupEmailThreadMailProjectionEdgeReader: Send + Sync + 'static {
+    /// Load Mail projection data for authorized threads on behalf of `user_id`.
+    fn get_email_thread_mail_projections<'a>(
+        &'a self,
+        user_id: &'a MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+    ) -> impl Future<Output = HashMap<Uuid, EmailThreadMailProjectionLoad>> + Send + 'a;
+}
+
 /// Combined reader capability required by the complete Soup email-thread edge.
 pub trait SoupEmailEdgeReader:
-    SoupEmailContentEdgeReader + SoupEmailThreadMetadataEdgeReader
+    SoupEmailContentEdgeReader + SoupEmailThreadMailProjectionEdgeReader
 {
 }
 
 impl<T> SoupEmailEdgeReader for T where
-    T: SoupEmailContentEdgeReader + SoupEmailThreadMetadataEdgeReader
+    T: SoupEmailContentEdgeReader + SoupEmailThreadMailProjectionEdgeReader
 {
 }
 
@@ -213,6 +235,19 @@ impl SoupEmailThreadMetadataEdgeReader for NoOpSoupEmailContentEdgeReader {
     }
 }
 
+impl SoupEmailThreadMailProjectionEdgeReader for NoOpSoupEmailContentEdgeReader {
+    async fn get_email_thread_mail_projections(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+    ) -> HashMap<Uuid, EmailThreadMailProjectionLoad> {
+        thread_ids
+            .into_iter()
+            .map(|thread_id| (thread_id, EmailThreadMailProjectionLoad::Missing))
+            .collect()
+    }
+}
+
 /// GraphQL email-content reader backed by the email domain service and the
 /// canonical entity-access service.
 #[derive(Clone)]
@@ -302,6 +337,85 @@ where
                     authorized_ids
                         .into_iter()
                         .map(|thread_id| (thread_id, EmailThreadMetadataLoad::Failed)),
+                );
+            }
+        }
+
+        loads
+    }
+}
+
+impl<S, A> SoupEmailThreadMailProjectionEdgeReader for EmailServiceEmailContentReader<S, A>
+where
+    S: EmailThreadMailProjectionService,
+    A: EntityAccessService,
+{
+    async fn get_email_thread_mail_projections(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+    ) -> HashMap<Uuid, EmailThreadMailProjectionLoad> {
+        let thread_ids = thread_ids.into_iter().collect::<HashSet<_>>();
+        let thread_id_strings = thread_ids.iter().map(Uuid::to_string).collect::<Vec<_>>();
+        let mut access_results = self
+            .entity_access_service
+            .generate_email_thread_view_access_receipts(user_id, None, &thread_id_strings)
+            .await;
+        let mut loads = HashMap::with_capacity(thread_ids.len());
+        let mut authorized = Vec::new();
+        let mut authorized_ids = Vec::new();
+
+        for thread_id in thread_ids {
+            match access_results
+                .remove(&thread_id.to_string())
+                .unwrap_or_else(|| {
+                    Err(AccessError::internal(
+                        "bulk access resolution missing entry",
+                    ))
+                }) {
+                Ok(receipt) => {
+                    authorized.push(receipt);
+                    authorized_ids.push(thread_id);
+                }
+                Err(
+                    AccessError::Unauthorized
+                    | AccessError::UnauthorizedWithMessage(_)
+                    | AccessError::NotFound(_),
+                ) => {
+                    loads.insert(thread_id, EmailThreadMailProjectionLoad::Missing);
+                }
+                Err(error) => {
+                    tracing::error!(%thread_id, error = ?error, "email thread Mail projection access check failed");
+                    loads.insert(thread_id, EmailThreadMailProjectionLoad::Failed);
+                }
+            }
+        }
+
+        if authorized.is_empty() {
+            return loads;
+        }
+
+        match self
+            .email_service
+            .get_email_thread_mail_projections(user_id.clone(), authorized)
+            .await
+        {
+            Ok(mut projections) => {
+                for thread_id in authorized_ids {
+                    let load = projections
+                        .remove(&thread_id)
+                        .map_or(EmailThreadMailProjectionLoad::Missing, |projection| {
+                            EmailThreadMailProjectionLoad::Found(Arc::new(projection))
+                        });
+                    loads.insert(thread_id, load);
+                }
+            }
+            Err(error) => {
+                tracing::error!(error = ?error, "bulk email thread Mail projection load failed");
+                loads.extend(
+                    authorized_ids
+                        .into_iter()
+                        .map(|thread_id| (thread_id, EmailThreadMailProjectionLoad::Failed)),
                 );
             }
         }
@@ -542,6 +656,53 @@ where
     .max_batch_size(MAX_EMAIL_THREAD_METADATA_KEYS);
     // Subscription connection data outlives one payload. Coalesce concurrent
     // fields, but do not retain mutable timestamps across update events.
+    loader.enable_all_cache(false);
+    loader
+}
+
+/// DataLoader for Mail-specific cache facts and canonical previews.
+pub struct EmailThreadMailProjectionLoader<R> {
+    user_id: MacroUserIdStr<'static>,
+    reader: R,
+}
+
+impl<R> EmailThreadMailProjectionLoader<R> {
+    /// Create a Mail projection DataLoader scoped to the requesting user.
+    pub fn new(user_id: MacroUserIdStr<'static>, reader: R) -> Self {
+        Self { user_id, reader }
+    }
+}
+
+impl<R> Loader<Uuid> for EmailThreadMailProjectionLoader<R>
+where
+    R: SoupEmailThreadMailProjectionEdgeReader,
+{
+    type Value = EmailThreadMailProjectionLoad;
+    type Error = std::convert::Infallible;
+
+    async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Self::Value>, Self::Error> {
+        Ok(self
+            .reader
+            .get_email_thread_mail_projections(&self.user_id, keys.to_vec())
+            .await)
+    }
+}
+
+/// Build a Mail projection DataLoader scoped to the requesting user.
+pub fn email_thread_mail_projection_loader<R>(
+    user_id: MacroUserIdStr<'static>,
+    reader: R,
+) -> DataLoader<EmailThreadMailProjectionLoader<R>>
+where
+    R: SoupEmailThreadMailProjectionEdgeReader,
+{
+    let loader = DataLoader::new(
+        EmailThreadMailProjectionLoader::new(user_id, reader),
+        tokio::spawn,
+    )
+    .max_batch_size(MAX_EMAIL_THREAD_MAIL_PROJECTION_KEYS);
+    // Subscription connection data outlives one payload. Coalesce concurrent
+    // fields, but do not retain mutable projection facts across update events.
     loader.enable_all_cache(false);
     loader
 }

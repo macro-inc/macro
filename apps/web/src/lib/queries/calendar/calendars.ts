@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { calendarKeys } from './keys';
 
-export type { VisibleCalendar } from '@service-email/generated/schemas/visibleCalendar';
+export type { VisibleCalendar } from '@service-calendar/generated/schemas/visibleCalendar';
 
 const CALENDAR_LIST_STALE_TIME = 5 * 60_000;
 

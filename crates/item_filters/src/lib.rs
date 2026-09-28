@@ -2,6 +2,7 @@
 //! This crate contains all filters for various item types to be used in soup/search.
 
 use non_empty::IsEmpty;
+pub use notification_state::NotificationState;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 
@@ -25,22 +26,34 @@ pub enum SearchOn {
 /// Notification-level filters that apply to an entity type.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
 pub struct NotificationFilters {
-    /// Filter by notification done state.
-    /// None to ignore, true to include only done notifications, false to include only not-done notifications.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub done: Option<bool>,
+    /// Include entities with a non-deleted notification in any of these exact states.
+    /// Empty means no notification restriction. Active means `[unseen, seen]`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub states: Vec<NotificationState>,
+}
 
-    /// Filter by notification seen state.
-    /// None to ignore, true to include only seen notifications, false to include only unseen notifications.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub seen: Option<bool>,
+impl NotificationFilters {
+    /// Whether no notification constraint is requested.
+    pub fn is_empty(&self) -> bool {
+        self.states.is_empty()
+    }
+
+    pub(crate) fn into_unique_states(self) -> Vec<NotificationState> {
+        let mut unique = Vec::with_capacity(3);
+        for state in self.states {
+            if !unique.contains(&state) {
+                unique.push(state);
+            }
+        }
+        unique
+    }
 }
 
 impl IsEmpty for NotificationFilters {
     fn is_empty(&self) -> bool {
-        let NotificationFilters { done, seen } = self;
-        done.is_none() && seen.is_none()
+        self.states.is_empty()
     }
 }
 
@@ -78,7 +91,10 @@ pub struct DocumentFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,
 
-    /// Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+    /// Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+    /// ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+    /// search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
 
@@ -144,7 +160,10 @@ pub struct ChatFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,
 
-    /// Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+    /// Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+    /// ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+    /// search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
 
@@ -233,6 +252,10 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
 
+    /// Filter by the email thread's read flag, independently of notification state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_read: Option<bool>,
+
     /// Filter by email notification state.
     #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
     pub notification_filters: NotificationFilters,
@@ -288,6 +311,7 @@ impl IsEmpty for EmailFilters {
             link_ids,
             project_ids,
             importance,
+            is_read,
             notification_filters,
             include_labels,
             exclude_labels,
@@ -304,6 +328,7 @@ impl IsEmpty for EmailFilters {
             && link_ids.is_empty()
             && project_ids.is_empty()
             && importance.is_none()
+            && is_read.is_none()
             && notification_filters.is_empty()
             && include_labels.is_empty()
             && exclude_labels.is_empty()
@@ -443,6 +468,83 @@ impl IsEmpty for ReminderFilters {
             fired,
         } = self;
         !include && ids.is_empty() && entities.is_empty() && completed.is_none() && fired.is_none()
+    }
+}
+
+/// Filters for initiatives.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct InitiativeFilters {
+    /// Opt this query into initiatives at all. Initiatives are off by
+    /// default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
+    /// Asking for specific `initiative_ids` or `owners` also opts in.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include: bool,
+    /// Initiative ids to filter by. Empty to include all accessible initiatives.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub initiative_ids: Vec<String>,
+    /// Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
+    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+    /// owner.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub owners: Vec<String>,
+    /// Case-insensitive name substring.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Inclusive upper due-date bound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_before: Option<chrono::DateTime<chrono::Utc>>,
+    /// Inclusive lower due-date bound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_after: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl IsEmpty for InitiativeFilters {
+    fn is_empty(&self) -> bool {
+        let InitiativeFilters {
+            include,
+            initiative_ids,
+            owners,
+            name,
+            due_before,
+            due_after,
+        } = self;
+        !include
+            && initiative_ids.is_empty()
+            && owners.is_empty()
+            && name.is_none()
+            && due_before.is_none()
+            && due_after.is_none()
+    }
+}
+
+/// Filters for agent sessions.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct AgentSessionFilters {
+    /// Opt this query into agent sessions at all. Agent sessions are off by
+    /// default — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].
+    /// Asking for specific `ids` or `owners` also opts in.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include: bool,
+    /// Agent session ids to filter by. Empty to include all accessible sessions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ids: Vec<String>,
+    /// Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+    /// owner.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub owners: Vec<String>,
+}
+
+impl IsEmpty for AgentSessionFilters {
+    fn is_empty(&self) -> bool {
+        let AgentSessionFilters {
+            include,
+            ids,
+            owners,
+        } = self;
+        !include && ids.is_empty() && owners.is_empty()
     }
 }
 
@@ -666,7 +768,10 @@ pub struct ProjectFilters {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub include_root: bool,
 
-    /// Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+    /// Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+    /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+    /// ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+    /// search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
 
@@ -711,6 +816,9 @@ pub enum TagFilterMode {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct EntityFilters {
+    /// Restrict results to the authenticated viewer's favorites when true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favorites_only: Option<bool>,
     /// the bundled [CalendarEventFilters]
     #[serde(default)]
     pub calendar_event_filters: CalendarEventFilters,
@@ -744,6 +852,12 @@ pub struct EntityFilters {
     /// the bundled [ReminderFilters]
     #[serde(default)]
     pub reminder_filters: ReminderFilters,
+    /// Initiative filters. Initiatives are opt-in.
+    #[serde(default)]
+    pub initiative_filters: InitiativeFilters,
+    /// the bundled [AgentSessionFilters]
+    #[serde(default)]
+    pub agent_session_filters: AgentSessionFilters,
     /// property-based filters applied across entity types
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub property_filters: Vec<PropertyFilter>,
@@ -761,6 +875,7 @@ pub struct EntityFilters {
 impl IsEmpty for EntityFilters {
     fn is_empty(&self) -> bool {
         let EntityFilters {
+            favorites_only,
             calendar_event_filters,
             project_filters,
             document_filters,
@@ -772,12 +887,15 @@ impl IsEmpty for EntityFilters {
             crm_company_filters,
             foreign_entity_filters,
             reminder_filters,
+            agent_session_filters,
+            initiative_filters,
             property_filters,
             tag_option_ids,
             // Mode is a modifier on tag_option_ids, not a filter by itself.
             tag_filter_mode: _,
         } = self;
-        calendar_event_filters.is_empty()
+        favorites_only != &Some(true)
+            && calendar_event_filters.is_empty()
             && project_filters.is_empty()
             && document_filters.is_empty()
             && chat_filters.is_empty()
@@ -788,6 +906,8 @@ impl IsEmpty for EntityFilters {
             && crm_company_filters.is_empty()
             && foreign_entity_filters.is_empty()
             && reminder_filters.is_empty()
+            && agent_session_filters.is_empty()
+            && initiative_filters.is_empty()
             && property_filters.iter().all(IsEmpty::is_empty)
             && tag_option_ids.is_empty()
     }

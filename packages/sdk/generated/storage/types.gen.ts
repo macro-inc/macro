@@ -47,6 +47,26 @@ export type ActiveCallsResponse = {
 };
 
 /**
+ * Active quick-call metadata available to its authenticated owner or attendees.
+ */
+export type ActiveMeeting = Meeting & {
+    /**
+     * Creator identity for displaying the caller in the authenticated active list.
+     */
+    createdBy: string;
+};
+
+/**
+ * The authenticated actor's active quick calls, including their creators.
+ */
+export type ActiveMeetingsResponse = {
+    /**
+     * Persistent meeting invitations for currently active sessions.
+     */
+    meetings: Array<ActiveMeeting>;
+};
+
+/**
  * The kind of activity a user performs in a channel.
  */
 export type ActivityType = 'view' | 'interact';
@@ -62,7 +82,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
 };
 
 /**
@@ -84,6 +104,204 @@ export type AddPinRequest = {
      * The type of the pin
      */
     pinType: string;
+};
+
+/**
+ * A persisted user- or team-owned AI agent.
+ */
+export type Agent = {
+    /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. `None` means always prompt. Bypass also requires the harness's opt-in.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
+     * The bot identity used for mentions and channel participation.
+     */
+    bot: Bot;
+    /**
+     * Selected channel ids. Empty for a global agent.
+     */
+    channel_ids: Array<string>;
+    /**
+     * Whether the agent is global or channel-specific.
+     */
+    channel_scope: AgentChannelScope;
+    /**
+     * Model selected specifically for this agent.
+     */
+    default_model: string;
+    /**
+     * Harness used to run the agent.
+     */
+    harness: string;
+    harness_id?: null | HarnessId;
+    /**
+     * Instructions supplied to the agent at the start of a conversation.
+     */
+    instructions: string;
+    /**
+     * Whether the agent works in a repository, which decides how it answers
+     * a channel mention: a coding agent posts a magic chip into its live
+     * session, a chat agent replies in the thread. Chosen in the agent's
+     * settings; the persona's word, not the runtime's.
+     */
+    is_coding: boolean;
+    /**
+     * Which MCP servers sessions of this agent are handed.
+     */
+    mcp: AgentMcpServers;
+};
+
+/**
+ * Identifies one accepted [`AgentAction`] end to end: returned by the
+ * control endpoint, written as the JSON-RPC request id on the action's wire
+ * frame, and read back off that frame as `request_id` on the folded message
+ * it derives.
+ *
+ * A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+ * or by a client that speculated the action and named it in the control
+ * request - either way the server is the only writer of runtime-bound
+ * frames, so a uuid-shaped request id remains the whole ownership test. The
+ * machine's own handshake request ids (`agent_session:{session}:{n}`) are
+ * not uuids and stay `None`.
+ */
+export type AgentActionId = string;
+
+/**
+ * Whether an agent is available everywhere or only in selected channels.
+ */
+export type AgentChannelScope = 'all' | 'selected';
+
+/**
+ * One Pipedream app an agent lists under [`AgentMcpServers::Selected`].
+ *
+ * Only the catalog identity is stored. Whether a given person has connected
+ * the app is theirs, resolved at call time by the egress proxy, never here.
+ */
+export type AgentMcpServer = {
+    /**
+     * Pipedream app slug, e.g. `linear`.
+     */
+    app_slug: string;
+    /**
+     * Display name, e.g. `Linear`.
+     */
+    server_name: string;
+};
+
+/**
+ * Which Pipedream MCP servers an agent's sessions are handed.
+ *
+ * One value for the whole choice, so a selection can never travel without
+ * its scope or a scope without its selection. Serialized with a `scope` tag,
+ * which the generated TypeScript sees as a discriminated union.
+ */
+export type AgentMcpServers = {
+    scope: 'owner_connections';
+} | {
+    scope: 'selected';
+    /**
+     * The apps, in the order the agent's author picked them.
+     */
+    servers: Array<AgentMcpServer>;
+};
+
+/**
+ * Last synchronized state of a session's linked GitHub pull request.
+ */
+export type AgentPullRequestState = 'open' | 'draft' | 'closed' | 'merged';
+
+/**
+ * Filters for agent sessions.
+ */
+export type AgentSessionFilters = {
+    /**
+     * Agent session ids to filter by. Empty to include all accessible sessions.
+     */
+    ids?: Array<string>;
+    /**
+     * Opt this query into agent sessions at all. Agent sessions are off by
+     * default — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].
+     * Asking for specific `ids` or `owners` also opts in.
+     */
+    include?: boolean;
+    /**
+     * Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+     * owner.
+     */
+    owners?: Array<string>;
+};
+
+/**
+ * Events publishable to [`MacroAgentSessionLifecycleTopic`].
+ *
+ * The serde tag and [`AgentSessionLifecycleEventName`] spell the same wire
+ * names: subscribers filter on them, so they are API. The
+ * `event_names_match_the_wire` test holds the two in step. Exhaustive on
+ * purpose: a consumer's match should break when a variant is added.
+ */
+export type AgentSessionLifecycleEvent = {
+    event_type: 'agent_session.opened';
+    /**
+     * A session was created.
+     */
+    metadata: SessionOpenedMetadata;
+} | {
+    event_type: 'agent_session.turn_started';
+    /**
+     * A prompt was delivered to the runtime.
+     */
+    metadata: TurnStartedMetadata;
+} | {
+    event_type: 'agent_session.turn_ended';
+    /**
+     * The runtime answered a turn.
+     */
+    metadata: TurnEndedMetadata;
+} | {
+    event_type: 'agent_session.settled';
+    /**
+     * A turn ended with nothing queued behind it.
+     */
+    metadata: SessionSettledMetadata;
+} | {
+    event_type: 'agent_session.waiting_for_input';
+    /**
+     * The agent is blocked on a question to its owner.
+     */
+    metadata: WaitingForInputMetadata;
+} | {
+    event_type: 'agent_session.input_received';
+    /**
+     * The question was answered or withdrawn.
+     */
+    metadata: InputReceivedMetadata;
+} | {
+    event_type: 'agent_session.mentioned';
+    /**
+     * A prompt named other users who can open the session.
+     */
+    metadata: SessionMentionedMetadata;
+} | {
+    event_type: 'agent_session.stopped';
+    /**
+     * The session's live actor is gone.
+     */
+    metadata: SessionStoppedMetadata;
+} | {
+    event_type: 'agent_session.renamed';
+    /**
+     * The session was renamed.
+     */
+    metadata: SessionRenamedMetadata;
+} | {
+    event_type: 'agent_session.deleted';
+    /**
+     * The session was deleted.
+     */
+    metadata: SessionDeletedMetadata;
 };
 
 export type Anchor = PdfAnchor;
@@ -651,6 +869,12 @@ export type ApiCountedReaction = {
  */
 export type ApiEntityFilterAst = {
     /**
+     * Filters applied to agent sessions (wire key `asf`). Like reminders,
+     * empty/omitted returns **no** agent sessions: they are opt-in, so the
+     * caller must send `inc`, an id, or an owner to get any.
+     */
+    asf?: unknown;
+    /**
      * filters applied to canonical calendar events
      */
     calf?: unknown;
@@ -700,6 +924,10 @@ export type ApiEntityFilterAst = {
      * unlike the materialized [`EntityFilterAst`] used for cursors.
      */
     ef?: unknown;
+    /**
+     * Restrict to the authenticated viewer's favorites before pagination when true.
+     */
+    favorites_only?: boolean | null;
     /**
      * the filters that should be applied to foreign entity records
      */
@@ -933,6 +1161,91 @@ export type ApiThreadReply = {
 };
 
 /**
+ * Request to approve a pairing and register the harness.
+ */
+export type ApprovePairingRequest = {
+    /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     */
+    allow_permission_bypass?: boolean;
+    /**
+     * Display name override. Defaults to the daemon's requested name.
+     */
+    name?: string | null;
+    /**
+     * Owning team. Omit for a private, user-owned harness.
+     */
+    team_id?: string | null;
+};
+
+/**
+ * Status written onto one assign result.
+ */
+export type AssignTaskStatus = 'assigned' | 'moved' | 'notATask' | 'notFound' | 'skippedNoPermission';
+
+/**
+ * Assign-tasks HTTP body.
+ */
+export type AssignTasksRequest = {
+    /**
+     * Task ids to assign, in request order.
+     */
+    taskIds: Array<string>;
+};
+
+/**
+ * Assign-tasks HTTP response.
+ */
+export type AssignTasksResponse = {
+    /**
+     * Outcomes in request order after dedupe.
+     */
+    results: Array<AssignTasksResult>;
+};
+
+/**
+ * Per-task outcome of an assign call.
+ */
+export type AssignTasksResult = {
+    /**
+     * What happened to the task.
+     */
+    status: AssignTaskStatus;
+    /**
+     * Task id this outcome describes.
+     */
+    taskId: string;
+};
+
+/**
+ * Attachment changes interpreted by the common command boundary.
+ */
+export type AttachmentChange = {
+    type: 'preserve';
+} | {
+    type: 'replace';
+    /**
+     * Replace all attachments.
+     */
+    value: Array<NewAttachment>;
+} | {
+    type: 'delta';
+    /**
+     * Remove stored attachment identities and append new references.
+     */
+    value: {
+        /**
+         * New attachments to append.
+         */
+        add: Array<NewAttachment>;
+        /**
+         * Existing attachment UUIDs to remove.
+         */
+        remove: Array<string>;
+    };
+};
+
+/**
  * RSVP state for an attendee.
  */
 export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
@@ -1017,6 +1330,8 @@ export type BasicDocumentSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 export type BomPart = {
@@ -1140,6 +1455,20 @@ export type BotOwner = {
 };
 
 /**
+ * Public bot profile attached to bot-authored messages.
+ */
+export type BotSenderProfile = {
+    /**
+     * Bot avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Bot display name.
+     */
+    name: string;
+};
+
+/**
  * Bot token metadata.
  */
 export type BotToken = {
@@ -1235,6 +1564,9 @@ export type CalendarAttendee = {
 
 /**
  * A stable, first-class Macro calendar event entity.
+ *
+ * Content fields hold the canonical source's values: the account's primary
+ * calendar copy when one is synced, else the freshest remaining copy.
  */
 export type CalendarEvent = {
     /**
@@ -1285,7 +1617,7 @@ export type CalendarEvent = {
      */
     id: string;
     /**
-     * Whether the current user can edit the canonical source.
+     * Whether the canonical source's calendar prohibits editing it.
      */
     isReadOnly: boolean;
     /**
@@ -1318,6 +1650,13 @@ export type CalendarEvent = {
      * Provider/iCalendar sequence number.
      */
     sequence: number;
+    /**
+     * Content of every active copy of this event, canonical first: the
+     * primary calendar's copy, then the freshest. A client picks the copy
+     * whose calendar it is showing and falls back to the first. Populated
+     * only on the read path, so stored projections omit it.
+     */
+    sources?: Array<CalendarEventSourceContent>;
     /**
      * Event status.
      */
@@ -1375,14 +1714,76 @@ export type CalendarEventFilters = {
 };
 
 /**
+ * The content one provider copy of an event carries.
+ *
+ * Google keeps these fields per calendar copy: a shared calendar's copy of a
+ * member's event can have its own title, type, reminders, and access role.
+ * The entity holds its canonical source's values. Every other copy's values
+ * are read from here so a client can show the copy that belongs to the
+ * calendar being viewed.
+ */
+export type CalendarEventSourceContent = {
+    /**
+     * Calendar this copy lives on.
+     */
+    calendarId: string;
+    /**
+     * Provider-reported creator email.
+     */
+    creatorEmail?: string | null;
+    /**
+     * Provider-reported creator display name.
+     */
+    creatorName?: string | null;
+    /**
+     * Optional event body.
+     */
+    description?: string | null;
+    /**
+     * Provider event type.
+     */
+    eventType: EventType;
+    /**
+     * Whether the calendar's access role prohibits editing this copy.
+     */
+    isReadOnly: boolean;
+    /**
+     * Optional physical or virtual location label.
+     */
+    location?: string | null;
+    /**
+     * Reminder configuration of this copy.
+     */
+    reminders: EventReminders;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Availability behavior.
+     */
+    transparency: EventTransparency;
+    /**
+     * Event visibility.
+     */
+    visibility: EventVisibility;
+};
+
+/**
  * Meeting-level fields shown in a calendar event mention preview, taken from
- * the requester's own projection of the meeting.
+ * the requester's own projection of the meeting, or — when the requester has
+ * none — from the mentioned projection a channel they belong to was given.
  */
 export type CalendarMentionEvent = {
     /**
-     * Number of attendees on the requester's copy.
+     * Number of attendees on the previewed copy.
      */
     attendeeCount: number;
+    /**
+     * Provider description, plain text or HTML, truncated for the preview.
+     * Clients must sanitize it before rendering.
+     */
+    description?: string | null;
     /**
      * Whether the event repeats.
      */
@@ -1415,14 +1816,17 @@ export type CalendarMentionEvent = {
      */
     title: string;
     /**
-     * Entity update time of the requester's copy.
+     * Entity update time of the previewed copy.
      */
     updatedAt: string;
     /**
      * The requester's own event entity for the mentioned meeting. Differs
      * from the mentioned id when the mention came from another attendee.
+     * Absent when the meeting is on none of the requester's calendars and
+     * they see it only because it was shared with one of their channels:
+     * that preview is read-only and there is no event of theirs to open.
      */
-    viewerEventId: string;
+    viewerEventId?: string | null;
 };
 
 /**
@@ -1589,7 +1993,7 @@ export type CallRecord = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -1616,11 +2020,16 @@ export type CallRecord = {
      */
     endedAt?: string | null;
     /**
+     * Non-account guests (both active and historic). Guests only ever exist
+     * on standalone meeting calls, never on channel calls.
+     */
+    guests: Array<CallRecordGuest>;
+    /**
      * Whether the call is currently active (from `calls` table).
      */
     isActive: boolean;
     /**
-     * Participants (both active and historic).
+     * Macro-account participants (both active and historic).
      */
     participants: Array<CallRecordParticipant>;
     /**
@@ -1643,7 +2052,9 @@ export type CallRecord = {
      */
     roomName: string;
     /**
-     * Whether the call is shared with the creator's team.
+     * Whether the call is shared with the creator's team. While the call is
+     * live this is the pending toggle applied at archive; afterwards it
+     * mirrors `team_share_access_level`.
      */
     shareWithTeam: boolean;
     /**
@@ -1656,11 +2067,34 @@ export type CallRecord = {
      * once summarization has run; active calls always return `None`.
      */
     summary?: string | null;
+    teamShareAccessLevel?: null | AccessLevel;
     /**
      * Transcript segments ordered by `sequence_num`.
      */
     transcript: Array<CallRecordTranscriptSegment>;
     userAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * A non-account guest as returned in a [`CallRecord`].
+ */
+export type CallRecordGuest = {
+    /**
+     * Guest-provided display name.
+     */
+    displayName: string;
+    /**
+     * Opaque guest identity; matches the guest's transcript `speaker_id`.
+     */
+    id: GuestId;
+    /**
+     * When the guest joined the call.
+     */
+    joinedAt: string;
+    /**
+     * When the guest left (None if still in an active call).
+     */
+    leftAt?: string | null;
 };
 
 /**
@@ -1676,7 +2110,7 @@ export type CallRecordParticipant = {
      */
     leftAt?: string | null;
     /**
-     * The user id.
+     * The Macro user id.
      */
     userId: string;
 };
@@ -1705,7 +2139,7 @@ export type CallRecordPreviewData = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -1782,7 +2216,11 @@ export type CallTokenResponse = {
     /**
      * The channel this call is associated with.
      */
-    channelId: string;
+    channelId?: string | null;
+    /**
+     * RTC participant identity.
+     */
+    participantId: string;
     /**
      * The RTC room name.
      */
@@ -1791,6 +2229,10 @@ export type CallTokenResponse = {
      * The RTC server URL for the frontend SDK to connect to.
      */
     serverUrl: string;
+    /**
+     * Meeting link capability, when joined using a link.
+     */
+    shareToken?: string | null;
     /**
      * The RTC token for connecting to the room.
      */
@@ -1855,6 +2297,7 @@ export type ChannelCreatedMetadata = {
      * Type of channel that was created.
      */
     channel_type: ChannelType;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * Active participants after creation (including the owner).
      */
@@ -1954,6 +2397,74 @@ export type ChannelJoinCodeResponse = {
      * Reusable code for joining the channel.
      */
     join_code: string;
+};
+
+/**
+ * A shared or account-private label grouping chat channels in the sidebar.
+ *
+ * `channel_ids` is viewer-relative: it lists only the labelled channels the
+ * requesting user participates in. `channel_count` counts every channel in
+ * the label so clients can warn accurately before a delete.
+ */
+export type ChannelLabel = {
+    /**
+     * All assignments for a manual label; visible matches for a smart tag.
+     */
+    channelCount: number;
+    /**
+     * Channels in this label that the requesting user participates in.
+     */
+    channelIds: Array<string>;
+    /**
+     * When the label was created.
+     */
+    createdAt: string;
+    /**
+     * Stable label id.
+     */
+    id: string;
+    /**
+     * Display name, unique within the scope (case-insensitive).
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
+    /**
+     * Manual ordering value within the scope; lower sorts first.
+     */
+    sortOrder: number;
+    /**
+     * Owning team, or `None` for account-private labels.
+     */
+    teamId?: string | null;
+    /**
+     * When the label was last renamed or reordered.
+     */
+    updatedAt: string;
+};
+
+/**
+ * Case-insensitive, literal substring matching on the channel name.
+ */
+export type ChannelLabelRule = {
+    attribute: 'name';
+    /**
+     * The substring to find anywhere in the name.
+     */
+    contains: string;
+};
+
+/**
+ * The authorized scope's labels in manual order.
+ */
+export type ChannelLabelsList = {
+    /**
+     * Every label of the scope, whether or not the caller sees channels in it.
+     */
+    labels: Array<ChannelLabel>;
+    /**
+     * Team scope, or `None` for private labels.
+     */
+    teamId?: string | null;
 };
 
 /**
@@ -2126,6 +2637,10 @@ export type ChannelMessageFilters = {
      * When set, only return top-level messages created at or after this timestamp.
      */
     created_after?: string | null;
+    /**
+     * When set, only return top-level messages created strictly after this timestamp.
+     */
+    created_after_exclusive?: string | null;
     /**
      * When set, only return top-level messages created before this timestamp.
      */
@@ -2321,6 +2836,10 @@ export type ChannelPreviewData = {
      * Channel type.
      */
     channel_type: ChannelType;
+    /**
+     * Static image file used as the channel's profile picture, when accessible.
+     */
+    profile_picture_id?: string | null;
 };
 
 export type ChannelSender = string;
@@ -2555,7 +3074,10 @@ export type ChatFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -2566,6 +3088,32 @@ export type ChatFilters = {
      * Chat message roles to search. Examples: ['user'], ['assistant']. Empty to search all roles.
      */
     role?: Array<string>;
+};
+
+/**
+ * Request to claim an approved pairing's credential.
+ *
+ * The daemon serializes this, so both derives are used.
+ */
+export type ClaimPairingRequest = {
+    /**
+     * The claim credential returned when the pairing was created.
+     */
+    device_secret: string;
+};
+
+/**
+ * The credential released to the daemon when a pairing is claimed.
+ */
+export type ClaimedPairing = {
+    /**
+     * The registered harness.
+     */
+    harness: Harness;
+    /**
+     * The raw harness bearer token. Shown only here; only its hash is stored.
+     */
+    token: string;
 };
 
 export type CloudStorageItemType = 'document' | 'chat' | 'project';
@@ -2585,7 +3133,7 @@ export type CollabSurfaceResponse = {
     /**
      * Type of the parent entity.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
     /**
      * Lifecycle state (`ready` for every surface visible via the API).
      */
@@ -2672,6 +3220,81 @@ export type CopyDocumentResponse = {
 };
 
 /**
+ * Reaction emoji and the users who added it.
+ */
+export type CountedReaction = {
+    /**
+     * Emoji being reacted with.
+     */
+    emoji: string;
+    /**
+     * User identifiers.
+     */
+    users: Array<string>;
+};
+
+/**
+ * Request to create a persisted AI agent.
+ */
+export type CreateAgentRequest = {
+    /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. Omit to always prompt.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
+     * Optional avatar URL or data URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Selected channels. Must be non-empty only for `selected` scope.
+     */
+    channel_ids?: Array<string>;
+    /**
+     * Whether the agent is global or channel-specific.
+     */
+    channel_scope: AgentChannelScope;
+    /**
+     * Model selected specifically for this agent.
+     */
+    default_model: string;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable `@` handle.
+     */
+    handle: string;
+    /**
+     * Harness used to run the agent.
+     */
+    harness: string;
+    harness_id?: null | HarnessId;
+    /**
+     * Instructions supplied to the agent at the start of a conversation.
+     */
+    instructions: string;
+    /**
+     * Whether the agent is a coding agent: a mention is answered with a magic
+     * chip into its live session (`true`) or a reply in the thread (`false`).
+     */
+    is_coding: boolean;
+    /**
+     * Which MCP servers sessions of this agent are handed.
+     */
+    mcp?: AgentMcpServers;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Team owner. Omit for a private, user-owned agent.
+     */
+    team_id?: string | null;
+};
+
+/**
  * Request to create a bot.
  */
 export type CreateBotRequest = {
@@ -2719,6 +3342,21 @@ export type CreateBulkDocumentResponseData = {
      * Indicates if the document was created successfully
      */
     success: boolean;
+};
+
+/**
+ * Request body for creating a label.
+ */
+export type CreateChannelLabelRequest = {
+    /**
+     * Channels to move into the new label.
+     */
+    channelIds?: Array<string>;
+    /**
+     * Display name; unique within the scope, case-insensitively.
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
 };
 
 /**
@@ -2832,7 +3470,7 @@ export type CreateCommentResponse = CommentThread & {
  */
 export type CreateCrmCommentRequest = {
     /**
-     * Arbitrary client metadata for the comment.
+     * Ignored: messages keep no client metadata.
      */
     metadata?: unknown;
     /**
@@ -2845,8 +3483,7 @@ export type CreateCrmCommentRequest = {
      */
     threadId?: string | null;
     /**
-     * Metadata to set on a newly created thread (ignored when replying
-     * without a value).
+     * Ignored: discussions keep no thread metadata.
      */
     threadMetadata?: unknown;
 };
@@ -3015,6 +3652,30 @@ export type CreateEntityMentionResponse = {
     user_id?: string | null;
 };
 
+/**
+ * Create-initiative HTTP body.
+ */
+export type CreateInitiativeRequest = {
+    /**
+     * Initial markdown for the description document. Not stored on the initiative; later
+     * edits happen in the document editor.
+     */
+    description?: string | null;
+    /**
+     * Optional member user ids. Invalid ids fail at the service boundary.
+     */
+    memberIds?: Array<string> | null;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Share with the owner's team at create time. Defaults to true; users without
+     * a team create an unshared initiative. Explicit false skips the team grant.
+     */
+    shareWithTeam?: boolean | null;
+};
+
 export type CreateInstructionsDocumentResponse = {
     documentId: string;
 };
@@ -3060,6 +3721,45 @@ export type CreateMarkdownDocumentResponse = {
     token: string;
 };
 
+/**
+ * Inputs for creating a meeting without starting its RTC room.
+ */
+export type CreateMeetingRequest = {
+    /**
+     * Optional scheduled end.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Optional scheduled start.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Optional display title.
+     */
+    title?: string | null;
+};
+
+/**
+ * Request to open a pairing: the daemon asks for a code the user approves.
+ *
+ * The daemon serializes this, so both derives are used.
+ */
+export type CreatePairingRequest = {
+    /**
+     * Daemon operator consent ceiling. Omitted by older clients; web approval decides.
+     */
+    allow_permission_bypass?: boolean | null;
+    /**
+     * Display-only description of the machine, e.g. `eric@macbook / darwin`.
+     */
+    host?: string | null;
+    /**
+     * Requested harness display name (typically the machine's hostname).
+     */
+    name: string;
+    scope?: null | RequestedHarnessScope;
+};
+
 export type CreateProjectRequest = {
     /**
      * The name of the project.
@@ -3097,7 +3797,7 @@ export type CreateReminderRequest = {
     /**
      * Type of the entity to attach the reminder to. Requires `entityId`.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
     /**
      * When and how often the reminder fires.
      */
@@ -3237,6 +3937,16 @@ export type CreateUnthreadedPdfAnchorRequest = PdfHighlightAnchorRequest & {
     anchorType: 'highlight';
 };
 
+/**
+ * Request body for minting a key.
+ */
+export type CreateUserApiKeyRequest = {
+    /**
+     * User-facing name for the key.
+     */
+    name: string;
+};
+
 export type CreateViewRequest = {
     config: unknown;
     name: string;
@@ -3335,6 +4045,57 @@ export type CreateWebhookResponse = {
      * Owning workspace id.
      */
     workspace_id: string;
+};
+
+/**
+ * A pairing the daemon created, including its claim credential.
+ *
+ * `device_secret` is returned exactly once and never stored raw; the daemon
+ * keeps it to claim the harness credential after approval.
+ */
+export type CreatedPairing = {
+    /**
+     * Human-readable code the user confirms in the web app, `XXXX-XXXX`.
+     */
+    code: string;
+    /**
+     * Claim credential the daemon must present. Shown only here.
+     */
+    device_secret: string;
+    /**
+     * When the pairing expires.
+     */
+    expires_at: string;
+    /**
+     * Pairing id used to poll for the claim.
+     */
+    pairing_id: string;
+    /**
+     * Suggested delay between claim polls.
+     */
+    poll_interval_seconds: number;
+};
+
+/**
+ * A newly minted key: safe metadata plus the secret, shown only once.
+ */
+export type CreatedUserApiKey = {
+    /**
+     * When the key was created.
+     */
+    createdAt: string;
+    /**
+     * Opaque identifier used to address the key after create.
+     */
+    id: UserApiKeyId;
+    /**
+     * The newly minted secret. Shown only on create.
+     */
+    key: string;
+    /**
+     * User-facing name.
+     */
+    name: string;
 };
 
 /**
@@ -3559,6 +4320,48 @@ export type CrmDomainResponse = {
 export type CrmPermissionRole = 'admin' | 'owner';
 
 /**
+ * One stage in a `PUT /crm/stages` body.
+ */
+export type CrmStageInput = {
+    /**
+     * Existing stage to keep; omit to add one.
+     */
+    id?: string | null;
+    /**
+     * Label after the update; non-blank and unique within the set.
+     */
+    label: string;
+};
+
+/**
+ * One stage of the team's custom pipeline.
+ */
+export type CrmStageResponse = {
+    /**
+     * Property option id companies carry as their stage value.
+     */
+    id: string;
+    /**
+     * Label.
+     */
+    label: string;
+};
+
+/**
+ * The team's custom stage set.
+ */
+export type CrmStagesResponse = {
+    /**
+     * Team-scoped stage definition id.
+     */
+    definition_id: string;
+    /**
+     * Stages in pipeline order.
+     */
+    stages: Array<CrmStageResponse>;
+};
+
+/**
  * The team's CRM configuration (everything on `team_crm_settings`
  * except the `crm_enabled` killswitch, which is managed via
  * `PATCH /team/crm` on the auth service).
@@ -3581,6 +4384,12 @@ export type CrmTeamSettingsResponse = {
      * Who can change the deal stage set in CRM settings.
      */
     edit_stages_role: CrmPermissionRole;
+    /**
+     * System stage option id to team stage option id for seeded stages.
+     */
+    legacy_stage_ids: {
+        [key: string]: string;
+    };
     /**
      * Who can move deals out of a closed stage.
      */
@@ -3673,8 +4482,8 @@ export type DeleteCommentResponse = {
 };
 
 /**
- * Outcome of soft-deleting a CRM comment: reports whether the parent thread
- * was soft-deleted too (it is when the deleted comment was its last live one).
+ * Outcome of deleting a CRM comment: reports whether its discussion went with
+ * it (it does when the deleted comment was the discussion's first).
  */
 export type DeleteCrmCommentResult = {
     /**
@@ -3682,8 +4491,8 @@ export type DeleteCrmCommentResult = {
      */
     commentId: string;
     /**
-     * Whether the thread itself was soft-deleted because no live comments
-     * remained.
+     * Whether the whole discussion was deleted because the comment was its
+     * first.
      */
     threadDeleted: boolean;
     /**
@@ -3730,6 +4539,11 @@ export type DeleteUnthreadedPdfAnchorRequest = {
     anchorType: 'highlight';
     uuid: string;
 };
+
+/**
+ * Id of the markdown document that holds an initiative's description.
+ */
+export type DescriptionDocumentId = string;
 
 /**
  * Returns basic information of a document used for some db queries
@@ -3789,13 +4603,17 @@ export type DocumentContentUploadedMetadata = {
     /**
      * The owner of the document (used by the extractor to resolve S3 keys).
      */
-    owner: MacroUserIdStr;
+    owner: string;
 };
 
 /**
  * Metadata for [`DocumentTopicEvent::Copied`].
  */
 export type DocumentCopiedMetadata = {
+    /**
+     * Who mechanically created the copy.
+     */
+    actor?: string | null;
     /**
      * The id of the newly created copy.
      */
@@ -3805,10 +4623,11 @@ export type DocumentCopiedMetadata = {
      */
     document_name: string;
     file_type?: null | FileType;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
-     * The owner of the new copy (the copier).
+     * The principal who owns the new copy.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project the copy belongs to, when any.
      */
@@ -3830,7 +4649,8 @@ export type DocumentCopiedMetadata = {
 export type DocumentCreatedMetadata = {
     /**
      * Who mechanically created the document. Absent on events published
-     * before attribution: ingest then treats [`Self::owner`] as the actor.
+     * before attribution: ingest derives a user/bot actor from [`Self::owner`].
+     * Team owners fall back to [`Self::on_behalf_of`], then the system bot.
      */
     actor?: string | null;
     /**
@@ -3848,9 +4668,9 @@ export type DocumentCreatedMetadata = {
     file_type?: null | FileType;
     on_behalf_of?: null | MacroUserIdStr;
     /**
-     * The owner (creator) of the document.
+     * The principal who owns the document.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project the document was created in, when any.
      */
@@ -3862,11 +4682,18 @@ export type DocumentCreatedMetadata = {
  * Metadata for [`DocumentTopicEvent::Deleted`].
  */
 export type DocumentDeletedMetadata = {
+    /**
+     * Who mechanically deleted the document. Absent on events published
+     * before attribution, and on user-receipt writes (ingest then uses
+     * [`Self::actor_user_id`]).
+     */
+    actor?: string | null;
     actor_user_id?: null | MacroUserIdStr;
     /**
      * The id of the deleted document.
      */
     document_id: string;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * Project the document belonged to, when any.
      */
@@ -3898,7 +4725,10 @@ export type DocumentFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -3915,6 +4745,11 @@ export type DocumentFilters = {
      */
     task_filters?: TaskFilters;
 };
+
+/**
+ * A validated document identifier. Historical document ids need not be UUIDs.
+ */
+export type DocumentId = string;
 
 /**
  * Metadata for [`DocumentTopicEvent::Interaction`].
@@ -4103,6 +4938,8 @@ export type DocumentPreviewDataSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 /**
@@ -4214,13 +5051,20 @@ export type DocumentStorageServiceApiVersion = 'v1' | 'v2';
 /**
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
+ *
+ * Wire, database, and `Display` spellings are all `snake_case` so a
+ * multi-word variant serializes identically in every system.
  */
-export type DocumentSubType = 'task' | 'snippet' | 'skill';
+export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_description';
 
 /**
  * Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
  */
 export type DocumentSyncContentUpdatedMetadata = {
+    /**
+     * Legacy single-editor attribution; newer Sync callers send `editors`.
+     */
+    actor?: string | null;
     /**
      * The id of the live-collab document whose content changed.
      */
@@ -4230,9 +5074,25 @@ export type DocumentSyncContentUpdatedMetadata = {
      */
     document_version_id?: string | null;
     /**
-     * File type of the sync document (markdown today).
+     * Distinct editors since the preceding snapshot notification.
+     */
+    editors?: Array<DocumentSyncEditor>;
+    /**
+     * File type of the sync document, resolved by the document backend.
      */
     file_type: FileType;
+    on_behalf_of?: null | MacroUserIdStr;
+};
+
+/**
+ * An editor reported by Sync from an authenticated session.
+ */
+export type DocumentSyncEditor = {
+    /**
+     * User or bot that performed the edit.
+     */
+    actor: string;
+    on_behalf_of?: null | MacroUserIdStr;
 };
 
 /**
@@ -4241,7 +5101,7 @@ export type DocumentSyncContentUpdatedMetadata = {
  */
 export type DocumentTeamShareResponse = {
     /**
-     * Whether the document is currently shared with the owner's team.
+     * Whether explicit team sharing is enabled; inherited team access does not count.
      */
     sharedWithTeam: boolean;
     /**
@@ -4308,6 +5168,12 @@ export type DocumentTopicEvent = {
  * Metadata for [`DocumentTopicEvent::Updated`].
  */
 export type DocumentUpdatedMetadata = {
+    /**
+     * Who mechanically updated the document. Absent on events published
+     * before attribution, and on user-receipt writes (ingest then uses
+     * [`Self::actor_user_id`]).
+     */
+    actor?: string | null;
     actor_user_id?: null | MacroUserIdStr;
     /**
      * The id of the updated document.
@@ -4318,10 +5184,11 @@ export type DocumentUpdatedMetadata = {
      */
     document_name?: string | null;
     file_type?: null | FileTypeUpdate;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * The owner of the document.
      */
-    owner: MacroUserIdStr;
+    owner: string;
     /**
      * Project id before the update.
      */
@@ -4346,7 +5213,7 @@ export type EditAnchorResponse = Anchor & {
 };
 
 /**
- * Edit call request
+ * Edit call request, as supplied by inbound callers.
  */
 export type EditCallRecordRequest = {
     /**
@@ -4359,8 +5226,9 @@ export type EditCallRecordRequest = {
     customName?: string | null;
     sharePermission?: null | UpdateSharePermissionRequestV2;
     /**
-     * If `Some(true)`, grant the creator's team View access on the call.
-     * If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
+     * Deprecated alias for `sharePermission.teamShareAccessLevel`:
+     * `Some(true)` behaves like `"view"`, `Some(false)` like `null`, and
+     * `None` is a no-op. Supplying both with disagreeing values is rejected.
      * The team is resolved from the call's `created_by`, not the acting user.
      */
     shareWithTeam?: boolean | null;
@@ -4513,6 +5381,10 @@ export type EmailFilters = {
      */
     include_labels?: Array<string>;
     /**
+     * Filter by the email thread's read flag, independently of notification state.
+     */
+    is_read?: boolean | null;
+    /**
      * Restrict to specific inboxes by email_links.id. Empty means "any inbox the
      * caller can access" (soup expands to the full set at the router edge).
      */
@@ -4564,13 +5436,17 @@ export type EnsureCollabSurfaceRequest = {
     /**
      * Type of the parent entity access derives from.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
 };
 
 /**
  * a bundle of all of the filters for each entity type
  */
 export type EntityFilters = {
+    /**
+     * the bundled [AgentSessionFilters]
+     */
+    agent_session_filters?: AgentSessionFilters;
     /**
      * the bundled [CalendarEventFilters]
      */
@@ -4604,9 +5480,17 @@ export type EntityFilters = {
      */
     email_filters?: EmailFilters;
     /**
+     * Restrict results to the authenticated viewer's favorites when true.
+     */
+    favorites_only?: boolean | null;
+    /**
      * the bundled [ForeignEntityFilters]
      */
     foreign_entity_filters?: ForeignEntityFilters;
+    /**
+     * Initiative filters. Initiatives are opt-in.
+     */
+    initiative_filters?: InitiativeFilters;
     /**
      * the bundled [ProjectFilters]
      */
@@ -4686,7 +5570,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.
@@ -4843,7 +5727,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -4865,7 +5749,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
 };
 
 /**
@@ -4906,7 +5790,7 @@ export type FileSystemNodeWithIds = {
  * - ContentType::mime_type() - Gets MIME type for ContentType
  *
  */
-export type FileType = 'docx' | 'pdf' | 'md' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'ppt' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
+export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'ppt' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
 
 /**
  * Represents a file type update: either set to a specific type or clear to null.
@@ -5619,6 +6503,160 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
  */
 export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated';
 
+/**
+ * A non-account guest of a single call session.
+ *
+ * The id doubles as the guest's RTC participant identity, so identities are
+ * opaque UUIDs and never share a namespace (or a column) with Macro user
+ * ids. Only the server mints them; Macro users keep `macro|…` identities,
+ * so an RTC identity classifies as exactly one of the two.
+ */
+export type GuestId = string;
+
+/**
+ * Public guest join inputs. The server generates the participant identity.
+ */
+export type GuestJoinRequest = {
+    /**
+     * Guest's name, displayed to everyone in the room.
+     */
+    displayName: string;
+};
+
+/**
+ * A registered user-run harness.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type Harness = {
+    /**
+     * Whether agents may bypass ACP permission requests on this harness.
+     */
+    allow_permission_bypass?: boolean;
+    /**
+     * Whether the daemon currently holds a runtime connection.
+     */
+    connected: boolean;
+    /**
+     * Creation timestamp.
+     */
+    created_at: string;
+    /**
+     * User that registered this harness.
+     */
+    created_by: string;
+    /**
+     * Harness id.
+     */
+    id: HarnessId;
+    /**
+     * Runtime kind. Currently always `macrod`.
+     */
+    kind: string;
+    /**
+     * When the daemon last attached a runtime connection.
+     */
+    last_connected_at?: string | null;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Owner.
+     */
+    owner: HarnessOwner;
+    /**
+     * Update timestamp.
+     */
+    updated_at: string;
+};
+
+/**
+ * An agent bound to a harness, as listed for the daemon.
+ */
+export type HarnessAgent = {
+    /**
+     * The agent's bot id.
+     */
+    bot_id: BotId;
+    /**
+     * Stable `@` handle.
+     */
+    handle: string;
+    /**
+     * Display name.
+     */
+    name: string;
+};
+
+export type HarnessId = string;
+
+/**
+ * Harness owner.
+ *
+ * Exactly one of a user or a team, mirroring the bots owner pattern. There
+ * are no system harnesses.
+ */
+export type HarnessOwner = {
+    type: 'user';
+    /**
+     * Owner user id.
+     */
+    user_id: string;
+} | {
+    /**
+     * Owner team id.
+     */
+    team_id: string;
+    type: 'team';
+};
+
+/**
+ * An agent session running on a harness, as listed for the daemon's UI.
+ */
+export type HarnessSession = {
+    /**
+     * The agent's `@` handle.
+     */
+    bot_handle: string;
+    /**
+     * The agent the session runs for.
+     */
+    bot_id: BotId;
+    /**
+     * The agent's display name.
+     */
+    bot_name: string;
+    /**
+     * Creation timestamp.
+     */
+    created_at: string;
+    /**
+     * Model the session was opened with.
+     */
+    model: string;
+    /**
+     * Last-activity timestamp.
+     */
+    modified_at: string;
+    /**
+     * The session's display name.
+     */
+    name: string;
+    /**
+     * The user the session belongs to.
+     */
+    owner_id: string;
+    /**
+     * The session id.
+     */
+    session_id: string;
+    /**
+     * Session lifecycle status, e.g. `no_messages`, `active`.
+     */
+    status: string;
+};
+
 export type HashMap = {
     [key: string]: (PresignedUrl & {
         type: 'external';
@@ -5630,9 +6668,193 @@ export type HashMap = {
 export type HighlightType = 1 | 2 | 3;
 
 /**
+ * Display attribution for a comment imported from an external document.
+ */
+export type ImportedAuthor = {
+    /**
+     * Original author text; never interpreted as an authenticated principal.
+     */
+    name: string;
+};
+
+/**
+ * A turn the runtime never answered: the session stopped underneath it.
+ */
+export type InFlightTurnSummary = {
+    /**
+     * The action that opened the turn.
+     */
+    action_id: AgentActionId;
+    actor?: null | MacroUserIdStr;
+    /**
+     * The magic-chip message posted for this turn, when one was.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * Position in the session's log.
+     */
+    turn: number;
+};
+
+/**
+ * Full initiative returned to a caller, including members, tasks, and share state.
+ */
+export type InitiativeDetail = {
+    /**
+     * When the initiative was created.
+     */
+    createdAt: string;
+    /**
+     * The markdown document holding the description; open it in the editor.
+     */
+    descriptionDocumentId: DescriptionDocumentId;
+    /**
+     * Opaque identifier.
+     */
+    id: InitiativeId;
+    /**
+     * Member user ids. The owner is never stored here.
+     */
+    memberIds: Array<MacroUserIdStr>;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Owner of the initiative.
+     */
+    ownerId: MacroUserIdStr;
+    /**
+     * Current share permission.
+     */
+    sharePermission: SharePermissionV2;
+    /**
+     * Task ids currently assigned to the initiative.
+     */
+    taskIds: Array<string>;
+    /**
+     * When the initiative was last updated.
+     */
+    updatedAt: string;
+    /**
+     * Caller's access level on this initiative.
+     */
+    userAccessLevel: AccessLevel;
+};
+
+/**
+ * Filters for initiatives.
+ */
+export type InitiativeFilters = {
+    /**
+     * Inclusive lower due-date bound.
+     */
+    due_after?: string | null;
+    /**
+     * Inclusive upper due-date bound.
+     */
+    due_before?: string | null;
+    /**
+     * Opt this query into initiatives at all. Initiatives are off by
+     * default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
+     * Asking for specific `initiative_ids` or `owners` also opts in.
+     */
+    include?: boolean;
+    /**
+     * Initiative ids to filter by. Empty to include all accessible initiatives.
+     */
+    initiative_ids?: Array<string>;
+    /**
+     * Case-insensitive name substring.
+     */
+    name?: string | null;
+    /**
+     * Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+     * owner.
+     */
+    owners?: Array<string>;
+};
+
+/**
+ * Opaque identifier for an initiative. Minted as UUIDv7 in application code.
+ */
+export type InitiativeId = string;
+
+/**
+ * Accessible-initiative list.
+ */
+export type InitiativeList = {
+    /**
+     * Initiatives the caller can view.
+     */
+    initiatives: Array<InitiativeSummary>;
+};
+
+/**
+ * List-row view of an initiative.
+ */
+export type InitiativeSummary = {
+    /**
+     * The markdown document holding the description; open it in the editor.
+     */
+    descriptionDocumentId: DescriptionDocumentId;
+    /**
+     * Opaque identifier.
+     */
+    id: InitiativeId;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * When the initiative was last updated.
+     */
+    updatedAt: string;
+};
+
+/**
+ * The pending question was answered or withdrawn.
+ */
+export type InputReceivedMetadata = {
+    /**
+     * The action that opened the turn.
+     */
+    action_id: AgentActionId;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * The turn that was asking.
+     */
+    turn: number;
+};
+
+/**
  * Why a document interaction was reported.
  */
 export type InteractionReason = 'edited' | 'first_join' | 'last_leave';
+
+/**
+ * A single email recipient for a call invitation.
+ */
+export type InviteMeetingRequest = {
+    /**
+     * Recipient email; no Macro account is required.
+     */
+    email: string;
+};
+
+/**
+ * Registered teammates selected for an incoming call invitation.
+ */
+export type InviteMeetingUsersRequest = {
+    /**
+     * Human user principals; bot principals and historical bare bot UUIDs are invalid.
+     */
+    userIds: Array<string>;
+};
 
 export type Item = ({
     type: 'document';
@@ -5739,9 +6961,444 @@ export type LocationResponseV3 = {
 
 export type MacroUserIdStr = string;
 
+/**
+ * Persistent meeting metadata. No channel contents or archived media are exposed.
+ */
+export type Meeting = {
+    /**
+     * Currently active call session, if any.
+     */
+    callId?: string | null;
+    /**
+     * Associated channel, for links to existing channel calls only.
+     */
+    channelId?: string | null;
+    /**
+     * Persistent meeting identifier.
+     */
+    id: string;
+    /**
+     * Scheduled end, or none for an instant meeting.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Scheduled start, or none for an instant meeting.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Bearer capability embedded in the invitation URL.
+     */
+    shareToken: MeetingToken;
+    /**
+     * Human-readable meeting title.
+     */
+    title: string;
+};
+
+/**
+ * Whether the authenticated caller can invite teammates to this meeting.
+ */
+export type MeetingInvitePermissions = {
+    /**
+     * True for the owner of an uncancelled standalone meeting.
+     */
+    canInvite: boolean;
+};
+
+/**
+ * A bearer capability that grants access only to a meeting's RTC room.
+ */
+export type MeetingToken = string;
+
+/**
+ * Uncancelled standalone meetings visible in the requested meeting list.
+ */
+export type MeetingsResponse = {
+    /**
+     * Persistent meeting invitations, most recently created first.
+     */
+    meetings: Array<Meeting>;
+};
+
 export type Mentions = {
     mentionId: string;
     users: Array<string>;
+};
+
+/**
+ * Shared message representation for channel timelines and entity discussions.
+ */
+export type Message = {
+    /**
+     * Attached entities.
+     */
+    attachments: Array<MessageAttachment>;
+    bot_profile?: null | BotSenderProfile;
+    /**
+     * Macro Markdown body.
+     */
+    content: string;
+    /**
+     * Creation time.
+     */
+    created_at: string;
+    /**
+     * Message tombstone, independent of thread deletion.
+     */
+    deleted_at?: string | null;
+    /**
+     * Last content edit, if any.
+     */
+    edited_at?: string | null;
+    /**
+     * Message UUID.
+     */
+    id: string;
+    imported_author?: null | ImportedAuthor;
+    /**
+     * Tracked mentions, retained when a caller changes attachments only.
+     */
+    mentions: Array<SimpleMention>;
+    /**
+     * Entity that owns this conversation.
+     */
+    parent: MessageParent;
+    /**
+     * Aggregated reactions.
+     */
+    reactions: Array<CountedReaction>;
+    /**
+     * Authenticated actor or owner of imported content.
+     */
+    sender_id: string;
+    /**
+     * Root message UUID for replies; absent on roots.
+     */
+    thread_id?: string | null;
+    /**
+     * User who triggered a bot-authored message.
+     */
+    triggered_by?: string | null;
+    /**
+     * Last persisted update.
+     */
+    updated_at: string;
+};
+
+/**
+ * An entity attached to a message.
+ */
+export type MessageAttachment = {
+    /**
+     * When the attachment was added.
+     */
+    created_at: string;
+    /**
+     * Attached entity identifier.
+     */
+    entity_id: string;
+    /**
+     * Attached entity type.
+     */
+    entity_type: string;
+    /**
+     * Optional media height.
+     */
+    height?: number | null;
+    /**
+     * Attachment UUID.
+     */
+    id: string;
+    /**
+     * Optional media width.
+     */
+    width?: number | null;
+};
+
+/**
+ * Kind of message change; notification policy only runs for posted messages.
+ */
+export type MessageChange = {
+    /**
+     * Mentions included in this post.
+     */
+    mentions: Array<SimpleMention>;
+    /**
+     * Persisted message.
+     */
+    message: Message;
+    /**
+     * Trusted notification policy carried with the committed change.
+     */
+    notification_policy: PostMessageNotificationPolicy;
+    type: 'posted';
+} | {
+    /**
+     * Complete replacement mention set.
+     */
+    mentions: Array<SimpleMention>;
+    /**
+     * Persisted replacement message.
+     */
+    message: Message;
+    /**
+     * Trusted notification policy for the edited content.
+     */
+    notification_policy: PatchMessageNotificationPolicy;
+    /**
+     * Attachment identities before the edit, for channel change delivery.
+     */
+    previous_attachments: Array<MessageAttachment>;
+    type: 'edited';
+} | {
+    /**
+     * Persisted tombstone.
+     */
+    message: Message;
+    type: 'message_deleted';
+} | {
+    /**
+     * Persisted message.
+     */
+    message: Message;
+    type: 'reaction_changed';
+} | {
+    /**
+     * Persisted thread state.
+     */
+    state: ThreadState;
+    type: 'thread_updated';
+} | {
+    /**
+     * Whether the user is currently typing.
+     */
+    active: boolean;
+    /**
+     * Root being replied to, or no root for the parent composer.
+     */
+    thread_id?: string | null;
+    type: 'typing';
+};
+
+/**
+ * Cursor for a chronological parent timeline.
+ */
+export type MessageCursor = {
+    /**
+     * Last root creation time.
+     */
+    created_at: string;
+    /**
+     * Last root UUID, used to break timestamp ties.
+     */
+    id: string;
+};
+
+/**
+ * Direction through a parent timeline, retaining channel cursor semantics.
+ */
+export type MessageDirection = 'older' | 'newer';
+
+/**
+ * A committed message or thread change sent to delivery adapters.
+ */
+export type MessageEvent = {
+    /**
+     * User or bot who initiated the operation.
+     */
+    actor: string;
+    /**
+     * Persisted change.
+     */
+    change: MessageChange;
+    /**
+     * Mutation nonce for optimistic reconciliation.
+     */
+    nonce?: string | null;
+    /**
+     * Changed parent, used for subscriptions and cache invalidation.
+     */
+    parent: MessageParent;
+};
+
+/**
+ * Root message with its small thread preview, independent of its parent type.
+ */
+export type MessageListItem = Message & {
+    /**
+     * Thread metadata, independent of the first message's lifecycle.
+     */
+    state: ThreadState;
+    /**
+     * Bounded reply preview; full replies load on expansion.
+     */
+    thread: MessageThreadPreview;
+};
+
+/**
+ * Bidirectional, bounded timeline page, ordered newest root first.
+ */
+export type MessagePage = {
+    /**
+     * Root messages with bounded previews.
+     */
+    items: Array<MessageListItem>;
+    next_cursor?: null | MessageCursor;
+    previous_cursor?: null | MessageCursor;
+};
+
+/**
+ * The entity whose permissions and lifecycle govern a message.
+ */
+export type MessageParent = {
+    /**
+     * A channel, including direct messages.
+     */
+    id: string;
+    type: 'channel';
+} | {
+    /**
+     * A document, including tasks and PDFs.
+     */
+    id: DocumentId;
+    type: 'document';
+} | {
+    /**
+     * An initiative, presented as a project in the application.
+     */
+    id: string;
+    type: 'initiative';
+} | {
+    /**
+     * A CRM company.
+     */
+    id: string;
+    type: 'crm_company';
+} | {
+    /**
+     * A CRM contact.
+     */
+    id: string;
+    type: 'crm_contact';
+};
+
+/**
+ * Partial updates share the same authorship, reference, and delivery rules as edits.
+ */
+export type MessagePatch = {
+    /**
+     * Attachment change, without adapter-side message reads.
+     */
+    attachments?: AttachmentChange;
+    /**
+     * Replacement body; absent preserves current content.
+     */
+    content?: string | null;
+    /**
+     * Replacement authored mentions; absent preserves current mentions.
+     */
+    mentions?: Array<SimpleMention> | null;
+    /**
+     * Client mutation nonce.
+     */
+    nonce?: string | null;
+};
+
+/**
+ * A discussion with its root and ordered replies, including root tombstones.
+ */
+export type MessageThread = {
+    /**
+     * Replies in display order.
+     */
+    replies: Array<Message>;
+    /**
+     * Root message, which may be a tombstone.
+     */
+    root: Message;
+    /**
+     * Shared thread lifecycle and anchor state.
+     */
+    state: ThreadState;
+};
+
+/**
+ * Thread counts and its oldest three live replies.
+ */
+export type MessageThreadPreview = {
+    /**
+     * Creation time of the latest live reply.
+     */
+    latest_reply_at?: string | null;
+    /**
+     * Bounded preview using the canonical message shape.
+     */
+    preview: Array<Message>;
+    /**
+     * Total live reply count.
+     */
+    reply_count: number;
+};
+
+/**
+ * Root selection shared by channel timelines and document discussions.
+ */
+export type MessageTimelineQuery = {
+    /**
+     * Include roots or live replies created at or after this time.
+     */
+    activity_after?: string | null;
+    /**
+     * Include roots or live replies created before this time.
+     */
+    activity_before?: string | null;
+    /**
+     * Select anchored or unanchored roots; absent includes both.
+     */
+    anchored?: boolean | null;
+    /**
+     * Center on the root containing this message.
+     */
+    around?: string | null;
+    cursor?: null | MessageCursor;
+    /**
+     * Which side of the cursor to fetch.
+     */
+    direction?: MessageDirection;
+    /**
+     * Restrict roots to this set, for selected source threads.
+     */
+    ids?: Array<string>;
+    /**
+     * Include whole-thread tombstones when reconciling persisted document marks.
+     */
+    include_deleted_threads?: boolean;
+    /**
+     * Page size, clamped by the application to 1..=100.
+     */
+    limit?: number | null;
+};
+
+/**
+ * An attachment to add to a message.
+ */
+export type NewAttachment = {
+    /**
+     * Attached entity identifier.
+     */
+    entity_id: string;
+    /**
+     * Attached entity type.
+     */
+    entity_type: string;
+    /**
+     * Optional media height.
+     */
+    height?: number | null;
+    /**
+     * Optional media width.
+     */
+    width?: number | null;
 };
 
 /**
@@ -5767,19 +7424,99 @@ export type NewChannelAttachment = {
 };
 
 /**
- * Notification state filters for channel message queries.
+ * Location supplied when creating a document discussion.
+ */
+export type NewThreadAnchor = {
+    /**
+     * Serialized mark identifier.
+     */
+    mark_id: string;
+    /**
+     * The document text the mark covers, captured by the editor as the
+     * comment is written. Trimmed and bounded before it is stored, so an
+     * oversized or whitespace-only claim cannot reach the thread row.
+     */
+    marked_text?: string | null;
+    type: 'markdown';
+} | {
+    /**
+     * Highlight annotation identifier.
+     */
+    anchor_id: string;
+    type: 'pdf_highlight';
+} | {
+    /**
+     * Client-generated annotation identifier used by optimistic rendering.
+     */
+    anchor_id: string;
+    /**
+     * Height as a fraction of the page height.
+     */
+    height_pct: number;
+    /**
+     * PDF page number.
+     */
+    page: number;
+    type: 'pdf_placeable';
+    /**
+     * Width as a fraction of the page width.
+     */
+    width_pct: number;
+    /**
+     * Horizontal position as a fraction of the page width.
+     */
+    x_pct: number;
+    /**
+     * Vertical position as a fraction of the page height.
+     */
+    y_pct: number;
+};
+
+/**
+ * Notification-level filters that apply to an entity type.
  */
 export type NotificationFilters = {
     /**
-     * Filter by notification done state. `Some(true)` selects done
-     * notifications; `Some(false)` selects not-done notifications.
+     * Include entities with a non-deleted notification in any of these exact states.
+     * Empty means no notification restriction. Active means `[unseen, seen]`.
      */
-    done?: boolean | null;
+    states?: Array<NotificationState>;
+};
+
+/**
+ * The mutually exclusive lifecycle states of a user's notification.
+ */
+export type NotificationState = 'unseen' | 'seen' | 'done';
+
+/**
+ * A pending pairing, as shown to the approving user.
+ */
+export type PairingDetails = {
     /**
-     * Filter by notification seen state. `Some(true)` selects seen
-     * notifications; `Some(false)` selects not-seen notifications.
+     * The pairing code, normalized to `XXXX-XXXX`.
      */
-    seen?: boolean | null;
+    code: string;
+    /**
+     * When the pairing was created.
+     */
+    created_at: string;
+    /**
+     * When the pairing expires.
+     */
+    expires_at: string;
+    /**
+     * Display-only description of the machine.
+     */
+    host?: string | null;
+    /**
+     * Daemon operator consent ceiling; false forbids bypass at approval.
+     */
+    requested_allow_permission_bypass?: boolean | null;
+    /**
+     * Harness display name the daemon asked for.
+     */
+    requested_name: string;
+    requested_scope?: null | RequestedHarnessScope;
 };
 
 /**
@@ -5849,6 +7586,11 @@ export type PatchChannelRequest = {
      */
     convert_to_team_channel?: boolean | null;
 };
+
+/**
+ * Internal notification behavior for a patched channel message.
+ */
+export type PatchMessageNotificationPolicy = 'Default' | 'NotifyAsPostedMessage';
 
 /**
  * Request to patch a channel message.
@@ -5950,6 +7692,7 @@ export type PdfHighlightAnchor = {
     pageViewportHeight: number;
     pageViewportWidth: number;
     red: number;
+    rootId?: string | null;
     text: string;
     threadId?: number | null;
     updatedAt?: string | null;
@@ -5993,9 +7736,10 @@ export type PdfPlaceableCommentAnchor = {
     originalPage: number;
     owner: string;
     page: number;
+    rootId?: string | null;
     rotation: number;
     shouldLockOnSave: boolean;
-    threadId: number;
+    threadId?: number | null;
     uuid: string;
     wasDeleted: boolean;
     wasEdited: boolean;
@@ -6018,6 +7762,16 @@ export type PdfPlaceableCommentAnchorRequest = {
     widthPct: number;
     xPct: number;
     yPct: number;
+};
+
+/**
+ * Body returned while a claim is still waiting for approval.
+ */
+export type PendingClaimResponse = {
+    /**
+     * Always `pending`.
+     */
+    status: string;
 };
 
 export type PinRequest = {
@@ -6074,6 +7828,43 @@ export type PostGroupedSoupAstRequest = (PostGroupedSoupAstInitialRequest & {
 }) | (PostGroupedSoupAstGroupPageRequest & {
     mode: 'group_page';
 });
+
+/**
+ * Create a root or reply. Thread state may only be supplied on a root.
+ */
+export type PostMessage = {
+    anchor?: null | NewThreadAnchor;
+    /**
+     * Initial attachments.
+     */
+    attachments?: Array<NewAttachment>;
+    /**
+     * Macro Markdown body.
+     */
+    content: string;
+    /**
+     * Client-minted UUIDv7 for the new message, so an optimistic message
+     * already carries its final id; the server mints one when absent.
+     */
+    id?: string | null;
+    /**
+     * Mentions tracked by the editor.
+     */
+    mentions?: Array<SimpleMention>;
+    /**
+     * Client nonce for optimistic reconciliation.
+     */
+    nonce?: string | null;
+    /**
+     * Root to reply to, if this is a reply.
+     */
+    thread_id?: string | null;
+};
+
+/**
+ * Internal notification behavior for a posted channel message.
+ */
+export type PostMessageNotificationPolicy = 'Default' | 'MentionsOnly' | 'Silent';
 
 /**
  * Request to send a channel message.
@@ -6280,7 +8071,10 @@ export type ProjectFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
+     * Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
+     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * search all owners.
      */
     owners?: Array<string>;
     /**
@@ -6449,6 +8243,24 @@ export type PropertyValue = {
  */
 export type ReactionAction = 'Add' | 'Remove';
 
+/**
+ * Reaction mutation for the authenticated user.
+ */
+export type ReactionInput = {
+    /**
+     * Add when true, remove when false.
+     */
+    add: boolean;
+    /**
+     * Emoji.
+     */
+    emoji: string;
+    /**
+     * Client nonce.
+     */
+    nonce?: string | null;
+};
+
 export type RecentlyDeletedResponseData = {
     /**
      * The items returned from the call
@@ -6487,7 +8299,7 @@ export type Reminder = {
     /**
      * Type of the associated entity, when the reminder is attached to one.
      */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
     /**
      * Reminder id.
      */
@@ -6591,6 +8403,17 @@ export type RemoveParticipantsRequest = {
 };
 
 /**
+ * Request body for renaming a label.
+ */
+export type RenameChannelLabelRequest = {
+    /**
+     * New display name.
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
+};
+
+/**
  * Request body for reordering favorites.
  */
 export type ReorderFavoritesRequest = {
@@ -6614,6 +8437,24 @@ export type ReorderPinRequest = {
      */
     pinnedItemType: string;
 };
+
+/**
+ * Request body for `PUT /crm/stages`: the whole stage set in order.
+ */
+export type ReplaceCrmStagesRequest = {
+    /**
+     * Stages first to last.
+     */
+    stages: Array<CrmStageInput>;
+};
+
+/**
+ * The ownership scope a daemon's config asks for.
+ *
+ * Advisory, not binding: the approving user confirms it in the dialog, which
+ * arrives preselected to this. Approval is what actually sets ownership.
+ */
+export type RequestedHarnessScope = 'private' | 'team';
 
 /**
  * Per-user status of an incoming-call ring, as reported by the
@@ -6687,6 +8528,152 @@ export type SaveDocumentResponseData = {
      * If the document is an editable file, we provide a presigned url to save the updated file to.
      */
     presignedUrl?: string | null;
+};
+
+/**
+ * The session was deleted.
+ */
+export type SessionDeletedMetadata = {
+    /**
+     * The session as it was.
+     */
+    identity: SessionIdentity;
+};
+
+/**
+ * Who and what a session is; carried by every lifecycle event so a
+ * consumer never has to look the session up.
+ */
+export type SessionIdentity = {
+    /**
+     * Everyone with a stake in what happens next: the owner plus every user
+     * who has prompted or answered this session. Resolved by the emitter so
+     * a consumer fanning out never has to read the session's log.
+     */
+    audience?: Array<MacroUserIdStr>;
+    /**
+     * Bot the session runs for.
+     */
+    bot_id: BotId;
+    /**
+     * The bot's display name at the time of the event.
+     */
+    bot_name: string;
+    origin?: null | ThreadOrigin;
+    /**
+     * User who owns the session.
+     */
+    owner_id: MacroUserIdStr;
+    /**
+     * The session.
+     */
+    session_id: string;
+    /**
+     * User-facing session name at the time of the event.
+     */
+    session_name: string;
+};
+
+/**
+ * A prompt named other users who can open the session. Published when the
+ * prompt is accepted, not when it is answered: "come look at this" should
+ * not wait for the turn.
+ */
+export type SessionMentionedMetadata = {
+    /**
+     * The action carrying the prompt.
+     */
+    action_id: AgentActionId;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * The users named, already narrowed to those who can open the session
+     * and never including the author.
+     */
+    mentioned: Array<MacroUserIdStr>;
+    mentioned_by?: null | MacroUserIdStr;
+    /**
+     * The channel or document message the prompt was posted as, when it
+     * arrived from a thread rather than the session view. That message
+     * already notified the users it named when it was posted.
+     */
+    origin_message_id?: string | null;
+};
+
+/**
+ * A session was created.
+ */
+export type SessionOpenedMetadata = {
+    /**
+     * Harness slug the session runs on.
+     */
+    harness: string;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * Model slug the session runs with.
+     */
+    model: string;
+};
+
+/**
+ * The session was renamed; `identity` carries the new name.
+ */
+export type SessionRenamedMetadata = {
+    /**
+     * The session, with its new name.
+     */
+    identity: SessionIdentity;
+};
+
+/**
+ * A turn ended and nothing is queued: the agent has stopped working.
+ */
+export type SessionSettledMetadata = {
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    last_turn?: null | TurnSummary;
+};
+
+/**
+ * The session's live actor is gone: idle teardown, transport loss, or crash.
+ */
+export type SessionStoppedMetadata = {
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * Why it stopped, as the session machine reported it.
+     */
+    reason: string;
+    turn_in_flight?: null | InFlightTurnSummary;
+};
+
+/**
+ * Request body for moving a channel between labels.
+ */
+export type SetChannelLabelRequest = {
+    /**
+     * The label to put the channel in, or `null` to remove it from its label.
+     */
+    labelId?: string | null;
+};
+
+/**
+ * Replace a channel's picture, or remove it by sending a null file id.
+ */
+export type SetChannelPictureRequest = {
+    /**
+     * Static image file id; null restores the default channel icon.
+     */
+    profile_picture_id?: string | null;
 };
 
 /**
@@ -6818,6 +8805,7 @@ export type SharePermissionV2 = {
      * The owner of the item
      */
     owner: string;
+    teamShareAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -6836,17 +8824,128 @@ export type ShortIdResponse = {
 };
 
 /**
- * Simple entity mention attached to a message.
+ * A mention tracked in a message body.
  */
 export type SimpleMention = {
     /**
-     * Mentioned entity id.
+     * Mentioned entity identifier.
      */
     entity_id: string;
     /**
      * Mentioned entity type.
      */
     entity_type: string;
+};
+
+/**
+ * A channel visible to the caller that matches a smart tag rule.
+ */
+export type SmartTagChannelMatch = {
+    /**
+     * Channel id.
+     */
+    id: string;
+    /**
+     * Channel display name.
+     */
+    name: string;
+};
+
+/**
+ * A bounded preview and the total number of visible channels matching a rule.
+ */
+export type SmartTagPreview = {
+    /**
+     * First matches, in alphabetical order.
+     */
+    channels: Array<SmartTagChannelMatch>;
+    /**
+     * Number of matching channels the caller participates in, including overflow.
+     */
+    totalCount: number;
+};
+
+/**
+ * An agent session as displayed in Soup.
+ *
+ * Includes the persisted runtime and repository metadata needed to render
+ * coding and non-coding sessions without fetching each session separately.
+ */
+export type SoupAgentSessionSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * The bot running this session
+     */
+    botId: string;
+    /**
+     * The time the session was created
+     */
+    createdAt: string;
+    /**
+     * The runtime snapshotted when the session was created.
+     */
+    harness: string;
+    /**
+     * The agent session uuid
+     */
+    id: string;
+    /**
+     * The user-facing name of the session
+     */
+    name: string;
+    /**
+     * Who the session belongs to
+     */
+    ownerId: string;
+    /**
+     * The linked pull request's Macro entity, when visible to the viewer.
+     */
+    pullRequestId?: string | null;
+    pullRequestState?: null | AgentPullRequestState;
+    /**
+     * The persisted pull request associated with the session.
+     */
+    pullRequestUrl?: string | null;
+    /**
+     * The starting branch selected for this session, not its current branch.
+     */
+    repoBranch?: string | null;
+    /**
+     * The repository the session works with, when one was selected.
+     */
+    repoUrl?: string | null;
+    /**
+     * The session's last known status.
+     *
+     * `no_messages` until the first system event arrives, `disconnected` if
+     * the connection dropped without a clean close, otherwise the wire name
+     * of the most recent system event (for example `session/end`).
+     */
+    status: string;
+    /**
+     * The channel thread the session was opened from, when any
+     */
+    threadId?: string | null;
+    /**
+     * Last persisted fold turn state. Absent until an older session next runs.
+     */
+    turnState?: string | null;
+    /**
+     * The time the session was last modified
+     */
+    updatedAt: string;
+    /**
+     * The time the session was last viewed by the requesting user
+     */
+    viewedAt?: string | null;
+    /**
+     * Last captured working branch, when the runtime has reported one.
+     */
+    workingBranch?: string | null;
 };
 
 /**
@@ -6859,6 +8958,12 @@ export type SoupApiItem = SoupItem & {
      */
     is_favorited: boolean;
     /**
+     * When the caller was last notified about this entity, present only
+     * when the page was ordered by `notified_at`. Clients keep the notified
+     * feed ordered and date-bucketed on this value.
+     */
+    notified_at?: string | null;
+    /**
      * The caller's latest own mutation of this entity, present only when the
      * page was ordered by `touched_by_me`. Clients keep the touched feed
      * ordered on this value, so it can be bumped optimistically.
@@ -6869,7 +8974,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -6989,6 +9094,10 @@ export type SoupCalendarEventSoupPropertiesField = {
      */
     isReadOnly: boolean;
     /**
+     * When this event's most recent reminder notification was delivered.
+     */
+    lastReminderFiredAt?: string | null;
+    /**
      * Optional location label.
      */
     location?: string | null;
@@ -7031,7 +9140,29 @@ export type SoupCalendarEventSoupPropertiesField = {
 };
 
 /**
- * A participant in a call record, as displayed in Soup.
+ * A non-account guest of a call record, as displayed in Soup.
+ */
+export type SoupCallRecordGuest = {
+    /**
+     * Guest-provided display name.
+     */
+    displayName: string;
+    /**
+     * Opaque guest identity; matches the guest's transcript speaker id.
+     */
+    id: string;
+    /**
+     * When the guest joined the call.
+     */
+    joinedAt: string;
+    /**
+     * When the guest left (None if still in an active call).
+     */
+    leftAt?: string | null;
+};
+
+/**
+ * A Macro-account participant in a call record, as displayed in Soup.
  */
 export type SoupCallRecordParticipant = {
     /**
@@ -7043,7 +9174,7 @@ export type SoupCallRecordParticipant = {
      */
     leftAt?: string | null;
     /**
-     * The user id.
+     * The Macro user id.
      */
     userId: string;
 };
@@ -7070,7 +9201,7 @@ export type SoupCallRecordSoupPropertiesField = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -7092,11 +9223,15 @@ export type SoupCallRecordSoupPropertiesField = {
      */
     endedAt?: string | null;
     /**
+     * Non-account guests in the call.
+     */
+    guests: Array<SoupCallRecordGuest>;
+    /**
      * Whether the call is currently active.
      */
     isActive: boolean;
     /**
-     * Participants in the call.
+     * Macro-account participants in the call.
      */
     participants: Array<SoupCallRecordParticipant>;
     /**
@@ -7211,6 +9346,10 @@ export type SoupChatSoupPropertiesField = {
      * Whether the chat is persistent or not
      */
     isPersistent: boolean;
+    /**
+     * The last model selected for a sent message (`provider/model` id).
+     */
+    model?: string | null;
     /**
      * The name of the chat
      */
@@ -7368,6 +9507,8 @@ export type SoupDocumentSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 /**
@@ -7469,6 +9610,12 @@ export type SoupEmailThreadPreview = {
      * Whether the thread has been read.
      */
     isRead: boolean;
+    /**
+     * The denormalized `email_threads.is_signal` importance classification —
+     * the same flag the soup Importance filter evaluates, distinct from
+     * `is_important` (Gmail's IMPORTANT label).
+     */
+    isSignal: boolean;
     /**
      * Thread display name or subject.
      */
@@ -7579,6 +9726,45 @@ export type SoupForeignEntity = {
 };
 
 /**
+ * An initiative (called a project in the frontend) in the Soup feed.
+ */
+export type SoupInitiativeSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * Creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Document holding the initiative description.
+     */
+    descriptionDocumentId?: string | null;
+    /**
+     * Initiative identifier.
+     */
+    id: string;
+    /**
+     * Initiative display name.
+     */
+    name: string;
+    /**
+     * Initiative owner.
+     */
+    ownerId: string;
+    /**
+     * Last modification timestamp.
+     */
+    updatedAt: string;
+    /**
+     * Last time the requesting user viewed the initiative.
+     */
+    viewedAt?: string | null;
+};
+
+/**
  * A single item in the Soup feed.
  */
 export type SoupItem = {
@@ -7599,6 +9785,12 @@ export type SoupItem = {
      */
     data: SoupProjectSoupPropertiesField;
     tag: 'project';
+} | {
+    /**
+     * Initiative entity.
+     */
+    data: SoupInitiativeSoupPropertiesField;
+    tag: 'initiative';
 } | {
     /**
      * Email thread item.
@@ -7647,6 +9839,12 @@ export type SoupItem = {
      */
     data: SoupReminderSoupPropertiesField;
     tag: 'reminder';
+} | {
+    /**
+     * Agent session item.
+     */
+    data: SoupAgentSessionSoupPropertiesField;
+    tag: 'agentSession';
 };
 
 /**
@@ -7793,7 +9991,7 @@ export type SoupProjectSoupPropertiesField = {
      */
     name: string;
     /**
-     * The user id of who created the project
+     * The owner of the project
      */
     ownerId: string;
     /**
@@ -7850,7 +10048,7 @@ export type SoupReminderReference = {
     /**
      * The referenced entity's type.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
     /**
      * File type, when the reference is a document — `md`, `pdf`, and so on.
      */
@@ -8070,6 +10268,40 @@ export type TaskFilters = {
 };
 
 /**
+ * One teammate's out-of-office occurrence.
+ */
+export type TeamOutOfOfficeItem = {
+    /**
+     * The teammate's calendar event id.
+     */
+    eventId: string;
+    /**
+     * Stable occurrence key within the event.
+     */
+    occurrenceKey: string;
+    /**
+     * Macro user id of the teammate who is out.
+     */
+    ownerId: string;
+    /**
+     * Occurrence time span.
+     */
+    time: EventTime;
+    /**
+     * Event title, absent when the event's visibility withholds details.
+     */
+    title?: string | null;
+};
+
+/**
+ * Team out-of-office viewport response.
+ */
+export type TeamOutOfOfficeResponse = {
+    hasMore: boolean;
+    items: Array<TeamOutOfOfficeItem>;
+};
+
+/**
  * The role a user has within a team.
  *
  * Ordered least to most privileged so comparisons reflect access strength.
@@ -8087,8 +10319,127 @@ export type Thread = {
     updatedAt?: string | null;
 };
 
+/**
+ * A thread's location within its document. Geometry remains annotation-owned.
+ */
+export type ThreadAnchor = {
+    /**
+     * Mark UUID serialized in the document.
+     */
+    mark_id: string;
+    /**
+     * The marked text as it read when the discussion was created, already
+     * trimmed and bounded. Absent on threads created or imported before
+     * snapshots were captured: the text a mark covers cannot be recovered
+     * from the mark id alone.
+     */
+    marked_text?: string | null;
+    type: 'markdown';
+} | {
+    /**
+     * Highlight annotation UUID.
+     */
+    anchor_id: string;
+    /**
+     * The text the highlight covers, trimmed and bounded like a markdown
+     * snapshot. The highlight owns it and it can be edited there, so it is
+     * read from the highlight whenever the thread is, never stored on the
+     * thread. Absent when the highlight carries no text.
+     */
+    marked_text?: string | null;
+    type: 'pdf_highlight';
+} | {
+    /**
+     * Placeable annotation UUID.
+     */
+    anchor_id: string;
+    type: 'pdf_placeable';
+};
+
+/**
+ * The thread a session was opened from, when it was.
+ */
+export type ThreadOrigin = {
+    /**
+     * Channel the thread lives in, for channel parents only. Kept beside
+     * `parent` for consumers written when every origin was a channel.
+     */
+    channel_id?: string | null;
+    /**
+     * The message whose mention opened the session.
+     */
+    originating_message_id: string;
+    /**
+     * Entity owning the thread: the channel or document it was posted in.
+     */
+    parent: MessageParent;
+    /**
+     * Root message of the thread.
+     */
+    thread_id: string;
+};
+
+/**
+ * Partial changes to discussion lifecycle or document anchor placement.
+ */
+export type ThreadPatch = {
+    /**
+     * Move a Markdown discussion to the document when its marked text is removed.
+     */
+    detach_anchor?: boolean;
+    /**
+     * Client nonce for the shared thread update event.
+     */
+    nonce?: string | null;
+    /**
+     * Resolve or reopen the discussion; absent preserves its state.
+     */
+    resolved?: boolean | null;
+};
+
 export type ThreadResponse = {
     data: Array<CommentThread>;
+};
+
+/**
+ * State belonging to a whole thread, keyed by its root message.
+ */
+export type ThreadState = {
+    anchor?: null | ThreadAnchor;
+    /**
+     * Creation time of the discussion.
+     */
+    created_at: string;
+    /**
+     * Explicit deletion of the entire thread, distinct from root deletion.
+     */
+    deleted_at?: string | null;
+    /**
+     * Whether this discussion has been resolved.
+     */
+    resolved: boolean;
+    /**
+     * Root message UUID; there is no separate thread identity.
+     */
+    root_id: string;
+    /**
+     * Last state change.
+     */
+    updated_at: string;
+    /**
+     * User who owns this discussion, including imported discussions.
+     */
+    user_id: string;
+};
+
+/**
+ * Transcription result.
+ */
+export type TranscribeResponse = {
+    /**
+     * Recognized text.
+     */
+    text: string;
 };
 
 /**
@@ -8142,6 +10493,89 @@ export type TranscriptSegmentRequest = {
     streamStartedAt?: string | null;
 };
 
+/**
+ * The runtime answered a turn. Another prompt may follow at once; see
+ * [`SessionSettledMetadata`] for "nothing left to do".
+ */
+export type TurnEndedMetadata = {
+    /**
+     * The action that opened the turn.
+     */
+    action_id: AgentActionId;
+    actor?: null | MacroUserIdStr;
+    /**
+     * The magic-chip message posted for this turn, when one was.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * Prompts still waiting behind this turn.
+     */
+    queued_remaining: number;
+    /**
+     * The ACP stop reason, or `"error"` when the runtime refused the prompt.
+     */
+    stop_reason: string;
+    /**
+     * Position in the session's log.
+     */
+    turn: number;
+};
+
+/**
+ * A prompt was delivered to the runtime.
+ */
+export type TurnStartedMetadata = {
+    /**
+     * The action that opened the turn.
+     */
+    action_id: AgentActionId;
+    actor?: null | MacroUserIdStr;
+    /**
+     * The magic-chip message posted for this turn, when one was.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * Position in the session's log.
+     */
+    turn: number;
+};
+
+/**
+ * A turn the runtime answered.
+ */
+export type TurnSummary = {
+    /**
+     * The action that opened the turn.
+     */
+    action_id: AgentActionId;
+    actor?: null | MacroUserIdStr;
+    /**
+     * The magic-chip message posted for this turn, when one was.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * The agent's last text in the turn, whole; what the magic chip shows
+     * once the turn ends. `None` when the turn produced no prose.
+     */
+    excerpt?: string | null;
+    /**
+     * The ACP stop reason, or `"error"` when the runtime refused the prompt.
+     */
+    stop_reason: string;
+    /**
+     * Position in the session's log.
+     */
+    turn: number;
+};
+
 export type TypedSuccessResponse = {
     /**
      * Data to be returned
@@ -8187,9 +10621,88 @@ export type TypedSuccessResponseGetDocumentResponseData = {
  */
 export type TypingAction = 'start' | 'stop';
 
+/**
+ * Transient typing update.
+ */
+export type TypingInput = {
+    /**
+     * Whether the caller is typing.
+     */
+    active: boolean;
+    /**
+     * Client mutation nonce.
+     */
+    nonce?: string | null;
+    /**
+     * Root being replied to, absent for the parent composer.
+     */
+    thread_id?: string | null;
+};
+
 export type UnthreadedPdfUuidRequest = {
     attachmentType: 'highlight';
     uuid: string;
+};
+
+/**
+ * Request to replace the editable configuration of a persisted AI agent.
+ */
+export type UpdateAgentRequest = {
+    /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. Omit to always prompt.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
+     * Optional avatar URL or data URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Selected channels. Must be non-empty only for `selected` scope.
+     */
+    channel_ids?: Array<string>;
+    /**
+     * Whether the agent is global or channel-specific.
+     */
+    channel_scope: AgentChannelScope;
+    /**
+     * Model selected specifically for this agent.
+     */
+    default_model: string;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable `@` handle.
+     */
+    handle: string;
+    /**
+     * Harness used to run the agent.
+     */
+    harness: string;
+    harness_id?: null | HarnessId;
+    /**
+     * Instructions supplied to the agent at the start of a conversation.
+     */
+    instructions: string;
+    /**
+     * Whether the agent is a coding agent: a mention is answered with a magic
+     * chip into its live session (`true`) or a reply in the thread (`false`).
+     */
+    is_coding: boolean;
+    /**
+     * Which MCP servers sessions of this agent are handed.
+     */
+    mcp?: AgentMcpServers;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Team owner. Omit to make the agent private to the caller.
+     */
+    team_id?: string | null;
 };
 
 export type UpdateChannelSharePermission = {
@@ -8227,6 +10740,44 @@ export type UpdateCrmTeamSettingsRequest = {
      * Replacement team-views array (whole-blob, last write wins).
      */
     team_views?: unknown;
+};
+
+/**
+ * Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
+ * present is a full replace. The description is edited in its document, not here.
+ */
+export type UpdateInitiativeRequest = {
+    /**
+     * Full replacement collaborator list when present. Only the owner may send this field.
+     */
+    memberIds?: Array<string> | null;
+    /**
+     * Replacement name.
+     */
+    name?: string | null;
+    sharePermission?: null | UpdateSharePermissionRequestV2;
+};
+
+/**
+ * Changes to a meeting's title or scheduled time; omitted values stay unchanged.
+ */
+export type UpdateMeetingRequest = {
+    /**
+     * Remove timed scheduling, for example when the calendar event becomes all-day.
+     */
+    clearSchedule?: boolean;
+    /**
+     * Replacement scheduled end; requires a matching start.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Replacement scheduled start; requires a matching end.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Replacement title, when supplied.
+     */
+    title?: string | null;
 };
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
@@ -8269,6 +10820,7 @@ export type UpdateSharePermissionRequestV2 = {
     channelSharePermissions?: Array<UpdateChannelSharePermission> | null;
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
+    teamShareAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -8305,6 +10857,39 @@ export type UploadFolderRequest = {
 
 export type UpsertUserDocumentViewLocationRequest = {
     location: string;
+};
+
+/**
+ * Opaque identifier for a stored user API key.
+ */
+export type UserApiKeyId = string;
+
+/**
+ * Safe metadata for a stored key. Never contains the secret or its hash.
+ */
+export type UserApiKeyInfo = {
+    /**
+     * When the key was created.
+     */
+    createdAt: string;
+    /**
+     * Opaque identifier used to address the key after create.
+     */
+    id: UserApiKeyId;
+    /**
+     * User-facing name.
+     */
+    name: string;
+};
+
+/**
+ * The caller's API keys as id, name, and created_at.
+ */
+export type UserApiKeysList = {
+    /**
+     * The caller's keys. Never includes the raw secret or hash.
+     */
+    keys: Array<UserApiKeyInfo>;
 };
 
 /**
@@ -8408,6 +10993,32 @@ export type ViewsResponse = {
 };
 
 /**
+ * The agent asked its owner a question and is blocked on the answer.
+ */
+export type WaitingForInputMetadata = {
+    /**
+     * The action that opened the turn.
+     */
+    action_id: AgentActionId;
+    /**
+     * The magic-chip message posted for this turn, when one was.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * The question, as the agent phrased it.
+     */
+    question: string;
+    /**
+     * The turn asking.
+     */
+    turn: number;
+};
+
+/**
  * Webhook row returned by application APIs.
  *
  * Clients deserialize this, so both derives are used.
@@ -8476,7 +11087,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | AgentSessionLifecycleEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
@@ -8495,7 +11106,8 @@ export type WebhookFilter = {
 /**
  * Scope that owns a newly-created webhook.
  *
- * Clients serialize this, so both derives are used.
+ * Clients serialize this, so both derives are used. `Display`/`FromStr`
+ * spell the same names as serde, for query strings and config values.
  */
 export type WebhookScope = 'user' | 'team';
 
@@ -8551,6 +11163,74 @@ export type WithDocumentId = {
 export type WithProjectId = {
     id: string;
 };
+
+export type ListAgentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agents';
+};
+
+export type ListAgentsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListAgentsError = ListAgentsErrors[keyof ListAgentsErrors];
+
+export type ListAgentsResponses = {
+    200: Array<Agent>;
+};
+
+export type ListAgentsResponse = ListAgentsResponses[keyof ListAgentsResponses];
+
+export type CreateAgentData = {
+    body: CreateAgentRequest;
+    path?: never;
+    query?: never;
+    url: '/agents';
+};
+
+export type CreateAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateAgentError = CreateAgentErrors[keyof CreateAgentErrors];
+
+export type CreateAgentResponses = {
+    201: Agent;
+};
+
+export type CreateAgentResponse = CreateAgentResponses[keyof CreateAgentResponses];
+
+export type UpdateAgentData = {
+    body: UpdateAgentRequest;
+    path: {
+        /**
+         * Agent bot ID
+         */
+        agent_id: BotId;
+    };
+    query?: never;
+    url: '/agents/{agent_id}';
+};
+
+export type UpdateAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateAgentError = UpdateAgentErrors[keyof UpdateAgentErrors];
+
+export type UpdateAgentResponses = {
+    200: Agent;
+};
+
+export type UpdateAgentResponse = UpdateAgentResponses[keyof UpdateAgentResponses];
 
 export type DeleteAnchorData = {
     body: DeleteUnthreadedAnchorRequest;
@@ -8915,6 +11595,58 @@ export type MentionPreviewsResponses = {
 
 export type MentionPreviewsResponse = MentionPreviewsResponses[keyof MentionPreviewsResponses];
 
+export type ListTeamOutOfOfficeData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Inclusive UTC viewport start.
+         */
+        start: string;
+        /**
+         * Exclusive UTC viewport end.
+         */
+        end: string;
+        /**
+         * Inclusive local date boundary for all-day events.
+         */
+        startDate?: string;
+        /**
+         * Exclusive local date boundary for all-day events.
+         */
+        endDate?: string;
+        /**
+         * Maximum number of occurrences, from 1 through 2,000.
+         */
+        limit?: number;
+    };
+    url: '/calendar-events/team-out-of-office';
+};
+
+export type ListTeamOutOfOfficeErrors = {
+    /**
+     * Invalid or unsupported calendar viewport
+     */
+    400: unknown;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar query failed
+     */
+    500: unknown;
+};
+
+export type ListTeamOutOfOfficeResponses = {
+    /**
+     * Teammates' out-of-office occurrences in the requested viewport
+     */
+    200: TeamOutOfOfficeResponse;
+};
+
+export type ListTeamOutOfOfficeResponse = ListTeamOutOfOfficeResponses[keyof ListTeamOutOfOfficeResponses];
+
 export type GetActiveCallsData = {
     body?: never;
     path?: never;
@@ -8934,6 +11666,279 @@ export type GetActiveCallsResponses = {
 };
 
 export type GetActiveCallsResponse = GetActiveCallsResponses[keyof GetActiveCallsResponses];
+
+export type MeetingLookupData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}';
+};
+
+export type MeetingLookupErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingLookupError = MeetingLookupErrors[keyof MeetingLookupErrors];
+
+export type MeetingLookupResponses = {
+    200: Meeting;
+};
+
+export type MeetingLookupResponse = MeetingLookupResponses[keyof MeetingLookupResponses];
+
+export type MeetingGuestJoinData = {
+    body: GuestJoinRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}';
+};
+
+export type MeetingGuestJoinErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingGuestJoinError = MeetingGuestJoinErrors[keyof MeetingGuestJoinErrors];
+
+export type MeetingGuestJoinResponses = {
+    200: CallTokenResponse;
+};
+
+export type MeetingGuestJoinResponse = MeetingGuestJoinResponses[keyof MeetingGuestJoinResponses];
+
+export type MeetingLeaveData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}/leave';
+};
+
+export type MeetingLeaveErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingLeaveError = MeetingLeaveErrors[keyof MeetingLeaveErrors];
+
+export type MeetingLeaveResponses = {
+    200: LeaveCallResponse;
+};
+
+export type MeetingLeaveResponse = MeetingLeaveResponses[keyof MeetingLeaveResponses];
+
+export type MeetingListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings';
+};
+
+export type MeetingListErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingListError = MeetingListErrors[keyof MeetingListErrors];
+
+export type MeetingListResponses = {
+    200: MeetingsResponse;
+};
+
+export type MeetingListResponse = MeetingListResponses[keyof MeetingListResponses];
+
+export type MeetingCreateData = {
+    body: CreateMeetingRequest;
+    path?: never;
+    query?: never;
+    url: '/call/meetings';
+};
+
+export type MeetingCreateErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingCreateError = MeetingCreateErrors[keyof MeetingCreateErrors];
+
+export type MeetingCreateResponses = {
+    200: Meeting;
+};
+
+export type MeetingCreateResponse = MeetingCreateResponses[keyof MeetingCreateResponses];
+
+export type MeetingListActiveData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings/active';
+};
+
+export type MeetingListActiveErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingListActiveError = MeetingListActiveErrors[keyof MeetingListActiveErrors];
+
+export type MeetingListActiveResponses = {
+    200: ActiveMeetingsResponse;
+};
+
+export type MeetingListActiveResponse = MeetingListActiveResponses[keyof MeetingListActiveResponses];
+
+export type MeetingInvitePermissionsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}';
+};
+
+export type MeetingInvitePermissionsErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingInvitePermissionsError = MeetingInvitePermissionsErrors[keyof MeetingInvitePermissionsErrors];
+
+export type MeetingInvitePermissionsResponses = {
+    200: MeetingInvitePermissions;
+};
+
+export type MeetingInvitePermissionsResponse = MeetingInvitePermissionsResponses[keyof MeetingInvitePermissionsResponses];
+
+export type MeetingInviteData = {
+    body: InviteMeetingRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}';
+};
+
+export type MeetingInviteErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type MeetingInviteError = MeetingInviteErrors[keyof MeetingInviteErrors];
+
+export type MeetingInviteResponses = {
+    204: void;
+};
+
+export type MeetingInviteResponse = MeetingInviteResponses[keyof MeetingInviteResponses];
+
+export type MeetingInviteUsersData = {
+    body: InviteMeetingUsersRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}/users';
+};
+
+export type MeetingInviteUsersErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingInviteUsersError = MeetingInviteUsersErrors[keyof MeetingInviteUsersErrors];
+
+export type MeetingInviteUsersResponses = {
+    204: void;
+};
+
+export type MeetingInviteUsersResponse = MeetingInviteUsersResponses[keyof MeetingInviteUsersResponses];
+
+export type MeetingJoinData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/join/{token}';
+};
+
+export type MeetingJoinErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingJoinError = MeetingJoinErrors[keyof MeetingJoinErrors];
+
+export type MeetingJoinResponses = {
+    200: CallTokenResponse;
+};
+
+export type MeetingJoinResponse = MeetingJoinResponses[keyof MeetingJoinResponses];
+
+export type MeetingCancelData = {
+    body?: never;
+    path: {
+        meeting_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/{meeting_id}';
+};
+
+export type MeetingCancelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingCancelError = MeetingCancelErrors[keyof MeetingCancelErrors];
+
+export type MeetingCancelResponses = {
+    204: void;
+};
+
+export type MeetingCancelResponse = MeetingCancelResponses[keyof MeetingCancelResponses];
+
+export type MeetingUpdateData = {
+    body: UpdateMeetingRequest;
+    path: {
+        meeting_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/{meeting_id}';
+};
+
+export type MeetingUpdateErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type MeetingUpdateError = MeetingUpdateErrors[keyof MeetingUpdateErrors];
+
+export type MeetingUpdateResponses = {
+    200: Meeting;
+};
+
+export type MeetingUpdateResponse = MeetingUpdateResponses[keyof MeetingUpdateResponses];
 
 export type GetBatchCallRecordPreviewData = {
     body: GetBatchCallRecordPreviewRequest;
@@ -9027,8 +12032,20 @@ export type EditCallRecordData = {
 };
 
 export type EditCallRecordErrors = {
+    /**
+     * Invalid team-share level, contradictory inputs, or the creator has no team
+     */
+    400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * Team sharing of an archived call may only be changed by its creator
+     */
+    403: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * Team-sharing facts changed, or the call was archived mid-request; reload and retry
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -9042,6 +12059,30 @@ export type EditCallRecordResponses = {
 };
 
 export type EditCallRecordResponse = EditCallRecordResponses[keyof EditCallRecordResponses];
+
+export type MeetingShareData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/link';
+};
+
+export type MeetingShareErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingShareError = MeetingShareErrors[keyof MeetingShareErrors];
+
+export type MeetingShareResponses = {
+    200: Meeting;
+};
+
+export type MeetingShareResponse = MeetingShareResponses[keyof MeetingShareResponses];
 
 export type ToggleShareWithTeamData = {
     body?: never;
@@ -9058,6 +12099,10 @@ export type ToggleShareWithTeamData = {
 export type ToggleShareWithTeamErrors = {
     401: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * The call is no longer active
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -9065,7 +12110,7 @@ export type ToggleShareWithTeamError = ToggleShareWithTeamErrors[keyof ToggleSha
 
 export type ToggleShareWithTeamResponses = {
     /**
-     * New value of share_with_team after toggle
+     * New value of the share-with-team toggle
      */
     200: boolean;
 };
@@ -9241,12 +12286,12 @@ export type IngestTranscriptData = {
     body: TranscriptSegmentRequest;
     path: {
         /**
-         * Channel ID
+         * RTC room name; the transcription agent passes its LiveKit room verbatim
          */
-        channel_id: string;
+        room_name: string;
     };
     query?: never;
-    url: '/call/{channel_id}/transcript';
+    url: '/call/{room_name}/transcript';
 };
 
 export type IngestTranscriptErrors = {
@@ -9266,6 +12311,157 @@ export type IngestTranscriptResponses = {
      */
     200: unknown;
 };
+
+export type ListChannelLabelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/channel-labels';
+};
+
+export type ListChannelLabelsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelLabelsError = ListChannelLabelsErrors[keyof ListChannelLabelsErrors];
+
+export type ListChannelLabelsResponses = {
+    200: ChannelLabelsList;
+};
+
+export type ListChannelLabelsResponse = ListChannelLabelsResponses[keyof ListChannelLabelsResponses];
+
+export type CreateChannelLabelData = {
+    body: CreateChannelLabelRequest;
+    path?: never;
+    query?: never;
+    url: '/channel-labels';
+};
+
+export type CreateChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateChannelLabelError = CreateChannelLabelErrors[keyof CreateChannelLabelErrors];
+
+export type CreateChannelLabelResponses = {
+    200: ChannelLabel;
+};
+
+export type CreateChannelLabelResponse = CreateChannelLabelResponses[keyof CreateChannelLabelResponses];
+
+export type SetChannelLabelData = {
+    body: SetChannelLabelRequest;
+    path: {
+        /**
+         * The channel id.
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/channels/{channel_id}';
+};
+
+export type SetChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetChannelLabelError = SetChannelLabelErrors[keyof SetChannelLabelErrors];
+
+export type SetChannelLabelResponses = {
+    204: void;
+};
+
+export type SetChannelLabelResponse = SetChannelLabelResponses[keyof SetChannelLabelResponses];
+
+export type PreviewSmartTagData = {
+    body: ChannelLabelRule;
+    path?: never;
+    query?: never;
+    url: '/channel-labels/preview';
+};
+
+export type PreviewSmartTagErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PreviewSmartTagError = PreviewSmartTagErrors[keyof PreviewSmartTagErrors];
+
+export type PreviewSmartTagResponses = {
+    200: SmartTagPreview;
+};
+
+export type PreviewSmartTagResponse = PreviewSmartTagResponses[keyof PreviewSmartTagResponses];
+
+export type DeleteChannelLabelData = {
+    body?: never;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/{label_id}';
+};
+
+export type DeleteChannelLabelErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteChannelLabelError = DeleteChannelLabelErrors[keyof DeleteChannelLabelErrors];
+
+export type DeleteChannelLabelResponses = {
+    204: void;
+};
+
+export type DeleteChannelLabelResponse = DeleteChannelLabelResponses[keyof DeleteChannelLabelResponses];
+
+export type RenameChannelLabelData = {
+    body: RenameChannelLabelRequest;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/{label_id}';
+};
+
+export type RenameChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RenameChannelLabelError = RenameChannelLabelErrors[keyof RenameChannelLabelErrors];
+
+export type RenameChannelLabelResponses = {
+    200: ChannelLabel;
+};
+
+export type RenameChannelLabelResponse = RenameChannelLabelResponses[keyof RenameChannelLabelResponses];
 
 export type CreateChannelData = {
     body: CreateChannelRequest;
@@ -9919,6 +13115,50 @@ export type PostChannelMessagesResponses = {
 
 export type PostChannelMessagesResponse = PostChannelMessagesResponses[keyof PostChannelMessagesResponses];
 
+export type GetChannelMessagesCatchUpData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query: {
+        /**
+         * Exclusive RFC3339 lower bound. Messages at this instant are omitted.
+         */
+        after: string;
+        /**
+         * Page size (1-100, default 50)
+         */
+        limit?: number;
+        /**
+         * Base64 encoded cursor value for older messages
+         */
+        cursor?: string;
+        /**
+         * Base64 encoded cursor value for newer messages
+         */
+        previous_cursor?: string;
+    };
+    url: '/channels/{channel_id}/messages/catch-up';
+};
+
+export type GetChannelMessagesCatchUpErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetChannelMessagesCatchUpError = GetChannelMessagesCatchUpErrors[keyof GetChannelMessagesCatchUpErrors];
+
+export type GetChannelMessagesCatchUpResponses = {
+    200: ApiChannelMessagesPage;
+};
+
+export type GetChannelMessagesCatchUpResponse = GetChannelMessagesCatchUpResponses[keyof GetChannelMessagesCatchUpResponses];
+
 export type GetMessageWithContextData = {
     body?: never;
     path: {
@@ -10095,6 +13335,37 @@ export type AddParticipantsError = AddParticipantsErrors[keyof AddParticipantsEr
 export type AddParticipantsResponses = {
     200: unknown;
 };
+
+export type SetChannelPictureData = {
+    body: SetChannelPictureRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/profile_picture';
+};
+
+export type SetChannelPictureErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetChannelPictureError = SetChannelPictureErrors[keyof SetChannelPictureErrors];
+
+export type SetChannelPictureResponses = {
+    /**
+     * Picture updated
+     */
+    204: void;
+};
+
+export type SetChannelPictureResponse = SetChannelPictureResponses[keyof SetChannelPictureResponses];
 
 export type PostReactionData = {
     body: PostReactionRequest;
@@ -10809,6 +14080,107 @@ export type PutCrmTeamSettingsResponses = {
 };
 
 export type PutCrmTeamSettingsResponse = PutCrmTeamSettingsResponses[keyof PutCrmTeamSettingsResponses];
+
+export type ResetCrmTeamStagesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/stages';
+};
+
+export type ResetCrmTeamStagesErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ResetCrmTeamStagesError = ResetCrmTeamStagesErrors[keyof ResetCrmTeamStagesErrors];
+
+export type ResetCrmTeamStagesResponses = {
+    204: void;
+};
+
+export type ResetCrmTeamStagesResponse = ResetCrmTeamStagesResponses[keyof ResetCrmTeamStagesResponses];
+
+export type PutCrmTeamStagesData = {
+    body: ReplaceCrmStagesRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/stages';
+};
+
+export type PutCrmTeamStagesErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutCrmTeamStagesError = PutCrmTeamStagesErrors[keyof PutCrmTeamStagesErrors];
+
+export type PutCrmTeamStagesResponses = {
+    200: CrmStagesResponse;
+};
+
+export type PutCrmTeamStagesResponse = PutCrmTeamStagesResponses[keyof PutCrmTeamStagesResponses];
+
+export type TranscribeDictationData = {
+    /**
+     * OpenAPI representation of the raw encoded audio body extracted as `Bytes`.
+     */
+    body: Blob | File;
+    path?: never;
+    query?: {
+        /**
+         * ISO 639-1 language hint
+         */
+        language?: string;
+    };
+    url: '/dictation/transcribe';
+};
+
+export type TranscribeDictationErrors = {
+    /**
+     * Empty, oversized, or malformed request
+     */
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * Only signed-in users may dictate
+     */
+    403: ErrorResponse;
+    /**
+     * Body exceeds 8 MiB
+     */
+    413: unknown;
+    /**
+     * Unsupported audio container
+     */
+    415: ErrorResponse;
+    /**
+     * Per-user hourly rate limit exceeded
+     */
+    429: unknown;
+    /**
+     * Provider failure
+     */
+    502: ErrorResponse;
+    /**
+     * Transcription capacity exhausted; retry after the Retry-After delay
+     */
+    503: ErrorResponse;
+};
+
+export type TranscribeDictationError = TranscribeDictationErrors[keyof TranscribeDictationErrors];
+
+export type TranscribeDictationResponses = {
+    200: TranscribeResponse;
+};
+
+export type TranscribeDictationResponse = TranscribeDictationResponses[keyof TranscribeDictationResponses];
 
 export type GetUserDocumentsHandlerData = {
     body?: never;
@@ -11730,9 +15102,19 @@ export type SetDocumentTeamShareData = {
 };
 
 export type SetDocumentTeamShareErrors = {
+    /**
+     * Owner has no team
+     */
     400: ErrorResponse;
+    /**
+     * Acting identity is absent or is not the actual owner
+     */
     401: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * Sharing facts changed or an untracked grant conflicts
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -11840,7 +15222,16 @@ export type GetEntityPermissionResponse = GetEntityPermissionResponses[keyof Get
 export type ListFavoritesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Restrict to favorites whose entity is one of these types.
+         */
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative'>;
+        /**
+         * Restrict to favorites whose entity is one of these ids.
+         */
+        entityId?: Array<string>;
+    };
     url: '/favorites';
 };
 
@@ -11904,7 +15295,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
         /**
          * The id of the favorited entity.
          */
@@ -11925,6 +15316,37 @@ export type RemoveFavoriteByEntityError = RemoveFavoriteByEntityErrors[keyof Rem
 export type RemoveFavoriteByEntityResponses = {
     200: unknown;
 };
+
+export type GetForeignEntityBySourceData = {
+    body?: never;
+    path: {
+        /**
+         * Foreign entity source, e.g. github_pull_request
+         */
+        source: string;
+        /**
+         * Identifier assigned by the source system; may contain slashes
+         */
+        foreign_entity_id: string;
+    };
+    query?: never;
+    url: '/foreign_entity/by_source/{source}/{foreign_entity_id}';
+};
+
+export type GetForeignEntityBySourceErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetForeignEntityBySourceError = GetForeignEntityBySourceErrors[keyof GetForeignEntityBySourceErrors];
+
+export type GetForeignEntityBySourceResponses = {
+    200: ForeignEntity;
+};
+
+export type GetForeignEntityBySourceResponse = GetForeignEntityBySourceResponses[keyof GetForeignEntityBySourceResponses];
 
 export type GetForeignEntityData = {
     body?: never;
@@ -11966,6 +15388,239 @@ export type InstallSyncErrors = {
      */
     401: unknown;
 };
+
+export type CreateHarnessPairingData = {
+    body: CreatePairingRequest;
+    path?: never;
+    query?: never;
+    url: '/harness-pairings';
+};
+
+export type CreateHarnessPairingErrors = {
+    400: ErrorResponse;
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateHarnessPairingError = CreateHarnessPairingErrors[keyof CreateHarnessPairingErrors];
+
+export type CreateHarnessPairingResponses = {
+    201: CreatedPairing;
+};
+
+export type CreateHarnessPairingResponse = CreateHarnessPairingResponses[keyof CreateHarnessPairingResponses];
+
+export type GetHarnessPairingData = {
+    body?: never;
+    path: {
+        /**
+         * Pairing code
+         */
+        code: string;
+    };
+    query?: never;
+    url: '/harness-pairings/{code}';
+};
+
+export type GetHarnessPairingErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    410: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetHarnessPairingError = GetHarnessPairingErrors[keyof GetHarnessPairingErrors];
+
+export type GetHarnessPairingResponses = {
+    200: PairingDetails;
+};
+
+export type GetHarnessPairingResponse = GetHarnessPairingResponses[keyof GetHarnessPairingResponses];
+
+export type ApproveHarnessPairingData = {
+    body: ApprovePairingRequest;
+    path: {
+        /**
+         * Pairing code
+         */
+        code: string;
+    };
+    query?: never;
+    url: '/harness-pairings/{code}/approve';
+};
+
+export type ApproveHarnessPairingErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    410: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ApproveHarnessPairingError = ApproveHarnessPairingErrors[keyof ApproveHarnessPairingErrors];
+
+export type ApproveHarnessPairingResponses = {
+    200: Harness;
+};
+
+export type ApproveHarnessPairingResponse = ApproveHarnessPairingResponses[keyof ApproveHarnessPairingResponses];
+
+export type ClaimHarnessPairingData = {
+    body: ClaimPairingRequest;
+    path: {
+        /**
+         * Pairing ID
+         */
+        pairing_id: string;
+    };
+    query?: never;
+    url: '/harness-pairings/{pairing_id}/claim';
+};
+
+export type ClaimHarnessPairingErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    410: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ClaimHarnessPairingError = ClaimHarnessPairingErrors[keyof ClaimHarnessPairingErrors];
+
+export type ClaimHarnessPairingResponses = {
+    200: ClaimedPairing;
+    202: PendingClaimResponse;
+};
+
+export type ClaimHarnessPairingResponse = ClaimHarnessPairingResponses[keyof ClaimHarnessPairingResponses];
+
+export type ListHarnessesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses';
+};
+
+export type ListHarnessesErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessesError = ListHarnessesErrors[keyof ListHarnessesErrors];
+
+export type ListHarnessesResponses = {
+    200: Array<Harness>;
+};
+
+export type ListHarnessesResponse = ListHarnessesResponses[keyof ListHarnessesResponses];
+
+export type DeleteSelfHarnessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me';
+};
+
+export type DeleteSelfHarnessErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteSelfHarnessError = DeleteSelfHarnessErrors[keyof DeleteSelfHarnessErrors];
+
+export type DeleteSelfHarnessResponses = {
+    204: void;
+};
+
+export type DeleteSelfHarnessResponse = DeleteSelfHarnessResponses[keyof DeleteSelfHarnessResponses];
+
+export type GetSelfHarnessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me';
+};
+
+export type GetSelfHarnessErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSelfHarnessError = GetSelfHarnessErrors[keyof GetSelfHarnessErrors];
+
+export type GetSelfHarnessResponses = {
+    200: Harness;
+};
+
+export type GetSelfHarnessResponse = GetSelfHarnessResponses[keyof GetSelfHarnessResponses];
+
+export type ListHarnessAgentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me/agents';
+};
+
+export type ListHarnessAgentsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessAgentsError = ListHarnessAgentsErrors[keyof ListHarnessAgentsErrors];
+
+export type ListHarnessAgentsResponses = {
+    200: Array<HarnessAgent>;
+};
+
+export type ListHarnessAgentsResponse = ListHarnessAgentsResponses[keyof ListHarnessAgentsResponses];
+
+export type ListHarnessSessionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me/sessions';
+};
+
+export type ListHarnessSessionsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessSessionsError = ListHarnessSessionsErrors[keyof ListHarnessSessionsErrors];
+
+export type ListHarnessSessionsResponses = {
+    200: Array<HarnessSession>;
+};
+
+export type ListHarnessSessionsResponse = ListHarnessSessionsResponses[keyof ListHarnessSessionsResponses];
+
+export type DeleteHarnessData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}';
+};
+
+export type DeleteHarnessErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteHarnessError = DeleteHarnessErrors[keyof DeleteHarnessErrors];
+
+export type DeleteHarnessResponses = {
+    204: void;
+};
+
+export type DeleteHarnessResponse = DeleteHarnessResponses[keyof DeleteHarnessResponses];
 
 export type HealthHandlerData = {
     body?: never;
@@ -12063,6 +15718,217 @@ export type UpsertHistoryHandlerResponses = {
 
 export type UpsertHistoryHandlerResponse = UpsertHistoryHandlerResponses[keyof UpsertHistoryHandlerResponses];
 
+export type ListInitiativesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/initiatives';
+};
+
+export type ListInitiativesErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListInitiativesError = ListInitiativesErrors[keyof ListInitiativesErrors];
+
+export type ListInitiativesResponses = {
+    200: InitiativeList;
+};
+
+export type ListInitiativesResponse = ListInitiativesResponses[keyof ListInitiativesResponses];
+
+export type CreateInitiativeData = {
+    body: CreateInitiativeRequest;
+    path?: never;
+    query?: never;
+    url: '/initiatives';
+};
+
+export type CreateInitiativeErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    409: ErrorResponse;
+    /**
+     * Name exceeds the maximum length
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateInitiativeError = CreateInitiativeErrors[keyof CreateInitiativeErrors];
+
+export type CreateInitiativeResponses = {
+    200: InitiativeDetail;
+};
+
+export type CreateInitiativeResponse = CreateInitiativeResponses[keyof CreateInitiativeResponses];
+
+export type DeleteInitiativeData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}';
+};
+
+export type DeleteInitiativeErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteInitiativeError = DeleteInitiativeErrors[keyof DeleteInitiativeErrors];
+
+export type DeleteInitiativeResponses = {
+    200: GenericSuccessResponse;
+};
+
+export type DeleteInitiativeResponse = DeleteInitiativeResponses[keyof DeleteInitiativeResponses];
+
+export type GetInitiativeData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}';
+};
+
+export type GetInitiativeErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetInitiativeError = GetInitiativeErrors[keyof GetInitiativeErrors];
+
+export type GetInitiativeResponses = {
+    200: InitiativeDetail;
+};
+
+export type GetInitiativeResponse = GetInitiativeResponses[keyof GetInitiativeResponses];
+
+export type UpdateInitiativeData = {
+    body: UpdateInitiativeRequest;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}';
+};
+
+export type UpdateInitiativeErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    /**
+     * Name exceeds the maximum length
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateInitiativeError = UpdateInitiativeErrors[keyof UpdateInitiativeErrors];
+
+export type UpdateInitiativeResponses = {
+    200: InitiativeDetail;
+};
+
+export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
+
+export type AssignInitiativeTasksData = {
+    body: AssignTasksRequest;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}/tasks';
+};
+
+export type AssignInitiativeTasksErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AssignInitiativeTasksError = AssignInitiativeTasksErrors[keyof AssignInitiativeTasksErrors];
+
+export type AssignInitiativeTasksResponses = {
+    200: AssignTasksResponse;
+};
+
+export type AssignInitiativeTasksResponse = AssignInitiativeTasksResponses[keyof AssignInitiativeTasksResponses];
+
+export type UnassignInitiativeTaskData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+        /**
+         * Task identifier.
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}/tasks/{task_id}';
+};
+
+export type UnassignInitiativeTaskErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnassignInitiativeTaskError = UnassignInitiativeTaskErrors[keyof UnassignInitiativeTaskErrors];
+
+export type UnassignInitiativeTaskResponses = {
+    200: GenericSuccessResponse;
+};
+
+export type UnassignInitiativeTaskResponse = UnassignInitiativeTaskResponses[keyof UnassignInitiativeTaskResponses];
+
 export type GetInstructionsHandlerData = {
     body?: never;
     path?: never;
@@ -12125,7 +15991,8 @@ export type GetItemsSoupData = {
         limit?: number;
         /**
          * Sort method. Options are viewed_at, created_at, updated_at,
-         * viewed_updated, frecency, touched_by_me. Defaults to viewed_at.
+         * viewed_updated, frecency, touched_by_me, notified_at. Defaults to
+         * viewed_at.
          */
         sort_method?: SoupApiSort;
         /**
@@ -12246,6 +16113,210 @@ export type PostItemsSoupAstGroupedResponses = {
 };
 
 export type PostItemsSoupAstGroupedResponse = PostItemsSoupAstGroupedResponses[keyof PostItemsSoupAstGroupedResponses];
+
+export type MessageTimelineData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+    };
+    query?: {
+        /**
+         * Serialized MessageTimelineQuery; absent selects the latest roots.
+         */
+        selection?: string | null;
+    };
+    url: '/messages/{parent_type}/{parent_id}';
+};
+
+export type MessageTimelineResponses = {
+    200: MessagePage;
+};
+
+export type MessageTimelineResponse = MessageTimelineResponses[keyof MessageTimelineResponses];
+
+export type EntityMessageCreateData = {
+    body: PostMessage;
+    path: {
+        parent_type: string;
+        parent_id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}';
+};
+
+export type EntityMessageCreateResponses = {
+    200: Message;
+};
+
+export type EntityMessageCreateResponse = EntityMessageCreateResponses[keyof EntityMessageCreateResponses];
+
+export type EntityMessageDeleteMessageData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: {
+        /**
+         * Client nonce.
+         */
+        nonce?: string | null;
+    };
+    url: '/messages/{parent_type}/{parent_id}/items/{id}';
+};
+
+export type EntityMessageDeleteMessageResponses = {
+    200: Message;
+};
+
+export type EntityMessageDeleteMessageResponse = EntityMessageDeleteMessageResponses[keyof EntityMessageDeleteMessageResponses];
+
+export type EntityMessageGetMessageData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/items/{id}';
+};
+
+export type EntityMessageGetMessageResponses = {
+    200: Message;
+};
+
+export type EntityMessageGetMessageResponse = EntityMessageGetMessageResponses[keyof EntityMessageGetMessageResponses];
+
+export type EntityMessageEditData = {
+    body: MessagePatch;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/items/{id}';
+};
+
+export type EntityMessageEditResponses = {
+    200: Message;
+};
+
+export type EntityMessageEditResponse = EntityMessageEditResponses[keyof EntityMessageEditResponses];
+
+export type EntityMessageReactData = {
+    body: ReactionInput;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/items/{id}/reactions';
+};
+
+export type EntityMessageReactResponses = {
+    200: Message;
+};
+
+export type EntityMessageReactResponse = EntityMessageReactResponses[keyof EntityMessageReactResponses];
+
+export type EntityMessageLegacyData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        legacy_id: number;
+    };
+    query?: {
+        /**
+         * Resolve a thread id instead of a comment id.
+         */
+        thread?: boolean;
+    };
+    url: '/messages/{parent_type}/{parent_id}/legacy/{legacy_id}';
+};
+
+export type EntityMessageLegacyResponses = {
+    200: Message;
+};
+
+export type EntityMessageLegacyResponse = EntityMessageLegacyResponses[keyof EntityMessageLegacyResponses];
+
+export type EntityMessageDeleteThreadData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: {
+        /**
+         * Client nonce.
+         */
+        nonce?: string | null;
+    };
+    url: '/messages/{parent_type}/{parent_id}/threads/{id}';
+};
+
+export type EntityMessageDeleteThreadResponses = {
+    200: ThreadState;
+};
+
+export type EntityMessageDeleteThreadResponse = EntityMessageDeleteThreadResponses[keyof EntityMessageDeleteThreadResponses];
+
+export type EntityMessageGetThreadData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/threads/{id}';
+};
+
+export type EntityMessageGetThreadResponses = {
+    200: MessageThread;
+};
+
+export type EntityMessageGetThreadResponse = EntityMessageGetThreadResponses[keyof EntityMessageGetThreadResponses];
+
+export type EntityMessagePatchThreadData = {
+    body: ThreadPatch;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/threads/{id}';
+};
+
+export type EntityMessagePatchThreadResponses = {
+    200: ThreadState;
+};
+
+export type EntityMessagePatchThreadResponse = EntityMessagePatchThreadResponses[keyof EntityMessagePatchThreadResponses];
+
+export type EntityMessageTypingData = {
+    body: TypingInput;
+    path: {
+        parent_type: string;
+        parent_id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/typing';
+};
+
+export type EntityMessageTypingResponses = {
+    204: void;
+};
+
+export type EntityMessageTypingResponse = EntityMessageTypingResponses[keyof EntityMessageTypingResponses];
 
 export type GetPinsHandlerData = {
     body?: never;
@@ -12729,13 +16800,13 @@ export type ListRemindersData = {
     path?: never;
     query?: {
         /**
-         * The type of an entity in Macro
+         * Restrict to reminders attached to an entity of these types.
          */
-        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative'>;
         /**
-         * Restrict to reminders attached to this entity id. Requires `entityType`.
+         * Restrict to reminders attached to these entity ids.
          */
-        entityId?: string;
+        entityId?: Array<string>;
         /**
          * Include reminders that have already fired.
          */
@@ -13053,6 +17124,76 @@ export type EditThreadV2Responses = {
 
 export type EditThreadV2Response = EditThreadV2Responses[keyof EditThreadV2Responses];
 
+export type ListUserApiKeysData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user-api-keys';
+};
+
+export type ListUserApiKeysErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListUserApiKeysError = ListUserApiKeysErrors[keyof ListUserApiKeysErrors];
+
+export type ListUserApiKeysResponses = {
+    200: UserApiKeysList;
+};
+
+export type ListUserApiKeysResponse = ListUserApiKeysResponses[keyof ListUserApiKeysResponses];
+
+export type CreateUserApiKeyData = {
+    body: CreateUserApiKeyRequest;
+    path?: never;
+    query?: never;
+    url: '/user-api-keys';
+};
+
+export type CreateUserApiKeyErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateUserApiKeyError = CreateUserApiKeyErrors[keyof CreateUserApiKeyErrors];
+
+export type CreateUserApiKeyResponses = {
+    201: CreatedUserApiKey;
+};
+
+export type CreateUserApiKeyResponse = CreateUserApiKeyResponses[keyof CreateUserApiKeyResponses];
+
+export type DeleteUserApiKeyData = {
+    body?: never;
+    path: {
+        /**
+         * Opaque key identifier.
+         */
+        id: UserApiKeyId;
+    };
+    query?: never;
+    url: '/user-api-keys/{id}';
+};
+
+export type DeleteUserApiKeyErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteUserApiKeyError = DeleteUserApiKeyErrors[keyof DeleteUserApiKeyErrors];
+
+export type DeleteUserApiKeyResponses = {
+    /**
+     * API key deleted
+     */
+    204: void;
+};
+
+export type DeleteUserApiKeyResponse = DeleteUserApiKeyResponses[keyof DeleteUserApiKeyResponses];
+
 export type DeleteUserDocumentViewLocationData = {
     body?: never;
     path: {
@@ -13178,6 +17319,49 @@ export type EditProjectV2Responses = {
 };
 
 export type EditProjectV2Response = EditProjectV2Responses[keyof EditProjectV2Responses];
+
+export type StreamEventsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Personal or team workspace whose webhook lifecycle events are delivered.
+         */
+        scope: WebhookScope;
+        /**
+         * URL-encoded JSON array of webhook filters, identical to the persisted
+         * webhook `filters` field.
+         */
+        filters?: string;
+    };
+    url: '/webhook/events/stream';
+};
+
+export type StreamEventsErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Internal server error
+     */
+    500: ErrorResponse;
+};
+
+export type StreamEventsError = StreamEventsErrors[keyof StreamEventsErrors];
+
+export type StreamEventsResponses = {
+    /**
+     * Server-Sent Events stream of matching broker events
+     */
+    200: string;
+};
+
+export type StreamEventsResponse = StreamEventsResponses[keyof StreamEventsResponses];
 
 export type ListWebhooksData = {
     body?: never;

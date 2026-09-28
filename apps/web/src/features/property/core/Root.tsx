@@ -1,3 +1,4 @@
+import { useHoldParentHoverCardOpen } from '@core/component/HoverCard';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { cn, Dropdown } from '@ui';
 import { createSignal, type JSX, splitProps } from 'solid-js';
@@ -33,6 +34,8 @@ export function Root(props: PropertyRootProps) {
   const [editorAnchor, setEditorAnchor] = createSignal<HTMLElement | undefined>(
     undefined
   );
+
+  useHoldParentHoverCardOpen(editorOpen);
 
   // Focus restoration helper - used by both closeEditor and onOpenChange
   // When a value is saved, the component may remount (due to reactive updates),

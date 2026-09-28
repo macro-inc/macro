@@ -114,6 +114,21 @@ describe('buildEntityData', () => {
       });
       expect(e).toEqual({ ...base, type: 'channel', channelType: 'team' });
     });
+
+    it('passes isParticipant through when provided', () => {
+      const e = buildEntityData({
+        ...base,
+        blockName: 'channel',
+        channelType: 'team',
+        isParticipant: false,
+      });
+      expect(e).toEqual({
+        ...base,
+        type: 'channel',
+        channelType: 'team',
+        isParticipant: false,
+      });
+    });
   });
 
   describe('email', () => {
@@ -171,8 +186,11 @@ describe('buildEntityData', () => {
   });
 
   describe('call', () => {
-    it('returns undefined without channelId', () => {
-      expect(buildEntityData({ ...base, blockName: 'call' })).toBeUndefined();
+    it('builds a standalone call without a channel', () => {
+      expect(buildEntityData({ ...base, blockName: 'call' })).toMatchObject({
+        type: 'call',
+        isActive: false,
+      });
     });
 
     it('builds a call with defaults', () => {

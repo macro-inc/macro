@@ -23,9 +23,12 @@ export type BuildEntityDataArgs = {
   fileType?: string;
   isCompleted?: boolean;
   channelType?: ChannelEntity['channelType'];
+  isParticipant?: boolean;
   cron?: string;
   enabled?: boolean;
-  channelId?: string;
+  channelId?: string | null;
+  botId?: string;
+  sessionStatus?: string;
   isActive?: boolean;
   status?: CallEntity['status'];
   attended?: boolean;
@@ -103,6 +106,7 @@ export function buildEntityData(
         'code',
         'image',
         'canvas',
+        'spreadsheet',
         'video',
         'unknown',
         'csv',
@@ -135,6 +139,9 @@ export function buildEntityData(
           ...base,
           type: 'channel',
           channelType: args.channelType,
+          ...(args.isParticipant === undefined
+            ? {}
+            : { isParticipant: args.isParticipant }),
         };
       })
       .with(
@@ -158,7 +165,6 @@ export function buildEntityData(
         };
       })
       .with('call', (): CallEntity | undefined => {
-        if (!args.channelId) return undefined;
         const status: CallEntity['status'] =
           args.status ?? (args.attended ? 'ATTENDED' : 'UNATTENDED');
 
@@ -178,8 +184,16 @@ export function buildEntityData(
       .with('company', 'contact', (): undefined => undefined)
       // PRs are virtual blocks backed by GitHub, not Macro entities.
       .with('pr', (): undefined => undefined)
-      // Agent sessions aren't constructed from block args; not soup-listed yet.
-      .with('agent', (): undefined => undefined)
+      .with('agent', (): EntityData | undefined =>
+        args.botId
+          ? {
+              ...base,
+              type: 'agent_session',
+              botId: args.botId,
+              status: args.sessionStatus ?? 'no_messages',
+            }
+          : undefined
+      )
       .exhaustive()
   );
 }

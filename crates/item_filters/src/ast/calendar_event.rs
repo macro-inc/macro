@@ -26,12 +26,9 @@ pub enum CalendarEventLiteral {
     /// Match an organizer email.
     #[serde(rename = "o")]
     Organizer(String),
-    /// Filter by the requester's notification done state for the event.
-    #[serde(rename = "nd")]
-    NotificationDone(bool),
-    /// Filter by the requester's notification seen state for the event.
+    /// An entity has a non-deleted notification in this exact state.
     #[serde(rename = "ns")]
-    NotificationSeen(bool),
+    NotificationState(crate::NotificationState),
 }
 
 impl ExpandFrame<CalendarEventLiteral> for CalendarEventFilters {

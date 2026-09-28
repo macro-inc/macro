@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            d.status,\n            d.delivered_at,\n            d.attempt_count,\n            a.status AS attempt_status,\n            a.completed_at,\n            w.last_success_at,\n            w.last_failure_at\n        FROM webhook_delivery d\n        JOIN webhook_delivery_attempt a ON a.webhook_delivery_id = d.id\n        JOIN webhook w ON w.id = d.webhook_id\n        WHERE d.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "delivered_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "attempt_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "attempt_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "last_success_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_failure_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "ce412ec518979bbde55cfa89c941aa25611aef717cfae6c9a6be3cef969cfe15"
+}

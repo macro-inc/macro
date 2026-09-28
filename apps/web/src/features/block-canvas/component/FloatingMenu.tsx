@@ -4,6 +4,7 @@ import { vec2 } from '@block-canvas/util/vector2';
 import {
   type DropdownPreset,
   SlidableNumberInput,
+  type SlidableNumberInputProps,
 } from '@core/component/SlidableNumberInput';
 import { themeColors, themeStyles } from '@core/component/Themes';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -30,6 +31,7 @@ import {
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import type { CanvasEntityStyle, NodeType } from '../model/CanvasModel';
 import { useCachedStyle } from '../signal/cachedStyle';
 import { useCanvasHistory } from '../signal/canvasHistory';
@@ -52,6 +54,15 @@ import { LineWeight } from './icons-custom/LineWeight';
 import { Swatch } from './Swatch';
 
 type CanvasEntity = NodeType | 'edge';
+
+function CanvasSlidableNumberInput(props: SlidableNumberInputProps) {
+  const [, setActiveTextEditor] =
+    useCanvasDocument().state.signals.activeTextEditor;
+  return (
+    <SlidableNumberInput {...props} onEditingChange={setActiveTextEditor} />
+  );
+}
+
 type ColorOption = {
   base: string;
   fill: string;
@@ -533,7 +544,7 @@ export function FloatingMenu() {
               <ReverseEdgeButton />
             </div>
             <div class="flex flex-row justify-between">
-              <SlidableNumberInput
+              <CanvasSlidableNumberInput
                 icon={
                   sharedStyles().get('fromEndStyle')
                     ? arrowStylePresets[sharedStyles().get('fromEndStyle')]
@@ -556,7 +567,7 @@ export function FloatingMenu() {
                 fullIcon={true}
                 tooltip="Line start"
               />
-              <SlidableNumberInput
+              <CanvasSlidableNumberInput
                 icon={
                   sharedStyles().get('connectionStyle')
                     ? connectionStylePresets[
@@ -582,7 +593,7 @@ export function FloatingMenu() {
                 fullIcon={true}
                 tooltip="Connection type"
               />
-              <SlidableNumberInput
+              <CanvasSlidableNumberInput
                 icon={
                   sharedStyles().get('toEndStyle')
                     ? arrowStylePresets[sharedStyles().get('toEndStyle')].icon!
@@ -677,7 +688,7 @@ export function FloatingMenu() {
             <div class="flex flex-row">
               <Show when={validMenus().has('strokeWidth')}>
                 <div class={cn(!isMobileWidth() && 'mr-3.5')}>
-                  <SlidableNumberInput
+                  <CanvasSlidableNumberInput
                     label={'Line weight'}
                     labelPosition="top"
                     icon={LineWeight}
@@ -724,7 +735,7 @@ export function FloatingMenu() {
                 </div>
               </Show>
               <Show when={!isMobileWidth() && validMenus().has('cornerRadius')}>
-                <SlidableNumberInput
+                <CanvasSlidableNumberInput
                   label={'Corner rounding'}
                   labelPosition="top"
                   icon={CornersOut}
@@ -776,7 +787,7 @@ export function FloatingMenu() {
                     'ml-2'
                 )}
               >
-                <SlidableNumberInput
+                <CanvasSlidableNumberInput
                   label={'Font size'}
                   labelPosition="top"
                   icon={TextAa}

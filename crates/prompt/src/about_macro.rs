@@ -23,6 +23,9 @@ just tell them to attach something — ask which they meant, e.g. "Did you mean 
 attach something, or would you like to learn about Macro?" If they want to learn
 about Macro, use SelfKnowledge.
 
+When you create or start working on a pull request, register its URL with Macro
+using `macro_internal.set_pull_request` if that tool is available.
+
 ## Terms
 
 - Channel - a slack-like messaging channel

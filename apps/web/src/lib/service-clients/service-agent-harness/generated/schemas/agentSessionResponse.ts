@@ -8,9 +8,11 @@ import type { AgentSessionResponseAcpSessionId } from './agentSessionResponseAcp
 import type { AgentSessionResponseExternal } from './agentSessionResponseExternal';
 import type { AgentSessionResponseInstructions } from './agentSessionResponseInstructions';
 import type { AgentSessionResponseOriginatingMessageId } from './agentSessionResponseOriginatingMessageId';
+import type { AgentSessionResponsePullRequestUrl } from './agentSessionResponsePullRequestUrl';
 import type { AgentSessionResponseRepoUrl } from './agentSessionResponseRepoUrl';
 import type { AgentSessionResponseThreadChannelId } from './agentSessionResponseThreadChannelId';
 import type { AgentSessionResponseThreadId } from './agentSessionResponseThreadId';
+import type { AgentSessionResponseThreadParent } from './agentSessionResponseThreadParent';
 import type { SandboxSize } from './sandboxSize';
 import type { SessionStatusDto } from './sessionStatusDto';
 
@@ -24,6 +26,10 @@ export interface AgentSessionResponse {
   acpSessionId?: AgentSessionResponseAcpSessionId;
   /** The bot running the agent. */
   botId: string;
+  /** Whether the caller may drive the session - prompt it, answer its
+questions, stop it - rather than only watch. Edit access; the
+creator owns the session, so a create response always says so. */
+  canEdit: boolean;
   /** When the session was created. */
   createdAt: string;
   external?: AgentSessionResponseExternal;
@@ -44,6 +50,8 @@ at creation. Absent otherwise, so existing payloads are unchanged. */
   originatingMessageId?: AgentSessionResponseOriginatingMessageId;
   /** The user who created and owns the session. */
   ownerId: string;
+  /** The session's linked pull request. */
+  pullRequestUrl?: AgentSessionResponsePullRequestUrl;
   /** The repository the session works with, when one was stated. */
   repoUrl?: AgentSessionResponseRepoUrl;
   /** Compute tier of the managed sandbox. */
@@ -51,10 +59,11 @@ at creation. Absent otherwise, so existing payloads are unchanged. */
   /** The session's status. */
   status: SessionStatusDto;
   /** The channel `thread_id` lives in, when the session was spawned from a
-thread. */
+channel thread. Derived from `thread_parent`. */
   threadChannelId?: AgentSessionResponseThreadChannelId;
   /** The root message of the thread the session was created from, if any. */
   threadId?: AgentSessionResponseThreadId;
+  threadParent?: AgentSessionResponseThreadParent;
   /** The directory the session's harness runs in on its runtime. */
   workspace: string;
 }

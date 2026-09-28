@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            (SELECT COUNT(*) FROM \"Project\" WHERE \"uploadRequestId\" = 'lambda-request-id')\n                AS \"upload_projects!\",\n            (SELECT COUNT(*) FROM \"Document\" WHERE owner = $1) AS \"documents!\",\n            (SELECT COUNT(*) FROM entity WHERE owner_id = $1) AS \"entities!\",\n            (SELECT COUNT(*) FROM entity_access WHERE source_id = $1) AS \"grants!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "upload_projects!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "documents!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "entities!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "grants!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "14a2188cb52a1529c3593351f08c82f5d13acb89ded253aefa3f759f184d87f3"
+}

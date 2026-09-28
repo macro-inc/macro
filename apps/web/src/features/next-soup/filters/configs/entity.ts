@@ -11,6 +11,7 @@ import {
   doneRemindersFilter as doneRemindersPredicate,
   filesAndFolderFilter as filesAndFolderPredicate,
   firedRemindersFilter as firedRemindersPredicate,
+  notDoneRemindersFilter as notDoneRemindersPredicate,
   projectFilter as projectPredicate,
   remindersFilter as remindersPredicate,
   scheduledRemindersFilter as scheduledRemindersPredicate,
@@ -29,7 +30,10 @@ export const filesAndFolderFilter = config({
   id: 'file-folder',
   predicate: filesAndFolderPredicate,
   query: {
-    exclude: { fileAssoc: ['assoc:md', 'assoc:canvas'], folderId: [NIL_UUID] },
+    exclude: {
+      fileType: ['md', 'canvas', 'spreadsheet'],
+      folderId: [NIL_UUID],
+    },
   },
 });
 
@@ -119,6 +123,19 @@ export const scheduledRemindersFilter = config({
       reminderCompleted: false,
       reminderFired: false,
     },
+  }),
+});
+
+// Everything not done — fired and scheduled together — for a single inbox
+// tab. Unlike Active/Scheduled it does not split on `reminderFired`, so both
+// ends share one `comp:false` query; the page limit is generous enough for an
+// inbox, and `soupQueryExcludesDone` still drops a reminder the moment it is
+// marked done.
+export const notDoneRemindersFilter = config({
+  id: 'reminders-not-done',
+  predicate: notDoneRemindersPredicate,
+  query: defineQueryFilters({
+    include: { includeReminders: true, reminderCompleted: false },
   }),
 });
 

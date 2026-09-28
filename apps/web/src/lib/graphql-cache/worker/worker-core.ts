@@ -18,7 +18,7 @@ import type {
   SearchCachePage,
   WriteResult,
 } from '../protocol';
-import { parseCacheRevision } from '../protocol';
+import { parseCacheRevision, parseStorageGeneration } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
   classifyCacheError,
@@ -75,6 +75,7 @@ const CACHE_WRITE_PRIORITY = 2;
 function isOrderingBarrier(request: CacheRequest): boolean {
   return (
     request.kind === 'init' ||
+    request.kind === 'current-storage-generation' ||
     request.kind === 'teardown' ||
     request.kind === 'clear'
   );
@@ -207,7 +208,12 @@ export class CacheWorkerCore {
       const result = await this.enqueue(request);
       const durationMs = this.now() - startedAt;
       const revisionCategory = revisionAdvancementCategory(request);
-      if (revisionCategory !== undefined) {
+      const revisionAdvanced =
+        typeof result !== 'object' ||
+        result === null ||
+        !('revisionAdvanced' in result) ||
+        result.revisionAdvanced !== false;
+      if (revisionCategory !== undefined && revisionAdvanced) {
         this.telemetry.record({
           name: 'graphql_cache.revision_advance',
           operationCategory: category,
@@ -423,6 +429,11 @@ export class CacheWorkerCore {
       .with({ kind: 'current-revision' }, async () => {
         return parseCacheRevision(await this.requireEngine().currentRevision());
       })
+      .with({ kind: 'current-storage-generation' }, async () => {
+        return parseStorageGeneration(
+          await this.requireEngine().currentStorageGeneration()
+        );
+      })
       .with({ kind: 'read' }, async (request) => {
         const engine = this.requireEngine();
         const result: ReadResult = await engine.readQuery(
@@ -485,7 +496,13 @@ export class CacheWorkerCore {
           request.identity
         );
         result.revision = parseCacheRevision(result.revision);
-        this.fanOut(result, true);
+        // Only cache-only consumers opt into hydration. Do not invalidate
+        // foreground Soup queries or switch their authority mid-backfill.
+        // Identity changes remain ordinary cache resets for every subscriber.
+        if (result.reset) this.fanOut(result, true);
+        else if (result.revisionAdvanced) {
+          this.push({ kind: 'cache-hydrated', revision: result.revision });
+        }
         const hydration: HydrationResult & Pick<WriteResult, 'reset'> =
           result.data === null
             ? { kind: 'void', revision: result.revision, reset: result.reset }
@@ -502,6 +519,7 @@ export class CacheWorkerCore {
         const result: EnqueueOptimisticMutationResult =
           await engine.enqueueOptimisticMutation(
             request.originOpId,
+            request.uuid,
             request.query,
             request.operationName,
             request.variables,
@@ -515,6 +533,16 @@ export class CacheWorkerCore {
           );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
+        if (result.upsertKind.kind === 'replaced-pending') {
+          this.push({
+            kind: 'mutation-settled',
+            settlement: {
+              transactionId: result.upsertKind.removedTransactionId,
+              status: 'superseded',
+              replacementTransactionId: result.transactionId,
+            },
+          });
+        }
         return result;
       })
       .with({ kind: 'inspect-query-variants' }, async (request) => {
@@ -542,14 +570,26 @@ export class CacheWorkerCore {
       })
       .with({ kind: 'defer-optimistic-write' }, async (request) => {
         const engine = this.requireEngine();
-        await engine.deferOptimisticWrite(
+        const result = await engine.deferOptimisticWrite(
           request.transactionId,
           request.leaseOwner,
           request.leaseGeneration,
           request.nextAttemptAtMs,
           request.error
         );
-        return null;
+        if (result.kind === 'discarded-superseded') {
+          result.revision = parseCacheRevision(result.revision);
+          this.fanOut(result, true);
+          this.push({
+            kind: 'mutation-settled',
+            settlement: {
+              transactionId: request.transactionId,
+              status: 'superseded',
+              replacementTransactionId: result.replacementTransactionId,
+            },
+          });
+        }
+        return result;
       })
       .with({ kind: 'commit-optimistic-write' }, async (request) => {
         const engine = this.requireEngine();
@@ -567,10 +607,17 @@ export class CacheWorkerCore {
         this.fanOut(result, true);
         this.push({
           kind: 'mutation-settled',
-          settlement: {
-            transactionId: request.transactionId,
-            status: 'committed',
-          },
+          settlement:
+            result.kind === 'committed-superseded'
+              ? {
+                  transactionId: request.transactionId,
+                  status: 'superseded',
+                  replacementTransactionId: result.replacementTransactionId,
+                }
+              : {
+                  transactionId: request.transactionId,
+                  status: 'committed',
+                },
         });
         return result;
       })
@@ -585,11 +632,18 @@ export class CacheWorkerCore {
         this.fanOut(result, true);
         this.push({
           kind: 'mutation-settled',
-          settlement: {
-            transactionId: request.transactionId,
-            status: 'permanently-failed',
-            error: request.error,
-          },
+          settlement:
+            result.kind === 'discarded-superseded'
+              ? {
+                  transactionId: request.transactionId,
+                  status: 'superseded',
+                  replacementTransactionId: result.replacementTransactionId,
+                }
+              : {
+                  transactionId: request.transactionId,
+                  status: 'permanently-failed',
+                  error: request.error,
+                },
         });
         return result;
       })
@@ -602,6 +656,7 @@ export class CacheWorkerCore {
         this.fanOut(
           {
             revision: result.revision,
+            revisionAdvanced: true,
             changed: request.keys,
             affectedOps: result.affectedOps,
             reset: false,
@@ -620,6 +675,7 @@ export class CacheWorkerCore {
         this.fanOut(
           {
             revision: result.revision,
+            revisionAdvanced: true,
             changed: request.keys,
             affectedOps: result.affectedOps,
             reset: false,
@@ -636,7 +692,7 @@ export class CacheWorkerCore {
       .with({ kind: 'clear' }, async () => {
         const result: CacheRevisionResult = await this.requireEngine().clear();
         const revision = parseCacheRevision(result.revision);
-        this.push({ kind: 'cache-changed', revision });
+        this.push({ kind: 'cache-changed', revision, reset: true });
         return revision;
       })
       .exhaustive();
@@ -777,6 +833,11 @@ export class CacheWorkerCore {
     }
   }
 
+  /** Download/compile/instantiate without acquiring the database lock or opening OPFS. */
+  async prepare(): Promise<void> {
+    await loadCacheWasm();
+  }
+
   private async init(scope: string, hotCapacity?: number): Promise<void> {
     if (this.initPromise) {
       // Subsequent page clients routed to this elected engine re-init idempotently.
@@ -881,8 +942,12 @@ export class CacheWorkerCore {
         keys: result.changed,
       });
     }
-    if (cacheChanged) {
-      this.push({ kind: 'cache-changed', revision: result.revision });
+    if (cacheChanged && result.revisionAdvanced) {
+      this.push({
+        kind: 'cache-changed',
+        revision: result.revision,
+        ...(result.reset ? { reset: true } : {}),
+      });
     }
   }
 

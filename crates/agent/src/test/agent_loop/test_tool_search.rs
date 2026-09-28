@@ -108,7 +108,7 @@ impl FakeCombined {
 }
 
 impl AiToolSet<()> for FakeCombined {
-    fn try_tool_call<'a>(
+    fn dispatch_tool_call<'a>(
         &'a self,
         context: (),
         request_context: RequestContext,
@@ -129,7 +129,7 @@ impl AiToolSet<()> for FakeCombined {
             });
         }
         self.static_tools
-            .try_tool_call(context, request_context, tool_name, json)
+            .dispatch_tool_call(context, request_context, tool_name, json)
     }
 
     fn request_schemas(&self) -> Option<Vec<RequestSchema>> {

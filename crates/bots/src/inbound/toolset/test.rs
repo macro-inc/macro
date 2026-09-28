@@ -6,9 +6,10 @@ use super::{
     manage_bot_channel_access::{BotChannelAccessAction, ManageBotChannelAccess},
 };
 use crate::domain::models::{
-    AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotToken, CreateBotRequest,
-    CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
-    CreateChannelScopedBotResponse, PatchBotRequest,
+    Agent, AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotToken,
+    CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
+    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
+    UpdateAgentRequest,
 };
 use crate::domain::{
     models::{Bot, BotKind, BotOwner},
@@ -83,6 +84,27 @@ struct ToolTestBotService {
 }
 
 impl BotService for ToolTestBotService {
+    async fn create_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _req: CreateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn update_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn list_agents(&self, _caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
+        unimplemented!()
+    }
+
     async fn create_bot(
         &self,
         _caller: MacroUserIdStr<'static>,
@@ -201,6 +223,17 @@ impl BotService for ToolTestBotService {
         _bot_id: BotId,
         _token_id: Uuid,
     ) -> Result<(), BotError> {
+        unimplemented!()
+    }
+
+    async fn channel_message_access(
+        &self,
+        _bot_id: BotId,
+        _channel_id: Uuid,
+    ) -> Result<
+        entity_access::domain::models::EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        BotError,
+    > {
         unimplemented!()
     }
 

@@ -27,6 +27,7 @@ fn created_event_wire_shape() {
         ChannelTopicEvent::Created(ChannelCreatedMetadata {
             channel_id,
             actor: user("macro|owner@example.com"),
+            on_behalf_of: None,
             channel_type: ChannelType::Private,
             channel_name: Some("general".to_string()),
             participant_user_ids: vec![
@@ -51,6 +52,43 @@ fn created_event_wire_shape() {
                 "participant_user_ids": [
                     "macro|owner@example.com",
                     "macro|member@example.com",
+                ],
+            },
+        })
+    );
+}
+
+#[test]
+fn created_event_wire_shape_includes_on_behalf_of() {
+    let channel_id = Uuid::nil();
+    let actor = ChannelSender::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID);
+    let event = Event::with_event_id(
+        Uuid::nil(),
+        ChannelTopicEvent::Created(ChannelCreatedMetadata {
+            channel_id,
+            actor: actor.clone(),
+            on_behalf_of: Some(user_id("macro|owner@example.com")),
+            channel_type: ChannelType::Private,
+            channel_name: Some("Macro Support x owner".to_string()),
+            participant_user_ids: vec![user_id("macro|owner@example.com")],
+        }),
+    );
+
+    let value = serde_json::to_value(&event).expect("serializable");
+    assert_eq!(
+        value,
+        json!({
+            "event_id": "00000000-0000-0000-0000-000000000000",
+            "schema_version": 1,
+            "event_type": "channel.created",
+            "metadata": {
+                "channel_id": "00000000-0000-0000-0000-000000000000",
+                "actor": actor.as_ref(),
+                "on_behalf_of": "macro|owner@example.com",
+                "channel_type": "private",
+                "channel_name": "Macro Support x owner",
+                "participant_user_ids": [
+                    "macro|owner@example.com",
                 ],
             },
         })

@@ -7,10 +7,12 @@ import {
   useChatInputContext,
 } from '@core/component/AI/context';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
+import { createMentionAttachmentCallbacks } from '@core/component/AI/signal/mention-attachment-callbacks';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import {
   getSoupInputStoredModel,
+  storeChatStateImmediate,
   storeSoupInputModel,
 } from '@core/component/AI/util/storage';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
@@ -20,19 +22,19 @@ import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { createEffect, onMount } from 'solid-js';
+import { createEffect } from 'solid-js';
 
 function SoupChatInputInner() {
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+  const attachmentMentionCallbacks = createMentionAttachmentCallbacks(
+    input.attachments,
+    getAttachmentFromMention
+  );
   const editor = buildChatEditor().withMentions({
-    onCreate: (mention) => {
-      const attachment = getAttachmentFromMention(mention);
-      if (attachment) input.attachments.addAttachment(attachment);
-    },
-    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
+    ...attachmentMentionCallbacks,
     block: 'chat',
     showOpenTabs: true,
   });
@@ -46,12 +48,6 @@ function SoupChatInputInner() {
   });
 
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
-
-  let containerRef!: HTMLDivElement;
-
-  onMount(() => {
-    attachHotkeys(containerRef);
-  });
 
   // cmd+j - Focus AI chat
   registerHotkey({
@@ -80,6 +76,9 @@ function SoupChatInputInner() {
       return;
     }
     const { id: chatId } = response.value;
+    // Give list/recent icons the sent model before the new chat loads or its
+    // server metadata refreshes, including when sending in the background.
+    storeChatStateImmediate(chatId, { model: request.model });
 
     // Rename via mutation for optimistic cache updates (history, preview, soup)
     const name = deriveChatName(request.content);
@@ -117,27 +116,19 @@ function SoupChatInputInner() {
   };
 
   return (
-    <div
-      ref={containerRef}
-      class="absolute bottom-0 inset-x-px pb-2 px-2 flex justify-center pointer-events-none"
-      style={{
-        'background-image': `linear-gradient(transparent, var(--color-surface) 85%)`,
-      }}
-    >
-      <div class="w-full max-w-3xl">
-        <div class="pointer-events-auto">
-          <ChatInput
-            editor={editor}
-            onSend={handleSend}
-            onEscape={() => {
-              splitPanelContext.panelRef()?.focus();
-              return true;
-            }}
-            isPersistent={true}
-            autoFocusOnMount={false}
-          />
-        </div>
-      </div>
+    <div ref={attachHotkeys}>
+      <ChatInput
+        variant="default"
+        collapseOnBlur
+        editor={editor}
+        onSend={handleSend}
+        onEscape={() => {
+          splitPanelContext.panelRef()?.focus();
+          return true;
+        }}
+        isPersistent={true}
+        autoFocusOnMount={false}
+      />
     </div>
   );
 }

@@ -5,7 +5,7 @@ use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolR
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::EditAccessLevel;
+use entity_access::domain::models::{BotAccessScope, EditAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
@@ -39,7 +39,7 @@ pub struct ToolEntityRef {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "SetEntityProperty",
-    description = "Set or update a property value on an entity (document, project, etc.). Tasks are targeted as entity_type='document'. Provide the property_definition_id and exactly one value field matching the property's data type.
+    description = "Set or update a property value on an entity. Tasks are targeted as entity_type='document'. Projects in the Tasks UI are entity_type='initiative'; entity_type='project' still means a folder. Initiatives share the Assignees, Status, Priority and Due Date definitions below and their clearing behavior. Project Status accepts only Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), and Completed (...0004); In Review and Canceled are task-only options. Provide the property_definition_id and exactly one value field matching the property's data type.
 
 For multi-select properties — including tags — prefer add_option_ids / remove_option_ids over option_ids: they add or remove just those options atomically, composing with concurrent edits. option_ids replaces the entire value, so a stale read can silently drop options someone else just added; only use it when the user asks to set the value to exactly a given list. To apply a tag, pass the tag set's property_definition_id and the tag's option id (both from ListTags) in add_option_ids; to remove a tag, use remove_option_ids.
 
@@ -225,9 +225,9 @@ where
         // Prove the requesting user can edit the entity before writing anything.
         let entity_access_receipt = service_context
             .entity_access_service
-            .generate_entity_access_receipt::<EditAccessLevel>(
-                &request_context.user_id,
-                None,
+            .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                service_context.actor,
+                BotAccessScope::user(request_context.user_id.clone()),
                 &self.entity_id,
                 entity_type,
             )

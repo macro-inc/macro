@@ -51,8 +51,8 @@ local-e2e-seed:
   just initialize_dbs
   just tooling/seed_cli/local-e2e-smoke
 
-# Email rendering snapshots (Playwright HTML fixtures, not inbox e2e).
-# Add a fixture under apps/web/src/lib/core/email/tests/fixtures, then
+# Email rendering Node tests and Chromium fixtures (not inbox e2e).
+# Add a fixture under packages/email-renderer/tests/fixtures, then
 # `just test-email-rendering-update`.
 test-email-rendering:
   just apps/web/test-email-rendering

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE harnesses SET last_disconnected_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b4d134196b124c4c4a6b0ca5ceb6c8b0c14fbe1d11ad9c260c9108a27f64134d"
+}

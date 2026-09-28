@@ -300,7 +300,7 @@ After:
 - `insertVideo(afterId, { srcType, url, controls?, width?, height? })`
 - `insertEquation(afterId, tex)` · `insertInlineEquation(blockId, at, tex)`
 - `insertLineBreak(blockId, at)` — inserts a **soft line break** (Shift+Enter) within a block. Use only when multiple lines must live in a single semantic block (poetry, addresses, signature blocks). For ordinary multi-line content, insert separate paragraph nodes instead.
-- `insertDate(blockId, at, isoDate, displayFormat?)`
+- `insertDate(blockId, at, isoDate, displayFormat?)` / `mentionDate(...)` — inserts a date/time **mention chip** (the same chip `@` inserts). Prefer this over typing a date as plain text.
 - `insertTextAfterInline(inlineRef, text)` — inserts a plain text node immediately after an inline object. Use this (not `appendText`) when you need text to follow an inline equation, date, line break, or other inline node.
 
 The `at` in `insertInlineEquation`/`insertLineBreak`/`insertDate` is a **character offset into the block's plain text** — inline objects don't count toward it. Compute it (`text.length`, `text.indexOf('word')`) rather than guessing. When you do use `insertLineBreak` for soft-break content, set the first line then add each break at the running text length and `insertTextAfterInline` the next line:
@@ -342,7 +342,7 @@ After:
   <video id="b4" version="1" srcType="url" _id="" url="https://x/movie.mp4" width="0" height="0" scale="1" constrainedWidth="null" constrainedHeight="null" controls="true"/>
   <image id="b5" version="1" srcType="url" _id="" url="https://x/cat.png" width="0" height="0" scale="1" constrainedWidth="null" constrainedHeight="null" alt="cat"/>
   <hr id="b6"/>
-  <p id="b2"><equation id="b7" version="1" equation="x^2" inline="true"/><t id="t2">Bel</t><br id="b8"/><date id="b9" date="2026-06-23" displayFormat="MMM d, yyyy"/><t id="t3">ow</t></p>
+  <p id="b2"><equation id="b7" version="1" equation="x^2" inline="true"/><t id="t2">Bel</t><br id="b8"/><date-mention id="b9" date="2026-06-23" displayFormat="MMM d, yyyy"/><t id="t3">ow</t></p>
 </doc>
 ```
 
@@ -366,7 +366,7 @@ Before:
 <doc>
   <image id="img1" version="1" srcType="url" _id="" url="https://x/cat.png" alt="cat"/>
   <video id="vid1" version="1" srcType="url" _id="" url="https://x/old.mp4" controls="true"/>
-  <p id="b1"><date id="date1" date="2026-06-23" displayFormat="MMM d"/></p>
+  <p id="b1"><date-mention id="date1" date="2026-06-23" displayFormat="MMM d"/></p>
 </doc>
 ```
 
@@ -376,23 +376,33 @@ After:
 <doc>
   <image id="img1" version="1" srcType="url" _id="" url="https://x/dog.png" alt="dog"/>
   <video id="vid1" version="1" srcType="url" _id="" url="https://x/new.mp4" controls="false"/>
-  <p id="b1"><date id="date1" date="2026-07-01" displayFormat="yyyy-MM-dd"/></p>
+  <p id="b1"><date-mention id="date1" date="2026-07-01" displayFormat="yyyy-MM-dd"/></p>
 </doc>
 ```
 
 ## Mentions
 
-Use the ids and details supplied in the task -- do not invent them.
+These insert the same @-mention chips the user inserts from the `@` menu. Use the ids and details supplied in the task -- do not invent entity ids. Date/time chips do not need a looked-up id.
 
+Existing chips in the document XML look like `<user-mention>`, `<date-mention>`, `<document-mention>`, `<agent-session-mention>`, `<contact-mention>`, `<group-mention>`, `<pr-mention>`, `<tag-mention>`. Leave them intact unless the task asks to change them.
+
+- `insertDate(blockId, at, isoDate, displayFormat?)` · `mentionDate(...)` — time chip. `isoDate` is ISO 8601; `displayFormat` is the label on the chip (e.g. `'Mon, Dec 1, 2025'`, `'Today'`, `'3:00 PM'`).
 - `insertMention(blockId, at, mention)`
 - `mentionUser(blockId, at, { userId, email })`
 - `mentionContact(blockId, at, { contactId, name, emailOrDomain, isCompany })`
 - `mentionGroup(blockId, at, { groupAlias })`
-- `mentionDocument(blockId, at, { documentId, documentName, blockName })`
+- `mentionDocument(blockId, at, { documentId, documentName, blockName, blockParams? })` — documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, automations (`blockName` is `md`/`channel`/`chat`/`project`/`task`/`email`/`calendar`/`skill`/`call`/`automation`/…). `blockParams` is for channel messages (`channel_message_id`) and calendar occurrences (`occurrenceKey`).
+- `mentionAgentSession(blockId, at, { id, label?, expanded? })` — existing agent session. `expanded: true` inserts the card that follows the session's latest turn.
+- `mentionPullRequest(blockId, at, { id, label? })`
+- `mentionTag(blockId, at, { optionId, propertyDefinitionId, scope, name, color? })`
 
 ```ts
+// `at` is a plain-text offset; chips do not increase it. 6 appends after "Email ".
 editor.mentionUser('b1', 6, { userId: 'u1', email: 'a@example.com' });
-editor.mentionContact('b1', 7, { contactId: 'c1', name: 'Acme', emailOrDomain: 'acme.com', isCompany: true });
+editor.mentionContact('b1', 6, { contactId: 'c1', name: 'Acme', emailOrDomain: 'acme.com', isCompany: true });
+editor.mentionDate('b1', 6, '2026-07-08T00:00:00.000Z', 'Today');
+editor.mentionAgentSession('b1', 6, { id: 'sess-1', label: 'Fix login' });
+editor.mentionDocument('b1', 6, { documentId: 'd1', documentName: 'Spec', blockName: 'md' });
 ```
 
 Before:
@@ -407,7 +417,7 @@ After:
 
 ```xml
 <doc>
-  <p id="b1"><t id="t1">Email </t><mention id="m1" kind="user" userId="u1" email="a@example.com"/><mention id="m2" kind="contact" contactId="c1" name="Acme" emailOrDomain="acme.com" isCompany="true"/></p>
+  <p id="b1"><t id="t1">Email </t><document-mention id="m5" documentId="d1" name="Spec" blockName="md"/><agent-session-mention id="m4" sessionId="sess-1" label="Fix login"/><date-mention id="m3" date="2026-07-08T00:00:00.000Z" displayFormat="Today"/><contact-mention id="m2" contactId="c1" name="Acme" email="acme.com" isCompany="true"/><user-mention id="m1" userId="u1" email="a@example.com"/></p>
 </doc>
 ```
 

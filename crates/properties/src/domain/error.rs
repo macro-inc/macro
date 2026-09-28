@@ -48,6 +48,10 @@ pub enum PropertiesErr {
     #[error("You must be on a team to use team-scoped properties")]
     TeamMembershipRequired,
 
+    /// The team definition is owned by another feature's settings - maps to 403
+    #[error("This property is managed from its feature's settings and cannot be edited here")]
+    ManagedDefinition,
+
     /// Repository/database errors - maps to 500
     #[error(transparent)]
     Repo(#[from] anyhow::Error),

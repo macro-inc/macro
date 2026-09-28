@@ -3,6 +3,7 @@ import {
   deserializeToolResponse,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
+import { createMemo } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import {
@@ -32,6 +33,11 @@ import { createTagHandler } from './CreateTag';
 import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
 import { displayResultsHandler } from './DisplayResults';
+import {
+  commentOnDocumentTextHandler,
+  replyToDocumentCommentHandler,
+  resolveDocumentCommentHandler,
+} from './DocumentComments';
 import { editDocumentHandler } from './EditDocument';
 import { editTagHandler } from './EditTag';
 import { getThreadHandler } from './GetThread';
@@ -41,6 +47,7 @@ import {
   importNotionPageHandler,
   listImportEntitiesHandler,
 } from './ImportTools';
+import { initiativeToolHandlers } from './Initiatives';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
@@ -82,8 +89,14 @@ import { listSkillsHandler, searchSkillsHandler } from './SearchSkills';
 import { searchToolsHandler } from './SearchTools';
 import { selfKnowledgeHandler } from './SelfKnowledge';
 import { sendChannelMessageHandler } from './SendChannelMessage';
+import { sendConfirmedEmailHandler } from './SendConfirmedEmail';
 import { sendEmailHandler } from './SendEmail';
 import { setSenderPolicyHandler } from './SetSenderPolicy';
+import {
+  calculateSpreadsheetHandler,
+  editSpreadsheetHandler,
+  readSpreadsheetHandler,
+} from './Spreadsheet';
 import { subagentHandler } from './Subagent';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
 import {
@@ -94,10 +107,15 @@ import {
   type ToolRenderContext,
 } from './ToolRenderer';
 import { updateThreadLabelsHandler } from './UpdateThreadLabels';
+import { uploadFileHandler } from './UploadFile';
 import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  ...initiativeToolHandlers,
+  ReadSpreadsheet: readSpreadsheetHandler,
+  CalculateSpreadsheet: calculateSpreadsheetHandler,
+  EditSpreadsheet: editSpreadsheetHandler,
   ConfigureBot: configureBotHandler,
   CreateChannel: createChannelHandler,
   CreateBot: createBotHandler,
@@ -135,6 +153,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   DisplayResults: displayResultsHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
+  UploadFile: uploadFileHandler,
   CreateProject: createProjectHandler,
   CreateReminder: createReminderHandler,
   CreateTag: createTagHandler,
@@ -156,10 +175,14 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadProject: readProjectHandler,
   RenameChannel: renameChannelHandler,
   RenameDocument: renameDocumentHandler,
+  CommentOnDocumentText: commentOnDocumentTextHandler,
+  ReplyToDocumentComment: replyToDocumentCommentHandler,
+  ResolveDocumentComment: resolveDocumentCommentHandler,
   SearchSkills: searchSkillsHandler,
   SearchTools: searchToolsHandler,
   SelfKnowledge: selfKnowledgeHandler,
   SendChannelMessage: sendChannelMessageHandler,
+  SendConfirmedEmail: sendConfirmedEmailHandler,
   SendEmail: sendEmailHandler,
   SetSenderPolicy: setSenderPolicyHandler,
   SetEntityProperty: setEntityPropertyHandler,
@@ -194,6 +217,11 @@ type TriggerToolArgs = Omit<
   type: 'call' | 'response' | 'error';
 };
 
+/** Schema support alone does not guarantee that this surface has a renderer. */
+export function hasToolRenderer(name: string): boolean {
+  return Object.hasOwn(toolHandlers, name);
+}
+
 export function RenderTool(props: ToolProps) {
   const maybeTool = deserializeToolCall({
     id: props.tool_id,
@@ -215,18 +243,47 @@ export function RenderTool(props: ToolProps) {
     isComplete: props.isComplete,
   };
 
-  const response = () => {
-    if (!props.response) return undefined;
+  /*
+   Every streamed character rebuilds the message parts (and the response map),
+   giving `props.response` a fresh object identity even though its `json`
+   payload is reference-stable once the tool result has arrived. Compare by
+   field identity so the expensive parse below only re-runs when the response
+   actually changes.
+  */
+  const responseInput = createMemo(
+    () =>
+      props.response
+        ? {
+            id: props.tool_id,
+            json: props.response.json,
+            name: props.response.name,
+          }
+        : undefined,
+    undefined,
+    {
+      equals: (a, b) =>
+        a?.id === b?.id && a?.json === b?.json && a?.name === b?.name,
+    }
+  );
+
+  /*
+   Deserializing runs a full zod parse of the tool payload. Unmemoized, it
+   re-ran per read site in every tool component on each streamed character,
+   which made streaming crawl on messages with completed tool calls.
+  */
+  const response = createMemo(() => {
+    const input = responseInput();
+    if (!input) return undefined;
 
     const maybeResponse = deserializeToolResponse({
-      id: props.tool_id,
-      json: props.response.json,
-      name: props.response.name as ToolName,
+      id: input.id,
+      json: input.json,
+      name: input.name as ToolName,
     });
 
     if (maybeResponse.isErr()) return undefined;
     return maybeResponse.value;
-  };
+  });
 
   return (
     <ToolErrorContext.Provider

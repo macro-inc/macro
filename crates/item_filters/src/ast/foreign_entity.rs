@@ -19,12 +19,9 @@ pub enum ForeignEntityLiteral {
     /// Filter to entities whose metadata participant list contains the requesting user.
     #[serde(rename = "me")]
     IncludesMe,
-    /// Filter by the requesting user's notification done state for this foreign entity.
-    #[serde(rename = "nd")]
-    NotificationDone(bool),
-    /// Filter by the requesting user's notification seen state for this foreign entity.
+    /// An entity has a non-deleted notification in this exact state.
     #[serde(rename = "ns")]
-    NotificationSeen(bool),
+    NotificationState(crate::NotificationState),
 }
 
 impl ExpandFrame<ForeignEntityLiteral> for ForeignEntityFilters {
@@ -56,20 +53,18 @@ impl ExpandFrame<ForeignEntityLiteral> for ForeignEntityFilters {
 
         let includes_me = includes_me.then_some(Expr::Literal(ForeignEntityLiteral::IncludesMe));
 
-        let notification_done = notification_filters
-            .done
-            .map(|done| Expr::Literal(ForeignEntityLiteral::NotificationDone(done)));
-        let notification_seen = notification_filters
-            .seen
-            .map(|seen| Expr::Literal(ForeignEntityLiteral::NotificationSeen(seen)));
+        let notification_state_node = notification_filters
+            .into_unique_states()
+            .into_iter()
+            .map(|state| Expr::Literal(ForeignEntityLiteral::NotificationState(state)))
+            .reduce(Expr::or);
 
         Ok([
             ids,
             foreign_entity_ids,
             foreign_entity_sources,
             includes_me,
-            notification_done,
-            notification_seen,
+            notification_state_node,
         ]
         .into_iter()
         .fold_with(Expr::and))

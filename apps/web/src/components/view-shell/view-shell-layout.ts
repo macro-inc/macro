@@ -8,10 +8,17 @@ export type AsideLayout = {
   width: number;
   min: number;
   max: number;
+  /**
+   * Whether automatic container resizing should preserve the user-resized
+   * width (or `width` before resizing).
+   * Set to false with a main `preferredWidth` to let the aside yield first.
+   */
+  preserveDuringResize?: boolean;
 };
 
+/** Shared starting size for every workspace navigation sidebar. */
 export const DEFAULT_ASIDE_LAYOUT: AsideLayout = {
-  width: 288,
+  width: 256,
   min: 224,
   max: 360,
 };
@@ -20,6 +27,11 @@ export type MainLayout = {
   width?: number;
   min: number;
   max?: number;
+  /**
+   * Soft width protected while a yielding aside shrinks toward its minimum.
+   * Unlike `min`, this does not prevent Main from shrinking when space runs out.
+   */
+  preferredWidth?: number;
 };
 
 export const DEFAULT_MAIN_LAYOUT: MainLayout = {
@@ -30,6 +42,8 @@ export type DetailNarrowBehavior = 'overlay' | 'replace' | 'hide';
 
 export type DetailLayout = {
   width: number;
+  /** Initial inline panel width. Use `auto` to fill the space left by siblings. */
+  initialWidth?: number | 'auto';
   min: number;
   max: number;
   whenNarrow: DetailNarrowBehavior;

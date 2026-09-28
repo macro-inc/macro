@@ -18,10 +18,13 @@ pub mod outbound;
 
 pub use domain::error::PropertiesErr;
 pub use domain::model::{
-    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, PropertyAccessReceiptExt,
-    PropertyOptionInfo, PropertyTargetKey, ViewReceipt, canonical_entity_type,
+    CRM_TEAM_STAGE_DEFINITION_NAME, EditReceipt, EntityPropertiesKey, EntityPropertyInfo,
+    PropertyAccessReceiptExt, PropertyOptionInfo, PropertyTargetKey, ViewReceipt,
+    canonical_entity_type,
 };
-pub use domain::ports::{NotificationService, PermissionService, PropertiesRepo};
+pub use domain::ports::{
+    InitiativeAssigneeService, NotificationService, PermissionService, PropertiesRepo,
+};
 pub use domain::service::{PropertiesService, TeamReceipt};
 pub use domain::service_impl::PropertiesServiceImpl;
 #[cfg(feature = "outbound")]

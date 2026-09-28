@@ -2,11 +2,11 @@
  * @vitest-environment jsdom
  */
 
+import type { MessageData } from '@core/messages/types';
 import { fireEvent, render } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import { ActionMenu } from '../ActionMenu';
 import { Root } from '../Root';
-import type { MessageData } from '../types';
 
 const message: MessageData = {
   id: 'message-1',
@@ -41,6 +41,7 @@ describe('ActionMenu', () => {
     expect(
       container.querySelector('[data-message-hover-actions]')
     ).not.toBeNull();
+    expect(container.querySelector('[data-slot="toolbar"]')).not.toBeNull();
 
     fireEvent.pointerLeave(root!);
 
@@ -92,5 +93,59 @@ describe('ActionMenu', () => {
     fireEvent.focusOut(control!, { relatedTarget: document.body });
 
     expect(container.querySelector('[data-message-hover-actions]')).toBeNull();
+  });
+
+  it('passes browser-selected message text to Reply', () => {
+    const onReply = vi.fn();
+    const { container } = render(() => (
+      <Root message={message} actions={{ onReply }}>
+        <div data-message-content>only this phrase should be quoted</div>
+        <ActionMenu />
+      </Root>
+    ));
+    const root = container.querySelector<HTMLElement>('[data-message]')!;
+    const content = container.querySelector<HTMLElement>(
+      '[data-message-content]'
+    )!;
+    const range = document.createRange();
+    range.setStart(content.firstChild!, 5);
+    range.setEnd(content.firstChild!, 16);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    fireEvent.pointerEnter(root);
+    const reply = container.querySelector<HTMLButtonElement>(
+      '[data-message-action="reply"]'
+    )!;
+    fireEvent.pointerDown(reply);
+    fireEvent.click(reply);
+
+    expect(onReply).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedText: 'this phrase' })
+    );
+  });
+
+  it('passes resolved decorator text to Reply', () => {
+    const onReply = vi.fn();
+    const { container } = render(() => (
+      <Root message={message} actions={{ onReply }}>
+        <div data-message-content>
+          <div data-message-reply-preview>Resolved bot response</div>
+        </div>
+        <ActionMenu />
+      </Root>
+    ));
+    const root = container.querySelector<HTMLElement>('[data-message]')!;
+
+    fireEvent.pointerEnter(root);
+    const reply = container.querySelector<HTMLButtonElement>(
+      '[data-message-action="reply"]'
+    )!;
+    fireEvent.pointerDown(reply);
+    fireEvent.click(reply);
+
+    expect(onReply).toHaveBeenCalledWith(
+      expect.objectContaining({ renderedText: 'Resolved bot response' })
+    );
   });
 });

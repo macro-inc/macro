@@ -28,7 +28,8 @@ use uuid::Uuid;
 use super::error::PropertiesErr;
 use super::model::{
     EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
-    EntityPropertyOptionUpdate, PropertyTargetKey, TagScope, TagSet, ViewReceipt,
+    EntityPropertyOptionUpdate, PropertyOptionReplacePlan, PropertyTargetKey, TagScope, TagSet,
+    ViewReceipt,
 };
 
 /// The caller's team-membership proof, used to scope definition/option/tag
@@ -204,10 +205,29 @@ pub trait PropertiesService: Send + Sync + 'static {
         team: Option<&TeamReceipt>,
     ) -> impl Future<Output = Result<Vec<PropertyOption>, PropertiesErr>> + Send;
 
+    /// Batch options for requested definitions readable by the caller.
+    /// Missing or inaccessible definitions are omitted, including their options.
+    fn get_property_options_batch(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, Vec<PropertyOption>>, PropertiesErr>> + Send;
+
     /// Add a new option to a select property owned by the caller.
     /// Validates the request against the property's data type, including the
     /// tag color rules.
     fn add_property_option(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        property_definition_id: Uuid,
+        request: &AddPropertyOptionRequest,
+    ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send;
+
+    /// Get or create an option by exact value on a property owned by the caller.
+    /// Preserves existing option metadata and tolerates concurrent creation.
+    fn get_or_create_property_option(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team: Option<&TeamReceipt>,
@@ -226,6 +246,19 @@ pub trait PropertiesService: Send + Sync + 'static {
         option_id: Uuid,
         request: &UpdatePropertyOptionRequest,
     ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send;
+
+    /// Apply a whole-set option change on a `SelectString` property owned by
+    /// the caller, in one transaction. Fails with
+    /// [`PropertiesErr::OptionNotFound`] when a deleted or rewritten option is
+    /// not on the definition and [`PropertiesErr::DuplicateOptionValue`] when
+    /// two options would share a value; neither partially applies.
+    fn replace_property_options(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        property_definition_id: Uuid,
+        plan: PropertyOptionReplacePlan,
+    ) -> impl Future<Output = Result<Vec<PropertyOption>, PropertiesErr>> + Send;
 
     /// Delete a property option on a property owned by the caller, stripping
     /// its id from every entity value that references it.

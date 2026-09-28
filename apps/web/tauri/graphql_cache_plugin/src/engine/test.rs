@@ -1,6 +1,8 @@
 use super::*;
 use pollster::block_on;
 
+mod soup;
+
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
     user { id soup(input: $input) { nextCursor items { __typename id } } }
 }"#;
@@ -39,6 +41,32 @@ fn spawn_handle() -> EngineHandle {
     EngineHandle::new(storage, None)
 }
 
+#[test]
+fn storage_generation_survives_native_reopening_and_rotates_after_clear() {
+    let dir = tempfile::tempdir().unwrap();
+    let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
+    let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+    let first = block_on(handle.current_storage_generation()).unwrap();
+    assert_eq!(
+        block_on(handle.clone().current_storage_generation()).unwrap(),
+        first
+    );
+    handle.shutdown().unwrap();
+    let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+    assert_eq!(
+        block_on(handle.current_storage_generation()).unwrap(),
+        first
+    );
+    block_on(handle.clear()).unwrap();
+    let replacement = block_on(handle.current_storage_generation()).unwrap();
+    assert_ne!(replacement, first);
+    assert_eq!(
+        block_on(handle.current_storage_generation()).unwrap(),
+        replacement
+    );
+    handle.shutdown().unwrap();
+}
+
 fn write(
     handle: &EngineHandle,
     origin: Option<&str>,
@@ -68,6 +96,59 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
     .unwrap()
 }
 
+fn empty_write_result() -> WriteResultWire {
+    WriteResultWire {
+        revision: "0".to_string(),
+        revision_advanced: false,
+        changed: Vec::new(),
+        affected_ops: Vec::new(),
+        reset: false,
+        revalidations: Vec::new(),
+    }
+}
+
+#[test]
+fn tagged_wire_enum_fields_are_camel_case() {
+    assert_eq!(
+        serde_json::to_value(MutationUpsertKindWire::ReplacedPending {
+            removed_transaction_id: "1".to_string(),
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "replaced-pending", "removedTransactionId": "1"})
+    );
+    assert_eq!(
+        serde_json::to_value(MutationUpsertKindWire::AppendedAfterActive {
+            active_transaction_id: "2".to_string(),
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "appended-after-active", "activeTransactionId": "2"})
+    );
+    assert_eq!(
+        serde_json::to_value(DeferOptimisticWriteResultWire::DiscardedSuperseded {
+            replacement_transaction_id: "3".to_string(),
+            result: empty_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "3"
+    );
+    assert_eq!(
+        serde_json::to_value(CommitOptimisticWriteResultWire::CommittedSuperseded {
+            replacement_transaction_id: "4".to_string(),
+            result: empty_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "4"
+    );
+    assert_eq!(
+        serde_json::to_value(RollbackOptimisticWriteResultWire::DiscardedSuperseded {
+            replacement_transaction_id: "5".to_string(),
+            result: empty_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "5"
+    );
+}
+
 #[test]
 fn write_then_read_round_trips() {
     let handle = spawn_handle();
@@ -81,6 +162,27 @@ fn write_then_read_round_trips() {
         panic!("expected hit");
     };
     assert_eq!(data, soup_data(false));
+}
+
+#[test]
+fn identical_hydration_does_not_advance_the_native_revision() {
+    let handle = spawn_handle();
+    let hydrate = || {
+        block_on(handle.hydrate_query(
+            HYDRATION_QUERY.to_string(),
+            Some("Soup".to_string()),
+            variables(),
+            soup_data(true),
+            None,
+        ))
+        .unwrap()
+        .write_result
+    };
+    let first = hydrate();
+    let duplicate = hydrate();
+    assert!(first.revision_advanced);
+    assert!(!duplicate.revision_advanced);
+    assert_eq!(first.revision, duplicate.revision);
 }
 
 #[test]
@@ -368,6 +470,7 @@ fn optimistic_layer_commits_durably() {
 
     let optimistic = block_on(handle.enqueue_optimistic_mutation(
         Some("client:2".to_string()),
+        "00000000-0000-4000-8000-000000000001".to_string(),
         QUERY.to_string(),
         Some("Soup".to_string()),
         variables(),
@@ -382,6 +485,7 @@ fn optimistic_layer_commits_durably() {
     .unwrap();
     assert_eq!(optimistic.result.affected_ops, vec!["client:1".to_string()]);
     let serialized = serde_json::to_value(&optimistic).unwrap();
+    assert_eq!(serialized["upsertKind"]["kind"], "inserted");
     assert_eq!(serialized["initialClaim"]["kind"], "claimed");
     assert_eq!(
         serialized["initialClaim"]["mutation"]["transactionId"],
@@ -391,6 +495,8 @@ fn optimistic_layer_commits_durably() {
         panic!("new queue head should be claimed")
     };
     assert_eq!(claimed.transaction_id, optimistic.transaction_id);
+    assert_eq!(claimed.uuid, "00000000-0000-4000-8000-000000000001");
+    assert!(!claimed.superseded);
 
     // The optimistic view answers reads.
     let ReadResultWire::Hit { data } = read(&handle, None) else {
@@ -408,6 +514,9 @@ fn optimistic_layer_commits_durably() {
         soup_data(true),
     ))
     .unwrap();
+    let CommitOptimisticWriteResultWire::Committed { result: committed } = committed else {
+        panic!("current transaction was reported as superseded")
+    };
     assert!(!committed.changed.is_empty());
 
     let ReadResultWire::Hit { data } = read(&handle, None) else {
@@ -423,6 +532,7 @@ fn rollback_drops_optimistic_contribution() {
 
     let optimistic = block_on(handle.enqueue_optimistic_mutation(
         None,
+        "00000000-0000-4000-8000-000000000002".to_string(),
         QUERY.to_string(),
         Some("Soup".to_string()),
         variables(),

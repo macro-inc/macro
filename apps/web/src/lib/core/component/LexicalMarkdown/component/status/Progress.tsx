@@ -58,7 +58,7 @@ export function ProgressChip(props: ProgressProps) {
         <Tooltip label={progress.tooltip()} as="span">
           <div
             class={cn(
-              'inline-flex min-w-0 items-center gap-1.5 rounded-full border border-edge-muted',
+              'h-6 inline-flex min-w-0 items-center gap-1.5 rounded-full border border-edge-muted',
               'bg-surface px-2 py-1 leading-tight',
               props.class
             )}

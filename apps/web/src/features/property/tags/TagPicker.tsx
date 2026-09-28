@@ -27,6 +27,7 @@ import {
   createSignal,
   For,
   type JSX,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -79,6 +80,14 @@ export type TagPickerProps = {
   children: JSX.Element;
   onOpenChange?: (open: boolean) => void;
   /**
+   * Fires when a picker session starts or ends, where a session covers both the
+   * popover and the tag editor dialog it can hand off to. Consumers that
+   * unmount the trigger once the picker is done (a chip that disappears with
+   * its last tag, say) should wait for this instead of `onOpenChange`, which
+   * reports closed while the editor dialog is still up.
+   */
+  onActiveChange?: (active: boolean) => void;
+  /**
    * Prevent the click that dismisses the picker from activating the element
    * behind it. This matches inline property editors rendered in soup rows.
    */
@@ -100,6 +109,13 @@ export function TagPicker(props: TagPickerProps) {
       triggerRef?.isConnected && triggerRef.focus();
     }, 0);
   };
+
+  const pickerActive = () => open() || editorMode() !== null;
+  createEffect(
+    on(pickerActive, (active) => props.onActiveChange?.(active), {
+      defer: true,
+    })
+  );
 
   const setOpenState = (
     value: boolean,
@@ -690,7 +706,7 @@ function TagPickerBody(props: {
     <Popover.Portal>
       <Layer depth={3}>
         <Popover.Content
-          class="z-modal w-96 max-w-[min(24rem,calc(100vw-1.5rem))] rounded-xl border border-edge-muted bg-surface text-sm shadow-menu menu-open-animation"
+          class="z-modal w-96 max-w-[min(24rem,calc(100vw-1.5rem))] rounded-xl glass bg-menu-glass text-sm menu-open-animation"
           onCloseAutoFocus={(event) => event.preventDefault()}
           onFocusOutside={(event) => {
             if (shouldIgnoreOutsideEvent()) event.preventDefault();

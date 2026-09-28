@@ -105,7 +105,11 @@ export function TaskListEntity(props: TaskListEntityProps) {
   const [snippetContainerRef, setSnippetContainerRef] = createSignal<
     HTMLElement | undefined
   >();
-  const chars = useCharacterCount(snippetContainerRef);
+  const chars = useCharacterCount(() =>
+    props.deferInteractions && !hasSearchContentHits(props.entity)
+      ? undefined
+      : snippetContainerRef()
+  );
 
   const showHitSnippet = () =>
     !props.hideContentHits && hasSearchContentHits(props.entity);
@@ -130,6 +134,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
   const draggable = createEntityDraggable({
     entity: props.entity,
     splitId: useSplitPanel()?.handle?.id,
+    deferUntilInteraction: () => props.deferInteractions === true,
   });
 
   const isWide = useListLayout()?.isWide ?? (() => true);
@@ -149,7 +154,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
         // Carries the --soup-row-* geometry (ListEntity.css) that the narrow
         // layout below reads for its leading edge.
         isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
-        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 rounded-lg',
+        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 rounded-xl',
         {
           'min-h-10 mx-(--soup-row-gutter)': !isMobile(),
           'bg-list-selected': props.checked,

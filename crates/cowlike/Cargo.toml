@@ -6,7 +6,3 @@ version = "0.1.0"
 
 [dependencies]
 either = { workspace = true }
-
-[dev-dependencies]
-bot_id = { path = "../bot_id" }
-macro_user_id = { path = "../macro_user_id" }

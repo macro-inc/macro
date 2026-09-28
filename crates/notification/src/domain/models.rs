@@ -4,6 +4,7 @@ pub mod android;
 pub mod apple;
 pub mod device;
 pub mod email_notification_digest;
+pub mod entity_query;
 pub mod mobile;
 pub mod push_notification_event;
 pub mod queue_message;
@@ -21,6 +22,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 pub use mobile::{DeviceEndpoint, HashedCollapseKey, NotifCollapseKey};
 use model_entity::Entity;
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
+pub use notification_state::{NotificationAction, NotificationState};
 pub use rate_limit::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult};
 pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{NotificationResult, SendNotificationRequest, SendNotificationRequestBuilder};
@@ -49,8 +51,8 @@ pub struct VoipPushTarget {
 /// A compact patch describing user notification status fields that changed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationStatusPatch {
-    /// Whether the notification is marked as done after the update.
-    pub done: bool,
+    /// The authoritative notification state after the update.
+    pub state: NotificationState,
     /// When the notification was viewed/seen after the update.
     pub viewed_at: Option<DateTime<Utc>>,
     /// The time this status change was persisted.
@@ -160,8 +162,8 @@ pub struct UserNotificationRow<T> {
     pub entity: Entity<'static>,
     /// Whether the notification has been sent.
     pub sent: bool,
-    /// Whether the notification is marked as done.
-    pub done: bool,
+    /// The authoritative lifecycle state, independent of viewing timestamps.
+    pub state: NotificationState,
     /// When the notification was created.
     pub created_at: DateTime<Utc>,
     /// When the notification was viewed/seen.
@@ -188,7 +190,7 @@ impl<T> UserNotificationRow<T> {
             notification_event_type,
             entity,
             sent,
-            done,
+            state,
             created_at,
             viewed_at,
             updated_at,
@@ -203,7 +205,7 @@ impl<T> UserNotificationRow<T> {
             notification_event_type,
             entity,
             sent,
-            done,
+            state,
             created_at,
             viewed_at,
             updated_at,
@@ -224,7 +226,7 @@ impl<T> UserNotificationRow<T> {
             notification_event_type,
             entity,
             sent,
-            done,
+            state,
             created_at,
             viewed_at,
             updated_at,
@@ -239,7 +241,7 @@ impl<T> UserNotificationRow<T> {
             notification_event_type,
             entity,
             sent,
-            done,
+            state,
             created_at,
             viewed_at,
             updated_at,

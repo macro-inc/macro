@@ -419,6 +419,81 @@ describe('createUrqlQuery reactive state', () => {
     expect(observed.at(-1)).toEqual([2, undefined]);
   });
 
+  it('does not traverse unchanged data for status-only emissions', () => {
+    const fake = makeFakeClient();
+    const query = setup(() => activeOptions(fake.client));
+    const data = { value: 'cached', nested: { count: 1 } };
+    fake.executions[0]?.next({ data, stale: true, hasNext: true });
+    const firstData = query.data;
+    const firstNested = query.data?.nested;
+    const descriptors = vi.spyOn(Object, 'getOwnPropertyDescriptors');
+
+    fake.executions[0]?.next({ data, stale: false, hasNext: true });
+    fake.executions[0]?.complete();
+
+    expect(query.stale).toBe(false);
+    expect(query.hasNext).toBe(false);
+    expect(query.isFetching).toBe(false);
+    expect(query.data).toBe(firstData);
+    expect(query.data?.nested).toBe(firstNested);
+    expect(descriptors).not.toHaveBeenCalledWith(data);
+    expect(descriptors).not.toHaveBeenCalledWith(data.nested);
+  });
+
+  it('reconciles changed data after skipping an unchanged emission', () => {
+    const fake = makeFakeClient();
+    const query = setup(() => activeOptions(fake.client));
+    const first = { value: 'first', nested: { count: 1, removed: 'old' } };
+    const second = { value: 'second', nested: { count: 2 } };
+    fake.executions[0]?.next({ data: first, stale: true });
+    const firstData = query.data;
+    const firstNested = query.data?.nested;
+
+    fake.executions[0]?.next({ data: first });
+    fake.executions[0]?.next({ data: second });
+
+    expect(query.data).toBe(firstData);
+    expect(query.data?.nested).toBe(firstNested);
+    expect(query.data).toEqual(second);
+    expect(query.data?.nested?.removed).toBeUndefined();
+
+    const descriptors = vi.spyOn(Object, 'getOwnPropertyDescriptors');
+    fake.executions[0]?.next({ data: second, stale: true });
+    expect(query.stale).toBe(true);
+    expect(descriptors).not.toHaveBeenCalledWith(second);
+    expect(descriptors).not.toHaveBeenCalledWith(second.nested);
+  });
+
+  it('publishes data and status together without notifying unchanged data consumers', () => {
+    const fake = makeFakeClient();
+    const snapshots: Array<[string | undefined, boolean]> = [];
+    const values: Array<string | undefined> = [];
+    const data = { value: 'cached' };
+    const dispose = createRoot((rootDispose) => {
+      const query = createUrqlQuery(() => activeOptions(fake.client));
+      createRenderEffect(() => {
+        snapshots.push([query.data?.value, query.isFetching]);
+      });
+      createRenderEffect(() => {
+        values.push(query.data?.value);
+      });
+      return rootDispose;
+    });
+    disposals.push(dispose);
+
+    fake.executions[0]?.next({ data, stale: true });
+    fake.executions[0]?.next({ data });
+    fake.executions[0]?.next({ data: { value: 'fresh' } });
+
+    expect(snapshots).toEqual([
+      [undefined, true],
+      ['cached', true],
+      ['cached', false],
+      ['fresh', false],
+    ]);
+    expect(values).toEqual([undefined, 'cached', 'fresh']);
+  });
+
   it('normalizes stale and incremental state when a source completes', () => {
     const fake = makeFakeClient();
     const query = setup(() => activeOptions(fake.client));

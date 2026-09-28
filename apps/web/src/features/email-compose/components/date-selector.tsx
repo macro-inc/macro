@@ -1,0 +1,537 @@
+import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
+import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
+import {
+  Combobox,
+  type ComboboxRootItemComponentProps,
+} from '@kobalte/core/combobox';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
+import { useSearchInputFocus } from '@property/utils/focus';
+import { Surface } from '@ui';
+import { format, setHours, setMinutes, startOfDay } from 'date-fns';
+import {
+  type Component,
+  createEffect,
+  createMemo,
+  createSignal,
+  type FlowComponent,
+  type JSX,
+  on,
+  Show,
+} from 'solid-js';
+
+type DateSelectorMode = 'search' | 'calendar';
+
+type DateSelectorOption =
+  | {
+      type: 'option';
+      displayText: string;
+      secondaryText?: string;
+      date: Date;
+    }
+  | { type: 'select-custom' }
+  | { type: 'custom'; date: Date };
+
+type DateSelectorProps = {
+  open?: boolean;
+  onClose?: VoidFunction;
+  selectedDate?: Date | null;
+  /** Return false (or reject) to leave the confirmed selection unchanged. */
+  onSelectDate?: (
+    date: Date | null
+  ) => void | boolean | Promise<void | boolean>;
+  placeholder?: string;
+  disablePriorToDate?: Date;
+  disableAfterDate?: Date;
+  withTime?: boolean;
+  /** Render content inline instead of in a portal (avoids keyboard positioning issues on mobile) */
+  disablePortal?: boolean;
+  disabled?: boolean;
+  triggerClass?: string;
+  triggerLabel?: string;
+  clearLabel?: string;
+  currentLabel?: string;
+  /** Show the selected date in the menu above its clear action. */
+  showCurrentValue?: boolean;
+  clearable?: boolean;
+  footer?: JSX.Element;
+  trigger?:
+    | JSX.Element
+    | ((props: { selectedDate: Date | null }) => JSX.Element);
+};
+
+const DateSelectorPortalWrapper: FlowComponent<{ disabled?: boolean }> = (
+  props
+) => {
+  if (props.disabled) return <>{props.children}</>;
+  return <Combobox.Portal>{props.children}</Combobox.Portal>;
+};
+
+export const DateSelector = (props: DateSelectorProps) => {
+  const [selectedOption, setSelectedOption] =
+    createSignal<DateSelectorOption | null>(
+      props.selectedDate ? { type: 'custom', date: props.selectedDate } : null
+    );
+
+  createEffect(
+    on(
+      () => props.selectedDate,
+      () => {
+        const next = props.selectedDate
+          ? { type: 'custom' as const, date: props.selectedDate }
+          : null;
+        const current = selectedOption();
+
+        if (
+          current?.type !== 'select-custom' &&
+          current?.date.toString() === next?.date.toString()
+        )
+          return;
+
+        setSelectedOption(next);
+      }
+    )
+  );
+
+  const [internalOpen, setInternalOpen] = createSignal(props.open ?? false);
+  createEffect(
+    on(
+      () => props.open,
+      (open) => {
+        if (open !== undefined) setInternalOpen(open);
+      },
+      { defer: true }
+    )
+  );
+  const isControlled = () => props.open !== undefined;
+  const isOpen = () => (isControlled() ? props.open! : internalOpen());
+  const [mode, setMode] = createSignal<DateSelectorMode>('search');
+
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
+  const [searchInputRef, setSearchInputRef] = createSignal<
+    HTMLInputElement | undefined
+  >();
+
+  const dateOptions = useDateSearch({
+    query: searchQuery,
+    baseDate: startOfDay(new Date()),
+    defaultTime: { hours: 8, minutes: 0 },
+  });
+
+  const dispatchKeyToListbox = (key: string) => {
+    listboxRef()?.dispatchEvent(
+      // We need to send `bubbles: true` because otherwise Kobalte ignores the event
+      new KeyboardEvent('keydown', { bubbles: true, key: key })
+    );
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const target = e.target;
+    const isNonComboboxInput =
+      target instanceof HTMLInputElement && target !== searchInputRef();
+
+    switch (e.key) {
+      case 'Delete':
+      case 'Backspace': {
+        if (
+          props.clearable === false ||
+          isNonComboboxInput ||
+          searchQuery().trim()
+        ) {
+          return;
+        }
+        e.preventDefault();
+        void onChange(null);
+
+        break;
+      }
+      case 'j': {
+        if (!e.ctrlKey) return;
+
+        e.preventDefault();
+        dispatchKeyToListbox('ArrowDown');
+        break;
+      }
+      case 'k': {
+        if (!e.ctrlKey) return;
+
+        e.preventDefault();
+        dispatchKeyToListbox('ArrowUp');
+        break;
+      }
+    }
+  };
+
+  useSearchInputFocus(
+    () => searchInputRef(),
+    () => true
+  );
+
+  const onInputChange = (value: string) => {
+    setSearchQuery(value);
+
+    // Send the keydown event to the listbox so Kobalte's internal system can update the focus state
+    // This makes it so it behaves the same as if you had manually pressed the down arrow to focus the item
+    queueMicrotask(() => {
+      dispatchKeyToListbox('ArrowDown');
+    });
+  };
+
+  const resetState = () => {
+    setSearchQuery('');
+    setMode('search');
+  };
+
+  const onOpenChange = (open: boolean) => {
+    setInternalOpen(open);
+    if (!open) {
+      resetState();
+      props.onClose?.();
+    }
+  };
+
+  const onChange = async (option: DateSelectorOption | null) => {
+    if (option?.type === 'select-custom') {
+      setMode('calendar');
+      return;
+    }
+
+    onOpenChange(false);
+    const dateValue = option?.date ?? null;
+    try {
+      const accepted = await props.onSelectDate?.(dateValue);
+      if (accepted !== false) setSelectedOption(option);
+    } catch {
+      // The caller owns request feedback. Keep showing the last confirmed value.
+    }
+  };
+
+  const options = createMemo(() => {
+    const list: DateSelectorOption[] = [];
+
+    for (const option of dateOptions()) {
+      list.push({
+        type: 'option',
+        displayText: option.displayText,
+        secondaryText: option.secondaryText,
+        date: option.date,
+      });
+    }
+
+    list.push({
+      type: 'select-custom',
+    });
+
+    return list;
+  });
+
+  const getOptionValue = (option: DateSelectorOption) => {
+    if (option.type === 'select-custom') return '';
+    return option.date.toString();
+  };
+
+  const getOptionTextValue = (option: DateSelectorOption) => {
+    if (option.type === 'select-custom') return 'Custom date';
+
+    return option.type === 'option' ? option.displayText : '';
+  };
+
+  const selectedDate = () => {
+    const option = selectedOption();
+
+    if (!option || option.type === 'select-custom') return null;
+
+    return option.date;
+  };
+
+  const onTimeInputChange = (e: Event) => {
+    if (!(e.currentTarget instanceof HTMLInputElement)) return;
+    const value = e.currentTarget.value;
+
+    if (!value || !value.trim().length) {
+      const currentDate = selectedDate() ?? new Date();
+
+      void onChange({
+        type: 'custom',
+        date: startOfDay(currentDate),
+      });
+      return;
+    }
+
+    const split = value.split(':');
+    if (!split.length || split.length !== 2) return;
+
+    if (Number.isNaN(split[0]) || Number.isNaN(split[1])) return;
+
+    let hours = Number(split[0]);
+    let mins = Number(split[1]);
+
+    let currentDate = selectedDate() ?? new Date();
+
+    currentDate = setHours(currentDate, Number(hours));
+    currentDate = setMinutes(currentDate, Number(mins));
+
+    void onChange({ type: 'custom', date: currentDate });
+  };
+
+  return (
+    <Combobox<DateSelectorOption>
+      open={isOpen()}
+      disabled={props.disabled}
+      multiple={false}
+      value={selectedOption()}
+      options={options()}
+      optionValue={getOptionValue}
+      optionTextValue={getOptionTextValue}
+      optionLabel={() => ''}
+      onOpenChange={onOpenChange}
+      onChange={onChange}
+      onInputChange={onInputChange}
+      allowsEmptyCollection
+      placement="bottom-start"
+      placeholder={props.placeholder ?? 'Select date'}
+      closeOnSelection={false}
+      // Filtering is done by `useDateSearch`
+      defaultFilter={() => true}
+      itemComponent={DateSelectorItem}
+    >
+      <Show when={typeof props.trigger !== 'undefined'}>
+        <Combobox.Control>
+          <Combobox.Trigger
+            class={props.triggerClass ?? 'flex group/date-selector-trigger'}
+            aria-label={props.triggerLabel}
+            tabIndex={0}
+            onKeyDown={(e: KeyboardEvent) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                setInternalOpen(true);
+              }
+            }}
+          >
+            {typeof props.trigger === 'function'
+              ? props.trigger({ selectedDate: selectedDate() })
+              : props.trigger}
+          </Combobox.Trigger>
+        </Combobox.Control>
+      </Show>
+
+      <DateSelectorPortalWrapper disabled={props.disablePortal}>
+        <Combobox.Content
+          class="rounded-xl size-auto z-action-menu menu-open-animation glass w-full max-w-70 text-ink bg-menu-glass"
+          as={Surface}
+          depth={3}
+          on:keydown={handleKeyDown}
+        >
+          <WithCustomDateMode
+            selectedDate={selectedDate()}
+            disablePriorToDate={props.disablePriorToDate}
+            disableAfterDate={props.disableAfterDate}
+            mode={mode()}
+            onSelectDate={(date) => {
+              void onChange({ type: 'custom', date });
+              setInternalOpen(false);
+            }}
+          >
+            <div class="flex w-full items-center py-2 gap-2 px-2 border-b border-edge-muted">
+              <SearchIcon class="size-4 text-ink-muted" />
+              <Combobox.Input
+                ref={setSearchInputRef}
+                class="w-full caret-accent"
+                autofocus
+              />
+            </div>
+
+            <Show
+              when={
+                props.showCurrentValue !== false || props.clearable !== false
+              }
+            >
+              <Show when={selectedOption()}>
+                {(option) => (
+                  <CurrentValueDisplay
+                    selectedOption={option()}
+                    clearLabel={props.clearLabel}
+                    currentLabel={props.currentLabel}
+                    showValue={props.showCurrentValue !== false}
+                    clearable={props.clearable !== false}
+                    onClear={() => {
+                      void onChange(null);
+                    }}
+                  />
+                )}
+              </Show>
+            </Show>
+            <div class="p-1.5">
+              <div class="max-h-56 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+                <Show when={dateOptions().length === 0}>
+                  <Show
+                    when={searchQuery().trim()}
+                    fallback={
+                      <div class="text-center py-2 text-ink-muted text-sm">
+                        Enter a date or duration
+                      </div>
+                    }
+                  >
+                    <div class="text-center py-2 text-ink-muted text-sm">
+                      No dates match "{searchQuery()}"
+                    </div>
+                  </Show>
+                </Show>
+                <Combobox.Listbox ref={setListboxRef} />
+              </div>
+            </div>
+            <Show when={props.withTime}>
+              <div class="px-2 py-1.5 border-t border-edge-muted">
+                <label class="flex items-center justify-between text-sm">
+                  Time
+                  <input
+                    type="time"
+                    value={
+                      selectedDate()
+                        ? format(selectedDate()!, 'HH:mm')
+                        : undefined
+                    }
+                    onInput={onTimeInputChange}
+                  />
+                </label>
+              </div>
+            </Show>
+            <div class="px-2 py-1.5 border-t border-edge-muted">
+              <div class="text-xs text-ink-muted">
+                <span>Use queries like </span>
+                <code class="bg-active px-1">3d</code>,{' '}
+                <code class="bg-active px-1">1w</code>,{' '}
+                <code class="bg-active px-1">feb 17</code>, or{' '}
+                <code class="bg-active px-1">tomorrow</code>
+              </div>
+            </div>
+            <Show when={props.footer}>
+              <div class="border-t border-edge-muted p-1.5">{props.footer}</div>
+            </Show>
+          </WithCustomDateMode>
+        </Combobox.Content>
+      </DateSelectorPortalWrapper>
+    </Combobox>
+  );
+};
+
+interface CurrentValueDisplayProps {
+  selectedOption: DateSelectorOption;
+  onClear: VoidFunction;
+  clearLabel?: string;
+  currentLabel?: string;
+  showValue: boolean;
+  clearable: boolean;
+}
+
+const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
+  const currentDateDisplay = createMemo(() => {
+    if (props.selectedOption.type === 'select-custom') return '';
+    try {
+      return format(props.selectedOption.date, "MMMM d, yyyy 'at' h:mm a");
+    } catch {
+      return 'Invalid date';
+    }
+  });
+
+  return (
+    <div class="border-b border-edge-muted p-1.5">
+      <div class="flex items-center justify-between gap-3">
+        <Show when={props.showValue}>
+          <div class="flex min-w-0 flex-1 items-center gap-2 px-1.5">
+            <span class="shrink-0 text-xs text-ink-muted">
+              {props.currentLabel ?? 'Current:'}
+            </span>
+            <span class="min-w-0 truncate text-xs font-medium">
+              {currentDateDisplay()}
+            </span>
+          </div>
+        </Show>
+        <Show when={props.clearable}>
+          <button
+            onPointerDown={(e: PointerEvent) => e.preventDefault()}
+            onClick={props.onClear}
+            class="min-h-10 shrink-0 rounded-lg px-3 text-xs text-ink-muted underline hover:bg-hover hover:text-ink"
+            classList={{ 'w-full text-left': !props.showValue }}
+          >
+            {props.clearLabel ?? 'Clear'}
+          </button>
+        </Show>
+      </div>
+    </div>
+  );
+};
+
+interface WithCustomDateModeProps {
+  selectedDate: Date | null;
+  mode: DateSelectorMode;
+  onSelectDate: (date: Date) => void;
+  disablePriorToDate?: Date;
+  disableAfterDate?: Date;
+}
+
+const WithCustomDateMode: FlowComponent<WithCustomDateModeProps> = (props) => {
+  return (
+    <Show when={props.mode === 'calendar'} fallback={props.children}>
+      <div class="border-b border-edge-muted text-sm flex justify-center">
+        <DatePickerUI
+          disablePriorToDate={props.disablePriorToDate}
+          disableAfterDate={props.disableAfterDate}
+          value={props.selectedDate ?? new Date()}
+          onChange={props.onSelectDate}
+          showTimePicker
+        />
+      </div>
+    </Show>
+  );
+};
+
+const DateSelectorItem: Component<
+  ComboboxRootItemComponentProps<DateSelectorOption>
+> = (props) => {
+  const label = () => {
+    const item = props.item.rawValue;
+
+    if (item.type === 'option') return item.displayText;
+
+    return 'Custom date...';
+  };
+
+  const description = () => {
+    const item = props.item.rawValue;
+
+    if (item.type === 'option') return item.secondaryText;
+    return 'Pick from calendar';
+  };
+
+  const item = () => (
+    <Combobox.Item
+      item={props.item}
+      class="group rounded-lg w-full flex items-center justify-between gap-1.5 p-1.5 px-2 text-left text-ink font-normal cursor-default outline-none data-highlighted:bg-hover"
+      onPointerDown={(e: PointerEvent) => {
+        // Prevent default to stop input blur on mobile, which would close the
+        // combobox before the selection click event fires.
+        e.preventDefault();
+      }}
+    >
+      <Combobox.ItemIndicator class="hidden" />
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <Combobox.ItemLabel class="text-sm font-medium truncate">
+          {label()}
+        </Combobox.ItemLabel>
+      </div>
+
+      <Show when={description()}>
+        <Combobox.ItemDescription as="span" class="text-xs text-ink-muted">
+          {description()}
+        </Combobox.ItemDescription>
+      </Show>
+    </Combobox.Item>
+  );
+
+  return (
+    <Show when={props.item.rawValue.type === 'select-custom'} fallback={item()}>
+      <div class="border-t border-edge-muted mt-1.5 pt-1.5">{item()}</div>
+    </Show>
+  );
+};

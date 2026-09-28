@@ -31,3 +31,8 @@ coverage:
 # http://sdk-webhook-relay:8787/macro-events and run the receiver on the host.
 webhook *ARGS:
     bun run webhook -- "$@"
+
+# Bump the published version: `just bump patch|minor|major`, or an explicit
+# `X.Y.Z`. Merging the bump to main is what publishes; see RELEASING.md.
+bump level="patch":
+    bun scripts/bump.ts {{level}}

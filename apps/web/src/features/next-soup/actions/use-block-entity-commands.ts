@@ -7,7 +7,7 @@ import { useAllProperties } from '@app/features/property/editor/hooks/useAllProp
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { useBlockId } from '@core/block';
+import { useMaybeBlockId } from '@core/block';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
@@ -18,6 +18,7 @@ import { type EntityData, isDocumentEntity, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { createEffect, onCleanup } from 'solid-js';
+import type { EntityActionNavigationEvent } from './entity-action-context';
 import {
   makeAddTagAction,
   makeCopyAction,
@@ -29,6 +30,7 @@ import {
   makeFavoriteAction,
   makeMarkDoneAction,
   makeMoveToProjectAction,
+  makeMuteAction,
   makeRenameAction,
   markReminderTargetDone,
 } from './index';
@@ -47,10 +49,24 @@ import {
  * source: `condition()` runs inside command-menu evaluation, where a pending
  * query must not suspend.
  */
+export type UseBlockEntityCommandsOptions = {
+  id?: string;
+  scopeId?: string;
+  resolveEntity?: () => EntityData | undefined;
+  onDeleted?: () => void;
+};
+
 export const useBlockEntityCommands = (
-  resolveEntity?: () => EntityData | undefined
+  options: UseBlockEntityCommandsOptions = {}
 ) => {
-  const blockId = useBlockId();
+  const blockId = options.id ?? useMaybeBlockId();
+
+  if (!blockId) {
+    throw new Error(
+      'useBlockEntityCommands requires an explicit id or an enclosing block'
+    );
+  }
+
   const quickAccess = useQuickAccess();
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
@@ -62,7 +78,10 @@ export const useBlockEntityCommands = (
     notificationSource: () => notificationSource,
   });
 
-  const deleteAction = makeDeleteAction({ userId: () => userId() });
+  const deleteAction = makeDeleteAction({
+    userId: () => userId(),
+    onDeleted: options.onDeleted,
+  });
   const renameAction = makeRenameAction({ userId: () => userId() });
   const copyAction = makeCopyAction();
   const moveToProjectAction = makeMoveToProjectAction();
@@ -70,6 +89,9 @@ export const useBlockEntityCommands = (
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
   const favoriteAction = makeFavoriteAction();
+  const muteAction = makeMuteAction({
+    notificationSource: () => notificationSource,
+  });
   const addTagAction = makeAddTagAction();
 
   const allProperties = useAllProperties();
@@ -82,7 +104,7 @@ export const useBlockEntityCommands = (
   const assignees = () => propertyById(SYSTEM_PROPERTY_IDS.ASSIGNEES);
 
   const getEntity = (): EntityData | undefined => {
-    const provided = resolveEntity?.();
+    const provided = options.resolveEntity?.();
     if (provided) return provided;
     const item = quickAccess.getById(blockId);
     if (item?.kind === 'entity') return item.data;
@@ -107,7 +129,7 @@ export const useBlockEntityCommands = (
   // use-soup-navigation-hotkeys.
   const canUseMarkDoneHotkey = () => {
     const referredFrom = splitPanel?.handle.referredFrom();
-    return referredFrom === 'inbox' || referredFrom === 'mail';
+    return referredFrom === 'home' || referredFrom === 'mail';
   };
 
   // The canvas block binds 'h' to its hand tool in this same scope
@@ -124,13 +146,20 @@ export const useBlockEntityCommands = (
   };
 
   /** Follows the list's next row into this split, as the triage flow does. */
-  const advanceSplitTo = (nextEntity: EntityData) => {
+  const advanceSplitTo = ({
+    entity: nextEntity,
+  }: EntityActionNavigationEvent) => {
     const splitHandle = splitPanel?.handle;
     if (!splitHandle) return;
+    if (!nextEntity) {
+      return;
+    }
+
     void openEntityInSplitFromUnifiedList(nextEntity, {
       splitHandle,
       mergeHistory: true,
       referredFrom: splitHandle.referredFrom(),
+      notificationSource,
     });
   };
 
@@ -192,7 +221,7 @@ export const useBlockEntityCommands = (
   };
 
   createEffect(() => {
-    const scopeId = blockHotkeyScopeSignal.get();
+    const scopeId = options.scopeId ?? blockHotkeyScopeSignal.get();
     if (!scopeId) return;
 
     const group = createHotkeyGroup();
@@ -287,6 +316,49 @@ export const useBlockEntityCommands = (
       condition: () => {
         const entity = getEntity();
         return entity !== undefined && favoriteAction.canExecute(entity);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
+    // Mute notifications (command menu only, no keybinding)
+    registerHotkey({
+      scopeId,
+      description: 'Snooze notifications…',
+      keywords: ['pause', 'morning', 'weekend', 'notifications'],
+      keyDownHandler: () => {
+        const entity = getEntity();
+        if (!entity || !muteAction.canExecute(entity)) return false;
+        muteAction.snooze([entity]);
+        return true;
+      },
+      condition: () => {
+        const entity = getEntity();
+        return entity !== undefined && muteAction.canExecute(entity);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
+    registerHotkey({
+      hotkeyToken: TOKENS.entity.action.mute,
+      scopeId,
+      description: () => {
+        const entity = getEntity();
+        return entity && muteAction.isMuted(entity)
+          ? 'Unmute notifications'
+          : 'Mute notifications';
+      },
+      keyDownHandler: () => {
+        const entity = getEntity();
+        if (!entity) return false;
+        if (!muteAction.canExecute(entity)) return false;
+        void muteAction.execute([entity]);
+        return true;
+      },
+      condition: () => {
+        const entity = getEntity();
+        return entity !== undefined && muteAction.canExecute(entity);
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],

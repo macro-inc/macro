@@ -206,7 +206,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     });
 
     let notification_reader_queue = SqsQueue::new(
-        aws_sdk_sqs::Client::from_conf(sqs_config),
+        aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
         "test-notification-queue".to_string(),
     );
     let notification_reader_service = NotificationReaderService {
@@ -233,7 +233,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         "test-bucket",
         "test-docx-bucket",
     );
-    let document_repo = documents::outbound::pg_document_repo::PgDocumentRepo::new(pool.clone());
+    let document_repo = documents::outbound::pg_document_repo::PgDocumentRepo::new(
+        pool.clone(),
+        entity_registry_db_utils::OwnedEntityRegistrar::new(
+            entity_registry::OwnerGrantPolicy::new(bots::outbound::pg_bots_repo::PgBotsRepo::new(
+                pool.clone(),
+            )),
+        ),
+    );
     let cloudfront_config = documents::domain::models::CloudFrontConfig {
         distribution_url: "https://test.cloudfront.net".to_string(),
         signer_public_key_id: "test-key-id".to_string(),
@@ -287,6 +294,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         sync_service_client.as_ref().clone(),
         test_editing_client,
         "test-jwt-secret".to_string(),
+        ai_tools::build_message_service_without_side_effects(
+            pool.clone(),
+            std::sync::Arc::new(test_lexical_client.clone()),
+        ),
     );
 
     let search_service_client = Arc::new(search_service_client);
@@ -316,6 +327,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         user_email_service.clone(),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         entity_access_service.clone(),
+        Arc::new(test_lexical_client.clone()),
     );
 
     let call_service = call::domain::service::CallServiceImpl::new(
@@ -353,6 +365,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         user_email_service,
     );
 
+    let initiative_tool_context = ai_tools::build_initiative_tool_context(
+        pool.clone(),
+        &document_tool_context,
+        properties_service.clone(),
+        entity_access_service.clone(),
+        aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
+        macro_event_broker.clone(),
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
@@ -369,7 +390,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         call_tool_context: call_tool_context.clone(),
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             pool.clone(),
-            "http://localhost:0".to_string(),
+            macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
         ),
         notification_tool_context: notification_tool_context.clone(),
@@ -390,6 +411,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             "http://localhost:8086".to_string(),
         ),
         project_tool_context,
+        initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),
         skill_tool_context: ai_tools::build_skill_tool_context(
@@ -401,7 +423,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         recorder: ai_usage::pg_recorder(pool.clone()),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
-    let all_tools = ai_tools::all_tools();
+    let all_tools = ai_tools::tools_for(ai_tools::AiHost::Chat);
     let all_tools_toolset = all_tools.toolset.clone();
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
         Arc::new(all_tools.prompt.to_string());
@@ -465,7 +487,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let projection_generator =
         ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
-            ai_tools::all_tools(),
+            ai_tools::tools_for(ai_tools::AiHost::Chat),
         );
 
     let projection_notifier =
@@ -497,6 +519,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 default_user_id: None,
             },
             macro_authorization::NoBotAuthorizer,
+            macro_authorization::NoUserApiKeyAuthorizer,
         )));
 
     let user_permissions_service = Arc::new(
@@ -513,6 +536,16 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         search_service_client,
         email_service_client_external,
         authorization_state: authorization_state.clone(),
+        ai_billing: Arc::new(ai_billing::domain::BillingServiceImpl::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                (*user_permissions_service).clone(),
+                teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+            ),
+            ai_billing::outbound::PgUsageReader::new(pool.clone()),
+            ai_billing::outbound::PgBillingRepo::new(pool.clone()),
+            ai_billing::outbound::NoOpPaymentGateway,
+            macro_env::Environment::Local,
+        )),
         user_permissions_service,
         config: Arc::new(Config::new_empty_for_test()),
         internal_api_key: InternalApiKey::Comptime("testing"),

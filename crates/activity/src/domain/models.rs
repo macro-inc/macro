@@ -23,6 +23,7 @@ use std::sync::LazyLock;
 
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::CreationPrincipal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -62,6 +63,15 @@ impl Attribution {
         Self::Delegated { actor, subject }
     }
 
+    /// Delegated to `on_behalf_of` when set, otherwise direct. Mirrors how
+    /// events carry attribution as an actor plus an optional subject.
+    pub fn new(actor: Actor<'static>, on_behalf_of: Option<MacroUserIdStr<'static>>) -> Self {
+        match on_behalf_of {
+            Some(subject) => Self::Delegated { actor, subject },
+            None => Self::Direct { actor },
+        }
+    }
+
     /// Who mechanically acted.
     pub fn actor(&self) -> Actor<'static> {
         match self {
@@ -74,6 +84,18 @@ impl Attribution {
         match self {
             Self::Direct { .. } => None,
             Self::Delegated { subject, .. } => Some(subject.clone()),
+        }
+    }
+}
+
+impl From<&CreationPrincipal> for Attribution {
+    fn from(principal: &CreationPrincipal) -> Self {
+        match principal {
+            CreationPrincipal::User(user) => Self::direct(Actor::new_from_user(user.clone())),
+            CreationPrincipal::BotForUser { bot, user } => {
+                Self::delegated(Actor::new_from_bot(*bot), user.clone())
+            }
+            CreationPrincipal::TeamBot { bot, .. } => Self::direct(Actor::new_from_bot(bot.get())),
         }
     }
 }
@@ -129,6 +151,13 @@ pub struct CallStart {
     pub call_id: String,
 }
 
+/// Task referenced by a project membership event. No task name is stored.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InitiativeTaskChange {
+    /// The task document. Readers must verify task visibility before exposing this reference.
+    pub task_id: String,
+}
+
 /// The durable action vocabulary — what the `action`/`action_payload`
 /// columns hold. [`Action::to_columns`] is the storage codec, written out
 /// explicitly; the future read path adds the inverse next to it.
@@ -174,6 +203,10 @@ pub enum Action {
     ParticipantRemoved(ParticipantChange),
     /// A call was started in the entity (channel).
     CallStarted(CallStart),
+    /// A task was added to an initiative.
+    TaskAdded(InitiativeTaskChange),
+    /// A task was removed from an initiative.
+    TaskRemoved(InitiativeTaskChange),
 }
 
 impl From<CommonAction> for Action {
@@ -226,6 +259,7 @@ impl Action {
                 payload(change)
             }
             Action::CallStarted(start) => payload(start),
+            Action::TaskAdded(change) | Action::TaskRemoved(change) => payload(change),
         };
         (tag, payload)
     }
@@ -263,6 +297,8 @@ impl Action {
             ActionTag::ParticipantAdded => Ok(Action::ParticipantAdded(parsed(payload)?)),
             ActionTag::ParticipantRemoved => Ok(Action::ParticipantRemoved(parsed(payload)?)),
             ActionTag::CallStarted => Ok(Action::CallStarted(parsed(payload)?)),
+            ActionTag::TaskAdded => Ok(Action::TaskAdded(parsed(payload)?)),
+            ActionTag::TaskRemoved => Ok(Action::TaskRemoved(parsed(payload)?)),
         }
     }
 }

@@ -4,6 +4,8 @@ use model_entity::{Entity, EntityType};
 /// GraphQL representation of Soup entity types.
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum GraphqlSoupEntityType {
+    /// Initiative entity, presented as a project in the frontend.
+    Initiative,
     /// Document entity.
     Document,
     /// Chat entity.
@@ -26,6 +28,8 @@ pub enum GraphqlSoupEntityType {
     CalendarEvent,
     /// Reminder entity.
     Reminder,
+    /// AI coding agent session entity.
+    AgentSession,
 }
 
 /// Canonical entity types accepted by cross-entity APIs.
@@ -65,6 +69,10 @@ pub enum GraphqlEntityType {
     Skill,
     /// AI coding agent session entity.
     AgentSession,
+    /// Scheduled action entity.
+    ScheduledAction,
+    /// Initiative entity.
+    Initiative,
 }
 
 impl GraphqlSoupEntityType {
@@ -90,7 +98,14 @@ impl GraphqlSoupEntityType {
             EntityType::ForeignEntity => Self::ForeignEntity,
             EntityType::CalendarEvent => Self::CalendarEvent,
             EntityType::Reminder => Self::Reminder,
-            _ => return None,
+            EntityType::AgentSession => Self::AgentSession,
+            EntityType::Initiative => Self::Initiative,
+            EntityType::User
+            | EntityType::Team
+            | EntityType::StaticFile
+            | EntityType::CrmContact
+            | EntityType::Skill
+            | EntityType::ScheduledAction => return None,
         })
     }
 
@@ -108,6 +123,8 @@ impl GraphqlSoupEntityType {
             Self::ForeignEntity => EntityType::ForeignEntity,
             Self::CalendarEvent => EntityType::CalendarEvent,
             Self::Reminder => EntityType::Reminder,
+            Self::AgentSession => EntityType::AgentSession,
+            Self::Initiative => EntityType::Initiative,
         }
     }
 }
@@ -133,6 +150,8 @@ impl GraphqlEntityType {
             EntityType::Reminder => Self::Reminder,
             EntityType::Skill => Self::Skill,
             EntityType::AgentSession => Self::AgentSession,
+            EntityType::ScheduledAction => Self::ScheduledAction,
+            EntityType::Initiative => Self::Initiative,
         }
     }
 
@@ -161,6 +180,8 @@ impl GraphqlEntityType {
             Self::Reminder => EntityType::Reminder,
             Self::Skill => EntityType::Skill,
             Self::AgentSession => EntityType::AgentSession,
+            Self::ScheduledAction => EntityType::ScheduledAction,
+            Self::Initiative => EntityType::Initiative,
         }
     }
 }
@@ -198,5 +219,36 @@ impl GraphqlCacheDeletion {
             graphql_type_name: graphql_type_name.into(),
             entity_id: entity_id.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn scheduled_action_round_trips_through_graphql_entity_type() {
+        let graphql = GraphqlEntityType::new(EntityType::ScheduledAction);
+        assert!(matches!(graphql, GraphqlEntityType::ScheduledAction));
+        assert!(matches!(graphql.into_model(), EntityType::ScheduledAction));
+    }
+
+    #[test]
+    fn scheduled_action_is_not_a_soup_entity_type() {
+        assert!(GraphqlSoupEntityType::try_new(EntityType::ScheduledAction).is_none());
+    }
+
+    #[test]
+    fn initiative_round_trips_through_graphql_entity_type() {
+        let graphql = GraphqlEntityType::new(EntityType::Initiative);
+        assert!(matches!(graphql, GraphqlEntityType::Initiative));
+        assert!(matches!(graphql.into_model(), EntityType::Initiative));
+    }
+
+    #[test]
+    fn initiative_round_trips_through_soup_entity_type() {
+        let graphql = GraphqlSoupEntityType::try_new(EntityType::Initiative).unwrap();
+        assert!(matches!(graphql, GraphqlSoupEntityType::Initiative));
+        assert_eq!(graphql.into_model(), EntityType::Initiative);
     }
 }

@@ -2,14 +2,13 @@ import {
   edgeToCollisionData,
   getEdgeEndVectors,
 } from '@block-canvas/util/connectors';
-import { createBlockSignal, useBlockId } from '@core/block';
 import { filterMapAsync } from '@core/util/list';
 
-import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import { nanoid } from 'nanoid';
 import { batch, createMemo } from 'solid-js';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import {
   type Canvas,
   type CanvasEdge,
@@ -22,7 +21,7 @@ import {
   NodeSchema,
   type PencilNode,
 } from '../model/CanvasModel';
-import { blockDataSignal } from '../signal/canvasBlockData';
+import { saveCanvasDocument } from '../queries/canvas-document';
 import { useSelection } from '../signal/selection';
 import { untrackMentionsInTextNode } from '../util/mentions';
 import { Rect, type Rectangle } from '../util/rectangle';
@@ -30,32 +29,40 @@ import { createRenderQueue } from '../util/renderQueue';
 import { sharedInstance } from '../util/sharedInstance';
 import { type Vector2, vec2 } from '../util/vector2';
 import { useGetEdge, useGetGroup, useGetNode } from './getNodeEdge';
-import { edgesStore, groupStore, nodesStore } from './nodesStore';
 
 export const renderQueue = sharedInstance(() => {
-  return createRenderQueue(nodesStore, edgesStore, groupStore);
+  const state = useCanvasDocument().state;
+  return createRenderQueue(
+    state.stores.nodes,
+    state.stores.edges,
+    state.stores.groups,
+    state.signals.highestOrder[1]
+  );
 });
 
 export const previewRenderQueue = sharedInstance(() => {
-  return createRenderQueue(nodesStore, edgesStore, groupStore);
+  const state = useCanvasDocument().state;
+  return createRenderQueue(
+    state.stores.nodes,
+    state.stores.edges,
+    state.stores.groups,
+    state.signals.highestOrder[1]
+  );
 });
 
 export const debugRenderQueue = sharedInstance(() => {
-  return createRenderQueue(nodesStore, edgesStore, groupStore);
+  const state = useCanvasDocument().state;
+  return createRenderQueue(
+    state.stores.nodes,
+    state.stores.edges,
+    state.stores.groups,
+    state.signals.highestOrder[1]
+  );
 });
-
-export const highestOrderSignal = createBlockSignal<number>(0);
-
-const lastCreatedNodeId = createBlockSignal<CanvasId>();
 
 // TODO (seamus) : This pending updates thing is a stop gap until the save logic
 // is refined and integrated into undo/redo system.
 // Since it's a temp. solution, I've left it as a shared signal between nodes and edges -Ness
-export const pendingUpdates = createBlockSignal(false);
-
-// I really should just update the canvasFile signal as that's the pattern I intend to use for PDF
-// But I'm not sure what kind of effects the derived signal would have so I'll just play it safe
-export const currentSavedFile = createBlockSignal<Blob | null>(null);
 
 export interface OperationOptions {
   autosave?: boolean;
@@ -65,8 +72,9 @@ export interface OperationOptions {
 }
 
 export const useSetAllNodes = sharedInstance(() => {
-  const [, setStore] = nodesStore;
-  const [, setPendingUpdates] = pendingUpdates;
+  const [, setStore] = useCanvasDocument().state.stores.nodes;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
   const saveCanvasData = useSaveCanvasData();
   const rq = renderQueue();
 
@@ -83,13 +91,14 @@ export const useSetAllNodes = sharedInstance(() => {
 });
 
 export const useDeleteNode = sharedInstance(() => {
-  const [, setPendingUpdates] = pendingUpdates;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
   const saveCanvasData = useSaveCanvasData();
   const getNode = useGetNode();
   const getEdge = useGetEdge();
   const disconnectEdge = useEdgeUtils().disconnectEdge;
   const rq = renderQueue();
-  const blockId = useBlockId();
+  const blockId = useCanvasDocument().documentId();
   const untrackMentionsInTextNode_ = createCallback(untrackMentionsInTextNode);
 
   return createCallback(async (id: CanvasId, opts?: OperationOptions) => {
@@ -114,8 +123,9 @@ export const useDeleteNode = sharedInstance(() => {
 });
 
 export const useCreateNode = sharedInstance(() => {
-  const [nodes, setStore] = nodesStore;
-  const [, setPendingUpdates] = pendingUpdates;
+  const [nodes, setStore] = useCanvasDocument().state.stores.nodes;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
   const saveCanvasData = useSaveCanvasData();
   const { selectNode, deselectAll } = useSelection();
   const rq = renderQueue();
@@ -155,9 +165,10 @@ export const useCreateNode = sharedInstance(() => {
 });
 
 export const useUpdateNode = sharedInstance(() => {
-  const [store, setStore] = nodesStore;
+  const [store, setStore] = useCanvasDocument().state.stores.nodes;
   const saveCanvasData = useSaveCanvasData();
-  const [, setPendingUpdates] = pendingUpdates;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
 
   return createCallback(
     (id: CanvasId, updates: Partial<CanvasNode>, opts?: OperationOptions) => {
@@ -181,8 +192,10 @@ export const useUpdateNode = sharedInstance(() => {
 });
 
 export const useCanvasNodes = sharedInstance(() => {
-  const [pending, setPending] = pendingUpdates;
-  const [lastCreated, setLastCreated] = lastCreatedNodeId;
+  const [pending, setPending] =
+    useCanvasDocument().state.signals.pendingUpdates;
+  const [lastCreated, setLastCreated] =
+    useCanvasDocument().state.signals.lastCreatedNodeId;
   const saveCanvasData = useSaveCanvasData();
   const getNode = useGetNode();
   const rq = renderQueue();
@@ -219,8 +232,9 @@ export const useCanvasNodes = sharedInstance(() => {
 });
 
 export const useSetAllEdges = sharedInstance(() => {
-  const [, setStore] = edgesStore;
-  const [, setPendingUpdates] = pendingUpdates;
+  const [, setStore] = useCanvasDocument().state.stores.edges;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
   const saveCanvasData = useSaveCanvasData();
   const rq = renderQueue();
 
@@ -237,7 +251,8 @@ export const useSetAllEdges = sharedInstance(() => {
 });
 
 export const useDeleteEdge = sharedInstance(() => {
-  const [, setPendingUpdates] = pendingUpdates;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
   const saveCanvasData = useSaveCanvasData();
   const getEdge = useGetEdge();
   const getNode = useGetNode();
@@ -271,8 +286,9 @@ export const useDeleteEdge = sharedInstance(() => {
 });
 
 export const useCreateEdge = sharedInstance(() => {
-  const [, setStore] = edgesStore;
-  const [, setPendingUpdates] = pendingUpdates;
+  const [, setStore] = useCanvasDocument().state.stores.edges;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
   const saveCanvasData = useSaveCanvasData();
   const getNode = useGetNode();
   const updateNode = useUpdateNode();
@@ -318,9 +334,10 @@ export const useCreateEdge = sharedInstance(() => {
 });
 
 export const useUpdateEdge = sharedInstance(() => {
-  const [store, setStore] = edgesStore;
+  const [store, setStore] = useCanvasDocument().state.stores.edges;
   const saveCanvasData = useSaveCanvasData();
-  const [, setPendingUpdates] = pendingUpdates;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
   const getEdge = useGetEdge();
   const getNode = useGetNode();
   const updateNode = useUpdateNode();
@@ -372,7 +389,8 @@ export const useUpdateEdge = sharedInstance(() => {
 });
 
 export const useCanvasEdges = sharedInstance(() => {
-  const [pending, setPending] = pendingUpdates;
+  const [pending, setPending] =
+    useCanvasDocument().state.signals.pendingUpdates;
   const getEdge = useGetEdge();
   const saveCanvasData = useSaveCanvasData();
   const rq = renderQueue();
@@ -526,8 +544,9 @@ export const useBoundingBox = sharedInstance(() => {
 });
 
 export const useSetAllGroups = sharedInstance(() => {
-  const [, setStore] = groupStore;
-  const [, setPendingUpdates] = pendingUpdates;
+  const [, setStore] = useCanvasDocument().state.stores.groups;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
   const saveCanvasData = useSaveCanvasData();
 
   return createCallback((groups: CanvasGroup[], opts?: OperationOptions) => {
@@ -538,7 +557,8 @@ export const useSetAllGroups = sharedInstance(() => {
 });
 
 export const useDeleteGroup = sharedInstance(() => {
-  const [, setPendingUpdates] = pendingUpdates;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
   const saveCanvasData = useSaveCanvasData();
   const getNode = useGetNode();
   const getEdge = useGetEdge();
@@ -578,8 +598,9 @@ export const useDeleteGroup = sharedInstance(() => {
 });
 
 export const useCreateGroup = sharedInstance(() => {
-  const [groups, setStore] = groupStore;
-  const [, setPendingUpdates] = pendingUpdates;
+  const [groups, setStore] = useCanvasDocument().state.stores.groups;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
   const saveCanvasData = useSaveCanvasData();
   const { selectedNodeIds, selectedEdgeIds, selectedNodes } = useSelection();
   const updateNode = useUpdateNode();
@@ -630,9 +651,10 @@ export const useCreateGroup = sharedInstance(() => {
 });
 
 export const useUpdateGroup = sharedInstance(() => {
-  const [store, setStore] = groupStore;
+  const [store, setStore] = useCanvasDocument().state.stores.groups;
   const saveCanvasData = useSaveCanvasData();
-  const [, setPendingUpdates] = pendingUpdates;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
 
   return createCallback(
     (id: CanvasId, updates: Partial<CanvasGroup>, opts?: OperationOptions) => {
@@ -645,9 +667,10 @@ export const useUpdateGroup = sharedInstance(() => {
 });
 
 export const useAddNodeToGroup = sharedInstance(() => {
-  const [store, setStore] = groupStore;
+  const [store, setStore] = useCanvasDocument().state.stores.groups;
   const saveCanvasData = useSaveCanvasData();
-  const [, setPendingUpdates] = pendingUpdates;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
 
   return createCallback(
     (id: CanvasId, nodeId: string, opts?: OperationOptions) => {
@@ -661,9 +684,10 @@ export const useAddNodeToGroup = sharedInstance(() => {
 });
 
 export const useAddEdgeToGroup = sharedInstance(() => {
-  const [store, setStore] = groupStore;
+  const [store, setStore] = useCanvasDocument().state.stores.groups;
   const saveCanvasData = useSaveCanvasData();
-  const [, setPendingUpdates] = pendingUpdates;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
 
   return createCallback(
     (id: CanvasId, edgeId: string, opts?: OperationOptions) => {
@@ -677,7 +701,8 @@ export const useAddEdgeToGroup = sharedInstance(() => {
 });
 
 export const useCanvasGroups = sharedInstance(() => {
-  const [pending, setPending] = pendingUpdates;
+  const [pending, setPending] =
+    useCanvasDocument().state.signals.pendingUpdates;
   const saveCanvasData = useSaveCanvasData();
   const getGroup = useGetGroup();
   const rq = renderQueue();
@@ -717,12 +742,12 @@ export const useLoadCanvasData = sharedInstance(() => {
   const nodes = useCanvasNodes();
   const edges = useCanvasEdges();
   const groups = useCanvasGroups();
-  const setHighestOrder = highestOrderSignal.set;
+  const setHighestOrder = useCanvasDocument().state.signals.highestOrder[1];
   const assertLayerAndSortOrder = (entity: CanvasEntity) => {
     if (entity.layer === undefined) entity.layer = 0;
     if (entity.sortOrder === undefined) entity.sortOrder = 0;
   };
-  return async (json: Canvas) => {
+  return async (json: Canvas, shouldApply: () => boolean = () => true) => {
     let highestSortOrder = 0;
 
     const nodeMap = await filterMapAsync<any, CanvasNode>(
@@ -742,6 +767,8 @@ export const useLoadCanvasData = sharedInstance(() => {
         }
       }
     );
+    if (!shouldApply()) return false;
+
     const edgeMap = await filterMapAsync<any, CanvasEdge>(
       json.edges || [],
       async (edge) => {
@@ -753,6 +780,8 @@ export const useLoadCanvasData = sharedInstance(() => {
         }
       }
     );
+    if (!shouldApply()) return false;
+
     const groupMap = await filterMapAsync<any, CanvasGroup>(
       json.groups || [],
       async (group) => {
@@ -764,18 +793,20 @@ export const useLoadCanvasData = sharedInstance(() => {
         }
       }
     );
+    if (!shouldApply()) return false;
 
     nodes.initialize(nodeMap, { initialize: true });
     edges.initialize(edgeMap, { initialize: true });
     groups.initialize(groupMap, { initialize: true });
     setHighestOrder(highestSortOrder);
+    return true;
   };
 });
 
 export const useExportCanvasData = sharedInstance(() => {
   const getNode = useGetNode();
   const getEdge = useGetEdge();
-  const [canvasGroups] = groupStore;
+  const [canvasGroups] = useCanvasDocument().state.stores.groups;
   const rq = renderQueue();
   return (): Canvas => {
     const nodes: CanvasNode[] = [];
@@ -807,29 +838,16 @@ export const useExportCanvasData = sharedInstance(() => {
 // Immediate save function (not debounced)
 export const useSaveCanvasDataImmediate = sharedInstance(() => {
   const exportCanvasData = useExportCanvasData();
-  const [, setPendingUpdates] = pendingUpdates;
-  const setCurrentSavedFile = currentSavedFile.set;
+  const [, setPendingUpdates] =
+    useCanvasDocument().state.signals.pendingUpdates;
+  const setCurrentSavedFile =
+    useCanvasDocument().state.signals.currentSavedFile[1];
+  const documentId = useCanvasDocument().documentId();
 
   return createCallback(async () => {
-    const dssFile = blockDataSignal()?.dssFile;
-    if (!dssFile) {
-      console.error('no dss file');
-      return;
-    }
-    const { documentId } = dssFile.getMetadata();
-
     const canvas = exportCanvasData();
-    const encoder = new TextEncoder();
-    const buffer = encoder.encode(JSON.stringify(canvas));
-
-    const file = new Blob([buffer], { type: 'application/x-macro-canvas' });
-
-    const saveRes = await storageServiceClient.simpleSave({
-      documentId,
-      file,
-    });
-
-    if (saveRes.isErr()) {
+    const { file, saved } = await saveCanvasDocument(documentId, canvas);
+    if (!saved) {
       console.error('error on canvas save');
     }
 
@@ -839,7 +857,7 @@ export const useSaveCanvasDataImmediate = sharedInstance(() => {
   });
 });
 
-// save block-level canvas data to DSS (debounced)
+// Save document-level canvas data to DSS (debounced).
 export const useSaveCanvasData = sharedInstance(() => {
   const saveImmediate = useSaveCanvasDataImmediate();
   return debounce(saveImmediate, 1500);

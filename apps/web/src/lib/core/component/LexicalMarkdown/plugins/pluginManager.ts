@@ -21,6 +21,7 @@ import { checklistPlugin } from './checklist/';
 import { customDeletePlugin } from './custom-delete';
 import { markdownShortcutsPlugin } from './markdown-shortcuts';
 import { normalizeTripleClickPlugin } from './normalize-triple-click';
+import { wordNavigationPlugin } from './word-navigation/wordNavigationPlugin';
 
 export type PluginFunction = (editor: LexicalEditor) => () => void;
 
@@ -66,9 +67,17 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
     },
 
     markdownShortcuts() {
+      // Editor types register a subset of the nodes, and Lexical refuses a
+      // shortcut whose node is missing, so only offer the transformers this
+      // editor can actually produce.
+      const transformers = ALL_TRANSFORMERS.filter(
+        (transformer) =>
+          !('dependencies' in transformer) ||
+          editor.hasNodes(transformer.dependencies)
+      );
       cleanupFunctions.push(
         markdownShortcutsPlugin({
-          transformers: ALL_TRANSFORMERS,
+          transformers,
           triggerOnEnterTransformers: [HR, CODE],
         })(editor)
       );
@@ -81,6 +90,7 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
       // selection normalization the way the newer RichTextExtension does, so
       // register it explicitly here.
       cleanupFunctions.push(normalizeTripleClickPlugin()(editor));
+      cleanupFunctions.push(wordNavigationPlugin()(editor));
       return pluginManager;
     },
 

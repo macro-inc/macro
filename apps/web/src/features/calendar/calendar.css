@@ -8,7 +8,7 @@
 	--fc-event-bg-color: color-mix(
 		in oklch,
 		var(--color-calendar) 5%,
-		var(--color-surface)
+		var(--color-panel)
 	);
 	--fc-event-border-color: var(--color-calendar);
 	--fc-event-text-color: var(--color-calendar);
@@ -219,16 +219,21 @@
 	margin-left: 0.375rem;
 }
 
+/* Rich, opaque blocks keep busy schedules readable. Bound lightness for
+   dark-text contrast and boost chroma without turning neutral calendars colorful. */
 .calendar-view .fc .fc-event {
-	--fc-event-bg-color: var(--color-panel);
-	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
-	--fc-event-text-color: var(--color-ink-muted);
-	border-color: var(--fc-event-border-color);
+	--calendar-event-fill: oklch(from var(--event-calendar-color, var(--color-calendar)) clamp(0.67, l, 0.72) min(calc(c * 1.65), 0.2) h);
+	--calendar-event-ink: oklch(0.2 0 0);
+	--fc-event-bg-color: var(--calendar-event-fill);
+	--fc-event-border-color: var(--color-panel);
+	--fc-event-text-color: var(--calendar-event-ink);
+	--calendar-event-ring: 0 0 0 0 transparent;
+	border: 1px solid var(--fc-event-border-color);
+	border-radius: 0.375rem;
 	background-color: var(--fc-event-bg-color);
 	color: var(--fc-event-text-color);
-	transition:
-		box-shadow 120ms ease-out,
-		opacity 120ms ease-out;
+	box-shadow: var(--calendar-event-ring);
+	transition: filter 120ms ease-out, opacity 120ms ease-out;
 }
 
 .calendar-view .fc .fc-event.fc-event-draggable {
@@ -281,16 +286,28 @@
 	pointer-events: none;
 }
 
+.calendar-view
+	.fc
+	.fc-timegrid-col-events
+	.calendar-multi-day-selection-preview-event,
+.calendar-view
+	.fc
+	.fc-timegrid-bg
+	.calendar-multi-day-selection-preview-event,
+.calendar-view
+	.fc
+	.fc-timegrid-col-bg
+	.calendar-multi-day-selection-preview-event {
+	display: none;
+}
+
 .calendar-view .fc .fc-highlight {
 	inset: 2px;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-highlight {
-	top: 1.5rem;
-	right: 0.375rem;
-	bottom: auto;
-	left: 0.375rem;
-	height: 1rem;
+/* All-day and month selections render as a stacked preview chip. */
+.calendar-view .fc .fc-daygrid-body .fc-highlight {
+	display: none;
 }
 
 /* Timed selections already render an event mirror; hide its backing fill. */
@@ -382,14 +399,14 @@
 }
 
 .calendar-view .fc .calendar-event-content-layout {
-	padding: 1px 3px;
+	padding: 2px 6px;
 }
 
 .calendar-view .fc .calendar-event-content-layout-single-line {
 	flex-direction: row;
 	align-items: center;
 	gap: 0.25rem;
-	padding: 1px 3px;
+	padding: 2px 6px;
 }
 
 .calendar-view
@@ -404,24 +421,6 @@
 	.calendar-event-content-layout-single-line
 	.calendar-event-location {
 	display: none;
-}
-
-.calendar-view .fc .calendar-event-color-bar {
-	position: absolute;
-	top: 2px;
-	left: 2px;
-	z-index: 1;
-	width: 4px;
-	height: min(2rem, 70%);
-	border-radius: 9999px;
-	background: var(--event-calendar-color, var(--color-calendar));
-}
-
-.calendar-view
-	.fc
-	.calendar-event-content-with-color-bar
-	.calendar-event-content-layout {
-	padding-left: 10px;
 }
 
 /* Single-day timed events use a compact dot treatment in the month grid. */
@@ -464,39 +463,15 @@
 	background: transparent;
 }
 
-.calendar-view
-	.fc
-	.fc-event:not(.fc-daygrid-dot-event):not(
-		:has(.calendar-event-content-selected)
-	):has([data-response-status="accepted"]) {
-	--fc-event-bg-color: var(--color-surface);
-	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
-	background-image: linear-gradient(
-		color-mix(
-			in oklch,
-			var(--event-calendar-color, var(--color-calendar)) 25%,
-			transparent
-		),
-		color-mix(
-			in oklch,
-			var(--event-calendar-color, var(--color-calendar)) 25%,
-			transparent
-		)
-	);
-	--fc-event-text-color: var(--color-ink-muted);
+/* Unanswered and tentative invitations stay filled, with a softer tint. */
+.calendar-view .fc .fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content:is([data-response-status="tentative"], [data-response-status="needs_action"])) {
+	--fc-event-bg-color: color-mix(in oklch, var(--calendar-event-fill) 85%, white);
 }
 
 .calendar-view
 	.fc
-	.fc-event:has(.calendar-event-content[data-response-status="tentative"]) {
-	--fc-event-bg-color: var(--color-panel);
-	border-style: dashed;
-}
-
-.calendar-view
-	.fc
-	.fc-event:has(.calendar-event-content[data-response-status="declined"]) {
-	opacity: 0.5;
+	.fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content[data-response-status="declined"]) {
+	--fc-event-bg-color: oklch(from var(--calendar-event-fill) l calc(c * 0.25) h);
 }
 
 .calendar-view
@@ -506,11 +481,21 @@
 	text-decoration: line-through;
 }
 
+/* The month grid's dot treatment sets its colors directly rather than
+   through the event variables, so the solid fill must too. A selected chip
+   keeps its usual accent rendering. */
 .calendar-view
 	.fc
-	.fc-event:has(.calendar-event-content[data-response-status="needs_action"]) {
-	--fc-event-bg-color: transparent;
-	--fc-event-text-color: var(--color-ink-muted);
+	.fc-dayGridMonth-view
+	.fc-daygrid-dot-event.calendar-event-out-of-office:not(
+		:has(.calendar-event-content-selected)
+	) {
+	background-color: var(--fc-event-bg-color);
+	color: var(--fc-event-text-color);
+}
+
+.calendar-view .fc .calendar-event-out-of-office .calendar-event-response-dot {
+	display: none;
 }
 
 .calendar-view .fc .fc-event:hover {
@@ -520,19 +505,17 @@
 .calendar-view .fc .fc-event:focus-visible {
 	z-index: 4;
 	outline: none;
-	box-shadow: 0 0 0 1px var(--color-ink-muted);
+	--calendar-event-ring: 0 0 0 1px var(--color-ink-muted);
 }
 
-.calendar-view .fc .fc-event:focus-visible::after {
-	background: transparent;
-}
+@media (hover: hover) {
+	.calendar-view .fc .fc-event:hover:not(.fc-event-mirror):not(.calendar-multi-day-selection-preview-event):not(:has(.calendar-event-content-selected)) {
+		filter: brightness(0.94);
+	}
 
-.calendar-view .fc .fc-event:hover .calendar-event-content {
-	background-color: var(--color-hover);
-}
-
-.calendar-view .fc .fc-event:focus-visible .calendar-event-content {
-	background-color: var(--color-active);
+	.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-dot-event:hover:not(.calendar-event-out-of-office):not(:has(.calendar-event-content-selected)) {
+		background-color: var(--color-hover);
+	}
 }
 
 .calendar-view .fc .fc-event:has(.calendar-event-content-selected) {
@@ -569,11 +552,79 @@
 
 .calendar-view .fc .fc-timegrid .fc-daygrid-day-frame,
 .calendar-view .fc .fc-timegrid .fc-daygrid-day-events {
-	min-height: 1.5rem;
+	min-height: 3rem;
 }
 
 .calendar-view .fc .fc-timegrid .fc-daygrid-day-events {
 	margin-bottom: 0;
+}
+
+/* Empty create strip after the chip stack, including when events already exist. */
+.calendar-view .fc .fc-timegrid .fc-daygrid-day-bottom {
+	min-height: 1.5rem;
+}
+
+/*
+ * Keep a fixed all-day slot in the scrollgrid so extra chips grow over the
+ * time grid instead of shrinking it and shifting the hour rows.
+ */
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
+		.fc-daygrid-body
+	)
+	> td {
+	position: relative;
+	z-index: 4;
+	height: 3rem;
+	max-height: 3rem;
+	overflow: visible;
+	vertical-align: top;
+	border-bottom-width: 0;
+}
+
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
+		.fc-daygrid-body
+	)
+	.fc-scroller-harness {
+	position: absolute;
+	top: 0;
+	right: 0;
+	left: 0;
+	z-index: 4;
+	height: auto;
+	min-height: 100%;
+	overflow: visible;
+}
+
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
+		.fc-daygrid-body
+	)
+	.fc-daygrid-body,
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
+		.fc-daygrid-body
+	)
+	.fc-daygrid-body
+	> table {
+	height: auto;
+}
+
+.calendar-view .fc .fc-timegrid .fc-daygrid-body {
+	border-bottom: var(--app-border-width) solid var(--fc-border-color);
+}
+
+.calendar-view .fc .fc-timegrid .fc-scrollgrid-section-liquid > td {
+	border-top-width: 0;
 }
 
 .calendar-view .fc .fc-timegrid-divider {

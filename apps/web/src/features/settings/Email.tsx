@@ -7,11 +7,10 @@ import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
-  ENABLE_EMAIL_SIGNATURES_FLAG,
-  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
-  ENABLE_MULTI_INBOX_OVERRIDE,
+  enableEmailSignatures,
+  enableMultiInbox,
 } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
 import {
@@ -19,12 +18,13 @@ import {
   useEmailLinks,
   useEmailLinksStatus,
 } from '@core/email-link';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import GmailIcon from '@icon/mcp-gmail.svg';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import CalendarSlashIcon from '@phosphor-icons/core/regular/calendar-slash.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import {
   type BackfillProgress,
   estimateEtaSeconds,
@@ -59,9 +59,7 @@ import {
 export function EmailCard() {
   const email = useEmail();
   const userId = useUserId();
-  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
-    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
-  });
+  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
 
   const { query: emailLinksQuery, resyncInbox } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
@@ -418,14 +416,31 @@ function InboxRow(props: {
   onRemove: () => void;
   onTurnOffCalendar: () => void;
 }) {
-  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
-    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
-  });
+  const emailSignaturesFlag = useFeatureFlag(enableEmailSignatures);
   const calendarUiEnabled = useCalendarUiFlag();
   const showSignature = () => isSignatureExpanded(props.link.id);
   const signatureSectionId = `signature-section-${props.link.id}`;
+  const [attachHotkeys, signatureHotkeyScope] =
+    useHotkeyDOMScope('email-signature');
+  let signatureTrigger: HTMLButtonElement | undefined;
+  const closeSignature = () => {
+    if (!showSignature()) return;
+    toggleSignatureExpanded(props.link.id);
+    signatureTrigger?.focus();
+  };
+  registerHotkey({
+    scopeId: signatureHotkeyScope,
+    hotkey: 'escape',
+    description: 'Close signature editor',
+    condition: showSignature,
+    runWithInputFocused: true,
+    keyDownHandler: () => {
+      closeSignature();
+      return true;
+    },
+  });
   return (
-    <div class="bg-surface flex flex-col">
+    <div class="bg-surface flex flex-col" ref={attachHotkeys}>
       <div class="flex items-center justify-between gap-3 min-h-15.25 py-2 px-6">
         <div class="min-w-0 flex flex-col gap-0.5">
           <div class="flex items-center gap-2 min-w-0">
@@ -488,6 +503,7 @@ function InboxRow(props: {
                 variant="outline"
                 size="icon-sm"
                 depth={3}
+                ref={signatureTrigger}
                 onClick={() => toggleSignatureExpanded(props.link.id)}
                 aria-label={`Edit signature for ${props.link.email_address}`}
                 aria-expanded={showSignature()}
@@ -581,7 +597,7 @@ function InboxRow(props: {
               onClick={props.onRemove}
               aria-label={`Remove ${props.link.email_address}`}
             >
-              <XIcon class="size-4" />
+              <TrashIcon class="size-4" />
             </Button>
           </Tooltip>
         </div>
@@ -590,7 +606,7 @@ function InboxRow(props: {
         when={emailSignaturesFlag().enabled && props.isOwn && showSignature()}
       >
         <div id={signatureSectionId} class="px-6 pb-4">
-          <SignatureSection link={props.link} />
+          <SignatureSection link={props.link} onClose={closeSignature} />
         </div>
       </Show>
     </div>

@@ -89,6 +89,7 @@ impl IntoResponse for ProjectError {
             | Self::NameTooLong { .. }
             | Self::CannotModifyDeleted
             | Self::RecursiveNesting => StatusCode::BAD_REQUEST,
+            Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 

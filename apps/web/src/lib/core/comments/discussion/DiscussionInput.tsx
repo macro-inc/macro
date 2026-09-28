@@ -1,5 +1,6 @@
 import { InputActionButton } from '@channel/Input/ActionButton';
 import { useInputCommands } from '@channel/Input/context';
+import { createCollapsedInputState } from '@channel/Input/create-collapsed-input-state';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { Input } from '@channel/Input/Input';
 import type {
@@ -13,14 +14,19 @@ import {
   applyInlineFormat,
   applyNodeFormat,
 } from '@channel/Input/utils/formatting';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
+import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
+import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import PaperclipIcon from '@phosphor/paperclip.svg';
 import { isIOS } from '@solid-primitives/platform';
-import { Surface } from '@ui';
+import { CollapsedInput, ComposerSurface } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -39,6 +45,10 @@ export type DiscussionInputProps = InputCallbacks & {
   children?: JSX.Element;
   /** Whether to auto-focus the input on mount. Defaults to `!isMobile()`. */
   autofocus?: boolean;
+  /** Use the channel-style compact mobile composer until tapped. */
+  collapsible?: boolean;
+  /** Blur and collapse after onSend completes; other inputs retain focus. */
+  blurOnSend?: boolean;
 };
 
 function AttachImagesAction() {
@@ -70,7 +80,7 @@ function AttachImagesAction() {
         label="Attach images"
         onClick={() => fileInputRef?.click()}
       >
-        <PaperclipIcon class="size-5" />
+        <PaperclipIcon />
       </InputActionButton>
     </>
   );
@@ -78,28 +88,31 @@ function AttachImagesAction() {
 
 function DefaultActions(props: { input: InputData; isSending: boolean }) {
   return (
-    <Input.Actions>
-      <Input.Actions.Left>
+    <>
+      <Input.Layout.ActionsLeft>
         <AttachImagesAction />
-        <Input.ToggleFormatAction />
+        <Show when={isTouchDevice()}>
+          <Input.ToggleFormatAction />
+        </Show>
         <Show when={isReplyInput(props.input)}>
           <Input.CloseReplyAction />
         </Show>
-      </Input.Actions.Left>
-      <Input.Actions.Right>
+      </Input.Layout.ActionsLeft>
+      <Input.Layout.ActionsRight>
         <Input.SendAction tooltip="Send comment" disabled={props.isSending} />
-      </Input.Actions.Right>
-    </Input.Actions>
+      </Input.Layout.ActionsRight>
+    </>
   );
 }
 
 export function DiscussionInput(props: DiscussionInputProps) {
+  const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   const [value, setValue] = createSignal(props.input.value ?? '');
   const [mentions, setMentions] = createSignal<ItemMention[]>([]);
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isSending, setIsSending] = createSignal(false);
-  const [isFocused, setIsFocused] = createSignal(false);
+  let isInternalRefocus = false;
 
   const inputView = () => ({
     ...props.input,
@@ -145,6 +158,13 @@ export function DiscussionInput(props: DiscussionInputProps) {
 
   // Build the editor handle immediately to ensure lexical is available for commands
   markdownEditor.buildHandle();
+  const { isCompact: oneLineInput } = createComposerLayout(
+    markdownEditor.lexical,
+    {
+      container: layout,
+      mode: () => (isTouchDevice() || showFormatRibbon() ? 'expanded' : 'auto'),
+    }
+  );
 
   const commands = {
     send: async () => {
@@ -154,7 +174,18 @@ export function DiscussionInput(props: DiscussionInputProps) {
       setIsSending(true);
       try {
         await props.onSend?.(snapshot);
+        if (props.blurOnSend) {
+          markdownEditor.controls.blur();
+          collapsedInput.collapse();
+        }
         return true;
+      } catch (error) {
+        toast.failure(
+          error instanceof Error
+            ? error.message
+            : 'Unable to send comment. Your draft has been kept.'
+        );
+        return false;
       } finally {
         setIsSending(false);
       }
@@ -177,20 +208,40 @@ export function DiscussionInput(props: DiscussionInputProps) {
     },
   };
 
+  const collapsedInput = createCollapsedInputState({
+    inputId: () => props.input.id,
+    attachFiles: commands.attachFiles,
+  });
+  const isCollapsed = () => !!props.collapsible && collapsedInput.isCollapsed();
+  const focusEditor = () => {
+    collapsedInput.expand();
+    markdownEditor.controls.focus();
+  };
+
   props.onReady?.({
     clear: () => {
       // On iOS, blur before clearing so dictation finalizes and discards its buffer
-      if (isIOS) {
+      const root = markdownEditor.lexical.getRootElement();
+      if (isIOS && root?.contains(document.activeElement)) {
+        isInternalRefocus = true;
         markdownEditor.controls.blur();
         markdownEditor.controls.clear();
-        requestAnimationFrame(() => markdownEditor.controls.focus());
+        if (props.blurOnSend && isSending()) {
+          // Sending will collapse this input; an iOS refocus would reopen the keyboard.
+          isInternalRefocus = false;
+        } else {
+          requestAnimationFrame(() => {
+            markdownEditor.controls.focus();
+            isInternalRefocus = false;
+          });
+        }
       } else {
         markdownEditor.controls.clear();
       }
       setValue('');
       setMentions([]);
     },
-    focus: () => markdownEditor.controls.focus(),
+    focus: focusEditor,
     send: () => commands.send(),
     attachFiles: async (files: File[]) => {
       // Insert images into the editor
@@ -202,65 +253,94 @@ export function DiscussionInput(props: DiscussionInputProps) {
       markdownEditor.controls.setMarkdown(snapshot.value);
       setMentions(snapshot.mentions);
       setValue(snapshot.value);
-      markdownEditor.controls.focus();
+      focusEditor();
     },
   });
 
   return (
     <Input.Root input={inputView()} commands={commands}>
-      <Surface
+      <Show when={isCollapsed()}>
+        <input
+          ref={collapsedInput.setFilePickerRef}
+          type="file"
+          class="hidden"
+          multiple
+          accept="image/*"
+          onChange={collapsedInput.onFilePickerChange}
+        />
+        <CollapsedInput
+          class="touch:rounded-full touch:island"
+          draft={value()}
+          renderDraft={(draft) => (
+            <StaticMarkdown
+              markdown={draft()}
+              theme={singleLineMarkdownTheme}
+              singleLine
+            />
+          )}
+          placeholder={props.input.placeholder}
+          pending={isSending()}
+          disabled={!value().trim()}
+          getFocusTarget={() => {
+            // Expand synchronously so iOS can focus within the tap gesture.
+            collapsedInput.expand();
+            return markdownEditor.lexical.getRootElement();
+          }}
+          onAttach={collapsedInput.attach}
+          onOpen={collapsedInput.expand}
+          onSend={() => void commands.send()}
+        />
+      </Show>
+      <ComposerSurface
+        class={isCollapsed() ? 'hidden' : 'h-auto'}
         onFocusOut={(event) => {
           const next = event.relatedTarget as Node | null;
           if (next && event.currentTarget.contains(next)) return;
-          setIsFocused(false);
+          if (isInternalRefocus) return;
+          collapsedInput.collapse();
         }}
-        onFocusIn={() => setIsFocused(true)}
-        active={isFocused()}
-        class="rounded-xl bg-surface"
-        depth={2}
-        solid
       >
-        <Input.Layout>
-          <Input.FormatRibbon>
-            <FormatButtons
-              selectionState={() => markdownEditor.selection}
-              onInlineFormat={(format) =>
-                applyInlineFormat(markdownEditor.lexical, format)
-              }
-              onNodeFormat={(format) =>
-                applyNodeFormat(markdownEditor.lexical, format)
-              }
-            />
-          </Input.FormatRibbon>
-          <Input.EditorShell
-            ref={setScrollContainer}
-            onClick={(event) => {
-              if (!isMobile()) {
-                event.stopPropagation();
-                markdownEditor.controls.focus();
-              }
-            }}
-          >
-            <Input.Editor>
-              <MarkdownShell
-                config={markdownEditor}
-                placeholder={inputView().placeholder}
-                initialValue={inputView().value}
-                autofocus={!isMobile() && (props.autofocus ?? true)}
-                class="text-sm"
+        <Input.Layout ref={setLayout} oneLineInput={oneLineInput()}>
+          <Input.Layout.Body>
+            <Input.FormatRibbon>
+              <FormatButtons
+                selectionState={() => markdownEditor.selection}
+                onInlineFormat={(format) =>
+                  applyInlineFormat(markdownEditor.lexical, format)
+                }
+                onNodeFormat={(format) =>
+                  applyNodeFormat(markdownEditor.lexical, format)
+                }
               />
-            </Input.Editor>
-          </Input.EditorShell>
-          <Input.Footer>
-            <Switch>
-              <Match when={props.children}>{props.children}</Match>
-              <Match when>
-                <DefaultActions input={inputView()} isSending={isSending()} />
-              </Match>
-            </Switch>
-          </Input.Footer>
+            </Input.FormatRibbon>
+            <Input.Layout.Editor
+              ref={setScrollContainer}
+              onClick={(event) => {
+                if (!isMobile()) {
+                  event.stopPropagation();
+                  markdownEditor.controls.focus();
+                }
+              }}
+            >
+              <Input.Editor>
+                <ComposerEditor
+                  config={markdownEditor}
+                  placeholder={inputView().placeholder}
+                  initialValue={inputView().value}
+                  autofocus={!isMobile() && (props.autofocus ?? true)}
+                  class="text-base"
+                />
+              </Input.Editor>
+            </Input.Layout.Editor>
+          </Input.Layout.Body>
+          <Switch>
+            <Match when={props.children}>{props.children}</Match>
+            <Match when>
+              <DefaultActions input={inputView()} isSending={isSending()} />
+            </Match>
+          </Switch>
         </Input.Layout>
-      </Surface>
+      </ComposerSurface>
     </Input.Root>
   );
 }

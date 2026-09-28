@@ -1,22 +1,27 @@
 use document_sub_type::DocumentSubType;
+use entity_registry::BotFacts;
+use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentMetadata, FileType, VersionIDWithTimeStamps};
+use model_owner::Owner;
 use models_permissions::share_permission::SharePermissionV2;
+use models_permissions::share_permission::team_share::TeamShareCreation;
+use share_permission_db_utils::team_share::{self, TeamShareError};
 
-use crate::domain::models::CreateDocumentRepoArgs;
+use crate::domain::models::{CreateDocumentRepoArgs, DocumentError, NewDocument};
 
 /// Inserts a record into the document table
 /// Returns the document id
 #[tracing::instrument(skip(transaction), err)]
-pub async fn insert_document_row<'a>(
+pub async fn insert_document_row(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     document_id: Option<&uuid::Uuid>,
-    user_id: &MacroUserIdStr<'a>,
+    owner: &Owner,
     document_name: &str,
     file_type: Option<FileType>,
     project_id: Option<&uuid::Uuid>,
     created_at: &chrono::DateTime<chrono::Utc>,
-) -> Result<uuid::Uuid, sqlx::Error> {
+) -> Result<uuid::Uuid, DocumentError> {
     // Generate id if one is not provided
     let id = macro_uuid::generate_uuid_v7();
     let document_id: uuid::Uuid = if let Some(id) = document_id { *id } else { id };
@@ -28,7 +33,7 @@ pub async fn insert_document_row<'a>(
                 VALUES ($1, $2, $3, $4, $5, $6, $6)
                 "#,
                 &document_id.to_string(),
-                user_id.as_ref(),
+                owner.principal_id(),
                 document_name,
                 file_type.map(|ft| ft.as_str().to_string()),
                 project_id.map(|s| s.to_string()),
@@ -38,16 +43,12 @@ pub async fn insert_document_row<'a>(
             .await;
 
     match result {
-        Ok(_) => id.to_string().clone(),
-        Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
-            return Err(sqlx::Error::Protocol(format!(
-                "document with ID already exists: {id}"
-            )));
-        }
-        Err(e) => return Err(e),
-    };
-
-    Ok(document_id)
+        Ok(_) => Ok(document_id),
+        Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => Err(
+            DocumentError::Conflict("document with ID already exists".to_string()),
+        ),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// sets the document sub type if necessary
@@ -155,7 +156,8 @@ pub async fn set_document_version(
 
 /// Sets share permission for the document
 ///
-/// The permission is resolved by the domain layer; this function persists it verbatim.
+/// Link permission is resolved by the domain layer. Canonical team state always starts
+/// NULL; only guarded explicit task initialization may establish a team share.
 #[tracing::instrument(skip(transaction, share_permission), err)]
 pub async fn set_share_permission(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -197,28 +199,30 @@ pub async fn set_share_permission(
     Ok(())
 }
 
-/// Set user history
+/// Records the document's last access, and `history_user`'s history when set.
 #[tracing::instrument(skip(transaction), err)]
-pub async fn insert_history<'a>(
+pub async fn insert_history(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     document_id: &uuid::Uuid,
-    user_id: &MacroUserIdStr<'a>,
+    history_user: Option<&MacroUserIdStr<'_>>,
     created_at: &chrono::DateTime<chrono::Utc>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        r#"
+    if let Some(user_id) = history_user {
+        sqlx::query!(
+            r#"
                 INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")
                 VALUES ($1, $2, $3, $4, $4)
                 ON CONFLICT ("userId", "itemId", "itemType") DO UPDATE
                 SET "updatedAt" = $4
                 "#,
-        user_id.as_ref(),
-        &document_id.to_string(),
-        "document",
-        created_at.naive_utc()
-    )
-    .execute(transaction.as_mut())
-    .await?;
+            user_id.as_ref(),
+            &document_id.to_string(),
+            "document",
+            created_at.naive_utc()
+        )
+        .execute(transaction.as_mut())
+        .await?;
+    }
 
     sqlx::query!(
         r#"
@@ -381,25 +385,27 @@ pub async fn reuse_email_document(
 ///
 /// Does not link email attachments. Callers that need that belong on
 /// [`crate::domain::ports::DocumentRepo::import_email_attachment_document`].
-#[tracing::instrument(skip(transaction, args, share_permission), err)]
-pub async fn insert_new_document(
+#[tracing::instrument(skip(transaction, registrar, args, share_permission), err)]
+pub async fn insert_new_document<B: BotFacts>(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    registrar: &OwnedEntityRegistrar<B>,
     args: CreateDocumentRepoArgs,
     share_permission: &SharePermissionV2,
-) -> Result<DocumentMetadata, sqlx::Error> {
-    let CreateDocumentRepoArgs {
+) -> Result<DocumentMetadata, DocumentError> {
+    let CreateDocumentRepoArgs { owner, document } = args;
+    let NewDocument {
         id,
         sha,
         document_name,
-        user_id,
         file_type,
         project_id,
         team_id,
+        share_with_team,
         created_at: provided_created_at,
         sub_type: requested_sub_type,
         skip_history,
-        attribution: _,
-    } = args;
+        initial_link_share: _,
+    } = document;
 
     let now = chrono::Utc::now();
     let created_at = provided_created_at.as_ref().unwrap_or(&now);
@@ -418,7 +424,7 @@ pub async fn insert_new_document(
     let document_id = insert_document_row(
         transaction,
         id.as_ref(),
-        &user_id,
+        &owner,
         &document_name,
         file_type,
         project_id.as_ref(),
@@ -441,23 +447,34 @@ pub async fn insert_new_document(
     set_share_permission(transaction, &document_id, share_permission).await?;
 
     if !skip_history {
-        insert_history(transaction, &document_id, &user_id, created_at).await?;
+        insert_history(transaction, &document_id, owner.as_user(), created_at).await?;
     }
 
-    entity_access_db_utils::insert_entity_access_row(
-        transaction,
-        &document_id,
-        entity_access_db_utils::EntityType::Document,
-        user_id.as_ref(),
-        entity_access_db_utils::EntityAccessSourceType::User,
-        entity_access_db_utils::AccessLevel::Owner,
-    )
-    .await?;
+    registrar
+        .register_owned_entity(
+            transaction,
+            NewEntityRecord::new(document_id, RegisteredEntityType::Document, owner.clone()),
+        )
+        .await
+        .map_err(|error| DocumentError::Internal(error.into()))?;
+
+    if share_with_team {
+        let document_id_string = document_id.to_string();
+        let entity = model_entity::EntityType::Document.with_entity_str(&document_id_string);
+        team_share::initialize(transaction, &entity, TeamShareCreation::ExplicitTask)
+            .await
+            .map_err(|error| match error.current_context() {
+                TeamShareError::InvalidState => DocumentError::BadRequest(
+                    "document owner does not belong to a team".to_string(),
+                ),
+                _ => DocumentError::Internal(error.into()),
+            })?;
+    }
 
     Ok(DocumentMetadata::new_document(
         &document_id.to_string(),
         document_version.id,
-        user_id,
+        owner,
         &document_name,
         file_type,
         &document_version.sha,

@@ -1,7 +1,9 @@
 use std::sync::LazyLock;
 
 use anyhow::Context;
+use authentication_service::service::signup_policy::SignupPolicy;
 use database_env_vars::{DatabaseUrl, RedisUri};
+use gtm_invite::domain::models::{GtmInviteConfig, PromoCode};
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
@@ -52,6 +54,8 @@ maybe_env_vars! {
     /// process environment because `MacroConfig` does not fall back to it
     /// when `APP_SECRETS_JSON` is present.
     pub struct CursorApiKeyKmsKeyId;
+    /// Dedicated CMK for encrypted Codex OAuth envelopes, injected by infrastructure.
+    pub struct CodexOauthKmsKeyId;
     pub struct GaMeasurementId;
     pub struct GaApiSecret;
     pub struct MetaPixelId;
@@ -60,6 +64,16 @@ maybe_env_vars! {
     pub struct PosthogApiKey;
     pub struct PosthogHost;
     pub struct LoopsApiKey;
+    /// JSON array of exact email addresses allowed to sign up in Develop.
+    pub struct DevelopmentSignupAllowlistJson;
+    /// Stripe promotion code GTM invite links grant at checkout. Defaults to `1MF`.
+    pub struct GtmInvitePromoCode;
+    /// Hours a GTM invite link stays openable after creation. Defaults to 48.
+    pub struct GtmInviteLinkTtlHours;
+    /// Stripe price id for the Max plan seat. Optional so the service can
+    /// deploy before the price exists in Stripe; until it is set, Max checkout
+    /// and plan changes answer 400 and every subscription maps to Premium.
+    pub struct StripeMaxPriceId;
 }
 
 /// The configuration parameters for the application.
@@ -107,6 +121,8 @@ pub struct Config {
     /// read through [`Config::cursor_api_key_kms_key_id`], which refuses an
     /// absent or blank value at startup.
     pub cursor_api_key_kms_key_id: CursorApiKeyKmsKeyId,
+    /// Dedicated Codex envelope encryption CMK; absent deployments return 503 for Codex.
+    pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Stripe secret key
     pub stripe_secret_key: StripeSecretKey,
     /// The port to listen for HTTP requests on.
@@ -140,8 +156,24 @@ pub struct Config {
     /// Loops API key (optional). When set, Macro sign-ups are added to our
     /// Loops audience.
     pub loops_api_key: LoopsApiKey,
-    /// The stripe price id
+    /// JSON array of exact non-Macro email addresses allowed to sign up in Develop.
+    ///
+    /// All `@macro.com` email addresses are allowed by the Develop policy automatically.
+    pub development_signup_allowlist_json: DevelopmentSignupAllowlistJson,
+    /// Whether Develop allows every public signup without reading
+    /// `DEVELOPMENT_SIGNUP_ALLOWLIST_JSON`. Production and Local ignore it.
+    #[macro_config_default(false)]
+    pub development_bypass_signup_allowlist: bool,
+    /// Stripe promotion code applied at checkout for accounts that signed up
+    /// through a GTM invite link (optional, defaults to `1MF`).
+    pub gtm_invite_promo_code: GtmInvitePromoCode,
+    /// Hours a GTM invite link can be opened and redeemed (optional, defaults to 48).
+    pub gtm_invite_link_ttl_hours: GtmInviteLinkTtlHours,
+    /// The stripe price id for the Premium plan seat
     pub stripe_price_id: StripePriceId,
+    /// The stripe price id for the Max plan seat (optional, see
+    /// [`StripeMaxPriceId`])
+    pub stripe_max_price_id: StripeMaxPriceId,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
@@ -187,6 +219,19 @@ impl Config {
         )
     }
 
+    /// Resolve the dedicated CMK, including Pulumi-injected process environment.
+    pub(crate) fn codex_oauth_kms_key_id(&self) -> Option<String> {
+        let process = CodexOauthKmsKeyId::new();
+        nonblank_value(self.codex_oauth_kms_key_id.value())
+            .or_else(|| {
+                process
+                    .as_ref()
+                    .and_then(CodexOauthKmsKeyId::value)
+                    .and_then(|value| nonblank_value(Some(value)))
+            })
+            .map(str::to_owned)
+    }
+
     /// Resolves Microsoft credentials, enforcing that all values are configured together.
     pub(crate) fn microsoft_credentials(&self) -> anyhow::Result<Option<MicrosoftCredentials>> {
         resolve_microsoft_credentials(
@@ -195,6 +240,28 @@ impl Config {
             &self.microsoft_tenant_id,
             &self.microsoft_token_kms_key_id,
         )
+    }
+
+    /// Resolves the signup policy for the configured environment.
+    pub(crate) fn signup_policy(&self) -> anyhow::Result<SignupPolicy> {
+        self.signup_policy_for_environment(self.environment)
+    }
+
+    /// Resolves the signup policy for an explicit environment.
+    pub(crate) fn signup_policy_for_environment(
+        &self,
+        environment: Environment,
+    ) -> anyhow::Result<SignupPolicy> {
+        resolve_signup_policy(
+            environment,
+            self.development_bypass_signup_allowlist,
+            &self.development_signup_allowlist_json,
+        )
+    }
+
+    /// Resolves the offer GTM invite links carry.
+    pub(crate) fn gtm_invite_config(&self) -> anyhow::Result<GtmInviteConfig> {
+        resolve_gtm_invite_config(&self.gtm_invite_promo_code, &self.gtm_invite_link_ttl_hours)
     }
 }
 
@@ -226,6 +293,58 @@ fn resolve_microsoft_credentials(
             "MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and MICROSOFT_TENANT_ID must all be set to nonblank values or all be unset"
         ),
     }
+}
+
+fn resolve_signup_policy(
+    environment: Environment,
+    development_bypass_signup_allowlist: bool,
+    development_signup_allowlist_json: &DevelopmentSignupAllowlistJson,
+) -> anyhow::Result<SignupPolicy> {
+    match environment {
+        Environment::Production | Environment::Local => Ok(SignupPolicy::allow_all()),
+        Environment::Develop if development_bypass_signup_allowlist => {
+            Ok(SignupPolicy::allow_all())
+        }
+        Environment::Develop => {
+            let raw_allowlist = nonblank_value(development_signup_allowlist_json.value())
+                .context("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON is required in Develop")?;
+            SignupPolicy::from_allowlist_json(raw_allowlist)
+                .context("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON is invalid")
+        }
+    }
+}
+
+/// The promotion code applied when `GTM_INVITE_PROMO_CODE` is unset: 100% off
+/// the first month, created in Stripe for exactly this program.
+const DEFAULT_GTM_INVITE_PROMO_CODE: &str = "1MF";
+/// How long an invite link stays usable when `GTM_INVITE_LINK_TTL_HOURS` is unset.
+const DEFAULT_GTM_INVITE_LINK_TTL_HOURS: i64 = 48;
+/// Free months the default promotion grants, for user-facing copy.
+const GTM_INVITE_FREE_MONTHS: u8 = 1;
+
+fn resolve_gtm_invite_config(
+    promo_code: &GtmInvitePromoCode,
+    link_ttl_hours: &GtmInviteLinkTtlHours,
+) -> anyhow::Result<GtmInviteConfig> {
+    let promo_code: PromoCode = nonblank_value(promo_code.value())
+        .unwrap_or(DEFAULT_GTM_INVITE_PROMO_CODE)
+        .parse()
+        .context("GTM_INVITE_PROMO_CODE is invalid")?;
+    let link_ttl_hours: i64 = match nonblank_value(link_ttl_hours.value()) {
+        Some(hours) => hours
+            .trim()
+            .parse()
+            .context("GTM_INVITE_LINK_TTL_HOURS must be a whole number of hours")?,
+        None => DEFAULT_GTM_INVITE_LINK_TTL_HOURS,
+    };
+    if link_ttl_hours <= 0 {
+        anyhow::bail!("GTM_INVITE_LINK_TTL_HOURS must be positive");
+    }
+    Ok(GtmInviteConfig {
+        promo_code,
+        link_ttl: chrono::Duration::hours(link_ttl_hours),
+        free_months: GTM_INVITE_FREE_MONTHS,
+    })
 }
 
 fn nonblank_value(value: Option<&str>) -> Option<&str> {

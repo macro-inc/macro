@@ -50,6 +50,7 @@ export function Surface(props: SurfaceProps) {
           local.class
         )}
         {...rest}
+        data-surface
       >
         {local.children}
       </div>

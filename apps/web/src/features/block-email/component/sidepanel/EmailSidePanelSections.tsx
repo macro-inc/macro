@@ -1,13 +1,14 @@
-import { EntityActivitySectionConditional } from '@app/features/activity/EntityActivitySection';
+import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
+import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
 } from '@app/features/property/side-panel/properties';
 import { SidePanel } from '@components/app/side-panel';
 import { References } from '@core/component/References';
+import { queryReadyGate } from '@queries/gate';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { Show, Suspense } from 'solid-js';
-import { useEmailContext } from '../EmailContext';
 
 interface EmailSidePanelSectionsProps {
   threadId: string;
@@ -15,7 +16,7 @@ interface EmailSidePanelSectionsProps {
 }
 
 export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
-  const emailCtx = useEmailContext();
+  const emailCtx = useEmailThreadState();
   const canEdit = () => emailCtx.permissions().isOwner;
 
   return (
@@ -59,7 +60,7 @@ function ReferencesSectionConditional(props: { threadId: string }) {
     () => 'email'
   );
 
-  const count = () => references.data?.length ?? 0;
+  const count = () => (queryReadyGate(references) ? references.data.length : 0);
 
   return (
     <Show when={count() > 0}>

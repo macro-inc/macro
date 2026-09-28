@@ -1,33 +1,32 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_on_push.rs
+#
+# Every stage here deploys on every push — deliberately NOT path-gated.
+# Do not add `if:` change filters to these jobs.
+#
+# This pipeline serializes on one concurrency group, and GitHub keeps only
+# ONE pending run per group: a newly queued run cancels the run already
+# waiting. `cancel-in-progress: false` does not prevent that — it only
+# protects the run that is actively executing.
+#
+# So with change filters, pushes get silently dropped. Push A (backend) is
+# queued behind a running deploy; push B (frontend-only) arrives and
+# cancels A before its deploy job ever starts; B runs and its filter skips
+# the backend stage. A's commit is on main and was never deployed.
+#
+# Deploying everything unconditionally makes the coalescing lossless: the
+# surviving run always deploys a superset of the runs it displaced. The
+# called workflows already avoid redundant work internally (Nix-cached
+# builds, Pulumi no-ops on unchanged stacks), so the cost is small next to
+# an undeployed commit.
+#
 name: Deploy on Push
 on:
   push:
     branches:
     - main
 jobs:
-  check-to-deploy:
-    runs-on: namespace-profile-linux-tiny-no-cache
-    outputs:
-      cloud-storage: ${{ steps.changes.outputs.cloud-storage }}
-      sync-service: ${{ steps.changes.outputs.sync-service }}
-      web-app: ${{ steps.changes.outputs.web-app }}
-    steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-    - id: changes
-      name: Check changed paths
-      uses: whutchinson98/diff-checker-action@d25a22ee8f84f5e44abda3027c80c2e6d71f68a6
-      with:
-        token: ${{ github.token }}
-        diff: |-
-          cloud-storage: ./Cargo.toml ./Cargo.lock ./Cross.toml ./clippy.toml ./deny.toml ./rust-toolchain.toml ./.cargo/** ./.config/** ./.sqlx/** ./crates/** ./services/** ./tooling/xtask/** ./tooling/just/** ./tooling/scripts/** ./static_assets/** ./docker/** ./nix/** ./nix-support/** ./infra/** ./.github/workflows/deploy_on_push.yml ./.github/workflows/deploy_all_services.yml ./.github/actions/deploy-cloud-storage-pulumi/** ./.github/actions/setup-nix/** ./.github/actions/teardown-nix/** ./.github/actions/migrate-cloud-storage-db/** ./.github/scripts/build-cloud-storage-lambdas-nix.sh ./.github/services-config.json ./.github/workspace-dep-closures.json ./flake.nix ./flake.lock
-          sync-service: ./services/sync-service/** ./crates/macro_sync_service_jwt/** ./Cargo.toml ./Cargo.lock ./rust-toolchain.toml ./.github/workflows/deploy_on_push.yml ./.github/workflows/deploy_sync_service.yml
-          web-app: ./infra/stacks/web-app/** ./.github/workflows/deploy_on_push.yml ./.github/workflows/deploy_web_app.yml ./package.json ./bun.lock ./apps/web/** ./packages/** ./crates/client/cache-core/** ./crates/client/cache-turso/** ./crates/client/cache-wasm/** ./crates/client/turso-opfs/** ./static_assets/schema.graphql ./Cargo.toml ./Cargo.lock ./rust-toolchain.toml
   deploy-cloud-storage:
-    needs:
-    - check-to-deploy
-    if: ${{ needs.check-to-deploy.outputs.cloud-storage == 'true' }}
     name: Deploy Cloud Storage Services
     uses: ./.github/workflows/deploy_all_services.yml
     with:
@@ -41,9 +40,7 @@ jobs:
       NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
   deploy-sync-service:
     needs:
-    - check-to-deploy
     - deploy-cloud-storage
-    if: ${{ !failure() && !cancelled() && needs.check-to-deploy.outputs.sync-service == 'true' }}
     name: Deploy Sync Service
     uses: ./.github/workflows/deploy_sync_service.yml
     with:
@@ -52,9 +49,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   deploy-web-app:
     needs:
-    - check-to-deploy
     - deploy-cloud-storage
-    if: ${{ !failure() && !cancelled() && needs.check-to-deploy.outputs.web-app == 'true' }}
     name: Deploy Web App
     uses: ./.github/workflows/deploy_web_app.yml
     with:

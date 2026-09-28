@@ -34,7 +34,10 @@ use github::{
 };
 use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState,
+    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
+};
 use macro_entrypoint::MacroEntrypoint;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
@@ -62,6 +65,9 @@ use teams::{
     },
 };
 
+use gtm_invite::{
+    domain::service::GtmInviteServiceImpl, outbound::pg_gtm_invite_repo::PgGtmInviteRepo,
+};
 use referral::{
     domain::service::ReferralServiceImpl,
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
@@ -98,6 +104,14 @@ async fn main() -> anyhow::Result<()> {
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
+    let signup_policy = Arc::new(
+        config
+            .signup_policy()
+            .context("invalid signup policy configuration")?,
+    );
+    let gtm_invite_config = config
+        .gtm_invite_config()
+        .context("invalid GTM invite link configuration")?;
     let microsoft_credentials = config
         .microsoft_credentials()
         .context("invalid Microsoft OAuth configuration")?;
@@ -245,6 +259,7 @@ async fn main() -> anyhow::Result<()> {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
     )));
 
     let redis_client = redis::Client::open(config.redis_uri.to_string().as_str())
@@ -333,11 +348,21 @@ async fn main() -> anyhow::Result<()> {
         user_roles_and_permissions_macro_db,
     );
 
+    let stripe_prices = api::StripePrices {
+        premium: config.stripe_price_id.to_string(),
+        max: config
+            .stripe_max_price_id
+            .value()
+            .filter(|id| !id.trim().is_empty())
+            .map(str::to_owned),
+    };
+    if stripe_prices.max.is_none() {
+        tracing::warn!("STRIPE_MAX_PRICE_ID is not set; the Max plan cannot be sold");
+    }
+
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
-    let customer_repo_impl = CustomerRepositoryImpl::new(
-        stripe_client.clone(),
-        config.stripe_price_id.to_string().clone(),
-    );
+    let customer_repo_impl =
+        CustomerRepositoryImpl::new(stripe_client.clone(), stripe_prices.seat_prices());
     let favorites_service = favorites::domain::service::FavoritesServiceImpl::new(
         favorites::outbound::pg_favorites_repo::PgFavoritesRepo::new(db.clone()),
     );
@@ -375,7 +400,7 @@ async fn main() -> anyhow::Result<()> {
     // indexing.
     let channel_side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(db.clone()),
-        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway_client),
+        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway_client.clone()),
         NotificationChannelSender::new(notification_ingress_service.clone()),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
@@ -383,22 +408,43 @@ async fn main() -> anyhow::Result<()> {
     let channel_event_dispatcher = SpawnedChannelEventDispatcher::new(channel_side_effects);
     let channel_service = ChannelServiceImpl::with_dependencies(
         PgChannelsRepo::new(db.clone()),
-        channel_event_dispatcher,
+        channel_event_dispatcher.clone(),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service_impl.clone()),
     );
-
-    let teams_service_impl = TeamServiceImpl::new_with_analytics(
-        teams_repo_impl,
-        customer_repo_impl,
-        channel_service.clone(),
-        user_roles_and_permissions_service.clone(),
-        notification_ingress_service.clone(),
-        crm_enqueuer,
-        team_crm_settings_repo_impl,
-        team_analytics,
-    )
-    .with_contacts_enqueuer(contacts_enqueuer)
-    .with_event_broker(macro_event_broker);
+    // The welcome message goes through the shared message service so it gets the
+    // same persistence and delivery as every other channel message.
+    let channel_messages: Arc<dyn messages::domain::api::MessageCommands> = Arc::new(
+        messages::domain::service::MessageService::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
+                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                ))
+                .with_crm(crm::outbound::lookup::PgCrmParentReader::new(db.clone())),
+            messages::domain::effects::MessageEffects::new(
+                messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
+                messages::domain::ports::NoMessageEventPublisher,
+                channels::domain::message_delivery::ChannelMessageDelivery::new(
+                    PgChannelsRepo::new(db.clone()),
+                    channel_event_dispatcher,
+                    PgChannelReferenceSharePermissions::new(
+                        db.clone(),
+                        entity_access_service_impl.clone(),
+                    ),
+                    messages::outbound::connection_gateway::ConnectionGatewayMessages(
+                        connection_gateway_client,
+                    ),
+                ),
+            ),
+        )
+        .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
+            PgChannelsRepo::new(db.clone()),
+        ))
+        .with_references(
+            messages::outbound::entity_access_audience::EntityAccessMessageReferences(
+                (*entity_access_service_impl).clone(),
+            ),
+        ),
+    );
 
     let foreign_entity_service =
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
@@ -428,6 +474,65 @@ async fn main() -> anyhow::Result<()> {
         ),
         notification_ingress: notification_ingress_service.clone(),
     };
+    let gtm_invite_service = GtmInviteServiceImpl {
+        repo: PgGtmInviteRepo::new(db.clone()),
+        config: gtm_invite_config,
+    };
+
+    let codex_connection = if let Some(key_id) = config.codex_oauth_kms_key_id() {
+        let cipher = Arc::new(codex_connection::outbound::cipher::EnvelopeCipher::new(
+            aws_sdk_kms::Client::new(&aws_config),
+            key_id,
+        )?);
+        let repository = Arc::new(
+            codex_connection::outbound::postgres::PostgresRepository::new(db.clone(), cipher),
+        );
+        let provider = codex_cloud_agents::outbound::openai::OpenAi::new()
+            .map_err(|_| anyhow::anyhow!("failed to initialize Codex OAuth client"))?;
+        Some(
+            Arc::new(codex_connection::domain::ConnectionServiceImpl::new(
+                repository, provider,
+            )) as Arc<dyn codex_connection::domain::ConnectionService>,
+        )
+    } else {
+        None
+    };
+
+    let stripe_client = Arc::new(stripe_client);
+    let ai_billing_service = Arc::new(ai_billing::domain::BillingServiceImpl::new(
+        ai_billing::outbound::RolesTeamsEntitlementSource::new(
+            user_roles_and_permissions_service.clone(),
+            teams_repo_impl.clone(),
+        ),
+        ai_billing::outbound::PgUsageReader::new(db.clone()),
+        ai_billing::outbound::PgBillingRepo::new(db.clone()),
+        ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
+        config.environment,
+    ));
+    let teams_service_impl = TeamServiceImpl::new_with_analytics(
+        teams_repo_impl.clone(),
+        customer_repo_impl,
+        channel_service.clone(),
+        user_roles_and_permissions_service.clone(),
+        notification_ingress_service.clone(),
+        crm_enqueuer,
+        team_crm_settings_repo_impl,
+        team_analytics,
+    )
+    .with_contacts_enqueuer(contacts_enqueuer)
+    .with_event_broker(macro_event_broker)
+    .with_open_seat_release((*ai_billing_service).clone());
+    let document_storage_service_client = Arc::new(document_storage_service_client);
+    let user_deletion = Arc::new(
+        authentication_service::outbound::user_deletion::UserDeletionAdapter::new(
+            db.clone(),
+            document_storage_service_client.clone(),
+            internal_api_key.to_string(),
+            macro_service_urls::AgentHarnessServiceUrl::new()?.to_string(),
+            macro_service_urls::ScheduledActionServiceUrl::new()?.to_string(),
+        )
+        .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+    );
 
     let server_result = api::setup_and_serve(
         ApiContext {
@@ -436,14 +541,17 @@ async fn main() -> anyhow::Result<()> {
             auth_client: Arc::new(auth_client),
             microsoft_token_cipher,
             cursor_api_key_cipher,
+            codex_connection,
             macro_cache_client: Arc::new(macro_cache_client),
-            stripe_client: Arc::new(stripe_client),
-            document_storage_service_client: Arc::new(document_storage_service_client),
+            stripe_client,
+            document_storage_service_client,
+            user_deletion,
             email_service_client: Arc::new(email_service_client),
             ses_client: Arc::new(ses_client),
             notification_ingress_service,
             sqs_client,
             environment: config.environment,
+            signup_policy,
             rate_limit_service: rate_limit,
             calendar_scope_enabled: config.calendar_scope_enabled,
             jwt_args,
@@ -461,9 +569,11 @@ async fn main() -> anyhow::Result<()> {
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
             channel_service: Arc::new(channel_service),
+            channel_messages,
             favorites_service: Arc::new(favorites_service),
             entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),
+            gtm_invite_service: Arc::new(gtm_invite_service),
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(
                     AppServiceUrl::new_for_environment(config.environment)
@@ -482,7 +592,8 @@ async fn main() -> anyhow::Result<()> {
             }),
             loops_client: Arc::new(loops_client),
             analytics_client,
-            stripe_price_id: config.stripe_price_id.to_string(),
+            stripe_prices,
+            ai_billing_service,
         },
         config.port,
     )

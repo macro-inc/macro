@@ -9,7 +9,7 @@ import type { EditCallRecordRequestSharePermission } from './editCallRecordReque
 import type { EditCallRecordRequestShareWithTeam } from './editCallRecordRequestShareWithTeam';
 
 /**
- * Edit call request
+ * Edit call request, as supplied by inbound callers.
  */
 export interface EditCallRecordRequest {
   /** Updated user-supplied display name for the call. `None` is a no-op;
@@ -19,8 +19,9 @@ this column — patching while the call is still active is a no-op for
 this field. */
   customName?: EditCallRecordRequestCustomName;
   sharePermission?: EditCallRecordRequestSharePermission;
-  /** If `Some(true)`, grant the creator's team View access on the call.
-If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
+  /** Deprecated alias for `sharePermission.teamShareAccessLevel`:
+`Some(true)` behaves like `"view"`, `Some(false)` like `null`, and
+`None` is a no-op. Supplying both with disagreeing values is rejected.
 The team is resolved from the call's `created_by`, not the acting user. */
   shareWithTeam?: EditCallRecordRequestShareWithTeam;
 }

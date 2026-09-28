@@ -20,6 +20,7 @@ const ENTITY_DRAG_TYPES = [
   'channel',
   'channel_message',
   'channel_thread',
+  'agent_session',
   'chat',
   'document',
   'email',

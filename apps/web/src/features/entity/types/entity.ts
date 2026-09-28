@@ -17,12 +17,20 @@ export type EntityBase = {
   name: string;
   ownerId: string;
   frecencyScore?: number;
+  /** Viewer-owned favorite state from Soup; absent on search-only results. */
+  isFavorited?: boolean;
   /**
    * The viewer's latest own mutation of this entity, present only on rows
    * from `touched_by_me` pages. The Recent feed sorts on it, so mutation
    * helpers may bump it optimistically.
    */
   touchedAt?: DateValue | null;
+  /**
+   * When the viewer was last notified about this entity, present only on
+   * rows from `notified_at` pages. The inbox sorts and date-buckets on it,
+   * and incoming notifications bump it optimistically.
+   */
+  notifiedAt?: DateValue | null;
   createdAt?: DateValue | null;
   updatedAt?: DateValue | null;
   viewedAt?: DateValue | null;
@@ -87,6 +95,14 @@ export type ChannelEntityTarget = {
 };
 
 /**
+ * The comment a document row opens at when it is not derived from the row's
+ * notifications, e.g. a preview rebuilt from its route.
+ */
+export type DocumentCommentTarget = {
+  commentId: string;
+};
+
+/**
  * The resolved click intent for a channel-family row. Either a specific
  * message to jump to and highlight, or `latest` — open the channel at its
  * newest message with no highlight. A whole `channel` row with no unread
@@ -100,6 +116,13 @@ export type ChannelClickTarget =
 
 export type ChannelEntity = EntityBase & {
   type: 'channel';
+  /** Filtered, bounded edge for the unread dot. Undefined denotes a legacy/full
+   * row; an empty array denotes no unread messages. Never use for bulk reads. */
+  unreadNotifications?: {
+    id: string;
+    state: 'unseen' | 'seen' | 'done';
+    createdAt: DateValue;
+  }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
   interactedAt?: DateValue | null;
   participantIds?: string[];
@@ -152,7 +175,26 @@ export type ChannelThreadEntity = EntityBase & {
 
 export type ChatEntity = EntityBase & {
   type: 'chat';
+  model?: string | null;
   projectId?: string;
+  properties?: SoupProperty[];
+};
+
+export type AgentSessionEntity = EntityBase & {
+  type: 'agent_session';
+  botId: string;
+  harness?: string;
+  repoUrl?: string | null;
+  /** Starting branch selected at creation, not the current working branch. */
+  repoBranch?: string | null;
+  pullRequestUrl?: string | null;
+  workingBranch?: string | null;
+  pullRequestState?: 'open' | 'draft' | 'closed' | 'merged' | null;
+  pullRequestId?: string | null;
+  turnState?: string | null;
+  bot?: { id: string; name: string; avatarUrl?: string | null } | null;
+  threadId?: string | null;
+  status: string;
   properties?: SoupProperty[];
 };
 
@@ -164,6 +206,17 @@ export type SubType = {
   type: NamedSubType;
   is_completed?: boolean;
 } | null;
+
+/** Wire subtypes without a dedicated block, including initiative_description, become null. */
+export const toSubType = (
+  wire: { type: string; is_completed?: boolean } | null | undefined
+): SubType => {
+  if (wire == null) return null;
+  const { type } = wire;
+  return type === 'task' || type === 'snippet' || type === 'skill'
+    ? { type, is_completed: wire.is_completed }
+    : null;
+};
 
 export type BaseDocumentEntity = EntityBase & {
   type: 'document';
@@ -234,6 +287,8 @@ export type EmailEntity = EntityBase & {
   hasIcsAttachment?: boolean;
   attachments?: EmailAttachment[];
   properties?: SoupProperty[];
+  /** ISO 8601 time of the thread draft's confirmed scheduled send. */
+  scheduledSendTime?: string;
 };
 
 export type ProjectEntity = EntityBase & {
@@ -244,16 +299,24 @@ export type ProjectEntity = EntityBase & {
 
 export type CallStatus = StorageCallStatus;
 
+/** Session-scoped guest identity on a call; not a Macro account. */
+export type CallGuest = {
+  id: string;
+  displayName: string;
+};
+
 export type CallEntity = EntityBase & {
   type: 'call';
-  channelId: string;
+  channelId?: string | null;
   channelName?: string;
   isActive: boolean;
   status: CallStatus;
   /** Compatibility flag derived from status. */
   attended: boolean;
   durationMs?: number;
+  /** Macro users only; guests are listed separately in `guests`. */
   participantIds: string[];
+  guests?: CallGuest[];
   summary?: string;
   properties?: SoupProperty[];
 };
@@ -332,7 +395,7 @@ export type ReminderEntity = EntityBase & {
     id: string;
     // Calendar events are excluded alongside reminders: neither has a
     // previewable block, and the mapper yields `undefined` for both.
-    type: Exclude<EntityType, 'reminder' | 'calendar_event'>;
+    type: Exclude<EntityType, 'reminder' | 'calendar_event' | 'initiative'>;
     fileType?: string;
     subType?: string;
   };
@@ -383,7 +446,15 @@ export type CalendarEventEntity = EntityBase & {
   properties?: SoupProperty[];
 };
 
+/** A native project, distinct from folder entities. */
+export type InitiativeEntity = EntityBase & {
+  type: 'initiative';
+  descriptionDocumentId: string;
+  properties?: SoupProperty[];
+};
+
 export type EntityData =
+  | AgentSessionEntity
   | ChannelEntity
   | ChannelMessageEntity
   | ChannelThreadEntity
@@ -393,6 +464,7 @@ export type EntityData =
   | SnippetEntity
   | EmailEntity
   | ProjectEntity
+  | InitiativeEntity
   | CallEntity
   | CrmCompanyEntity
   | CrmContactEntity
@@ -402,6 +474,7 @@ export type EntityData =
   | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
+  'agent_session',
   'channel',
   'channel_message',
   'channel_thread',
@@ -409,6 +482,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'document',
   'email',
   'project',
+  'initiative',
   'call',
   'crm_company',
   'crm_contact',

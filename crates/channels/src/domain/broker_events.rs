@@ -15,7 +15,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::models::{ChannelType, MutatedAttachment, SimpleMention};
+use crate::domain::models::{ChannelType, MutatedAttachment};
+use messages::domain::models::SimpleMention;
 
 /// Attachment payload carried by channel wire events.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -50,6 +51,9 @@ pub struct ChannelCreatedMetadata {
     pub channel_id: Uuid,
     /// Actor that created the channel (channel owner).
     pub actor: ChannelSender<'static>,
+    /// User the actor created the channel for, when the actor is a bot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
     /// Type of channel that was created.
     pub channel_type: ChannelType,
     /// Stored channel name; `None` for direct message / unnamed channels.

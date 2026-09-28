@@ -29,7 +29,7 @@ function SelectTrigger(props: SelectTriggerProps) {
   return (
     <KobalteSelect.Trigger
       class={cn(
-        'flex w-full items-center justify-between gap-2 text-left data-expanded:bg-hover',
+        'flex h-8 w-full items-center justify-between gap-2 rounded-full border border-edge-frame bg-control px-2 text-left text-ink-muted outline-none data-expanded:overlay-active data-expanded:text-ink focus-visible:ring-2 focus-visible:ring-edge-muted aria-invalid:border-failure data-invalid:border-failure',
         local.class
       )}
       {...rest}
@@ -106,7 +106,7 @@ function SelectContent(props: SelectContentProps) {
         <Layer depth={local.depth ?? 3}>
           <KobalteSelect.Content
             class={cn(
-              'z-action-menu max-h-[var(--kb-popper-content-available-height)] min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu p-1.5 shadow-menu menu-open-animation',
+              'menu-surface z-action-menu max-h-[var(--kb-popper-content-available-height)] min-w-[var(--kb-popper-anchor-width)] overflow-y-auto p-1.5 menu-open-animation',
               local.class
             )}
             {...rest}
@@ -222,7 +222,18 @@ function SelectRoot<Option, OptGroup = never>(
   );
 }
 
-/** Composable, styled single- or multi-value select built on Kobalte. */
+/** Composable, styled single- or multi-value select built on Kobalte.
+ *
+ * @do Let `Select.Content` own the menu chrome; pass only sizing classes to
+ *   it.
+ * @do Include `Select.ItemIndicator` so the current selection is visible in
+ *   the list.
+ * @do Use `portalScope="local"` when the select lives inside a dialog or other
+ *   portal scope.
+ * @dont Do not wrap `Select.Content` in a Portal — it already portals itself.
+ * @dont Do not use Select for more than roughly a dozen options; use a command
+ *   menu with search.
+ */
 export const Select = Object.assign(SelectRoot, {
   Content: SelectContent,
   Icon: SelectIcon,

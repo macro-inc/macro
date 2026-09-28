@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_session_changes (agent_session_id, attempt_started_at)\n            VALUES ($1, $2)\n            ON CONFLICT (agent_session_id) DO UPDATE SET\n                attempt_started_at = EXCLUDED.attempt_started_at,\n                attempt_finished_at = NULL,\n                attempt_outcome = NULL,\n                attempt_error = NULL,\n                updated_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "17bcd83046cf29fbe5a2a18bebb3ba0c983c9b861f5454579d44c676c13e89c5"
+}

@@ -62,10 +62,8 @@ pub enum ChannelLiteral {
     /// of the channel. Its presence widens the candidate set to team channels of the
     /// user's teams that they have not joined.
     IsParticipant(bool),
-    /// this node value filters by notification done state for channels.
-    NotificationDone(bool),
-    /// this node value filters by notification seen state for channels.
-    NotificationSeen(bool),
+    /// An entity has a non-deleted notification in this exact state.
+    NotificationState(crate::NotificationState),
 }
 
 impl ExpandFrame<ChannelLiteral> for ChannelFilters {
@@ -124,12 +122,11 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
         let importance_node = importance.map(|imp| Expr::Literal(ChannelLiteral::Importance(imp)));
         let is_participant_node =
             is_participant.map(|val| Expr::Literal(ChannelLiteral::IsParticipant(val)));
-        let notification_done_node = notification_filters
-            .done
-            .map(|done| Expr::Literal(ChannelLiteral::NotificationDone(done)));
-        let notification_seen_node = notification_filters
-            .seen
-            .map(|seen| Expr::Literal(ChannelLiteral::NotificationSeen(seen)));
+        let notification_state_node = notification_filters
+            .into_unique_states()
+            .into_iter()
+            .map(|state| Expr::Literal(ChannelLiteral::NotificationState(state)))
+            .reduce(Expr::or);
 
         Ok([
             thread_ids,
@@ -141,8 +138,7 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             channel_type_nodes,
             importance_node,
             is_participant_node,
-            notification_done_node,
-            notification_seen_node,
+            notification_state_node,
         ]
         .into_iter()
         .fold_with(Expr::and))
@@ -162,10 +158,8 @@ pub enum ChannelThreadLiteral {
     /// anyone who replied in the thread, or anyone @-mentioned in the thread (group
     /// mentions like @here count through their per-user expansion at send time).
     Participant(MacroUserIdStr<'static>),
-    /// this node value filters by notification done state for the thread notification.
-    NotificationDone(bool),
-    /// this node value filters by notification seen state for the thread notification.
-    NotificationSeen(bool),
+    /// An entity has a non-deleted notification in this exact state.
+    NotificationState(crate::NotificationState),
 }
 
 impl ExpandFrame<ChannelThreadLiteral> for ChannelThreadFilters {

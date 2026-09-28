@@ -22,11 +22,22 @@ import {
   mapGraphqlGroupedSoupPage,
 } from '@service-storage/graphql-soup';
 import type { CombinedError } from '@urql/core';
-import { type Accessor, createComputed, createMemo, on } from 'solid-js';
+import {
+  type Accessor,
+  createComputed,
+  createMemo,
+  on,
+  onCleanup,
+} from 'solid-js';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { mapSoupPageToEntityList } from '../transform-utils';
+import { registerGraphqlSoupRevalidations } from './active-queries';
 import { makeGraphqlGroupedSoupInput } from './ast';
 import type { GraphqlSoupAstItemsQuery } from './items';
+import {
+  usePendingGraphqlSoupDeleteIds,
+  withoutPendingGraphqlSoupDeletes,
+} from './optimistic-deletions';
 
 export type GraphqlGroupedSoupAstItemsQueryArgs = {
   params: SoupAstParams;
@@ -36,6 +47,8 @@ export type GraphqlGroupedSoupAstItemsQueryArgs = {
 
 export type GraphqlGroupedSoupAstItemsQueryOptions = {
   enabled: boolean;
+  networkPaused?: boolean;
+  keepPreviousData?: boolean;
   showSupportedForeignEntities?: boolean;
 };
 
@@ -83,6 +96,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   options: Accessor<GraphqlGroupedSoupAstItemsQueryOptions>
 ): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
+  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
   const input = createMemo(() => {
     const { params, body, groupBy } = args();
     if (!groupBy) return;
@@ -107,8 +121,10 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     const common = {
       query: GroupSoupDocument,
       client: getGraphqlSoupClient(),
-      requestPolicy: 'cache-and-network' as const,
-      keepPreviousData: false,
+      requestPolicy: queryOptions.networkPaused
+        ? ('cache-only' as const)
+        : ('cache-and-network' as const),
+      keepPreviousData: queryOptions.keepPreviousData ?? false,
       select: (data: GroupSoupQuery) =>
         mapGraphqlGroupedSoupData(data, groupBy!, {
           instructionsIdQuery,
@@ -128,6 +144,15 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     };
   });
 
+  onCleanup(
+    registerGraphqlSoupRevalidations(() => {
+      const queryInput = input();
+      return query.isEnabled && queryInput
+        ? [{ document: GroupSoupDocument, variables: { input: queryInput } }]
+        : [];
+    })
+  );
+
   const error = (): CombinedError | undefined => query.error ?? undefined;
   createComputed(
     on(error, (queryError) => {
@@ -138,7 +163,8 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   );
 
   return {
-    data: () => query.data,
+    data: () =>
+      withoutPendingGraphqlSoupDeletes(query.data, pendingDeleteIds()),
     error,
     isSupported,
     isEnabled: () => query.isEnabled,

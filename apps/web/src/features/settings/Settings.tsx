@@ -1,5 +1,4 @@
-import { Billing } from '@app/features/settings/Billing';
-import { Bots } from '@app/features/settings/Bots';
+import { useParams, useNavigate as useSplitNavigate } from '@app/split-router';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -11,10 +10,13 @@ import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import {
   isSoloSettings,
   type SettingsTab,
-  settingsTabFromSplitPath,
   useSettingsState,
 } from '@core/constant/SettingsState';
-import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
+import {
+  settingsSlugToTab,
+  settingsTabToSlug,
+  useSettingsTabs,
+} from '@core/constant/settingsTabsConfig';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
@@ -24,7 +26,6 @@ import ArrowsIn from '@phosphor/arrows-in.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
-import { useLocation } from '@solidjs/router';
 import { Button, cn, Layer, SideNav } from '@ui';
 import {
   createRenderEffect,
@@ -33,20 +34,9 @@ import {
   onCleanup,
   onMount,
   Show,
-  Suspense,
   untrack,
 } from 'solid-js';
-import { Account } from './Account';
-import { Admin } from './Admin';
-import { Agent } from './Agent';
-import { Appearance } from './Appearance';
-import { ConnectedAccounts } from './ConnectedAccounts';
-import { Crm } from './Crm';
-import { MobileApp } from './MobileApp';
-import { Notifications } from './Notifications';
-import { Shortcuts } from './Shortcuts';
-import { Tags } from './Tags';
-import { Team } from './Team';
+import { SettingsTabContent } from './SettingsTabContent';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
 export type SettingsVariant = 'split' | 'fullscreen';
@@ -59,7 +49,8 @@ const COMPACT_WIDTH = 660;
 const NARROW_WIDTH = 820;
 
 export function SettingsPanelComponentWrapper() {
-  const location = useLocation();
+  const params = useParams<{ tab?: string }>();
+
   // Sync the active page from the docked split's URL (`settings/<slug>`). Read
   // the live URL reactively — not static mount props — so browser back/forward
   // and direct navigation stay in sync: reconcile reuses this component on
@@ -69,10 +60,29 @@ export function SettingsPanelComponentWrapper() {
   // activeTabId read is untracked so a tab click (which sets it, then updates
   // the URL) isn't reverted by this effect firing before the URL catches up.
   createRenderEffect(() => {
-    const tab = settingsTabFromSplitPath(location.pathname);
-    if (tab && untrack(activeTabId) !== tab) setActiveTabId(tab);
+    const tab = settingsSlugToTab(params.tab ?? '') ?? 'Account';
+
+    if (untrack(activeTabId) !== tab) setActiveTabId(tab);
   });
-  return <SettingsPanel variant={isSoloSettings() ? 'fullscreen' : 'split'} />;
+
+  return (
+    <Show when={!isMobile()} fallback={<MobileSettingsDeepLink />}>
+      <SettingsPanel variant={isSoloSettings() ? 'fullscreen' : 'split'} />
+    </Show>
+  );
+}
+
+/** Old settings URLs still open their section, over the restored app surface. */
+function MobileSettingsDeepLink() {
+  const params = useParams<{ tab?: string }>();
+  const { openSettings, restoreMobileDeepLink } = useSettingsState();
+
+  onMount(() => {
+    openSettings(settingsSlugToTab(params.tab ?? '') ?? 'Account');
+    restoreMobileDeepLink();
+  });
+
+  return null;
 }
 
 type SettingsPanelProps = {
@@ -89,15 +99,13 @@ export function SettingsPanel(props: SettingsPanelProps) {
     activeTabId,
     selectTab,
   } = useSettingsState();
-  const { groups, flatTabs, isAvailable } = useSettingsTabs();
+  const splitNavigate = useSplitNavigate();
+  const { groups, flatTabs } = useSettingsTabs();
   const logout = useLogout();
 
   const variant = () => props.variant ?? 'split';
-
-  // A tab's content renders only when it's both selected and still available
-  // (gating lives solely in the settings tab config).
-  const isCurrentTab = (tab: SettingsTab) =>
-    activeTabId() === tab && isAvailable(tab);
+  const activeNavigationTab = () =>
+    activeTabId() === 'Harness' ? 'Agents' : activeTabId();
 
   // Responsive state, driven by the panel's own width (see breakpoints above).
   const [panelWidth, setPanelWidth] = createSignal(Number.POSITIVE_INFINITY);
@@ -139,13 +147,19 @@ export function SettingsPanel(props: SettingsPanelProps) {
     hotkey: 'escape',
   });
 
+  const selectRoutedTab = (tab: SettingsTab) => {
+    selectTab(tab, (next) => {
+      splitNavigate(`/settings/${settingsTabToSlug(next)}`);
+    });
+  };
+
   // Helper to navigate to a tab by index
   function navigateToTabIndex(index: number): boolean {
     const tabs = flatTabs();
     if (index >= 0 && index < tabs.length) {
       const tab = tabs[index];
       if (tab) {
-        selectTab(tab.tab);
+        selectRoutedTab(tab.tab);
         return true;
       }
     }
@@ -153,7 +167,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   }
 
   function getCurrentTabIndex() {
-    return flatTabs().findIndex((tab) => tab.tab === activeTabId());
+    return flatTabs().findIndex((tab) => tab.tab === activeNavigationTab());
   }
 
   function handleNextTab() {
@@ -207,7 +221,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   const handleTabChange = (value: string) => {
     if (flatTabs().some((tab) => tab.tab === value)) {
-      selectTab(value as SettingsTab);
+      selectRoutedTab(value as SettingsTab);
     }
   };
 
@@ -261,7 +275,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
                 contentClass="px-(--mobile-chrome-gutter)"
                 items={tabItems()}
-                value={activeTabId()}
+                value={activeNavigationTab()}
                 onChange={handleTabChange}
               />
             }
@@ -281,7 +295,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
               <div class="mx-2 shrink-0">
                 <TabsInsetDropdown
                   list={tabItems()}
-                  value={activeTabId()}
+                  value={activeNavigationTab()}
                   onChange={handleTabChange}
                 />
               </div>
@@ -326,7 +340,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     {(item) => (
                       <SideNav.Item
                         icon={item.icon}
-                        active={activeTabId() === item.tab}
+                        active={activeNavigationTab() === item.tab}
                         onSelect={() => handleTabChange(item.tab)}
                         class="text-xs py-1.5"
                       >
@@ -372,7 +386,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   {backToApp()}
                   <TabsInsetDropdown
                     list={tabItems()}
-                    value={activeTabId()}
+                    value={activeNavigationTab()}
                     onChange={handleTabChange}
                   />
                   <div class="flex-1" />
@@ -385,58 +399,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   so content scrolls under the floating header/dock like every
                   other block instead of being boxed between them. */}
               <div class="relative min-h-0 flex-1 overflow-hidden">
-                <Show when={isCurrentTab('Account')}>
-                  <Suspense>
-                    <Account />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('Notifications')}>
-                  <Notifications />
-                </Show>
-                <Show when={isCurrentTab('Billing')}>
-                  <Suspense>
-                    <Billing />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('Appearance')}>
-                  <Appearance />
-                </Show>
-                <Show when={isCurrentTab('Shortcuts')}>
-                  <Shortcuts />
-                </Show>
-                <Show when={isCurrentTab('Team')}>
-                  <Suspense>
-                    <Team />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('Tags')}>
-                  <Suspense>
-                    <Tags />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('CRM')}>
-                  <Suspense>
-                    <Crm />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('Connected')}>
-                  <Suspense>
-                    <ConnectedAccounts />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('Mobile App')}>
-                  <MobileApp />
-                </Show>
-                <Show when={isCurrentTab('Agent')}>
-                  <Agent />
-                </Show>
-                <Show when={isCurrentTab('Bots')}>
-                  <Suspense>
-                    <Bots />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('Admin')}>
-                  <Admin />
+                <Show when={activeTabId()}>
+                  {(tab) => <SettingsTabContent tab={tab()} />}
                 </Show>
               </div>
             </div>

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO claude_oauth_grants (user_id, grant_ciphertext, kms_key_id, encryption_version) VALUES ($1, $2, $3, 2) ON CONFLICT (user_id) DO UPDATE SET grant_ciphertext = EXCLUDED.grant_ciphertext, kms_key_id = EXCLUDED.kms_key_id, encryption_version = 2, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0c69d12ce11ea87b4856ccb20039ec6f045f2753d3c27a5243b5d7debc124a75"
+}
