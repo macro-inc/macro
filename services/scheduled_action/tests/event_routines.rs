@@ -39,7 +39,11 @@ use scheduled_action::{
         event_trigger::{
             EventEntityType, EventId, EventPayload, EventReference, EventRejection, IncomingEvent,
         },
-        models::{MAX_ACTION_TIME, ScheduledAction, ScheduledActionUpdate},
+        execution::ExecutionHandle,
+        models::{
+            ExecutionResource, ExecutionResourceType, MAX_ACTION_TIME, ScheduledAction,
+            ScheduledActionUpdate,
+        },
         ports::{ScheduledActionLiveUpdate, ScheduledActionRepo, ScheduledAgentRunner},
         service::ScheduledActionServiceImpl,
     },
@@ -137,13 +141,24 @@ struct FakeRunner {
     emit_bot_outputs: bool,
 }
 impl ScheduledAgentRunner for FakeRunner {
-    async fn create_chat(&self, _: &ScheduledAction) -> anyhow::Result<String> {
-        Ok(generate_uuid_v7().to_string())
+    async fn prepare(
+        &self,
+        _: &ScheduledAction,
+        handle: &mut ExecutionHandle,
+    ) -> anyhow::Result<()> {
+        handle.resource = Some(ExecutionResource {
+            resource_type: ExecutionResourceType::Chat,
+            id: generate_uuid_v7().to_string(),
+        });
+        Ok(())
+    }
+    async fn cancel(&self, _: &ScheduledAction, _: &ExecutionHandle) -> anyhow::Result<()> {
+        Ok(())
     }
     async fn run(
         &self,
         action: &ScheduledAction,
-        _: &str,
+        _: &ExecutionHandle,
         event: Option<&EventReference>,
     ) -> anyhow::Result<()> {
         self.calls

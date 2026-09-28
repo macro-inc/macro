@@ -16,7 +16,11 @@ use model::chat::NewChatMessage;
 use notification::domain::service::NotificationIngress;
 
 use crate::domain::event_trigger::EventReference;
-use crate::domain::models::{AgentTask, ResolvedTaskTarget, RoutineModelId, ScheduledAction};
+use crate::domain::execution::ExecutionHandle;
+use crate::domain::models::{
+    AgentTask, ExecutionResource, ExecutionResourceType, ResolvedTaskTarget, RoutineModelId,
+    ScheduledAction,
+};
 use crate::domain::ports::ScheduledAgentRunner;
 
 #[cfg(test)]
@@ -57,11 +61,12 @@ where
     Mem: MemoryService,
     N: NotificationIngress,
 {
-    async fn create_chat(&self, action: &ScheduledAction) -> Result<String> {
+    async fn prepare(&self, action: &ScheduledAction, handle: &mut ExecutionHandle) -> Result<()> {
         let task: AgentTask =
             serde_json::from_value(action.task.clone()).context("invalid agent task definition")?;
         required_model(&task)?;
-        self.chats
+        let chat_id = self
+            .chats
             .create(
                 action.owner_user()?.clone(),
                 CreateChatArgs {
@@ -70,15 +75,32 @@ where
                 },
             )
             .await
-            .map_err(|error| anyhow::anyhow!(error))
+            .map_err(|error| anyhow::anyhow!(error))?;
+        handle.resource = Some(ExecutionResource {
+            resource_type: ExecutionResourceType::Chat,
+            id: chat_id,
+        });
+        Ok(())
+    }
+
+    async fn cancel(&self, _: &ScheduledAction, _: &ExecutionHandle) -> Result<()> {
+        // The scoped guard in run_tool_loop cancels local session/tool work on drop.
+        // A prepared chat is retained as history, not deleted on failure.
+        Ok(())
     }
 
     async fn run(
         &self,
         action: &ScheduledAction,
-        chat_id: &str,
+        handle: &ExecutionHandle,
         event: Option<&EventReference>,
     ) -> Result<()> {
+        let resource = handle.resource.as_ref().context("chat was not prepared")?;
+        anyhow::ensure!(
+            resource.resource_type == ExecutionResourceType::Chat,
+            "expected chat resource"
+        );
+        let chat_id = &resource.id;
         let owner = action.owner_user()?.clone();
         let task: AgentTask =
             serde_json::from_value(action.task.clone()).context("invalid agent task definition")?;

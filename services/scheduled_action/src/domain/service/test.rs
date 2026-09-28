@@ -2,7 +2,7 @@ mod user_cleanup;
 
 use super::*;
 use crate::domain::event_runs::ClaimToken;
-use crate::domain::models::ActionKind;
+use crate::domain::models::{ActionKind, ExecutionResource, ExecutionResourceType};
 use macro_uuid::generate_uuid_v7;
 use serde_json::json;
 use std::sync::Mutex;
@@ -92,6 +92,10 @@ impl ScheduledActionExecutor for FakeExecutor {
         Ok(InProgressExecution {
             action_id,
             chat_id: Some("manual-chat".into()),
+            resource: Some(ExecutionResource {
+                resource_type: ExecutionResourceType::Chat,
+                id: "manual-chat".into(),
+            }),
         })
     }
 }
