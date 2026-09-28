@@ -9,3 +9,5 @@ pub mod model_load;
 /// Authenticated repository and branch listing.
 pub mod repositories;
 pub mod runtime_gateway;
+/// Answering tool calls held for the session owner's approval.
+pub mod tool_approvals;

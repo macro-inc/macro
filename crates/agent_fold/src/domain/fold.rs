@@ -81,6 +81,7 @@ mod replay;
 mod state;
 /// Delegated agents and the calls nested under them.
 mod subagent;
+mod tool_approval;
 /// Tool calls and their patches.
 mod tool_call;
 /// Opening, closing, and failing turns.

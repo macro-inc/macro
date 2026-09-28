@@ -71,6 +71,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     claude_auth: Router,
     sharing: Router,
     routine_sessions: Router,
+    tool_approvals: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
 }
 
@@ -97,6 +98,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             claude_auth: Router::new(),
             sharing: Router::new(),
             routine_sessions: Router::new(),
+            tool_approvals: Router::new(),
             changes,
         }
     }
@@ -116,6 +118,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach session-sharing routes with their independent domain service.
     pub fn with_sharing(mut self, router: Router) -> Self {
         self.sharing = router;
+        self
+    }
+
+    /// Attach the routes answering tool calls held for the owner's approval.
+    pub fn with_tool_approvals(mut self, router: Router) -> Self {
+        self.tool_approvals = router;
         self
     }
 }
@@ -209,6 +217,7 @@ where
         .merge(agent_session_control_router(states.control))
         .merge(agent_session_create_router(states.create))
         .merge(states.sharing)
+        .merge(states.tool_approvals)
         .merge(agent_changes_router(states.changes));
     Router::new()
         .nest("/agent-sessions", agent_sessions)

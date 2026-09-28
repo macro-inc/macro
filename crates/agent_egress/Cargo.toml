@@ -16,6 +16,8 @@ axum = { workspace = true }
 axum-extra = { workspace = true, features = ["typed-header"] }
 base64 = { workspace = true }
 bytes = { workspace = true }
+# Holding a tool call for the owner: the stream it answers with.
+futures = { workspace = true }
 chrono = { workspace = true }
 # The installation records that say whose installation an installation is, and
 # the team memberships that decide whether the session's owner is one of them.
@@ -25,6 +27,7 @@ github = { path = "../github", default-features = false, features = [
   "sync",
 ] }
 http = { workspace = true }
+http-body = { workspace = true }
 http-body-util = { workspace = true }
 lru = { workspace = true }
 # Signing Macro API tokens, with the same shared vocabulary
@@ -33,6 +36,7 @@ macro_auth = { path = "../macro_auth" }
 # The owner's `User` row, which carries the FusionAuth id the exchange needs.
 macro_db_client = { path = "../macro_db_client" }
 macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
 model_owner = { path = "../model_owner" }
 # The rows saying which apps an owner connected, and the client that turns one
 # into Pipedream's MCP endpoint plus the headers scoping a call to it.
@@ -45,6 +49,8 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
+# The hold's keepalive timer, and the channel its stream is fed through.
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
 tracing = { workspace = true }
 url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

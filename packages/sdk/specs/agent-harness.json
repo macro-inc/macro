@@ -1317,6 +1317,107 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/tool-approvals/{approval_id}": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Answer a tool call the agent made in a turn somebody other than the\nsession's owner prompted. Approve and deny are the owner's; cancel is\nanyone's with edit access.",
+        "operationId": "answer_agent_session_tool_approval",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "approval_id",
+            "in": "path",
+            "description": "ID of the held tool call",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerToolApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerToolApprovalResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the owner, for approve or deny; or no edit access",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already resolved",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/claude-auth": {
       "get": {
         "tags": ["claude-auth"],
@@ -2044,6 +2145,28 @@
           "model": {
             "type": "string",
             "description": "The model slug the agent should switch to."
+          }
+        }
+      },
+      "AnswerToolApprovalRequest": {
+        "type": "object",
+        "description": "Request body for answering a held tool call.",
+        "required": ["answer"],
+        "properties": {
+          "answer": {
+            "$ref": "#/components/schemas/ToolApprovalAnswerDto",
+            "description": "The answer."
+          }
+        }
+      },
+      "AnswerToolApprovalResponse": {
+        "type": "object",
+        "description": "Response body for answering a held tool call.",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/ToolApprovalStatusDto",
+            "description": "Where the call stands now."
           }
         }
       },
@@ -2997,6 +3120,16 @@
             "description": "Whether reconnecting after service restart is required."
           }
         }
+      },
+      "ToolApprovalAnswerDto": {
+        "type": "string",
+        "description": "How a person answers a held tool call.",
+        "enum": ["approve", "deny", "cancel"]
+      },
+      "ToolApprovalStatusDto": {
+        "type": "string",
+        "description": "Where a held tool call stands once answered.",
+        "enum": ["pending", "approved", "denied", "cancelled", "expired"]
       },
       "UpdateChannelSharePermission": {
         "type": "object",

@@ -53,4 +53,4 @@ pub mod inbound;
 /// Adapters this crate reaches the rest of the world through.
 pub mod outbound;
 
-pub use domain::{error, model, ports, service};
+pub use domain::{approval, error, model, ports, service};

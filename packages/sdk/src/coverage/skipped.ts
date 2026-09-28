@@ -35,6 +35,7 @@ export const agentHarnessExcluded = [
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog = [
+  'answerAgentSessionToolApproval',
   'getAgentSessionPermissions',
   'updateAgentSessionPermissions',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];

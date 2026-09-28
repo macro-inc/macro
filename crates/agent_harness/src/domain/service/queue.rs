@@ -8,7 +8,7 @@ use agent_session::domain::events::{
     SessionSettledMetadata, SessionStoppedMetadata, TurnEndedMetadata, TurnStartedMetadata,
     WaitingForInputMetadata,
 };
-use agent_session::domain::model::StoredQueuedAction;
+use agent_session::domain::model::{StoredQueuedAction, TurnPrompter};
 
 use super::*;
 
@@ -916,6 +916,25 @@ where
                     }
                 }
             }
+        }
+
+        // Recorded before delivery, since the runtime may call a tool the
+        // moment the prompt lands: the egress proxy judges every call by who
+        // prompted the turn it belongs to, and it may be serving the call on
+        // another replica.
+        if let Err(error) = self
+            .sessions
+            .set_turn_prompter(
+                session_id,
+                &TurnPrompter {
+                    action_id: entry.action_id,
+                    user: entry.actor.clone(),
+                },
+            )
+            .await
+        {
+            self.requeue_claimed(session_id, entry).await;
+            return Err(error.into());
         }
 
         let command = DeliverAction {

@@ -297,6 +297,25 @@ pub enum AgentContextReplyTarget<'a> {
     None,
 }
 
+/// A person an agent session acts for or hears from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct AgentContextPerson<'a> {
+    /// Their Macro user id.
+    pub id: &'a str,
+    /// How a reader names them.
+    pub name: &'a str,
+}
+
+/// Whose access an agent session runs with, and who sent the prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct AgentContextPeople<'a> {
+    /// The session's owner.
+    pub owner: AgentContextPerson<'a>,
+    /// The prompt's sender; absent when a bot sent it on nobody's behalf.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender: Option<AgentContextPerson<'a>>,
+}
+
 /// The conversation an agent prompt was posted in.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -373,6 +392,8 @@ struct AgentContextRequest<'a> {
     instructions: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     parent: Option<&'a MessageParent>,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    people: Option<&'a AgentContextPeople<'a>>,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     context: Option<&'a AgentContext<'a>>,
 }
@@ -687,6 +708,7 @@ impl LexicalClient {
         prompt_markdown: &str,
         instructions: Option<&str>,
         parent: Option<&MessageParent>,
+        people: Option<&AgentContextPeople<'_>>,
         context: Option<&AgentContext<'_>>,
     ) -> Result<String> {
         let url = format!("{}/agent-context", self.url);
@@ -697,6 +719,7 @@ impl LexicalClient {
                     prompt_markdown,
                     instructions,
                     parent,
+                    people,
                     context,
                 })
                 .send()

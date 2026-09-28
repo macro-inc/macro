@@ -21,7 +21,7 @@ use crate::domain::model::{
     ClaimOutcome, CreateAgentSessionParams, ExternalSession, LeaseView, ManagerFence, Message,
     ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
     SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, StoredQueuedAction,
-    ThreadSession, cursor_run_checkpoint,
+    ThreadSession, TurnPrompter, cursor_run_checkpoint,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -759,6 +759,41 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .await
         .context("failed to rotate session credential")?;
         Ok(())
+    }
+
+    async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
+        sqlx::query!(
+            "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3 WHERE id = $1",
+            id.as_uuid(),
+            prompter.action_id.as_uuid(),
+            prompter.user.as_ref().map(|user| user.as_ref()),
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to record the turn prompter")?;
+        Ok(())
+    }
+
+    async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
+        let row = sqlx::query!(
+            r#"
+            SELECT turn_action_id, turn_prompter AS "turn_prompter: MacroUserIdStr<'static>"
+            FROM agent_session
+            WHERE id = $1
+            "#,
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the turn prompter")?;
+        Ok(row.and_then(|row| {
+            row.turn_action_id.map(|action_id| TurnPrompter {
+                action_id: agent_runtime_protocol::domain::action::AgentActionId::from_uuid(
+                    action_id,
+                ),
+                user: row.turn_prompter,
+            })
+        }))
     }
 
     async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {

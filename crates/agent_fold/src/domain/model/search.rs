@@ -81,6 +81,14 @@ impl SearchText {
                     self.push(&option.name);
                 }
             }
+            MessagePart::ToolApproval {
+                server_name,
+                tool_name,
+                ..
+            } => {
+                self.push(server_name);
+                self.push(tool_name);
+            }
             MessagePart::Control { control, outcome } => {
                 if let Control::SetModel { model } = control {
                     self.push(model);
