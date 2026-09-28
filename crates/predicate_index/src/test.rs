@@ -239,6 +239,94 @@ fn rejects_empty_ranges_duplicate_partitions_and_duplicate_sort_facts() {
 }
 
 #[test]
+fn set_cardinality_does_not_consume_the_attribute_budget() {
+    let mut doc = document("Document:1", "user-1", 10);
+    doc.exact_facts.extend((0..10_000).map(|i| ExactFact {
+        attribute: token("members"),
+        value: exact(&i.to_string()),
+    }));
+    doc.integer_facts
+        .extend((0..10_000).map(|value| IntegerFact {
+            attribute: token("numbers"),
+            value,
+        }));
+    doc.validate().unwrap();
+
+    let patch = OptimisticProjectionMutation::PatchExact {
+        record_key: doc.record_key.clone(),
+        profile: doc.profile.clone(),
+        partition: doc.partition.clone(),
+        remove: doc.exact_facts.clone(),
+        insert: doc.exact_facts.clone(),
+    };
+    patch.validate().unwrap();
+    assert!(matches!(
+        ExactValue::new(vec![0; MAX_EXACT_VALUE_BYTES + 1]),
+        Err(ValidationError::ExactValueTooLarge(_))
+    ));
+}
+
+#[test]
+fn document_and_patch_attribute_budgets_include_every_fact_family() {
+    let mut doc = document("Document:1", "user-1", 10);
+    doc.exact_facts = (0..MAX_ATTRIBUTES_PER_DOCUMENT - 1)
+        .map(|i| ExactFact {
+            attribute: token(&format!("attribute-{i}")),
+            value: exact("value"),
+        })
+        .collect();
+    // updated-at is shared by integer and sort facts: one attribute name.
+    doc.validate().unwrap();
+    doc.integer_facts.push(IntegerFact {
+        attribute: token("extra"),
+        value: 1,
+    });
+    assert_eq!(doc.validate(), Err(ValidationError::DocumentAttributes));
+
+    let patch = OptimisticProjectionMutation::Patch {
+        record_key: doc.record_key.clone(),
+        profile: doc.profile.clone(),
+        partition: doc.partition.clone(),
+        exact: doc
+            .exact_facts
+            .iter()
+            .map(|fact| ExactAttributePatch {
+                attribute: fact.attribute.clone(),
+                values: vec![fact.value.clone()],
+            })
+            .collect(),
+        integers: doc
+            .integer_facts
+            .iter()
+            .map(|fact| IntegerAttributePatch {
+                attribute: fact.attribute.clone(),
+                values: vec![fact.value],
+            })
+            .collect(),
+        sorts: doc.sort_facts.clone(),
+    };
+    assert_eq!(patch.validate(), Err(ValidationError::DocumentAttributes));
+
+    let patch = OptimisticProjectionMutation::PatchExact {
+        record_key: doc.record_key,
+        profile: doc.profile,
+        partition: doc.partition,
+        remove: doc.exact_facts,
+        insert: vec![
+            ExactFact {
+                attribute: token("updated-at"),
+                value: exact("one"),
+            },
+            ExactFact {
+                attribute: token("extra"),
+                value: exact("two"),
+            },
+        ],
+    };
+    assert_eq!(patch.validate(), Err(ValidationError::DocumentAttributes));
+}
+
+#[test]
 fn uncertainty_can_clear_exact_fields_after_a_wildcard() {
     let owner = token("owner");
     let updated_at = token("updated-at");

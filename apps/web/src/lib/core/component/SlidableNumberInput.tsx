@@ -1,4 +1,3 @@
-import { activeTextEditorSignal } from '@block-canvas/signal/toolManager';
 import { clamp } from '@block-canvas/util/math';
 import { type Vector2, vec2 } from '@block-canvas/util/vector2';
 import CaretDown from '@phosphor/caret-down.svg';
@@ -30,6 +29,7 @@ type SlidableNumberInput = ComponentProps<'div'> & {
   onSlideStart?: () => void;
   onSlidePreview?: (newValue?: string) => void;
   onSlideEnd?: (newValue?: string) => void;
+  onEditingChange?: (editing: boolean) => void;
   currentValue: string;
   presets: DropdownPreset[];
   showPresets?: boolean;
@@ -52,7 +52,7 @@ const OptionalTooltipWrapper = (props: {
   return <>{props.children}</>;
 };
 
-type SlidableNumberInputProps = SlidableNumberInput;
+export type SlidableNumberInputProps = SlidableNumberInput;
 
 export function SlidableNumberInput(props: SlidableNumberInputProps) {
   const [dropdownOpen, setDropdownOpen] = createSignal<boolean>(false);
@@ -61,7 +61,6 @@ export function SlidableNumberInput(props: SlidableNumberInputProps) {
     props.currentValue
   );
   const [mouseDownValue, setMouseDownValue] = createSignal<string>();
-  const [, setActiveTextEditor] = activeTextEditorSignal;
 
   function pointerMove(e: PointerEvent) {
     if (!mouseDownPos()) return;
@@ -205,7 +204,7 @@ export function SlidableNumberInput(props: SlidableNumberInputProps) {
               )}
               contenteditable
               onFocus={() => {
-                setActiveTextEditor(true);
+                props.onEditingChange?.(true);
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -222,7 +221,7 @@ export function SlidableNumberInput(props: SlidableNumberInputProps) {
                   );
                   if (matchingPreset) props.inputChanged(matchingPreset.value);
                 } else props.inputChanged(e.currentTarget.innerText);
-                setActiveTextEditor(false);
+                props.onEditingChange?.(false);
               }}
             >
               {mouseDownValue() ?? currentValue()}

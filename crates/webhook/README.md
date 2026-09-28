@@ -76,7 +76,8 @@ bookkeeping (including success/failure timestamp updates) do not produce them.
 ## Event ingestion and matching
 
 The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
-`macro.channels`, and `macro.webhooks`. It supports these event names:
+`macro.channels`, `macro.webhooks`, `macro.agent_sessions`, and
+`macro.agent_session_lifecycle`. It supports these event names:
 
 - Documents: `document.created`, `document.updated`, `document.deleted`, and
   `document.copied`.
@@ -87,6 +88,12 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
   `channel.participant_removed`, and `channel.mentioned`.
 - Webhooks: `webhook.created`, `webhook.updated`, `webhook.deleted`, and
   `webhook.validated`.
+- Agent triggers: `agent_trigger.new` and `agent_trigger.existing`.
+- Agent sessions: `agent_session.opened`, `agent_session.turn_started`,
+  `agent_session.turn_ended`, `agent_session.settled`,
+  `agent_session.waiting_for_input`, `agent_session.input_received`,
+  `agent_session.stopped`, `agent_session.renamed`, and
+  `agent_session.deleted`.
 
 For document and channel events, ingestion asks `EntityAccessService` for the
 people who currently have access to the entity. The matching workspace set
@@ -102,6 +109,18 @@ event, access and `ids` filtering are by channel: the entity is the channel
 containing the message, and the mentioned entity travels in the payload's
 `mentioned` field for consumers to filter on (e.g. the SDK's
 `events.onSelfMention`).
+
+Agent trigger events use `entity_type = "bot"`: a filter's `ids` selects one
+bot's whole trigger stream. Access is gated by the channel the mention sits in
+for `agent_trigger.new`, and by the session for `agent_trigger.existing`.
+
+Agent session lifecycle events use `entity_type = "agent_session"` with the
+session as entity and ordering key, so `ids` selects one session and events of
+one session arrive in order. Access is gated by the session's own grants: its
+owner, plus the members of the channel it was opened from. Subscribers who want
+every session's facts filter by event name alone. `agent_session.settled` is
+emitted when a turn ends with nothing queued behind it; a session that dies
+mid-turn emits `agent_session.stopped` with the interrupted turn instead.
 
 Webhook events use `entity_type = "webhook"` and take the event metadata's
 `workspace_id` as the sole matching workspace. This is a strict owner-workspace

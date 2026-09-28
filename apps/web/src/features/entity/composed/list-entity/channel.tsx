@@ -5,7 +5,7 @@ import {
 } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { DisplayName } from '@entity/components/DisplayName';
-import PhoneIcon from '@icon/wide-call.svg';
+import PhoneIcon from '@phosphor/phone-call.svg';
 import { useActiveCallsQuery } from '@queries/call/call';
 import { useJoinChannelMutation } from '@queries/channel/join-links';
 import { Button } from '@ui';

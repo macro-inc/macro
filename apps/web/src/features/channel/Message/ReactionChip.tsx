@@ -78,6 +78,7 @@ export function ReactionChip(props: ReactionChipProps) {
           <Button
             data-message-reaction-chip
             data-emoji={props.emoji}
+            data-user-reacted={props.selected ? '' : undefined}
             noTouchResize
             ref={(el) =>
               touchHandler(el, () => ({
@@ -91,10 +92,11 @@ export function ReactionChip(props: ReactionChipProps) {
             variant={props.selected ? 'accent' : 'outline'}
             class={cn(
               'flex flex-row items-center h-7 min-w-7 gap-1 rounded-full',
-              {
-                'border-accent/10': props.selected,
-                'pointer-events-auto': !props.interactive,
-              }
+              // Mix toward black, not ink. An ink wash lightens a dark theme, so
+              // it cannot show "you reacted" in both themes.
+              props.selected &&
+                'bg-[color-mix(in_oklch,oklch(0_0_0)_16%,var(--color-control))] dark-mode:bg-[color-mix(in_oklch,oklch(0_0_0)_34%,var(--color-control))]',
+              !props.interactive && 'pointer-events-auto'
             )}
             disabled={!props.interactive}
             onClick={(event) => {
@@ -110,7 +112,7 @@ export function ReactionChip(props: ReactionChipProps) {
         </HoverCard>
       </Popover.Anchor>
       <Popover.Portal>
-        <Popover.Content class="z-modal border border-edge-muted bg-surface p-1.5 text-ink-muted text-xs rounded-sm">
+        <Popover.Content class="z-modal glass bg-menu-glass p-1.5 text-ink-muted text-xs rounded-lg">
           <ReactionTooltipContent
             users={props.users}
             currentUserId={props.currentUserId}

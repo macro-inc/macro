@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotKind, BotOwner,
-    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+    Agent, AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotKind, BotOwner,
+    CreateAgentRequest, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
 };
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
@@ -97,6 +97,27 @@ impl TestBotService {
 }
 
 impl BotService for TestBotService {
+    async fn create_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _req: CreateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn update_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn list_agents(&self, _caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
+        unimplemented!()
+    }
+
     async fn create_bot(
         &self,
         _caller: MacroUserIdStr<'static>,
@@ -208,6 +229,17 @@ impl BotService for TestBotService {
         _bot_id: BotId,
         _token_id: Uuid,
     ) -> Result<(), BotError> {
+        unimplemented!()
+    }
+
+    async fn channel_message_access(
+        &self,
+        _bot_id: BotId,
+        _channel_id: Uuid,
+    ) -> Result<
+        entity_access::domain::models::EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        BotError,
+    > {
         unimplemented!()
     }
 

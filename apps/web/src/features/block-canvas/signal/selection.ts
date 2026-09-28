@@ -4,8 +4,8 @@ import {
   useGetGroup,
   useGetNode,
 } from '@block-canvas/store/getNodeEdge';
-import { createBlockSignal } from '@core/block';
 import { createMemo, untrack } from 'solid-js';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import {
   type CanvasEdge,
   type CanvasEntityStyle,
@@ -16,26 +16,20 @@ import {
 import type { Rectangle } from '../util/rectangle';
 import { sharedInstance } from '../util/sharedInstance';
 
-export const selectedNodeIdsSignal = createBlockSignal<Set<string>>(new Set());
-export const selectedEdgeIdsSignal = createBlockSignal<Set<string>>(new Set());
-export const selectedGroupIdsSignal = createBlockSignal<Set<string>>(new Set());
-export const boxSelectionSignal = createBlockSignal<Rectangle>();
-const lastSelectedNodeIdsSignal = createBlockSignal<Set<string>>(new Set());
-const lastSelectedEdgeIdsSignal = createBlockSignal<Set<string>>(new Set());
-
 export type Selection = ReturnType<typeof createSelection>;
 
 export const useSelection = sharedInstance<Selection>(createSelection);
 
 function createSelection() {
-  const [selectedNodeIds, setSelectedNodeIds] = selectedNodeIdsSignal;
-  const [selectedEdgeIds, setSelectedEdgeIds] = selectedEdgeIdsSignal;
-  const [selectedGroupIds, setSelectedGroupIds] = selectedGroupIdsSignal;
+  const state = useCanvasDocument().state.signals;
+  const [selectedNodeIds, setSelectedNodeIds] = state.selectedNodeIds;
+  const [selectedEdgeIds, setSelectedEdgeIds] = state.selectedEdgeIds;
+  const [selectedGroupIds, setSelectedGroupIds] = state.selectedGroupIds;
   const [lastSelectedNodeIds, setLastSelectedNodeIds] =
-    lastSelectedNodeIdsSignal;
+    state.lastSelectedNodeIds;
   const [lastSelectedEdgeIds, setLastSelectedEdgeIds] =
-    lastSelectedEdgeIdsSignal;
-  const [boxSelection, setBoxSelection] = boxSelectionSignal;
+    state.lastSelectedEdgeIds;
+  const [boxSelection, setBoxSelection] = state.selectionBox;
   const getNode = useGetNode();
   const getEdge = useGetEdge();
   const getGroup = useGetGroup();

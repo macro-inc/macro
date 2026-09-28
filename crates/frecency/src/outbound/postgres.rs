@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::{cowlike::CowLike, error::ParseErr, user_id::MacroUserIdStr};
 use model_entity::{Entity, EntityType};
-use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction, prelude::FromRow};
+use sqlx::{PgPool, Postgres, QueryBuilder, Row, pool::PoolConnection, prelude::FromRow};
 use std::{borrow::Cow, collections::VecDeque, str::FromStr};
 use thiserror::Error;
 
@@ -387,13 +387,20 @@ impl AggregateFrecencyStorage for FrecencyPgStorage {
 }
 
 /// concrete struct which implements [UnprocessedEventsRepo]
-/// This uses transactions to ensure that the act of processing events remains atomic
+///
+/// Batches are claimed and committed up front, so no transaction stays open
+/// across the aggregation work. Pollers are still serialised, by a
+/// session-scoped advisory lock held on `aggregate_lock` for the length of one
+/// pass — see [`UnprocessedEventsRepo::get_unprocessed_events`] for why that is
+/// load-bearing.
 pub struct FrecencyPgProcessor {
     pool: PgPool,
-    tx: tokio::sync::Mutex<Option<Transaction<'static, Postgres>>>,
+    /// Connection holding the session-level aggregation lock. Occupied only
+    /// between a successful claim and its matching `mark_processed`.
+    aggregate_lock: tokio::sync::Mutex<Option<PoolConnection<Postgres>>>,
 }
 
-// Define a unique lock ID for frecency polling
+// Define a unique lock ID for frecency aggregation
 const FRECENCY_POLLER_LOCK_ID: i64 = 999_999_001;
 
 impl FrecencyPgProcessor {
@@ -401,7 +408,7 @@ impl FrecencyPgProcessor {
     pub fn new(pool: PgPool) -> Self {
         FrecencyPgProcessor {
             pool,
-            tx: tokio::sync::Mutex::new(None),
+            aggregate_lock: tokio::sync::Mutex::new(None),
         }
     }
 }
@@ -411,13 +418,10 @@ type ExistingEventRow = EventRow<'static, i64>;
 /// the types of errors that can occur with the poller
 #[derive(Debug, Error)]
 pub enum PollerErr {
-    /// there was an issue accessing the db tx
-    #[error("Expected to be inside a transaction, but no transaction was present")]
-    TxErr,
-    /// failed to acquire advisory lock on db
-    #[error("another poller currently holds the frecency lock")]
+    /// another poller currently holds the aggregation lock
+    #[error("another poller currently holds the frecency aggregation lock")]
     DbLockErr,
-    /// failed to acquire mutex lock
+    /// failed to acquire the in-process mutex guarding the lock connection
     #[error(transparent)]
     MutexErr(#[from] tokio::sync::TryLockError),
     /// sqlx database error
@@ -440,90 +444,133 @@ impl UnprocessedEventsRepo for FrecencyPgProcessor {
     type Err = PollerErr;
     type EventId = i64;
 
+    /// Take the aggregation lock, then claim a batch of unprocessed events,
+    /// marking them processed and committing before returning.
+    ///
+    /// This previously opened a transaction, took `pg_advisory_xact_lock`, ran
+    /// the read, and then stashed the *live* transaction so `mark_processed`
+    /// could commit it after aggregation. That left the connection
+    /// `idle in transaction` for the whole aggregation pass (20-60s in prod),
+    /// which pinned `xmin`, blocked vacuum on `frecency_events`, and held a
+    /// pool connection the entire time.
+    ///
+    /// Claiming up front makes the *transaction* one statement long. The lock
+    /// still has to outlive the claim, though, and dropping it would be a
+    /// correctness bug rather than a throughput trade: aggregation is a
+    /// read-modify-write of `frecency_aggregates`, and disjoint event batches
+    /// routinely map onto the same `(user_id, entity_type, entity_id)` key.
+    /// Two pollers would each read the same base row, merge their own events
+    /// onto it in memory, and then blind-overwrite it in `set_aggregates`
+    /// (`SET event_count = EXCLUDED.event_count, ...`) — last writer wins and
+    /// the other batch's contribution is silently dropped, permanently, since
+    /// its events are already marked processed. `connection_gateway` runs
+    /// three replicas in prod, so this is a steady-state race, not a rare one.
+    ///
+    /// So the lock is now session-scoped instead of transaction-scoped: held
+    /// on a dedicated pooled connection across the whole pass and released by
+    /// `mark_processed`. Same mutual exclusion as before, without an open
+    /// transaction. `FOR UPDATE SKIP LOCKED` on the claim is belt and braces —
+    /// it keeps the claim itself correct if this lock is ever narrowed.
+    ///
+    /// Delivery is at-most-once: a crash between the claim and
+    /// `set_aggregates` drops that batch's contribution. Frecency is a ranking
+    /// heuristic rather than a ledger, so a lost batch degrades ordering
+    /// slightly rather than corrupting state. If that stops being acceptable,
+    /// the fix is a `claimed_at` column reset by a sweeper, not a return to
+    /// holding the transaction open.
+    ///
+    /// `ORDER BY id` gives `idx_frecency_events_unprocessed_id` something to
+    /// walk; the columns are listed explicitly so adding a column to the table
+    /// cannot silently widen this read.
     async fn get_unprocessed_events(
         &self,
     ) -> Result<Vec<EventRecordWithId<'static, i64>>, Self::Err> {
-        // Clean up any stale transaction from a previous failed processing run.
-        // Without this, a failed run leaves its tx (and advisory lock) in the mutex,
-        // causing every subsequent poll to fail on pg_try_advisory_xact_lock.
-        {
-            let mut guard = self.tx.try_lock()?;
-            if let Some(stale_tx) = guard.take() {
-                tracing::warn!(
-                    "rolling back stale frecency transaction from a previous failed run"
-                );
-                let _ = stale_tx.rollback().await.inspect_err(|e| {
-                    tracing::error!(error = ?e, "failed to rollback stale frecency transaction");
+        let mut guard = self.aggregate_lock.try_lock()?;
+
+        // A pass that failed between the claim and mark_processed leaves its
+        // connection here, still holding the lock. Release it explicitly
+        // rather than trusting pool reset to do it.
+        if let Some(mut stale) = guard.take() {
+            tracing::warn!("releasing frecency aggregation lock left by a failed pass");
+            let _ = sqlx::query!(r#"SELECT pg_advisory_unlock_all()"#)
+                .execute(&mut *stale)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error = ?e, "failed to release stale frecency lock");
                 });
-            }
         }
 
-        let mut tx = self.pool.begin().await?;
-        let true = sqlx::query_scalar!(
-            r#"
-               SELECT pg_try_advisory_xact_lock($1)
-            "#,
+        let mut conn = self.pool.acquire().await?;
+        let locked = sqlx::query_scalar!(
+            r#"SELECT pg_try_advisory_lock($1)"#,
             FRECENCY_POLLER_LOCK_ID
         )
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut *conn)
         .await?
-        .unwrap_or(false) else {
+        .unwrap_or(false);
+
+        if !locked {
+            // Nothing was acquired, so returning the connection is enough.
             return Err(PollerErr::DbLockErr);
-        };
-
-        let res: Vec<ExistingEventRow> = sqlx::query_as!(
-            ExistingEventRow,
-            r#"
-            SELECT *
-            FROM
-                frecency_events
-            WHERE was_processed = false
-            LIMIT $1
-            "#,
-            FETCH_LIMIT as i64
-        )
-        .fetch_all(&mut *tx)
-        .await?;
-
-        let res: Result<Vec<_>, _> = res.into_iter().map(|r| r.into_event_record()).collect();
-
-        let mut guard = self.tx.try_lock()?;
-        *guard = Some(tx);
-        res.map_err(PollerErr::from)
-    }
-
-    async fn mark_processed<'a>(
-        &self,
-        event: Vec<EventRecordWithId<'a, i64>>,
-    ) -> Result<(), Self::Err> {
-        let mut guard = self.tx.try_lock()?;
-
-        let mut tx = guard.take().ok_or(PollerErr::TxErr)?;
-
-        if event.is_empty() {
-            tx.commit().await?;
-            return Ok(());
         }
 
-        let mut query_builder = QueryBuilder::<Postgres>::new(
+        // Stash before running anything that can fail, so a mid-pass error
+        // leaves the lock reachable for the cleanup above.
+        *guard = Some(conn);
+        let conn = guard.as_mut().expect("connection was just stashed");
+
+        let claimed: Vec<ExistingEventRow> = sqlx::query_as!(
+            ExistingEventRow,
             r#"
             UPDATE frecency_events
             SET was_processed = true
             WHERE id IN (
+                SELECT id
+                FROM frecency_events
+                WHERE was_processed = false
+                ORDER BY id
+                LIMIT $1
+                FOR UPDATE SKIP LOCKED
+            )
+            RETURNING
+                id,
+                user_id,
+                entity_type,
+                event_type,
+                timestamp,
+                connection_id,
+                entity_id,
+                was_processed
             "#,
-        );
+            FETCH_LIMIT as i64
+        )
+        .fetch_all(&mut **conn)
+        .await?;
 
-        let mut separated = query_builder.separated(", ");
-        for e in event {
-            separated.push_bind(e.id);
-        }
-        separated.push_unseparated(")");
+        claimed
+            .into_iter()
+            .map(|r| r.into_event_record())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(PollerErr::from)
+    }
 
-        let query = query_builder.build();
-
-        query.execute(&mut *tx).await?;
-
-        tx.commit().await?;
+    /// Releases the aggregation lock taken by
+    /// [`UnprocessedEventsRepo::get_unprocessed_events`].
+    ///
+    /// The events themselves were already marked processed by the claim; what
+    /// still has to happen at the end of a pass is letting the next poller in,
+    /// which must not happen until this pass's `set_aggregates` has landed.
+    async fn mark_processed<'a>(
+        &self,
+        _event: Vec<EventRecordWithId<'a, i64>>,
+    ) -> Result<(), Self::Err> {
+        let mut guard = self.aggregate_lock.try_lock()?;
+        let Some(mut conn) = guard.take() else {
+            return Ok(());
+        };
+        sqlx::query_scalar!(r#"SELECT pg_advisory_unlock($1)"#, FRECENCY_POLLER_LOCK_ID)
+            .fetch_one(&mut *conn)
+            .await?;
         Ok(())
     }
 
@@ -531,8 +578,12 @@ impl UnprocessedEventsRepo for FrecencyPgProcessor {
         &self,
         aggregates: Vec<AggregateId<'_>>,
     ) -> Result<Vec<AggregateFrecency>, Self::Err> {
-        let mut guard = self.tx.try_lock()?;
-        let tx = guard.as_deref_mut().ok_or(PollerErr::TxErr)?;
+        // `push_tuples` renders an empty iterator as `IN ()`, which Postgres
+        // rejects as a syntax error. Callers should not reach here with an
+        // empty batch, but nothing left to look up has an obvious answer.
+        if aggregates.is_empty() {
+            return Ok(Vec::new());
+        }
 
         let mut query_builder = QueryBuilder::<Postgres>::new(
             r#"
@@ -559,7 +610,7 @@ impl UnprocessedEventsRepo for FrecencyPgProcessor {
 
         let query = query_builder.build_query_as::<AggregateRow>();
 
-        let output = query.fetch_all(tx).await?;
+        let output = query.fetch_all(&self.pool).await?;
 
         let out: Result<Vec<_>, _> = output
             .into_iter()
@@ -570,9 +621,6 @@ impl UnprocessedEventsRepo for FrecencyPgProcessor {
     }
 
     async fn set_aggregates(&self, aggregates: Vec<AggregateFrecency>) -> Result<(), Self::Err> {
-        let mut guard = self.tx.try_lock()?;
-        let tx = guard.as_deref_mut().ok_or(PollerErr::TxErr)?;
-
         if aggregates.is_empty() {
             return Ok(());
         }
@@ -617,7 +665,7 @@ impl UnprocessedEventsRepo for FrecencyPgProcessor {
         );
 
         let query = query_builder.build();
-        query.execute(tx).await?;
+        query.execute(&self.pool).await?;
 
         Ok(())
     }

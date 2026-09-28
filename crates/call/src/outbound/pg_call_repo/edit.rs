@@ -1,19 +1,21 @@
 //! SQL operations for editing call-record share permissions.
 
-use entity_access_db_utils::{AccessLevel, EntityAccessSourceType};
+use entity_access_db_utils::AccessLevel;
 use model_entity::EntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use sqlx::{Postgres, QueryBuilder, Transaction};
 use uuid::Uuid;
 
-use crate::domain::models::CustomSpeakerAssignment;
+use crate::domain::models::{CallError, CustomSpeakerAssignment};
 
-/// Update share permissions for a call record.
+/// Update link and channel share permissions for a call record.
 ///
 /// Looks up the call's share permission ID from either the active `calls`
 /// table or the archived `call_records` table (both carry `share_permission_id`),
 /// then updates the `SharePermission` and `ChannelSharePermission` tables.
+/// Team sharing is not handled here: `team_share::apply_team_share` runs
+/// first in the same transaction and owns the `team_share_*` columns.
 pub(super) async fn update_share_permission(
     transaction: &mut Transaction<'_, Postgres>,
     call_id: &Uuid,
@@ -51,99 +53,32 @@ pub(super) async fn update_share_permission(
     Ok(())
 }
 
-/// Grant or revoke the call creator's team's View access on the call.
-///
-/// The team is resolved from the call's `created_by` in either the active
-/// `calls` table or the archived `call_records` table — not from the acting
-/// user. If the creator has no team, this is a no-op. Also keeps the
-/// `calls.share_with_team` and `call_records.share_with_team` flags in sync so
-/// reads and future archiving reflect the latest choice.
-pub(super) async fn set_share_with_team(
+/// The conflict returned when a live-call operation reaches a call that has
+/// been archived meanwhile: its team sharing is canonical now.
+pub(super) fn archived_call_conflict(call_id: &Uuid) -> CallError {
+    CallError::Conflict(format!(
+        "call {call_id} is no longer active; edit team sharing through sharePermission.teamShareAccessLevel"
+    ))
+}
+
+/// Set the pending share-with-team intent on an active call. The intent is
+/// translated into canonical team sharing when the call is archived.
+pub(super) async fn set_live_share_with_team(
     transaction: &mut Transaction<'_, Postgres>,
     call_id: &Uuid,
     share: bool,
-) -> Result<(), sqlx::Error> {
-    let created_by: String = sqlx::query_scalar!(
-        r#"
-        SELECT created_by as "created_by!"
-        FROM (
-            SELECT created_by FROM calls WHERE id = $1
-            UNION ALL
-            SELECT created_by FROM call_records WHERE id = $1
-        ) t
-        LIMIT 1
-        "#,
-        call_id,
-    )
-    .fetch_one(transaction.as_mut())
-    .await?;
-
-    sqlx::query!(
+) -> Result<(), CallError> {
+    let updated = sqlx::query!(
         r#"UPDATE calls SET share_with_team = $2 WHERE id = $1"#,
         call_id,
         share,
     )
     .execute(transaction.as_mut())
-    .await?;
-
-    sqlx::query!(
-        r#"UPDATE call_records SET share_with_team = $2 WHERE id = $1"#,
-        call_id,
-        share,
-    )
-    .execute(transaction.as_mut())
-    .await?;
-
-    let team_id: Option<Uuid> = sqlx::query_scalar!(
-        r#"
-        SELECT team_id
-        FROM team_user
-        WHERE user_id = $1
-        LIMIT 1
-        "#,
-        &created_by,
-    )
-    .fetch_optional(transaction.as_mut())
-    .await?;
-
-    let Some(team_id) = team_id else {
-        return Ok(());
-    };
-
-    if share {
-        sqlx::query!(
-            r#"
-            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT DO NOTHING
-            "#,
-            call_id,
-            EntityType::Call.as_ref(),
-            &team_id.to_string(),
-            EntityAccessSourceType::Team as _,
-            AccessLevel::View as _,
-        )
-        .execute(transaction.as_mut())
-        .await?;
-    } else {
-        sqlx::query!(
-            r#"
-            DELETE FROM entity_access
-            WHERE entity_id = $1
-              AND entity_type = $2
-              AND source_id = $3
-              AND source_type = $4
-              AND granted_from_project_id IS NULL
-            "#,
-            call_id,
-            EntityType::Call.as_ref(),
-            &team_id.to_string(),
-            EntityAccessSourceType::Team as _,
-        )
-        .execute(transaction.as_mut())
-        .await?;
+    .await?
+    .rows_affected();
+    if updated == 0 {
+        return Err(archived_call_conflict(call_id));
     }
-
     Ok(())
 }
 
@@ -223,7 +158,10 @@ pub(super) async fn set_custom_speakers(
     Ok(())
 }
 
-/// Update the SharePermission row.
+/// Update the link-share columns of the SharePermission row.
+///
+/// `team_share_access_level` is deliberately ignored: the canonical team-share
+/// command has already been validated and applied by `apply_team_share`.
 #[allow(
     clippy::disallowed_methods,
     reason = "the optional fields require a dynamic SET clause; identifiers are trusted and values are bound"

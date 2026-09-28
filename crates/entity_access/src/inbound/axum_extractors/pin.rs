@@ -80,7 +80,9 @@ where
                 Some(user.macro_user_id.clone())
             }
             MacroAuthorization::Bot(_) => None,
-            MacroAuthorization::Internal(None) => return Err(ExtractorError::Unauthorized),
+            MacroAuthorization::Harness(_) | MacroAuthorization::Internal(None) => {
+                return Err(ExtractorError::Unauthorized);
+            }
         };
 
         let Path(PinParams { pinned_item_id }) = req
@@ -135,7 +137,9 @@ where
                     _marker: PhantomData,
                 }
             }
-            MacroAuthorization::Internal(None) => return Err(ExtractorError::Unauthorized),
+            MacroAuthorization::Harness(_) | MacroAuthorization::Internal(None) => {
+                return Err(ExtractorError::Unauthorized);
+            }
         };
 
         Ok(Self {

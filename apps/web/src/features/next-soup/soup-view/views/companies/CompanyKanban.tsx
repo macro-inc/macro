@@ -3,10 +3,7 @@ import { NO_STAGE } from '@app/features/next-soup/filters/configs/';
 import { EmptyState } from '@app/features/next-soup/soup-view/empty-states';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
-import {
-  openEntityInSplitFromUnifiedList,
-  preventDuplicatePreviewEntityOpen,
-} from '@app/features/next-soup/utils';
+import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { SoupEntityContextMenu } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useDealStages } from '@companies/crm/deal-stages';
@@ -59,7 +56,9 @@ type StageColumn = {
  * closed stage additionally requires the move-closed-deals permission).
  *
  */
-export function CompanyKanban() {
+export function CompanyKanban(props: {
+  onOpenEntity?: (entity: EntityData) => boolean;
+}) {
   const { source, soup, stageFilter, searchText, activeTab } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const entityActionViewContext = () =>
@@ -255,23 +254,18 @@ export function CompanyKanban() {
   };
 
   const openCompany = (entity: EntityData, event: MouseEvent) => {
-    // Shift+click always opens a fresh split; opt+click replaces the whole
-    // Preview Pair; a plain click while engaged as a Controller previews into
-    // the Viewer and shouldn't re-open an entity already shown elsewhere.
-    // Matches the list view's onEntityClick.
     if (
+      !event.metaKey &&
+      !event.ctrlKey &&
       !event.shiftKey &&
       !event.altKey &&
-      panel.handle.isControllerSplit() &&
-      preventDuplicatePreviewEntityOpen(entity, panel.handle)
-    ) {
+      props.onOpenEntity?.(entity)
+    )
       return;
-    }
     soup.focus.set(entity.id);
 
     void openEntityInSplitFromUnifiedList(entity, {
       openInNewSplit: event.shiftKey,
-      replacePreview: !event.shiftKey && event.altKey,
       splitHandle: panel.handle,
       referredFrom: 'companies',
     });
@@ -304,10 +298,8 @@ export function CompanyKanban() {
                   class={cn(
                     // Fallback sizing until the board is measured; after
                     // that the snapping columnWidth() takes over.
-                    'flex h-full min-w-56 flex-1 flex-col rounded-lg border border-edge-muted bg-surface',
-                    dropTarget() === column.key &&
-                      draggedId() &&
-                      'border-accent/50 bg-accent/5'
+                    'flex h-full min-w-56 flex-1 flex-col rounded-xl bg-surface-2/30 transition-colors',
+                    dropTarget() === column.key && draggedId() && 'bg-accent/10'
                   )}
                   style={
                     columnWidth() !== undefined
@@ -434,8 +426,8 @@ function CompanyKanbanCard(props: {
         onDragEnd={props.onDragEnd}
         onClick={props.onClick}
         class={cn(
-          'flex flex-col gap-1.5 rounded-lg border border-edge-muted bg-panel p-2.5 text-sm',
-          'hover:border-edge hover:bg-active transition-colors',
+          'flex flex-col gap-1.5 rounded-lg bg-surface p-2.5 text-sm shadow-sm',
+          'hover:bg-hover hover:shadow-md transition-[background-color,box-shadow]',
           props.dragging && 'opacity-40'
         )}
       >

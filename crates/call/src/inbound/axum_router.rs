@@ -7,6 +7,12 @@
 //! - [`webhook_router`] — RTC provider webhook ingestion.
 //!   Does **not** require auth middleware (LiveKit signs requests itself).
 
+#[cfg(test)]
+mod test;
+
+/// Meeting invitation HTTP endpoints.
+pub mod meetings;
+
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -97,10 +103,10 @@ impl<S, Svc, Auth> FromRef<CallRouterState<S, Svc, Auth>> for MacroAuthorization
 /// - `GET /active` — list all active calls in channels the caller is a member of
 /// - `DELETE /{channel_id}` — leave or end a call
 /// - `GET /record/{call_id}` — get a full call record (transcript + participants)
-/// - `PATCH /record/{call_id}` — edit a call record (e.g. share permissions)
+/// - `PATCH /record/{call_id}` — edit a call record (share permissions, team sharing, name)
 /// - `PATCH /record/{call_id}/transcript` — set per-diarized-speaker custom_speaker overrides
 /// - `DELETE /record/{call_id}` — delete a call record
-/// - `POST /record/{call_id}/share-with-team/toggle` — flip the call's share_with_team flag
+/// - `POST /record/{call_id}/share-with-team/toggle` — flip the live call's share-with-team toggle
 /// - `POST /record/preview` — batch-fetch lightweight previews for many call ids
 pub fn call_router<S, Svc, Auth, T>(state: CallRouterState<S, Svc, Auth>) -> Router<T>
 where
@@ -110,6 +116,36 @@ where
     T: Send + Sync,
 {
     Router::new()
+        .route(
+            "/meetings",
+            get(meetings::list::<S, Svc, Auth>).post(meetings::create::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/active",
+            get(meetings::list_active::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/{meeting_id}",
+            axum::routing::delete(meetings::cancel::<S, Svc, Auth>)
+                .patch(meetings::update::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/join/{token}",
+            post(meetings::join::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/invite/{token}",
+            post(meetings::invite::<S, Svc, Auth>)
+                .get(meetings::invite_permissions::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/invite/{token}/users",
+            post(meetings::invite_users::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/link",
+            post(meetings::share::<S, Svc, Auth>),
+        )
         .route(
             "/{channel_id}",
             get(get_or_create_call_handler::<S, Svc, Auth>)
@@ -165,19 +201,31 @@ impl<S: CallService> WebhookRouterState<S> {
     }
 }
 
-/// Webhook router for endpoints outside the user-auth layer; each handler
-/// validates its own credentials.
+/// Routes outside user authentication; each handler validates its credentials.
 ///
-/// Routes:
-/// - `POST /webhook` — ingest a webhook event from LiveKit (signed by LiveKit)
-/// - `GET /ring-status/{call_id}` — per-user ring status, authenticated with
-///   the LiveKit JWT delivered in the VoIP push payload
-pub fn webhook_router<S, T>(state: WebhookRouterState<S>) -> Router<T>
+/// - `GET /join/{token}` — public capability lookup (per-IP rate limited)
+/// - `POST /join/{token}` — public guest join (per-IP rate limited)
+/// - `POST /join/{token}/leave` — RTC-token-authorized leave (per-IP rate limited)
+/// - `POST /webhook` — signed LiveKit events
+/// - `GET /ring-status/{call_id}` — status authorized by the VoIP-delivered RTC token
+pub fn webhook_router<S, R, T>(state: WebhookRouterState<S>, rate_limiter: R) -> Router<T>
 where
     S: CallService,
+    R: rate_limit::RateLimitService + Clone + Send + Sync + 'static,
     T: Send + Sync,
 {
     Router::new()
+        .route(
+            "/join/{token}",
+            get(meetings::lookup::<S>).post(meetings::guest_join::<S>),
+        )
+        .route("/join/{token}/leave", post(meetings::leave::<S>))
+        // Apply the anonymous budget only to the routes above, not signed
+        // LiveKit webhooks or authenticated ring-status requests.
+        .route_layer(axum::middleware::from_fn_with_state(
+            rate_limiter,
+            meetings::enforce_public_rate_limit::<R>,
+        ))
         .route("/webhook", post(webhook_handler::<S>))
         .route("/ring-status/{call_id}", get(ring_status_handler::<S>))
         .with_state(state)
@@ -216,14 +264,16 @@ impl<S> FromRef<InternalCallRouterState<S>> for Arc<S> {
 /// Internal call router for agent-submitted transcript segments.
 ///
 /// Routes:
-/// - `POST /{channel_id}/transcript` — ingest a transcript segment (from internal agent)
+/// - `POST /{room_name}/transcript` — ingest a transcript segment (from the
+///   transcription agent; the path segment is the RTC room name, which equals
+///   the call id for new calls)
 pub fn internal_call_router<S, T>(state: InternalCallRouterState<S>) -> Router<T>
 where
     S: CallService,
     T: Send + Sync,
 {
     Router::new()
-        .route("/{channel_id}/transcript", post(transcript_handler::<S>))
+        .route("/{room_name}/transcript", post(transcript_handler::<S>))
         .with_state(state)
 }
 
@@ -443,8 +493,11 @@ pub async fn delete_call_record_handler<
 
 /// Handler for `PATCH /call/record/{call_id}`.
 ///
-/// Edits a call record — currently supports updating the record's share
-/// permissions. Access is validated via channel membership
+/// Edits a call record: link/channel share permissions, display name, and
+/// team sharing. Edit access (channel membership) is required for the request.
+/// `sharePermission.teamShareAccessLevel` only accepts `view` or `null`; while
+/// the call is live it sets the pending share-with-team toggle, and once the
+/// call is archived it is additionally authorized against the call's creator.
 #[utoipa::path(
     patch,
     operation_id = "edit_call_record",
@@ -455,8 +508,11 @@ pub async fn delete_call_record_handler<
     request_body = EditCallRecordRequest,
     responses(
         (status = 204, description = "Call record updated"),
+        (status = 400, description = "Invalid team-share level, contradictory inputs, or the creator has no team", body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, description = "Team sharing of an archived call may only be changed by its creator", body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 409, description = "Team-sharing facts changed, or the call was archived mid-request; reload and retry", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -517,8 +573,10 @@ pub async fn edit_call_transcript_handler<
 
 /// Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
 ///
-/// Toggles the `share_with_team` flag on the active call. Returns the new
-/// value as the JSON body.
+/// Flips the live call's share-with-team toggle and returns the new value as
+/// the JSON body. The toggle is applied as canonical team sharing (View for
+/// the creator's team) when the call is archived; archived calls answer 409
+/// and are edited through `PATCH /call/record/{call_id}` instead.
 #[utoipa::path(
     post,
     operation_id = "toggle_share_with_team",
@@ -527,9 +585,10 @@ pub async fn edit_call_transcript_handler<
         ("call_id" = Uuid, Path, description = "Call ID"),
     ),
     responses(
-        (status = 200, body = bool, content_type = "application/json", description = "New value of share_with_team after toggle"),
+        (status = 200, body = bool, content_type = "application/json", description = "New value of the share-with-team toggle"),
         (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 409, description = "The call is no longer active", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -706,9 +765,9 @@ pub async fn ring_status_handler<S: CallService>(
 #[utoipa::path(
     post,
     operation_id = "ingest_transcript",
-    path = "/call/{channel_id}/transcript",
+    path = "/call/{room_name}/transcript",
     params(
-        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("room_name" = Uuid, Path, description = "RTC room name; the transcription agent passes its LiveKit room verbatim"),
     ),
     request_body = TranscriptSegmentRequest,
     responses(
@@ -722,12 +781,12 @@ pub async fn ring_status_handler<S: CallService>(
 pub async fn transcript_handler<S: CallService>(
     State(state): State<InternalCallRouterState<S>>,
     _access: InternalCallAccessExtractor,
-    axum::extract::Path(channel_id): axum::extract::Path<Uuid>,
+    axum::extract::Path(room_name): axum::extract::Path<Uuid>,
     Json(segment): Json<TranscriptSegmentRequest>,
 ) -> Result<StatusCode, CallError> {
     state
         .service
-        .ingest_transcript_segment(&channel_id, segment)
+        .ingest_transcript_segment(&room_name, segment)
         .await?;
 
     Ok(StatusCode::OK)
@@ -745,6 +804,8 @@ impl IntoResponse for CallError {
             CallError::AlreadyInCall(_) => StatusCode::CONFLICT,
             CallError::Auth => StatusCode::UNAUTHORIZED,
             CallError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
+            CallError::Forbidden(_) => StatusCode::FORBIDDEN,
+            CallError::Conflict(_) => StatusCode::CONFLICT,
             CallError::Internal(_) => {
                 tracing::error!(error=?self, "internal server error");
                 StatusCode::INTERNAL_SERVER_ERROR

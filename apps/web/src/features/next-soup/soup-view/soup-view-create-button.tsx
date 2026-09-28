@@ -28,7 +28,7 @@ import { useMaybeSoupView } from './soup-view-context';
 
 // Which blocks to show as create options per view, in order
 const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, CreatableName[]>> = {
-  documents: ['md', 'snippet', 'canvas', 'code', 'project'],
+  documents: ['md', 'snippet', 'spreadsheet', 'canvas', 'code', 'project'],
   tasks: ['task'],
   agents: ['agent', 'chat', 'automation', 'skill'],
   mail: ['email'],
@@ -145,7 +145,7 @@ export const SoupViewCreateButton = () => {
   // one thing you make from that list rather than triage into it.
   const createView = createMemo(() => {
     const view = currentView();
-    if (view === 'inbox' && soupView?.activeTab() === 'reminders') {
+    if (view === 'home' && soupView?.activeTab() === 'reminders') {
       return 'reminders';
     }
     return view;

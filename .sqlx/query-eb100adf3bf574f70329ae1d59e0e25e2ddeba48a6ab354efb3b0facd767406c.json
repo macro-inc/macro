@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ref->>'entity_id' AS \"user_id!\"\n                FROM entity_properties p CROSS JOIN LATERAL jsonb_array_elements(p.values->'value') ref\n                WHERE p.entity_type = 'DOCUMENT' AND p.entity_id = $1 AND p.property_definition_id = $2\n                    AND p.values->>'type' = 'EntityReference' AND ref->>'entity_type' = 'USER'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "eb100adf3bf574f70329ae1d59e0e25e2ddeba48a6ab354efb3b0facd767406c"
+}

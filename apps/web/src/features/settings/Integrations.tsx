@@ -394,7 +394,7 @@ function FeaturedServerRow(props: { server: FeaturedMcpServer }) {
 }
 
 /**
- * The "MCP integrations" section of the Connections page: MCP servers the
+ * The "MCP integrations" section of the Connections/Integrations pages: MCP servers the
  * user has connected, followed by the preset suggestions they haven't, with
  * custom servers behind the "Add server" dialog.
  */

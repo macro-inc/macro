@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { getWebOrigin } from '@core/util/webOrigin';
+import type { MessageParent } from '@service-storage/messages';
 import type { Accessor } from 'solid-js';
 import type {
   MessageActionHandler,
@@ -17,7 +18,7 @@ import {
 } from '../Thread/utils/message-actions';
 
 type AddReactionInput = {
-  channelId: string;
+  parent: MessageParent;
   messageId: string;
   emoji: string;
   userId: string;
@@ -26,7 +27,7 @@ type AddReactionInput = {
 };
 
 type RemoveReactionInput = {
-  channelId: string;
+  parent: MessageParent;
   messageId: string;
   emoji: string;
   userId: string;
@@ -35,7 +36,7 @@ type RemoveReactionInput = {
 };
 
 export type DeleteMessageInput = {
-  channelID: string;
+  parent: MessageParent;
   messageID: string;
   threadID?: string;
 };
@@ -50,8 +51,10 @@ type ChannelMessageActionEffects = {
 };
 
 export type CreateChannelMessageActionsOptions = {
-  channelId: Accessor<string>;
+  parent: Accessor<MessageParent>;
   userId: Accessor<string | undefined>;
+  canWrite?: (message: MessageData) => boolean;
+  buildLink?: (message: MessageData) => string;
   deleteMessage: (input: DeleteMessageInput) => void;
   addReaction: (input: AddReactionInput) => void;
   removeReaction: (input: RemoveReactionInput) => void;
@@ -101,62 +104,66 @@ export function createChannelMessageActions(
 
   return (message) => {
     const currentUserId = options.userId();
-    const canEdit = canEditMessage(message, currentUserId);
-    const canDelete = canDeleteMessage(message, currentUserId);
-    const canReply = canReplyToMessage(message);
+    const writable = options.canWrite?.(message) ?? true;
+    const canEdit = writable && canEditMessage(message, currentUserId);
+    const canDelete = writable && canDeleteMessage(message, currentUserId);
+    const canReply = writable && canReplyToMessage(message);
     const isDeleted = !!message.deleted_at;
 
     return {
       onReply: canReply ? (options.onReply ?? emptyReplyHandler) : undefined,
-      onReact: !isDeleted
-        ? (ctx) => {
-            const userId = options.userId();
-            if (!userId) return;
+      onReact:
+        writable && !isDeleted
+          ? (ctx) => {
+              const userId = options.userId();
+              if (!userId) return;
 
-            const emoji = ctx.emoji ?? DEFAULT_REACTION_EMOJI;
-            const channelId = options.channelId();
-            const targetMessage = message;
-            const liveMessage = ctx.message;
-            const threadId =
-              (targetMessage as MessageData & { thread_id?: string | null })
-                .thread_id ?? undefined;
-            const hasReaction = hasReactionFromUser(liveMessage, emoji, userId);
+              const emoji = ctx.emoji ?? DEFAULT_REACTION_EMOJI;
+              const parent = message.parent ?? options.parent();
+              const targetMessage = message;
+              const liveMessage = ctx.message;
+              const threadId =
+                (targetMessage as MessageData & { thread_id?: string | null })
+                  .thread_id ?? undefined;
+              const hasReaction = hasReactionFromUser(
+                liveMessage,
+                emoji,
+                userId
+              );
 
-            analytics.track('channel_reaction', {
-              emoji,
-              action: hasReaction ? 'remove' : 'add',
-            });
+              analytics.track('channel_reaction', {
+                emoji,
+                action: hasReaction ? 'remove' : 'add',
+              });
 
-            if (hasReaction) {
-              options.removeReaction({
-                channelId,
+              if (hasReaction) {
+                options.removeReaction({
+                  parent,
+                  messageId: targetMessage.id,
+                  emoji,
+                  userId,
+                  threadId,
+                  currentReactions: liveMessage.reactions,
+                });
+                return;
+              }
+
+              options.addReaction({
+                parent,
                 messageId: targetMessage.id,
                 emoji,
                 userId,
                 threadId,
                 currentReactions: liveMessage.reactions,
               });
-              return;
             }
-
-            options.addReaction({
-              channelId,
-              messageId: targetMessage.id,
-              emoji,
-              userId,
-              threadId,
-              currentReactions: liveMessage.reactions,
-            });
-          }
-        : undefined,
+          : undefined,
       onCopyLink: async () => {
         try {
-          const channelId = options.channelId();
-          const url = buildMessageLink(
-            channelId,
-            message.id,
-            message.thread_id
-          );
+          const parent = message.parent ?? options.parent();
+          const url =
+            options.buildLink?.(message) ??
+            buildMessageLink(parent.id, message.id, message.thread_id);
           await effects.copyToClipboard(url);
           effects.notifyCopyLinkSuccess();
         } catch (error) {
@@ -178,7 +185,7 @@ export function createChannelMessageActions(
       onDelete: canDelete
         ? () => {
             options.deleteMessage({
-              channelID: options.channelId(),
+              parent: message.parent ?? options.parent(),
               messageID: message.id,
               threadID:
                 (message as MessageData & { thread_id?: string | null })

@@ -1,4 +1,47 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const remoteFlag = vi.hoisted(() => vi.fn());
+vi.mock('@app/lib/analytics', () => ({
+  analytics: { posthog: { isFeatureEnabled: remoteFlag } },
+}));
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.resetModules();
+  remoteFlag.mockReset();
+});
+
+describe('new app views rollout', () => {
+  it('enables production without waiting for PostHog', async () => {
+    vi.stubEnv('MODE', 'production');
+    vi.stubEnv('VITE_ENABLE_NEW_APP_VIEWS', '');
+    vi.resetModules();
+    const { enableNewAppViews, isFeatureEnabled } = await import(
+      '../constant/featureFlags'
+    );
+    remoteFlag.mockReturnValue(undefined);
+    expect(isFeatureEnabled(enableNewAppViews)).toBe(true);
+    expect(remoteFlag).not.toHaveBeenCalled();
+  });
+
+  it('lets the env override disable the flag', async () => {
+    vi.stubEnv('MODE', 'production');
+    vi.stubEnv('VITE_ENABLE_NEW_APP_VIEWS', 'false');
+    vi.resetModules();
+    const { enableNewAppViews, isFeatureEnabled } = await import(
+      '../constant/featureFlags'
+    );
+    expect(isFeatureEnabled(enableNewAppViews)).toBe(false);
+  });
+
+  it('enables local development by default', async () => {
+    vi.stubEnv('MODE', 'development');
+    vi.stubEnv('VITE_ENABLE_NEW_APP_VIEWS', '');
+    vi.resetModules();
+    const { enableNewAppViews } = await import('../constant/featureFlags');
+    expect(enableNewAppViews.override).toBe(true);
+  });
+});
 
 import { resolveFeatureFlag } from '../constant/featureFlags';
 

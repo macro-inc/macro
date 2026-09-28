@@ -1,12 +1,16 @@
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
-import { favoriteDisplayName, favoriteSplitContent } from '@app/util/favorites';
+import {
+  favoriteSplitContent,
+  useFavoriteDisplayName,
+} from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { toast } from '@core/component/Toast/Toast';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { registerScope } from '@core/hotkey/utils';
 import Star from '@phosphor/star.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { createEffect, onCleanup } from 'solid-js';
+import { createEffect, createRoot, onCleanup } from 'solid-js';
 import { CommandState } from './state';
 
 /** Command scope for the favorites sub-view of the command menu. */
@@ -33,9 +37,13 @@ export function FavoritesCommands() {
   const { openWithSplit } = useSplitLayout();
 
   const openFavorite = (favorite: Favorite) => {
-    openWithSplit(favoriteSplitContent(favorite), {
+    const result = openWithSplit(favoriteSplitContent(favorite), {
       referredFrom: 'kommand-menu',
+      allowDuplicate: favorite.entityType === 'foreign_entity',
     });
+    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+      toast.alert('Content already open');
+    }
     // Close the menu and clear the query once a favorite is opened.
     CommandState.close();
     CommandState.setQuery('');
@@ -65,6 +73,8 @@ export function FavoritesCommands() {
     })
   );
 
+  let disposeFavoritePreviews: () => void = () => undefined;
+
   const registerFavorites = (list: Favorite[]) => {
     // Registered without a hotkey: bare digits would fight type-to-filter in
     // the sub-view's search input. The entries are still listed and openable
@@ -72,24 +82,25 @@ export function FavoritesCommands() {
     // `runWithInputFocused` is required even without a hotkey: entering the
     // sub-view captures its commands while the menu's search input has focus,
     // and the capture filter drops commands without this flag.
-    list.forEach((favorite) => {
-      dynamicGroup.add(
-        registerHotkey({
-          scopeId: FAVORITES_COMMAND_SCOPE,
-          // A callback so each render re-reads the preview cache, where
-          // names resolve (and renames land), warmed by the sidebar's
-          // favorite rows.
-          description: () => favoriteDisplayName(favorite),
-          keyDownHandler: () => {
-            openFavorite(favorite);
-            return true;
-          },
-          commandPaletteIcon: (props) => (
-            <FavoriteIcon favorite={favorite} class={props.class} />
-          ),
-          runWithInputFocused: true,
-        })
-      );
+    disposeFavoritePreviews = createRoot((dispose) => {
+      list.forEach((favorite) => {
+        const description = useFavoriteDisplayName(favorite);
+        dynamicGroup.add(
+          registerHotkey({
+            scopeId: FAVORITES_COMMAND_SCOPE,
+            description,
+            keyDownHandler: () => {
+              openFavorite(favorite);
+              return true;
+            },
+            commandPaletteIcon: (props) => (
+              <FavoriteIcon favorite={favorite} class={props.class} />
+            ),
+            runWithInputFocused: true,
+          })
+        );
+      });
+      return dispose;
     });
   };
 
@@ -98,12 +109,15 @@ export function FavoritesCommands() {
   createEffect(() => {
     const data = favoritesData();
     dynamicGroup.dispose();
+    disposeFavoritePreviews();
+    disposeFavoritePreviews = () => undefined;
     if (!data) return;
     registerFavorites(data.favorites);
   });
 
   onCleanup(() => {
     dynamicGroup.dispose();
+    disposeFavoritePreviews();
     staticGroup.dispose();
   });
 

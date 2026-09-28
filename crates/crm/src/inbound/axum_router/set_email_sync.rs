@@ -49,9 +49,14 @@ pub struct SetEmailSyncRequest {
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(company_id = %company_id, email_sync = req.email_sync))]
-pub async fn handler<C: CrmService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+pub async fn handler<
+    C: CrmService,
+    St,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     access: CrmCompanyAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
-    State(state): State<CrmRouterState<C, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Path(company_id): Path<Uuid>,
     Json(req): Json<SetEmailSyncRequest>,
 ) -> Result<StatusCode, CrmError> {

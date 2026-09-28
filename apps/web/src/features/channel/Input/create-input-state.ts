@@ -45,11 +45,9 @@ export function createInputState(options: CreateInputStateOptions): InputState {
     snapshot: view.snapshot,
     setIsSending: view.setIsSending,
     setShowFormatRibbon: view.setShowFormatRibbon,
-    clearComposer: options.clearComposer,
-    reset: () => {
-      view.reset();
-      options.clearInput?.();
-    },
+    // Sending/closing clears the editor once, through the focus-preserving path.
+    clearComposer: options.clearComposer ?? options.clearInput,
+    reset: view.reset,
     removeTrackedAttachment: (id) =>
       options.attachmentTracker.removeAttachment(id),
     attachFiles: options.attachFiles,

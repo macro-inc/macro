@@ -34,3 +34,8 @@ export type {
   SoupRow,
   SoupSectionHeaderRow,
 } from './types';
+export {
+  type SoupListNavigationOpenOptions,
+  type UseSoupListNavigationHotkeysOptions,
+  useSoupListNavigationHotkeys,
+} from './useSoupListNavigationHotkeys';

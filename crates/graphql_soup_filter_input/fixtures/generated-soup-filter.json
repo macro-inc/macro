@@ -1,7 +1,10 @@
 {
   "documentFilter": {
     "and": {
-      "left": { "literal": { "notificationDone": false } },
+      "left": { "or": {
+        "left": { "literal": { "notificationState": "UNSEEN" } },
+        "right": { "literal": { "notificationState": "SEEN" } }
+      } },
       "right": {
         "literal": { "updatedAt": { "gte": "2026-01-01T00:00:00.000Z" } }
       }

@@ -4,6 +4,7 @@ mod test;
 use std::{collections::HashSet, fmt};
 
 use bot_id::BotId;
+use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_user::UserContext;
 use thiserror::Error;
@@ -61,6 +62,28 @@ pub struct BotAuthentication {
     pub acting_user: Option<MacroUserAuthentication>,
 }
 
+/// A harness principal whose token has been validated.
+///
+/// The raw token is deliberately excluded so it cannot flow into handlers,
+/// tracing spans, or logs after authentication.
+#[derive(Clone, Debug)]
+pub struct HarnessAuthentication {
+    /// The validated harness.
+    pub harness_id: HarnessId,
+    /// The token row used to authenticate, for audit and telemetry.
+    pub token_id: Uuid,
+    /// The harness owner used by acting-user policy.
+    pub owner: HarnessAuthorizationOwner,
+    /// The verified user this request acts for.
+    ///
+    /// Always resolved server-side: the claimed user when the daemon forwards
+    /// one (a mention sender, verified against harness ownership), otherwise
+    /// the harness owner for private harnesses or its creator for team
+    /// harnesses. A guaranteed acting user lets acting-user-gated endpoints
+    /// (webhook feed registration) admit harness callers unchanged.
+    pub acting_user: MacroUserAuthentication,
+}
+
 /// How the caller authenticated.
 ///
 /// This enum is exhaustive so adding an authentication source requires every
@@ -71,6 +94,8 @@ pub enum MacroAuthorization {
     User(MacroUserAuthentication),
     /// A caller authenticated with a bot token.
     Bot(BotAuthentication),
+    /// A caller authenticated with a harness token.
+    Harness(HarnessAuthentication),
     /// An internally authenticated service, optionally acting for a user.
     Internal(Option<MacroUserAuthentication>),
 }
@@ -81,6 +106,7 @@ impl MacroAuthorization {
         match self {
             Self::User(user) => Some(user),
             Self::Bot(bot) => bot.acting_user.as_ref(),
+            Self::Harness(harness) => Some(&harness.acting_user),
             Self::Internal(user) => user.as_ref(),
         }
     }
@@ -94,7 +120,15 @@ impl MacroAuthorization {
     pub fn bot(&self) -> Option<&BotAuthentication> {
         match self {
             Self::Bot(bot) => Some(bot),
-            Self::User(_) | Self::Internal(_) => None,
+            Self::User(_) | Self::Harness(_) | Self::Internal(_) => None,
+        }
+    }
+
+    /// Return the authenticated harness principal, when the caller is a harness.
+    pub fn harness(&self) -> Option<&HarnessAuthentication> {
+        match self {
+            Self::Harness(harness) => Some(harness),
+            Self::User(_) | Self::Bot(_) | Self::Internal(_) => None,
         }
     }
 }
@@ -114,6 +148,39 @@ pub enum BotAuthorizationOwner {
     },
     /// A first-party system bot with no user or team owner.
     System,
+}
+
+/// Ownership facts for a harness whose token has been validated.
+///
+/// Unlike bots, a harness always has a user or team owner; there are no
+/// system harnesses.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum HarnessAuthorizationOwner {
+    /// A harness owned by one Macro user.
+    User {
+        /// The owning Macro user identifier.
+        user_id: String,
+    },
+    /// A harness owned by a team.
+    Team {
+        /// The owning team identifier.
+        team_id: Uuid,
+    },
+}
+
+/// Valid harness-token facts returned by the authorization repository.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HarnessTokenAuthorization {
+    /// The authenticated harness.
+    pub harness_id: HarnessId,
+    /// The token row used to authenticate.
+    pub token_id: Uuid,
+    /// The harness owner used by acting-user policy.
+    pub owner: HarnessAuthorizationOwner,
+    /// The Macro user id that registered the harness.
+    ///
+    /// The default acting user for team-owned harnesses.
+    pub created_by: String,
 }
 
 /// Valid bot-token facts returned by the authorization repository.

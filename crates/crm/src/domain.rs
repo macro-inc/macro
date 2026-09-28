@@ -18,6 +18,9 @@ pub mod company_metadata_resolver;
 /// The CRM service trait and implementation
 #[cfg(feature = "ports")]
 pub mod service;
+/// Team deal stages: the role-gated write path over the team's stage definition
+#[cfg(feature = "ports")]
+pub mod stages;
 
 /// Capability-token receipt wrappers gating per-entity CRM service calls
 #[cfg(feature = "ports")]

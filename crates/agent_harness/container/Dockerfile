@@ -2,14 +2,14 @@
 # sidecar the harness dials.
 
 # Sidecar install
-FROM rust:1.94.0-slim-bullseye AS sidecar-build
+FROM docker.io/library/rust:1.94.0-slim-bullseye AS sidecar-build
 WORKDIR /build
 COPY sidecar/Cargo.toml sidecar/Cargo.lock ./
 COPY sidecar/src ./src
 RUN cargo build --locked --release
 
 # Macro nix devshell hard install
-FROM ubuntu:22.04 AS nix-build
+FROM docker.io/library/ubuntu:22.04 AS nix-build
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl xz-utils && \
@@ -55,7 +55,7 @@ RUN bash -c 'source /env/dev-env.sh && \
     rm -rf /root/.cache/nix
 
 # Runtime
-FROM ubuntu:22.04
+FROM docker.io/library/ubuntu:22.04
 
 # curl: the ensure script's readiness probe. nixbld users: nix.conf names the
 # group, and source builds inside the sandbox need it.

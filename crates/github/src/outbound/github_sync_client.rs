@@ -3,14 +3,15 @@
 use std::time::Duration;
 
 use super::pull_request_metadata::{
-    fetch_open_pull_requests_for_installation, fetch_pull_request_metadata,
+    fetch_installation_repositories, fetch_open_pull_requests_for_installation,
+    fetch_pull_request_metadata,
 };
 
 use crate::domain::{
     models::{
         AppJwt, EnrichedGithubPullRequest, GithubAuthenticatedUser, GithubError,
-        GithubInstallationAccessToken, GithubPullRequestDetails, GithubSetupAccessToken,
-        GithubUserInstallation, GithubUserInstallationsPage,
+        GithubInstallationAccessToken, GithubPullRequestDetails, GithubRepository,
+        GithubSetupAccessToken, GithubUserInstallation, GithubUserInstallationsPage,
     },
     ports::GithubSyncClient,
 };
@@ -18,6 +19,11 @@ use crate::domain::{
 const GITHUB_API_BASE_URL: &str = "https://api.github.com";
 const GITHUB_OAUTH_BASE_URL: &str = "https://github.com";
 const USER_INSTALLATIONS_PAGE_SIZE: u64 = 100;
+const BRANCH_PAGE_SIZE: u64 = 100;
+/// GitHub's listing maxes at 100 names per page. Five pages is enough for a
+/// picker and bounds how long we hold an installation token against a
+/// repository with thousands of stale branches.
+const BRANCH_PAGE_LIMIT: u64 = 5;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[cfg(test)]
@@ -74,6 +80,58 @@ impl GithubSyncClientImpl {
             client: build_client(),
             api_base_url: Some(api_base_url),
         }
+    }
+}
+
+/// The narrowing GitHub applies to a minted token. An omitted field widens the
+/// token to everything the installation can reach, so `permissions` is always
+/// sent and `repositories` is omitted only when the caller deliberately wants
+/// the whole installation.
+#[derive(serde::Serialize)]
+struct ScopedTokenRequest<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repositories: Option<[&'a str; 1]>,
+    /// Permission name to level, as GitHub names them.
+    permissions: std::collections::BTreeMap<&'a str, &'a str>,
+}
+
+impl GithubSyncClientImpl {
+    async fn mint_access_token(
+        &self,
+        jwt: &AppJwt,
+        installation_id: u64,
+        body: ScopedTokenRequest<'_>,
+    ) -> Result<GithubInstallationAccessToken, GithubError> {
+        let response = self
+            .client
+            .post(format!(
+                "{}/app/installations/{installation_id}/access_tokens",
+                self.api_base_url()
+            ))
+            .header("Authorization", format!("Bearer {}", jwt.as_str()))
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "Macro-Auth-Service")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unknown error".to_string());
+            return Err(GithubError::Internal(anyhow::anyhow!(
+                "failed to create a scoped installation access token (status {status}): {error_body}"
+            )));
+        }
+
+        response
+            .json()
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))
     }
 }
 
@@ -316,53 +374,17 @@ impl GithubSyncClient for GithubSyncClientImpl {
         repository: &str,
         permissions: &[(&str, &str)],
     ) -> Result<GithubInstallationAccessToken, GithubError> {
-        /// The narrowing GitHub applies to the minted token. Omitting either
-        /// field widens it to everything the installation can reach, so both
-        /// are always sent.
-        #[derive(serde::Serialize)]
-        struct ScopedTokenRequest<'a> {
-            /// Names only, without the owner - GitHub resolves them within the
-            /// installation.
-            repositories: [&'a str; 1],
-            /// Permission name to level, as GitHub names them.
-            permissions: std::collections::BTreeMap<&'a str, &'a str>,
-        }
-
-        let body = ScopedTokenRequest {
-            repositories: [repository],
-            permissions: permissions.iter().copied().collect(),
-        };
-
-        let response = self
-            .client
-            .post(format!(
-                "{}/app/installations/{installation_id}/access_tokens",
-                self.api_base_url()
-            ))
-            .header("Authorization", format!("Bearer {}", jwt.as_str()))
-            .header("Accept", "application/vnd.github+json")
-            .header("User-Agent", "Macro-Auth-Service")
-            .header("X-GitHub-Api-Version", "2022-11-28")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let error_body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "unknown error".to_string());
-            return Err(GithubError::Internal(anyhow::anyhow!(
-                "failed to create a scoped installation access token (status {status}): {error_body}"
-            )));
-        }
-
-        response
-            .json()
-            .await
-            .map_err(|e| GithubError::Internal(e.into()))
+        self.mint_access_token(
+            jwt,
+            installation_id,
+            ScopedTokenRequest {
+                // Names only, without the owner - GitHub resolves them within
+                // the installation.
+                repositories: Some([repository]),
+                permissions: permissions.iter().copied().collect(),
+            },
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self, access_token, body), err)]
@@ -421,6 +443,93 @@ impl GithubSyncClient for GithubSyncClientImpl {
         access_token: &str,
     ) -> Result<Vec<EnrichedGithubPullRequest>, GithubError> {
         fetch_open_pull_requests_for_installation(&self.client, access_token)
+            .await
+            .map_err(GithubError::Internal)
+    }
+
+    #[tracing::instrument(skip(self, access_token), err)]
+    async fn list_repository_branches(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repository: &str,
+    ) -> Result<Vec<String>, GithubError> {
+        #[derive(serde::Deserialize)]
+        struct BranchResponse {
+            name: String,
+        }
+
+        let mut page = 1_u64;
+        let mut branches = Vec::new();
+
+        loop {
+            let response = self
+                .client
+                .get(format!(
+                    "{}/repos/{owner}/{repository}/branches?per_page={BRANCH_PAGE_SIZE}&page={page}",
+                    self.api_base_url()
+                ))
+                .header("Authorization", format!("Bearer {access_token}"))
+                .header("Accept", "application/vnd.github+json")
+                .header("User-Agent", "Macro-Auth-Service")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .send()
+                .await
+                .map_err(|_| {
+                    GithubError::Internal(anyhow::anyhow!("GitHub branch list request failed"))
+                })?;
+
+            let status = response.status();
+            // An empty repository has no branches yet. GitHub answers 404
+            // (and occasionally 409) rather than an empty page.
+            if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::CONFLICT {
+                return Ok(branches);
+            }
+            if !status.is_success() {
+                return Err(GithubError::Internal(anyhow::anyhow!(
+                    "GitHub branch list failed with status {status}"
+                )));
+            }
+
+            let page_items: Vec<BranchResponse> = response.json().await.map_err(|_| {
+                GithubError::Internal(anyhow::anyhow!(
+                    "GitHub branch list returned a malformed response"
+                ))
+            })?;
+            let last_page = (page_items.len() as u64) < BRANCH_PAGE_SIZE;
+            branches.extend(page_items.into_iter().map(|branch| branch.name));
+
+            if last_page || page >= BRANCH_PAGE_LIMIT {
+                return Ok(branches);
+            }
+
+            page = page.checked_add(1).ok_or_else(|| {
+                GithubError::Internal(anyhow::anyhow!(
+                    "GitHub branch list pagination exceeded page limit"
+                ))
+            })?;
+        }
+    }
+}
+
+impl crate::domain::ports::GithubRepositoryClient for GithubSyncClientImpl {
+    #[tracing::instrument(skip(self, jwt), err)]
+    async fn repositories_for_installation(
+        &self,
+        jwt: &AppJwt,
+        installation_id: u64,
+    ) -> Result<Vec<GithubRepository>, GithubError> {
+        let token = self
+            .mint_access_token(
+                jwt,
+                installation_id,
+                ScopedTokenRequest {
+                    repositories: None,
+                    permissions: [("metadata", "read")].into_iter().collect(),
+                },
+            )
+            .await?;
+        fetch_installation_repositories(&self.client, &token.token)
             .await
             .map_err(GithubError::Internal)
     }

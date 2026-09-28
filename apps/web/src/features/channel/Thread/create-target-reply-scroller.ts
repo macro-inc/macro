@@ -212,7 +212,7 @@ export function createTargetReplyScroller(options: {
     function schedulePositionAfterMeasurement() {
       if (completed) return;
       // ResizeObserver callbacks run before paint, but callback order between
-      // observers is not a safe contract. Defer to a microtask so Virtua's
+      // observers is not a safe contract. Defer to a microtask so the virtualizer's
       // sibling observer has applied the new item geometry before we position
       // against it, while still correcting before the browser can paint.
       if (!measurementMicrotaskQueued) {
@@ -232,7 +232,7 @@ export function createTargetReplyScroller(options: {
         measurementTimerId = undefined;
       }
 
-      // Virtua may commit a corrected item range in the first frame after a
+      // The virtualizer may commit a corrected item range in the first frame after a
       // row measurement. Position in the following frame against that DOM.
       measurementRafId = requestAnimationFrame(() => {
         measurementRafId = requestAnimationFrame(() => {

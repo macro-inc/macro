@@ -1,5 +1,32 @@
+import { EphemeralStore } from 'loro-crdt';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { realAwarenessSource, resolveTextOwner } from './awareness-source';
+import {
+  AI_NAMES,
+  aiLabel,
+  realAwarenessSource,
+  resolveTextOwner,
+} from './awareness-source';
+import { PeerPool } from './peer-pool';
+
+describe('aiLabel', () => {
+  it('suffixes the editor name so the web client pins its cursor tag', () => {
+    expect(aiLabel('Macro')).toBe('Macro (AI)');
+    expect(aiLabel('  Grunk  ')).toBe('Grunk (AI)');
+  });
+
+  it('does not double the suffix', () => {
+    expect(aiLabel('Wolf (AI)')).toBe('Wolf (AI)');
+  });
+
+  it('cuts an overlong name instead of rejecting it', () => {
+    const label = aiLabel('x'.repeat(200));
+    expect(label).toBe(`${'x'.repeat(64)} (AI)`);
+  });
+
+  it('is what the pooled names are built with', () => {
+    for (const name of AI_NAMES) expect(name.endsWith('(AI)')).toBe(true);
+  });
+});
 
 // Duck-typed fake loro containers (kind/get), matching what resolveTextOwner reads.
 function textC() {
@@ -92,6 +119,32 @@ describe('realAwarenessSource (no live mirror)', () => {
     expect(send).not.toHaveBeenCalled();
     src.clear(); // no peers → still no broadcast, and no throw
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('broadcasts the borrowed peer name as the cursor user readers see', async () => {
+    const sent: Uint8Array[] = [];
+    const { mirror, doc } = fakeLoro({ c1: mapC('t1', { text: textC() }) });
+    const pool = PeerPool.forEditor('Macro');
+    const [a, b] = await Promise.all([pool.borrow(), pool.borrow()]);
+    for (const peer of [a, b]) {
+      realAwarenessSource({
+        mirror,
+        doc,
+        send: (bytes) => sent.push(bytes),
+        name: peer.name,
+        color: peer.color,
+      }).apply({ type: 'cursor', node: 't1', at: 3 });
+    }
+
+    // Decode what a reader's client would: two cursors, both labelled Macro.
+    const reader = new EphemeralStore<
+      Record<string, { user: { userId: string } }>
+    >(30_000);
+    for (const bytes of sent) reader.apply(bytes);
+    const users = Object.values(reader.getAllStates()).map(
+      (state) => state?.user.userId
+    );
+    expect(users).toEqual(['Macro (AI)', 'Macro (AI)']);
   });
 
   it('keeps live awareness alive until clear removes it', () => {

@@ -2,10 +2,13 @@ use anyhow::Context;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
-use macro_service_urls::{AiEditingWorkerUrl, DocumentCognitionServiceUrl};
+use macro_service_urls::AiEditingWorkerUrl;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
+
+#[cfg(test)]
+mod test;
 
 env_vars!(
     pub struct DatabaseUrl;
@@ -49,6 +52,15 @@ maybe_env_vars!(
     /// by deploy environment: the app origin (`https://macro.com` /
     /// `https://dev.macro.com`) plus localhost outside production.
     pub struct PipedreamAllowedOrigins;
+    /// Absolute URL Pipedream posts connect-flow outcomes to, minted into
+    /// every Connect token. Must carry the shared secret as a `secret` query
+    /// parameter, matching `PIPEDREAM_WEBHOOK_SECRET`. When unset (or when
+    /// the secret is unset), connect tokens are minted without a webhook.
+    pub struct PipedreamWebhookUri;
+    /// Shared secret guarding the public Pipedream webhook route, which is
+    /// unauthenticated because Pipedream is the caller. When unset, the
+    /// webhook route is not mounted.
+    pub struct PipedreamWebhookSecret;
 );
 
 /// The configuration parameters for the application.
@@ -102,18 +114,30 @@ pub struct Config {
     pub pipedream_mcp_url: PipedreamMcpUrl,
     /// Browser origins allowed to embed Pipedream's hosted Connect UI.
     pub pipedream_allowed_origins: PipedreamAllowedOrigins,
+    /// URL Pipedream posts connect-flow outcomes to.
+    pub pipedream_webhook_uri: PipedreamWebhookUri,
+    /// Shared secret guarding the public Pipedream webhook route.
+    pub pipedream_webhook_secret: PipedreamWebhookSecret,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// AI editing worker URL
     #[macro_config_default(AiEditingWorkerUrl::unwrap_new().to_string())]
     pub ai_editing_worker_url: String,
     /// Browser-facing base URL used for MCP OAuth redirects and client metadata.
-    #[macro_config_default(DocumentCognitionServiceUrl::unwrap_new().to_string())]
+    #[macro_config_default(default_mcp_public_url(Environment::new_or_prod()).to_string())]
     pub mcp_public_url: String,
     /// JWT secret for minting document permission tokens for the editing worker.
     pub document_permission_jwt: DocumentPermissionJwt,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub kafka_brokers: KafkaBrokers,
+}
+
+fn default_mcp_public_url(environment: Environment) -> &'static str {
+    match environment {
+        Environment::Production => "https://document-cognition.macro.com",
+        Environment::Develop => "https://document-cognition-dev.macro.com",
+        Environment::Local => "http://localhost:8085",
+    }
 }
 
 impl Config {
@@ -166,9 +190,11 @@ impl Config {
             pipedream_api_url: PipedreamApiUrl::Unset,
             pipedream_mcp_url: PipedreamMcpUrl::Unset,
             pipedream_allowed_origins: PipedreamAllowedOrigins::Unset,
+            pipedream_webhook_uri: PipedreamWebhookUri::Unset,
+            pipedream_webhook_secret: PipedreamWebhookSecret::Unset,
             internal_api_key: InternalApiKey::Comptime(""),
             ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
-            mcp_public_url: DocumentCognitionServiceUrl::unwrap_new().to_string(),
+            mcp_public_url: default_mcp_public_url(Environment::Local).to_string(),
             document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),
             kafka_brokers: KafkaBrokers::Comptime("localhost:9092"),
         }

@@ -4,8 +4,9 @@ import {
   type WithCustomUserInput,
 } from '@core/user/combinedRecipient';
 import { TZDateMini } from '@date-fns/tz';
-import type { ConferenceChange } from '@service-email/generated/schemas/conferenceChange';
-import type { EventTime } from '@service-email/generated/schemas/eventTime';
+import type { ConferenceChange } from '@service-calendar/generated/schemas/conferenceChange';
+import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
+import type { OutOfOfficeProperties } from '@service-calendar/generated/schemas/outOfOfficeProperties';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
@@ -22,6 +23,10 @@ import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import type { CalendarEvent } from '../../types';
 import { parseLocalDate } from '../../utils/calendar-date';
 import {
+  calendarMacroCallUrl,
+  removeCalendarMacroCall,
+} from '../../utils/macro-call-link';
+import {
   buildRecurrenceLines,
   defaultCustomConfig,
   formatRecurrenceDescription,
@@ -30,6 +35,7 @@ import {
   recurrenceConfigsEqual,
   recurrencePresetsFor,
 } from '../../utils/recurrence';
+import type { EventEditorOutOfOffice } from './out-of-office';
 
 /** `<input type="date">` value. */
 const DATE_VALUE = 'yyyy-MM-dd';
@@ -48,6 +54,11 @@ function shiftDateValue(value: string, days: number) {
   return format(addDays(parseISO(value), days), DATE_VALUE);
 }
 
+/** Local midnight of a `yyyy-MM-dd` date, as a UTC ISO instant. */
+function localMidnightIso(date: string): string {
+  return new Date(`${date}T00:00`).toISOString();
+}
+
 /** Default editor slot: the next full hour, one hour long. */
 function defaultEditorTimes(reference: Date) {
   const start = addHours(startOfHour(reference), 1);
@@ -55,7 +66,11 @@ function defaultEditorTimes(reference: Date) {
 }
 
 /** Conferencing displayed by the editor before it is submitted. */
-export type EventEditorConferenceChoice = 'none' | 'google_meet' | 'existing';
+export type EventEditorConferenceChoice =
+  | 'none'
+  | 'macro'
+  | 'google_meet'
+  | 'existing';
 
 /** Values used to initialize the shared event editor form. */
 export interface EventEditorInitialValues {
@@ -76,6 +91,14 @@ export interface EventEditorInitialValues {
   reminders?: EventReminders;
   /** Provider event type of the edited event; absent for new events. */
   eventType?: EventType;
+  /**
+   * Out-of-office decline behavior. Absent while the event is not out of
+   * office, and on an edited out-of-office event until the user picks decline
+   * settings — the provider readback does not expose the stored ones.
+   */
+  outOfOffice?: EventEditorOutOfOffice;
+  /** Event type of the copy `reminders` belong to. Absent for new events. */
+  reminderEventType?: EventType;
 }
 
 /** Calendar option displayed by the event editor. */
@@ -85,6 +108,9 @@ export interface EventEditorCalendarOption {
   color: string;
   /** Provider defaults shown until the event's reminders are customized. */
   defaultReminders?: EventReminderOverride[];
+  /** Whether this is its account's primary calendar, the only kind Google
+   * accepts out-of-office events on. */
+  isPrimary?: boolean;
 }
 
 /** Editable fields that a create/edit owner may disable. */
@@ -115,14 +141,23 @@ export interface EventEditorSubmitValues {
   guestEmails: string[];
   location: string;
   description: string;
-  /** Present only when conferencing should be attached, replaced, or removed. */
+  /** Selected conferencing, including client-managed Macro call links. */
+  conferenceChoice: EventEditorConferenceChoice;
+  /** Present only when provider conferencing should change. */
   conference?: ConferenceChange;
   /** Present only when the user changed the event's reminder configuration. */
   reminders?: EventReminders;
+  /**
+   * Present when the save is out of office: on create its presence marks the
+   * event as out of office, on edit it patches the decline behavior of an
+   * event that already is.
+   */
+  outOfOffice?: OutOfOfficeProperties;
 }
 
 export function defaultEditorInitialValues(
-  reference = new Date()
+  reference = new Date(),
+  macroCallsEnabled = false
 ): EventEditorInitialValues {
   const { start, end } = defaultEditorTimes(reference);
   return {
@@ -135,19 +170,26 @@ export function defaultEditorInitialValues(
     guests: '',
     location: '',
     description: '',
-    conference: 'none',
+    conference: macroCallsEnabled ? 'macro' : 'none',
     reminders: undefined,
     eventType: undefined,
+    outOfOffice: undefined,
   };
 }
 
 /** Converts a FullCalendar-style selected range into create-event values. */
-export function calendarSelectionToEditorInitialValues(selection: {
-  start: Date;
-  end: Date;
-  allDay: boolean;
-}): EventEditorInitialValues {
-  const initialValues = defaultEditorInitialValues(selection.start);
+export function calendarSelectionToEditorInitialValues(
+  selection: {
+    start: Date;
+    end: Date;
+    allDay: boolean;
+  },
+  macroCallsEnabled = false
+): EventEditorInitialValues {
+  const initialValues = defaultEditorInitialValues(
+    selection.start,
+    macroCallsEnabled
+  );
   if (selection.allDay) {
     return {
       ...initialValues,
@@ -167,6 +209,7 @@ export function calendarSelectionToEditorInitialValues(selection: {
 function initialConferenceChoice(
   event: CalendarEvent
 ): EventEditorConferenceChoice {
+  if (calendarMacroCallUrl(event)) return 'macro';
   if (!event.conferenceUrl) return 'none';
   return event.conferenceProvider === 'google_meet'
     ? 'google_meet'
@@ -190,6 +233,7 @@ export function calendarEventToEditorInitialValues(
   event: CalendarEvent
 ): EventEditorInitialValues {
   const guests = eventGuestEmails(event).join(', ');
+  const content = removeCalendarMacroCall(event, calendarMacroCallUrl(event));
 
   if (event.allDay) {
     const start = isDateOnly(event.start)
@@ -206,11 +250,12 @@ export function calendarEventToEditorInitialValues(
       recurrenceLines: [...event.recurrenceLines],
       calendarId: event.calendarId ?? event.calendar.id,
       guests,
-      location: event.location ?? '',
-      description: event.description ?? '',
+      location: content.location,
+      description: content.description,
       conference: initialConferenceChoice(event),
       reminders: event.reminders,
       eventType: event.eventType,
+      reminderEventType: event.reminderEventType,
     };
   }
 
@@ -222,11 +267,12 @@ export function calendarEventToEditorInitialValues(
     recurrenceLines: [...event.recurrenceLines],
     calendarId: event.calendarId ?? event.calendar.id,
     guests,
-    location: event.location ?? '',
-    description: event.description ?? '',
+    location: content.location,
+    description: content.description,
     conference: initialConferenceChoice(event),
     reminders: event.reminders,
     eventType: event.eventType,
+    reminderEventType: event.reminderEventType,
   };
 }
 
@@ -236,6 +282,18 @@ export function buildEventTime(
   if (state.allDay) {
     if (!state.start || !state.end || state.end < state.start) {
       return undefined;
+    }
+    // Google has no date-based out-of-office event, so encode an all-day one as
+    // a timed span covering whole days in the editor's time zone. It then reads
+    // and renders as a full-day timed block, the same as Google Calendar shows
+    // its own all-day out-of-office events.
+    if (state.eventType === 'out_of_office') {
+      return {
+        kind: 'timed',
+        startsAt: localMidnightIso(state.start),
+        endsAt: localMidnightIso(shiftDateValue(state.end, 1)),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      };
     }
     return {
       kind: 'allDay',

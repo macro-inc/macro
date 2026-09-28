@@ -11,6 +11,7 @@ chrono-tz = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 mention_utils = { path = "../mention_utils" }
 model-entity = { path = "../model-entity" }
+model_owner = { path = "../model_owner" }
 models_pagination = { path = "../models_pagination" }
 notification = { path = "../notification" }
 paste = { workspace = true }

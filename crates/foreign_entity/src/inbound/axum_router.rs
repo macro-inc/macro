@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, State},
+    extract::{FromRef, Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
@@ -16,12 +16,16 @@ use entity_access::{
     domain::{models::ViewAccessLevel, ports::EntityAccessService},
     inbound::axum_extractors::ForeignEntityAccessLevelExtractor,
 };
-use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use macro_authorization::{
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor,
+};
 use model_error_response::ErrorResponse;
 
 use crate::domain::{
-    models::{ForeignEntity, ForeignEntityError},
+    models::{ForeignEntity, ForeignEntityError, ForeignEntityLookupCaller},
     ports::ForeignEntityService,
+    service::get_visible_foreign_entity_by_source,
 };
 
 /// Router state for authenticated foreign entity operations.
@@ -78,6 +82,10 @@ impl<S, AccessSvc, Auth> FromRef<ForeignEntityRouterState<S, AccessSvc, Auth>>
 ///
 /// Routes:
 /// - `GET /{id}` — get a visible foreign entity by its internal ID.
+/// - `GET /by_source/{source}/{*foreign_entity_id}` — get a visible foreign
+///   entity by the identifier its source system assigned. The external
+///   identifier is a wildcard segment because sources embed slashes in it, for
+///   example `owner/repo/pull/12` for `github_pull_request`.
 pub fn foreign_entity_router<S, AccessSvc, Auth, T>(
     state: ForeignEntityRouterState<S, AccessSvc, Auth>,
 ) -> Router<T>
@@ -91,6 +99,10 @@ where
         .route(
             "/{id}",
             get(get_foreign_entity_handler::<S, AccessSvc, Auth>),
+        )
+        .route(
+            "/by_source/{source}/{*foreign_entity_id}",
+            get(get_foreign_entity_by_source_handler::<S, AccessSvc, Auth>),
         )
         .with_state(state)
 }
@@ -130,10 +142,85 @@ where
     Ok(Json(foreign_entity))
 }
 
+/// Get a visible foreign entity by the identifier its source system assigned.
+///
+/// `foreign_entity_id` is a wildcard path segment: sources store slashes inside
+/// the identifier, for example `owner/repo/pull/12`.
+///
+/// Authorization matches the by-id route. Internal service callers see every
+/// record; an authenticated user sees a record only when they have view access
+/// to it, and records they cannot view are reported as `404` so the route never
+/// reveals that a mapping exists. Bot tokens are not accepted here — they use
+/// the by-id route, which mints a bot-scoped receipt.
+#[utoipa::path(
+    get,
+    tag = "foreign_entity",
+    operation_id = "get_foreign_entity_by_source",
+    path = "/foreign_entity/by_source/{source}/{foreign_entity_id}",
+    params(
+        ("source" = String, Path, description = "Foreign entity source, e.g. github_pull_request"),
+        (
+            "foreign_entity_id" = String,
+            Path,
+            description = "Identifier assigned by the source system; may contain slashes"
+        )
+    ),
+    responses(
+        (status = 200, body = ForeignEntity),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn get_foreign_entity_by_source_handler<S, AccessSvc, Auth>(
+    State(state): State<ForeignEntityRouterState<S, AccessSvc, Auth>>,
+    authorization: OptionalMacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    Path((source, foreign_entity_id)): Path<(String, String)>,
+) -> Result<Json<ForeignEntity>, ForeignEntityError>
+where
+    S: ForeignEntityService,
+    AccessSvc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let caller = lookup_caller(authorization.authorization.as_ref())?;
+
+    let foreign_entity = get_visible_foreign_entity_by_source(
+        state.service.as_ref(),
+        state.access_service.as_ref(),
+        &caller,
+        &source,
+        &foreign_entity_id,
+    )
+    .await?;
+
+    Ok(Json(foreign_entity))
+}
+
+/// Resolve the transport credential into the identity the lookup runs as.
+fn lookup_caller(
+    authorization: Option<&MacroAuthorization>,
+) -> Result<ForeignEntityLookupCaller, ForeignEntityError> {
+    match authorization {
+        Some(MacroAuthorization::User(user)) | Some(MacroAuthorization::Internal(Some(user))) => {
+            Ok(ForeignEntityLookupCaller::User(user.macro_user_id.clone()))
+        }
+        Some(MacroAuthorization::Internal(None)) => Ok(ForeignEntityLookupCaller::Internal),
+        Some(MacroAuthorization::Harness(harness)) => Ok(ForeignEntityLookupCaller::User(
+            harness.acting_user.macro_user_id.clone(),
+        )),
+        Some(MacroAuthorization::Bot(_)) | None => Err(ForeignEntityError::Unauthorized),
+    }
+}
+
 impl IntoResponse for ForeignEntityError {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
-            ForeignEntityError::NotFound(_) => StatusCode::NOT_FOUND,
+            ForeignEntityError::NotFound(_) | ForeignEntityError::NotFoundForSource { .. } => {
+                StatusCode::NOT_FOUND
+            }
+            ForeignEntityError::Unauthorized => StatusCode::UNAUTHORIZED,
             ForeignEntityError::BadRequest(_) => StatusCode::BAD_REQUEST,
             ForeignEntityError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

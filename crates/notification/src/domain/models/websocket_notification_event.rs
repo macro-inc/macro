@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroNotificationsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
+use rootcause::prelude::{Report, ResultExt as _};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
@@ -43,6 +44,79 @@ pub enum NotificationTopicEvent<'a, T: Clone> {
         /// Notification row patches and deletions for the user.
         updates: Vec<PatchDelete<Uuid, Cow<'a, UserNotificationRow<T>>>>,
     },
+}
+
+impl NotificationTopicEvent<'static, serde_json::Value> {
+    /// Deserializes the JSON metadata carried by every notification row into `T`.
+    ///
+    /// Status patches use the row's notification event type as the external serde tag,
+    /// while delivery requests deserialize their metadata values directly.
+    pub fn deserialize_metadata<T>(self) -> Result<NotificationTopicEvent<'static, T>, Report>
+    where
+        T: Clone + DeserializeOwned + 'static,
+    {
+        match self {
+            NotificationTopicEvent::WebSocketDeliveryRequested(WebSocketNotificationMetadata {
+                notifications,
+            }) => Ok(NotificationTopicEvent::WebSocketDeliveryRequested(
+                WebSocketNotificationMetadata {
+                    notifications: notifications
+                        .into_iter()
+                        .map(decode_notification_row)
+                        .collect::<Result<Vec<_>, _>>()?,
+                },
+            )),
+            NotificationTopicEvent::NotificationStatusUpdatedForUsers { users, update } => {
+                Ok(NotificationTopicEvent::NotificationStatusUpdatedForUsers { users, update })
+            }
+            NotificationTopicEvent::NotificationStatusesUpdatedForUser { user, updates } => {
+                Ok(NotificationTopicEvent::NotificationStatusesUpdatedForUser {
+                    user,
+                    updates: updates
+                        .into_iter()
+                        .map(decode_update)
+                        .collect::<Result<Vec<_>, _>>()?,
+                })
+            }
+        }
+    }
+}
+
+fn decode_notification_row<T>(
+    row: UserNotificationRow<serde_json::Value>,
+) -> Result<UserNotificationRow<T>, Report>
+where
+    T: DeserializeOwned,
+{
+    Ok(row.try_map(|metadata| {
+        serde_json::from_value(metadata).context("failed to decode notification metadata")
+    })?)
+}
+
+fn decode_status_notification_row<T>(
+    row: UserNotificationRow<serde_json::Value>,
+) -> Result<UserNotificationRow<T>, Report>
+where
+    T: DeserializeOwned,
+{
+    Ok(row
+        .into_tagged()
+        .deserialize_metadata::<T>()
+        .context("failed to decode tagged notification status metadata")?)
+}
+
+fn decode_update<T>(
+    update: PatchDelete<Uuid, Cow<'static, UserNotificationRow<serde_json::Value>>>,
+) -> Result<PatchDelete<Uuid, Cow<'static, UserNotificationRow<T>>>, Report>
+where
+    T: Clone + DeserializeOwned + 'static,
+{
+    match update {
+        PatchDelete::Patch { diff } => Ok(PatchDelete::Patch {
+            diff: Cow::Owned(decode_status_notification_row(diff.into_owned())?),
+        }),
+        PatchDelete::Delete { id } => Ok(PatchDelete::Delete { id }),
+    }
 }
 
 impl<'a, T: Clone + Serialize + DeserializeOwned + Send + Sync> TopicEvent

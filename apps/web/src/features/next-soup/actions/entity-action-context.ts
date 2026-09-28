@@ -13,6 +13,15 @@ export type EntityActionViewContext = {
   senderBucket: EntityActionSenderBucket | undefined;
 };
 
+export type EntityActionNavigationEvent = {
+  actionId: string;
+  entity: EntityData | undefined;
+};
+
+export type EntityActionNavigationHandler = (
+  event: EntityActionNavigationEvent
+) => void;
+
 /** Soup list capabilities used by entity actions. */
 export type EntityActionListState = {
   focus: Pick<SoupState['focus'], 'id' | 'index' | 'set'>;

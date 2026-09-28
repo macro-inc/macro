@@ -4,6 +4,8 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateSessionThreadChannelId } from './createSessionThreadChannelId';
+import type { CreateSessionThreadParent } from './createSessionThreadParent';
 import type { CreateSessionThreadThreadId } from './createSessionThreadThreadId';
 
 /**
@@ -12,12 +14,14 @@ import type { CreateSessionThreadThreadId } from './createSessionThreadThreadId'
 Clients serialize this, so both derives are used.
  */
 export interface CreateSessionThread {
-  /** Channel the mentioning message was posted in. */
-  channelId: string;
+  /** Channel the mentioning message was posted in. Runtimes built before
+message parents send this instead of `parent`. */
+  channelId?: CreateSessionThreadChannelId;
   /** The mention's text, quoted in the session's announcement. */
   content?: string;
   /** The mentioning message. */
   messageId: string;
+  parent?: CreateSessionThreadParent;
   /** Thread the session belongs to; defaults to the message itself, which
 is how a top-level mention roots its own thread. */
   threadId?: CreateSessionThreadThreadId;

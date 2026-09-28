@@ -6,7 +6,7 @@ use cursor_api_key::cipher::CursorApiKey;
 use macro_authorization::{MacroAuthorizationExtractor, UserOnly};
 use utoipa::ToSchema;
 
-use super::{CursorApiKeyError, CursorApiKeyStatus, require_macro_staff};
+use super::{CursorApiKeyError, CursorApiKeyStatus};
 use crate::api::context::{ApiContext, AuthorizationService};
 
 /// The key the user pasted.
@@ -44,7 +44,6 @@ pub async fn handler(
     extract::Json(req): extract::Json<PutCursorApiKeyRequest>,
 ) -> Result<Json<CursorApiKeyStatus>, CursorApiKeyError> {
     let user_id = &user_context.authorization.macro_user_id;
-    require_macro_staff(user_id)?;
 
     let cipher = &ctx.cursor_api_key_cipher;
 

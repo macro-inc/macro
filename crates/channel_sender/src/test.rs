@@ -32,3 +32,29 @@ fn fallback_user_name_uses_email_local_part() {
 
     assert_eq!(user_id.email_part().local_part(), "shepherd.hatton");
 }
+
+#[test]
+fn bot_sender_into_owned_and_copied_preserve_contents() {
+    let storage = "bot|00000000-0000-0000-0000-00000000a1a1";
+
+    let copied_value = ChannelSender::parse_from_str(storage).unwrap();
+    let copied = copied_value.copied();
+    assert!(matches!(copied.0, InnerVal::Left(bot_id) if bot_id.as_ref() == storage));
+
+    let owned_value = ChannelSender::parse_from_str(storage).unwrap();
+    let owned = owned_value.into_owned();
+    assert!(matches!(owned.0, InnerVal::Left(bot_id) if bot_id.as_ref() == storage));
+}
+
+#[test]
+fn user_sender_into_owned_and_copied_preserve_contents() {
+    let storage = "macro|alice@example.com";
+
+    let copied_value = ChannelSender::parse_from_str(storage).unwrap();
+    let copied = copied_value.copied();
+    assert!(matches!(copied.0, InnerVal::Right(user_id) if user_id.as_ref() == storage));
+
+    let owned_value = ChannelSender::parse_from_str(storage).unwrap();
+    let owned = owned_value.into_owned();
+    assert!(matches!(owned.0, InnerVal::Right(user_id) if user_id.as_ref() == storage));
+}

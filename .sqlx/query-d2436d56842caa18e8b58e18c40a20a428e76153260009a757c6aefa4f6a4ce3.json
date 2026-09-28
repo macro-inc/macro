@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"Document\" (id, name, owner, \"fileType\")\n            VALUES ($1, 'Empty Test Document', 'macro|user@user.com', 'pdf')\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d2436d56842caa18e8b58e18c40a20a428e76153260009a757c6aefa4f6a4ce3"
+}

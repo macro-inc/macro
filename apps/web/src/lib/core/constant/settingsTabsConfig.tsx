@@ -1,5 +1,4 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import BotIcon from '@icon/wide-bot.svg';
 import BellIcon from '@phosphor/bell-simple.svg';
 import BugIcon from '@phosphor/bug.svg';
 import BuildingsIcon from '@phosphor/buildings.svg';
@@ -9,23 +8,24 @@ import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
+import BotIcon from '@phosphor/robot.svg';
+import AgentIcon from '@phosphor/sparkle.svg';
 import SwatchesIcon from '@phosphor/swatches.svg';
 import TagIcon from '@phosphor/tag-simple.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
 import { useHasPermission } from '../context/user';
+import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
 import {
-  BOT_MANAGEMENT_FLAG,
-  BOT_MANAGEMENT_OVERRIDE,
+  botManagement,
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
-  ENABLE_CRM_FLAG,
-  ENABLE_CRM_OVERRIDE,
-  ENABLE_NOTIFICATION_SETTINGS_FLAG,
-  ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
+  enableChatV3Agents,
+  enableCrm,
+  enableNotificationSettings,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -58,6 +58,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       { tab: 'Notifications', label: 'Notifications', icon: BellIcon },
       { tab: 'Billing', label: 'Billing', icon: CreditCardIcon },
       { tab: 'Appearance', label: 'Appearance', icon: SwatchesIcon },
+      { tab: 'Agents', label: 'Agents', icon: AgentIcon },
       { tab: 'Mobile App', label: 'Mobile App', icon: DeviceMobileIcon },
       { tab: 'Shortcuts', label: 'Shortcuts', icon: KeyboardIcon },
     ],
@@ -70,7 +71,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       { tab: 'CRM', label: 'CRM', icon: BuildingsIcon },
       {
         tab: 'Connected',
-        label: 'Connections',
+        label: 'Integrations',
         icon: CpuIcon,
       },
       { tab: 'Agent', label: 'MCP server', icon: PlugIcon },
@@ -106,6 +107,8 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Shortcuts: 'shortcuts',
   'Mobile App': 'mobile-app',
   Agent: 'mcp-server',
+  Agents: 'agents',
+  Harness: 'runtimes',
   Bots: 'bots',
   Team: 'team',
   Tags: 'tags',
@@ -121,6 +124,9 @@ const SETTINGS_SLUG_TO_TAB = new Map<string, SettingsTab>(
     ([tab, slug]) => [slug, tab]
   )
 );
+
+// Preserve daemon pairing links and bookmarks from before the rename.
+SETTINGS_SLUG_TO_TAB.set('harness', 'Harness');
 
 /** The URL slug for a settings tab (e.g. `Connected` → `connections`). */
 export const settingsTabToSlug = (tab: SettingsTab): string =>
@@ -140,7 +146,9 @@ export const settingsSlugToTab = (
 export const getSettingsTabItem = (
   tab: SettingsTab
 ): SettingsTabItem | undefined =>
-  SETTINGS_TAB_ITEMS.find((item) => item.tab === tab);
+  tab === 'Harness'
+    ? { tab: 'Harness', label: 'Agents', icon: AgentIcon }
+    : SETTINGS_TAB_ITEMS.find((item) => item.tab === tab);
 
 /**
  * Returns a predicate gating which settings tabs are available given feature
@@ -149,27 +157,22 @@ export const getSettingsTabItem = (
  * surface a tab the panel won't render.
  */
 export const useSettingsTabAvailable = () => {
-  const botManagementFlag = useFeatureFlag(BOT_MANAGEMENT_FLAG, {
-    enabledOverride: BOT_MANAGEMENT_OVERRIDE,
-  });
-  const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
-    enabledOverride: ENABLE_CRM_OVERRIDE,
-  });
-  const notificationSettingsFlag = useFeatureFlag(
-    ENABLE_NOTIFICATION_SETTINGS_FLAG,
-    {
-      enabledOverride: ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
-    }
-  );
+  const botManagementFlag = useFeatureFlag(botManagement);
+  const chatV3AgentsFlag = useFeatureFlag(enableChatV3Agents);
+  const crmFlag = useFeatureFlag(enableCrm);
+  const notificationSettingsFlag = useFeatureFlag(enableNotificationSettings);
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   return (tab: SettingsTab): boolean => {
     switch (tab) {
       case 'Appearance':
       case 'Account':
-      case 'API Keys':
       case 'Billing':
         return true;
+      // Issuing and copying a key is desk work, and the mobile sheet has no
+      // good place for a one-time secret.
+      case 'API Keys':
+        return !isMobile();
       case 'Notifications':
         return notificationSettingsFlag().enabled;
       case 'Team':
@@ -188,6 +191,12 @@ export const useSettingsTabAvailable = () => {
         return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
       case 'Agent':
         return !isNativeMobilePlatform();
+      // Configurable agents are still rolling out; keep both tabs behind the
+      // same enable-chat-v3-agents gate as the channel mention surfaces, so
+      // settings never advertises agents to a user who cannot mention one.
+      case 'Harness':
+      case 'Agents':
+        return chatV3AgentsFlag().enabled;
       case 'Bots':
         return botManagementFlag().enabled;
       case 'Mobile':

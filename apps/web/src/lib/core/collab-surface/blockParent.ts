@@ -23,6 +23,7 @@ const BLOCK_PARENT_TYPE: Partial<
   code: 'document',
   image: 'document',
   canvas: 'document',
+  spreadsheet: 'document',
   video: 'document',
   channel: 'channel',
   project: 'project',

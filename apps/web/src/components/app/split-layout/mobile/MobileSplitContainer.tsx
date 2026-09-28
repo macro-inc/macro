@@ -1,3 +1,4 @@
+import { ContentLoading } from '@components/app/ContentLoading';
 import { type Accessor, createMemo, Show, Suspense } from 'solid-js';
 import { SplitPanel } from '../components/SplitPanel';
 import type {
@@ -10,7 +11,7 @@ import { createMobileSplitMotion } from './createMobileSplitMotion';
 import type { MobileSwipeLayout } from './createMobileSwipeLayout';
 
 export type MobileSplitContainerProps = {
-  splitManager: SplitManager;
+  splitManager: Pick<SplitManager, 'getSplit'>;
   mobileSwipeLayout: MobileSwipeLayout;
   splits: Accessor<ReadonlyArray<SplitState>>;
   panelRefs: Map<SplitId, HTMLDivElement>;
@@ -41,9 +42,6 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
   const slotAData = slotDataFor(mobileSwipeLayout.slotASplitId);
   const slotBData = slotDataFor(mobileSwipeLayout.slotBSplitId);
 
-  const renderKeyForSplit = (split: SplitState) =>
-    `${split.id}:${split.content.type}:${split.content.id}`;
-
   return (
     <div
       class="relative size-full overflow-hidden"
@@ -66,12 +64,15 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
             }
           >
             {/*
-             * Key by split and content so SplitPanel remounts when a slot
-             * receives a new split, even if it has the same content id.
+             * Key by split id so SplitPanel remounts when a slot receives a
+             * new split — and only then. Content changes inside a split
+             * (navigation, or the agent block adopting its real session id
+             * mid-typing) swap the mount without tearing the panel down,
+             * matching the desktop layout.
              */}
-            <Show when={renderKeyForSplit(a().split)} keyed>
-              {(_renderKey) => (
-                <Suspense>
+            <Show when={a().split.id} keyed>
+              {(_splitId) => (
+                <Suspense fallback={<ContentLoading />}>
                   <SplitPanel
                     split={a().split}
                     handle={a().handle}
@@ -98,9 +99,9 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
               motion.handleTransitionEnd(e, !mobileSwipeLayout.fgIsSlotA())
             }
           >
-            <Show when={renderKeyForSplit(b().split)} keyed>
-              {(_renderKey) => (
-                <Suspense>
+            <Show when={b().split.id} keyed>
+              {(_splitId) => (
+                <Suspense fallback={<ContentLoading />}>
                   <SplitPanel
                     split={b().split}
                     handle={b().handle}

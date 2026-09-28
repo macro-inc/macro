@@ -1,5 +1,3 @@
-import { openChatWithMessage } from '@app/features/chat/ChatWithAgentButton';
-import { pressPulse } from '@components/app/mobile/pressPulse';
 import {
   useForegroundMobileView,
   useMobileNavNavigate,
@@ -10,9 +8,7 @@ import XIcon from '@phosphor/x.svg';
 import { cn } from '@ui';
 import { createEffect, on } from 'solid-js';
 import { SearchState } from './mobileSearchState';
-
-// Keeps the directive import from being tree-shaken / lint-flagged.
-false && pressPulse;
+import { openMobileAskAi } from './open-mobile-ask-ai';
 
 // This component only writes the global session state. The active split's
 // bridge effect (see soup-view-context) mirrors the session into its own
@@ -22,13 +18,12 @@ false && pressPulse;
 // session itself (see MobileDockRow's search layout).
 
 /**
- * Sends the current query to a new AI chat and ends the search session.
- * Same wiring as the desktop command menu's "Ask AI about" row.
+ * Sends the current query to a new AI conversation and ends the search session.
  */
 function submitAskAi() {
   const query = SearchState.query().trim();
   if (!query) return;
-  openChatWithMessage(query);
+  openMobileAskAi(query);
   SearchState.close();
 }
 
@@ -42,7 +37,6 @@ export function MobileAskAiButton() {
   return (
     <button
       type="button"
-      use:pressPulse
       // Tapping it must not drop the keyboard before the action runs.
       data-keep-keyboard
       class={cn(
@@ -97,7 +91,7 @@ export function MobileSearchInput() {
   // returns to the default view.
   const handleClear = () => {
     SearchState.close();
-    if (foregroundView() === 'search') navigate('inbox');
+    if (foregroundView() === 'search') navigate('home');
   };
 
   return (

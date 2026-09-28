@@ -3,47 +3,43 @@ import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@components/app/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 
-import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
-import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import { FileTypeChip } from '@core/component/FileTypeChip';
-import {
-  REFERENCES_DRAWER_ID,
-  ReferencesButton,
-} from '@core/component/ReferencesModal';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
-import { blockFileSignal } from '@core/signal/load';
+import { useShareModal } from '@core/component/TopBar/shareModal';
+import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/wide-share.svg';
+import IconShared from '@icon/share.svg';
 import Download from '@phosphor/download.svg';
-import Info from '@phosphor/info.svg';
-import Quotes from '@phosphor/quotes.svg';
 import { createCallback } from '@solid-primitives/rootless';
 
 export function TopBar() {
-  const isAuth = useIsAuthenticated();
   const blockId = useBlockId();
   const imageFile = blockFileSignal.get;
   const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
 
-  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
-  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
-  const shareCtx = useShareDialogContext();
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: blockId,
+    blockAlias: 'image',
+    itemType: 'document',
+    name: name() ?? '',
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
 
   const downloadDocument = createCallback(async () => {
     const file = imageFile();
@@ -52,11 +48,6 @@ export function TopBar() {
   });
 
   const ops: FileOperation[] = [
-    {
-      label: 'Details',
-      icon: Info,
-      action: detailsControl.toggle,
-    },
     { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },
@@ -71,24 +62,11 @@ export function TopBar() {
 
   const tools: BlockTool[] = [
     {
-      label: 'References',
-      icon: Quotes,
-      action: referencesControl.toggle,
-      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
-      buttonComponent: () => (
-        <ReferencesButton
-          documentId={blockId}
-          documentName={name()}
-          buttonSize="sm"
-        />
-      ),
-    },
-    {
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
-      buttonComponent: () => <ShareTrigger />,
+      action: openShare,
+      buttonComponent: () => <ShareTrigger onClick={openShare} />,
       focusTarget: getShareDrawerRecipientInput,
     },
   ];

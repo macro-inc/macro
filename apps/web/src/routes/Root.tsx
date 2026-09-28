@@ -6,7 +6,14 @@ import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAu
 import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from '@app/features/auth/Shared';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
+import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
+import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
+import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
+import { HomePreferencesProvider } from '@app/features/home/home-prefs';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
+import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
+import { MeetingRouter } from '@app/features/meetings/meeting-router';
+import { MeetingSessionProvider } from '@app/features/meetings/meeting-session-provider';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
@@ -27,6 +34,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { isMeetingPath } from '@channel/Call/call-link';
 import { CallKitSync } from '@channel/Call/use-callkit';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
@@ -36,7 +44,7 @@ import { publishLoginSuccess } from '@core/auth/login-events';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { ENABLE_ONBOARDING_V4_OVERRIDE } from '@core/constant/featureFlags';
+import { enableOnboardingV4 } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
@@ -82,7 +90,10 @@ import {
 import { useChatRenameWebsocketSync } from '@queries/chat';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
-import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
+import {
+  useRefreshTrackedEntitiesOnFocus,
+  useReopenTrackedEntitiesOnReconnect,
+} from '@service-connection/client';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
@@ -92,6 +103,7 @@ import {
   type RoutePreloadFunc,
   Router,
   type RouterProps,
+  type RouteSectionProps,
   useLocation,
 } from '@solidjs/router';
 import {
@@ -111,7 +123,6 @@ import {
   onMount,
   type ParentProps,
   Show,
-  Suspense,
 } from 'solid-js';
 import { BasePathComponent } from './BasePath';
 import { TaskRoute } from './TaskRoute';
@@ -224,62 +235,12 @@ function OnboardingRoute() {
 }
 
 const ROUTES: RouteDefinition[] = [
+  { path: '/meet/*path', component: MeetingRouter },
   {
     path: '/task-slug/:taskSlug',
     component: TaskRoute,
   },
   LAYOUT_ROUTE,
-  /** BEGIN - APP ROUTES */
-  {
-    path: '/inbox',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/recent',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/activity',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/reminders',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/agents',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/mail',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/documents',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/tasks',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/channels',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/calls',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/companies',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/files',
-    component: LAYOUT_ROUTE.component,
-  },
-  /** END - APP ROUTES */
-
   {
     path: '/',
     component: BasePathComponent,
@@ -356,6 +317,16 @@ const ROUTES: RouteDefinition[] = [
     component: SetupRoute,
   },
   {
+    // A personal GTM invite link (`?token=`): welcome page, then signup.
+    path: '/invite',
+    component: InviteWelcome,
+  },
+  {
+    // Macro staff only: create and track GTM invite links.
+    path: '/internal/invite-links',
+    component: InviteLinksPortal,
+  },
+  {
     path: '/team-invite',
     component: TeamInviteAcceptance,
   },
@@ -371,10 +342,12 @@ const ROUTES: RouteDefinition[] = [
 ];
 
 function ConfiguredGlobalAppStateProvider(props: ParentProps) {
+  const userId = useUserId();
   // Initialize global notification helpers
   const notifInterface = usePlatformNotificationState();
   useChatRenameWebsocketSync();
   useReopenTrackedEntitiesOnReconnect();
+  useRefreshTrackedEntitiesOnFocus();
 
   if (isNativeMobilePlatform()) {
     useInvalidateQueriesOnReconnect();
@@ -404,7 +377,9 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
       notificationSource={notificationSource}
       blockOrchestrator={blockOrchestrator}
     >
-      {props.children}
+      <HomePreferencesProvider userId={userId}>
+        {props.children}
+      </HomePreferencesProvider>
     </GlobalAppStateProvider>
   );
 }
@@ -420,6 +395,10 @@ function UserInfoSideEffects() {
   const posthog = usePosthog();
 
   useSyncLoginCookie();
+
+  // A signup that started from a GTM invite link finishes its attribution on
+  // the first authenticated load (the welcome page parked the token).
+  usePendingInviteRedemption();
 
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
@@ -496,7 +475,7 @@ function InitialInteractiveOnboardingModal() {
     // `just run_local` sets VITE_ENABLE_ONBOARDING_V4=false; without this the
     // v4-off fallback would still open this legacy modal. Opt in with
     // `just run_local --enable-onboarding`.
-    ENABLE_ONBOARDING_V4_OVERRIDE !== false &&
+    enableOnboardingV4.override !== false &&
     // Onboarding-v4 replaces this modal on desktop; the Layout redirect
     // sends first-time users to /onboarding instead. Desktop waits for the
     // flag to resolve so this doesn't flash before that redirect fires.
@@ -549,6 +528,19 @@ function InitialInteractiveOnboardingModal() {
   );
 }
 
+/** Meeting links have a focused shell and never enter app onboarding. */
+function AppRouteLayout(props: RouteSectionProps) {
+  const location = useLocation();
+  return (
+    <IncomingMeetingInvitationsProvider>
+      <Show when={!isMeetingPath(location.pathname)} fallback={props.children}>
+        <Layout {...props} />
+        <InitialInteractiveOnboardingModal />
+      </Show>
+    </IncomingMeetingInvitationsProvider>
+  );
+}
+
 export function Root() {
   setHotkeyRoot(useHotKeyRoot());
 
@@ -597,10 +589,12 @@ export function Root() {
                                 <ChatAttachmentsInit />
                                 <ReactiveFavicon />
                                 <Title>{tabTitle()}</Title>
-                                <Suspense>
+                                <MeetingSessionProvider>
+                                  {/* Loading boundaries belong inside Layout so
+                                    a pending resource cannot detach the app shell. */}
                                   <IsomorphicRouter
                                     transformUrl={transformShortIdInUrlPathname}
-                                    root={Layout}
+                                    root={AppRouteLayout}
                                     rootPreload={rootPreload}
                                     base={ROUTER_BASE}
                                   >
@@ -610,8 +604,7 @@ export function Root() {
                                       children: ROUTES,
                                     }}
                                   </IsomorphicRouter>
-                                </Suspense>
-                                <InitialInteractiveOnboardingModal />
+                                </MeetingSessionProvider>
                                 <ToastRegion />
                               </SearchProvider>
                             </QuickAccessProvider>

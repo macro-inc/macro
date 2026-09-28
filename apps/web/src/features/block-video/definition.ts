@@ -3,51 +3,19 @@ import {
   type ExtractLoadType,
   LoadErrors,
   loadResult,
-  type MimeType,
 } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_VIDEO_BLOCK } from '@core/constant/featureFlags';
 import { storageServiceClient } from '@service-storage/client';
-import type { DocumentMetadataFileType } from '@service-storage/generated/schemas/documentMetadataFileType';
 import { getPresignedUrl } from '@service-storage/util/presignedUrl';
 import { err, ok } from 'neverthrow';
 import BlockVideo from './component/Block';
+import {
+  isVideoPlaybackEnabled,
+  PLAYBACK_ENABLED_MIMES,
+  VIDEO_MIMES,
+} from './core/video';
 
-export const VIDEO_MIMES: Record<
-  NonNullable<DocumentMetadataFileType>,
-  MimeType
-> = ENABLE_VIDEO_BLOCK
-  ? {
-      mp4: 'video/mp4',
-      mkv: 'video/x-matroska',
-      webm: 'video/webm',
-      avi: 'video/x-msvideo',
-      mov: 'video/quicktime',
-      wmv: 'video/x-ms-wmv',
-      mpg: 'video/mpeg',
-      mpeg: 'video/mpeg',
-      m4v: 'video/mp4',
-      flv: 'video/x-flv',
-      f4v: 'video/mp4',
-      threegp: 'video/3gpp',
-    }
-  : {};
-
-export const PLAYBACK_ENABLED_MIMES: Record<keyof typeof VIDEO_MIMES, boolean> =
-  {
-    mp4: true,
-    mkv: true,
-    webm: true,
-    avi: true,
-    mov: true,
-    wmv: true,
-    mpg: true,
-    mpeg: true,
-    m4v: true,
-    flv: true,
-    f4v: true,
-    threegp: true,
-  };
+export { PLAYBACK_ENABLED_MIMES, VIDEO_MIMES };
 
 export const definition = defineBlock({
   name: 'video',
@@ -71,16 +39,11 @@ export const definition = defineBlock({
       if (maybeDocument.isErr()) return err(maybeDocument.error);
 
       const documentResult = maybeDocument.value;
-
       const { documentMetadata, userAccessLevel } = documentResult;
 
       const fileType = documentMetadata.fileType;
       let videoUrl: string | undefined;
-      if (
-        fileType &&
-        Object.keys(PLAYBACK_ENABLED_MIMES).includes(fileType) &&
-        PLAYBACK_ENABLED_MIMES[fileType]
-      ) {
+      if (isVideoPlaybackEnabled(fileType)) {
         videoUrl = await getPresignedUrl({
           documentId: documentMetadata.documentId,
           versionId: documentMetadata.documentVersionId,

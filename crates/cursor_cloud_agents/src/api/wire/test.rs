@@ -58,9 +58,47 @@ fn no_mcp_servers_means_no_field() {
         repos: Vec::new(),
         model: None,
         mcp_servers: Vec::new(),
+        auto_create_pr: false,
     };
     let body = serde_json::to_value(&request).expect("serializes");
     assert!(body.get("mcpServers").is_none(), "got {body}");
+}
+
+/// A repo agent asks Cursor for a pull request under Cursor's own spelling,
+/// `autoCreatePR`; camel case alone would send `autoCreatePr` and be ignored.
+#[test]
+fn a_repo_agent_asks_for_a_pull_request() {
+    let request = CreateAgentRequest {
+        prompt: PromptBody {
+            text: "hi".to_owned(),
+        },
+        repos: vec![RepoSelection {
+            url: "https://github.com/macro-inc/macro".to_owned(),
+            starting_ref: "main".to_owned(),
+        }],
+        model: None,
+        mcp_servers: Vec::new(),
+        auto_create_pr: true,
+    };
+    let body = serde_json::to_value(&request).expect("serializes");
+    assert_eq!(body.get("autoCreatePR"), Some(&serde_json::json!(true)));
+}
+
+/// A repo-less agent has nothing to open a pull request against, so the field
+/// is omitted rather than sent as false.
+#[test]
+fn a_repoless_agent_omits_the_pull_request_flag() {
+    let request = CreateAgentRequest {
+        prompt: PromptBody {
+            text: "hi".to_owned(),
+        },
+        repos: Vec::new(),
+        model: None,
+        mcp_servers: Vec::new(),
+        auto_create_pr: false,
+    };
+    let body = serde_json::to_value(&request).expect("serializes");
+    assert!(body.get("autoCreatePR").is_none(), "got {body}");
 }
 
 /// The list response reads a documented page: items plus a `nextCursor` that
@@ -106,4 +144,36 @@ fn me_reads_user_and_service_account_shapes() {
     }))
     .expect("service-account key");
     assert!(service.user_email.is_none());
+}
+
+/// Artifact fields arrive camel-cased, and an agent that has written none may
+/// answer with a bare object rather than an empty `items` array.
+#[test]
+fn artifact_listings_read_camel_case_and_an_absent_items_key() {
+    let listing: ListArtifactsResponse = serde_json::from_value(serde_json::json!({
+        "items": [{
+            "path": "artifacts/mobile_selection_menu_formatting_walkthrough.mp4",
+            "sizeBytes": 48_500_000_u64,
+            "updatedAt": "2026-04-13T18:45:00.000Z",
+        }],
+    }))
+    .expect("a documented listing");
+    assert_eq!(listing.items[0].size_bytes, 48_500_000);
+    assert_eq!(listing.items[0].updated_at, "2026-04-13T18:45:00.000Z");
+
+    let empty: ListArtifactsResponse =
+        serde_json::from_value(serde_json::json!({})).expect("no artifacts yet");
+    assert!(empty.items.is_empty());
+}
+
+/// The download body is the presigned url plus its expiry, both camel-cased.
+#[test]
+fn an_artifact_download_reads_the_documented_body() {
+    let download: ArtifactDownloadResponse = serde_json::from_value(serde_json::json!({
+        "url": "https://cloud-agent-artifacts.s3.us-east-1.amazonaws.com/a?sig=1",
+        "expiresAt": "2026-04-13T19:00:00.000Z",
+    }))
+    .expect("a documented download");
+    assert!(download.url.contains("cloud-agent-artifacts"));
+    assert_eq!(download.expires_at, "2026-04-13T19:00:00.000Z");
 }

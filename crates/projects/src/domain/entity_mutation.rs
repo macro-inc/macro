@@ -35,7 +35,9 @@ impl From<ProjectError> for EntityMutationErrorCode {
             error @ (ProjectError::BadRequest(_)
             | ProjectError::NameTooLong { .. }
             | ProjectError::RecursiveNesting) => Self::invalid(rootcause::report!(error)),
-            error @ ProjectError::CannotModifyDeleted => Self::conflict(rootcause::report!(error)),
+            error @ (ProjectError::Conflict(_) | ProjectError::CannotModifyDeleted) => {
+                Self::conflict(rootcause::report!(error))
+            }
             error @ ProjectError::Internal(_) => Self::internal(rootcause::report!(error)),
         }
     }

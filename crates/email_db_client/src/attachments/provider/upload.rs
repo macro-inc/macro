@@ -193,7 +193,11 @@ pub async fn fetch_job_attachments_for_backfill(
             JOIN public.email_messages message ON message.thread_id = eligible.thread_id
             WHERE message.from_contact_id IS NOT NULL
 
-            UNION
+            -- UNION ALL, not UNION: `qualified_threads` already applies
+            -- SELECT DISTINCT to this result, so a set-union dedupe here
+            -- sorts the whole participant set only to have the work thrown
+            -- away. Duplicates cannot change the final thread set.
+            UNION ALL
 
             SELECT message.thread_id, recipient.contact_id
             FROM eligible_threads eligible

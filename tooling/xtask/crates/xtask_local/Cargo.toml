@@ -41,6 +41,7 @@ console = "0.15"
 indicatif = "0.18.5"
 docker-compose-types = { version = "0.24", features = ["indexmap"] }
 indexmap = { workspace = true }
+indoc = { workspace = true }
 serde_yaml = { workspace = true }
 # Parse user-provided `--env-file` overlays. EnumIter derives the port list.
 dotenvy = { workspace = true }

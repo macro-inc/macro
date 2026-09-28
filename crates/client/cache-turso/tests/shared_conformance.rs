@@ -78,6 +78,7 @@ fn record(value: &str) -> Record {
 
 fn queued(label: &str) -> NewQueuedMutation {
     NewQueuedMutation {
+        uuid: uuid::Uuid::new_v4(),
         mutation: StoredMutation::new(
             MutationRequest {
                 query: format!("mutation {label} {{ update {{ id }} }}"),
@@ -96,6 +97,7 @@ fn queued(label: &str) -> NewQueuedMutation {
 
 fn fully_populated_queued() -> NewQueuedMutation {
     NewQueuedMutation {
+        uuid: uuid::Uuid::new_v4(),
         mutation: StoredMutation {
             request: MutationRequest {
                 query: "mutation Full($id: ID!) { update(id: $id) { id } }".into(),

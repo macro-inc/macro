@@ -1,6 +1,5 @@
 export { defaultNameTransform } from './fetchers';
 export {
-  getCachedItemPreview,
   getItemPreview,
   invalidatePreview,
   setPreviewFileType,

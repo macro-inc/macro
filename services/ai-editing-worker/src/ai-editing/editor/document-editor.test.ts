@@ -427,6 +427,51 @@ describe('DocumentEditor — mention methods push insertInline ops', () => {
       kind: 'insertInline',
       spec: { inline: 'mention', mention: { kind: 'document' } },
     });
+    const es = ed();
+    es.mentionAgentSession('b1', 0, {
+      id: 'sess-1',
+      label: 'Fix login',
+      expanded: true,
+    });
+    expect(es.drain()[0]).toMatchObject({
+      kind: 'insertInline',
+      spec: {
+        inline: 'mention',
+        mention: {
+          kind: 'agent_session',
+          id: 'sess-1',
+          label: 'Fix login',
+          expanded: true,
+        },
+      },
+    });
+    const epr = ed();
+    epr.mentionPullRequest('b1', 0, { id: 'pr-1', label: 'macro#1' });
+    expect(epr.drain()[0]).toMatchObject({
+      kind: 'insertInline',
+      spec: { inline: 'mention', mention: { kind: 'pr', id: 'pr-1' } },
+    });
+    const et = ed();
+    et.mentionTag('b1', 0, {
+      optionId: 'o',
+      propertyDefinitionId: 'p',
+      scope: 'team',
+      name: 'Launch',
+    });
+    expect(et.drain()[0]).toMatchObject({
+      kind: 'insertInline',
+      spec: { inline: 'mention', mention: { kind: 'tag', name: 'Launch' } },
+    });
+    const edate = ed();
+    edate.mentionDate('b1', 0, '2026-07-08T00:00:00.000Z', 'Today');
+    expect(edate.drain()[0]).toMatchObject({
+      kind: 'insertInline',
+      spec: {
+        inline: 'date',
+        date: '2026-07-08T00:00:00.000Z',
+        displayFormat: 'Today',
+      },
+    });
   });
 });
 
@@ -647,6 +692,10 @@ describe('DocumentEditor — mention methods require a valid block id', () => {
     expect(() => ed().mentionGroup('nope', 0, { groupAlias: 'g' })).toThrow(
       /nope/
     );
+    expect(() => ed().mentionAgentSession('nope', 0, { id: 's' })).toThrow(
+      /nope/
+    );
+    expect(() => ed().mentionDate('nope', 0, '2026-01-01')).toThrow(/nope/);
   });
 });
 

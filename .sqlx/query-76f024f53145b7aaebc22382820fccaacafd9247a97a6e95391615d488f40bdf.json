@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendar_events event\n            SET is_read_only = source.is_read_only\n            FROM calendar_event_sources source\n            WHERE source.id = event.content_source_id\n              AND source.account_id = $1\n              AND event.is_read_only IS DISTINCT FROM source.is_read_only\n            RETURNING event.id, event.owner_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "76f024f53145b7aaebc22382820fccaacafd9247a97a6e95391615d488f40bdf"
+}

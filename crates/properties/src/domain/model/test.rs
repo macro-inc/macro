@@ -1,12 +1,13 @@
 use super::*;
 
-const STORAGE_TYPES: [EntityType; 10] = [
+const STORAGE_TYPES: [EntityType; 11] = [
     EntityType::CalendarEvent,
     EntityType::CallRecord,
     EntityType::Channel,
     EntityType::Chat,
     EntityType::Company,
     EntityType::Document,
+    EntityType::Initiative,
     EntityType::Project,
     EntityType::Task,
     EntityType::Thread,
@@ -51,6 +52,7 @@ fn canonical_types_without_properties_storage_map_to_none() {
         AccessEntityType::Reminder,
         AccessEntityType::Skill,
         AccessEntityType::AgentSession,
+        AccessEntityType::ScheduledAction,
     ] {
         assert_eq!(storage_entity_type(unsupported), None, "{unsupported:?}");
     }

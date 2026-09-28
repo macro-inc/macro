@@ -227,3 +227,25 @@ describe('selectIndexSpecs', () => {
     expect(selectIndexSpecs(INDEX_SPECS, 'nope')).toEqual([]);
   });
 });
+
+test('agent sessions use a parent-child folded-message mapping', () => {
+  const spec = INDEX_SPECS.find(
+    ({ aliasName }) => aliasName === 'agent_sessions'
+  );
+
+  expect(spec?.indexName).toBe('agent_sessions_v1');
+  expect(spec?.body).toMatchObject({
+    mappings: {
+      dynamic: 'false',
+      properties: {
+        agent_session_id: { type: 'keyword' },
+        entity_id: { type: 'alias', path: 'agent_session_id' },
+        content: { type: 'text', analyzer: 'standard' },
+        agent_session_relation: {
+          type: 'join',
+          relations: { agent_session: 'message' },
+        },
+      },
+    },
+  });
+});

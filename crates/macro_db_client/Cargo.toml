@@ -18,11 +18,13 @@ cached = { workspace = true }
 chrono = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
 entity_access_db_utils = { path = "../entity_access_db_utils" }
+entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
 futures = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
+model_owner = { path = "../model_owner" }
 model_file_type = { path = "../model_file_type" }
 models_dcs = { path = "../models_dcs" }
 models_entity_access_management = { path = "../models_entity_access_management", features = [

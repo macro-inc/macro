@@ -82,7 +82,14 @@ pub(crate) async fn create_message(
         }
     }
 
-    super::patch_chat::patch_chat(&mut tx, chat_id, None, None).await?;
+    let selected_model = (message.role == Role::User).then_some(model.as_str());
+    sqlx::query!(
+        r#"UPDATE "Chat" SET "updatedAt" = NOW(), model = COALESCE($2, model) WHERE id = $1"#,
+        chat_id,
+        selected_model,
+    )
+    .execute(&mut *tx)
+    .await?;
 
     tx.commit().await?;
     Ok(message_id)

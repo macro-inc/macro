@@ -1,5 +1,5 @@
 use anyhow::Context;
-use models_search::document::MarkdownParseResult;
+use lexical_client::types::MarkdownParseResult;
 
 /// Takes the raw json markdown file and parses it into searchable content for opensearch.
 /// NOTE: this is included for legacy reasons for files included with DSS and should

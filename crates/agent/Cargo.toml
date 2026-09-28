@@ -27,6 +27,7 @@ tracing = { workspace = true }
 ai_usage = { path = "../ai_usage" }
 ai_toolset = { path = "../ai_toolset" }
 attachment = { path = "../attachment" }
+genai_telemetry = { path = "../genai_telemetry" }
 macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id" }
 prompt = { path = "../prompt" }
@@ -36,6 +37,10 @@ tokio-util.workspace = true
 [dev-dependencies]
 model-entity = { path = "../model-entity" }
 non_empty = { path = "../non_empty" }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
 # Enable rig's scripted MockCompletionModel for tests (fake AI streams).
 rig-core = { version = "0.41.0", features = ["test-utils"] }
 rig-agent = { version = "0.41.0", features = ["test-utils"] }

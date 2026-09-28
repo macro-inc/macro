@@ -1,0 +1,106 @@
+---
+source: crates/codex_cloud_agents/tests/fold.rs
+expression: messages
+---
+[
+  {
+    "turn": 0,
+    "author": {
+      "kind": "user",
+      "userId": null
+    },
+    "requestId": null,
+    "parts": [
+      {
+        "kind": "text",
+        "text": "wh atis this repo how is ti going man"
+      }
+    ],
+    "stop": null,
+    "pending": false
+  },
+  {
+    "turn": 0,
+    "author": {
+      "kind": "agent"
+    },
+    "requestId": null,
+    "parts": [
+      {
+        "kind": "thought",
+        "text": "**Inspecting AGENTS and files****Inspecting hidden files and git history**"
+      },
+      {
+        "kind": "tool_use",
+        "id": "record_15",
+        "name": {
+          "kind": "native",
+          "name": "/bin/bash -lc \"printf '%s\\\\n' '--- directory ---' && find . -maxdepth 2 -mindepth 1 -printf '%y %p\\\\n' | sort | sed -n '1,160p' && printf '%s\\\\n' '--- recent commits ---' && git log --oneline --decorate --all -10 && printf '%s\\\\n' '--- HEAD tree ---' && git ls-tree -r --name-only HEAD 2>&1 || true && printf '%s\\\\n' '--- remotes ---' && git remote -v\""
+        },
+        "status": "completed",
+        "detail": {
+          "kind": "terminal",
+          "command": "/bin/bash -lc \"printf '%s\\\\n' '--- directory ---' && find . -maxdepth 2 -mindepth 1 -printf '%y %p\\\\n' | sort | sed -n '1,160p' && printf '%s\\\\n' '--- recent commits ---' && git log --oneline --decorate --all -10 && printf '%s\\\\n' '--- HEAD tree ---' && git ls-tree -r --name-only HEAD 2>&1 || true && printf '%s\\\\n' '--- remotes ---' && git remote -v\"",
+          "output": null,
+          "exitCode": null
+        }
+      },
+      {
+        "kind": "tool_use",
+        "id": "record_106",
+        "name": {
+          "kind": "native",
+          "name": "/bin/bash -lc \"pwd && printf '%s\\\\n' '--- AGENTS files ---' && find .. -name AGENTS.md -print && printf '%s\\\\n' '--- top-level files ---' && rg --files -g '\"'!node_modules'\"' | sed -n '1,120p' && printf '%s\\\\n' '--- git status ---' && git status --short --branch\""
+        },
+        "status": "completed",
+        "detail": {
+          "kind": "terminal",
+          "command": "/bin/bash -lc \"pwd && printf '%s\\\\n' '--- AGENTS files ---' && find .. -name AGENTS.md -print && printf '%s\\\\n' '--- top-level files ---' && rg --files -g '\"'!node_modules'\"' | sed -n '1,120p' && printf '%s\\\\n' '--- git status ---' && git status --short --branch\"",
+          "output": null,
+          "exitCode": null
+        }
+      },
+      {
+        "kind": "text",
+        "text": "## Hey! 👋\n\nI’m doing well, man—thanks for asking.\n\n## What is this repository?\n\nThis is currently an **empty temporary test repository**:\n\n- It contains no application source code, documentation, dependencies, or tests.\n- Its only tracked file is `.gitkeep`, which is commonly used to keep an otherwise empty directory in Git. \n\n\n- The repository has a single commit named **“Initialize repository.”**\n- You’re on the `work` branch.\n- No Git remote is configured, so it is not currently connected to a GitHub or other remote repository.\n\nIn short: **it’s just a blank sandbox that can be used to test changes or start a new project.**\n\n## Checks performed\n\n- ✅ `pwd`\n- ✅ `find .. -name AGENTS.md -print`\n- ✅ `rg --files -g '!node_modules'`\n- ✅ `git status --short --branch`\n- ✅ `find . -maxdepth 2 -mindepth 1 -printf '%y %p\\n'`\n- ✅ `git log --oneline --decorate --all -10`\n- ✅ `git ls-tree -r --name-only HEAD`\n- ✅ `git remote -v`\n\nI didn’t modify anything, so there was nothing to commit or open a pull request for."
+      }
+    ],
+    "stop": {
+      "kind": "end_turn"
+    },
+    "pending": false
+  },
+  {
+    "turn": 1,
+    "author": {
+      "kind": "user",
+      "userId": null
+    },
+    "requestId": null,
+    "parts": [
+      {
+        "kind": "text",
+        "text": "what is your name"
+      }
+    ],
+    "stop": null,
+    "pending": false
+  },
+  {
+    "turn": 1,
+    "author": {
+      "kind": "agent"
+    },
+    "requestId": null,
+    "parts": [
+      {
+        "kind": "text",
+        "text": "My name is **Codex**. I’m an AI coding assistant created by OpenAI."
+      }
+    ],
+    "stop": {
+      "kind": "end_turn"
+    },
+    "pending": false
+  }
+]

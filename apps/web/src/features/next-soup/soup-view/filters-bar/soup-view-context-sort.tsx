@@ -55,7 +55,7 @@ export const SoupViewContextSort = () => {
 
   return (
     <Switch>
-      <Match when={isComponentListView('inbox')}>
+      <Match when={isComponentListView('home')}>
         <InboxSort {...openProps()} />
       </Match>
       <Match when={isComponentListView('agents')}>

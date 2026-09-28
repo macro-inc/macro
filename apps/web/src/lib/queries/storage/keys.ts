@@ -50,6 +50,9 @@ export const pullRequestMentionKeys = createQueryKeys('pullRequestMention', {
   foreignEntity: (id: string) => ({
     queryKey: [id],
   }),
+  byGithubKey: (githubKey: string) => ({
+    queryKey: ['byGithubKey', githubKey],
+  }),
 });
 
 export const attachmentReferencesKeys = createQueryKeys(
@@ -66,6 +69,9 @@ export const attachmentReferencesKeys = createQueryKeys(
 export const entityKeys = createQueryKeys('entity', {
   documentMetadata: (documentId: string) => ({
     queryKey: [documentId],
+  }),
+  documentAccessLevel: (documentId: string) => ({
+    queryKey: [documentId, 'accessLevel'],
   }),
   projectData: (projectId: string) => ({
     queryKey: [projectId],

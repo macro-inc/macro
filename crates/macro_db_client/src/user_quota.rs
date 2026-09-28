@@ -4,7 +4,10 @@ use user_quota::{CreateUserQuotaRequest, UserQuota};
 #[cfg(test)]
 mod test;
 
-/// Retrieves the user quota for a user
+/// Retrieves the user quota for a user.
+///
+/// Documents count user-owned rows only. Bot/team-owned document quota policy
+/// remains open (ownership-v2 §11.5); access grants do not imply quota ownership.
 #[tracing::instrument(skip(db))]
 pub async fn get_user_quota(
     db: &sqlx::PgPool,

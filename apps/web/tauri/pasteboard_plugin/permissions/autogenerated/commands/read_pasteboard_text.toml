@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-read-pasteboard-text"
+description = "Enables the read_pasteboard_text command without any pre-configured scope."
+commands.allow = ["read_pasteboard_text"]
+
+[[permission]]
+identifier = "deny-read-pasteboard-text"
+description = "Denies the read_pasteboard_text command without any pre-configured scope."
+commands.deny = ["read_pasteboard_text"]

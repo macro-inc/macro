@@ -6,6 +6,7 @@
  */
 import type { NotificationDocumentSubTypeOneOf } from './notificationDocumentSubTypeOneOf';
 import type { NotificationDocumentSubTypeOneOfFive } from './notificationDocumentSubTypeOneOfFive';
+import type { NotificationDocumentSubTypeOneOfSeven } from './notificationDocumentSubTypeOneOfSeven';
 import type { NotificationDocumentSubTypeOneOfThree } from './notificationDocumentSubTypeOneOfThree';
 
 /**
@@ -15,4 +16,5 @@ Serializes as `{ "type": "task" }` matching the storage service pattern.
 export type NotificationDocumentSubType =
   | NotificationDocumentSubTypeOneOf
   | NotificationDocumentSubTypeOneOfThree
-  | NotificationDocumentSubTypeOneOfFive;
+  | NotificationDocumentSubTypeOneOfFive
+  | NotificationDocumentSubTypeOneOfSeven;

@@ -324,11 +324,17 @@ impl RemindersRepo for PgRemindersRepo {
         filter: &ReminderFilter,
         limit: i64,
     ) -> Result<ReminderBatch, Self::Err> {
-        let entity_type: Option<&str> = filter
-            .entity
-            .as_ref()
-            .map(|entity| entity.entity_type.into());
-        let entity_id = entity_uuid(filter.entity.as_ref())?;
+        // An empty dimension means no constraint, so it binds NULL rather than
+        // an empty array. `= ANY('{}')` would match nothing.
+        let entity_types: Option<Vec<String>> = (!filter.entity_types.is_empty()).then(|| {
+            filter
+                .entity_types
+                .iter()
+                .map(|entity_type| <&str>::from(*entity_type).to_string())
+                .collect()
+        });
+        let entity_ids: Option<&[Uuid]> =
+            (!filter.entity_ids.is_empty()).then_some(&filter.entity_ids);
         let (cursor_next_run_at, cursor_created_at, cursor_id) = match filter.cursor {
             Some(cursor) => (
                 Some(cursor.next_run_at),
@@ -356,8 +362,11 @@ impl RemindersRepo for PgRemindersRepo {
                 updated_at
             FROM reminder
             WHERE user_id = $1
-              AND ($2::text IS NULL OR entity_type = $2)
-              AND ($3::uuid IS NULL OR entity_id = $3)
+              -- A standalone reminder has NULL in both columns, and
+              -- `NULL = ANY(...)` is NULL rather than true, so a constrained
+              -- dimension excludes it.
+              AND ($2::text[] IS NULL OR entity_type = ANY($2))
+              AND ($3::uuid[] IS NULL OR entity_id = ANY($3))
               AND ($4::bool OR completed_at IS NULL)
               -- Keyset: resume strictly after the cursor position in the same
               -- (next_run_at, created_at, id) order the query returns.
@@ -369,8 +378,8 @@ impl RemindersRepo for PgRemindersRepo {
             LIMIT $8
             "#,
             user_id.as_ref(),
-            entity_type,
-            entity_id,
+            entity_types.as_deref(),
+            entity_ids,
             filter.include_completed,
             cursor_next_run_at,
             cursor_created_at,

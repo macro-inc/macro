@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE gtm_invite_link\n            SET converted_at = $3,\n                stripe_subscription_id = $2\n            WHERE redeemed_by_user_id = $1\n              AND converted_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5e1c5170a61a76cb9b13645d3470bd2c7b1395d29f6da1c208b6070fc969cf92"
+}

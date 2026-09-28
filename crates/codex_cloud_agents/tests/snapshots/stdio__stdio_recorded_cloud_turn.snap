@@ -1,0 +1,68 @@
+---
+source: crates/codex_cloud_agents/tests/stdio.rs
+expression: "normalize(&json!(frames), &session)"
+---
+[
+  {
+    "jsonrpc": "2.0",
+    "method": "session/update",
+    "params": {
+      "sessionId": "SESSION",
+      "update": {
+        "sessionUpdate": "tool_call",
+        "toolCallId": "recorded-id-7",
+        "title": "printf \"safe-output\\n\"",
+        "kind": "execute",
+        "status": "completed",
+        "content": [
+          {
+            "type": "content",
+            "content": {
+              "type": "text",
+              "text": "safe-output\n"
+            }
+          }
+        ],
+        "rawInput": {
+          "aggregatedOutput": "safe-output\n",
+          "command": "printf \"safe-output\\n\"",
+          "commandActions": [
+            {
+              "command": "printf \"safe-output\\n\"",
+              "type": "unknown"
+            }
+          ],
+          "cwd": "/workspace/example",
+          "durationMs": 1000,
+          "exitCode": 0,
+          "id": "recorded-id-7",
+          "processId": "recorded-id-8",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "type": "commandExecution"
+        }
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "method": "session/update",
+    "params": {
+      "sessionId": "SESSION",
+      "update": {
+        "sessionUpdate": "agent_message_chunk",
+        "content": {
+          "type": "text",
+          "text": "Safe text. Safe text. Safe text. Safe text. Safe text. Safe text. Safe text. Safe text. Safe text. Safe text. Safe text. "
+        }
+      }
+    }
+  },
+  {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "stopReason": "end_turn"
+    }
+  }
+]

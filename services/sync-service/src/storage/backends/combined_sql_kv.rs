@@ -31,6 +31,13 @@ impl SnapshotStorage for Storage {
         }
     }
 
+    async fn delete_snapshot(&self) -> worker::Result<()> {
+        // Remove the fallback first so a partial rollback cannot expose it after
+        // the authoritative SQL copy is removed.
+        self.kv.delete_snapshot().await?;
+        self.sql.delete_snapshot().await
+    }
+
     async fn has_snapshot(&self) -> worker::Result<bool> {
         Ok(self.sql.has_snapshot().await? || self.kv.has_snapshot().await?)
     }

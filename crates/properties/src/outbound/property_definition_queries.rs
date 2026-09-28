@@ -182,6 +182,39 @@ pub async fn list_property_definitions_with_options(
     user_id: Option<&MacroUserIdStr<'_>>,
     include_system: bool,
 ) -> anyhow::Result<Vec<PropertyDefinitionWithOptions>> {
+    read_property_definitions_with_options(pool, team_id, user_id, include_system, None).await
+}
+
+/// Read options for requested definitions visible to the caller, retaining empty option lists.
+pub async fn get_visible_property_options_batch(
+    pool: &Pool<Postgres>,
+    property_definition_ids: &[Uuid],
+    user_id: &MacroUserIdStr<'_>,
+    team_id: Option<Uuid>,
+) -> anyhow::Result<HashMap<Uuid, Vec<PropertyOption>>> {
+    if property_definition_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    Ok(read_property_definitions_with_options(
+        pool,
+        team_id,
+        Some(user_id),
+        true,
+        Some(property_definition_ids),
+    )
+    .await?
+    .into_iter()
+    .map(|row| (row.definition.id, row.property_options))
+    .collect())
+}
+
+async fn read_property_definitions_with_options(
+    pool: &Pool<Postgres>,
+    team_id: Option<Uuid>,
+    user_id: Option<&MacroUserIdStr<'_>>,
+    include_system: bool,
+    property_definition_ids: Option<&[Uuid]>,
+) -> anyhow::Result<Vec<PropertyDefinitionWithOptions>> {
     let user_id: Option<&str> = user_id.map(|u| u.as_ref());
     let rows = sqlx::query!(
         r#"
@@ -206,16 +239,18 @@ pub async fn list_property_definitions_with_options(
         FROM property_definitions pd
         LEFT JOIN property_options po ON pd.id = po.property_definition_id
         WHERE
-            ($3 AND pd.is_system)
-            OR (
-                ($1::uuid IS NOT NULL AND pd.team_id = $1)
+            ($4::uuid[] IS NULL OR pd.id = ANY($4))
+            AND (
+                ($3 AND pd.is_system)
+                OR ($1::uuid IS NOT NULL AND pd.team_id = $1)
                 OR ($2::text IS NOT NULL AND pd.user_id = $2)
             )
         ORDER BY LOWER(pd.display_name), po.display_order, po.number_value, LOWER(po.string_value)
         "#,
         team_id,
         user_id,
-        include_system
+        include_system,
+        property_definition_ids
     )
     .fetch_all(pool)
     .await?;

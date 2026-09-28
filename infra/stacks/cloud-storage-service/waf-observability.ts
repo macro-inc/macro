@@ -27,10 +27,6 @@ const SENSITIVE_HEADERS = [
   'x-permissions-token',
 ] as const;
 
-interface WafObservabilityArgs {
-  albArn: pulumi.Input<string>;
-}
-
 const visibilityConfig = (metricName: string) => ({
   cloudwatchMetricsEnabled: true,
   metricName,
@@ -74,12 +70,8 @@ const messagePostStatement = (
 });
 
 export class WafObservability extends pulumi.ComponentResource {
-  constructor(
-    name: string,
-    args: WafObservabilityArgs,
-    opts?: pulumi.ComponentResourceOptions
-  ) {
-    super('macro:cloud-storage:WafObservability', name, args, opts);
+  constructor(name: string, opts?: pulumi.ComponentResourceOptions) {
+    super('macro:cloud-storage:WafObservability', name, {}, opts);
 
     // Read WAF config only when instantiated; non-production stacks omit it.
     const config = new pulumi.Config();
@@ -87,7 +79,6 @@ export class WafObservability extends pulumi.ComponentResource {
     const region = new pulumi.Config('aws').require('region');
     const webAclName = config.require('waf_web_acl_name');
     const webAclId = config.require('waf_web_acl_id');
-    const configuredAlbArn = config.require('waf_alb_arn');
     const webAclArn = `arn:aws:wafv2:${region}:${accountId}:regional/webacl/${webAclName}/${webAclId}`;
     const ipSafetyRuleGroupArn = config.require('waf_ip_safety_rule_group_arn');
     const logGroupName = config.require('waf_log_group_name');
@@ -224,30 +215,15 @@ export class WafObservability extends pulumi.ComponentResource {
       }
     );
 
-    new aws.wafv2.WebAclAssociation(
-      `${name}-web-acl-association`,
-      {
-        // Import IDs must be plain strings. Verify the configured import target
-        // matches the stack's ALB before registering the association.
-        resourceArn: pulumi.output(args.albArn).apply((albArn) => {
-          if (albArn !== configuredAlbArn) {
-            throw new Error('waf_alb_arn must match the stack-managed ALB ARN');
-          }
-          return albArn;
-        }),
-        webAclArn: webAcl.arn,
-      },
-      {
-        ...adoptedOptions,
-        import: `${webAclArn},${configuredAlbArn}`,
-      }
+    const existingLogGroup = aws.cloudwatch.getLogGroupOutput(
+      { name: logGroupName },
+      { parent: this }
     );
-
     const logGroup = new aws.cloudwatch.LogGroup(
       `${name}-log-group`,
       {
         name: logGroupName,
-        retentionInDays: 7,
+        retentionInDays: existingLogGroup.retentionInDays,
       },
       {
         ...adoptedOptions,
@@ -477,7 +453,7 @@ export class WafObservability extends pulumi.ComponentResource {
             categoryProcessor: {
               name: 'Set WAF response status',
               isEnabled: true,
-              target: 'http.response.status_code',
+              target: 'waf.status_category',
               categories: [
                 {
                   name: '403',
@@ -488,6 +464,19 @@ export class WafObservability extends pulumi.ComponentResource {
                   filter: { query: '@action:CHALLENGE' },
                 },
               ],
+            },
+          },
+          {
+            attributeRemapper: {
+              name: 'Normalize WAF response status',
+              isEnabled: true,
+              sources: ['waf.status_category'],
+              sourceType: 'attribute',
+              target: 'http.response.status_code',
+              targetType: 'attribute',
+              targetFormat: 'integer',
+              preserveSource: false,
+              overrideOnConflict: true,
             },
           },
           {

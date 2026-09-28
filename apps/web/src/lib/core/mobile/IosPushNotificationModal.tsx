@@ -37,9 +37,13 @@ export function IosPushNotificationModal() {
                 Get notified about new messages, mentions, comments, and emails.
               </Dialog.Description>
               <div class="flex gap-2 w-full justify-end pt-2">
-                <Dialog.CloseButton class="text-sm text-ink-muted hover:text-ink px-3 py-1.5">
+                <button
+                  type="button"
+                  class="text-sm text-ink-muted hover:text-ink px-3 py-1.5"
+                  onClick={() => settings.dismissPrompt()}
+                >
                   Later
-                </Dialog.CloseButton>
+                </button>
                 <Button
                   variant="accent"
                   size="sm"

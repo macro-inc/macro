@@ -9,10 +9,13 @@ use rootcause::Report;
 
 use super::{
     models::{
-        BotActingUserClaims, BotAuthentication, BotScope, InternalAuthConfig,
-        InternalIdentityClaims, MacroAuthorizationError,
+        BotActingUserClaims, BotAuthentication, BotScope, HarnessAuthentication,
+        InternalAuthConfig, InternalIdentityClaims, MacroAuthorizationError,
     },
-    ports::{BotAuthorizer, JwtValidator, MacroAuthorizationService, UserApiKeyAuthorizer},
+    ports::{
+        BotAuthorizer, HarnessAuthorizer, JwtValidator, MacroAuthorizationService,
+        NoHarnessAuthorizer, UserApiKeyAuthorizer,
+    },
 };
 
 type BotAuthorizationFuture<'a> = Pin<
@@ -65,6 +68,39 @@ where
     }
 }
 
+type HarnessAuthorizationFuture<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<HarnessAuthentication, Report<MacroAuthorizationError>>>
+            + Send
+            + 'a,
+    >,
+>;
+
+trait DynHarnessAuthorizer: Send + Sync {
+    fn authorize_harness<'a>(
+        &'a self,
+        harness_token: &'a str,
+        acting_user_claim: Option<String>,
+    ) -> HarnessAuthorizationFuture<'a>;
+}
+
+impl<H> DynHarnessAuthorizer for H
+where
+    H: HarnessAuthorizer,
+{
+    fn authorize_harness<'a>(
+        &'a self,
+        harness_token: &'a str,
+        acting_user_claim: Option<String>,
+    ) -> HarnessAuthorizationFuture<'a> {
+        Box::pin(HarnessAuthorizer::authorize_harness(
+            self,
+            harness_token,
+            acting_user_claim,
+        ))
+    }
+}
+
 /// Default authorization service backed by a credential validator.
 #[derive(Clone)]
 pub struct MacroAuthorizationServiceImpl<V> {
@@ -72,10 +108,14 @@ pub struct MacroAuthorizationServiceImpl<V> {
     internal_auth: InternalAuthConfig,
     bot_authorizer: Arc<dyn DynBotAuthorizer>,
     user_api_key_authorizer: Arc<dyn DynUserApiKeyAuthorizer>,
+    harness_authorizer: Arc<dyn DynHarnessAuthorizer>,
 }
 
 impl<V> MacroAuthorizationServiceImpl<V> {
     /// Create an authorization service with required user, internal, bot, and user API key authorization dependencies.
+    ///
+    /// Harness credentials are rejected unless a harness authorizer is
+    /// supplied with [`Self::with_harness_authorizer`].
     pub fn new(
         validator: V,
         internal_auth: InternalAuthConfig,
@@ -87,7 +127,15 @@ impl<V> MacroAuthorizationServiceImpl<V> {
             internal_auth,
             bot_authorizer: Arc::new(bot_authorizer),
             user_api_key_authorizer: Arc::new(user_api_key_authorizer),
+            harness_authorizer: Arc::new(NoHarnessAuthorizer),
         }
+    }
+
+    /// Accept harness credentials, validating them with the supplied authorizer.
+    #[must_use]
+    pub fn with_harness_authorizer(mut self, harness_authorizer: impl HarnessAuthorizer) -> Self {
+        self.harness_authorizer = Arc::new(harness_authorizer);
+        self
     }
 }
 
@@ -161,6 +209,36 @@ where
 
         tracing::Span::current().record("user_id", tracing::field::display(&user.user_id));
         Ok(user)
+    }
+
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(
+            harness_id = tracing::field::Empty,
+            token_id = tracing::field::Empty,
+            acting_user_id = tracing::field::Empty,
+        )
+    )]
+    async fn authorize_harness(
+        &self,
+        harness_token: &str,
+        acting_user_claim: Option<String>,
+    ) -> Result<HarnessAuthentication, Report<MacroAuthorizationError>> {
+        let harness = self
+            .harness_authorizer
+            .authorize_harness(harness_token, acting_user_claim)
+            .await?;
+
+        let span = tracing::Span::current();
+        span.record("harness_id", tracing::field::display(harness.harness_id));
+        span.record("token_id", tracing::field::display(harness.token_id));
+        span.record(
+            "acting_user_id",
+            tracing::field::display(&harness.acting_user.macro_user_id),
+        );
+
+        Ok(harness)
     }
 
     async fn authorize_internal(

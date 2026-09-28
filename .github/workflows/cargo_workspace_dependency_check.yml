@@ -18,9 +18,10 @@ name: cargo workspace dependency check
     - Cargo.lock
     - '.config/hakari.toml'
     - crates/workspace-hack/**
-    - tooling/xtask/**
+    - tooling/xtask/src/**
+    - tooling/xtask/crates/xtask_deps/**
+    - tooling/xtask/crates/xtask_graph/**
     - '.github/workspace-dep-closures.json'
-    - '.github/workflows/cargo_workspace_dependency_check.yml'
 jobs:
   dependency-check:
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci

@@ -8,10 +8,7 @@ import {
   getDebugSetting,
   setDebugSetting,
 } from '@app/lib/debugSettings';
-import {
-  ENABLE_SOUP_FILTER_PERSISTENCE_FLAG,
-  ENABLE_SOUP_FILTER_PERSISTENCE_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableSoupFilterPersistence } from '@core/constant/featureFlags';
 import { Button, ToggleSwitch } from '@ui';
 import { For, Show } from 'solid-js';
 import { SettingsCard, SettingsPage, SettingsRow } from './primitives';
@@ -35,10 +32,7 @@ function DebugSettingRow(props: { setting: DebugSettingDef }) {
 
 export function Admin() {
   const hasActiveSettings = () => Object.keys(debugSettings()).length > 0;
-  const soupFilterPersistenceFlag = useFeatureFlag(
-    ENABLE_SOUP_FILTER_PERSISTENCE_FLAG,
-    { enabledOverride: ENABLE_SOUP_FILTER_PERSISTENCE_OVERRIDE }
-  );
+  const soupFilterPersistenceFlag = useFeatureFlag(enableSoupFilterPersistence);
   const [shouldPersistSoupFilters, setShouldPersistSoupFilters] =
     useSoupFilterPersistence();
 

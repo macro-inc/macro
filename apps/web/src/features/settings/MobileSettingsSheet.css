@@ -1,0 +1,16 @@
+@keyframes mobile-settings-enter {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.mobile-settings-detail,
+.mobile-settings-home {
+  animation: mobile-settings-enter 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-settings-detail,
+  .mobile-settings-home {
+    animation: none;
+  }
+}

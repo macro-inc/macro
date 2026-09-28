@@ -1,5 +1,6 @@
+import { intoFrames, Reassembler } from '../../../packages/collaboration/src/websocket/platform/framing/frames';
 import { EphemeralStore, LoroDoc } from 'loro-crdt';
-import { Miniflare, type WebSocket } from 'miniflare';
+import { Miniflare, type MiniflareOptions, type WebSocket } from 'miniflare';
 import { assert } from 'vitest';
 import jwt from 'jsonwebtoken';
 import {
@@ -27,7 +28,15 @@ async function migrateDatabase(mf: Miniflare) {
   }
 }
 
-export async function setupMiniflare() {
+export async function setupMiniflare(
+  options: {
+    persistPath?: string;
+    migrate?: boolean;
+    dssUrl?: string;
+    fetchMock?: MiniflareOptions['fetchMock'];
+  } = {},
+) {
+  const persist = (name: string) => options.persistPath ? `${options.persistPath}/${name}` : false;
   const mf = new Miniflare({
     d1Databases: {
       USER_PEER_MAPPING: 'user-peer-mapping-database-id',
@@ -50,19 +59,25 @@ export async function setupMiniflare() {
     },
     cachePersist: false,
     workflowsPersist: false,
-    durableObjectsPersist: false,
+    durableObjectsPersist: persist('objects'),
+    d1Persist: persist('d1'),
+    kvPersist: persist('kv'),
+    r2Persist: persist('r2'),
+    fetchMock: options.fetchMock,
     bindings: {
+      ...(options.fetchMock ? { DSS_URL: "https://dss.test", DSS_INTERNAL_AUTH_KEY: "local" } : {}),
       DOCUMENT_PERMISSIONS_SECRET: "local",
       INTERNAL_API_SECRET_KEY: "INTERNAL_API_SECRET",
       INTERNAL_API_SECRET,
       SPS_API_SECRET_KEY: "local",
-      SPS_URL:"http://localhost:8090",
+      SPS_URL: "http://localhost:8092",
       local:true,
+      ...(options.dssUrl ? { DSS_URL: options.dssUrl, DSS_INTERNAL_AUTH_KEY: "local" } : {}),
     },
     compatibilityDate: '2025-03-05'
   });
 
-  await migrateDatabase(mf);
+  if (options.migrate !== false) await migrateDatabase(mf);
 
   return mf;
 }
@@ -147,7 +162,7 @@ export async function createTestUser(mf: Miniflare, documentId = 'test-doc', opt
   const registrationMessage = FromPeer.fromPeerRegisterId({ peerid: loroDoc.peerId }).encode();
 
 
-  connection.getWebSocket().send(registrationMessage);
+  connection.send(registrationMessage);
 
   return {
     doc: loroDoc,
@@ -176,7 +191,7 @@ export async function createTestUser(mf: Miniflare, documentId = 'test-doc', opt
       loroDoc.getText('content').push(text);
       loroDoc.commit();
       const update = loroDoc.export({ mode: 'update' });
-      connection.send(FromPeer.fromPeerUpdate({ update}).encode());
+      connection.send(FromPeer.fromPeerUpdate({ updates: [update], id: crypto.randomUUID() }).encode());
     },
     getState() {
       return loroDoc.getText('content').toString();
@@ -196,11 +211,15 @@ export async function createTestUser(mf: Miniflare, documentId = 'test-doc', opt
 }
 
 export function createTestWebSocket(ws: WebSocket) {
-  const messages: ArrayBuffer[] = [];
-  const waiters: ((message: ArrayBuffer) => void)[] = [];
+  const reassembler = new Reassembler();
+  const messages: (ArrayBuffer | string)[] = [];
+  const waiters: ((message: ArrayBuffer | string) => void)[] = [];
 
   ws.addEventListener('message', (event) => {
-    const message = event.data as ArrayBuffer;
+    const message = typeof event.data === 'string'
+      ? event.data
+      : reassembler.push(new Uint8Array(event.data as ArrayBuffer))?.buffer;
+    if (message === undefined) return;
 
     if (waiters.length > 0) {
       const resolve = waiters.shift()!;
@@ -216,9 +235,9 @@ export function createTestWebSocket(ws: WebSocket) {
         return messages.shift()!;
       }
 
-      return new Promise<ArrayBuffer>((resolve, reject) => {
+      return new Promise<ArrayBuffer | string>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
-          const index = waiters.indexOf(resolve);
+          const index = waiters.indexOf(wrappedResolve);
           if (index !== -1) {
             waiters.splice(index, 1);
           }
@@ -229,7 +248,7 @@ export function createTestWebSocket(ws: WebSocket) {
           );
         }, timeout);
 
-        const wrappedResolve = (message: ArrayBuffer) => {
+        const wrappedResolve = (message: ArrayBuffer | string) => {
           clearTimeout(timeoutId);
           resolve(message);
         };
@@ -238,8 +257,12 @@ export function createTestWebSocket(ws: WebSocket) {
       });
     },
 
-    send(message: string | ArrayBuffer) {
-      ws.send(message);
+    send(message: string | ArrayBuffer | Uint8Array): void {
+      if (typeof message === 'string') {
+        ws.send(message);
+        return;
+      }
+      for (const frame of intoFrames(new Uint8Array(message))) ws.send(frame);
     },
 
     getWebSocket() {
@@ -251,7 +274,7 @@ export function createTestWebSocket(ws: WebSocket) {
 export function getTokenForDocument(
   documentId: string,
   userId: string,
-  permissionLevel: 'view' | 'edit' | 'owner'
+  permissionLevel: 'view' | 'edit' | 'owner' | 'comment'
 ): string {
   const token = jwt.sign({
     user_id: userId,
@@ -263,6 +286,21 @@ export function getTokenForDocument(
   return token;
 }
 
+
+export function getTokenForSurface(
+  surfaceId: string,
+  permissionLevel: 'view' | 'comment' | 'edit' | 'owner' = 'edit',
+  expiresAt = Math.floor(Date.now() / 1000) + 60,
+): string {
+  return jwt.sign({
+    session_kind: 'surface',
+    surface_id: surfaceId,
+    user_id: 'surface-user',
+    access_level: permissionLevel,
+    exp: expiresAt,
+    iss: 'document_storage_service',
+  }, 'local', { noTimestamp: true });
+}
 
 export async function connectToDocumentForTesting(
   mf: Miniflare,

@@ -16,12 +16,10 @@ vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => ({ activeSplit: () => mocks.activeSplit }),
 }));
 
-// Spread the original so the other flags in this module keep working; only the
-// reminders gate is driven by the tests. Under vitest MODE is not
-// 'development', so the real ENABLE_REMINDERS would resolve to false.
-vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  ENABLE_REMINDERS: () => mocks.remindersEnabled,
+vi.mock('@core/constant/featureFlags', () => ({
+  enableReminders: { key: 'enable-reminders' },
+  isFeatureEnabled: (flag: { key?: string }) =>
+    flag.key === 'enable-reminders' ? mocks.remindersEnabled : false,
 }));
 
 import { makeEditReminderAction } from './make-edit-reminder-action';

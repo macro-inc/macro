@@ -41,6 +41,7 @@ import {
   type ItemMention,
   iosCursorScrollPlugin,
   keyboardFocusPlugin,
+  listSwipeIndentPlugin,
   mediaPlugin,
   mentionsPlugin,
   type SelectionData,
@@ -48,6 +49,7 @@ import {
   snippetsPlugin,
   tabIndentationPlugin,
   textPastePlugin,
+  trailingParagraphPlugin,
 } from '../../plugins';
 import { checkboxToTaskPlugin } from '../../plugins/checkbox-to-task';
 import { restoreFocusPlugin } from '../../plugins/restore-focus';
@@ -78,6 +80,8 @@ import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
  *     If the function returns true, the enter press will not propagate to the lexical editor.
  * @param onEscape - A callback function that is called when the user presses Escape in the textarea. If the function
  *     returns true Lexical's default behavior will be prevented.
+ * @param onInitialized - Called once the editor is mounted and any initial content has been loaded, before
+ *     onChange starts reporting edits.
  */
 function isHistoryItem(
   item: HistoryItem | ChannelWithParticipants
@@ -112,6 +116,7 @@ interface MarkdownTextareaProps {
   onEscape?: (e: KeyboardEvent) => boolean;
   onTab?: (e: KeyboardEvent) => boolean;
   captureEditor?: (editor: LexicalEditor) => void;
+  onInitialized?: (editor: LexicalEditor) => void;
   onFocusReady?: (focusFn: () => void) => void;
   onFocusLeaveStart?: (e: KeyboardEvent) => void;
   onFocusLeaveEnd?: (e: KeyboardEvent) => void;
@@ -126,9 +131,10 @@ interface MarkdownTextareaProps {
   autoLinkMatchMode?: AutoLinkMatchMode;
   /**
    * Show a floating format toolbar (headings, lists, inline styles, links)
-   * over the current text selection, like the markdown block's popup.
+   * over the current text selection, like the markdown block's popup. Pass
+   * `{ extendedInlineFormats: true }` to also offer underline/super/subscript.
    */
-  floatingFormatMenu?: boolean;
+  floatingFormatMenu?: boolean | { extendedInlineFormats?: boolean };
 }
 
 export function MarkdownTextarea(props: MarkdownTextareaProps) {
@@ -174,6 +180,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       props.onChange?.(markdownState());
     }
 
+    props.onInitialized?.(editor);
     didInitializeContent = true;
   };
 
@@ -213,6 +220,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     .delete()
     .state<string>(setMarkdownState, 'markdown')
     .history(400)
+    .use(trailingParagraphPlugin())
     .use(restoreFocusPlugin())
     .use(checkboxToTaskPlugin())
     .use(mediaPlugin())
@@ -226,6 +234,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         : selectionDataPlugin(lexicalWrapper)
     )
     .use(tabIndentationPlugin())
+    .use(listSwipeIndentPlugin(props.editable))
     .use(textPastePlugin())
     .use(
       mentionsPlugin({
@@ -337,11 +346,20 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       <div
         ref={scrollContainerRef}
-        class={cn('relative size-full overflow-auto min-h-8', props.class)}
+        class={cn(
+          'relative size-full overflow-auto min-h-8 text-base',
+          props.class
+        )}
         on:keydown={(e) => {
           e.stopPropagation();
         }}
         on:click={(e) => {
+          // Embedded controls own focus and need Solid's delegated clicks.
+          if (
+            e.target instanceof Element &&
+            e.target.closest('[data-lexical-interactive]')
+          )
+            return;
           e.stopPropagation();
           editor.focus();
         }}
@@ -405,7 +423,13 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         <FloatingMenuGroup>
           <FloatingLinkMenu autoLinkMatchMode={props.autoLinkMatchMode} />
           <Show when={props.floatingFormatMenu}>
-            <FloatingFormatMenu portalScope={props.portalScope} />
+            <FloatingFormatMenu
+              portalScope={props.portalScope}
+              extendedInlineFormats={
+                typeof props.floatingFormatMenu === 'object' &&
+                props.floatingFormatMenu.extendedInlineFormats
+              }
+            />
           </Show>
         </FloatingMenuGroup>
       </div>

@@ -1,4 +1,5 @@
 import type {
+  CommitOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   ReadResult,
   WriteResult,
@@ -8,6 +9,7 @@ import type { CacheHost } from './types';
 
 const emptyWriteResult = (): WriteResult => ({
   revision: INITIAL_CACHE_REVISION,
+  revisionAdvanced: false,
   changed: [],
   affectedOps: [],
   reset: false,
@@ -26,6 +28,9 @@ export function createNoopCacheHost(reason: string): CacheHost {
     disabled: true,
     async currentRevision() {
       return INITIAL_CACHE_REVISION;
+    },
+    async currentStorageGeneration() {
+      throw new Error('normalized GraphQL cache is unavailable');
     },
     async readQuery(): Promise<ReadResult> {
       return { kind: 'miss' };
@@ -57,12 +62,14 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async claimNextMutation() {
       return undefined;
     },
-    async deferOptimisticWrite(): Promise<void> {},
-    async commitOptimisticWrite(): Promise<WriteResult> {
-      return emptyWriteResult();
+    async deferOptimisticWrite() {
+      return { kind: 'deferred' } as const;
     },
-    async rollbackOptimisticWrite(): Promise<WriteResult> {
-      return emptyWriteResult();
+    async commitOptimisticWrite(): Promise<CommitOptimisticWriteResult> {
+      return { kind: 'committed', ...emptyWriteResult() };
+    },
+    async rollbackOptimisticWrite() {
+      return { kind: 'rolled-back' as const, ...emptyWriteResult() };
     },
     async invalidate() {
       return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };

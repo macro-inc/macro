@@ -401,6 +401,16 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         comment_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
 
+    /// The discussion root a legacy thread id maps to on the record addressed
+    /// by `access`. See [`CompaniesRepository::legacy_thread_root`].
+    fn legacy_thread_root(
+        &self,
+        _access: &CrmCommentReceipt<AnyEntityPermission>,
+        _thread_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send {
+        async { Ok(None) }
+    }
+
     /// Read the team's CRM configuration. Any team member may read;
     /// a team without a settings row gets the defaults. See
     /// [`CompaniesRepository::get_team_settings`].
@@ -1010,6 +1020,18 @@ where
     ) -> Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError> {
         self.companies_repository
             .get_comment_entity(comment_id)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
+    async fn legacy_thread_root(
+        &self,
+        access: &CrmCommentReceipt<AnyEntityPermission>,
+        thread_id: &uuid::Uuid,
+    ) -> Result<Option<uuid::Uuid>, CrmError> {
+        let (_, entity_id) = access.comment_entity()?;
+        self.companies_repository
+            .legacy_thread_root(&entity_id, thread_id)
             .await
     }
 

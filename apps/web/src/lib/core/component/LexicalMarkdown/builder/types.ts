@@ -175,8 +175,12 @@ export interface EditorConfig {
   focusLeave?: FocusLeaveCallbacks;
   withIds: boolean;
   selectionData: boolean;
-  /** Show a floating format toolbar over the current text selection. */
-  floatingFormatMenu: boolean;
+  /**
+   * Show a floating format toolbar over the current text selection. Pass
+   * `{ extendedInlineFormats: true }` to also offer underline/super/subscript
+   * (only for non-Markdown-backed editors).
+   */
+  floatingFormatMenu: boolean | { extendedInlineFormats?: boolean };
   actions: ActionsOptions | false;
   /** When true, decorator components skip backend fetches (e.g. preview API). */
   skipPreviewFetch: boolean;

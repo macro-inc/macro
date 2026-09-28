@@ -1,4 +1,3 @@
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import { type ParentProps, Show } from 'solid-js';
 import {
   ChannelCreatedIndicator,
@@ -11,7 +10,7 @@ type ThreadRowProps = ParentProps & {
   ref?: (element: HTMLDivElement) => void;
   /** Present only in channel threads; other consumers (calls, PRs, comments) omit it. */
   channelId?: string;
-  message: ApiChannelMessage;
+  message: { created_at: string };
   listMeta?: ChannelMessageListMeta;
   /** Discussions reuse the channel thread geometry without channel dividers. */
   showDividers?: boolean;

@@ -1,11 +1,12 @@
 //! Postgres-backed [`ChatRepo`] implementation.
 
 mod queries;
+mod team_share;
 #[cfg(test)]
 mod test;
 
 use crate::domain::models::{
-    ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatArgs, PatchChatMessageArgs,
+    ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatMessageArgs, PatchChatRepoArgs,
     Result, WebCitation,
 };
 use crate::domain::ports::{ChatRepo, MessageRepo};
@@ -16,6 +17,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatMessageWithAttachments;
 use model::chat::NewChatMessage;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use sqlx::PgPool;
 
@@ -113,13 +115,25 @@ impl ChatRepo for PgChatRepo {
             .await
             .map_err(to_chat_err)?;
 
+        let chat_uuid = macro_uuid::string_to_uuid(&chat_id).map_err(to_chat_err)?;
         entity_access_db_utils::insert_entity_access_row(
             &mut tx,
-            &macro_uuid::string_to_uuid(&chat_id).unwrap(),
+            &chat_uuid,
             entity_access_db_utils::EntityType::Chat,
             user_id.as_ref(),
             entity_access_db_utils::EntityAccessSourceType::User,
             entity_access_db_utils::AccessLevel::Owner,
+        )
+        .await
+        .map_err(|e| ChatErr::Unknown(e.into()))?;
+
+        entity_registry_db_utils::insert_entity(
+            &mut tx,
+            entity_registry_db_utils::NewEntityRecord::new(
+                chat_uuid,
+                entity_registry_db_utils::RegisteredEntityType::Chat,
+                model_owner::Owner::User(user_id),
+            ),
         )
         .await
         .map_err(|e| ChatErr::Unknown(e.into()))?;
@@ -217,9 +231,10 @@ impl ChatRepo for PgChatRepo {
             .await
             .map_err(to_chat_err)?;
 
+        let chat_uuid = macro_uuid::string_to_uuid(&chat_id).map_err(to_chat_err)?;
         entity_access_db_utils::insert_entity_access_row(
             &mut tx,
-            &macro_uuid::string_to_uuid(&chat_id).unwrap(),
+            &chat_uuid,
             entity_access_db_utils::EntityType::Chat,
             user_id.as_ref(),
             entity_access_db_utils::EntityAccessSourceType::User,
@@ -231,6 +246,17 @@ impl ChatRepo for PgChatRepo {
         queries::copy_messages::copy_messages(&mut tx, source_chat_id, &chat_id)
             .await
             .map_err(to_chat_err)?;
+
+        entity_registry_db_utils::insert_entity(
+            &mut tx,
+            entity_registry_db_utils::NewEntityRecord::new(
+                chat_uuid,
+                entity_registry_db_utils::RegisteredEntityType::Chat,
+                model_owner::Owner::User(user_id),
+            ),
+        )
+        .await
+        .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "copy_chat transaction error");
@@ -262,6 +288,11 @@ impl ChatRepo for PgChatRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_team_share_facts(&self, chat_id: &str) -> Result<TeamShareFacts> {
+        team_share::get_team_share_facts(&self.pool, chat_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn delete(&self, chat_id: &str) -> Result<()> {
         let mut tx = self
             .pool
@@ -289,18 +320,28 @@ impl ChatRepo for PgChatRepo {
         Ok(())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, args))]
     async fn patch(
         &self,
         user_id: MacroUserIdStr<'static>,
         chat_id: &str,
-        args: PatchChatArgs,
+        args: PatchChatRepoArgs,
     ) -> Result<()> {
         let mut tx = self
             .pool
             .begin()
             .await
             .map_err(|e| ChatErr::Unknown(e.into()))?;
+
+        // Canonical team sharing first: it takes the shared guard before any
+        // `SharePermission` row lock and refuses an unauthorized team level.
+        team_share::apply_team_share(
+            &mut tx,
+            chat_id,
+            args.share_permission.as_ref(),
+            args.team_share.as_ref(),
+        )
+        .await?;
 
         queries::patch_chat::patch_chat(
             &mut tx,

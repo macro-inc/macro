@@ -8,7 +8,7 @@ export type AttachmentEntityListRow = {
   entity: EntityData;
   timestamp?: DateValue | null;
   senderId?: string;
-  onClick?: () => void;
+  onClick?: (event: MouseEvent) => void;
 };
 
 export function AttachmentEntityList(props: {

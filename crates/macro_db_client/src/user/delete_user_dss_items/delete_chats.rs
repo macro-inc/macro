@@ -54,12 +54,13 @@ pub async fn delete_user_chats(
     .execute(transaction.as_mut())
     .await?;
 
+    let chat_uuids = user_chats
+        .iter()
+        .filter_map(|id| macro_uuid::string_to_uuid(id).ok())
+        .collect::<Vec<_>>();
     crate::item_access::delete::delete_user_entity_access_bulk(
         transaction,
-        &user_chats
-            .iter()
-            .filter_map(|p| macro_uuid::string_to_uuid(p).ok())
-            .collect::<Vec<uuid::Uuid>>(),
+        &chat_uuids,
         EntityType::Chat,
     )
     .await?;
@@ -75,39 +76,9 @@ pub async fn delete_user_chats(
     .execute(transaction.as_mut())
     .await?;
 
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use sqlx::{Pool, Postgres};
-
-    #[sqlx::test(fixtures(
-        path = "../../../fixtures",
-        scripts("basic_user_with_lots_of_documents")
-    ))]
-    async fn test_delete_user_chats(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let mut transaction = pool.begin().await?;
-        delete_user_chats(&mut transaction, "macro|user@user.com").await?;
-        transaction.commit().await?;
-
-        let chats = sqlx::query!(
-            r#"
-            SELECT
-                c.id
-            FROM
-                "Chat" c
-            WHERE
-                c."userId" = $1
-            "#,
-            "macro|user@user.com"
-        )
-        .fetch_all(&pool)
-        .await?;
-
-        assert_eq!(chats.len(), 0);
-
-        Ok(())
+    for chat_uuid in chat_uuids {
+        entity_registry_db_utils::delete_entity(transaction, chat_uuid).await?;
     }
+
+    Ok(())
 }

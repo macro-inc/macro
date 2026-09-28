@@ -183,6 +183,7 @@ impl NotificationRepository for MockNotifRepo {
         &self,
         _: macro_user_id::user_id::MacroUserIdStr<'_>,
         _: &[model_entity::Entity<'_>],
+        _: &crate::domain::models::request::NotificationStatus,
     ) -> Result<Vec<uuid::Uuid>, Report> {
         unimplemented!()
     }
@@ -222,6 +223,7 @@ impl NotificationRepository for MockNotifRepo {
         &self,
         _: macro_user_id::user_id::MacroUserIdStr<'_>,
         entity_refs: Vec<model_entity::Entity<'static>>,
+        _query: crate::domain::models::entity_query::EntityNotificationQuery,
     ) -> Result<
         std::collections::HashMap<
             model_entity::Entity<'static>,

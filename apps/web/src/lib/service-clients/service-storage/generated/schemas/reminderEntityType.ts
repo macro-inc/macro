@@ -26,4 +26,6 @@ export type ReminderEntityType =
   | 'crm_contact'
   | 'reminder'
   | 'skill'
-  | 'agent_session';
+  | 'agent_session'
+  | 'scheduled_action'
+  | 'initiative';

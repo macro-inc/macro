@@ -1,0 +1,7 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  calendar-service:authentication_service_internal_api_key: authentication-service-internal-api-key-dev
+  calendar-service:jwt_secret_key: fusionauth-jwt-secret-dev
+  calendar-service:internal_auth_key: document-storage-service-auth-key-dev
+  calendar-service:macro_db_secret_key: macro-db-dev

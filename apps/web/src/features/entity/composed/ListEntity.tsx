@@ -1,4 +1,5 @@
 import './ListEntity.css';
+import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   SwipableRow,
@@ -20,6 +21,7 @@ import {
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui';
 import {
+  children,
   createEffect,
   createMemo,
   createSignal,
@@ -90,6 +92,11 @@ export function MaybeEntityRow(props: {
 }
 
 export function ListEntity(props: ListEntityProps) {
+  // Legacy Soup callers do not pass row behavior explicitly yet.
+  const soupView = useMaybeSoupView();
+  const rowActions = children(() => props.actions);
+  const leadingAction = children(() => props.leadingAction);
+
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
   const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
@@ -117,7 +124,11 @@ export function ListEntity(props: ListEntityProps) {
   const [snippetContainerRef, setSnippetContainerRef] = createSignal<
     HTMLElement | undefined
   >();
-  const chars = useCharacterCount(snippetContainerRef);
+  const chars = useCharacterCount(() =>
+    props.deferInteractions && !hasSearchContentHits(props.entity)
+      ? undefined
+      : snippetContainerRef()
+  );
 
   // For singleton hits on a SnippetEntity, expanding "show more" only adds
   // value when windowSearchMatch trimmed text — otherwise the inline
@@ -140,6 +151,9 @@ export function ListEntity(props: ListEntityProps) {
 
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
+    actions: !isTouchDevice() ? rowActions() : undefined,
+    leadingAction: !isTouchDevice() ? leadingAction() : undefined,
+    authorDisplayName: props.authorDisplayName,
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
     onChecked: props.onChecked,
@@ -151,11 +165,16 @@ export function ListEntity(props: ListEntityProps) {
     setSnippetContainerRef,
     chars: chars(),
     onProjectClick: props.onProjectClick,
+    onFilterByTag: props.onFilterByTag ?? soupView?.filterByTag,
+    showCalendarAttendance:
+      props.showCalendarAttendance ??
+      (soupView?.activeTab() ?? 'all') === 'all',
   });
 
   const draggable = createEntityDraggable({
     entity: props.entity,
     splitId: useSplitPanel()?.handle?.id,
+    deferUntilInteraction: () => props.deferInteractions === true,
   });
 
   const listLayout = useListLayout();
@@ -193,7 +212,7 @@ export function ListEntity(props: ListEntityProps) {
         // that the layouts below and the soup group headers both read, so it has
         // to track which layout the Switch actually renders.
         isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
-        'soup-list-entity rounded-lg @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5',
+        'soup-list-entity rounded-xl @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5',
         {
           'min-h-10 mx-(--soup-row-gutter)':
             !isMobile() && !usesCondensedNarrowLayout(),
@@ -205,6 +224,8 @@ export function ListEntity(props: ListEntityProps) {
             props.highlighted && !props.checked && !isTouchDevice(),
           'hover:bg-list-hover':
             !props.highlighted && !props.checked && !isTouchDevice(),
+          'focus-within:bg-list-hover':
+            !!rowActions() && !props.highlighted && !props.checked,
         }
       )}
       onMouseMove={props.onMouseMove}

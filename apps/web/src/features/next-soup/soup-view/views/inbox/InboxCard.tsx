@@ -24,6 +24,8 @@ interface RootProps extends SlotProps {
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
+  /** Set false when a parent list owns keyboard focus and activation. */
+  focusable?: boolean;
 }
 
 function Root(props: RootProps): JSX.Element {
@@ -43,7 +45,7 @@ function Root(props: RootProps): JSX.Element {
         // appears on hover. It comes from the --soup-row-* geometry in
         // ListEntity.css — which also carries the mobile rail value — so group
         // headers can line their label up with this card's content.
-        'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg py-2.5 pr-2 pl-(--soup-row-padding-l)',
+        'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-xl py-2.5 pr-2 pl-(--soup-row-padding-l)',
         // Mobile renders the same cards in slightly different visual
         // language: a full-bleed row whose left rail holds the unread dot
         // (see the span below) instead of the checkbox gutter, with the
@@ -61,8 +63,8 @@ function Root(props: RootProps): JSX.Element {
         props.class
       )}
       data-unread={props.dimmed ? undefined : true}
-      role={interactive() ? 'button' : undefined}
-      tabIndex={interactive() ? 0 : undefined}
+      role={interactive() && props.focusable !== false ? 'button' : undefined}
+      tabIndex={interactive() && props.focusable !== false ? 0 : undefined}
       onClick={props.onClick}
       onKeyDown={onKeyDown}
     >

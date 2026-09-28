@@ -383,6 +383,102 @@ async fn preserves_user_channel_and_team_entity_access(pool: PgPool) -> anyhow::
     Ok(())
 }
 
+/// A canonical team share: the `entity_access` row
+/// `share_permission_db_utils::team_share` writes for the creator's team on a
+/// call (calls only ever grant `view`).
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn explicit_team_grant_allows_team_members_only(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER_WITH_TEAM).await?;
+    add_owner_to_team(&pool, OWNER_WITH_TEAM, OWNER_TEAM).await?;
+
+    let anonymous = SourceIds(vec![]);
+    let other_team = SourceIds(vec![REQUESTER.to_string(), OTHER_TEAM.to_string()]);
+    let same_team = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+
+    for call_table in CallTable::ALL {
+        let call_id =
+            insert_link_shared_call(&pool, call_table, OWNER_WITH_TEAM, None, None).await?;
+        insert_entity_access(
+            &pool,
+            call_id,
+            &OWNER_TEAM.to_string(),
+            "team",
+            AccessLevel::View,
+        )
+        .await?;
+
+        assert_eq!(
+            get_call_access(&pool, &call_id, &anonymous).await?,
+            None,
+            "anonymous access for {call_table:?}"
+        );
+        assert_eq!(
+            get_call_access(&pool, &call_id, &other_team).await?,
+            None,
+            "other-team access for {call_table:?}"
+        );
+        assert_eq!(
+            get_call_access(&pool, &call_id, &same_team).await?,
+            Some(AccessLevel::View),
+            "same-team access for {call_table:?}"
+        );
+    }
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn takes_maximum_of_explicit_team_grant_and_link(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER_WITH_TEAM).await?;
+    add_owner_to_team(&pool, OWNER_WITH_TEAM, OWNER_TEAM).await?;
+    let same_team = SourceIds(vec![REQUESTER.to_string(), OWNER_TEAM.to_string()]);
+
+    for call_table in CallTable::ALL {
+        // Team grant (view) below a public edit link: the link wins.
+        let link_wins = insert_link_shared_call(
+            &pool,
+            call_table,
+            OWNER_WITH_TEAM,
+            Some("PUBLIC"),
+            Some("edit"),
+        )
+        .await?;
+        insert_entity_access(
+            &pool,
+            link_wins,
+            &OWNER_TEAM.to_string(),
+            "team",
+            AccessLevel::View,
+        )
+        .await?;
+
+        // Team grant (view) with no link at all: the grant is the whole answer.
+        let grant_only =
+            insert_link_shared_call(&pool, call_table, OWNER_WITH_TEAM, None, None).await?;
+        insert_entity_access(
+            &pool,
+            grant_only,
+            &OWNER_TEAM.to_string(),
+            "team",
+            AccessLevel::View,
+        )
+        .await?;
+
+        assert_eq!(
+            get_call_access(&pool, &link_wins, &same_team).await?,
+            Some(AccessLevel::Edit),
+            "link beats team grant for {call_table:?}"
+        );
+        assert_eq!(
+            get_call_access(&pool, &grant_only, &same_team).await?,
+            Some(AccessLevel::View),
+            "team grant alone for {call_table:?}"
+        );
+    }
+
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn returns_highest_link_or_explicit_access(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER_WITHOUT_TEAM).await?;

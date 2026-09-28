@@ -1,4 +1,5 @@
-use crate::markdown_images::{MarkdownImageResolver, tool_result_with_images};
+use crate::markdown_images::MarkdownImageResolver;
+use crate::tool_response::tool_result_with_media;
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::{
@@ -36,6 +37,8 @@ pub struct AuthenticatedToolService<Context> {
     /// responses (e.g. `https://macro.com`). Comes from the `APP_BASE_URL`
     /// environment variable.
     item_base_url: String,
+    /// Static file CDN used for attachments returned by authorized channel reads.
+    static_file_base_url: url::Url,
 }
 
 impl<Context> AuthenticatedToolService<Context> {
@@ -44,11 +47,13 @@ impl<Context> AuthenticatedToolService<Context> {
         toolset: Arc<AsyncToolCollection<Context>>,
         context: Context,
         item_base_url: String,
+        static_file_base_url: url::Url,
     ) -> Self {
         Self {
             toolset,
             context,
             item_base_url,
+            static_file_base_url,
         }
     }
 
@@ -109,6 +114,10 @@ where
             "This server provides tools for interacting with a user's Macro workspace. \
              Use ContentSearch and NameSearch to find entities. \
              Use ReadContent, ReadMetadata, and ReadThread to read them. \
+             Use ReadChannelMessages, ReadChannelThread, and ReadChannelMessageContext \
+             to read channel messages and their attachments. Channel image attachments \
+             include inline images when available; image and video attachments include \
+             downloadable URLs. Use a video-capable tool to inspect video URLs. \
              Use CreateDocument to create new documents. \
              Use EditDocument to edit existing documents. \
              Use ListEntities to browse recent items.\n\n{}",
@@ -163,7 +172,14 @@ where
             })?;
 
         match result {
-            Ok(value) => Ok(tool_result_with_images(&self.context, &user_id, value).await),
+            Ok(value) => Ok(tool_result_with_media(
+                &self.context,
+                &user_id,
+                &request.name,
+                &self.static_file_base_url,
+                value,
+            )
+            .await),
             Err(error) => Ok(rmcp::model::CallToolResult::error(vec![Content::text(
                 error.description,
             )])),

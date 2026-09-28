@@ -25,7 +25,7 @@ pub struct CallRecordSearchResponseItem {
     pub name: Option<String>,
     pub owner_id: String,
     pub call_id: uuid::Uuid,
-    pub channel_id: uuid::Uuid,
+    pub channel_id: Option<uuid::Uuid>,
     pub participant_ids: Vec<String>,
     pub call_search_results: Vec<CallRecordSearchResult>,
 }
@@ -75,7 +75,7 @@ pub struct CallRecordSearchRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct SimpleCallRecordSearchResponseBaseItem<T> {
     pub call_id: String,
-    pub channel_id: String,
+    pub channel_id: Option<String>,
     pub user_id: String,
     pub participant_ids: Vec<String>,
     #[schema(inline)]

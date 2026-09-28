@@ -26,6 +26,14 @@ export {
   normalizeFacetSelection,
   serializeFacetSelection,
 } from './selection';
+export {
+  createTagFacetContext,
+  EMPTY_TAG_FACET_CONTEXT,
+  TAG_FACET_ID,
+  type TagFacetContext,
+  tagFacetOption,
+  tagFacetReady,
+} from './tag-facet';
 export type {
   Facet,
   FacetClause,

@@ -59,11 +59,43 @@ export function parseDocumentMentions(text: string): string {
   );
 }
 
+export function parseAgentSessionMentions(text: string): string {
+  return text.replace(
+    /<m-agent-session-mention>(.*?)<\/m-agent-session-mention>/g,
+    (_, json) => {
+      try {
+        const data = JSON.parse(json);
+        return typeof data.label === 'string'
+          ? data.label
+          : typeof data.id === 'string'
+            ? data.id
+            : '';
+      } catch {
+        return '';
+      }
+    }
+  );
+}
+
 export function parsePullRequestMentions(text: string): string {
   return text.replace(/<m-pr-mention>(.*?)<\/m-pr-mention>/g, (_, json) => {
     try {
       const data = JSON.parse(json);
       return data.label || data.id || '';
+    } catch {
+      return '';
+    }
+  });
+}
+
+/** `<m-connect-app>` chips read as their call to action. */
+export function parseConnectApps(text: string): string {
+  return text.replace(/<m-connect-app>(.*?)<\/m-connect-app>/g, (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return typeof data.name === 'string' && data.name
+        ? `Connect ${data.name}`
+        : '';
     } catch {
       return '';
     }
@@ -120,6 +152,21 @@ export function parseDocumentCards(text: string): string {
   );
 }
 
+/** Replace reply-target nodes with their user-visible preview text. */
+export function parseReplyTargets(text: string): string {
+  return text.replace(
+    /<m-reply-target>(.*?)<\/m-reply-target>/gs,
+    (_, json) => {
+      try {
+        const data = JSON.parse(json);
+        return data.displayText || '';
+      } catch {
+        return '';
+      }
+    }
+  );
+}
+
 export function parseSnapshots(text: string): string {
   return text.replace(/<m-snapshot>(.*?)<\/m-snapshot>/g, (_, encoded) => {
     try {
@@ -168,27 +215,27 @@ export function stripAgentContext(text: string): string {
  * - Snapshots: documentName (base64-encoded payload)
  * - Group mentions: @groupAlias (e.g., @here)
  * - Links: text (fallback to url)
+ * - Reply targets: displayText
  */
 export function markdownToPlainText(markdown: string): string {
-  return stripAgentContext(
-    parseLinks(
-      parseDocumentCards(
-        parseSnapshots(
-          parseTagMentions(
-            parsePullRequestMentions(
-              parseDocumentMentions(
-                parseGroupMentions(
-                  parseDateMentions(
-                    parseContactMentions(parseUserMentions(markdown))
-                  )
-                )
-              )
-            )
-          )
-        )
-      )
-    )
-  );
+  const transforms: Array<(text: string) => string> = [
+    parseUserMentions,
+    parseContactMentions,
+    parseDateMentions,
+    parseGroupMentions,
+    parseDocumentMentions,
+    parsePullRequestMentions,
+    parseAgentSessionMentions,
+    parseTagMentions,
+    parseConnectApps,
+    parseSnapshots,
+    parseDocumentCards,
+    parseLinks,
+    parseReplyTargets,
+    stripAgentContext,
+  ];
+
+  return transforms.reduce((text, transform) => transform(text), markdown);
 }
 
 /**
@@ -211,6 +258,7 @@ type MentionTagPayload = {
   emailOrDomain?: string;
   displayFormat?: string;
   groupAlias?: string;
+  displayText?: string;
   equation?: string;
 };
 
@@ -324,6 +372,11 @@ export function markdownToEmbeddingText(markdown: string): string {
   text = flattenEmailThreadEmbeds(text);
 
   // Leaf tags.
+  text = replaceJsonTag(text, 'm-agent-session-mention', (data) =>
+    data.id
+      ? `[${data.label || 'Agent session'}](agent_session:${data.id})`
+      : data.label || ''
+  );
   text = replaceJsonTag(text, 'm-document-mention', documentRefToEmbeddingText);
   text = replaceJsonTag(text, 'm-document-card', documentRefToEmbeddingText);
   text = replaceJsonTag(text, 'm-pr-mention', (data) =>
@@ -368,7 +421,15 @@ export function markdownToEmbeddingText(markdown: string): string {
     data.name ? `#${data.name}` : ''
   );
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
+  text = replaceJsonTag(text, 'm-connect-app', (data) =>
+    data.name ? `Connect ${data.name}` : ''
+  );
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');
+  text = replaceJsonTag(
+    text,
+    'm-reply-target',
+    (data) => data.displayText || ''
+  );
   text = replaceJsonTag(text, 'm-watermark', () => '');
 
   // Anything still tagged is an unrecognized m-* node: drop it entirely so

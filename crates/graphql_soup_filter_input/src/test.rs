@@ -9,13 +9,22 @@ fn generated_filter_fixture() -> Value {
 }
 
 #[test]
+fn favorites_filter_materializes_without_changing_entity_scope() {
+    let mut input = generated_filter_fixture();
+    input["favoritesOnly"] = json!(true);
+    let ast = materialize_graphql_filter(input).unwrap();
+    assert_eq!(ast.favorites_only, Some(true));
+    assert!(ast.email_filter.tree.is_some());
+}
+
+#[test]
 fn generated_typescript_variables_materialize_authoritative_ast() {
     let ast = materialize_graphql_filter(generated_filter_fixture()).unwrap();
 
     assert!(matches!(
         ast.document_filter.as_deref(),
         Some(Expr::And(left, right))
-            if matches!(left.as_ref(), Expr::Literal(DocumentLiteral::NotificationDone(false)))
+            if matches!(left.as_ref(), Expr::Or(_, _))
                 && matches!(right.as_ref(), Expr::Literal(DocumentLiteral::UpdatedAt(_)))
     ));
     assert!(matches!(
@@ -47,6 +56,27 @@ fn rejects_rest_ast_shape() {
     .unwrap_err();
 
     assert!(matches!(error, MaterializeError::Shape(_)));
+}
+
+fn balanced_file_types(leaves: usize) -> Value {
+    if leaves == 1 {
+        return json!({"literal":{"fileType":"md"}});
+    }
+    json!({"or":{"left":balanced_file_types(leaves / 2), "right":balanced_file_types(leaves - leaves / 2)}})
+}
+
+#[test]
+fn finite_file_picker_unions_fit_but_unbounded_json_forests_do_not() {
+    // 512 leaves are 1,023 expression nodes, but 2,559 JSON values after wrappers.
+    let input = json!({"documentFilter":balanced_file_types(512)});
+    assert!(materialize_graphql_filter(input.clone()).is_ok());
+    let graphql: GraphqlEntityFilterAst = serde_json::from_value(input).unwrap();
+    assert!(graphql.into_ast().is_ok());
+    let oversized = json!({"documentFilter":balanced_file_types(1024)});
+    assert!(matches!(
+        materialize_graphql_filter(oversized),
+        Err(MaterializeError::Bounds(_))
+    ));
 }
 
 #[test]
@@ -98,4 +128,61 @@ fn property_entity_type_conversion_rejects_unsupported_variants() {
         panic!("expected property literal")
     };
     assert!(literal.entity_type.is_none());
+}
+
+#[test]
+fn initiative_filters_materialize_for_browser_and_server() {
+    let id = Uuid::from_u128(42);
+    for literal in [
+        json!({"include": true}),
+        json!({"id": id.to_string()}),
+        json!({"owner": "macro|user@example.com"}),
+        json!({"nameContains": "Launch"}),
+        json!({"dueBefore": "2026-10-01T00:00:00Z"}),
+        json!({"dueAfter": "2026-09-01T00:00:00Z"}),
+    ] {
+        let value = json!({"initiativeFilter": {"literal": literal}});
+        let ast = materialize_graphql_filter(value.clone()).unwrap();
+        let input: GraphqlEntityFilterAst = serde_json::from_value(value).unwrap();
+        assert!(ast.initiative_filter.is_some());
+        assert_eq!(
+            serde_json::to_value(ast).unwrap(),
+            serde_json::to_value(input.into_ast().unwrap()).unwrap()
+        );
+    }
+    for literal in [
+        json!({"include": false}),
+        json!({"id": "invalid"}),
+        json!({"dueBefore": "invalid"}),
+    ] {
+        assert!(
+            materialize_graphql_filter(json!({"initiativeFilter": {"literal": literal}})).is_err()
+        );
+    }
+    assert!(
+        materialize_graphql_filter(json!({}))
+            .unwrap()
+            .initiative_filter
+            .is_none()
+    );
+}
+
+#[test]
+fn initiative_property_filters_preserve_entity_scope() {
+    let ast = materialize_graphql_filter(json!({
+        "initiativeFilter": {"literal": {"include": true}},
+        "propertiesFilter": {"literal": {
+            "propertyDefinitionId": "00000001-0000-0000-0000-000000000002",
+            "entityType": "INITIATIVE",
+            "value": {"selectOption": "00000001-0000-0000-0002-000000000001"}
+        }}
+    }))
+    .unwrap();
+    assert!(matches!(
+        ast.properties_filter.as_deref(),
+        Some(Expr::Literal(PropertiesLiteral {
+            entity_type: Some(PropertyEntityType::Initiative),
+            ..
+        }))
+    ));
 }

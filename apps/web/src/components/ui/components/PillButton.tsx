@@ -6,7 +6,7 @@ import { Button } from './Button';
 export type PillButtonTone = 'cta' | 'subtle';
 
 export interface PillButtonProps {
-  /** `cta` = primary green action; `subtle` = borderless ink/5 pill. */
+  /** `cta` uses stronger ink; both tones use the shared flat action frame. */
   tone?: PillButtonTone;
   /** Optional leading icon, e.g. a plus for "create" actions. */
   icon?: Component<{ class?: string }>;
@@ -16,7 +16,7 @@ export interface PillButtonProps {
 }
 
 /**
- * Rounded-full pill button shared across empty states and setup cards. Tight
+ * Rounded-full button shared across empty states and setup cards. Tight
  * vertical padding by design; the leading icon (when present) tightens the left
  * padding so the icon, not the pill edge, sets the rhythm.
  */
@@ -28,7 +28,7 @@ export function PillButton(props: PillButtonProps) {
       size="md"
       class={cn(
         'rounded-full py-1',
-        subtle() ? 'bg-ink/5 px-2.5' : props.icon ? 'pl-3 pr-4' : 'px-4',
+        subtle() ? 'px-2.5' : props.icon ? 'pl-3 pr-4' : 'px-4',
         props.class
       )}
       onClick={props.onClick}

@@ -1,12 +1,20 @@
-import type { AgentSessionRenamedEvent } from './realtime-protocol';
+import { queryClient } from '@queries/client';
+import { agentSessionKeys } from './keys';
+import { refreshAgentSessionLists } from './list-sync';
+import type {
+  AgentSessionRenamedEvent,
+  AgentSessionUpdatedEvent,
+} from './realtime-protocol';
 
 const renameListeners = new Set<(event: AgentSessionRenamedEvent) => void>();
+const updateListeners = new Set<(event: AgentSessionUpdatedEvent) => void>();
 
 /** Apply a server-persisted rename to active agent-session consumers. */
 export function handleAgentSessionRenamed(
   event: AgentSessionRenamedEvent
 ): void {
   for (const listener of renameListeners) listener(event);
+  void refreshAgentSessionLists(event.agentSessionId);
 }
 
 /** Follow name changes while a session-scoped view is mounted. */
@@ -15,4 +23,35 @@ export function subscribeAgentSessionRenamed(
 ): () => void {
   renameListeners.add(listener);
   return () => renameListeners.delete(listener);
+}
+
+/** Follow committed session-row changes (e.g. a linked pull request). */
+export function subscribeAgentSessionUpdated(
+  listener: (event: AgentSessionUpdatedEvent) => void
+): () => void {
+  updateListeners.add(listener);
+  return () => updateListeners.delete(listener);
+}
+
+/** Cancel stale snapshots before refetching the committed session metadata. */
+export async function handleAgentSessionUpdated(
+  event: AgentSessionUpdatedEvent
+): Promise<void> {
+  for (const listener of updateListeners) listener(event);
+  const filters = {
+    queryKey: agentSessionKeys.detail(event.agentSessionId).queryKey,
+    exact: true,
+  };
+  await queryClient.cancelQueries(filters);
+  await Promise.all([
+    queryClient.invalidateQueries(filters),
+    refreshAgentSessionLists(event.agentSessionId),
+  ]);
+}
+
+/** Recover session metadata updates missed while the gateway was disconnected. */
+export async function invalidateAgentSessionMetadata(): Promise<void> {
+  const filters = { queryKey: agentSessionKeys.detail._def };
+  await queryClient.cancelQueries(filters);
+  await queryClient.invalidateQueries(filters);
 }

@@ -75,7 +75,8 @@ export type FetchProgress = {
 export async function fetchPresignedBlobWithProgress(
   url: string,
   onProgress: (progress: FetchProgress) => void,
-  init?: RequestInit
+  init?: RequestInit,
+  maxBytes = Infinity
 ): Promise<Result<Blob, ResultError<FetchError>[]>> {
   try {
     const response = await platformFetch(url, init);
@@ -87,11 +88,17 @@ export async function fetchPresignedBlobWithProgress(
     const totalHeader = response.headers.get('Content-Length');
     const total = totalHeader ? Number.parseInt(totalHeader, 10) : 0;
     const contentType = response.headers.get('Content-Type') ?? undefined;
+    if (total > maxBytes) {
+      await response.body?.cancel();
+      throw new Error(`File exceeds the ${maxBytes}-byte download limit.`);
+    }
 
     onProgress({ loaded: 0, total });
 
     if (!response.body) {
       const blob = await response.blob();
+      if (blob.size > maxBytes)
+        throw new Error(`File exceeds the ${maxBytes}-byte download limit.`);
       onProgress({ loaded: blob.size, total: blob.size });
       return ok(blob);
     }
@@ -103,13 +110,21 @@ export async function fetchPresignedBlobWithProgress(
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      loaded += value.byteLength;
+      if (loaded > maxBytes || init?.signal?.aborted) {
+        await reader.cancel();
+        throw new Error(
+          init?.signal?.aborted
+            ? 'Download cancelled.'
+            : `File exceeds the ${maxBytes}-byte download limit.`
+        );
+      }
       chunks.push(
         value.buffer.slice(
           value.byteOffset,
           value.byteOffset + value.byteLength
         ) as ArrayBuffer
       );
-      loaded += value.byteLength;
       onProgress({ loaded, total });
     }
 

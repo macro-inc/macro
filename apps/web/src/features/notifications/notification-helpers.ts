@@ -1,5 +1,9 @@
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { Entity, EntityType } from '@core/types';
+import { isMutedItem } from '@entity/utils/notification';
 import { queryClient } from '@queries/client';
 import {
   toNotificationEntityRef,
@@ -12,12 +16,9 @@ import {
 } from '@queries/notification/user-notifications';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { isMatching, P } from 'ts-pattern';
+import { DOCUMENT_COMMENT_EVENT_TYPES } from './document-comment-notification';
 import type { NotificationSource } from './notification-source';
-import {
-  CHANNEL_EVENT_TYPES,
-  DOCUMENT_COMMENT_EVENT_TYPES,
-  setDoneOverride,
-} from './notification-source';
+import { CHANNEL_EVENT_TYPES, setDoneOverride } from './notification-source';
 import { compositeEntity, type UnifiedNotification } from './types';
 
 export const isChannelNotification = isMatching({
@@ -73,7 +74,7 @@ export function notificationIsOfEntityType(
  * @returns boolean
  */
 export function notificationIsRead(notification: UnifiedNotification): boolean {
-  if (notification.viewed_at || notification.done) return true;
+  if (notification.state !== 'unseen') return true;
   if (
     notification.entity_type === 'channel' &&
     !isChannelNotification(notification)
@@ -167,24 +168,36 @@ export function useUnreadEntityTypeNotifications(
  * @param entity
  * @returns Promise<void>
  */
-export function markNotificationsForEntityAsDone(
+export async function markNotificationsForEntityAsDone(
   notificationSource: NotificationSource,
   entity: Entity
 ): Promise<void> {
+  await ensureNotificationSourceLoaded(notificationSource);
   return notificationSource.bulkMarkAsDone(
     notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
 }
 
-export function markNotificationForEntityIdAsRead(
+export async function markNotificationForEntityIdAsRead(
   notificationSource: NotificationSource,
   id: string
 ): Promise<void> {
+  await ensureNotificationSourceLoaded(notificationSource);
   return notificationSource.bulkMarkAsRead(
     notificationSource
       .notifications()
       .filter((n) => n.entity_id === id && !notificationIsRead(n))
   );
+}
+
+/** Cold imperative actions must load the full feed rather than act on an empty snapshot. */
+export async function ensureNotificationSourceLoaded(
+  notificationSource: NotificationSource
+): Promise<void> {
+  const query = notificationSource._notificationsQuery;
+  if (!query.isStarted || query.isLoading || query.data === undefined) {
+    await query.refetch();
+  }
 }
 
 /**
@@ -198,7 +211,7 @@ export async function markNotificationsForEntityAsRead(
   entity: Entity
 ): Promise<void> {
   const entityRef = toNotificationEntityRef(entity);
-  if (ENABLE_GRAPHQL_SOUP() && entityRef) {
+  if (isFeatureEnabled(enableGraphqlSoup) && entityRef) {
     await updateNotificationsForEntities({
       entities: [entityRef],
       operation: 'MARK_SEEN',
@@ -209,6 +222,18 @@ export async function markNotificationsForEntityAsRead(
   await notificationSource.bulkMarkAsRead(
     notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
+}
+
+/** Best-effort read marker for navigation/timer callers with no awaiting UI. */
+export async function markNotificationsForEntityAsReadInBackground(
+  notificationSource: NotificationSource,
+  entity: Entity
+): Promise<void> {
+  try {
+    await markNotificationsForEntityAsRead(notificationSource, entity);
+  } catch (error) {
+    console.error('Failed to mark entity notifications as read', error);
+  }
 }
 
 /**
@@ -222,9 +247,9 @@ export function useNotificationsMutedForEntity(
   entity: Entity
 ): Accessor<boolean> {
   return createMemo(() =>
-    notificationSource.mutedEntities().includes({
-      item_type: entity.type,
+    isMutedItem(notificationSource.mutedEntities(), {
       item_id: entity.id,
+      item_type: entity.type,
     })
   );
 }
@@ -237,11 +262,11 @@ export function useNotificationsMutedForEntity(
 export async function executeMarkNotificationsDone(
   notificationIds: string[]
 ): Promise<void> {
-  setDoneOverride(notificationIds, true);
+  const rollback = setDoneOverride(notificationIds, true);
   try {
     await bulkMarkNotificationsAsDone(notificationIds);
   } catch (err) {
-    setDoneOverride(notificationIds, false);
+    rollback();
     throw err;
   } finally {
     await queryClient.invalidateQueries({
@@ -259,11 +284,11 @@ export async function executeMarkNotificationsDone(
 export async function executeMarkNotificationsUndone(
   notificationIds: string[]
 ): Promise<void> {
-  setDoneOverride(notificationIds, false);
+  const rollback = setDoneOverride(notificationIds, false);
   try {
     await bulkMarkNotificationsAsUndone(notificationIds);
   } catch (err) {
-    setDoneOverride(notificationIds, true);
+    rollback();
     throw err;
   } finally {
     await queryClient.invalidateQueries({

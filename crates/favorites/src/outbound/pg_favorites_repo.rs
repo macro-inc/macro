@@ -10,7 +10,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use sqlx::PgPool;
 
-use crate::domain::models::Favorite;
+use crate::domain::models::{Favorite, FavoriteFilter};
 use crate::domain::ports::FavoritesRepo;
 
 /// Postgres-backed favorites repository.
@@ -121,7 +121,20 @@ impl FavoritesRepo for PgFavoritesRepo {
     async fn list_favorites(
         &self,
         user_id: &MacroUserIdStr<'_>,
+        filter: &FavoriteFilter,
     ) -> Result<Vec<Favorite>, Self::Err> {
+        // An empty dimension means no constraint, so it binds NULL rather than
+        // an empty array. `= ANY('{}')` would match nothing.
+        let entity_types: Option<Vec<String>> = (!filter.entity_types.is_empty()).then(|| {
+            filter
+                .entity_types
+                .iter()
+                .map(|entity_type| <&str>::from(*entity_type).to_string())
+                .collect()
+        });
+        let entity_ids: Option<&[String]> =
+            (!filter.entity_ids.is_empty()).then_some(&filter.entity_ids);
+
         // Resolves display metadata for the favorited entity where possible
         // and omits favorites whose target is deleted. Display names are not
         // hydrated here: clients resolve them from entity previews.
@@ -157,12 +170,16 @@ impl FavoritesRepo for PgFavoritesRepo {
             LEFT JOIN comms_channels ch ON f.entity_type = 'channel' AND ch.id = fid.entity_uuid
             LEFT JOIN comms_messages cm ON f.entity_type = 'channel_message' AND cm.id = fid.entity_uuid
             WHERE f.user_id = $1
+                AND ($2::text[] IS NULL OR f.entity_type = ANY($2))
+                AND ($3::text[] IS NULL OR f.entity_id = ANY($3))
                 AND (f.entity_type <> 'document' OR (d.id IS NOT NULL AND d."deletedAt" IS NULL))
                 AND (f.entity_type <> 'chat' OR (c.id IS NOT NULL AND c."deletedAt" IS NULL))
                 AND (f.entity_type <> 'project' OR (p.id IS NOT NULL AND p."deletedAt" IS NULL))
             ORDER BY f.sort_order ASC, f.created_at ASC
             "#,
             user_id.as_ref(),
+            entity_types.as_deref(),
+            entity_ids,
         )
         .fetch_all(&self.pool)
         .await?;

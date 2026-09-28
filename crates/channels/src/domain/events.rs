@@ -2,11 +2,11 @@
 
 use crate::domain::models::{
     ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, EntityMention,
-    MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, Sender, SimpleMention,
-    TypingAction,
+    MutatedAttachment, MutatedMessage, Sender, TypingAction,
 };
 use channel_sender::ChannelSender;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::{PostMessageNotificationPolicy, SimpleMention};
 use uuid::Uuid;
 
 /// Notification context for a patched message that should notify like a new post.
@@ -25,12 +25,21 @@ pub struct MessageChangedNotificationContext {
 /// Events emitted after durable channel state changes.
 #[derive(Debug, Clone)]
 pub enum ChannelEvent {
+    /// A channel picture was set, replaced, or removed.
+    PictureChanged {
+        /// Channel whose picture changed.
+        channel_id: Uuid,
+        /// Active participants whose sessions should refresh the picture.
+        recipients: Vec<MacroUserIdStr<'static>>,
+    },
     /// A channel was created.
     ChannelCreated {
         /// Created channel id.
         channel_id: Uuid,
         /// Actor that created the channel.
         actor: ChannelSender<'static>,
+        /// User the actor created the channel for, when the actor is a bot.
+        on_behalf_of: Option<MacroUserIdStr<'static>>,
         /// Type of channel that was created.
         channel_type: ChannelType,
         /// Stored channel name; `None` for direct message / unnamed channels.

@@ -3,29 +3,15 @@
 The Rust backend is split across deployable processes in `services/`, reusable
 libraries in `crates/`, and deployment definitions in `infra/`.
 
-## Prerequisites
+## Development and testing
 
-- docker
-- sqlx-cli
-- just
-- pulumi cli
-- aws cli
-
-# Testing
-
-To run tests locally, run the following commands:
-
-```bash
-just create_networks
-just run_dbs -d
-just setup_test_envs
-just initialize_dbs
-cargo test # NB: SQLX_OFFLINE should NOT be set
-```
-
-## clean up
-
-To reset the local database, use the repository-root database recipes rather than deleting unrelated containers: `just crates/macro_db_client/drop_db -y -f`, then `just setup_macrodb`.
+- [Rust development](RUST_DEVELOPMENT.md): toolchain, build/check commands, and
+  tests for the affected packages.
+- [Database development](DATABASE_DEVELOPMENT.md): local test databases,
+  migrations, SQLx cache preparation, and approved destructive resets.
+- [Running locally](RUNNING_LOCALLY.md): frontend against hosted services or a
+  full local stack.
+- [Cursor Cloud](CURSOR_CLOUD.md): Cloud-only setup and rebuild entry points.
 
 ## Deployment
 

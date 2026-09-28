@@ -145,6 +145,7 @@ describe('cache worker message validators', () => {
       },
       { kind: 'ops-affected', opIds: ['client:7'], keys: ['User:1'] },
       { kind: 'cache-changed', revision: INITIAL_CACHE_REVISION },
+      { kind: 'cache-hydrated', revision: INITIAL_CACHE_REVISION },
       {
         kind: 'mutation-settled',
         settlement: { transactionId: '3', status: 'committed' },
@@ -153,6 +154,14 @@ describe('cache worker message validators', () => {
         kind: 'mutation-settled',
         settlement: {
           transactionId: '4',
+          status: 'superseded',
+          replacementTransactionId: '5',
+        },
+      },
+      {
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '6',
           status: 'permanently-failed',
           error: 'denied',
         },
@@ -176,6 +185,8 @@ describe('cache worker message validators', () => {
     { kind: 'ops-affected', opIds: [7], keys: [] },
     { kind: 'ops-affected', opIds: [], keys: [], extra: true },
     { kind: 'cache-changed', keys: [] },
+    { kind: 'cache-hydrated', revision: 1 },
+    { kind: 'cache-hydrated', revision: '1', extra: true },
     {
       kind: 'mutation-settled',
       settlement: { transactionId: '3', status: 'committed', error: 'extra' },
@@ -183,6 +194,10 @@ describe('cache worker message validators', () => {
     {
       kind: 'mutation-settled',
       settlement: { transactionId: '4', status: 'permanently-failed' },
+    },
+    {
+      kind: 'mutation-settled',
+      settlement: { transactionId: '5', status: 'superseded' },
     },
   ])('rejects malformed or extended worker message %#', (value) => {
     expect(isWorkerMessage(value)).toBe(false);

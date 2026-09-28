@@ -1,6 +1,7 @@
 query Soup($input: SoupInput!) {
 	user {
 		id
+		emailLinks @cacheOnly { id emailAddress photoUrl }
 		soup(input: $input) {
 			items {
 				...SoupItemFields
@@ -13,6 +14,7 @@ query Soup($input: SoupInput!) {
 query SoupBackfill($input: SoupInput!) {
 	user {
 		id @cacheOnly
+		emailLinks @cacheOnly { id emailAddress photoUrl }
 		soup(input: $input) {
 			items @cacheOnly {
 				...SoupItemFields
@@ -33,228 +35,333 @@ query SoupBackfill($input: SoupInput!) {
 	}
 }
 
+query SoupMailBackfill($input: SoupInput!) {
+	user {
+		id @cacheOnly
+		emailLinks @cacheOnly { id emailAddress photoUrl }
+		soup(input: $input) {
+			items @cacheOnly { ...SoupItemFields }
+			nextCursor
+		}
+	}
+}
+
+query SoupSharedMailBackfill($input: SoupInput!) {
+	user {
+		id @cacheOnly
+		emailLinks @cacheOnly { id emailAddress photoUrl }
+		soup(input: $input) {
+			items @cacheOnly { ...SoupItemFields }
+			scopeIds: items { __typename id }
+			nextCursor
+		}
+	}
+}
+
+query MailAccounts {
+	user {
+		id
+		emailLinks { id emailAddress photoUrl }
+	}
+}
+
+fragment MailPreviewFields on GraphqlMailPreviewMessage {
+	id
+	subject
+	snippet
+	isDraft
+	senderEmail
+	senderName
+	senderPhotoUrl
+}
+
+# Local-only selection: materialize canonical preview references instead of the
+# query-dependent preview fields last written by a different tab/filter.
+fragment MailItemFields on GraphqlSoupEntity {
+	...SoupItemFields
+	... on GraphqlSoupEmailThread {
+		mailAllPreview { ...MailPreviewFields }
+		mailDraftPreview { ...MailPreviewFields }
+		mailSentPreview { ...MailPreviewFields }
+	}
+}
+
 fragment SoupItemFields on GraphqlSoupEntity {
+	...SoupItemPreviewFields
+	notifications { ...SoupNotificationFields }
+}
+
+# Shared entity data without historical notification presentation payloads.
+fragment SoupItemPreviewFields on GraphqlSoupEntity {
 	__typename
 	cacheProjection @cacheOnly
-	...SoupEntityCoreFields
+	...SoupEntityIdentityFields
+	... on GraphqlSoupAgentSession {
+		sessionName: name
+		ownerId
+		botId
+		harness
+		repoUrl
+		repoBranch
+		pullRequestUrl
+		workingBranch
+		pullRequestState
+		pullRequestId
+		turnState
+		bot {
+			id
+			name
+			avatarUrl
+		}
+		threadId
+		status
+		createdAt
+		updatedAt
+		viewedAt
+		properties {
+			...SoupPropertyFields
+		}
+	}
 	frecencyScore
-					... on GraphqlSoupDocument {
-						documentName: name
-						ownerId
-						fileType
-						projectId
-						createdAt
-						updatedAt
-						viewedAt
-						deletedAt
-						subType {
-							__typename
-							... on GraphqlTaskSubType {
-								isCompleted
-							}
-						}
-						properties {
-							...SoupPropertyFields
-						}
-					}
-					... on GraphqlSoupChat {
-						chatName: name
-						ownerId
-						projectId
-						isPersistent
-						createdAt
-						updatedAt
-						viewedAt
-						deletedAt
-						properties {
-							...SoupPropertyFields
-						}
-					}
-					... on GraphqlSoupProject {
-						projectName: name
-						ownerId
-						parentId
-						createdAt
-						updatedAt
-						viewedAt
-						deletedAt
-						properties {
-							...SoupPropertyFields
-						}
-					}
-					... on GraphqlSoupEmailThread {
-						providerId
-						ownerId
-						inboxVisible
-						linkId
-						latestInboundMessageTs
-						emailName: name
-						snippet
-						senderEmail
-						senderName
-						senderPhotoUrl
-						isRead
-						isDraft
-						isImportant
-						projectId
-						sortTs
-						createdAt
-						updatedAt
-						viewedAt
-						participants {
-							id
-							linkId
-							name
-							email
-							sfsPhotoUrl
-						}
-						attachments {
-							id
-							messageId
-							providerAttachmentId
-							filename
-							mimeType
-							sizeBytes
-							contentId
-							createdAt
-						}
-						labels {
-							__typename
-							id
-							linkId
-							providerLabelId
-							name
-							createdAt
-							messageListVisibility
-							labelListVisibility
-							type
-						}
-						properties {
-							...SoupPropertyFields
-						}
-					}
-					... on GraphqlSoupChannel {
-						channelName: name
-						channelType
-						ownerId
-						organizationId
-						channelTeamId: teamId
-						createdAt
-						updatedAt
-						viewedAt
-						interactedAt
-						isParticipant
-						participants {
-							channelId
-							userId
-							role
-							joinedAt
-							leftAt
-						}
-						latestMessage {
-							...SoupChannelMessageFields
-						}
-						latestNonThreadMessage {
-							...SoupChannelMessageFields
-						}
-					}
-					... on GraphqlSoupChannelMessage {
-						channelId
-						senderId
-						content
-						createdAt
-						updatedAt
-						effectiveUpdatedAt
-						replyCount
-					}
-					... on GraphqlSoupCall {
-						channelId
-						channelName
-						createdBy
-						customName
-						summary
-						startedAt
-						endedAt
-						durationMs
-						isActive
-						status
-						attended
-						participants {
-							userId
-							joinedAt
-							leftAt
-						}
-						properties {
-							...SoupPropertyFields
-						}
-					}
-					... on GraphqlSoupCrmCompany {
-						crmTeamId: teamId
-						crmCompanyName: name
-						description
-						emailSync
-						hidden
-						createdAt
-						updatedAt
-						viewedAt
-						domains
-						properties {
-							...SoupPropertyFields
-						}
-					}
-					... on GraphqlSoupForeignEntity {
-						foreignEntityId
-						foreignEntitySource
-						storedForId
-						storedForAuthEntity
-						sourceMetadata
-						createdAt
-						updatedAt
-					}
-					... on GraphqlSoupReminder {
-						reminderDescription: description
-						scheduleType
-						remindAt
-						cron
-						timezone
-						nextRunAt
-						enabled
-						completedAt
-						createdAt
-						updatedAt
-						referencedEntity {
-							id
-							entityType
-							fileType
-							subType
-						}
-						properties {
-							...SoupPropertyFields
-						}
-					}
-					... on GraphqlSoupCalendarEvent {
-						calendarEventTitle: title
-						calendarEventStatus: status
-						time
-						conferenceUrl
-						isReadOnly
-						ownerId
-						createdAt
-						updatedAt
-						properties {
-							...SoupPropertyFields
-						}
-					}
+	... on GraphqlSoupInitiative {
+		descriptionDocumentId
+		metadata { ownerId createdAt updatedAt viewedAt }
+		viewerPermission {
+			__typename
+			... on GraphqlAccessLevelPermission { accessLevel }
+		}
+		properties { ...SoupPropertyFields }
+	}
+	... on GraphqlSoupDocument {
+		documentName: name
+		ownerId
+		fileType
+		projectId
+		createdAt
+		updatedAt
+		viewedAt
+		deletedAt
+		subType {
+			__typename
+			... on GraphqlTaskSubType {
+				isCompleted
+			}
+		}
+		properties {
+			...SoupPropertyFields
+		}
+	}
+	... on GraphqlSoupChat {
+		chatName: name
+		model
+		ownerId
+		projectId
+		isPersistent
+		createdAt
+		updatedAt
+		viewedAt
+		deletedAt
+		properties {
+			...SoupPropertyFields
+		}
+	}
+	... on GraphqlSoupProject {
+		projectName: name
+		ownerId
+		parentId
+		createdAt
+		updatedAt
+		viewedAt
+		deletedAt
+		properties {
+			...SoupPropertyFields
+		}
+	}
+	... on GraphqlSoupEmailThread {
+		providerId
+		ownerId
+		inboxVisible
+		linkId
+		latestInboundMessageTs
+		mailAllPreview @cacheOnly { ...MailPreviewFields }
+		mailDraftPreview @cacheOnly { ...MailPreviewFields }
+		mailSentPreview @cacheOnly { ...MailPreviewFields }
+		emailName: name
+		snippet
+		senderEmail
+		senderName
+		senderPhotoUrl
+		isRead
+		isDraft
+		isImportant
+		isSignal
+		projectId
+		sortTs
+		createdAt
+		updatedAt
+		viewedAt
+		participants {
+			id
+			linkId
+			name
+			email
+			sfsPhotoUrl
+		}
+		attachments {
+			id
+			messageId
+			providerAttachmentId
+			filename
+			mimeType
+			sizeBytes
+			contentId
+			createdAt
+		}
+		labels {
+			__typename
+			id
+			linkId
+			providerLabelId
+			name
+			createdAt
+			messageListVisibility
+			labelListVisibility
+			type
+		}
+		properties {
+			...SoupPropertyFields
+		}
+	}
+	... on GraphqlSoupChannel {
+		channelName: name
+		channelType
+		ownerId
+		organizationId
+		channelTeamId: teamId
+		createdAt
+		updatedAt
+		viewedAt
+		interactedAt
+		isParticipant
+		participants {
+			channelId
+			userId
+			role
+			joinedAt
+			leftAt
+		}
+		latestMessage {
+			...SoupChannelMessageFields
+		}
+		latestNonThreadMessage {
+			...SoupChannelMessageFields
+		}
+	}
+	... on GraphqlSoupChannelMessage {
+		channelId
+		senderId
+		content
+		createdAt
+		updatedAt
+		effectiveUpdatedAt
+		replyCount
+	}
+	... on GraphqlSoupCall {
+		callChannelId: channelId
+		channelName
+		createdBy
+		customName
+		summary
+		startedAt
+		endedAt
+		durationMs
+		isActive
+		status
+		attended
+		participants {
+			userId
+			joinedAt
+			leftAt
+		}
+		guests {
+			id
+			displayName
+			joinedAt
+			leftAt
+		}
+		properties {
+			...SoupPropertyFields
+		}
+	}
+	... on GraphqlSoupCrmCompany {
+		crmTeamId: teamId
+		crmCompanyName: name
+		description
+		emailSync
+		hidden
+		createdAt
+		updatedAt
+		viewedAt
+		domains
+		properties {
+			...SoupPropertyFields
+		}
+	}
+	... on GraphqlSoupForeignEntity {
+		foreignEntityId
+		foreignEntitySource
+		storedForId
+		storedForAuthEntity
+		sourceMetadata
+		createdAt
+		updatedAt
+	}
+	... on GraphqlSoupReminder {
+		reminderDescription: description
+		scheduleType
+		remindAt
+		cron
+		timezone
+		nextRunAt
+		enabled
+		completedAt
+		createdAt
+		updatedAt
+		referencedEntity {
+			id
+			entityType
+			fileType
+			subType
+		}
+		properties {
+			...SoupPropertyFields
+		}
+	}
+	... on GraphqlSoupCalendarEvent {
+		calendarEventTitle: title
+		calendarEventStatus: status
+		time
+		conferenceUrl
+		isReadOnly
+		ownerId
+		createdAt
+		updatedAt
+		properties {
+			...SoupPropertyFields
+		}
+	}
 }
 
 fragment SoupEntityCoreFields on GraphqlSoupEntity {
+	...SoupEntityIdentityFields
+	notifications { ...SoupNotificationFields }
+}
+
+fragment SoupEntityIdentityFields on GraphqlSoupEntity {
 	id
 	entityType
 	displayName
 	isFavorited
-	notifications {
-		...SoupNotificationFields
-	}
 }
 
 fragment SoupPropertyFields on GraphqlProperty {
@@ -309,33 +416,55 @@ fragment SoupChannelMessageFields on GraphqlSoupChannelMessagePreview {
 }
 
 fragment SoupNotificationFields on GraphqlNotification {
+	...SoupNotificationStateFields
+	metadata { ...SoupNotificationMetadataFields }
+}
+
+fragment SoupNotificationStateFields on GraphqlNotification {
 	id
 	eventType
 	entityType
 	entityId
 	sent
-	done
-	seen
+	state
 	createdAt
 	viewedAt
 	updatedAt
 	senderId
-	metadata {
-		...SoupNotificationMetadataFields
-	}
 }
 
 fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
+	...SoupNotificationNavigationMetadataFields
+	... on GraphqlChannelMentionMetadata {
+		channelMentionHasAttachments: hasAttachments
+		channelMentionSenderDisplayName: senderDisplayName
+		channelMentionChannelName: channelName
+		channelMentionSenderProfilePictureUrl: senderProfilePictureUrl
+	}
+	... on GraphqlChannelMessageSendMetadata {
+		channelMessageSendMessageContent: messageContent
+		channelMessageSendHasAttachments: hasAttachments
+		channelMessageSendSenderDisplayName: senderDisplayName
+		channelMessageSendChannelName: channelName
+		channelMessageSendSenderProfilePictureUrl: senderProfilePictureUrl
+	}
+	... on GraphqlChannelReplyMetadata {
+		channelReplyHasAttachments: hasAttachments
+		channelReplySenderDisplayName: senderDisplayName
+		channelReplyChannelName: channelName
+		channelReplySenderProfilePictureUrl: senderProfilePictureUrl
+	}
+}
+
+# Preserve notification lifecycle, thread membership, and click targets. Required
+# REST metadata (including mention/reply content) remains available to consumers.
+fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	__typename
 	... on GraphqlChannelMentionMetadata {
 		channelMentionMessageId: messageId
 		channelMentionMessageContent: messageContent
-		channelMentionHasAttachments: hasAttachments
 		channelMentionThreadId: threadId
-		channelMentionSenderDisplayName: senderDisplayName
 		channelMentionChannelType: channelType
-		channelMentionChannelName: channelName
-		channelMentionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlDocumentMentionMetadata {
 		documentMentionDocumentName: documentName
@@ -361,6 +490,7 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 		mentionedInDocumentCommentThreadId: threadId
 		mentionedInDocumentCommentText: text
 		mentionedInDocumentCommentSenderProfilePictureUrl: senderProfilePictureUrl
+		mentionedInDocumentCommentSenderDisplayName: senderDisplayName
 	}
 	... on GraphqlRepliedToDocumentCommentThreadMetadata {
 		repliedToDocumentCommentThreadDocumentName: documentName
@@ -371,6 +501,7 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 		repliedToDocumentCommentThreadThreadId: threadId
 		repliedToDocumentCommentThreadText: text
 		repliedToDocumentCommentThreadSenderProfilePictureUrl: senderProfilePictureUrl
+		repliedToDocumentCommentThreadSenderDisplayName: senderDisplayName
 	}
 	... on GraphqlCommentedOnDocumentMetadata {
 		commentedOnDocumentDocumentName: documentName
@@ -381,6 +512,26 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 		commentedOnDocumentThreadId: threadId
 		commentedOnDocumentText: text
 		commentedOnDocumentSenderProfilePictureUrl: senderProfilePictureUrl
+		commentedOnDocumentSenderDisplayName: senderDisplayName
+	}
+	... on GraphqlInitiativeDiscussionMetadata {
+		initiativeDiscussionProjectName: projectName
+		initiativeDiscussionOwner: owner
+		initiativeDiscussionReason: reason
+		initiativeDiscussionMessageId: messageId
+		initiativeDiscussionThreadId: threadId
+		initiativeDiscussionText: text
+		initiativeDiscussionSenderDisplayName: senderDisplayName
+		initiativeDiscussionSenderProfilePictureUrl: senderProfilePictureUrl
+	}
+	... on GraphqlCrmDiscussionMetadata {
+		crmDiscussionRecordName: recordName
+		crmDiscussionReason: reason
+		crmDiscussionMessageId: messageId
+		crmDiscussionThreadId: threadId
+		crmDiscussionText: text
+		crmDiscussionSenderDisplayName: senderDisplayName
+		crmDiscussionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlChannelInviteMetadata {
 		channelInviteInvitedBy: invitedBy
@@ -390,25 +541,16 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 	}
 	... on GraphqlChannelMessageSendMetadata {
 		channelMessageSendSender: sender
-		channelMessageSendSenderDisplayName: senderDisplayName
-		channelMessageSendMessageContent: messageContent
 		channelMessageSendMessageId: messageId
-		channelMessageSendHasAttachments: hasAttachments
 		channelMessageSendChannelType: channelType
-		channelMessageSendChannelName: channelName
-		channelMessageSendSenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlChannelReplyMetadata {
 		channelReplyThreadId: threadId
 		channelReplyMessageId: messageId
 		channelReplyUserId: userId
-		channelReplySenderDisplayName: senderDisplayName
 		channelReplyMessageContent: messageContent
-		channelReplyHasAttachments: hasAttachments
 		channelReplyThreadParentSenderId: threadParentSenderId
 		channelReplyChannelType: channelType
-		channelReplyChannelName: channelName
-		channelReplySenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlCallStartedMetadata {
 		callStartedChannelName: channelName
@@ -561,5 +703,46 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 		githubPrReviewReviewUrl: reviewUrl
 		githubPrReviewState: state
 		githubPrReviewReviewSnippet: reviewSnippet
+	}
+	... on GraphqlAgentSessionSettledMetadata {
+		agentSessionSettledSession: session {
+			sessionId
+			sessionName
+			botId
+			botName
+			channelId
+			threadId
+			announcementMessageId
+		}
+		agentSessionSettledTurn: turn
+		agentSessionSettledActor: actor
+		agentSessionSettledStopReason: stopReason
+		agentSessionSettledExcerpt: excerpt
+	}
+	... on GraphqlAgentSessionWaitingForInputMetadata {
+		agentSessionWaitingForInputSession: session {
+			sessionId
+			sessionName
+			botId
+			botName
+			channelId
+			threadId
+			announcementMessageId
+		}
+		agentSessionWaitingForInputTurn: turn
+		agentSessionWaitingForInputQuestion: question
+	}
+	... on GraphqlAgentSessionMentionedMetadata {
+		agentSessionMentionedSession: session {
+			sessionId
+			sessionName
+			botId
+			botName
+			channelId
+			threadId
+			announcementMessageId
+		}
+		agentSessionMentionedMentionedBy: mentionedBy
+		agentSessionMentionedActionId: actionId
 	}
 }

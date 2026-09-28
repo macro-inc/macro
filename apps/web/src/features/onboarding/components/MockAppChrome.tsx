@@ -1,15 +1,10 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import { getIconConfig } from '@core/component/EntityIcon';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import MacroIcon from '@icon/macro-logo.svg';
-import { AnimatedChannelIcon } from '@icon/wide-channel';
-import { AnimatedEmailIcon } from '@icon/wide-email';
-import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
-import { AnimatedFolderIcon } from '@icon/wide-folder';
-import { AnimatedGearIcon } from '@icon/wide-gear';
-import { AnimatedPlusIcon } from '@icon/wide-plus';
-import { AnimatedStarIcon } from '@icon/wide-star';
-import { AnimatedTaskIcon } from '@icon/wide-task';
+import GearIcon from '@phosphor/gear.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { cn, HoverCard } from '@ui';
 import {
   createSignal,
@@ -30,37 +25,37 @@ const MOCK_SIDEBAR_LINKS = [
   {
     id: 'agents',
     label: 'Agents',
-    icon: AnimatedStarIcon,
+    icon: getIconConfig('agent').icon,
     hotkey: 'a',
   },
   {
     id: 'mail',
     label: 'Emails',
-    icon: AnimatedEmailIcon,
+    icon: getIconConfig('email').icon,
     hotkey: 'e',
   },
   {
     id: 'documents',
     label: 'Documents',
-    icon: AnimatedFileMdIcon,
+    icon: getIconConfig('md').icon,
     hotkey: 'd',
   },
   {
     id: 'tasks',
     label: 'Tasks',
-    icon: AnimatedTaskIcon,
+    icon: getIconConfig('task').icon,
     hotkey: 't',
   },
   {
     id: 'channels',
     label: 'Channels',
-    icon: AnimatedChannelIcon,
+    icon: getIconConfig('channel').icon,
     hotkey: 'c',
   },
   {
     id: 'folders',
     label: 'Folders',
-    icon: AnimatedFolderIcon,
+    icon: getIconConfig('project').icon,
     hotkey: 'f',
   },
 ] satisfies {
@@ -180,7 +175,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
             }}
             title="Create"
           >
-            <AnimatedPlusIcon />
+            <PlusIcon />
           </button>
           <hr class="border-ink/5 w-full my-1" />
           <button
@@ -271,7 +266,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
               onClick={(e) => e.preventDefault()}
               title="Settings"
             >
-              <AnimatedGearIcon />
+              <GearIcon />
             </button>
           </div>
         </div>

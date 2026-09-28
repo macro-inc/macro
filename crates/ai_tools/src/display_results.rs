@@ -1,8 +1,9 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
-use schemars::JsonSchema;
+use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 use crate::ToolServiceContext;
 
@@ -11,27 +12,52 @@ pub struct DisplayResultsResponse {
     pub message: String,
 }
 
-/// `displayResults` is intentionally a thin pass-through tool: the model emits
-/// a dynamic-UI "view" as the `view` argument, the FRONTEND renders that view
-/// from the tool call arguments (using the dynamic-ui component library), and the
-/// backend does no work — it just acknowledges so the model can continue.
+#[cfg(test)]
+mod test;
+
+/// A view rendered by the frontend directly from the tool-call arguments.
 ///
-/// The input is arbitrary JSON (`view`) because the dynamic-UI schema is owned by
-/// the frontend (a Zod schema) and conveyed to the model out-of-band rather than
-/// duplicated here in Rust.
-#[derive(Debug, Deserialize, JsonSchema)]
+/// The AI input schema is generated from the renderer's Zod schema. Keeping it
+/// on the tool means agent sessions do not depend on frontend instructions.
+#[derive(Debug, Deserialize)]
+pub struct DisplayResults {
+    /// Kept opaque so the renderer can handle partial and malformed views.
+    #[expect(dead_code, reason = "the frontend consumes the tool-call arguments")]
+    pub view: serde_json::Value,
+}
+
+// Frontend wire typegen must remain permissive: streamed arguments are incomplete
+// until the call finishes, and DashboardToolView owns validation/error rendering.
+// Preserve this contract separately from the model-facing recursive input schema.
+#[derive(JsonSchema)]
 #[schemars(
     title = "DisplayResults",
     description = "Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched."
 )]
-pub struct DisplayResults {
-    // The frontend renders the view from the tool-call arguments; the backend
-    // never reads it (hence allow(dead_code)).
-    #[allow(dead_code)]
+struct DisplayResultsWire {
+    #[expect(dead_code, reason = "only used to generate the frontend wire schema")]
     #[schemars(
         description = "The dynamic-UI view to render: an object with an optional `title` and a `widgets` array, per the provided dynamic-UI schema."
     )]
-    pub view: serde_json::Value,
+    view: serde_json::Value,
+}
+
+impl JsonSchema for DisplayResults {
+    fn schema_name() -> Cow<'static, str> {
+        "DisplayResults".into()
+    }
+
+    fn json_schema(generator: &mut SchemaGenerator) -> Schema {
+        if generator.settings().inline_subschemas {
+            // The AI pipeline requests a complete root schema. Its recursive
+            // widget refs and $defs must stay together at that root; nesting
+            // this schema below `view` would break their JSON-pointer targets.
+            serde_json::from_str(include_str!("display_results/schema.generated.json"))
+                .expect("the generated DisplayResults tool schema must be valid JSON Schema")
+        } else {
+            DisplayResultsWire::json_schema(generator)
+        }
+    }
 }
 
 impl ToolAnnotated for DisplayResults {

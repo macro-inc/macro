@@ -18,6 +18,7 @@ use model::{
     document::{DocumentBasic, FileType, response::LocationResponseData},
     response::{ErrorResponse, GenericErrorResponse},
 };
+use model_owner::Owner;
 use s3_key::build_temp_docx_key;
 
 use models_permissions::share_permission::access_level::ViewAccessLevel;
@@ -87,7 +88,7 @@ pub async fn handler(
             _ => {
                 export_basic_document(
                     &state,
-                    document_context.owner.as_ref(),
+                    &document_context.owner,
                     &document_context.document_id,
                     file_type,
                 )
@@ -126,7 +127,7 @@ pub async fn handler(
 /// Wrapper for get_presigned_url_by_type to export basic documents
 async fn export_basic_document(
     ctx: &ApiContext,
-    owner: &str,
+    owner: &Owner,
     document_id: &str,
     file_type: FileType,
 ) -> anyhow::Result<String> {

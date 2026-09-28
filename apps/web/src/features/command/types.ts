@@ -1,7 +1,6 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { HotkeyRegistrationOptions } from '@core/hotkey/types';
-import type { Component } from 'solid-js';
 
 /**
  * What a create-menu entry makes.
@@ -12,14 +11,13 @@ import type { Component } from 'solid-js';
  * than in `BlockAliasRegistry`, where it would leak into `fileTypeToBlockName`,
  * split content types and `NonDocumentBlockTypes`.
  */
-export type CreatableName = BlockName | BlockAlias | 'reminder';
+export type CreatableName = BlockName | BlockAlias | 'reminder' | 'initiative';
 
 export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
   label: string;
   launcherHint?: string;
   blockName: CreatableName;
   altHotkeyToken?: HotkeyToken;
-  animatedIcon?: Component<{ triggerAnimation?: boolean }>;
   /**
    * Whether the entry is available at all, for one behind a feature flag.
    *

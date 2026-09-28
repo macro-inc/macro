@@ -4,6 +4,7 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { AgentSessionFilters } from './agentSessionFilters';
 import type { CalendarEventFilters } from './calendarEventFilters';
 import type { CallFilters } from './callFilters';
 import type { ChannelFilters } from './channelFilters';
@@ -12,7 +13,9 @@ import type { ChatFilters } from './chatFilters';
 import type { CrmCompanyFilters } from './crmCompanyFilters';
 import type { DocumentFilters } from './documentFilters';
 import type { EmailFilters } from './emailFilters';
+import type { EntityFiltersFavoritesOnly } from './entityFiltersFavoritesOnly';
 import type { ForeignEntityFilters } from './foreignEntityFilters';
+import type { InitiativeFilters } from './initiativeFilters';
 import type { ProjectFilters } from './projectFilters';
 import type { PropertyFilter } from './propertyFilter';
 import type { ReminderFilters } from './reminderFilters';
@@ -22,6 +25,8 @@ import type { TagFilterMode } from './tagFilterMode';
  * a bundle of all of the filters for each entity type
  */
 export interface EntityFilters {
+  /** the bundled [AgentSessionFilters] */
+  agent_session_filters?: AgentSessionFilters;
   /** the bundled [CalendarEventFilters] */
   calendar_event_filters?: CalendarEventFilters;
   /** the bundled [CallFilters] */
@@ -38,8 +43,12 @@ export interface EntityFilters {
   document_filters?: DocumentFilters;
   /** the bundled [EmailFilters] */
   email_filters?: EmailFilters;
+  /** Restrict results to the authenticated viewer's favorites when true. */
+  favorites_only?: EntityFiltersFavoritesOnly;
   /** the bundled [ForeignEntityFilters] */
   foreign_entity_filters?: ForeignEntityFilters;
+  /** Initiative filters. Initiatives are opt-in. */
+  initiative_filters?: InitiativeFilters;
   /** the bundled [ProjectFilters] */
   project_filters?: ProjectFilters;
   /** property-based filters applied across entity types */

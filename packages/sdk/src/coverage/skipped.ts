@@ -11,6 +11,7 @@
 
 import type { Sdk as AgentHarnessSdk } from '../../generated/agent-harness/sdk.gen';
 import type { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
+import type { Sdk as CalendarSdk } from '../../generated/calendar/sdk.gen';
 import type { Sdk as CognitionSdk } from '../../generated/cognition/sdk.gen';
 import type { Sdk as ConnectionSdk } from '../../generated/connection/sdk.gen';
 import type { Sdk as ContactsSdk } from '../../generated/contacts/sdk.gen';
@@ -23,17 +24,31 @@ import type { Sdk as StaticFilesSdk } from '../../generated/static-files/sdk.gen
 import type { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 
-export const agentHarnessExcluded =
-  [] as const satisfies readonly (keyof AgentHarnessSdk)[];
+export const agentHarnessExcluded = [
+  // Claude Cloud sign-in is an app-internal auth flow, not SDK surface.
+  'complete',
+  'disconnect',
+  'start',
+  'status',
+  'loadAgentModelsHandler',
+  'previewAgentSessions',
+] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
-export const agentHarnessBacklog =
-  [] as const satisfies readonly (keyof AgentHarnessSdk)[];
+export const agentHarnessBacklog = [
+  'getAgentSessionPermissions',
+  'updateAgentSessionPermissions',
+] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const authExcluded = [
   'appleLogin',
+  'cancelCodexLogin',
+  'changePlan',
   'checkGithubLinkStatus',
   'checkGmailLinkStatus',
+  'configureCodex',
+  'createAiCreditCheckout',
   'createCheckoutSessionV2',
+  'createGtmInviteLink',
   'createInProgressLink',
   'createMergeRequest',
   'createPortalSession',
@@ -44,9 +59,14 @@ export const authExcluded = [
   'deleteTeam',
   'deleteTeamInviteHandler',
   'deleteUser',
+  'disconnectCodex',
   'enrichGithubPullRequests',
   'generateEmailLink',
+  'getAiBillingPlans',
+  'getAiBillingSummary',
+  'getCodexConnection',
   'getCursorApiKey',
+  'getGtmInviteOffer',
   'getLegacyUserPermissions',
   'getPermissions',
   'getReferralCode',
@@ -64,7 +84,9 @@ export const authExcluded = [
   'initOutlookLink',
   'inviteToTeam',
   'joinTeam',
+  'listCodexEnvironments',
   'listCursorModels',
+  'listGtmInviteLinks',
   'logout',
   'oauth2Callback',
   'oauthRedirect',
@@ -73,25 +95,32 @@ export const authExcluded = [
   'passwordlessLogin',
   'patchTeam',
   'patchTeamCrmSettings',
+  'patchTeamMemberPlan',
   'patchUserGroup',
   'patchUserOnboarding',
   'patchUserTutorial',
+  'pollCodexLogin',
   'postProfilePictures',
   'putCursorApiKey',
   'putCursorDefaultModel',
   'putProfilePicture',
   'putUserName',
+  'redeemGtmInviteLink',
   'refresh',
   'rejectInvitation',
   'removeUserFromTeam',
   'resendFusionauthVerifyUserEmail',
+  'resolveGtmInviteLink',
+  'revokeGtmInviteLink',
   'sendMobileWelcomeEmail',
   'sendReferralCode',
   'sessionCreation',
   'sessionLogin',
   'ssoLogin',
+  'startCodexLogin',
   'toggleTeamAutoJoinDomain',
   'toggleTeamNonAdminInvites',
+  'updateAiBillingOverage',
   'verifyEmailLink',
   'verifyFusionauthUserEmail',
   'verifyMergeRequest',
@@ -100,6 +129,14 @@ export const authExcluded = [
 export const authBacklog = [
   'macroApiToken',
 ] as const satisfies readonly (keyof AuthSdk)[];
+
+export const calendarExcluded = [
+  // Health probe is infra, not SDK surface.
+  'healthHandler',
+] as const satisfies readonly (keyof CalendarSdk)[];
+
+export const calendarBacklog =
+  [] as const satisfies readonly (keyof CalendarSdk)[];
 
 export const cognitionExcluded = [
   'addMcpServer',
@@ -179,20 +216,16 @@ export const emailExcluded = [
 export const emailBacklog = [
   'addDraftAttachment',
   'addForwardedAttachment',
-  'createCalendarEvent',
   'createDraft',
-  'deleteCalendarEvent',
   'deleteDraft',
   'deleteEmailFilter',
   'deleteScheduledDraft',
   'getScheduledMessages',
-  'listCalendars',
+  'getThreadCalendarInvitations',
   'listContacts',
   'listEmailFilters',
   'removeDraftAttachment',
   'removeForwardedAttachment',
-  'rsvpCalendarEvent',
-  'updateCalendarEvent',
   'upsertEmailFilter',
   'upsertScheduledMessage',
 ] as const satisfies readonly (keyof EmailSdk)[];
@@ -294,6 +327,10 @@ export const storageExcluded = [
   'jobProcessingResultHandler',
   'joinChannelByCode',
   'leaveOrEndCall',
+  // Joining and leaving live meetings are app session flows.
+  'meetingGuestJoin',
+  'meetingJoin',
+  'meetingLeave',
   'mentionPreviews',
   'patchViewHandler',
   'postChannelMessages',
@@ -302,6 +339,8 @@ export const storageExcluded = [
   'postItemsSoupAstGrouped',
   'removeBotFromChannelByBot',
   'resolveChannelMessage',
+  // Composer dictation is an app-internal, user-only upload flow.
+  'transcribeDictation',
   'uploadExtractFolderHandler',
   'uploadFolderHandler',
   'upsertHistoryHandler',
@@ -309,18 +348,37 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
+  'approveHarnessPairing',
+  'assignInitiativeTasks',
+  'claimHarnessPairing',
+  'createAgent',
   'createAnchor',
   'createDocument',
   'createEntityMention',
+  'createHarnessPairing',
+  'createInitiative',
   'createReminder',
   'createUserApiKey',
   'deleteAnchor',
   'deleteEntityMention',
+  'deleteHarness',
+  'deleteInitiative',
+  'deleteSelfHarness',
   'deleteReminder',
   'deleteUserApiKey',
   'editAnchor',
   'editCallTranscript',
   'editThreadV2',
+  'entityMessageCreate',
+  'entityMessageDeleteMessage',
+  'entityMessageDeleteThread',
+  'entityMessageEdit',
+  'entityMessageGetMessage',
+  'entityMessageGetThread',
+  'entityMessageLegacy',
+  'entityMessagePatchThread',
+  'entityMessageReact',
+  'entityMessageTyping',
   'getActivity',
   'getDocumentAnchors',
   'getDocumentByTeamSlug',
@@ -330,15 +388,40 @@ export const storageBacklog = [
   'getEntityPermission',
   'getProjectPermissionsV2',
   'getProjectUserAccessLevel',
+  'getHarnessPairing',
+  'getInitiative',
+  'getSelfHarness',
   'getReminder',
+  'listAgents',
+  'listHarnessAgents',
+  'listHarnessSessions',
+  'listHarnesses',
+  'listInitiatives',
   'listOccurrences',
   'listReminders',
+  'listTeamOutOfOffice',
   'listUserApiKeys',
+  'messageTimeline',
+  // Meeting management uses the generated client.
+  'meetingCancel',
+  'meetingCreate',
+  'meetingInvite',
+  'meetingInvitePermissions',
+  'meetingInviteUsers',
+  'meetingList',
+  'meetingListActive',
+  'meetingLookup',
+  'meetingShare',
+  'meetingUpdate',
   'postActivity',
   'presaveDocumentHandler',
   'saveDocumentHandler',
+  'setChannelPicture',
   'simpleSave',
   'toggleShareWithTeam',
+  'unassignInitiativeTask',
+  'updateAgent',
+  'updateInitiative',
   'updateReminder',
   'validateDocumentPermissionsToken',
 ] as const satisfies readonly (keyof StorageSdk)[];

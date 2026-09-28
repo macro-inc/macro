@@ -1,0 +1,53 @@
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":20,"method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"old"}]}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"old answer"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":20,"result":{"stopReason":"end_turn"}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":1,"method":"session/load","params":{"sessionId":"s"}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"discard failed"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"partial"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"failed"}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"late discarded replay"}}}}}
+{"direction":"to_server","content":{"type":"event","event":"acp_ready"}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"late discarded handshake replay"}}}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":0,"method":"initialize","params":{"sessionId":"s"}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"late discarded handshake replay"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":0,"result":{}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":1,"method":"session/load","params":{"sessionId":"s"}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"question"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"thinking"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"tool","title":"Read file","kind":"read","status":"pending","rawInput":{"path":"file.txt"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"tool","status":"completed","rawOutput":"contents"}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"answer"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":1,"result":{}}}
+{"direction":"to_server","content":{"type":"event","event":"acp_ready"}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":0,"method":"initialize","params":{"sessionId":"s"}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":0,"result":{}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":1,"method":"session/load","params":{"sessionId":"s"}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"question"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"thinking"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"tool","title":"Read file","kind":"read","status":"pending","rawInput":{"path":"file.txt"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"tool","status":"completed","rawOutput":"contents"}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"answer"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":1,"result":{}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":2,"method":"session/resume","params":{"sessionId":"s"}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":2,"result":{}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":21,"method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"next"}]}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"continued"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":21,"result":{"stopReason":"end_turn"}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":1,"method":"session/load","params":{"sessionId":"s"}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"discard disconnected"}}}}}
+{"direction":"to_server","content":{"type":"event","event":"disconnected"}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"late discarded replay"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":1,"result":{}}}
+{"direction":"to_server","content":{"type":"event","event":"acp_ready"}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"late discarded handshake replay"}}}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":0,"method":"initialize","params":{"sessionId":"s"}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"late discarded handshake replay"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":0,"result":{}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":1,"method":"session/load","params":{"sessionId":"s"}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"discard incomplete"}}}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":1}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"late abandoned replay"}}}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":7,"method":"session/load","params":{"sessionId":"s","cwd":"/","mcpServers":[]}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"malformed candidate"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":7,"result":false}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"late malformed replay"}}}}}

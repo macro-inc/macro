@@ -128,6 +128,7 @@ pub fn run(args: &LocalE2eArgs) -> Result<()> {
             traces: TracesBackend::Off,
             with_chrome: false,
             verbose: false,
+            no_snapshot: false,
             with_cf_tunnel: false,
         },
         ..stack::UpArgs::default()

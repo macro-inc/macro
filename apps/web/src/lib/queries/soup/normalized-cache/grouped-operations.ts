@@ -126,6 +126,17 @@ export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
         continue;
       }
 
+      // The insert gate only decides admission of rows the page doesn't hold
+      // yet — rows already admitted keep the full membership sync.
+      if (
+        meta.insertFilter &&
+        !meta.insertFilter(entity) &&
+        !(entityId in page.items)
+      ) {
+        pages.push(page);
+        continue;
+      }
+
       const next = syncMembership(
         page,
         entityId,
@@ -172,6 +183,16 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
 
     const meta = getSoupQueryMeta(query.meta);
     if (!meta.groupBy || meta.groupKey == null) continue;
+
+    // The insert gate only decides admission of rows the query doesn't hold
+    // yet — rows already admitted keep the full membership sync.
+    if (
+      meta.insertFilter &&
+      !meta.insertFilter(entity) &&
+      !prev.pages.some((page) => page.group.itemIds.includes(entityId))
+    ) {
+      continue;
+    }
 
     const filter = meta.itemFilter;
     const nextGroupKeys =
@@ -277,18 +298,24 @@ export function insertGroupedPage(
 }
 
 /** Inserts an item into the first page of any expanded group query it matches. */
-export function insertGroupQueries(item: SoupApiItem, itemId: string) {
+export function insertGroupQueries(
+  item: SoupApiItem,
+  itemId: string,
+  keyFilter?: (key: QueryKey) => boolean
+) {
   const queries = queryClient.getQueryCache().findAll({
     queryKey: soupKeys.groupedGroup._def,
   });
 
   for (const query of queries) {
+    if (keyFilter && !keyFilter(query.queryKey)) continue;
     const prev = query.state.data as GroupedGroupInfiniteData | undefined;
     if (!prev?.pages?.length) continue;
 
     const meta = getSoupQueryMeta(query.meta);
     const filter = meta.itemFilter;
     if (filter && !filter(item)) continue;
+    if (meta.insertFilter && !meta.insertFilter(item)) continue;
 
     if (!meta.groupBy || meta.groupKey == null) continue;
 
@@ -299,8 +326,12 @@ export function insertGroupQueries(item: SoupApiItem, itemId: string) {
     }
     if (!targetKeys.includes(meta.groupKey)) continue;
 
+    // Continuation pages hold their own itemIds, so check them all — a
+    // restore of an entity sitting on a later page must not duplicate it.
+    if (prev.pages.some((page) => page.group.itemIds.includes(itemId)))
+      continue;
+
     const firstPage = prev.pages[0];
-    if (firstPage.group.itemIds.includes(itemId)) continue;
 
     query.setData(
       {

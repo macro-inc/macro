@@ -627,6 +627,15 @@ queue! {
             dev: "calendar-reminder-dispatch-queue-dev",
             prod: "calendar-reminder-dispatch-queue-prod",
         },
+        /// Queue for the Google Calendar sync backfill process (calendar_service).
+        ///
+        /// Calendar keeps its own backfill queue rather than sharing the email
+        /// backfill queue, so its sync deploy lifecycle is independent of email.
+        pub CalendarServiceBackfillQueue {
+            local: "calendar-service-backfill-queue",
+            dev: "calendar-service-backfill-queue-dev",
+            prod: "calendar-service-backfill-queue-prod",
+        },
         /// Queue for the organization retention handler
         /// (organization_retention_trigger `ORGANIZATION_RETENTION_QUEUE`).
         pub OrganizationRetentionQueue {

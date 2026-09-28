@@ -10,16 +10,19 @@ mod metadata;
 mod unsubscribe;
 pub use device::DeviceType;
 pub use metadata::{
-    AiResponseMetadata, CalendarEventReminderMetadata, CallStartedMetadata, ChannelInviteMetadata,
+    AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent,
+    AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata, AiResponseMetadata,
+    CalendarEventReminderMetadata, CallStartedMetadata, ChannelInviteMetadata,
     ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
-    CommentedOnDocumentMetadata, CommonChannelMetadata, DocumentMentionMetadata, GithubPrCheckRun,
-    GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
-    GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
-    GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
-    InboxReauthRequiredMetadata, InviteToTeamMetadata, ItemSharedMetadata,
-    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
-    NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    TaskAssignedMetadata,
+    CommentedOnDocumentMetadata, CommonChannelMetadata, CrmDiscussionMetadata, CrmDiscussionReason,
+    DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
+    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
+    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
+    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    InitiativeDiscussionMetadata, InitiativeDiscussionReason, InviteToTeamMetadata,
+    ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
+    NotificationDocumentSubType, NotificationTitle, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -185,6 +188,12 @@ define_notif_event!(
         /// Someone commented on a document the user owns.
         CommentedOnDocument(CommentedOnDocumentMetadata),
 
+        /// Someone commented, replied, or mentioned the recipient on a project.
+        InitiativeDiscussion(InitiativeDiscussionMetadata),
+
+        /// Someone commented, replied, or mentioned the recipient on a CRM company or contact.
+        CrmDiscussion(CrmDiscussionMetadata),
+
         /// The user was invited to a channel.
         ChannelInvite(ChannelInviteMetadata),
 
@@ -243,6 +252,15 @@ define_notif_event!(
 
         /// A review was submitted on the user's GitHub pull request.
         GithubPrReview(GithubPrReview),
+
+        /// An agent finished a turn with nothing queued behind it.
+        AgentSessionSettled(AgentSessionSettledMetadata),
+
+        /// An agent is blocked on a question for the session's owner.
+        AgentSessionWaitingForInput(AgentSessionWaitingForInputMetadata),
+
+        /// The user was named in a prompt to an agent session.
+        AgentSessionMentioned(AgentSessionMentionedMetadata),
     }
 );
 
@@ -263,6 +281,8 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::RepliedToDocumentCommentThread(m) => m.format_title(sender_id),
             NotifEvent::CommentedOnDocument(m) => m.format_title(sender_id),
+            NotifEvent::InitiativeDiscussion(m) => m.format_title(sender_id),
+            NotifEvent::CrmDiscussion(m) => m.format_title(sender_id),
             NotifEvent::ChannelInvite(m) => m.format_title(sender_id),
             NotifEvent::ChannelMessageSend(channel_message_send_metadata) => {
                 channel_message_send_metadata.format_title(sender_id)
@@ -304,6 +324,9 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::GithubPrReview(github_pr_review) => {
                 github_pr_review.format_title(sender_id)
             }
+            NotifEvent::AgentSessionSettled(m) => m.format_title(sender_id),
+            NotifEvent::AgentSessionWaitingForInput(m) => m.format_title(sender_id),
+            NotifEvent::AgentSessionMentioned(m) => m.format_title(sender_id),
         }
     }
 
@@ -323,6 +346,8 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::RepliedToDocumentCommentThread(m) => m.format_body(sender_id),
             NotifEvent::CommentedOnDocument(m) => m.format_body(sender_id),
+            NotifEvent::InitiativeDiscussion(m) => m.format_body(sender_id),
+            NotifEvent::CrmDiscussion(m) => m.format_body(sender_id),
             NotifEvent::ChannelInvite(m) => m.format_body(sender_id),
             NotifEvent::ChannelMessageSend(channel_message_send_metadata) => {
                 channel_message_send_metadata.format_body(sender_id)
@@ -362,6 +387,9 @@ impl NotificationTitle for NotifEvent {
                 github_pr_mention.format_body(sender_id)
             }
             NotifEvent::GithubPrReview(github_pr_review) => github_pr_review.format_body(sender_id),
+            NotifEvent::AgentSessionSettled(m) => m.format_body(sender_id),
+            NotifEvent::AgentSessionWaitingForInput(m) => m.format_body(sender_id),
+            NotifEvent::AgentSessionMentioned(m) => m.format_body(sender_id),
         }
     }
 }

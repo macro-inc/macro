@@ -1,16 +1,17 @@
 /**
  * A control the user issued mid-session: model switch, compaction, stop.
  *
- * The outcome is half the message. A runtime that refuses a control answers
+ * A rejection is half the message. A runtime that refuses a control answers
  * with a JSON-RPC error the fold records as `rejected` — most often a model
- * the harness advertised but cannot actually run — and a line that read
- * "Model set to X" either way would be reporting a change that never
- * happened. So each control names all three states, and a rejection carries
- * the runtime's own words.
+ * the harness advertised but cannot actually run — and that line has to say
+ * so, carrying the runtime's own words. Everything short of a rejection
+ * reads as done: the fold speculates the control, so naming a separate
+ * in-progress state would only make the switch look slower than it is.
  */
 
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import type { MessagePart } from '@service-agent-fold/generated/types';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import { ActionLine } from '../../ui';
 
 type ControlPartData = Extract<MessagePart, { kind: 'control' }>;
@@ -19,17 +20,15 @@ type ControlPartData = Extract<MessagePart, { kind: 'control' }>;
 function label(part: ControlPartData): string {
   return (
     match([part.control, part.outcome] as const)
+      // A model switch reads as done the instant it is issued; only a
+      // runtime refusal, after the fact, reads differently.
       .with(
-        [{ kind: 'set_model' }, { kind: 'pending' }],
-        ([control]) => `Setting model to ${control.model}…`
-      )
-      .with(
-        [{ kind: 'set_model' }, { kind: 'accepted' }],
-        ([control]) => `Model set to ${control.model}`
+        [{ kind: 'set_model' }, { kind: P.union('pending', 'accepted') }],
+        ([control]) => `Model set to ${modelLabel(control.model)}`
       )
       .with(
         [{ kind: 'set_model' }, { kind: 'rejected' }],
-        ([control]) => `Couldn't switch to ${control.model}`
+        ([control]) => `Couldn't switch to ${modelLabel(control.model)}`
       )
       .with(
         [{ kind: 'compact' }, { kind: 'pending' }],

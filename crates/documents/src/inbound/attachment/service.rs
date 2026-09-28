@@ -201,6 +201,14 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentAttachmentService
                 FileType::from_str(ft).map_err(|_| AttachmentError::UnsupportedFileType(ft.clone()))
             })?;
 
+        if let Some(context) = crate::domain::content::spreadsheet_attachment_context(&document) {
+            return Ok(AttachmentContent {
+                reference: EntityType::Document.with_entity_string(id.to_string()),
+                name: Some(document.document_name),
+                content: NonEmpty::one(AttachmentPart::Content(context)),
+            });
+        }
+
         let content = match file_type.macro_app_path() {
             FileAssociation::Pdf(_) | FileAssociation::Write(_) => {
                 let text = self

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, state)\n        VALUES ($1, $2, NOW(), NULL, 'unseen'), ($1, $3, NOW(), NOW(), 'done')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bb9c322f601c8672e364dc9e2700de834ed8b6abf3330c251b085538739db7cb"
+}

@@ -1,6 +1,6 @@
 #![recursion_limit = "256"]
 
-use ai_tools::{all_tools, build_tool_service_context_from_env};
+use ai_tools::{AiHost, build_tool_service_context_from_env, tools_for};
 use anyhow::Context;
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::config::Config;
@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
     let event_broker_tracker = TaskTracker::new();
     let tool_context =
         build_tool_service_context_from_env(pool.clone(), event_broker_tracker.clone()).await?;
-    let tools = all_tools();
+    let tools = tools_for(AiHost::Chat);
     let memory_repo = PgMemoryRepo::new(pool);
     let memory_service = MemoryServiceImpl::new(memory_repo, tool_context, tools);
 

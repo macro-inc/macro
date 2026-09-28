@@ -7,7 +7,9 @@
         "crates/agent_fold/**",
         "crates/agent_session/**",
         "crates/agent_trigger/**",
-        "crates/agent_runtime_protocol/**"
+        "crates/agent_runtime_protocol/**",
+        "crates/agent_preview/**",
+        "crates/agent_egress/**"
       ],
       "stack_path": "infra/stacks/agent-harness-service/**",
       "deploy_binaries": [
@@ -56,6 +58,15 @@
       "stack_path": "infra/stacks/call-recording/**",
       "deploy_lambdas": [
         "call_recording_preview_handler"
+      ]
+    },
+    "calendar-service": {
+      "source_paths": [
+        "services/calendar_service/**"
+      ],
+      "stack_path": "infra/stacks/calendar-service/**",
+      "deploy_binaries": [
+        "calendar_service"
       ]
     },
     "connection-gateway": {
@@ -113,6 +124,7 @@
         "services/document_storage_service/**",
         "crates/call/**",
         "crates/github/**",
+        "crates/initiative/**",
         "crates/reminders/**",
         "services/delete_chat_handler/**",
         "services/docx_unzip_handler/**",
@@ -285,6 +297,17 @@
         "crates/macro_event_topics/**"
       ],
       "stack_path": "infra/stacks/kafka-cluster/**"
+    },
+    "preview-gateway": {
+      "bootstrap_pending": "Requires an isolated preview domain, Pulumi stacks, and Doppler configs; see services/preview_gateway/README.md",
+      "source_paths": [
+        "services/preview_gateway/**",
+        "crates/agent_preview/**"
+      ],
+      "stack_path": "infra/stacks/preview-gateway/**",
+      "deploy_binaries": [
+        "preview_gateway"
+      ]
     }
   }
 }

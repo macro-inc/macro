@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM \"PdfPlaceableCommentAnchor\" WHERE root_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c5f8b3c0005ccae8e40bfa97482a964a57273339b0f20723d2b2b6b4ca7cf9c8"
+}

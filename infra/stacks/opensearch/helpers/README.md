@@ -42,11 +42,79 @@ that can be swapped without a code deploy.
 
 All migration scripts default to `DRY_RUN=true`; pass `DRY_RUN=false` to apply.
 
+## Manual provisioning
+
+Provision indices and aliases manually using the canonical declarations in
+`create_indices.ts`, and verify them before deploying their consumers. Deployment
+does not create or reconcile indices.
+
+Normal agent-session parent and bulk writes set `require_alias=true`. A missing
+alias fails the write instead of automatically creating a bare index with an
+inferred mapping. Explicit backfill `index_override` requests may still target
+a physical index. This guard does not provision a schema or recover events
+already dropped by the consumer.
+
+## One-time repair: incorrectly auto-created agent-session index
+
+This is an operator procedure, separate from deployment. Confirm that
+`agent_sessions` is a bare physical index with the incorrect mapping, not an
+existing alias. If it is already an alias, inspect its target before proceeding.
+Configure the intended cluster's usual `OPENSEARCH_*` credentials and use the
+production VPC connection/tunnel when appropriate.
+
+Create the versioned destination from the canonical declaration and verify it:
+
+```sh
+ENVIRONMENT=prod INDEX=agent_sessions bun scripts/create_indices.ts
+ENVIRONMENT=prod INDEX=agent_sessions DRY_RUN=false bun scripts/create_indices.ts
+ENVIRONMENT=prod INDEX=agent_sessions bun scripts/verify_mappings.ts
+```
+
+Inspect `GET /agent_sessions_v1/_mapping` against `AGENT_SESSIONS_V1_BODY` in
+`create_indices.ts`: the existing verifier checks field presence and types,
+not all mapping parameters. Confirm `dynamic:false`, the
+`agent_session_relation` join from `agent_session` to `message`, field-alias
+paths, and date formats before proceeding.
+
+A bare index blocks alias creation, so creation deliberately leaves the alias
+for this manual cutover. If the destination already contains data, inspect it
+before deciding to use it. Wait for `agent_sessions_v1` health to be at least
+yellow (all primary shards available), and recheck the source/alias state.
+
+For a future-writes-only repair, submit this **single** request through the
+OpenSearch API after explicitly accepting deletion of the old search projection:
+
+```http
+POST /_aliases
+{
+  "actions": [
+    { "remove_index": { "index": "agent_sessions" } },
+    { "add": { "index": "agent_sessions_v1", "alias": "agent_sessions", "is_write_index": true } }
+  ]
+}
+```
+
+Do not issue a separate DELETE followed by alias creation: a writer could
+recreate the bare index between those operations. The atomic request deletes
+the old index and its search data; Postgres session data is untouched. It does
+not reindex or backfill. The generic `reindex_with_alias_swap.ts` helper copies
+old documents, so it is not a substitute for this no-copy operation.
+
+Require an acknowledged response, then run `verify_mappings.ts` with
+`INDEX=agent_sessions`. Inspect `GET /_alias/agent_sessions`: its sole target
+must be `agent_sessions_v1` and `is_write_index` must be true or omitted, never
+false. Create a new session, complete a turn, and verify its title and unique
+phrases from both authors are searchable.
+Check indexing errors. In-flight reconciles can straddle the cutover; backfill
+those sessions and any desired historical sessions using the existing
+`POST /internal/backfill/agent-sessions` endpoint. Record the repair outcome in
+the incident runbook.
+
 ## Adding a field to an existing index
 
 The index bodies in `create_indices.ts` are the source of truth for mappings.
 Every body is `dynamic: 'false'`, so a field the service writes but the live
-mapping lacks is dropped silently — and a search over it matches nothing
+mapping lacks remains in `_source` but is not indexed — and a search over it matches nothing
 rather than erroring. That is how `call_records_v2` shipped without
 `properties`/`name` and left tag filters on calls returning empty (macro-2731).
 

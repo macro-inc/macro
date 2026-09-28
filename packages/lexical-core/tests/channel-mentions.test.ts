@@ -72,3 +72,11 @@ describe('extractChannelMentionsFromMarkdown', () => {
     ]);
   });
 });
+
+it('preserves authored groups for server-side recipient expansion', () => {
+  expect(
+    extractChannelMentionsFromMarkdown(
+      '<m-group-mention>{"groupAlias":"here"}</m-group-mention>'
+    )
+  ).toEqual([{ entityType: 'group', entityId: 'here' }]);
+});

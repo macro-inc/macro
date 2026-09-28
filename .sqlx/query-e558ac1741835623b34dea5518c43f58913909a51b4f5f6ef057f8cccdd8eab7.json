@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, t.\"documentId\" AS document_id FROM \"Comment\" c\n           JOIN \"Thread\" t ON t.id = c.\"threadId\"\n           WHERE t.\"documentId\" = ANY($1)\n             AND NOT EXISTS (SELECT 1 FROM migrated_comment_id m WHERE m.comment_id = c.id)\n           ORDER BY c.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "document_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "e558ac1741835623b34dea5518c43f58913909a51b4f5f6ef057f8cccdd8eab7"
+}

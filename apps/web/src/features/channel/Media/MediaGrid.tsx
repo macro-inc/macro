@@ -29,17 +29,21 @@ function MessageImageTile(props: {
   return (
     <button
       type="button"
-      class="relative flex rounded-2xl"
+      class="relative flex rounded-2xl border border-edge"
+      style={{
+        width: dimensions() ? `${dimensions()!.width}px` : undefined,
+        'max-width': '100%',
+      }}
       onClick={props.onOpen}
       aria-label="Open image viewer"
     >
       <MediaImage.Image
         src={props.item.src}
         previewSrc={props.item.previewSrc}
-        class="max-h-[80vh] w-full select-none rounded-2xl border border-edge object-contain"
+        class="max-h-[80vh] w-full select-none rounded-2xl object-contain"
         width={dimensions()?.width ?? props.item.width ?? undefined}
         height={dimensions()?.height ?? props.item.height ?? undefined}
-        fallback={<MediaImage.Fallback dims={dimensions()} />}
+        fallback={<MediaImage.Fallback fill={!!dimensions()} />}
         style={{
           ...(dimensions()
             ? {

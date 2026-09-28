@@ -102,6 +102,12 @@ pub fn generate(
                 instance.port(Port::AgentHarnessEgress)
             ));
         }
+        if mode.spec().runs_local_infra && svc.compose_name == "preview_gateway" {
+            if instance.is_default() {
+                ports.push(format!("{}:8080", instance.port(Port::PreviewControl)));
+            }
+            ports.push(format!("{}:2222", instance.port(Port::PreviewSsh)));
+        }
         if !ports.is_empty() {
             s.ports = dct::Ports::Short(ports);
         }
@@ -111,7 +117,12 @@ pub fn generate(
     // The reverse proxy is the frontend's single origin in every mode, and
     // LocalStack runs in every mode (dev's `dev_personal` notification queue
     // lives there too).
-    add_proxy_service(&mut services, instance, static_frontend);
+    add_proxy_service(
+        &mut services,
+        instance,
+        static_frontend,
+        mode.spec().runs_local_infra,
+    );
     add_localstack_service(&mut services, instance);
     // The rest of the local infra (FusionAuth, Mailpit, per-instance Postgres/
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
@@ -233,6 +244,28 @@ fn add_localstack_service(
             // shows up as `"kms": "disabled"` on its health endpoint rather
             // than as a connection error.
             environment: kv(&[("SERVICES", "sqs,dynamodb,s3,kms")]),
+            // Probe the readiness endpoint over loopback instead of the
+            // image's own healthcheck, which shells out to `localstack status
+            // services`. That CLI resolves `localhost.localstack.cloud`, a
+            // public name; where DNS cannot reach it the probe takes ~40s
+            // against its 10s timeout, so the container never reports healthy
+            // and `compose up --wait` fails the whole stack even though
+            // LocalStack is serving fine. Overriding only the probe keeps
+            // `LOCALSTACK_HOST` unset, so the hostname LocalStack advertises
+            // in returned SQS/S3 URLs stays `localstack`, which is how every
+            // other container addresses it.
+            healthcheck: Some(dct::Healthcheck {
+                test: Some(dct::HealthcheckTest::Multiple(vec![
+                    "CMD-SHELL".to_string(),
+                    "curl -fsS http://localhost:4566/_localstack/health".to_string(),
+                ])),
+                interval: Some("10s".to_string()),
+                timeout: Some("10s".to_string()),
+                retries: 5,
+                start_period: Some("180s".to_string()),
+                start_interval: Some("2s".to_string()),
+                ..Default::default()
+            }),
             ports: dct::Ports::Short(vec![format!("{}:4566", instance.port(Port::LocalStack))]),
             networks: net_aliases(&[
                 ("databases", &["localstack"]),
@@ -251,6 +284,7 @@ fn add_proxy_service(
     services: &mut IndexMap<String, Option<dct::Service>>,
     instance: &Instance,
     static_frontend: bool,
+    previews: bool,
 ) {
     let proxy_port = instance.port(Port::Proxy);
     let mut volumes = vec![dct::Volumes::Simple(format!(
@@ -263,12 +297,20 @@ fn add_proxy_service(
             super::frontend::static_dir(instance).display()
         )));
     }
+    let mut ports = vec![format!("{proxy_port}:{proxy_port}")];
+    if previews {
+        ports.push(format!("{}:8443", instance.port(Port::PreviewHttps)));
+        volumes.push(dct::Volumes::Simple(format!(
+            "{}:/data",
+            instance.artifact_dir().join("preview-caddy-data").display()
+        )));
+    }
     services.insert(
         "proxy".to_string(),
         Some(dct::Service {
             image: Some(CADDY_IMAGE.to_string()),
             environment: kv(&[("PROXY_PORT", &proxy_port.to_string())]),
-            ports: dct::Ports::Short(vec![format!("{proxy_port}:{proxy_port}")]),
+            ports: dct::Ports::Short(ports),
             volumes,
             networks: dct::Networks::Simple(vec!["services".to_string(), "databases".to_string()]),
             ..Default::default()

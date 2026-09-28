@@ -1,12 +1,15 @@
 //! The service itself: verify, resolve, stamp, forward.
 
-use http::Uri;
 use http::header::AUTHORIZATION;
+use http::{Method, Uri};
+use http_body_util::{BodyExt, Full};
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{
-    EgressTarget, ProxyRequest, ProxyResponse, SessionToken, ensure_method_allowed, is_macro_staff,
-    sanitize_request_headers, sanitize_response_headers,
+    EgressTarget, MAX_MCP_REQUEST_BYTES, McpDestination, McpResolution, McpServerSlug,
+    ProxyRequest, ProxyResponse, SessionToken, TOOLS_CALL_METHOD, ensure_method_allowed,
+    is_macro_staff, not_connected_tool_result, peek_json_rpc, sanitize_request_headers,
+    sanitize_response_headers,
 };
 use crate::domain::ports::{Forwarder, GithubTokens, McpCredentials, SessionAuthority};
 
@@ -32,6 +35,7 @@ pub struct EgressServiceImpl<Sessions, Credentials, Tokens, Forward> {
     credentials: Credentials,
     tokens: Tokens,
     forward: Forward,
+    preview_mcp: Option<(url::Url, bool)>,
 }
 
 impl<Sessions, Credentials, Tokens, Forward>
@@ -42,6 +46,22 @@ where
     Tokens: GithubTokens,
     Forward: Forwarder,
 {
+    /// Configure the fixed internal preview MCP destination. Cleartext is local-only.
+    pub fn with_preview_mcp(
+        mut self,
+        url: url::Url,
+        local_cleartext: bool,
+    ) -> Result<Self, EgressError> {
+        if !local_cleartext {
+            crate::domain::model::UpstreamCall::bearer(
+                url.clone(),
+                crate::domain::model::BearerToken::new("validation"),
+            )?;
+        }
+        self.preview_mcp = Some((url, local_cleartext));
+        Ok(self)
+    }
+
     /// Build the service over its adapters.
     pub fn new(
         sessions: Sessions,
@@ -54,6 +74,7 @@ where
             credentials,
             tokens,
             forward,
+            preview_mcp: None,
         }
     }
 }
@@ -89,11 +110,11 @@ where
         span.record("session", tracing::field::display(&grant.session));
         span.record("owner", tracing::field::display(&grant.owner));
 
-        // Staff-only for now, checked here so every target - git, connected
-        // MCP servers, Macro's own - passes one gate. The refusal names
-        // itself ("not Macro staff") so the sandbox can report an actionable
-        // reason; the reason is our own static wording, never the request's.
-        if !is_macro_staff(&grant.owner) {
+        // Workspace and Git egress remain staff-only. Session-scoped preview tools
+        // are available to every session owner, like the internal MCP tools.
+        if !matches!(&target, EgressTarget::McpServer(McpDestination::Preview))
+            && !is_macro_staff(&grant.owner)
+        {
             tracing::warn!(owner = %grant.owner, "refusing egress for a session owned outside macro.com");
             return Err(EgressError::Unauthenticated(
                 "the session owner is not Macro staff",
@@ -101,15 +122,56 @@ where
         }
 
         let call = match &target {
-            EgressTarget::McpServer(destination) => {
-                self.credentials.resolve(&grant.owner, destination).await?
+            EgressTarget::McpServer(McpDestination::Preview) => {
+                let (url, local) = self.preview_mcp.as_ref().ok_or_else(|| {
+                    EgressError::Unroutable("preview service is not configured".into())
+                })?;
+                // Unlike user tools, this tool must retain the authenticated session identity.
+                // The destination is deployment configuration, never supplied by an agent.
+                let bearer = crate::domain::model::BearerToken::new(token.as_str());
+                if *local {
+                    crate::domain::model::UpstreamCall::bearer_over_local_cleartext(
+                        url.clone(),
+                        bearer,
+                    )
+                } else {
+                    crate::domain::model::UpstreamCall::bearer(url.clone(), bearer)?
+                }
+            }
+
+            EgressTarget::McpServer(destination @ McpDestination::Macro) => {
+                match self.credentials.resolve(&grant.owner, destination).await? {
+                    McpResolution::Connected(call) | McpResolution::Unconnected(call) => call,
+                }
+            }
+            EgressTarget::McpServer(destination @ McpDestination::Connected(slug)) => {
+                match self.credentials.resolve(&grant.owner, destination).await? {
+                    McpResolution::Connected(call) => call,
+                    // The owner has no grant for this app, but it can still
+                    // be addressed for them: the handshake and tool listing
+                    // go through, and a tool call is answered here with a
+                    // result the model can act on.
+                    McpResolution::Unconnected(call) => {
+                        let name = grant.display_name(slug);
+                        match Self::answer_unconnected(slug, &name, request).await? {
+                            Unconnected::Answered(response) => return Ok(response),
+                            Unconnected::Forward(forwarded) => {
+                                request = forwarded;
+                                call
+                            }
+                        }
+                    }
+                }
             }
             EgressTarget::GitHubGit { endpoint } => {
                 // The repository is the grant's, never the request's: a
                 // session works on exactly one, and the sandbox has no way to
                 // name another because there is no place in the route to put
                 // one.
-                let base = self.tokens.resolve(&grant.owner, &grant.repo).await?;
+                let repo = grant.repo.as_ref().ok_or(EgressError::Unauthenticated(
+                    "the session has no repository for git access",
+                ))?;
+                let base = self.tokens.resolve(&grant.owner, repo).await?;
 
                 // The endpoint comes from the allowlist, not from the port, so
                 // no credential adapter can widen what the sandbox reaches.
@@ -162,5 +224,78 @@ where
         tracing::debug!(status = %response.status(), "upstream answered");
 
         Ok(response)
+    }
+}
+
+/// What became of a request to an app the owner has not connected.
+enum Unconnected {
+    /// The proxy answered it itself; nothing goes upstream.
+    Answered(ProxyResponse),
+    /// Forward it, addressed for the owner, so the handshake and tool listing
+    /// work. The body has been read and put back.
+    Forward(ProxyRequest),
+}
+
+impl<Sessions, Credentials, Tokens, Forward>
+    EgressServiceImpl<Sessions, Credentials, Tokens, Forward>
+where
+    Sessions: SessionAuthority,
+    Credentials: McpCredentials,
+    Tokens: GithubTokens,
+    Forward: Forwarder,
+{
+    /// An app the owner has not connected: forward everything except
+    /// `tools/call`.
+    ///
+    /// `initialize`, `tools/list`, notifications, the GET event stream and
+    /// DELETE all go to the upstream addressed for the owner, so the agent's
+    /// client completes its handshake and sees the app's real tools from the
+    /// first turn. A `tools/call` is answered here with a tool result that
+    /// names the app and how to connect it - and the moment the owner does,
+    /// the same advertised server resolves as connected and calls flow
+    /// through, with nothing re-attached.
+    async fn answer_unconnected(
+        slug: &McpServerSlug,
+        name: &str,
+        request: ProxyRequest,
+    ) -> Result<Unconnected, EgressError> {
+        if *request.method() != Method::POST {
+            return Ok(Unconnected::Forward(request));
+        }
+        let (parts, mut body) = request.into_parts();
+        let mut bytes = Vec::new();
+        while let Some(frame) = body.frame().await {
+            let frame = frame.map_err(|error| {
+                EgressError::Internal(rootcause::report!(
+                    "could not read an MCP request body: {error}"
+                ))
+            })?;
+            if let Ok(data) = frame.into_data() {
+                if bytes.len() + data.len() > MAX_MCP_REQUEST_BYTES {
+                    return Err(EgressError::RequestTooLarge);
+                }
+                bytes.extend_from_slice(&data);
+            }
+        }
+        let bytes = bytes::Bytes::from(bytes);
+
+        if let Some(call) = peek_json_rpc(&bytes)
+            && call.method == TOOLS_CALL_METHOD
+        {
+            tracing::info!(
+                app = %slug,
+                "answering tools/call for an app the owner has not connected"
+            );
+            return Ok(Unconnected::Answered(not_connected_tool_result(
+                slug, name, call.id,
+            )));
+        }
+
+        Ok(Unconnected::Forward(ProxyRequest::from_parts(
+            parts,
+            Full::new(bytes)
+                .map_err(|never| match never {})
+                .boxed_unsync(),
+        )))
     }
 }

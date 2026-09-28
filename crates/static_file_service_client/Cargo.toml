@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 bytes = { workspace = true }
+macro_aws_config = { path = "../macro_aws_config" }
 models_sfs = { path = "../models_sfs" }
 reqwest = { workspace = true }
 serde = { workspace = true }

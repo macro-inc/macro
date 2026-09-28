@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO property_options (\n                id, property_definition_id, display_order, number_value, string_value\n            )\n            SELECT insert.id, $1, insert.display_order, insert.number_value, insert.string_value\n            FROM UNNEST($2::uuid[], $3::int4[], $4::float8[], $5::text[])\n                AS insert(id, display_order, number_value, string_value)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Int4Array",
+        "Float8Array",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6ba1b1fa24a8af68ac9a09748284c761164c83262d5b73764fa28b236e55f667"
+}

@@ -8,6 +8,7 @@ export const makeCopyAction = () => {
 
   const canExecute = (entity: EntityData): boolean => {
     return (
+      entity.type !== 'agent_session' &&
       entity.type !== 'channel' &&
       entity.type !== 'email' &&
       entity.type !== 'channel_message' &&

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT uploaded, \"contentState\", \"contentLocation\"\n            FROM \"Document\"\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "uploaded",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "contentState",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "contentLocation",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "7b9ab815fcc51927f17f3fa838a0a13ebcc05049fe61d74eda708f22172b0ac7"
+}

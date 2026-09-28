@@ -1,6 +1,6 @@
 import { vec2 } from '@block-canvas/util/vector2';
-import { createBlockStore } from '@core/block';
 import { OldMenu } from '@core/component/OldMenu';
+import { ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import {
   autoUpdate,
@@ -18,7 +18,7 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { useCanvasDocument } from '../context/canvas-document-context';
 
 interface BaseMenuProps {
   open: boolean;
@@ -27,10 +27,11 @@ interface BaseMenuProps {
   ref?: HTMLDivElement | ((ref: HTMLDivElement) => void);
 }
 export function BaseMenu(props: ParentProps<BaseMenuProps>) {
+  const { portalScope } = useCanvasDocument();
   const safeChildren = children(() => props.open && props.children);
   return (
     <Show when={props.open}>
-      <Portal>
+      <ScopedPortal scope={portalScope()}>
         <div
           style={{ left: `${props.x}px`, top: `${props.y}px` }}
           class="absolute z-item-options-menu"
@@ -38,27 +39,16 @@ export function BaseMenu(props: ParentProps<BaseMenuProps>) {
         >
           <OldMenu width="md">{safeChildren()}</OldMenu>
         </div>
-      </Portal>
+      </ScopedPortal>
     </Show>
   );
 }
 
-export const contextMenuStore = createBlockStore<{
-  open: boolean;
-  x: number;
-  y: number;
-  ref?: HTMLDivElement;
-  mousePos?: { x: number; y: number };
-}>({
-  open: false,
-  x: 0,
-  y: 0,
-});
-
 export function createContextMenu(
   anchorElement: Accessor<HTMLElement | undefined>
 ) {
-  const [contextMenu, setContextMenu] = contextMenuStore;
+  const [contextMenu, setContextMenu] =
+    useCanvasDocument().state.stores.contextMenu;
 
   const contextMenuPos = () => {
     return vec2(contextMenu.x, contextMenu.y);

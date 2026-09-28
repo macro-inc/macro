@@ -26,6 +26,7 @@ import {
 } from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
+import { createMentionAttachmentCallbacks } from '@core/component/AI/signal/mention-attachment-callbacks';
 import {
   getPendingSend,
   peekPendingSend,
@@ -33,13 +34,14 @@ import {
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
-import { parseModel } from '@core/component/AI/util/parse';
+import { resolveChatInputModel } from '@core/component/AI/util/parse';
 import {
   getChatInputStoredState,
   type StoredStuff,
   storeChatState,
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -50,6 +52,7 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
+import { markMessageSent } from '@core/util/message-send-motion';
 import { createRenameDssEntityMutation } from '@entity';
 import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -70,8 +73,7 @@ export function Chat(props: { data: ChatData }) {
   // to this one.
   const initialModel =
     peekPendingSend()?.model ??
-    loadedState.model ??
-    parseModel(props.data.chat.model);
+    resolveChatInputModel(props.data.chat.model, loadedState.model);
 
   return (
     <ChatInputProvider
@@ -96,6 +98,7 @@ function ChatWithController(props: {
   loadedInputText: string | undefined;
 }) {
   const { showPaywall } = usePaywallState();
+  const { showUsageLimit } = useAiUsageLimitState();
   const input = useChatInputContext();
   const hasPaidAccess = useHasPaidAccess();
 
@@ -126,6 +129,7 @@ function ChatWithController(props: {
       messages={props.data.chat.messages}
       controllerOptions={{
         onShowPaywall: showPaywall,
+        onShowUsageLimit: showUsageLimit,
         onSwitchModel,
         hasAlternateModel: () => nextModel() !== undefined,
       }}
@@ -155,12 +159,12 @@ function ChatInner(props: {
   );
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+  const attachmentMentionCallbacks = createMentionAttachmentCallbacks(
+    input.attachments,
+    getAttachmentFromMention
+  );
   const editor = buildChatEditor().withMentions({
-    onCreate: (mention) => {
-      const attachment = getAttachmentFromMention(mention);
-      if (attachment) input.attachments.addAttachment(attachment);
-    },
-    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
+    ...attachmentMentionCallbacks,
     block: 'chat',
     showOpenTabs: true,
   });
@@ -196,6 +200,7 @@ function ChatInner(props: {
     const isFirstMessage = chat.messages().length === 0;
     const optimisticId = crypto.randomUUID();
 
+    markMessageSent(`chat:${optimisticId}`);
     chat.dispatch({
       type: 'send_started',
       optimisticMessage: {
@@ -225,6 +230,7 @@ function ChatInner(props: {
       chat.dispatch({
         type: 'send_failed',
         paymentError: result.paymentError,
+        usageLimit: result.usageLimit,
       });
       return;
     }
@@ -304,8 +310,7 @@ function ChatInner(props: {
     hotkeyToken: TOKENS.chat.stop,
   });
 
-  // J/K navigation focuses the block once it mounts, except when that block is
-  // passive content in a Preview Pair Viewer.
+  // J/K navigation focuses mounted standalone blocks.
   let hasRun = false;
   createEffect(() => {
     if (hasRun) return;
@@ -361,20 +366,19 @@ function ChatInner(props: {
       </div>
       <Show when={!disabled()}>
         <FloatRegionOrInline region="accessory">
-          <div class="flex w-full justify-center pb-2 px-2 touch:pb-0 touch:px-(--mobile-chrome-gutter) touch:pointer-events-auto">
-            <div class="w-3xl">
-              <ChatInput
-                editor={editor}
-                initialValue={props.loadedInputText}
-                onChange={setMarkdownText}
-                chatId={chat.chatId()}
-                onSend={onSend}
-                onStop={onStop}
-                autoFocusOnMount={
-                  canAutofocusSplitContent && !navigatedFromJK()
-                }
-              />
-            </div>
+          {/* Same wrapper as the home composer, so the box is the same width
+              and sits at the same offset whether a chat is being started or
+              continued. */}
+          <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
+            <ChatInput
+              editor={editor}
+              initialValue={props.loadedInputText}
+              onChange={setMarkdownText}
+              chatId={chat.chatId()}
+              onSend={onSend}
+              onStop={onStop}
+              autoFocusOnMount={canAutofocusSplitContent && !navigatedFromJK()}
+            />
           </div>
         </FloatRegionOrInline>
       </Show>

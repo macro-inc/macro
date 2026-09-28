@@ -50,7 +50,8 @@ export function createConfiguredDiscussionMarkdownEditor(
     .withHistory({ timeGap: 400 })
     .withCode()
     .withRestoreFocus()
-    .withSelectionData();
+    .withSelectionData()
+    .withFloatingFormatMenu();
 
   editor
     .use(

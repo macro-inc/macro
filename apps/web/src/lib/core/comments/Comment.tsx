@@ -1,5 +1,4 @@
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
-import { useMaybeBlockAliasedName } from '@core/block';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { useAuthor } from '@core/context/user';
@@ -8,13 +7,14 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  onCleanup,
   type ParentProps,
   Show,
   untrack,
   useContext,
 } from 'solid-js';
 import { getAndClearCommentMentions } from '.';
-import type { Root } from './commentType';
+import type { CommentId, Root, ThreadId } from './commentType';
 import { EditInput } from './Inputs';
 import { MessageTopRow } from './MessageTopRow';
 import { CommentsContext, ThreadContext } from './Thread';
@@ -34,7 +34,10 @@ const CommentText = (props: { text: string; isThreaded?: boolean }) => {
 };
 
 function CommentContainer(
-  props: ParentProps<{ isThreaded?: boolean; isHighlighted?: boolean }>
+  props: ParentProps<{
+    isThreaded?: boolean;
+    isHighlighted?: boolean;
+  }>
 ) {
   return (
     <div
@@ -68,13 +71,17 @@ export function Comment(
     isOwned: boolean;
     isActive: boolean;
     isThreaded?: boolean;
+    actionsDropdown?: boolean;
   }>
 ) {
-  const maybeBlockName = useMaybeBlockAliasedName();
   const commentsContext = useContext(CommentsContext);
 
-  const { commentOperations, setActiveThread, highlightedCommentId } =
-    commentsContext;
+  const {
+    commentOperations,
+    setActiveThread,
+    setMessageEditing,
+    highlightedCommentId,
+  } = commentsContext;
   const isHighlighted = createMemo(
     () => highlightedCommentId() === props.comment.id
   );
@@ -83,7 +90,14 @@ export function Comment(
   const date = () => props.comment.createdAt;
 
   const [textValue, setTextValue] = createSignal<string>(props.comment.text);
-  const [isEditing, setIsEditing] = createSignal<boolean>(false);
+  const [isEditing, setIsEditingSignal] = createSignal<boolean>(false);
+  // Report each edit-state transition to the drawer host (it hides its
+  // pinned reply composer while an edit is open). A wrapper instead of an
+  // effect keeps the reporting explicit at every mutation site.
+  const setIsEditing = (editing: boolean) => {
+    setIsEditingSignal(editing);
+    setMessageEditing?.(props.comment.id, editing);
+  };
 
   createEffect(() => {
     if (!untrack(isEditing)) return;
@@ -92,24 +106,25 @@ export function Comment(
     }
   });
 
-  const copyLink = () => {
-    if (!maybeBlockName) return;
-    return async () => {
-      const params: Record<string, string> = {};
-      if (maybeBlockName === 'task' || maybeBlockName === 'md') {
-        params[MD_URL_PARAMS.commentId] = props.comment.id.toString();
-      }
-      try {
-        const url = buildSimpleEntityUrl(
-          { type: maybeBlockName, id: commentsContext.documentId },
-          params
-        );
-        await navigator.clipboard.writeText(url);
-        toast.success('Link copied to clipboard');
-      } catch (_) {
-        toast.failure('Could not copy link');
-      }
-    };
+  // The report must also retract on unmount (deletion mid-edit, or the
+  // drawer paging to another thread with an edit open).
+  onCleanup(() => setMessageEditing?.(props.comment.id, false));
+
+  const copyLink = async () => {
+    const params: Record<string, string> = {};
+    if (commentsContext.documentType !== 'pdf') {
+      params[MD_URL_PARAMS.commentId] = props.comment.id.toString();
+    }
+    try {
+      const url = buildSimpleEntityUrl(
+        { type: commentsContext.documentType, id: commentsContext.documentId },
+        params
+      );
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied to clipboard');
+    } catch (_) {
+      toast.failure('Could not copy link');
+    }
   };
 
   const mentionsSignal = useContext(ThreadContext).mentionsSignal;
@@ -128,6 +143,7 @@ export function Comment(
           <MessageTopRow
             isOwned={props.isOwned}
             isActive={props.isActive}
+            actionsDropdown={props.actionsDropdown}
             authorId={props.comment.author}
             date={date()}
             isNew={false}
@@ -143,7 +159,7 @@ export function Comment(
               setActiveThread(props.comment.threadId);
               setIsEditing(true);
             }}
-            copyLink={copyLink()}
+            copyLink={copyLink}
           />
           <CommentText text={props.comment.text} />
           {props.children}
@@ -155,6 +171,7 @@ export function Comment(
           isOwned={props.isOwned}
           isActive={props.isActive}
           isEditing
+          actionsDropdown={props.actionsDropdown}
           authorId={props.comment.author}
           date={date()}
           isResolved={false}
@@ -178,6 +195,7 @@ export function Comment(
         handleCancel={() => {
           setTextValue(textValue());
         }}
+        deactivateThreadOnCancel={false}
         setEditing={setIsEditing}
         textValue={textValue()}
       />
@@ -190,48 +208,58 @@ export function Comment(
 export function CommentReply(
   props: ParentProps<{
     hide?: boolean;
-    replyId: number;
-    threadId: number;
+    replyId: CommentId;
+    threadId: ThreadId;
     deleteReply: () => void;
     updateReply: (content: string) => unknown | Promise<unknown>;
     isOwned: boolean;
     isActive: boolean;
     isThreaded?: boolean;
+    actionsDropdown?: boolean;
   }>
 ) {
   const thisAuthor = useAuthor();
-  const { getCommentById, highlightedCommentId, documentId } =
-    useContext(CommentsContext);
-  const maybeBlockName = useMaybeBlockAliasedName();
+  const {
+    getCommentById,
+    highlightedCommentId,
+    documentId,
+    documentType,
+    setMessageEditing,
+  } = useContext(CommentsContext);
   const reply = createMemo(() => getCommentById(props.replyId));
   const isHighlighted = createMemo(
     () => highlightedCommentId() === props.replyId
   );
 
-  const copyLink = () => {
-    if (!maybeBlockName) return;
-    return async () => {
-      const params: Record<string, string> = {};
-      if (maybeBlockName === 'task' || maybeBlockName === 'md') {
-        params[MD_URL_PARAMS.commentId] = props.replyId.toString();
-      }
-      try {
-        const url = buildSimpleEntityUrl(
-          { type: maybeBlockName, id: documentId },
-          params
-        );
-        await navigator.clipboard.writeText(url);
-        toast.success('Link copied to clipboard');
-      } catch (_) {
-        toast.failure('Could not copy link');
-      }
-    };
+  const copyLink = async () => {
+    const params: Record<string, string> = {};
+    if (documentType !== 'pdf') {
+      params[MD_URL_PARAMS.commentId] = props.replyId.toString();
+    }
+    try {
+      const url = buildSimpleEntityUrl(
+        { type: documentType, id: documentId },
+        params
+      );
+      await navigator.clipboard.writeText(url);
+      toast.success('Link copied to clipboard');
+    } catch (_) {
+      toast.failure('Could not copy link');
+    }
   };
 
-  const [isEditing, setIsEditing] = createSignal<boolean>(false);
+  const [isEditing, setIsEditingSignal] = createSignal<boolean>(false);
+  // As in Comment: explicit reporting at each mutation site, retracted on
+  // unmount.
+  const setIsEditing = (editing: boolean) => {
+    setIsEditingSignal(editing);
+    setMessageEditing?.(props.replyId, editing);
+  };
   const [textValue, setTextValue] = createSignal<string>('');
 
   createEffect(() => setTextValue(reply()?.text ?? ''));
+
+  onCleanup(() => setMessageEditing?.(props.replyId, false));
 
   const authorId = createMemo(() => reply()?.author ?? thisAuthor() ?? '');
   const date = () => reply()?.createdAt;
@@ -256,10 +284,11 @@ export function CommentReply(
               isResolved={false}
               deleteMessage={props.deleteReply}
               enableEditing={() => setIsEditing(true)}
-              copyLink={copyLink()}
+              copyLink={copyLink}
               hideBottomMargin
               isOwned={props.isOwned}
               isActive={props.isActive}
+              actionsDropdown={props.actionsDropdown}
             />
             <CommentText text={reply()?.text ?? ''} />
             {props.children}
@@ -275,6 +304,7 @@ export function CommentReply(
             isEditing
             isOwned={props.isOwned}
             isActive={props.isActive}
+            actionsDropdown={props.actionsDropdown}
           />
           <EditInput
             handleCancel={() => {
@@ -288,6 +318,7 @@ export function CommentReply(
               setTextValue(newText);
               return result;
             }}
+            deactivateThreadOnCancel={false}
             hidePadding
             isReply
             setEditing={setIsEditing}

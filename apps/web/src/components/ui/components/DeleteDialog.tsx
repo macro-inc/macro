@@ -2,10 +2,11 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import type { JSX } from 'solid-js';
 import { createSignal, createUniqueId, Show } from 'solid-js';
 import { cn } from '../utils/classname';
+import { ActionDialogShell } from './ActionDialogShell';
 import { Button } from './Button';
 import { Dialog, type DialogProps } from './Dialog';
 import type { ManagedDialogProps } from './ImperativeDialog';
-import { Surface } from './Surface';
+import { Input } from './Input';
 
 /** Presentation and behavior options for the shared deletion dialog. */
 export type DeleteDialogProps = ManagedDialogProps & {
@@ -48,23 +49,18 @@ export function DeleteDialog(props: DeleteDialogProps) {
       onOpenChange={(open) => {
         if (!open) close();
       }}
-      position={props.position}
-      class={cn('w-[90%] max-w-120', props.class)}
+      position={props.position ?? 'center'}
+      class={cn('w-110', props.class)}
       visibleScrim
     >
-      <Surface depth={2} class="rounded-xl text-ink">
-        <div class="flex flex-col gap-3 px-5 py-4">
-          <div class="flex flex-col gap-1">
-            <Dialog.Title class="text-base font-semibold">
-              {props.title}
-            </Dialog.Title>
-            <Dialog.Description
-              as="div"
-              class="text-sm leading-5 text-ink-muted"
-            >
+      <ActionDialogShell>
+        <ActionDialogShell.Body>
+          <ActionDialogShell.Header>
+            <ActionDialogShell.Title>{props.title}</ActionDialogShell.Title>
+            <ActionDialogShell.Description as="div">
               {props.body ?? props.children}
-            </Dialog.Description>
-          </div>
+            </ActionDialogShell.Description>
+          </ActionDialogShell.Header>
 
           <Show when={props.confirmationPhrase}>
             {(phrase) => (
@@ -76,24 +72,22 @@ export function DeleteDialog(props: DeleteDialogProps) {
                   Type <span class="font-medium text-ink">{phrase()}</span> to
                   confirm.
                 </label>
-                <input
+                <Input
                   id={confirmationInputId}
                   type="text"
                   value={confirmation()}
                   placeholder={phrase()}
                   disabled={props.pending}
-                  autofocus
                   onInput={(event) =>
                     setConfirmation(event.currentTarget.value)
                   }
-                  class="h-9 w-full rounded-lg border border-edge-muted bg-transparent px-3 text-sm text-ink outline-none transition-colors placeholder:text-ink-placeholder hover:border-edge focus:border-accent disabled:opacity-70"
                 />
               </div>
             )}
           </Show>
-        </div>
+        </ActionDialogShell.Body>
 
-        <div class="flex items-center justify-end gap-2 px-5 py-3">
+        <ActionDialogShell.Footer>
           <Button
             type="button"
             variant="ghost"
@@ -117,8 +111,8 @@ export function DeleteDialog(props: DeleteDialogProps) {
               <span class="sr-only">{props.deleteLabel ?? 'Delete'}</span>
             </Show>
           </Button>
-        </div>
-      </Surface>
+        </ActionDialogShell.Footer>
+      </ActionDialogShell>
     </Dialog>
   );
 }

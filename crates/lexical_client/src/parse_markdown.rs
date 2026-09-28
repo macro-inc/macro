@@ -1,9 +1,13 @@
+#[cfg(test)]
+mod test;
+
 use super::LexicalClient;
 use crate::types::{CognitionResponseData, CognitionV2ResponseData};
+use messages::domain::models::MessageParent;
 
+use crate::types::MarkdownParseResult;
 use agent_fold::domain::model::MessageId;
 use anyhow::{Context, Result};
-use models_search::document::MarkdownParseResult;
 use serde::de::DeserializeOwned;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -35,14 +39,79 @@ struct MentionsRequest<'a> {
 }
 
 #[derive(Debug, serde::Serialize)]
-struct QuoteReplyRequest<'a> {
+struct HtmlRequest<'a> {
     markdown: &'a str,
+}
+
+/// An email body rendered from markdown: the two parts a MIME message carries.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RenderedBody {
+    /// The HTML body, exported the way the draft composer exports it.
+    pub html: String,
+    /// The plain-text alternative.
+    pub text: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct ExtractReplyRequest<'a> {
+    markdown: &'a str,
+}
+
+/// The leading `ReplyTargetNode` extracted from markdown by the lexical
+/// service `/extract-reply` endpoint, when the markdown is an explicit reply.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractedExplicitReply {
+    /// Entity containing the targeted message.
+    pub parent: MessageParent,
+    /// Targeted message.
+    pub target_message_id: String,
+    /// Thread containing the targeted message.
+    pub target_thread_id: String,
+    /// Static one-line preview rendered by the reply target.
+    pub display_text: String,
+    /// Sender of the targeted message — who the author replied to.
+    pub sender_id: String,
+}
+
+/// Wire shape of an extracted reply target. Reply targets serialized before
+/// message parents existed name only a `channelId`; both shapes decode.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExtractedExplicitReplyWire {
+    #[serde(default)]
+    parent: Option<MessageParent>,
+    #[serde(default)]
+    channel_id: Option<String>,
+    target_message_id: String,
+    target_thread_id: String,
+    display_text: String,
+    sender_id: String,
+}
+
+impl<'de> serde::Deserialize<'de> for ExtractedExplicitReply {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let wire = ExtractedExplicitReplyWire::deserialize(deserializer)?;
+        let parent = match (wire.parent, wire.channel_id) {
+            (Some(parent), _) => parent,
+            (None, Some(channel_id)) => MessageParent::parse("channel", &channel_id)
+                .map_err(|_| serde::de::Error::custom("reply target channelId is not a uuid"))?,
+            (None, None) => return Err(serde::de::Error::missing_field("parent")),
+        };
+        Ok(Self {
+            parent,
+            target_message_id: wire.target_message_id,
+            target_thread_id: wire.target_thread_id,
+            display_text: wire.display_text,
+            sender_id: wire.sender_id,
+        })
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct QuoteReplyResponse {
-    is_quote_reply: bool,
+struct ExtractReplyResponse {
+    reply: Option<ExtractedExplicitReply>,
 }
 
 /// An entity mention extracted from markdown by the lexical service
@@ -78,10 +147,31 @@ pub struct AgentAnnouncementChip {
     pub status: String,
 }
 
+/// The message targeted by an agent-session announcement, in the shape the
+/// lexical service's `ReplyTargetNode` validates.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentAnnouncementReplyTarget {
+    /// Entity containing the targeted message.
+    pub parent: MessageParent,
+    /// Channel containing the targeted message, for channel parents. Sent
+    /// beside `parent` for the reply-target shape that predates parents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<String>,
+    /// Targeted message.
+    pub target_message_id: String,
+    /// Thread containing the targeted message.
+    pub target_thread_id: String,
+    /// Static one-line preview rendered by the reply target.
+    pub display_text: String,
+    /// Sender of the targeted message.
+    pub sender_id: String,
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentAnnouncementRequest<'a> {
-    prompt_markdown: &'a str,
+    reply_target: &'a AgentAnnouncementReplyTarget,
     chip: &'a AgentAnnouncementChip,
 }
 
@@ -90,13 +180,179 @@ struct AgentAnnouncementResponse {
     markdown: String,
 }
 
-/// A channel message included as context for an agent prompt.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+/// Connection chip metadata interpreted by the editor and lexical service.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentConnectionChip {
+    /// Integration or harness slug.
+    pub app_slug: String,
+    /// Display name on the connection chip.
+    pub name: String,
+    /// Settings surface: `connections` or `harness`.
+    pub target: String,
+}
+
+/// Structured explanation and action for a mention that requires account setup.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentConnectionPrompt {
+    /// Bot handle rendered as inline code, such as `@cursor`.
+    pub agent_tag: String,
+    /// Plain text explaining the required setup.
+    pub message: String,
+    /// Connection action rendered by Lexical.
+    pub chip: AgentConnectionChip,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentConnectionPromptRequest<'a> {
+    connection_prompt: &'a AgentConnectionPrompt,
+}
+
+/// What a chat agent's thread message says below its session link, in the
+/// shape the lexical service `/agent-announcement` endpoint validates.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AgentChatReplyBody {
+    /// The spinner while the turn runs.
+    Pending,
+    /// Prose, posted as written: the answer, or what the harness says for a
+    /// turn that answered with nothing or stopped to ask.
+    Markdown {
+        /// The prose, as channel markdown.
+        markdown: String,
+    },
+}
+
+/// A chat agent's thread message in one of its states.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentChatReply {
+    /// Session the message speaks for; linked ahead of the body.
+    pub session_id: String,
+    pub body: AgentChatReplyBody,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentChatReplyRequest<'a> {
+    chat_reply: &'a AgentChatReply,
+}
+
+/// A message included as context for an agent prompt.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentContextMessage<'a> {
-    /// Display name of the message sender.
-    pub sender: &'a str,
+    /// Message id.
+    pub id: String,
+    /// Sender identifier as the message service represents it.
+    pub sender_id: &'a str,
+    /// Readable name of the sender.
+    pub author: &'a str,
     /// Markdown content of the message.
     pub content: &'a str,
+    /// RFC 3339 time the message was posted.
+    pub posted_at: String,
+}
+
+/// Messages of one discussion included as context, oldest first.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentContextThread<'a> {
+    /// Root message of the discussion.
+    pub root_id: String,
+    /// Live messages, the root first when it is included.
+    pub messages: Vec<AgentContextMessage<'a>>,
+    /// Whether some messages of the discussion were left out.
+    pub messages_omitted: bool,
+}
+
+/// What an agent prompt answers.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum AgentContextReplyTarget<'a> {
+    /// The author quote-replied to one message.
+    Quote {
+        /// The quoted message.
+        message_id: String,
+        /// The discussion holding the quoted message.
+        thread_id: String,
+        /// The one-line preview the quote renders.
+        preview: &'a str,
+        /// The quoted message in full, when it could be read.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        message: Option<AgentContextMessage<'a>>,
+    },
+    /// The prompt was posted as a reply in a discussion.
+    Thread {
+        /// Root of that discussion.
+        thread_id: String,
+    },
+    /// The prompt was posted at the top level of a channel.
+    None,
+}
+
+/// The conversation an agent prompt was posted in.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentContext<'a> {
+    /// The document location of the comment thread, when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<AgentContextAnchor<'a>>,
+    /// What the prompt answers.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_target: Option<AgentContextReplyTarget<'a>>,
+    /// The prompting message, marked where it appears in the context.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_message_id: Option<String>,
+    /// The discussion the prompt was posted in, through the prompt.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread: Option<AgentContextThread<'a>>,
+    /// Other channel activity, grouped by discussion, oldest first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub channel: Vec<AgentContextThread<'a>>,
+}
+
+/// The document location of the comment thread an agent prompt was posted in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum AgentContextAnchor<'a> {
+    /// A comment mark in a markdown document.
+    Markdown {
+        /// Lexical mark the comment is attached to.
+        mark_id: &'a str,
+        /// The marked text when the comment was posted, when it was captured.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        marked_text: Option<&'a str>,
+        /// The text the mark covers in the document now, when it was resolved.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        current_marked_text: Option<&'a str>,
+        /// The passage around the mark now, when it was resolved.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        surrounding_text: Option<&'a str>,
+    },
+    /// A highlight on a PDF.
+    PdfHighlight {
+        /// Highlight annotation the comment is attached to.
+        anchor_id: &'a str,
+        /// The text the highlight covers, when it carries any.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        marked_text: Option<&'a str>,
+    },
+    /// A point pinned on a PDF page, which covers no text.
+    PdfPin {
+        /// Pin annotation the comment is attached to.
+        anchor_id: &'a str,
+    },
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -104,12 +360,30 @@ pub struct AgentContextMessage<'a> {
 struct AgentContextRequest<'a> {
     prompt_markdown: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    messages: Option<&'a [AgentContextMessage<'a>]>,
+    parent: Option<&'a MessageParent>,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    context: Option<&'a AgentContext<'a>>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct AgentContextResponse {
     markdown: String,
+}
+
+/// The live text of a comment mark, resolved from the current document by the
+/// lexical service `/comment-mark` endpoint. Both fields are bounded there.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommentMarkContext {
+    /// The text the mark covers now.
+    pub marked_text: String,
+    /// The block or blocks containing the mark, windowed around it.
+    pub surrounding_text: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct CommentMarkResponse {
+    data: Option<CommentMarkContext>,
 }
 
 /// Rendering target supported by the lexical service `/markdown` endpoint.
@@ -235,6 +509,20 @@ impl LexicalClient {
         Ok(EmbeddingMarkdown(markdown))
     }
 
+    /// Resolve a comment mark against the live document: `None` when the
+    /// document no longer carries it. Performs no access check of its own, so
+    /// callers must already hold access to the document.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn resolve_comment_mark(
+        &self,
+        document_id: &str,
+        mark_id: &str,
+    ) -> Result<Option<CommentMarkContext>> {
+        let url = format!("{}/comment-mark/{}/{}", self.url, document_id, mark_id);
+        let response: CommentMarkResponse = self.get_json(&url).await?;
+        Ok(response.data)
+    }
+
     #[tracing::instrument(skip(self), err)]
     pub async fn parse_markdown_for_ai(&self, document_id: &str) -> Result<CognitionResponseData> {
         let url = format!("{}/cognition/{}", self.url, document_id);
@@ -280,6 +568,24 @@ impl LexicalClient {
         Ok(bytes.to_vec())
     }
 
+    /// Renders `markdown` to an email-ready HTML body via the lexical
+    /// service, so a caller with no browser composer — the `SendEmail` tool,
+    /// whose body the model writes as markdown — produces the same HTML the
+    /// composer would have exported.
+    #[tracing::instrument(skip(self, markdown), err)]
+    pub async fn markdown_to_html(&self, markdown: &str) -> Result<RenderedBody> {
+        let url = format!("{}/html", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&HtmlRequest { markdown })
+                .send()
+                .await?,
+        )
+        .await?;
+        response.json().await.context("unexpected response")
+    }
+
     /// Parses `markdown` via the lexical service and returns the entity
     /// mentions it contains.
     #[tracing::instrument(skip(self, markdown), err)]
@@ -297,22 +603,41 @@ impl LexicalClient {
         Ok(data.mentions)
     }
 
-    /// Composes the channel message announcing an agent session — the prompt
-    /// quoted back as a blockquote above the session's Magic Chip — via the
-    /// lexical service, so the markdown is built from real Lexical nodes.
-    #[tracing::instrument(skip(self, prompt_markdown, chip), err)]
+    /// Composes the channel message announcing an agent session — a structured
+    /// reply target above the session's Magic Chip — via the lexical service,
+    /// so the markdown is built from real Lexical nodes.
+    #[tracing::instrument(skip(self, reply_target, chip), err)]
     pub async fn compose_agent_announcement(
         &self,
-        prompt_markdown: &str,
+        reply_target: &AgentAnnouncementReplyTarget,
         chip: &AgentAnnouncementChip,
     ) -> Result<String> {
         let url = format!("{}/agent-announcement", self.url);
         let response = check_response(
             self.client
                 .post(&url)
-                .json(&AgentAnnouncementRequest {
-                    prompt_markdown,
-                    chip,
+                .json(&AgentAnnouncementRequest { reply_target, chip })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentAnnouncementResponse =
+            response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
+    /// Compose an account setup reply through the lexical service's real nodes.
+    #[tracing::instrument(skip(self, prompt), err)]
+    pub async fn compose_agent_connection_prompt(
+        &self,
+        prompt: &AgentConnectionPrompt,
+    ) -> Result<String> {
+        let url = format!("{}/agent-announcement", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&AgentConnectionPromptRequest {
+                    connection_prompt: prompt,
                 })
                 .send()
                 .await?,
@@ -323,14 +648,33 @@ impl LexicalClient {
         Ok(data.markdown)
     }
 
-    /// Sanitizes an agent prompt and optionally composes it with prior-message
-    /// context via the lexical service, so internal nodes and escaping are
-    /// handled by Lexical rather than assembled manually by the caller.
-    #[tracing::instrument(skip(self, prompt_markdown, messages), err)]
+    /// Compose a chat agent's thread message - its session link over the
+    /// spinner or its prose - through the lexical service's real nodes.
+    #[tracing::instrument(skip(self, reply), err)]
+    pub async fn compose_agent_chat_reply(&self, reply: &AgentChatReply) -> Result<String> {
+        let url = format!("{}/agent-announcement", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&AgentChatReplyRequest { chat_reply: reply })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentAnnouncementResponse =
+            response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
+    /// Sanitizes an agent prompt and optionally composes it with the
+    /// conversation it was posted in via the lexical service, so internal
+    /// nodes and escaping are handled by Lexical rather than by the caller.
+    #[tracing::instrument(skip(self, prompt_markdown, context), err)]
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
-        messages: Option<&[AgentContextMessage<'_>]>,
+        parent: Option<&MessageParent>,
+        context: Option<&AgentContext<'_>>,
     ) -> Result<String> {
         let url = format!("{}/agent-context", self.url);
         let response = check_response(
@@ -338,7 +682,8 @@ impl LexicalClient {
                 .post(&url)
                 .json(&AgentContextRequest {
                     prompt_markdown,
-                    messages,
+                    parent,
+                    context,
                 })
                 .send()
                 .await?,
@@ -348,22 +693,25 @@ impl LexicalClient {
         Ok(data.markdown)
     }
 
-    /// Parses `markdown` via the lexical service and reports whether it is
-    /// composed as a quote-reply: a leading blockquote followed by the reply
-    /// itself, the shape the editor produces when replying to a message.
+    /// Parses `markdown` via the lexical service and returns the leading
+    /// `ReplyTargetNode` when it is followed by the author's non-empty reply.
+    /// Standard Markdown blockquotes carry no reply semantics.
     #[tracing::instrument(skip(self, markdown), err)]
-    pub async fn is_quote_reply(&self, markdown: &str) -> Result<bool> {
-        let url = format!("{}/quote-reply", self.url);
+    pub async fn extract_explicit_reply(
+        &self,
+        markdown: &str,
+    ) -> Result<Option<ExtractedExplicitReply>> {
+        let url = format!("{}/extract-reply", self.url);
         let response = check_response(
             self.client
                 .post(&url)
-                .json(&QuoteReplyRequest { markdown })
+                .json(&ExtractReplyRequest { markdown })
                 .send()
                 .await?,
         )
         .await?;
-        let data: QuoteReplyResponse = response.json().await.context("unexpected response")?;
-        Ok(data.is_quote_reply)
+        let data: ExtractReplyResponse = response.json().await.context("unexpected response")?;
+        Ok(data.reply)
     }
 
     async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
@@ -469,5 +817,95 @@ mod tests {
             }
             _ => panic!("expected dssImage node"),
         }
+    }
+
+    #[test]
+    fn extract_reply_response_deserializes_a_target() {
+        let json = r#"{
+            "reply": {
+                "parent": {"type": "document", "id": "doc-1"},
+                "targetMessageId": "message-1",
+                "targetThreadId": "thread-1",
+                "displayText": "please fix this",
+                "senderId": "bot|00000000-0000-0000-0000-00000000b07a"
+            }
+        }"#;
+
+        let response: ExtractReplyResponse = serde_json::from_str(json).unwrap();
+        let reply = response.reply.expect("reply");
+        assert_eq!(
+            reply.parent,
+            MessageParent::parse("document", "doc-1").unwrap()
+        );
+        assert_eq!(reply.target_message_id, "message-1");
+        assert_eq!(reply.sender_id, "bot|00000000-0000-0000-0000-00000000b07a");
+    }
+
+    #[test]
+    fn extract_reply_response_reads_a_channel_only_target_as_a_channel_parent() {
+        let json = r#"{
+            "reply": {
+                "channelId": "00000000-0000-0000-0000-000000000001",
+                "targetMessageId": "message-1",
+                "targetThreadId": "thread-1",
+                "displayText": "please fix this",
+                "senderId": "macro|user@example.com"
+            }
+        }"#;
+
+        let response: ExtractReplyResponse = serde_json::from_str(json).unwrap();
+        let reply = response.reply.expect("reply");
+        assert_eq!(
+            reply.parent,
+            MessageParent::parse("channel", "00000000-0000-0000-0000-000000000001").unwrap()
+        );
+    }
+
+    #[test]
+    fn announcement_reply_target_names_the_channel_beside_its_parent() {
+        let target = AgentAnnouncementReplyTarget {
+            parent: MessageParent::parse("channel", "00000000-0000-0000-0000-000000000001")
+                .unwrap(),
+            channel_id: Some("00000000-0000-0000-0000-000000000001".to_owned()),
+            target_message_id: "message-1".to_owned(),
+            target_thread_id: "thread-1".to_owned(),
+            display_text: "please fix this".to_owned(),
+            sender_id: "macro|user@example.com".to_owned(),
+        };
+        let value = serde_json::to_value(&target).unwrap();
+        assert_eq!(value["parent"]["type"], "channel");
+        assert_eq!(value["channelId"], "00000000-0000-0000-0000-000000000001");
+
+        let document = AgentAnnouncementReplyTarget {
+            parent: MessageParent::parse("document", "doc-1").unwrap(),
+            channel_id: None,
+            ..target
+        };
+        let value = serde_json::to_value(&document).unwrap();
+        assert!(value.get("channelId").is_none());
+        assert_eq!(value["parent"]["id"], "doc-1");
+    }
+
+    #[test]
+    fn comment_mark_response_reads_a_resolved_or_missing_mark() {
+        let found: CommentMarkResponse = serde_json::from_str(
+            r#"{"data":{"markedText":"the phrase","surroundingText":"all of the phrase here"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            found.data,
+            Some(CommentMarkContext {
+                marked_text: "the phrase".to_owned(),
+                surrounding_text: "all of the phrase here".to_owned(),
+            })
+        );
+        let missing: CommentMarkResponse = serde_json::from_str(r#"{"data":null}"#).unwrap();
+        assert_eq!(missing.data, None);
+    }
+
+    #[test]
+    fn extract_reply_response_deserializes_null() {
+        let response: ExtractReplyResponse = serde_json::from_str(r#"{ "reply": null }"#).unwrap();
+        assert!(response.reply.is_none());
     }
 }

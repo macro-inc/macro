@@ -10,6 +10,7 @@ use crate::{MacroAuthorization, MacroAuthorizationService};
 use super::{
     AuthorizationPolicy, MacroAuthorizationRejection, MacroAuthorizationState,
     bot::{BOT_TOKEN_HEADER, authorize_optional_bot_request},
+    harness::{HARNESS_TOKEN_HEADER, authorize_optional_harness_request},
     internal::{authorize_internal_request, internal_header_convention},
     rejection, status_rejection,
     user::{authorize_optional_user_request, explicit_user_credential_present},
@@ -73,10 +74,12 @@ where
     let internal_convention = internal_header_convention(&parts.headers);
     let has_bot_token = parts.headers.contains_key(BOT_TOKEN_HEADER);
     let has_user_api_key = parts.headers.contains_key(USER_API_KEY_HEADER);
+    let has_harness_token = parts.headers.contains_key(HARNESS_TOKEN_HEADER);
     let has_explicit_user_credential = explicit_user_credential_present(parts);
     let explicit_credential_count = usize::from(internal_convention.is_some())
         + usize::from(has_bot_token)
         + usize::from(has_user_api_key)
+        + usize::from(has_harness_token)
         + usize::from(has_explicit_user_credential);
 
     if explicit_credential_count > 1 {
@@ -100,6 +103,13 @@ where
             .await?
             .expect("bot token presence was checked");
         return Ok(Some(MacroAuthorization::Bot(bot)));
+    }
+
+    if has_harness_token {
+        let harness = authorize_optional_harness_request::<S, Svc>(parts, state)
+            .await?
+            .expect("harness token presence was checked");
+        return Ok(Some(MacroAuthorization::Harness(harness)));
     }
 
     authorize_optional_user_request::<S, Svc>(parts, state)

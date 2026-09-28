@@ -28,6 +28,8 @@ struct MockRepo {
     owned_email_thread_ids: Arc<Mutex<Vec<Uuid>>>,
     call_access: Arc<Mutex<Option<AccessLevel>>>,
     agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
+    initiative_access: Arc<Mutex<Option<AccessLevel>>>,
+    agent_session_document: Arc<Mutex<Option<String>>>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access_calls: Arc<AtomicUsize>,
@@ -46,8 +48,10 @@ struct MockRepo {
     chat_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     project_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     thread_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    agent_session_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     channel_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
+    call_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     user_team: Arc<Mutex<Option<UserTeamInfo>>>,
 }
 
@@ -63,6 +67,8 @@ impl MockRepo {
             owned_email_thread_ids: Arc::new(Mutex::new(Vec::new())),
             call_access: Arc::new(Mutex::new(None)),
             agent_session_access: Arc::new(Mutex::new(None)),
+            initiative_access: Arc::new(Mutex::new(None)),
+            agent_session_document: Arc::default(),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
             team_entity_access_calls: Arc::new(AtomicUsize::new(0)),
@@ -81,8 +87,10 @@ impl MockRepo {
             chat_users: Arc::new(Mutex::new(vec![])),
             project_users: Arc::new(Mutex::new(vec![])),
             thread_users: Arc::new(Mutex::new(vec![])),
+            agent_session_users: Arc::new(Mutex::new(Vec::new())),
             channel_users: Arc::new(Mutex::new(vec![])),
             call_channel: Arc::new(Mutex::new(None)),
+            call_users: Arc::default(),
             user_team: Arc::new(Mutex::new(None)),
         }
     }
@@ -205,6 +213,11 @@ impl MockRepo {
         self
     }
 
+    fn with_agent_session_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.agent_session_users = Arc::new(Mutex::new(users));
+        self
+    }
+
     fn with_user_team(mut self, user_team: UserTeamInfo) -> Self {
         self.user_team = Arc::new(Mutex::new(Some(user_team)));
         self
@@ -212,6 +225,10 @@ impl MockRepo {
 }
 
 impl AccessRepository for MockRepo {
+    async fn get_agent_session_document(&self, _: &str) -> Result<Option<String>, AccessError> {
+        Ok(self.agent_session_document.lock().await.clone())
+    }
+
     async fn get_document_access(
         &self,
         _document_id: &str,
@@ -301,6 +318,14 @@ impl AccessRepository for MockRepo {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(*self.agent_session_access.lock().await)
+    }
+
+    async fn get_initiative_access(
+        &self,
+        _initiative_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.initiative_access.lock().await)
     }
 
     async fn get_reminder_access(
@@ -405,8 +430,20 @@ impl AccessRepository for MockRepo {
             EntityType::Chat => Ok(self.chat_users.lock().await.clone()),
             EntityType::Project => Ok(self.project_users.lock().await.clone()),
             EntityType::EmailThread => Ok(self.thread_users.lock().await.clone()),
+            EntityType::AgentSession => Ok(self.agent_session_users.lock().await.clone()),
+            EntityType::Call => panic!("standalone calls must use direct grants"),
+            EntityType::Initiative => Ok(vec![]),
             _ => Err(AccessError::BadRequest("unsupported entity type")),
         }
+    }
+
+    async fn get_direct_entity_users(
+        &self,
+        _entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        assert_eq!(entity_type, EntityType::Call);
+        Ok(self.call_users.lock().await.clone())
     }
 
     async fn get_channel_users(
@@ -1226,6 +1263,7 @@ async fn team_scoped_bot_dispatches_all_item_types() {
         EntityType::Project,
         EntityType::EmailThread,
         EntityType::Call,
+        EntityType::Initiative,
     ] {
         let receipt = service
             .generate_bot_entity_access_receipt::<ViewAccessLevel>(
@@ -1249,7 +1287,7 @@ async fn team_scoped_bot_dispatches_all_item_types() {
         ));
     }
 
-    assert_eq!(repo.team_entity_access_calls.load(Ordering::SeqCst), 5);
+    assert_eq!(repo.team_entity_access_calls.load(Ordering::SeqCst), 6);
 }
 
 #[tokio::test]
@@ -1926,6 +1964,28 @@ async fn test_get_users_by_entity_document_returns_users() {
     assert_eq!(result[1].to_string(), "macro|bob@test.com");
 }
 
+/// Sessions grant their owner and their originating channel, both of which
+/// the generic accessor expansion reads, so they fan out like documents do.
+#[tokio::test]
+async fn test_get_users_by_entity_agent_session_returns_users() {
+    let users = vec![
+        user_id("macro|owner@test.com"),
+        user_id("macro|channel-member@test.com"),
+    ];
+    let repo = MockRepo::new().with_agent_session_users(users.clone());
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity(
+            "00000000-0000-0000-0000-00000000000a",
+            EntityType::AgentSession,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result, users);
+}
+
 #[tokio::test]
 async fn test_get_users_by_entity_document_returns_empty_when_no_users() {
     let repo = MockRepo::new();
@@ -2108,4 +2168,77 @@ async fn test_get_users_by_entity_project_with_many_users() {
     for (i, u) in result.iter().enumerate() {
         assert_eq!(u.to_string(), format!("macro|user{}@test.com", i));
     }
+}
+
+#[tokio::test]
+async fn document_session_access_tracks_current_document_permission() {
+    let repo = MockRepo::new();
+    *repo.agent_session_document.lock().await = Some("doc".into());
+    let service = EntityAccessServiceImpl::new(repo.clone());
+    for (permission, expected) in [
+        (Some(AccessLevel::View), Some(AccessLevel::View)),
+        (Some(AccessLevel::Comment), Some(AccessLevel::Edit)),
+        (Some(AccessLevel::Owner), Some(AccessLevel::Edit)),
+        (None, None),
+    ] {
+        *repo.document_access.lock().await = permission;
+        assert_eq!(
+            service
+                .get_access_level(None, "session", EntityType::AgentSession)
+                .await
+                .unwrap(),
+            expected
+        );
+    }
+    *repo.agent_session_access.lock().await = Some(AccessLevel::Owner);
+    assert_eq!(
+        service
+            .get_access_level(None, "session", EntityType::AgentSession)
+            .await
+            .unwrap(),
+        Some(AccessLevel::Owner)
+    );
+}
+
+#[tokio::test]
+async fn standalone_call_recipients_use_explicit_entity_grants() {
+    let repo = MockRepo::new();
+    let granted = MacroUserIdStr::parse_from_str("macro|participant@example.com")
+        .unwrap()
+        .into_owned();
+    *repo.call_channel.lock().await = Some(CallChannelInfo {
+        channel_id: None,
+        share_permission_id: "share".into(),
+    });
+    *repo.call_users.lock().await = vec![granted.clone()];
+    *repo.channel_users.lock().await = vec![
+        MacroUserIdStr::parse_from_str("macro|unrelated@example.com")
+            .unwrap()
+            .into_owned(),
+    ];
+    let service = EntityAccessServiceImpl::new(repo);
+    let users = service
+        .get_users_by_entity(&Uuid::now_v7().to_string(), EntityType::Call)
+        .await
+        .unwrap();
+    assert_eq!(users, vec![granted]);
+}
+
+#[tokio::test]
+async fn channel_call_recipients_still_use_channel_membership() {
+    let repo = MockRepo::new();
+    let member = MacroUserIdStr::parse_from_str("macro|member@example.com")
+        .unwrap()
+        .into_owned();
+    *repo.call_channel.lock().await = Some(CallChannelInfo {
+        channel_id: Some(Uuid::now_v7()),
+        share_permission_id: "share".into(),
+    });
+    *repo.channel_users.lock().await = vec![member.clone()];
+    let service = EntityAccessServiceImpl::new(repo);
+    let users = service
+        .get_users_by_entity(&Uuid::now_v7().to_string(), EntityType::Call)
+        .await
+        .unwrap();
+    assert_eq!(users, vec![member]);
 }

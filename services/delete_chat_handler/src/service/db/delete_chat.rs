@@ -1,7 +1,6 @@
 pub async fn delete_chat(db: sqlx::PgPool, chat_id: &str) -> anyhow::Result<()> {
     let mut transaction = db.begin().await?;
 
-    // Delete pins
     sqlx::query!(
         r#"
         DELETE FROM "Pin" WHERE "pinnedItemId" = $1 AND "pinnedItemType" = $2
@@ -12,7 +11,6 @@ pub async fn delete_chat(db: sqlx::PgPool, chat_id: &str) -> anyhow::Result<()> 
     .execute(&mut *transaction)
     .await?;
 
-    // Delete user history
     sqlx::query!(
         r#"
         DELETE FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = $2
@@ -23,7 +21,6 @@ pub async fn delete_chat(db: sqlx::PgPool, chat_id: &str) -> anyhow::Result<()> 
     .execute(&mut *transaction)
     .await?;
 
-    // Get share permission if present
     let share_permission: Option<String> = sqlx::query!(
         r#"
             SELECT "sharePermissionId" as share_permission_id
@@ -36,7 +33,6 @@ pub async fn delete_chat(db: sqlx::PgPool, chat_id: &str) -> anyhow::Result<()> 
     .await?;
 
     if let Some(share_permission) = share_permission {
-        // Delete share permission
         sqlx::query!(
             r#"
             DELETE FROM "SharePermission" WHERE id = $1"#,
@@ -46,12 +42,13 @@ pub async fn delete_chat(db: sqlx::PgPool, chat_id: &str) -> anyhow::Result<()> 
         .await?;
     }
 
+    let chat_uuid = macro_uuid::string_to_uuid(chat_id)?;
     sqlx::query!(
         r#"
         DELETE FROM "entity_access"
         WHERE "entity_id" = $1 AND "entity_type" = $2
         "#,
-        macro_uuid::string_to_uuid(chat_id).unwrap(),
+        chat_uuid,
         "chat",
     )
     .execute(&mut *transaction)
@@ -66,7 +63,12 @@ pub async fn delete_chat(db: sqlx::PgPool, chat_id: &str) -> anyhow::Result<()> 
     .execute(&mut *transaction)
     .await?;
 
+    entity_registry_db_utils::delete_entity(&mut transaction, chat_uuid).await?;
+
     transaction.commit().await?;
 
     Ok(())
 }
+
+#[cfg(test)]
+mod test;

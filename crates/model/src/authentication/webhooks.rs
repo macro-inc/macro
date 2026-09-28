@@ -1,4 +1,8 @@
 pub mod populate_jwt;
+
+#[cfg(test)]
+mod test;
+
 pub mod update_name;
 pub mod update_profile_picture;
 
@@ -44,4 +48,7 @@ pub struct User {
     pub last_name: Option<String>,
     /// Display name, set by the identity provider reconcile lambda on SSO signup
     pub full_name: Option<String>,
+    /// Caller-provided FusionAuth user metadata.
+    #[serde(default)]
+    pub data: Option<serde_json::Value>,
 }

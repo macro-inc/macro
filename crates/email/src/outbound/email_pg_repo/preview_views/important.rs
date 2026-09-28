@@ -130,6 +130,7 @@ pub(crate) async fn important_preview_cursor(
                t.provider_id,
                t.inbox_visible,
                t.is_read,
+               t.is_signal,
                isk.effective_ts as "sort_ts!",
                isk.created_at as "created_at!",
                isk.updated_at as "updated_at!",

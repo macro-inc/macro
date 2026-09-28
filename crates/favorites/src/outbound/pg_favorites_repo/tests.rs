@@ -6,6 +6,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::PgFavoritesRepo;
+use crate::domain::models::FavoriteFilter;
 use crate::domain::ports::FavoritesRepo;
 
 const USER_A: &str = "macro|user-a@macro.com";
@@ -145,7 +146,7 @@ async fn list_favorites_skips_deleted(pool: PgPool) {
     .expect("email favorite should insert");
 
     let favorites = repo
-        .list_favorites(&user(USER_A))
+        .list_favorites(&user(USER_A), &FavoriteFilter::default())
         .await
         .expect("favorites should list");
     assert_eq!(favorites.len(), 2);
@@ -184,7 +185,7 @@ async fn list_favorites_hydrates_uuid_keyed_entities(pool: PgPool) {
     .expect("non-uuid channel favorite should insert");
 
     let favorites = repo
-        .list_favorites(&user(USER_A))
+        .list_favorites(&user(USER_A), &FavoriteFilter::default())
         .await
         .expect("favorites should list");
     assert_eq!(favorites.len(), 2);
@@ -192,6 +193,156 @@ async fn list_favorites_hydrates_uuid_keyed_entities(pool: PgPool) {
     assert_eq!(favorites[0].channel_type.as_deref(), Some("public"));
     assert_eq!(favorites[1].entity_id, "not-a-uuid");
     assert_eq!(favorites[1].channel_type, None);
+}
+
+async fn listed(repo: &PgFavoritesRepo, filter: &FavoriteFilter) -> Vec<(EntityType, String)> {
+    repo.list_favorites(&user(USER_A), filter)
+        .await
+        .expect("favorites should list")
+        .into_iter()
+        .map(|favorite| (favorite.entity_type, favorite.entity_id))
+        .collect()
+}
+
+async fn insert_filter_fixture(pool: &PgPool, repo: &PgFavoritesRepo) {
+    insert_user(pool, USER_A).await;
+    insert_document(pool, "doc-1", "Doc 1", USER_A).await;
+    insert_document(pool, "shared-id", "Shared", USER_A).await;
+
+    for entity in [
+        EntityType::Document.with_entity_str("doc-1"),
+        EntityType::Document.with_entity_str("shared-id"),
+        EntityType::Channel.with_entity_str("shared-id"),
+    ] {
+        repo.add_favorite(&user(USER_A), &entity)
+            .await
+            .expect("favorite should insert");
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_favorites_filters_on_each_dimension_and_on_both(pool: PgPool) {
+    let repo = PgFavoritesRepo::new(pool.clone());
+    insert_filter_fixture(&pool, &repo).await;
+
+    assert_eq!(
+        listed(&repo, &FavoriteFilter::default()).await,
+        vec![
+            (EntityType::Document, "doc-1".to_string()),
+            (EntityType::Document, "shared-id".to_string()),
+            (EntityType::Channel, "shared-id".to_string()),
+        ],
+        "empty vectors constrain nothing"
+    );
+
+    assert_eq!(
+        listed(
+            &repo,
+            &FavoriteFilter {
+                entity_types: vec![EntityType::Channel],
+                entity_ids: Vec::new(),
+            }
+        )
+        .await,
+        vec![(EntityType::Channel, "shared-id".to_string())]
+    );
+
+    assert_eq!(
+        listed(
+            &repo,
+            &FavoriteFilter {
+                entity_types: Vec::new(),
+                entity_ids: vec!["shared-id".to_string()],
+            }
+        )
+        .await,
+        vec![
+            (EntityType::Document, "shared-id".to_string()),
+            (EntityType::Channel, "shared-id".to_string()),
+        ]
+    );
+
+    assert_eq!(
+        listed(
+            &repo,
+            &FavoriteFilter {
+                entity_types: vec![EntityType::Channel],
+                entity_ids: vec!["shared-id".to_string()],
+            }
+        )
+        .await,
+        vec![(EntityType::Channel, "shared-id".to_string())],
+        "the two dimensions are combined"
+    );
+
+    assert_eq!(
+        listed(
+            &repo,
+            &FavoriteFilter {
+                entity_types: vec![EntityType::Document, EntityType::Channel],
+                entity_ids: vec!["doc-1".to_string(), "shared-id".to_string()],
+            }
+        )
+        .await,
+        vec![
+            (EntityType::Document, "doc-1".to_string()),
+            (EntityType::Document, "shared-id".to_string()),
+            (EntityType::Channel, "shared-id".to_string()),
+        ],
+        "values within a dimension are alternatives"
+    );
+
+    assert!(
+        listed(
+            &repo,
+            &FavoriteFilter {
+                entity_types: vec![EntityType::Channel],
+                entity_ids: vec!["doc-1".to_string()],
+            }
+        )
+        .await
+        .is_empty(),
+        "a pair nothing satisfies matches nothing"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_filtered_list_keeps_the_manual_order_and_the_soft_delete_guard(pool: PgPool) {
+    let repo = PgFavoritesRepo::new(pool.clone());
+    insert_filter_fixture(&pool, &repo).await;
+
+    let reordered = [
+        EntityType::Document.with_entity_str("shared-id"),
+        EntityType::Channel.with_entity_str("shared-id"),
+        EntityType::Document.with_entity_str("doc-1"),
+    ];
+    repo.reorder_favorites(&user(USER_A), &reordered)
+        .await
+        .expect("reorder should run");
+
+    let filter = FavoriteFilter {
+        entity_types: vec![EntityType::Document],
+        entity_ids: Vec::new(),
+    };
+    assert_eq!(
+        listed(&repo, &filter).await,
+        vec![
+            (EntityType::Document, "shared-id".to_string()),
+            (EntityType::Document, "doc-1".to_string()),
+        ],
+        "the manual order survives the filter"
+    );
+
+    sqlx::query(r#"UPDATE "Document" SET "deletedAt" = now() WHERE id = 'shared-id'"#)
+        .execute(&pool)
+        .await
+        .expect("document should soft delete");
+
+    assert_eq!(
+        listed(&repo, &filter).await,
+        vec![(EntityType::Document, "doc-1".to_string())],
+        "a filter must not resurrect a favorite whose target is deleted"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -217,7 +368,7 @@ async fn remove_favorite_by_entity_scopes_to_user(pool: PgPool) {
 
     // User B's favorite for the same entity is untouched.
     let b_favorites = repo
-        .list_favorites(&user(USER_B))
+        .list_favorites(&user(USER_B), &FavoriteFilter::default())
         .await
         .expect("user B favorites should list");
     assert_eq!(b_favorites.len(), 1);
@@ -247,7 +398,7 @@ async fn reorder_favorites_sets_manual_order(pool: PgPool) {
         .expect("reorder should run");
 
     let favorites = repo
-        .list_favorites(&user(USER_A))
+        .list_favorites(&user(USER_A), &FavoriteFilter::default())
         .await
         .expect("favorites should list");
     let listed: Vec<&str> = favorites.iter().map(|f| f.entity_id.as_str()).collect();

@@ -3,6 +3,7 @@ use std::io::Write;
 use clap::Parser;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentMetadata, FileType};
+use model_owner::Owner;
 use tempfile::NamedTempFile;
 
 use crate::Cli;
@@ -181,7 +182,7 @@ fn test_document_metadata() -> DocumentMetadata {
     DocumentMetadata::new_document(
         "doc-123",
         1,
-        owner,
+        Owner::User(owner),
         "My Document",
         Some(FileType::Pdf),
         "sha",
@@ -201,7 +202,7 @@ fn test_document_metadata_with_type(file_type: FileType) -> DocumentMetadata {
     DocumentMetadata::new_document(
         "doc-123",
         1,
-        owner,
+        Owner::User(owner),
         "Test Doc",
         Some(file_type),
         "sha",

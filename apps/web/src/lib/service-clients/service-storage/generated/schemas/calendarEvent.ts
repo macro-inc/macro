@@ -14,6 +14,7 @@ import type { CalendarEventDescription } from './calendarEventDescription';
 import type { CalendarEventLocation } from './calendarEventLocation';
 import type { CalendarEventOrganizerEmail } from './calendarEventOrganizerEmail';
 import type { CalendarEventOrganizerName } from './calendarEventOrganizerName';
+import type { CalendarEventSourceContent } from './calendarEventSourceContent';
 import type { EventReminders } from './eventReminders';
 import type { EventStatus } from './eventStatus';
 import type { EventTime } from './eventTime';
@@ -23,6 +24,9 @@ import type { EventVisibility } from './eventVisibility';
 
 /**
  * A stable, first-class Macro calendar event entity.
+
+Content fields hold the canonical source's values: the account's primary
+calendar copy when one is synced, else the freshest remaining copy.
  */
 export interface CalendarEvent {
   /** Attendees, keyed by email during persistence. */
@@ -52,7 +56,7 @@ equal. */
   icalUid: string;
   /** Macro entity identifier. */
   id: string;
-  /** Whether the current user can edit the canonical source. */
+  /** Whether the canonical source's calendar prohibits editing it. */
   isReadOnly: boolean;
   /** Optional physical or virtual location label. */
   location?: CalendarEventLocation;
@@ -73,6 +77,11 @@ compare equal. */
    * @minimum 0
    */
   sequence: number;
+  /** Content of every active copy of this event, canonical first: the
+primary calendar's copy, then the freshest. A client picks the copy
+whose calendar it is showing and falls back to the first. Populated
+only on the read path, so stored projections omit it. */
+  sources?: CalendarEventSourceContent[];
   /** Event status. */
   status: EventStatus;
   /** Timed or all-day shape. */

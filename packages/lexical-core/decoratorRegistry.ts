@@ -3,7 +3,15 @@ import type {
   AgentContextDecoratorProps,
   AgentContextNode,
 } from './nodes/AgentContextNode';
+import type {
+  AgentSessionMentionDecoratorProps,
+  AgentSessionMentionNode,
+} from './nodes/AgentSessionMentionNode';
 import type { AwaitDecoratorProps, AwaitNode } from './nodes/AwaitNode';
+import type {
+  ConnectAppDecoratorProps,
+  ConnectAppNode,
+} from './nodes/ConnectAppNode';
 import type {
   ContactMentionDecoratorProps,
   ContactMentionNode,
@@ -50,6 +58,10 @@ import type {
   PullRequestMentionDecoratorProps,
   PullRequestMentionNode,
 } from './nodes/PullRequestMentionNode';
+import type {
+  ReplyTargetDecoratorProps,
+  ReplyTargetNode,
+} from './nodes/ReplyTargetNode';
 import type {
   SnapshotDecoratorProps,
   SnapshotNode,
@@ -123,9 +135,17 @@ export interface NodeDecoratorMap {
     klass: typeof DateMentionNode;
     props: DateMentionDecoratorProps;
   };
+  AgentSessionMentionNode: {
+    klass: typeof AgentSessionMentionNode;
+    props: AgentSessionMentionDecoratorProps;
+  };
   PullRequestMentionNode: {
     klass: typeof PullRequestMentionNode;
     props: PullRequestMentionDecoratorProps;
+  };
+  ReplyTargetNode: {
+    klass: typeof ReplyTargetNode;
+    props: ReplyTargetDecoratorProps;
   };
   EquationNode: {
     klass: typeof EquationNode;
@@ -154,6 +174,10 @@ export interface NodeDecoratorMap {
   TagMentionNode: {
     klass: typeof TagMentionNode;
     props: TagMentionDecoratorProps;
+  };
+  ConnectAppNode: {
+    klass: typeof ConnectAppNode;
+    props: ConnectAppDecoratorProps;
   };
   WatermarkNode: {
     klass: typeof WatermarkNode;

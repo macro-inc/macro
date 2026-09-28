@@ -91,6 +91,21 @@ fn stack_has_no_snapshot_verb() {
 }
 
 #[test]
+fn run_local_and_stack_up_accept_no_snapshot() {
+    let cli = Cli::try_parse_from(["cargo-x", "run-local", "--no-snapshot"]).unwrap();
+    let Cmd::RunLocal(args) = cli.command else {
+        panic!("expected run-local command");
+    };
+    assert!(args.no_snapshot);
+
+    let cli = Cli::try_parse_from(["cargo-x", "stack", "up", "--no-snapshot"]).unwrap();
+    let Cmd::Stack(StackCmd::Up(args)) = cli.command else {
+        panic!("expected stack up");
+    };
+    assert!(args.run.no_snapshot);
+}
+
+#[test]
 fn seed_scenario_accepts_instance_and_trailing_scenario_arguments() {
     let cli = Cli::try_parse_from([
         "cargo-x",

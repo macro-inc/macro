@@ -1,4 +1,4 @@
-import { alphaToken, mixTokens, tokenReference } from './themeVNext';
+import { alphaToken, mixTokens, tokenReference } from './themeColorTokens';
 
 export type ThemeAssignment =
   | { kind: 'custom'; value: string }

@@ -4,6 +4,7 @@
 //! Implementations live in the outbound module.
 
 use std::collections::HashMap;
+use std::pin::Pin;
 
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::EntityType as AccessEntityType;
@@ -22,8 +23,9 @@ use uuid::Uuid;
 
 use super::model::{
     EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
-    EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreateTagDefinitionResult,
-    PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
+    EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreatePropertyOptionResult,
+    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, PropertyOptionReplaceOutcome,
+    PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
     UpdatePropertyOptionOutcome, ViewReceipt,
 };
 
@@ -111,6 +113,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Vec<PropertyOption>, Self::Err>> + Send;
 
+    /// Read options for requested system, caller-owned, or caller-team definitions.
+    /// Missing or inaccessible definitions are omitted; visible definitions with no options remain.
+    fn get_visible_property_options_batch<'a>(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &MacroUserIdStr<'a>,
+        team_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, Vec<PropertyOption>>, Self::Err>> + Send;
+
     /// Create a new property option.
     fn create_property_option(
         &self,
@@ -119,6 +130,16 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         value: PropertyOptionValue,
         color: Option<String>,
     ) -> impl Future<Output = Result<PropertyOption, Self::Err>> + Send;
+
+    /// Resolve by exact value, inserting if absent. Concurrent calls return the
+    /// same option; an existing option's color and display order are preserved.
+    fn get_or_create_property_option(
+        &self,
+        property_definition_id: Uuid,
+        display_order: i32,
+        value: PropertyOptionValue,
+        color: Option<String>,
+    ) -> impl Future<Output = Result<GetOrCreatePropertyOptionResult, Self::Err>> + Send;
 
     /// Update a property option's value, color, and display order in place.
     /// The option id is preserved, so every entity referencing it reflects the
@@ -130,6 +151,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         color: Option<String>,
         display_order: i32,
     ) -> impl Future<Output = Result<UpdatePropertyOptionOutcome, Self::Err>> + Send;
+
+    /// Apply a whole-set option change in one transaction: deletes (stripping
+    /// ids from entity values), in-place rewrites, then inserts. Rewrites go
+    /// through temporary values so a set of options can trade values.
+    fn replace_property_options(
+        &self,
+        property_definition_id: Uuid,
+        plan: &PropertyOptionReplacePlan,
+    ) -> impl Future<Output = Result<PropertyOptionReplaceOutcome, Self::Err>> + Send;
 
     /// Delete a property option and strip its id from every entity value that
     /// references it, atomically. Returns `true` if the option was deleted,
@@ -438,4 +468,16 @@ pub trait NotificationService: Send + Sync + 'static {
         &self,
         notification: TaskAssignedNotification<'a>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Initiative-owned sharing operations required when assigning a project.
+/// The implementation keeps grants on the initiative and its description in
+/// sync while leaving the owning initiative service in charge of sharing side effects.
+pub trait InitiativeAssigneeService: std::fmt::Debug + Send + Sync + 'static {
+    /// Grant assignees edit access, preserving existing grants when cleared.
+    fn grant_assignees<'a>(
+        &'a self,
+        access: &'a EditReceipt,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), super::error::PropertiesErr>> + Send + 'a>>;
 }

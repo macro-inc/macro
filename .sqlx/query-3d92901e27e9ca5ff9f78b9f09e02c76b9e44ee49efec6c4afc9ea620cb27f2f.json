@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.id, i.\"documentId\" AS document_id, m.\"modificationData\" AS payload\n           FROM \"DocumentInstanceModificationData\" m\n           JOIN \"DocumentInstance\" i ON i.id = m.\"documentInstanceId\"\n           JOIN \"Document\" d ON d.id = i.\"documentId\"\n           WHERE i.\"documentId\" = ANY($1) AND d.\"fileType\" = 'pdf'\n             AND jsonb_path_exists(m.\"modificationData\", $2::text::jsonpath)\n           ORDER BY m.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "document_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "payload",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3d92901e27e9ca5ff9f78b9f09e02c76b9e44ee49efec6c4afc9ea620cb27f2f"
+}

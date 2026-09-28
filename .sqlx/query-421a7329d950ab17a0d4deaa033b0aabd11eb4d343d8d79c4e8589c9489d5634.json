@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT un.notification_id\n            FROM user_notification un\n            JOIN notification n ON n.id = un.notification_id\n            WHERE un.user_id = $1\n              AND un.notification_id = ANY($2)\n              AND un.deleted_at IS NULL\n              AND un.state = 'unseen'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "421a7329d950ab17a0d4deaa033b0aabd11eb4d343d8d79c4e8589c9489d5634"
+}

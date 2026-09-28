@@ -5,6 +5,7 @@ const SERVICE_NAMES = [
   'convert-service',
   'notification-service',
   'contacts-service',
+  'calendar-service',
   'cloud-storage-service',
   'search-processing-service',
   'unfurl-service',
@@ -16,6 +17,7 @@ const SERVICE_NAMES = [
   'email-service',
   'document-cognition',
   'agent-harness-service',
+  'preview-gateway',
 ];
 
 for (const service_name of SERVICE_NAMES) {

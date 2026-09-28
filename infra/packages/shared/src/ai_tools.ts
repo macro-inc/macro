@@ -54,6 +54,10 @@ export function getAiToolsInfra(): AiToolsInfra {
     .getOutput('docxUploadBucketArn')
     .apply((v) => v as string);
 
+  const documentDeleteQueueArn: pulumi.Output<string> = cloudStorageServiceStack
+    .getOutput('deleteDocumentQueueArn')
+    .apply((v) => v as string);
+
   // Queue names come from the `macro_queues` crate at runtime; we only need the
   // ARNs here for the IAM send/receive grants below.
   const emailScheduledQueueArn: pulumi.Output<string> = emailServiceStack
@@ -100,6 +104,7 @@ export function getAiToolsInfra(): AiToolsInfra {
       mcpCredentialsKeyArn,
     ],
     queueArns: [
+      documentDeleteQueueArn,
       emailScheduledQueueArn,
       gmailOpsQueueArn,
       notificationIngressQueueArn,
@@ -128,16 +133,10 @@ export function getAiToolsServiceRoleArns(): pulumi.Output<string>[] {
     'ai-tools-agent-schedule-service-stack',
     { name: `macro-inc/agent-schedule-service/${stack}` }
   );
-  const agentHarnessServiceRoleArns =
-    stack === 'dev'
-      ? [
-          new pulumi.StackReference('ai-tools-agent-harness-service-stack', {
-            name: `macro-inc/agent-harness-service/${stack}`,
-          })
-            .getOutput('agentHarnessServiceRoleArn')
-            .apply((v) => v as string),
-        ]
-      : [];
+  const agentHarnessServiceStack = new pulumi.StackReference(
+    'ai-tools-agent-harness-service-stack',
+    { name: `macro-inc/agent-harness-service/${stack}` }
+  );
 
   return [
     mcpServerStack.getOutput('mcpServerRoleArn').apply((v) => v as string),
@@ -147,6 +146,8 @@ export function getAiToolsServiceRoleArns(): pulumi.Output<string>[] {
     agentScheduleServiceStack
       .getOutput('agentScheduleServiceRoleArn')
       .apply((v) => v as string),
-    ...agentHarnessServiceRoleArns,
+    agentHarnessServiceStack
+      .getOutput('agentHarnessServiceRoleArn')
+      .apply((v) => v as string),
   ];
 }

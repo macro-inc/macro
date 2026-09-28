@@ -1,5 +1,6 @@
 import { createContext, type JSX, useContext } from 'solid-js';
 import { cn } from '../utils/classname';
+import { createVariants } from '../utils/variants';
 import type { ButtonSize, ButtonVariant } from './Button';
 import { Layer } from './Layer';
 
@@ -26,68 +27,90 @@ type ButtonGroupProps = {
   children?: JSX.Element;
 };
 
-const groupVariantStyles: Record<ButtonVariant, string> = {
-  danger: 'border border-failure/50  ',
-  outline: 'border border-edge-muted  ',
-  accent: 'border border-accent  ',
-  success: 'border border-success  ',
-  ghost: '                          ',
-  strong: 'border border-transparent',
-  cta: 'border border-transparent ',
-};
+/** Canonical classes for the button-group frame. */
+export const buttonGroupVariants = createVariants(
+  cn(
+    'inline-flex items-center justify-center rounded-[10px] data-[orientation=horizontal]:rounded-full border border-edge-button bg-control',
+    'has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-edge-muted',
+    'has-[[data-slot=input-group-control]]:rounded-full',
+    'data-[orientation=horizontal]:flex-row',
+    'data-[orientation=vertical]:flex-col',
+    // strip per-button rounding + borders so the group owns the frame
+    '**:data-button:rounded-none **:data-button:border-0'
+  ),
+  {
+    variant: {
+      danger: '',
+      outline: '',
+      accent: '',
+      success: '',
+      ghost: '',
+      plain: 'border-0 bg-transparent',
+      strong: '',
+      cta: '',
+      navigation: 'border-transparent bg-transparent',
+    },
+    // Explicit cross-axis size so the frame matches a standalone Button of the
+    // same size (border-box absorbs the 1px frame); radius tracks size too.
+    size: {
+      xs: '',
+      sm: 'data-[orientation=horizontal]:h-6',
+      md: '',
+      lg: '',
+      xl: 'data-[orientation=horizontal]:h-12',
+      'icon-xs':
+        'data-[orientation=horizontal]:h-5 data-[orientation=vertical]:w-5',
+      'icon-sm':
+        'data-[orientation=horizontal]:h-6 data-[orientation=vertical]:w-6',
+      'icon-composer':
+        'data-[orientation=horizontal]:h-6 data-[orientation=vertical]:w-6 not-touch:data-[orientation=horizontal]:h-[33.75px] not-touch:data-[orientation=vertical]:w-[33.75px]',
+      'icon-md':
+        'data-[orientation=horizontal]:h-8 data-[orientation=vertical]:w-8',
+      'icon-lg':
+        'rounded-xl data-[orientation=horizontal]:h-9 data-[orientation=vertical]:w-9',
+    },
+  },
+  {
+    variant: 'ghost',
+    size: 'md',
+  }
+);
 
-const dividerVariantStyles: Record<ButtonVariant, string> = {
-  danger: 'bg-failure/50',
-  outline: 'bg-edge-muted',
-  accent: 'bg-accent',
-  success: 'bg-success',
-  ghost: 'bg-edge-muted',
-  strong: 'bg-surface-4/50',
-  cta: 'bg-surface/50',
-};
-
-/* explicit cross-axis size so the group's outer box matches a standalone
-   Button of the same size (border-box absorbs the 1px outer border) */
-const groupHorizontalSize: Record<ButtonSize, string> = {
-  xs: '',
-  'icon-xs': 'h-5',
-  xl: 'h-12',
-  lg: '',
-  md: '',
-  sm: 'h-6',
-  'icon-lg': 'h-11',
-  'icon-md': 'h-9',
-  'icon-sm': 'h-6',
-};
-
-const groupVerticalSize: Record<ButtonSize, string> = {
-  xs: '',
-  'icon-xs': 'w-5',
-  xl: '',
-  lg: '',
-  md: '',
-  sm: '',
-  'icon-lg': 'w-11',
-  'icon-md': 'w-9',
-  'icon-sm': 'w-6',
-};
+/** Divider frame classes; `variant` picks the rule color. */
+export const buttonGroupDividerVariants = createVariants(
+  cn(
+    'shrink-0 self-stretch',
+    'data-[orientation=horizontal]:w-px',
+    'data-[orientation=vertical]:h-px'
+  ),
+  {
+    variant: {
+      danger: 'bg-edge-divider',
+      outline: 'bg-edge-divider',
+      accent: 'bg-edge-divider',
+      success: 'bg-edge-divider',
+      ghost: 'bg-edge-divider',
+      plain: 'bg-edge-divider',
+      strong: 'bg-edge-divider',
+      cta: 'bg-edge-divider',
+      navigation: 'bg-edge-divider',
+    },
+  },
+  {
+    variant: 'outline',
+  }
+);
 
 export const ButtonGroup = (props: ButtonGroupProps) => {
   const orientation = () => props.orientation ?? 'horizontal';
-  const variant = () => props.variant ?? 'ghost';
-  const sizeClass = () => {
-    if (!props.size) return '';
-    return orientation() === 'horizontal'
-      ? groupHorizontalSize[props.size]
-      : groupVerticalSize[props.size];
-  };
+  const size = () => props.size ?? 'md';
 
   const ctx: ButtonGroupContextValue = {
     get variant() {
       return props.variant;
     },
     get size() {
-      return props.size;
+      return size();
     },
     get orientation() {
       return orientation();
@@ -100,20 +123,17 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
         <div
           data-slot="button-group"
           data-orientation={orientation()}
+          data-size={size()}
           class={cn(
-            'data-[orientation=horizontal]:flex-row items-center',
-            'data-[orientation=vertical]:flex-col justify-center',
-            'inline-flex overflow-hidden rounded-sm',
-            /* strip per-button rounding + borders so the group owns the frame */
-            '**:data-button:rounded-none',
-            '**:data-button:border-0',
-            groupVariantStyles[variant()],
-            sizeClass(),
+            buttonGroupVariants({ variant: props.variant, size: props.size }),
             props.class
           )}
           role="group"
         >
-          {props.children}
+          {/* Clip the segments independently of the group frame. */}
+          <div class="flex size-full min-w-0 items-center justify-center overflow-hidden rounded-[inherit] [flex-direction:inherit]">
+            {props.children}
+          </div>
         </div>
       </Layer>
     </ButtonGroupContext.Provider>
@@ -125,17 +145,13 @@ type DividerProps = { class?: string };
 const Divider = (props: DividerProps) => {
   const group = useButtonGroupContext();
   const orientation = () => group?.orientation ?? 'horizontal';
-  const variant = () => group?.variant ?? 'outline';
   return (
     <div
       role="separator"
       aria-orientation={orientation()}
       data-orientation={orientation()}
       class={cn(
-        'shrink-0 self-stretch',
-        'data-[orientation=horizontal]:w-px',
-        'data-[orientation=vertical]:h-px',
-        dividerVariantStyles[variant()],
+        buttonGroupDividerVariants({ variant: group?.variant }),
         props.class
       )}
     />

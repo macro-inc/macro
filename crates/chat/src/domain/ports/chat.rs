@@ -1,6 +1,6 @@
 use crate::domain::models::{
     ChatResponse, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs,
-    PatchChatMessageArgs, Result,
+    PatchChatMessageArgs, PatchChatRepoArgs, Result,
 };
 use agent::types::ChatMessageContent;
 use ai_toolset::tool_object::UserToolResponse;
@@ -11,6 +11,7 @@ use entity_access::domain::models::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::Chat;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 /// Repository trait for low-level chat data access.
@@ -75,6 +76,13 @@ pub trait ChatRepo: Send + Sync + 'static {
         chat_id: &str,
     ) -> impl std::future::Future<Output = Result<SharePermissionV2>> + Send;
 
+    /// Load the canonical team-share facts (persisted owner, owner's team,
+    /// current explicit grant, revision) the owner policy authorizes against.
+    fn get_team_share_facts(
+        &self,
+        chat_id: &str,
+    ) -> impl std::future::Future<Output = Result<TeamShareFacts>> + Send;
+
     /// Soft-delete a chat (sets `deleted_at`, removes pins and history).
     fn delete(&self, chat_id: &str) -> impl std::future::Future<Output = Result<()>> + Send;
 
@@ -85,11 +93,15 @@ pub trait ChatRepo: Send + Sync + 'static {
     ) -> impl std::future::Future<Output = Result<()>> + Send;
 
     /// Patch a chat's metadata (name, project, share permissions).
+    ///
+    /// `args.team_share` is the owner-authorized command for an explicit
+    /// `teamShareAccessLevel`; the repository applies it atomically with the
+    /// rest of the patch and rejects a team level that arrives without one.
     fn patch(
         &self,
         user_id: MacroUserIdStr<'static>,
         chat_id: &str,
-        args: PatchChatArgs,
+        args: PatchChatRepoArgs,
     ) -> impl std::future::Future<Output = Result<()>> + Send;
 
     /// Update a project's `updatedAt` timestamp.

@@ -16,7 +16,7 @@ const documentFilter = config({
   group: 'entity-type',
   predicate: documentPredicate,
   query: {
-    include: { fileAssoc: ['assoc:md', 'assoc:canvas'] },
+    include: { fileType: ['md', 'canvas', 'spreadsheet'] },
     exclude: { subType: ['task'] },
   },
 });
@@ -68,7 +68,7 @@ const fileFilter = config({
   group: 'entity-type',
   predicate: filePredicate,
   query: {
-    exclude: { fileAssoc: ['assoc:md', 'assoc:canvas'], subType: ['task'] },
+    exclude: { fileType: ['md', 'canvas', 'spreadsheet'], subType: ['task'] },
   },
 });
 

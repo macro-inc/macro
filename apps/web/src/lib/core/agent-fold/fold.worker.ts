@@ -11,11 +11,10 @@
  *
  * It is also where a live session's fold *lives*: one machine per session id,
  * held across requests. That is the whole reason requests are served strictly
- * one at a time below — a machine is a sequence, and answering an `open` and
- * a `push` concurrently would fold frames out of order.
+ * one at a time below — a machine is a sequence, and answering two `push`es
+ * concurrently would fold inputs out of order.
  */
 
-import type { FoldedStreamEvent } from '@service-agent-fold/generated/types';
 import { match } from 'ts-pattern';
 import type { FoldRequest, FoldResponse } from './protocol';
 import { type FoldStream, loadAgentFoldWasm } from './wasm-module';
@@ -29,10 +28,10 @@ const streams = new Map<string, FoldStream>();
  * The tail of the request chain.
  *
  * Handling a request awaits the wasm module, so without this each request
- * would suspend and resume independently and two frames could reach a machine
+ * would suspend and resume independently and two inputs could reach a machine
  * in the wrong order. Chaining every request onto the previous one makes the
- * worker serve them in the order they were posted, which is the order the log
- * is in.
+ * worker serve them in the order they were posted, which is the order the
+ * caller folded them in.
  */
 let queue: Promise<void> = Promise.resolve();
 
@@ -40,41 +39,20 @@ async function serve(request: FoldRequest): Promise<FoldResponse> {
   const wasm = await loadAgentFoldWasm();
 
   return match(request)
-    .with({ kind: 'once' }, ({ id, kind, sessionId, entries }) => ({
-      id,
-      kind,
-      ok: true as const,
-      messages: wasm.fold_session(sessionId, entries),
-    }))
-    .with({ kind: 'open' }, ({ id, kind, sessionId, entries }) => {
-      // A fresh machine even when one is already open: the entries are a
-      // snapshot from the top of the log, so replaying them into a machine
-      // that has already seen them would duplicate every message.
-      streams.get(sessionId)?.free();
-      const stream = new wasm.FoldStream(sessionId);
-      streams.set(sessionId, stream);
-      const messages = stream.extend(entries);
-      return {
-        id,
-        kind,
-        ok: true as const,
-        messages,
-        metadata: stream.metadata(),
-      };
-    })
-    .with({ kind: 'push' }, ({ id, kind, sessionId, entries }) => {
-      const stream = streams.get(sessionId);
-      // Refusing rather than opening one: a machine seeded from the middle of
-      // a log folds a session that never happened, and a caller that has lost
-      // its machine needs to refetch, not to keep pushing.
-      if (!stream) throw new Error(`no open fold for session ${sessionId}`);
-      const changes: FoldedStreamEvent[] = [];
-      for (const entry of entries) {
-        changes.push(...stream.push(entry));
+    .with({ kind: 'push' }, ({ id, kind, sessionId, inputs }) => {
+      // Created on first use. The machine itself refuses anything before a
+      // snapshot, so a caller that lost its machine (a worker restart) hears
+      // about it on its next live input rather than folding from the middle
+      // of a log.
+      let stream = streams.get(sessionId);
+      if (!stream) {
+        stream = new wasm.FoldStream(sessionId);
+        streams.set(sessionId, stream);
       }
+      const changes = stream.push(inputs);
       return { id, kind, ok: true as const, changes };
     })
-    .with({ kind: 'messages' }, ({ id, kind, sessionId }) => {
+    .with({ kind: 'read' }, ({ id, kind, sessionId }) => {
       const stream = streams.get(sessionId);
       if (!stream) throw new Error(`no open fold for session ${sessionId}`);
       return {
@@ -102,7 +80,7 @@ scope.addEventListener('message', (event: MessageEvent<FoldRequest>) => {
       response = await serve(request);
     } catch (error) {
       // Includes the wasm module failing to load at all, which is why the
-      // caller treats a failure as "this channel folds to nothing" rather
+      // caller treats a failure as "this session folds to nothing" rather
       // than retrying: a missing module will not appear on a second try.
       response = {
         id: request.id,

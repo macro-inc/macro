@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM comms_channel_participants bot_p\n                INNER JOIN comms_channel_participants user_p\n                  ON user_p.channel_id = bot_p.channel_id\n                 AND user_p.user_id = $2\n                 AND user_p.left_at IS NULL\n                WHERE bot_p.user_id = $1\n                  AND bot_p.left_at IS NULL\n            ) AS \"shares!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "shares!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8a18ae7fd3e128f4310259d0b98b649ed1fdbc54cad49ca8fe0c32db08afaa70"
+}

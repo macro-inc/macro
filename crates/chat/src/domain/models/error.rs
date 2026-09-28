@@ -16,6 +16,10 @@ pub enum ChatErr {
     /// Bad request
     #[error("bad request: {0}")]
     BadRequest(String),
+    /// The requested change conflicts with the persisted state (for example a
+    /// stale team-share revision); the caller should reload and retry.
+    #[error("conflict: {0}")]
+    Conflict(String),
     /// Access denied.
     #[error(transparent)]
     Access(#[from] AccessError),

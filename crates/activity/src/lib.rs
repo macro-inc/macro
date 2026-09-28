@@ -17,26 +17,40 @@
 //! decoded event to the owning domain's mapping.
 //!
 //! Features: `outbound` (Postgres adapter), `consumer` (generic Kafka
-//! consumer); both on by default. The models are always available.
+//! consumer and realtime Kafka adapters), `realtime` (user-scoped realtime
+//! distribution); all on by default. The models and wire events are always
+//! available.
 
 pub mod domain;
 #[cfg(any(feature = "ai_tools", feature = "consumer"))]
 pub mod inbound;
-#[cfg(feature = "outbound")]
+#[cfg(any(feature = "outbound", feature = "consumer"))]
 pub mod outbound;
 
+pub use domain::events::{ActivityMacroEvent, ActivityTopicEvent, ActivityWireRow};
 pub use domain::models::{
     Action, ActionDecodeError, Activity, ActivityRecord, ActivitySource, Actor, Attribution,
-    CallStart, CommonAction, DomainActivity, EntityType, Ingest, ParticipantChange, PropertyChange,
-    RecordedAction, VIEW_ACTION_TAGS, activity_id, event_time,
+    CallStart, CommonAction, DomainActivity, EntityType, Ingest, InitiativeTaskChange,
+    ParticipantChange, PropertyChange, RecordedAction, VIEW_ACTION_TAGS, activity_id, event_time,
 };
 pub use domain::overview::{
     ActivityOverview, ActivityOverviewError, ActivityWindow, ActivityWindowError, DayCount,
     EntityRank, MAX_ACTIVITY_WINDOW_DAYS, TOP_ENTITY_LIMIT, trailing_year,
 };
+pub use domain::ports::{ActivityAudienceExpander, ActivityRealtimePublisher};
 pub use domain::ports::{ActivityFeedPage, ActivityRange, ActivityReads, EntityActivityMap};
+#[cfg(feature = "realtime")]
+pub use domain::realtime::{
+    ActivityRealtimeConsumerService, ActivitySubscription, ActivitySubscriptionExit,
+    ActivitySubscriptionService, ActivitySubscriptionUpdate, ActivityTopicEventConsumer,
+    NoOpActivitySubscriptionService,
+};
 #[cfg(feature = "ai_tools")]
 pub use domain::{
     ports::{ActivityMetadataResolver, ActivityPropertyMetadata},
     service::{ActivityReadService, NoopActivityMetadataResolver, ResolvedActivityRange},
 };
+#[cfg(all(feature = "consumer", feature = "realtime"))]
+pub use outbound::activity_topic_consumer::ActivityTopicConsumer;
+#[cfg(feature = "consumer")]
+pub use outbound::kafka_activity_realtime::KafkaActivityRealtimePublisher;

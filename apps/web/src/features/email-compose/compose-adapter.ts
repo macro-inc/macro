@@ -1,0 +1,474 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useHasPaidAccess } from '@core/auth';
+import {
+  createFilesReadyHandler,
+  getDragDropPosition,
+} from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
+import { toast } from '@core/component/Toast/Toast';
+import {
+  ENABLE_EMAIL_SCHEDULED_SEND,
+  enableEmailSignatures,
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
+import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
+import { useEmail, useUserContext } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { trackMention } from '@core/signal/mention';
+import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { getDisplayName, tryMacroId } from '@core/user';
+import { deviceLooksOffline } from '@core/util/connectivity';
+import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
+import { handleFileFolderDrop } from '@core/util/upload';
+import { Telemetry } from '@macro-inc/observability';
+import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowSquareOut from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
+import { queryClient } from '@queries/client';
+import {
+  useAddForwardedAttachmentsMutation,
+  useRemoveDraftAttachmentMutation,
+  useRemoveForwardedAttachmentMutation,
+  useUploadDraftAttachmentsMutation,
+} from '@queries/email/attachment';
+import {
+  useDeleteDraftMutation,
+  useSaveDraftMutation,
+} from '@queries/email/draft';
+import { markThreadDraftSaved } from '@queries/email/draft-cache';
+import {
+  deleteEmailDraftQueued,
+  draftQueueActive,
+  saveEmailDraftQueued,
+} from '@queries/email/draft-queue';
+import {
+  draftContactInput,
+  type GraphqlSaveEmailDraftArgs,
+} from '@queries/email/graphql/draft';
+import {
+  archiveEmailThread,
+  scheduleEmailMessage,
+} from '@queries/email/integration';
+import { emailKeys } from '@queries/email/keys';
+import {
+  useEmailLinksQuery,
+  useNonPrimaryEmailLinkIdHeader,
+  usePrimaryEmailLinkId,
+} from '@queries/email/link';
+import {
+  fetchAndCacheThread,
+  type ThreadQueryTransport,
+  useSendMessageMutation,
+  useUnscheduleMessageMutation,
+} from '@queries/email/thread';
+import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
+import type { ApiThread } from '@service-email/generated/schemas';
+import type { InfiniteData } from '@tanstack/solid-query';
+import { confirmDialog } from '@ui';
+import { type Accessor, getOwner } from 'solid-js';
+import {
+  type ComposeNoticeOptions,
+  type DraftClientHandles,
+  DraftPersistRejected,
+  type DraftSaveResult,
+  type EmailComposeContext,
+  type SaveEmailDraft,
+} from './context/compose-capabilities';
+import { decodeBase64Utf8 } from './core/decode-base64';
+import type { EmailDraft } from './core/email-draft';
+import { readDroppedEmailFiles, withVideoAttachments } from './editor-adapter';
+import { makeAttachmentPublic } from './make-attachment-public';
+import {
+  emailDraftLifecycleSource,
+  publishDraftLifecycleChange,
+} from './queries/draft-lifecycle';
+import { createEmailInboxSource } from './queries/inbox-source';
+import { restoreDraftBodyAfterUndo, runUndoSend } from './undo-send';
+
+export type EmailComposeContextOptions = {
+  /** Transport of the thread read this surface sits under; a compose surface has none. */
+  threadTransport?: Accessor<ThreadQueryTransport | undefined>;
+};
+
+/** Construct under the composing surface's Solid owner to scope request progress. */
+export function createEmailComposeContext(
+  options: EmailComposeContextOptions = {}
+): EmailComposeContext {
+  const accounts = useEmailLinksQuery();
+  const headerId = useNonPrimaryEmailLinkIdHeader();
+  const primaryId = usePrimaryEmailLinkId();
+  // Attach handlers run as event handlers, which have no Solid owner of
+  // their own; the dialog needs the surface's.
+  const dialogOwner = getOwner();
+  const user = useUserContext();
+  const paywall = usePaywallState();
+  const viewerEmail = useEmail();
+  const inboxSource = createEmailInboxSource(viewerEmail, accounts, (email) =>
+    getDisplayName(tryMacroId(`macro|${email}`))
+  );
+  const signatures = useFeatureFlag(enableEmailSignatures);
+  const save = useSaveDraftMutation();
+  const remove = useDeleteDraftMutation();
+  const send = useSendMessageMutation();
+  const upload = useUploadDraftAttachmentsMutation();
+  const forward = useAddForwardedAttachmentsMutation();
+  const removeAttachment = useRemoveDraftAttachmentMutation();
+  const removeForwarded = useRemoveForwardedAttachmentMutation();
+  const unschedule = useUnscheduleMessageMutation();
+  const { users } = useCombinedRecipients();
+  const notice = (options?: ComposeNoticeOptions) => ({
+    ...options,
+    actions: options?.actions?.map(({ kind, ...action }) => ({
+      ...action,
+      icon: kind === 'open' ? ArrowSquareOut : ArrowCounterClockwise,
+    })),
+  });
+  const reportError = (error: unknown) =>
+    Telemetry.error(error instanceof Error ? error : new Error(String(error)));
+  // A thread view renders its latest draft as the composer until the thread
+  // is read again, so every delivery change refetches it.
+  const refreshThread = (threadId: string | undefined) => {
+    if (!threadId) return;
+    if (isFeatureEnabled(enableGraphqlSoup)) {
+      void (async () => {
+        const result = await fetchAndCacheThread(threadId);
+        if (result.isErr())
+          reportError(
+            new Error(
+              `Failed to refresh email thread ${threadId}: ${result.error
+                .map((error) => `${error.code}: ${error.message}`)
+                .join(', ')}`
+            )
+          );
+      })().catch(reportError);
+      return;
+    }
+    void queryClient
+      .invalidateQueries({
+        queryKey: emailKeys.threadMessages(threadId).queryKey,
+      })
+      .catch(reportError);
+  };
+
+  // Queued writes address a draft by handles: the composer's minted ones, or a
+  // confirmed draft's server ids, which resolve as their own handles.
+  const queueHandles = ({
+    draft,
+    clientHandles,
+  }: SaveEmailDraft):
+    | (DraftClientHandles & { threadId: string })
+    | undefined => {
+    if (!draftQueueActive(options.threadTransport?.())) return undefined;
+    if (clientHandles?.threadId) {
+      return { ...clientHandles, threadId: clientHandles.threadId };
+    }
+    return draft.db_id && draft.thread_db_id
+      ? { draftId: draft.db_id, threadId: draft.thread_db_id }
+      : undefined;
+  };
+  const queuedSaveArgs = (
+    draft: EmailDraft,
+    handles: DraftClientHandles & { threadId: string },
+    senderLinkId: string
+  ): GraphqlSaveEmailDraftArgs => ({
+    draftId: handles.draftId,
+    threadDbId: handles.threadId,
+    // Persist the selected inbox itself: the primary inbox can change before replay.
+    linkId: senderLinkId || undefined,
+    replyingToId: draft.replying_to_id ?? undefined,
+    providerId: draft.provider_id ?? undefined,
+    providerThreadId: draft.provider_thread_id ?? undefined,
+    subject: draft.subject,
+    to: (draft.to ?? []).map(draftContactInput),
+    cc: (draft.cc ?? []).map(draftContactInput),
+    bcc: (draft.bcc ?? []).map(draftContactInput),
+    bodyHtml: draft.body_html ?? undefined,
+    bodyText: draft.body_text ?? undefined,
+    bodyMacro: draft.body_macro ?? undefined,
+    // Client-only, for the optimistic entity: responses carry the body unencoded.
+    senderLinkId,
+    senderEmail:
+      inboxSource.inboxes().find((inbox) => inbox.id === senderLinkId)
+        ?.email_address ??
+      viewerEmail() ??
+      '',
+    optimisticBodyHtml: draft.body_html
+      ? decodeBase64Utf8(draft.body_html)
+      : null,
+  });
+
+  return {
+    draftLifecycle: emailDraftLifecycleSource,
+    recipientName: (id) => getDisplayName(tryMacroId(id)),
+    recordMention: (sourceId, targetId) => {
+      void trackMention(sourceId, 'document', targetId).catch(reportError);
+    },
+    accounts: {
+      ...inboxSource,
+      primaryId,
+    },
+    connectivity: { looksOffline: deviceLooksOffline },
+    viewerEmail,
+    recipients: users,
+    hasPaidAccess: useHasPaidAccess(),
+    presentation: {
+      viewerLoading: user.isLoading,
+      prepareSignatureLinks: interceptMailtoLinks,
+      onUpgrade: () => paywall.showPaywall(PaywallKey.REMOVE_SIGNATURE),
+      isTouch: isTouchDevice,
+      isMobile,
+      scheduleEnabled: ENABLE_EMAIL_SCHEDULED_SEND,
+      signaturesEnabled: () => signatures().enabled,
+    },
+    editorFiles: {
+      readDroppedFiles: readDroppedEmailFiles,
+      makePublic: makeAttachmentPublic,
+      uploadEditorFiles(input) {
+        if (!input.editor) return;
+        handleFileFolderDrop(
+          input.files,
+          input.directories,
+          withVideoAttachments(
+            createFilesReadyHandler(
+              input.editor,
+              input.sourceId,
+              input.sourceId ? 'email' : undefined,
+              input.dropEvent && input.editor
+                ? () =>
+                    getDragDropPosition(input.editor!, input.dropEvent!, true)
+                : undefined,
+              input.onUploaded,
+              { width: 542, height: 542 }
+            ),
+            input.onVideos
+          )
+        );
+      },
+    },
+    notices: {
+      feedback: {
+        success: (message, options) => toast.success(message, notice(options)),
+        failure: (message, options) => toast.failure(message, notice(options)),
+        alert: (message, options) => toast.alert(message, notice(options)),
+        dismiss: toast.dismiss,
+      },
+      async blockingNotice({ title, body }) {
+        await confirmDialog(
+          { title, body, confirmLabel: 'OK' },
+          { owner: dialogOwner }
+        );
+      },
+      reportError,
+    },
+    drafts: {
+      async saveDraft({
+        completingThread,
+        previousThreadId,
+        inboxId,
+        ...input
+      }) {
+        const handles = queueHandles(input);
+        if (handles) {
+          const senderLinkId = inboxId ?? primaryId() ?? '';
+          const outcome = await saveEmailDraftQueued({
+            args: queuedSaveArgs(input.draft, handles, senderLinkId),
+            completingThread,
+            previousThreadId,
+          });
+          if (outcome.kind === 'rejected') {
+            throw new DraftPersistRejected(outcome.code);
+          }
+          const saved: DraftSaveResult =
+            outcome.kind === 'queued'
+              ? { ...handles, inboxId: senderLinkId, persistence: 'queued' }
+              : {
+                  draftId: outcome.draftId,
+                  threadId: outcome.threadId,
+                  inboxId: senderLinkId,
+                  persistence: 'committed',
+                };
+          return saved;
+        }
+        const { clientHandles: _clientHandles, ...restInput } = input;
+        const result = await save.mutateAsync({
+          ...restInput,
+          linkId: headerId(inboxId),
+          skipSoupRefetch: completingThread,
+        });
+        try {
+          const threadId = result.draft.thread_db_id;
+          if (threadId) markThreadDraftSaved(threadId);
+          if (previousThreadId && previousThreadId !== threadId) {
+            markThreadDraftSaved(previousThreadId);
+            invalidateSoupEntity(previousThreadId);
+            void refetchSoupEntity(previousThreadId, 'emailThread').catch(
+              reportError
+            );
+          }
+        } catch (error) {
+          reportError(error);
+        }
+        return {
+          draftId: result.draft.db_id ?? undefined,
+          threadId: result.draft.thread_db_id ?? undefined,
+          inboxId: result.draft.link_id,
+        };
+      },
+      async deleteDraft({ completingThread, inboxId, ...input }) {
+        if (input.threadId && draftQueueActive(options.threadTransport?.())) {
+          const outcome = await deleteEmailDraftQueued({
+            draftId: input.draftId,
+            threadId: input.threadId,
+            completingThread,
+          });
+          if (outcome.kind === 'rejected') {
+            throw new DraftPersistRejected(outcome.code);
+          }
+          return;
+        }
+        await remove.mutateAsync({
+          ...input,
+          linkId: headerId(inboxId),
+          skipSoupRefetch: completingThread,
+        });
+        try {
+          publishDraftLifecycleChange(input.draftId, inboxId);
+          if (input.threadId) markThreadDraftSaved(input.threadId);
+        } catch (error) {
+          reportError(error);
+        }
+      },
+      async restoreDraft({ threadId, draftId, draft, html, inboxId }) {
+        if (threadId && !isFeatureEnabled(enableGraphqlSoup)) {
+          queryClient.setQueryData<InfiniteData<ApiThread>>(
+            emailKeys.threadMessages(threadId).queryKey,
+            (old) =>
+              old
+                ? {
+                    ...old,
+                    pages: old.pages.map((page) => ({
+                      ...page,
+                      messages: page.messages.filter(
+                        (message) => message.db_id !== draftId
+                      ),
+                    })),
+                  }
+                : old
+          );
+          markThreadDraftSaved(threadId);
+        }
+        if (draft && html !== undefined)
+          await restoreDraftBodyAfterUndo(draft, html, headerId(inboxId));
+        if (threadId && isFeatureEnabled(enableGraphqlSoup))
+          void fetchAndCacheThread(threadId);
+      },
+    },
+    delivery: {
+      async sendMessage({ completingThread, inboxId, ...input }) {
+        const result = await send.mutateAsync({
+          ...input,
+          linkId: headerId(inboxId),
+          skipSoupRefetch: completingThread,
+        });
+        try {
+          if (result.message.db_id)
+            publishDraftLifecycleChange(
+              result.message.db_id,
+              result.message.link_id
+            );
+          if (result.message.thread_db_id) {
+            markThreadDraftSaved(result.message.thread_db_id);
+            refreshThread(result.message.thread_db_id);
+          }
+        } catch (error) {
+          reportError(error);
+        }
+        return {
+          draftId: result.message.db_id ?? undefined,
+          threadId: result.message.thread_db_id ?? undefined,
+          inboxId: result.message.link_id,
+        };
+      },
+      async unschedule({ draftId, threadId, inboxId }) {
+        await unschedule.mutateAsync({
+          draftID: draftId,
+          linkId: headerId(inboxId),
+        });
+        try {
+          publishDraftLifecycleChange(draftId, inboxId);
+          invalidateSoupEntity(draftId);
+          refreshThread(threadId);
+        } catch (error) {
+          reportError(error);
+        }
+      },
+      schedule: async (
+        { draftId, threadId, sendTime, includeSignature },
+        inboxId
+      ) => {
+        await scheduleEmailMessage(
+          {
+            draftID: draftId,
+            send_time: sendTime,
+            include_signature: includeSignature,
+          },
+          headerId(inboxId)
+        );
+        try {
+          publishDraftLifecycleChange(draftId, inboxId);
+          refreshThread(threadId);
+          void queryClient
+            .invalidateQueries({
+              queryKey: emailKeys.scheduledMessages._def,
+            })
+            .catch(reportError);
+        } catch (error) {
+          // Cache and cross-tab notifications are post-commit UI work. A
+          // failure here must not make a successful schedule retryable.
+          reportError(error);
+        }
+      },
+      archive: async ({ threadId, value }, inboxId) => {
+        await archiveEmailThread({ id: threadId, value }, headerId(inboxId));
+      },
+      undoSend: (input) =>
+        runUndoSend({
+          draftId: input.draftId,
+          linkId: headerId(input.inboxId),
+          onUndone: async () => {
+            await input.onUndone();
+            if (input.threadId)
+              void refetchSoupEntity(input.threadId, 'emailThread');
+          },
+        }),
+    },
+    attachmentStorage: {
+      uploadAttachments: ({ draftId, inboxId, ...input }) =>
+        upload.mutateAsync({
+          ...input,
+          draftID: draftId,
+          linkId: headerId(inboxId),
+        }),
+      addForwardedAttachments: ({ draftId, attachments, inboxId }) =>
+        forward.mutateAsync({
+          draftID: draftId,
+          attachments: attachments.map(({ attachmentId }) => ({
+            attachmentID: attachmentId,
+          })),
+          linkId: headerId(inboxId),
+        }),
+      removeAttachment: ({ draftId, attachmentId, inboxId }) =>
+        removeAttachment.mutateAsync({
+          draftID: draftId,
+          attachmentID: attachmentId,
+          linkId: headerId(inboxId),
+        }),
+      removeForwardedAttachment: ({ draftId, attachmentId, inboxId }) =>
+        removeForwarded.mutateAsync({
+          draftID: draftId,
+          attachmentID: attachmentId,
+          linkId: headerId(inboxId),
+        }),
+    },
+  };
+}

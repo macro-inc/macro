@@ -17,6 +17,7 @@ import {
   stringifyDocument,
 } from '@urql/core';
 import type { DocumentNode } from 'graphql';
+import { validate as validateUuid } from 'uuid';
 import type {
   EmbeddedLinkPathSegment,
   OptimisticLinkPatchWire,
@@ -30,6 +31,8 @@ import {
 
 /** Private operation-context field carrying serializable optimistic data. */
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
+// Page-local acknowledgement; deliberately excluded from durable queue data.
+const OPTIMISTIC_ENQUEUED_CONTEXT_KEY = 'normalizedCacheOptimisticEnqueued';
 /** Private result-extension field carrying the queue disposition. */
 const OPTIMISTIC_MUTATION_DISPOSITION_KEY =
   'normalizedCacheMutationDisposition';
@@ -108,12 +111,17 @@ export type QueryRevalidation = {
 };
 
 export type OptimisticMutationOptions = {
+  /** Required RFC UUID; reuse only when the newer intent safely replaces the older one. */
+  uuid: string;
+  /** Runs after durable layer installation, independently of HTTP settlement. */
+  onEnqueued?: () => void;
   updates?: readonly OptimisticUpdate[];
   /** Relevant queries that cannot safely be updated still revalidate on success. */
   revalidations?: readonly QueryRevalidation[];
 };
 
 export type OptimisticMutationContext<TData = unknown> = {
+  uuid: string;
   optimisticResponse: TData;
   linkPatches: OptimisticLinkPatchWire[];
   revalidations: QueryRevalidationWire[];
@@ -129,6 +137,11 @@ export type OptimisticMutationDisposition<TData> =
 export type OptimisticMutationDispositionMetadata =
   | { kind: 'committed'; transactionId?: string }
   | { kind: 'queued'; transactionId: string }
+  | {
+      kind: 'superseded';
+      transactionId: string;
+      replacementTransactionId: string;
+    }
   | { kind: 'permanently-failed'; transactionId?: string };
 
 /** Returns a copy of an operation result carrying its queue disposition. */
@@ -150,7 +163,14 @@ export function withOptimisticMutationDisposition(
           // that would roll back UI state or block the next edit.
           error: undefined,
         }
-      : {}),
+      : disposition.kind === 'superseded'
+        ? {
+            // The replacement's optimistic payload is already visible in the
+            // cache. Never expose this older operation's stale response.
+            data: undefined,
+            error: undefined,
+          }
+        : {}),
     extensions: {
       ...result.extensions,
       [OPTIMISTIC_MUTATION_DISPOSITION_KEY]: disposition,
@@ -174,6 +194,12 @@ export function optimisticMutationDispositionOf<
   const metadata = value as OptimisticMutationDispositionMetadata;
   if (metadata.kind === 'queued' && metadata.transactionId) {
     return { kind: 'queued', transactionId: metadata.transactionId };
+  }
+  if (metadata.kind === 'superseded' && metadata.replacementTransactionId) {
+    return {
+      kind: 'queued',
+      transactionId: metadata.replacementTransactionId,
+    };
   }
   if (metadata.kind === 'committed' && result.data != null) {
     return { kind: 'committed', data: result.data };
@@ -279,6 +305,33 @@ export function update<TItem extends object>(
 }
 
 /**
+ * Upserts a logical list member using its matching mutation-response record.
+ * Settlement resolves the server's ID rather than persisting a temporary ID.
+ */
+export function upsertByField<TItem extends object, K extends ScalarKey<TItem>>(
+  selection: ListSelection<TItem>,
+  args: {
+    entity: NormalizedEntityIdentity;
+    whereField: K;
+    equals: Extract<Present<TItem[K]>, JsonScalar>;
+  }
+): OptimisticUpdate {
+  const patch: OptimisticLinkPatchWire = {
+    query: stringifyDocument(selection.document),
+    operationName: documentOperationName(selection.document),
+    variablesJson: JSON.stringify(selection.variables ?? {}),
+    path: [...selection.path],
+    operation: {
+      kind: 'upsertByField',
+      entityKey: normalizedEntityKey(args.entity),
+      whereField: args.whereField,
+      equals: args.equals,
+    },
+  };
+  return patch as OptimisticUpdate;
+}
+
+/**
  * Removes an entity link from a selected embedded list item and decrements
  * its count only when the link was present.
  */
@@ -371,16 +424,34 @@ export function executeOptimisticMutation<
   document: TypedDocumentNode<TData, TVariables>,
   variables: TVariables,
   optimisticData: TData,
-  options: OptimisticMutationOptions = {}
+  options: OptimisticMutationOptions
 ): OperationResultSource<OperationResult<TData, TVariables>> {
+  if (!validateUuid(options.uuid)) {
+    throw new TypeError(`invalid optimistic mutation UUID: ${options.uuid}`);
+  }
   const context: OptimisticMutationContext<TData> = {
+    uuid: options.uuid,
     optimisticResponse: optimisticData,
     linkPatches: [...(options.updates ?? [])],
     revalidations: (options.revalidations ?? []).map(serializeRevalidation),
   };
   return client.mutation(document, variables, {
     [OPTIMISTIC_MUTATION_CONTEXT_KEY]: context,
+    ...(options.onEnqueued
+      ? { [OPTIMISTIC_ENQUEUED_CONTEXT_KEY]: options.onEnqueued }
+      : {}),
   });
+}
+
+/** Acknowledge installation without allowing caller code to interrupt queue routing. */
+export function notifyOptimisticMutationEnqueued(op: Operation): void {
+  const notify: unknown = op.context[OPTIMISTIC_ENQUEUED_CONTEXT_KEY];
+  if (typeof notify !== 'function') return;
+  try {
+    notify();
+  } catch (error) {
+    console.warn('Optimistic enqueue acknowledgement failed', error);
+  }
 }
 
 /** Reads and defensively validates the private context at the exchange edge. */
@@ -396,7 +467,13 @@ export function optimisticContextOf(
     const context = value as Partial<OptimisticMutationContext> & {
       optimisticResponse: unknown;
     };
+    if (typeof context.uuid !== 'string' || !validateUuid(context.uuid)) {
+      throw new TypeError(
+        'invalid optimistic mutation UUID in operation context'
+      );
+    }
     return {
+      uuid: context.uuid,
       optimisticResponse: context.optimisticResponse,
       linkPatches: Array.isArray(context.linkPatches)
         ? context.linkPatches

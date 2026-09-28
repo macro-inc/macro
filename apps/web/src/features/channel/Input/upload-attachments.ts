@@ -118,6 +118,8 @@ export async function uploadInputAttachments(options: {
       if (previewSrc && uploaded.kind !== 'document') {
         uploaded.previewSrc = previewSrc;
       }
+      if (file.type) uploaded.mimeType = file.type;
+      uploaded.size = file.size;
       if (dimensions) {
         uploaded.width = dimensions.width;
         uploaded.height = dimensions.height;

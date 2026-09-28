@@ -27,13 +27,18 @@ import {
   type LexicalEditor,
   type RangeSelection,
 } from 'lexical';
-import { createEffect, createSignal, on, type Setter } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  on,
+  type Setter,
+  type Signal,
+} from 'solid-js';
 import { theme } from '../../theme';
 import { $traverseNodes, setEditorStateFromMarkdown } from '../../utils';
 
 export {} from '@macro-inc/lexical-core';
 
-import type { createBlockSignal } from '@core/block';
 import type { SetStoreFunction } from 'solid-js/store';
 import { GenerateAccessory } from '../../component/accessory/GenerateAccessory';
 import {
@@ -61,7 +66,7 @@ export type GenerateMenuOpen = ReturnType<
   typeof createSignal<boolean | undefined>
 >;
 // done generating and waiting
-type BooleanSignal = ReturnType<typeof createBlockSignal<boolean>>;
+type BooleanSignal = Signal<boolean>;
 
 const _IGNORE_COMPLETION_TYPES = ['inline-search'];
 const MAKE_COMPLETION: LexicalCommand<Completion> =

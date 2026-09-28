@@ -105,6 +105,7 @@ export function signalFilter(entity: EntityData): boolean {
   switch (entity.type) {
     case 'channel':
       return true;
+    case 'agent_session':
     case 'chat':
       return true;
     case 'document':
@@ -112,6 +113,7 @@ export function signalFilter(entity: EntityData): boolean {
     case 'email':
       if (!ENABLE_CLIENT_EMAIL_SIGNAL_FILTER) return true;
       return isSignalEmail(entity) || entity.isDraft;
+    case 'initiative':
     case 'project':
       return true;
     case 'channel_message':

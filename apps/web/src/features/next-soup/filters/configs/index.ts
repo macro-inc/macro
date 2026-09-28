@@ -10,7 +10,12 @@ export * from './general';
 export * from './task';
 
 import type { FilterGroupConfig } from './base';
-import { companyOwnerFilter, companyStageFilter } from './company';
+import {
+  companyNeedsFollowUpFilter,
+  companyOwnerFilter,
+  companyRecentlyActiveFilter,
+  companyStageFilter,
+} from './company';
 import {
   DOCUMENT_CONTEXTUAL_FILTERS,
   emailAttachmentsFilter,
@@ -99,6 +104,8 @@ export const SOUP_FILTERS = [
   crmCompanyActiveFilter,
   crmCompanyHiddenFilter,
   companyOwnerFilter,
+  companyNeedsFollowUpFilter,
+  companyRecentlyActiveFilter,
   companyStageFilter,
   emailAttachmentsFilter,
   inFolderFilter,

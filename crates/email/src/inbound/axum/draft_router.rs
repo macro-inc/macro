@@ -64,8 +64,11 @@ impl IntoResponse for CreateDraftError {
 impl From<EmailErr> for CreateDraftError {
     fn from(err: EmailErr) -> Self {
         match &err {
-            EmailErr::MessageNotFound(_) => CreateDraftError::NotFound(err.to_string()),
+            EmailErr::MessageNotFound(_) | EmailErr::ThreadNotFound => {
+                CreateDraftError::NotFound(err.to_string())
+            }
             EmailErr::MessageAlreadySent(_)
+            | EmailErr::MessageDeliveryConflict(_)
             | EmailErr::CannotReplyToDraft
             | EmailErr::Base64DecodeError(_)
             | EmailErr::Utf8Error(_) => CreateDraftError::Validation(err.to_string()),

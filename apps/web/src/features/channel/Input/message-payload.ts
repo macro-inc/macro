@@ -1,10 +1,9 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
-import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { STATIC_IMAGE, STATIC_VIDEO } from '@core/store/cacheChannelInput';
-import type { NewChannelAttachment as NewAttachment } from '@service-storage/generated/schemas/newChannelAttachment';
-import type { PostMessageRequest } from '@service-storage/generated/schemas/postMessageRequest';
+import { messageReference } from '@macro-inc/lexical-core/utils/message-references';
+import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
-import { match } from 'ts-pattern';
+import type { PostMessage } from '@service-storage/messages';
 import type { InputAttachmentData, InputSnapshot } from './types';
 
 export function attachmentEntityType(
@@ -20,67 +19,34 @@ export function attachmentEntityType(
   }
 }
 
-function expandGroupMention(
-  mention: ItemMention,
-  participantIds: string[],
-  seenUserIds: Set<string>
-): SimpleMention[] {
-  return match(mention.groupAlias)
-    .with('here', () => {
-      const result: SimpleMention[] = [];
-      for (const userId of participantIds) {
-        if (!seenUserIds.has(userId)) {
-          seenUserIds.add(userId);
-          result.push({ entity_type: 'user', entity_id: userId });
-        }
-      }
-      return result;
-    })
-    .otherwise(() => []);
-}
-
-/**
- * Expands raw editor mentions into the flat list the API expects.
- *
- * - `group` mentions (e.g. @here) are fanned out to one user mention per
- *   participant, de-duplicated against explicitly mentioned users.
- * - Regular user mentions are de-duplicated so the same user isn't sent twice.
- */
-export function expandMentions(
-  mentions: ItemMention[],
-  participantIds: string[]
-): SimpleMention[] {
+/** Serialize authored references; the server resolves group recipients using current membership. */
+export function authoredMentions(mentions: ItemMention[]): SimpleMention[] {
+  const seen = new Set<string>();
   const result: SimpleMention[] = [];
-  const seenUserIds = new Set<string>();
-
   for (const mention of mentions) {
-    if (mention.itemType === 'group') {
-      result.push(...expandGroupMention(mention, participantIds, seenUserIds));
-    } else if (mention.itemType === 'user') {
-      if (seenUserIds.has(mention.itemId)) continue;
-      seenUserIds.add(mention.itemId);
-      // Bots (Macro AI and channel bots) ride the user-mention machinery in
-      // the editor; re-tag them so the backend dispatches bot triggers and
-      // webhook events.
-      result.push({
-        entity_type: isBotPrincipalId(mention.itemId) ? 'bot' : 'user',
-        entity_id: mention.itemId,
-      });
-    } else {
-      result.push({
-        entity_type: mention.itemType,
-        entity_id: mention.itemId,
-      });
-    }
+    const reference = messageReference(
+      mention.itemType,
+      mention.itemType === 'group'
+        ? (mention.groupAlias ?? mention.itemId)
+        : mention.itemId
+    );
+    // Dates, contacts, and PR chips remain in the body; they do not name a
+    // permission-bearing message reference, just as in Markdown extraction.
+    if (!reference) continue;
+    const key = `${reference.entityType}:${reference.entityId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({
+      entity_type: reference.entityType,
+      entity_id: reference.entityId,
+    });
   }
-
   return result;
 }
 
 type BuildPostMessageRequestOptions = {
   snapshot: InputSnapshot;
   threadId?: string;
-  participantIds?: string[];
 };
 
 export type OptimisticPostMessageAttachment = {
@@ -89,14 +55,14 @@ export type OptimisticPostMessageAttachment = {
 };
 
 export type PostMessageSendPayload = {
-  message: PostMessageRequest;
+  message: PostMessage & { mentions: SimpleMention[] };
   optimisticAttachments: OptimisticPostMessageAttachment[];
 };
 
 export function buildPostMessageSendPayload(
   options: BuildPostMessageRequestOptions
 ): PostMessageSendPayload {
-  const { snapshot, threadId, participantIds } = options;
+  const { snapshot, threadId } = options;
   const optimisticAttachments = snapshot.attachments.map((attachment) => {
     const postAttachment = {
       entity_id: attachment.id,
@@ -115,7 +81,7 @@ export function buildPostMessageSendPayload(
     message: {
       content: snapshot.value,
       thread_id: threadId,
-      mentions: expandMentions(snapshot.mentions, participantIds ?? []),
+      mentions: authoredMentions(snapshot.mentions),
       attachments: optimisticAttachments.map((item) => item.attachment),
     },
     optimisticAttachments,
@@ -124,6 +90,6 @@ export function buildPostMessageSendPayload(
 
 export function buildPostMessageRequest(
   options: BuildPostMessageRequestOptions
-): PostMessageRequest {
+): PostMessageSendPayload['message'] {
   return buildPostMessageSendPayload(options).message;
 }

@@ -20,6 +20,7 @@ use item_filters::{
     SharedEmailFilter,
     ast::{
         EmailFilterAst, EntityFilterAst,
+        agent_session::AgentSessionLiteral,
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral},
@@ -28,6 +29,7 @@ use item_filters::{
         document::DocumentLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
+        initiative::InitiativeLiteral,
         project::ProjectLiteral,
         reminder::ReminderLiteral,
     },
@@ -280,7 +282,7 @@ pub struct SoupItemDataLoader {
 
 impl SoupItemDataLoader {
     /// Construct a type-erased DataLoader from a concrete loader implementation.
-    fn new<S, I>(loader: SoupItemLoader<S, I>) -> Self
+    pub fn new<S, I>(loader: SoupItemLoader<S, I>) -> Self
     where
         S: SoupService,
         I: SoupInboxReader,
@@ -335,6 +337,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
     let mut documents = Vec::new();
     let mut chats = Vec::new();
     let mut projects = Vec::new();
+    let mut initiatives = Vec::new();
     let mut email_threads = Vec::new();
     let mut channels = Vec::new();
     let mut channel_threads = Vec::new();
@@ -343,6 +346,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
     let mut foreign_entities = Vec::new();
     let mut calendar_events = Vec::new();
     let mut reminders = Vec::new();
+    let mut agent_sessions = Vec::new();
 
     for entity in entities {
         let id = Uuid::parse_str(entity.entity_id.as_ref()).map_err(|error| {
@@ -357,6 +361,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             EntityType::Document => documents.push(DocumentLiteral::Id(id)),
             EntityType::Chat => chats.push(ChatLiteral::ChatId(id)),
             EntityType::Project => projects.push(ProjectLiteral::ProjectIdSelf(id)),
+            EntityType::Initiative => initiatives.push(InitiativeLiteral::Id(id)),
             EntityType::EmailThread => email_threads.push(EmailLiteral::ThreadId(id)),
             EntityType::Channel => channels.push(ChannelLiteral::ChannelId(id)),
             EntityType::ChannelMessage => {
@@ -367,12 +372,13 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             EntityType::ForeignEntity => foreign_entities.push(ForeignEntityLiteral::Id(id)),
             EntityType::CalendarEvent => calendar_events.push(CalendarEventLiteral::Id(id)),
             EntityType::Reminder => reminders.push(ReminderLiteral::Id(id)),
+            EntityType::AgentSession => agent_sessions.push(AgentSessionLiteral::Id(id)),
             EntityType::User
             | EntityType::Team
             | EntityType::StaticFile
             | EntityType::CrmContact
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::ScheduledAction => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",
                     entity.entity_type
@@ -384,6 +390,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
 
     let nil = Uuid::nil();
     Ok(EntityFilterAst {
+        favorites_only: None,
         calendar_event_filter: Some(literal_tree(calendar_events, CalendarEventLiteral::Id(nil))),
         document_filter: Some(literal_tree(documents, DocumentLiteral::Id(nil))),
         project_filter: Some(literal_tree(projects, ProjectLiteral::ProjectIdSelf(nil))),
@@ -409,6 +416,8 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             ForeignEntityLiteral::Id(nil),
         )),
         reminder_filter: Some(literal_tree(reminders, ReminderLiteral::Id(nil))),
+        agent_session_filter: Some(literal_tree(agent_sessions, AgentSessionLiteral::Id(nil))),
+        initiative_filter: Some(literal_tree(initiatives, InitiativeLiteral::Id(nil))),
         properties_filter: None,
     })
 }

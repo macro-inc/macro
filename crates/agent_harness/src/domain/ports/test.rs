@@ -19,6 +19,10 @@ use super::ContainerManager;
 use crate::domain::model::{AgentKind, SpawnContainer};
 use crate::testing::helpers::containers::{ContainerMock, MockContainerManager};
 use crate::testing::helpers::egress::test_egress;
+use agent_session::domain::model::ReplicaId;
+use agent_session::domain::ports::{
+    NoOpAgentSessionNameGenerator, NoOpTurnObserver, NoopLifecyclePublisher,
+};
 
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("owner@example.com").unwrap()
@@ -26,8 +30,9 @@ fn owner() -> MacroUserIdStr<'static> {
 
 fn params(id: AgentSessionId) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
+        repo_branch: None,
         id,
-        owner_id: owner(),
+        owner_id: model_owner::Owner::User(owner()),
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
         thread_id: None,
         originating_message_id: None,
@@ -37,6 +42,7 @@ fn params(id: AgentSessionId) -> CreateAgentSessionParams {
         workspace: "/workspace".to_owned(),
         sandbox_size: agent_session::domain::model::SandboxSize::Default,
         instructions: None,
+        mcp_servers: Default::default(),
         egress_token_hash: None,
     }
 }
@@ -61,9 +67,13 @@ async fn container_session_runs_and_logs_end_to_end() {
         store.clone(),
         FoldedMessageService::new(store.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     ));
     let containers = MockContainerManager::new();
-    let container = containers
+    let attachment = containers
         .spawn(SpawnContainer {
             session_id: id,
             kind: AgentKind::SandboxedCoder,
@@ -72,13 +82,11 @@ async fn container_session_runs_and_logs_end_to_end() {
         })
         .await
         .unwrap();
+    let container = containers.container(id).unwrap();
     let agent = container.agent();
 
     let record = sessions.create_session(params(id)).await.unwrap();
-    sessions
-        .attach_session(id, RuntimeAttachment::solo(container.clone()))
-        .await
-        .unwrap();
+    sessions.attach_session(id, attachment).await.unwrap();
     assert_eq!(record.id, id);
     assert_eq!(containers.spawned(), 1);
     assert!(agent.received_requests().is_empty());
@@ -147,6 +155,10 @@ async fn attaching_a_second_transport_to_an_active_session_fails() {
         store.clone(),
         FoldedMessageService::new(store),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
     let first = ContainerMock::default();
     let second = ContainerMock::default();

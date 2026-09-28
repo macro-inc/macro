@@ -18,12 +18,31 @@
  */
 export type AcpMessage = { [key in string]: unknown };
 
+/**  The result of probing a fresh ACP subprocess. */
+export type ModelProbeResult =
+/**  The raw options returned by `session/new`. */
+{ status: "available";
+/**  Session configuration options exactly as the agent returned them. */
+configOptions: unknown[] } |
+/**  A safe, operator-actionable failure description. */
+{ status: "error";
+/**  Failure text safe to return across the runtime connection. */
+message: string };
+
 /**  Agent Service to Agent Runtime traffic on the logical protocol stream. */
 export type ToRuntimeMessage =
 /**  An ACP message routed to the hosted agent. */
 {
 	type: "acp",
-} & AcpMessage;
+} & AcpMessage |
+/**
+ *  Probe a separate fresh agent process for its session configuration.
+ *
+ *  The request carries no parameters: it asks this connection's one
+ *  configured harness what it advertises. Answers are therefore
+ *  interchangeable, so nothing correlates a response to a request.
+ */
+{ type: "modelProbeRequest" };
 
 /**  Agent Runtime to Agent Service traffic on the logical protocol stream. */
 export type ToServerMessage =
@@ -32,6 +51,10 @@ export type ToServerMessage =
 	type: "acp",
 } & AcpMessage |
 /**  A runtime or agent lifecycle event. */
-{ type: "event";
+({ type: "event";
 /**  The event name. */
-event: string };
+event: string }) & { result?: never } |
+/**  An answer to a connection-level model probe. */
+({ type: "modelProbeResponse";
+/**  Raw options or a safe failure. */
+result: ModelProbeResult }) & { event?: never };

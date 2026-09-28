@@ -3,6 +3,7 @@ import * as pulumi from '@pulumi/pulumi';
 import { createBucket, Queue } from '../../packages/resources';
 import {
   config,
+  DOCUMENT_STORAGE_GATEWAY_URL,
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
@@ -324,23 +325,17 @@ const cloudStorageService = new CloudStorageService(
         value: stack,
       },
     ],
-    isPrivate: false,
     tags,
   }
 );
 
 if (stack === 'prod') {
-  new WafObservability(
-    'cloud-storage-service-prod',
-    { albArn: cloudStorageService.lb.arn },
-    { protect: true }
-  );
+  new WafObservability('cloud-storage-service-prod', { protect: true });
 }
 
 export const cloudStorageServiceRoleArn = cloudStorageService.role.arn;
 export const cloudStorageServiceSgId = cloudStorageService.serviceSg.id;
-export const cloudStorageServiceAlbSgId = cloudStorageService.serviceAlbSg.id;
-export const cloudStorageServiceUrl = pulumi.interpolate`${cloudStorageService.domain}`;
+export const cloudStorageServiceUrl = DOCUMENT_STORAGE_GATEWAY_URL;
 
 const convertServiceStack = new pulumi.StackReference('convert-service-stack', {
   name: `macro-inc/convert-service/${stack}`,

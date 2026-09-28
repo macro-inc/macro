@@ -68,6 +68,35 @@ A diagram for the animation abstraction flow
             propagate  →  snapshot  →  mirror  →  Loro  →  sync to everyone
 ```
 
+### Prompts
+
+System prompts are composed in `ai-editing/prompts/index.ts` from
+single-purpose markdown sections: `GROUND_RULES` (the XML view, ids),
+`TEAM` (the supervisor/writer split), `EDITING_RULES` (how `runCode` and
+`editor` are used), `API_COMPLETE`, and one short role file per agent. A rule
+lives in exactly one section; a role file holds only what is specific to that
+role. Add to a shared section when two roles need something, not to both role
+files.
+
+### Fast mode
+
+`mode: "fast"` on `/edit` skips the interpreter, supervisor, and dispatch
+entirely (`ai-editing/agents/fast.ts`). One model (`models.fast`, a fallback
+chain like the other roles) gets the user's request and the ENTIRE document as
+line-numbered XML, and edits it directly through the same `runCode` /
+`readDocument` / `reportBlocked` tools a coder has. Each `runCode` reply is the
+effect report, so it sees what it changed and can correct itself; the step cap
+is `DEFAULT_MAX_FAST_STEPS`. Everything below `runCode` is unchanged: sandbox,
+ops, animation queue, `Doc.apply`, propagation.
+
+It exists for small, well-scoped inline edits where the supervisor's review
+loop costs more latency than it buys. The web inline selection popup sends
+`mode: "fast"` with `propagate: false`, so the ops come back in the response as
+one dump and are applied client-side into the user's undo stack. The whole-doc
+edit bar stays on the supervised pipeline. The backend `EditDocument` tool
+(chat agents, MCP) exposes it as a `fast` boolean for one quick, contained
+edit; its default remains supervised.
+
 ### DocumentEditor and ops
 
 `DocumentEditor` is a ergonomic chainable surface the model calls. It has a
@@ -106,13 +135,30 @@ node ids. It is what turns DocumentOps into actual edits to the lexical document
 **The live cursor** is ephemeral. While a writer works, `realAwarenessSource`
 encodes its caret/selection as a Loro cursor and broadcasts it over the
 ephemeral awareness channel, so the website renders a remote cursor walking
-through the text. Each writer draws a name from a pool (`Sam (AI)`, `Alex (AI)`)
-and one of a few accent colors; the cursor lingers ~700ms after the writer
-finishes, then clears. We have some ugly code that manages resolving a block id
-to the `LoroText` that actually owns the characters for this :/
+through the text. The cursor's label is the editor `POST /edit` names
+(`editor: { name }`): the agent or persona that asked for the edit, so a
+`Macro` or `Grunk` session's edits read `Macro (AI)` / `Grunk (AI)` on every
+cursor they draw (`PeerPool.forEditor`). A request that names nobody falls back
+to the pool of distinct names (`Sam (AI)`, `Alex (AI)`). Every label ends in
+`(AI)`; the website keys off that suffix to keep AI name tags pinned. Each
+writer also gets one of a few accent colors; the cursor lingers ~700ms after the
+writer finishes, then clears. We have some ugly code that manages resolving a
+block id to the `LoroText` that actually owns the characters for this :/
 
 **The peer id** Human peers get random ids from the whole 64b range, and we have
 it so that AI commits use a small reserved range in
 (`999999999999999000`–`999999999999999999`). This makes AI authorship easy to
 detect (`isAiPeer`) which history will be able to use to group together all AI
 edits.
+
+## Comment marks
+
+`POST /comment-mark` places or removes the comment mark an inline comment is
+anchored to (`src/comment-mark`). No model runs: the caller quotes the text and
+an optional 1-based occurrence, and the worker joins the document as a peer,
+wraps that exact span in a committed `CommentNode`, and pushes it like any other
+edit. Text that is missing, crosses from one block into another, or appears
+more than once with no occurrence chosen is refused with a 422 and the
+document is left untouched, so a mark is never guessed into place. The
+backend `CommentOnDocumentText` tool places the mark first and then posts the
+thread anchored to it, removing the mark again if the post fails.

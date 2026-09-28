@@ -40,16 +40,16 @@ impl From<EmailRecipient> for ContactInfo {
 #[derive(Debug, Deserialize, JsonSchema, Clone)]
 #[schemars(
     title = "SendEmail",
-    description = "Draft, compose, and send an email. ALWAYS use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) — never write the email as plain text in the chat. This tool opens the email draft in the composer for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body."
+    description = "Draft, compose, and send an email the user confirms in a review card or composer. Use this tool whenever the user asks you to draft, write, compose, or send an email (or reply to one) from the agent session view or from chat — never write the email as plain text there. It opens the draft for the user to review, edit, and confirm before it is sent, so it is the correct tool even when the user only wants a draft. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the email out in your reply, ask whether to send it, and use SendConfirmedEmail once the user approves. To reply to an existing message, provide the replying_to_id. Write the body in Markdown — use **bold**, *italics*, lists, links, and other standard Markdown formatting. The draft composer renders the Markdown for the user to review and edit; the composer produces HTML that is sent as the actual email body."
 )]
 #[serde(rename_all = "camelCase")]
 pub struct SendEmail {
     /// The subject line of the email.
     pub subject: String,
-    /// The body of the email. Written as Markdown by the AI and rendered in
-    /// the draft composer. At send time the frontend replaces this with the
-    /// base64url-encoded HTML produced by the composer, which is what gets
-    /// sent to recipients.
+    /// The body of the email, written as Markdown. A host with a composer
+    /// (chat) replaces this with the base64url-encoded HTML the composer
+    /// exported before the tool runs; a host without one (an agent session)
+    /// leaves the Markdown, and this tool renders it the same way.
     pub body: String,
     /// The primary recipients (To field).
     pub to: Vec<EmailRecipient>,
@@ -111,10 +111,10 @@ where
         service_context: ServiceContext<EmailToolContext<T, G, E>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        println!("CALL SEND EMAIL {:?}", request_context);
-
         let acting_user = MacroUserIdStr((*request_context.user_id).clone());
         let link = service_context.resolve_link(acting_user.clone()).await?;
+
+        let body = service_context.render_body(&self.body).await?;
 
         let input = CreateDraftInput {
             db_id: None,
@@ -126,8 +126,8 @@ where
             to: self.to.iter().cloned().map(ContactInfo::from).collect(),
             cc: self.cc.iter().cloned().map(ContactInfo::from).collect(),
             bcc: self.bcc.iter().cloned().map(ContactInfo::from).collect(),
-            body_text: None,
-            body_html: Some(self.body.clone()),
+            body_text: body.text,
+            body_html: Some(body.html),
             body_macro: None,
             headers_json: None,
             send_time: None,
@@ -135,6 +135,8 @@ where
             // apply the default signature policy.
             include_signature: self.include_signature,
             actor: Some(acting_user),
+            draft_client_binding: None,
+            thread_client_binding: None,
         };
 
         let sent = service_context

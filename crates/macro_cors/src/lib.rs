@@ -23,24 +23,11 @@ static ALLOWED_ORIGINS: [&str; 11] = [
     "https://apollo-testing.macro.com",
 ];
 
-const REQUEST_ID_HEADER: &str = "x-request-id";
-
-static EXTRA_HEADERS: [&str; 5] = [
+static EXTRA_HEADERS: [&str; 4] = [
     "x-permissions-token",
     "traceparent",
     "tracestate",
     "x-email-link-id",
-    REQUEST_ID_HEADER,
-];
-static EXPOSED_HEADERS: [&str; 1] = [REQUEST_ID_HEADER];
-static ALLOWED_METHODS: [Method; 7] = [
-    Method::GET,
-    Method::HEAD,
-    Method::POST,
-    Method::PUT,
-    Method::PATCH,
-    Method::DELETE,
-    Method::OPTIONS,
 ];
 
 fn get_allowed_origins() -> Vec<Cow<'static, str>> {
@@ -101,8 +88,14 @@ pub fn cors_layer_with_headers(additional_headers: Vec<HeaderName>) -> CorsLayer
     CorsLayer::new()
         .allow_credentials(true)
         .allow_headers(headers)
-        .expose_headers(EXPOSED_HEADERS.map(HeaderName::from_static))
-        .allow_methods(ALLOWED_METHODS.to_vec())
+        .allow_methods(vec![
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
         .allow_origin(AllowOrigin::predicate(
             |origin: &HeaderValue, _request_parts| {
                 origin.to_str().map(is_allowed_origin).unwrap_or(false)

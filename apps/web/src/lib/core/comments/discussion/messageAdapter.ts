@@ -1,5 +1,5 @@
-import type { MessageData } from '@channel/Message/types';
-import { senderFromStorageId } from '@queries/channel/message-sender';
+import type { MessageData } from '@core/messages/types';
+import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { DiscussionComment } from './types';
 

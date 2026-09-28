@@ -248,3 +248,89 @@ fn otel_trace_filter_invalid_value_falls_back_to_info() {
 
     assert_eq!(exporter.get_finished_spans().unwrap().len(), 1);
 }
+
+#[test]
+fn absent_rust_log_still_logs_info() {
+    // A builder with no default directive and an empty value parses to zero
+    // directives, which logs nothing at all - the failure mode this floor
+    // exists to prevent. A service deployed without `RUST_LOG` must still
+    // emit its INFO lines, because those are what carry the decisions worth
+    // reconstructing after the fact.
+    for value in [None, Some("")] {
+        let logs = SharedWriter::default();
+        let subscriber = Registry::default().with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(logs.clone())
+                .with_filter(rust_log_filter(value)),
+        );
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::info!("info survives an unset RUST_LOG");
+            tracing::debug!("debug is still filtered");
+        });
+
+        let output = logs.contents();
+        assert!(
+            output.contains("info survives an unset RUST_LOG"),
+            "RUST_LOG={value:?} should keep INFO: {output:?}"
+        );
+        assert!(
+            !output.contains("debug is still filtered"),
+            "RUST_LOG={value:?} should not raise the floor to DEBUG: {output:?}"
+        );
+    }
+}
+
+#[test]
+fn explicit_rust_log_still_wins_over_the_floor() {
+    let logs = SharedWriter::default();
+    let subscriber = Registry::default().with(
+        tracing_subscriber::fmt::layer()
+            .with_ansi(false)
+            .with_writer(logs.clone())
+            .with_filter(rust_log_filter(Some("warn"))),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::warn!("warn is kept");
+        tracing::info!("info is filtered by an explicit directive");
+    });
+
+    let output = logs.contents();
+    assert!(output.contains("warn is kept"), "{output:?}");
+    assert!(
+        !output.contains("info is filtered by an explicit directive"),
+        "an explicit RUST_LOG must override the default floor: {output:?}"
+    );
+}
+
+#[test]
+fn dependency_suppression_overrides_enabled_logs_without_hiding_service_logs() {
+    let output = SharedWriter::default();
+    let subscriber = Registry::default()
+        .with(tracing_subscriber::filter::filter_fn(|metadata| {
+            dependency_logs_allowed(&["russh", "rmcp"], metadata.target())
+        }))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(output.clone())
+                .with_filter(EnvFilter::new("info")),
+        );
+    tracing::subscriber::with_default(subscriber, || {
+        tracing::info!(target: "russh::server", username = "test-only-token", "authentication");
+        tracing::info!(target: "rmcp::service", "script containing test-only-token");
+        tracing::info!(target: "preview_gateway", "gateway ready");
+        tracing::info!(target: "russh_unrelated", "unrelated target");
+    });
+    let text = output.contents();
+    assert!(!text.contains("test-only-token"));
+    assert!(text.contains("gateway ready"));
+    assert!(text.contains("unrelated target"));
+    let entrypoint = MacroEntrypoint::default()
+        .suppress_dependency_logs(&["russh"])
+        .local()
+        .build();
+    assert_eq!(entrypoint.suppressed_targets, &["russh"]);
+}

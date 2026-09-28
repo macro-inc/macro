@@ -5,12 +5,14 @@ use graphql_common::GraphqlSoupEntityType;
 use model_notifications::NotifEvent;
 use notification::domain::models::UserNotificationRow;
 
+use notification_state::graphql::GraphqlNotificationState;
+
 #[cfg(test)]
 mod test;
 
 use crate::{
-    GraphqlNotifEvent,
-    loaders::{EntityNotificationsLoader, SoupNotificationEdgeReader},
+    GraphqlNotifEvent, GraphqlNotificationFilter,
+    loaders::{EntityNotificationsKey, EntityNotificationsLoader, SoupNotificationEdgeReader},
 };
 
 /// GraphQL notification backed by either an owned or shared notification row.
@@ -82,14 +84,9 @@ impl GraphqlNotification {
         self.as_ref().sent
     }
 
-    /// Whether notification processing is complete.
-    async fn done(&self) -> bool {
-        self.as_ref().done
-    }
-
-    /// Whether the recipient has seen the notification.
-    async fn seen(&self) -> bool {
-        self.as_ref().viewed_at.is_some()
+    /// The authoritative lifecycle state, independent of viewing timestamps.
+    async fn state(&self) -> GraphqlNotificationState {
+        self.as_ref().state.into()
     }
 
     /// The notification creation time in RFC 3339 format.
@@ -126,13 +123,19 @@ impl GraphqlNotification {
 pub async fn load_entity_notifications<'a, R>(
     ctx: &'a Context<'a>,
     entity: model_entity::Entity<'static>,
+    filter: Option<GraphqlNotificationFilter>,
+    limit: Option<i32>,
 ) -> async_graphql::Result<Vec<GraphqlNotification>>
 where
     R: SoupNotificationEdgeReader,
 {
+    let query = filter.unwrap_or_default().into_query(limit)?;
     let loader = ctx.data::<DataLoader<EntityNotificationsLoader<R>>>()?;
     let notifications = loader
-        .load_one(model_entity::OwnedEntity::from(entity))
+        .load_one(EntityNotificationsKey {
+            entity: entity.into(),
+            query,
+        })
         .await
         .map_err(|error| {
             tracing::error!(error = ?error, "failed to load entity notifications");

@@ -30,7 +30,10 @@ export const filesAndFolderFilter = config({
   id: 'file-folder',
   predicate: filesAndFolderPredicate,
   query: {
-    exclude: { fileAssoc: ['assoc:md', 'assoc:canvas'], folderId: [NIL_UUID] },
+    exclude: {
+      fileType: ['md', 'canvas', 'spreadsheet'],
+      folderId: [NIL_UUID],
+    },
   },
 });
 

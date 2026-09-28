@@ -6,7 +6,7 @@ use anyhow::Context;
 use aws_sdk_s3::{presigning::PresigningConfig, primitives::ByteStream};
 use base64::Engine;
 use model::document::ContentType;
-use s3_key::SYNC_SERVICE_SNAPSHOT_PREFIX;
+use s3_key::{SYNC_SERVICE_SNAPSHOT_PREFIX, document_key_url_path};
 
 use crate::domain::ports::PresignedUploadUrlPort;
 
@@ -80,7 +80,12 @@ impl PresignedUploadUrlPort for S3UploadUrlAdapter {
         self.client
             .copy_object()
             .bucket(&self.document_storage_bucket)
-            .copy_source(format!("{}/{}", self.document_storage_bucket, source_key))
+            // S3 requires the copy source to be URL-encoded.
+            .copy_source(format!(
+                "{}/{}",
+                self.document_storage_bucket,
+                document_key_url_path(source_key)
+            ))
             .key(destination_key)
             .send()
             .await?;

@@ -1,16 +1,12 @@
-import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { CollabProvider } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
-import { blockSourceSignal, blockSyncSourceSignal } from '@core/signal/load';
-import { useCanComment, useCanEdit } from '@core/signal/permissions';
-import { isSourceSyncService } from '@core/util/source';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Setter } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import { endDocumentSpan, resumeDocumentSpan } from '../observability';
-import { CollabStatus } from './CollabStatus';
 
 // The sync tags and force-sync command live with the generic provider now;
 // re-exported here so existing md-block imports keep working.
@@ -38,11 +34,11 @@ export type MarkdownCollabProviderProps = {
  * the block's document tracing spans, with the CollabStatus chrome.
  */
 export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
-  const docSource = blockSourceSignal.get;
-  const syncSource = blockSyncSourceSignal.get;
-  const canEdit = useCanEdit();
-  const canComment = useCanComment();
-  const [editorError] = markdownBlockErrorSignal;
+  const { documentSource, permissions, state } = useMarkdownDocument();
+  const syncSource = () => {
+    const source = documentSource();
+    return source.type === 'sync' ? source.source : undefined;
+  };
 
   return (
     <CollabProvider
@@ -56,18 +52,14 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       setEditorError={props.setEditorError}
       loroManager={props.loroManager}
       syncSource={syncSource}
-      sourceReady={() => {
-        const source = docSource();
-        return !!source && isSourceSyncService(source);
-      }}
-      canEdit={canEdit}
-      canComment={canComment}
-      editorError={editorError}
+      sourceReady={() => documentSource().type === 'sync'}
+      canEdit={permissions.canEdit}
+      canComment={permissions.canComment}
+      editorError={state.editor.error}
       observability={{
         resumeSpan: resumeDocumentSpan,
         endSpan: endDocumentSpan,
       }}
-      statusChrome={<CollabStatus />}
     />
   );
 }

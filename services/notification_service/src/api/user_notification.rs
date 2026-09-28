@@ -10,11 +10,13 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use model_error_response::ErrorResponse;
 use model_notifications::{
-    AiResponseMetadata, CalendarEventReminderMetadata, ChannelMentionMetadata,
-    ChannelMessageSendMetadata, ChannelReplyMetadata, CommentedOnDocumentMetadata,
-    DocumentMentionMetadata, GithubPrComment, GithubPrMention, GithubPrReview,
-    GithubPrStatusChanged, GithubReviewRequested, MentionedInDocumentCommentMetadata,
-    NewEmailMetadata, NotifEvent, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
+    AgentSessionMentionedMetadata, AgentSessionSettledMetadata,
+    AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
+    ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata,
+    CommentedOnDocumentMetadata, CrmDiscussionMetadata, DocumentMentionMetadata, GithubPrComment,
+    GithubPrMention, GithubPrReview, GithubPrStatusChanged, GithubReviewRequested,
+    InitiativeDiscussionMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
+    RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
 use notification::{
     domain::{models::Notification, service::NotificationReader},
@@ -45,7 +47,12 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
         MentionedInDocumentCommentMetadata::TYPE_NAME,
         RepliedToDocumentCommentThreadMetadata::TYPE_NAME,
         CommentedOnDocumentMetadata::TYPE_NAME,
+        InitiativeDiscussionMetadata::TYPE_NAME,
+        CrmDiscussionMetadata::TYPE_NAME,
         CalendarEventReminderMetadata::TYPE_NAME,
+        AgentSessionSettledMetadata::TYPE_NAME,
+        AgentSessionWaitingForInputMetadata::TYPE_NAME,
+        AgentSessionMentionedMetadata::TYPE_NAME,
     ])
 });
 
@@ -68,8 +75,8 @@ pub struct ApiUserNotification {
     pub entity: Entity<'static>,
     /// Whether the notification has been sent.
     pub sent: bool,
-    /// Whether the notification is marked as done.
-    pub done: bool,
+    /// The authoritative notification lifecycle state.
+    pub state: notification::domain::models::NotificationState,
     /// When the notification was created.
     pub created_at: DateTime<Utc>,
     /// When the notification was viewed/seen.
@@ -93,7 +100,7 @@ impl ApiUserNotification {
             notification_event_type,
             entity,
             sent,
-            done,
+            state,
             created_at,
             viewed_at,
             updated_at,
@@ -107,7 +114,7 @@ impl ApiUserNotification {
             notification_event_type,
             entity,
             sent,
-            done,
+            state,
             created_at,
             viewed_at,
             updated_at,
@@ -169,6 +176,7 @@ pub fn router<S: ::notification::domain::service::NotificationReader>()
     operation_id = "list_typed_notifications",
     path = "/v1/user_notifications",
     params(
+        ("states" = Option<String>, Query, description = "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states."),
         ("limit" = Option<u32>, Query, description = "Size limit per page."),
         ("cursor" = Option<String>, Query, description = "Cursor value. Base64 encoded timestamp and item id."),
     ),
@@ -278,6 +286,7 @@ where
     operation_id = "bulk_get_typed_notifications_by_event_item_ids",
     path = "/v1/user_notifications/item/bulk",
     params(
+        ("states" = Option<String>, Query, description = "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states."),
         ("limit" = Option<u32>, Query, description = "Size limit per page. Default 20, max 500."),
         ("cursor" = Option<String>, Query, description = "Cursor value. Base64 encoded timestamp and item id."),
     ),
@@ -338,6 +347,7 @@ async fn bulk_get_typed_notifications_by_event_item_ids<
     operation_id = "get_typed_notifications_by_event_item_id",
     path = "/v1/user_notifications/item/{event_item_id}",
     params(
+        ("states" = Option<String>, Query, description = "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states."),
         ("event_item_id" = uuid::Uuid, Path, description = "The event item ID"),
         ("limit" = Option<u32>, Query, description = "Size limit per page."),
         ("cursor" = Option<String>, Query, description = "Cursor value. Base64 encoded timestamp and item id."),

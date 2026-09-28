@@ -17,6 +17,10 @@ pub async fn edit_share_permission(
     share_permission_id: &str,
     share_permission: &UpdateSharePermissionRequestV2,
 ) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        share_permission.team_share_access_level.is_none(),
+        "supplied team sharing requires a validated canonical command"
+    );
     // The optional update fields determine which assignments are present, so this query must be
     // assembled dynamically. Every value remains bound; only trusted SQL fragments are appended.
     let mut query =

@@ -6,7 +6,6 @@
  */
 import type { DocumentContentUploadedMetadataDocumentVersionId } from './documentContentUploadedMetadataDocumentVersionId';
 import type { FileType } from './fileType';
-import type { MacroUserIdStr } from './macroUserIdStr';
 
 /**
  * Metadata for [`DocumentTopicEvent::ContentUploaded`].
@@ -21,5 +20,5 @@ writes (mirrors `SearchExtractorMessage::document_version_id`). */
 type, e.g. `pdf` for the converted rendition of a docx). */
   file_type: FileType;
   /** The owner of the document (used by the extractor to resolve S3 keys). */
-  owner: MacroUserIdStr;
+  owner: string;
 }

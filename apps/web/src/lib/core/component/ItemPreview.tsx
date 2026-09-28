@@ -38,7 +38,7 @@ import {
 import { HoverCard } from './HoverCard';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
-  const [item] = useItemPreview(entity);
+  const [item, { documentProperties }] = useItemPreview(entity);
   const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
 
   createEffect(() => {
@@ -109,6 +109,7 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
 
   return {
     item,
+    documentProperties,
     name,
     onPreviewClick,
     targetType,
@@ -284,7 +285,11 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                       props.disableHoverCard || isTouchDevice() || !blockName()
                     }
                     trigger={
-                      <button class={buttonClass()} {...navHandlers}>
+                      <button
+                        type="button"
+                        class={buttonClass()}
+                        {...navHandlers}
+                      >
                         <div class={iconClass()}>
                           <ItemEntityIcon size={iconSize()} />
                         </div>

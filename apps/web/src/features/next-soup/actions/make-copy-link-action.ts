@@ -1,4 +1,4 @@
-import { copyCalendarEventMentionTarget } from '@block-calendar/copy-event-mention';
+import { copyCalendarEventMentionTarget } from '@app/features/calendar-view/copy-event-mention';
 import { getChannelParams } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -11,6 +11,7 @@ import type { EntityActionListState } from './entity-action-context';
  * Get the URL type/path segment for an entity
  */
 const getEntityUrlType = (entity: EntityData): string => {
+  if (entity.type === 'agent_session') return 'agent';
   if (entity.type === 'document') {
     const { fileType, subType } = entity;
     return fileTypeToBlockName(subType?.type ?? fileType);
@@ -40,8 +41,12 @@ const getEntityUrlParams = (
 };
 
 const getEntityUrl = (entity: EntityData): string => {
-  // TODO(dev-rb/github): Return the Macro /pr/:id URL.
-  if (isGithubPrEntity(entity)) return entity.metadata.url;
+  if (isGithubPrEntity(entity)) {
+    return buildSimpleEntityUrl({
+      type: 'reviews/pr',
+      id: encodeURIComponent(entity.id),
+    });
+  }
 
   return buildSimpleEntityUrl(
     {

@@ -239,8 +239,9 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
     let session = AgentSessionRepo::create(
         &repo,
         CreateAgentSessionParams {
+            repo_branch: None,
             id: session_id,
-            owner_id: owner,
+            owner_id: model_owner::Owner::User(owner),
             bot_id: BotId::new_from_uuid(args.bot_id),
             thread_id: None,
             originating_message_id: None,
@@ -251,6 +252,7 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
             // A recording is replayed, not run; nothing reads instructions.
             instructions: None,
+            mcp_servers: Default::default(),
             egress_token_hash: None,
         },
     )

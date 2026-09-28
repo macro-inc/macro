@@ -14,6 +14,7 @@ import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { type Accessor, onCleanup } from 'solid-js';
 import type {
   EntityActionListState,
+  EntityActionNavigationHandler,
   EntityActionViewContext,
 } from './entity-action-context';
 import {
@@ -31,6 +32,7 @@ import {
   makeMarkReadAction,
   makeMarkUnreadAction,
   makeMoveToProjectAction,
+  makeMuteAction,
   makeRenameAction,
   makeSetCompanyPropertyAction,
   makeShareAction,
@@ -45,7 +47,12 @@ type UseEntityActionHotkeysOptions = {
   restoreFocus: (entityId?: string) => void | Promise<void>;
   viewContext: Accessor<EntityActionViewContext>;
   splitHandle?: SplitHandle;
+  createActionNavigationHandler?: () =>
+    | EntityActionNavigationHandler
+    | undefined;
   condition?: () => boolean;
+  /** Home previews reserve Delete/Backspace for the open editor. */
+  enableDeleteHotkey?: boolean;
 };
 
 export const useEntityActionHotkeys = (
@@ -101,6 +108,9 @@ export const useEntityActionHotkeys = (
   const shareAction = makeShareAction();
 
   const favoriteAction = makeFavoriteAction();
+  const muteAction = makeMuteAction({
+    notificationSource: () => notificationSource,
+  });
 
   const setCompanyPropertyAction = makeSetCompanyPropertyAction();
   const addTagAction = makeAddTagAction();
@@ -115,12 +125,12 @@ export const useEntityActionHotkeys = (
     return [];
   };
 
-  const openNextEntity = (entity: EntityData) => {
+  const openNextEntity: EntityActionNavigationHandler = ({ entity }) => {
     if (!splitHandle) return;
-    // Preview Controllers are synchronized centrally by executeWithSoup so
-    // every mark-done entry point, including menus and swipe, behaves alike.
-    if (splitHandle.isControllerSplit()) return;
-    const handleContent = splitHandle.content().type;
+    if (!entity) return;
+
+    const handleContent = splitHandle.content()?.type;
+    if (!handleContent) return;
     if (handleContent === 'component' || handleContent === 'project') return;
     openEntityInSplitFromUnifiedList(entity, {
       splitHandle,
@@ -177,7 +187,11 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
       if (!entities.every(markDone.canExecute)) return false;
 
-      markDone.executeWithSoup(entities, list, openNextEntity);
+      markDone.executeWithSoup(
+        entities,
+        list,
+        options.createActionNavigationHandler?.() ?? openNextEntity
+      );
       return true;
     },
     condition: () => {
@@ -266,31 +280,33 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
-  // Delete - 'delete', 'backspace'
-  registerHotkey({
-    hotkey: ['delete', 'backspace'],
-    hotkeyToken: TOKENS.entity.action.delete,
-    scopeId,
-    description: () => {
-      const count = getEntitiesForAction().length;
-      return count > 1 ? 'Delete items' : 'Delete item';
-    },
-    keyDownHandler: () => {
-      const entities = getEntitiesForAction();
-      if (entities.length === 0) return false;
-      if (!entities.every(deleteAction.canExecute)) return false;
+  if (options.enableDeleteHotkey !== false) {
+    // Delete - 'delete', 'backspace'
+    registerHotkey({
+      hotkey: ['delete', 'backspace'],
+      hotkeyToken: TOKENS.entity.action.delete,
+      scopeId,
+      description: () => {
+        const count = getEntitiesForAction().length;
+        return count > 1 ? 'Delete items' : 'Delete item';
+      },
+      keyDownHandler: () => {
+        const entities = getEntitiesForAction();
+        if (entities.length === 0) return false;
+        if (!entities.every(deleteAction.canExecute)) return false;
 
-      deleteAction.executeWithSoup(entities, list);
-      return true;
-    },
-    condition: () => {
-      if (condition && !condition()) return false;
-      const entities = getEntitiesForAction();
-      return entities.length > 0 && entities.every(deleteAction.canExecute);
-    },
-    displayPriority: 10,
-    tags: [HotkeyTags.SelectionModification],
-  }).withGroup(group);
+        deleteAction.executeWithSoup(entities, list);
+        return true;
+      },
+      condition: () => {
+        if (condition && !condition()) return false;
+        const entities = getEntitiesForAction();
+        return entities.length > 0 && entities.every(deleteAction.canExecute);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+  }
 
   /**
    * Whether 'r' should open the reminder editor rather than rename.
@@ -365,6 +381,54 @@ export const useEntityActionHotkeys = (
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(favoriteAction.canExecute);
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Mute notifications (command menu only, no keybinding)
+  registerHotkey({
+    scopeId,
+    description: 'Snooze notifications…',
+    keywords: ['pause', 'morning', 'weekend', 'notifications'],
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (!entities.length || !entities.every(muteAction.canExecute))
+        return false;
+      muteAction.snooze(entities);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(muteAction.canExecute);
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  registerHotkey({
+    hotkeyToken: TOKENS.entity.action.mute,
+    scopeId,
+    description: () => {
+      const entities = getEntitiesForAction();
+      const allMuted =
+        entities.length > 0 &&
+        entities.every((entity) => muteAction.isMuted(entity));
+      return allMuted ? 'Unmute notifications' : 'Mute notifications';
+    },
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(muteAction.canExecute)) return false;
+
+      void muteAction.executeWithSoup(entities, list);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(muteAction.canExecute);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
@@ -508,6 +572,7 @@ export const useEntityActionHotkeys = (
       if (!createReminderAction.canExecute(entities[0])) return false;
       createReminderAction.executeWithSoup(entities, list, {
         advances: marksDoneOnThisView(),
+        onNavigate: options.createActionNavigationHandler?.() ?? openNextEntity,
       });
       return true;
     },
@@ -676,7 +741,12 @@ export const useEntityActionHotkeys = (
       keyDownHandler: () => {
         const entities = getEntitiesForAction();
         if (entities.length === 0) return false;
-        if (!entities.every(setCompanyPropertyAction.canExecute)) return false;
+        if (
+          !entities.every((entity) =>
+            setCompanyPropertyAction.canExecute(entity, field)
+          )
+        )
+          return false;
         setCompanyPropertyAction.execute(entities, field);
         return true;
       },
@@ -685,7 +755,9 @@ export const useEntityActionHotkeys = (
         const entities = getEntitiesForAction();
         return (
           entities.length > 0 &&
-          entities.every(setCompanyPropertyAction.canExecute)
+          entities.every((entity) =>
+            setCompanyPropertyAction.canExecute(entity, field)
+          )
         );
       },
       scopeId,

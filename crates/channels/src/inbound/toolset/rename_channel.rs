@@ -1,4 +1,4 @@
-use super::{ChannelToolContext, channel_mutation_error, channel_name, user_sender};
+use super::{ChannelToolContext, channel_mutation_error, channel_name};
 use crate::domain::models::PatchChannelRequest;
 use crate::domain::ports::ChannelService;
 use ai_toolset::{
@@ -29,7 +29,7 @@ pub struct RenameChannelResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "RenameChannel",
-    description = "Rename an existing channel. Requires the current user to be a channel admin or owner. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel."
+    description = "Rename an existing channel. Requires the current user to be an active channel participant. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel."
 )]
 pub struct RenameChannel {
     /// Channel to rename.
@@ -64,9 +64,8 @@ where
     ) -> ToolResult<Self::Output> {
         let name = channel_name(&self.name)?;
         let receipt = service_context
-            .require_channel_admin(&request_context, self.channel_id)
+            .require_channel_rename(&request_context, self.channel_id)
             .await?;
-        let actor = user_sender(&receipt)?;
         let previous_name = service_context
             .service
             .get_channel_metadata(self.channel_id, request_context.user_id.clone())
@@ -77,8 +76,7 @@ where
         service_context
             .service
             .patch_channel(
-                actor,
-                self.channel_id,
+                receipt,
                 PatchChannelRequest {
                     channel_name: Some(name.clone()),
                     convert_to_team_channel: None,

@@ -186,43 +186,231 @@ async fn list_returns_only_the_owners_reminders_soonest_first(pool: PgPool) {
     assert_eq!(batch.reminders[1].description, "later");
 }
 
+async fn seed_filterable_reminders(pool: &PgPool) -> PgRemindersRepo {
+    insert_user(pool, USER_A).await;
+    let repo = PgRemindersRepo::new(pool.clone());
+    let at_2pm = at(2026, 8, 1, 14);
+
+    for (description, entity) in [
+        (
+            "on doc-1",
+            Some(EntityType::Document.with_entity_string(DOC_1.to_string())),
+        ),
+        (
+            "on doc-2",
+            Some(EntityType::Document.with_entity_string(DOC_2.to_string())),
+        ),
+        (
+            "on channel doc-2",
+            Some(EntityType::Channel.with_entity_string(DOC_2.to_string())),
+        ),
+        ("standalone", None),
+    ] {
+        repo.create_reminder(
+            &user(USER_A),
+            &NewReminder {
+                entity,
+                ..new_reminder(description, once_at(at_2pm))
+            },
+        )
+        .await
+        .expect("insert");
+    }
+    repo
+}
+
+async fn listed_descriptions(repo: &PgRemindersRepo, filter: &ReminderFilter) -> Vec<String> {
+    repo.list_reminders(&user(USER_A), filter, 100)
+        .await
+        .expect("list should succeed")
+        .reminders
+        .into_iter()
+        .map(|reminder| reminder.description)
+        .collect()
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn list_filters_by_entity(pool: PgPool) {
-    insert_user(&pool, USER_A).await;
-    let repo = PgRemindersRepo::new(pool);
+async fn an_unfiltered_list_includes_standalone_reminders(pool: PgPool) {
+    let repo = seed_filterable_reminders(&pool).await;
 
-    let attached = NewReminder {
-        entity: Some(EntityType::Document.with_entity_string(DOC_1.to_string())),
-        ..new_reminder("on doc-1", once_at(at(2026, 8, 1, 14)))
-    };
-    let other = NewReminder {
-        entity: Some(EntityType::Document.with_entity_string(DOC_2.to_string())),
-        ..new_reminder("on doc-2", once_at(at(2026, 8, 1, 14)))
-    };
-    repo.create_reminder(&user(USER_A), &attached)
-        .await
-        .expect("insert");
-    repo.create_reminder(&user(USER_A), &other)
-        .await
-        .expect("insert");
-    repo.create_reminder(
-        &user(USER_A),
-        &new_reminder("standalone", once_at(at(2026, 8, 1, 14))),
+    let listed = listed_descriptions(&repo, &ReminderFilter::default()).await;
+    assert_eq!(listed.len(), 4);
+    assert!(listed.contains(&"standalone".to_string()));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_type_only_filter_keeps_every_id_of_those_types(pool: PgPool) {
+    let repo = seed_filterable_reminders(&pool).await;
+
+    let mut listed = listed_descriptions(
+        &repo,
+        &ReminderFilter {
+            entity_types: vec![EntityType::Document],
+            ..Default::default()
+        },
     )
-    .await
-    .expect("insert");
+    .await;
+    listed.sort();
 
+    assert_eq!(listed, vec!["on doc-1".to_string(), "on doc-2".to_string()]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_id_only_filter_keeps_every_type_holding_those_ids(pool: PgPool) {
+    let repo = seed_filterable_reminders(&pool).await;
+
+    let mut listed = listed_descriptions(
+        &repo,
+        &ReminderFilter {
+            entity_ids: vec![DOC_2.parse().expect("valid uuid")],
+            ..Default::default()
+        },
+    )
+    .await;
+    listed.sort();
+
+    assert_eq!(
+        listed,
+        vec!["on channel doc-2".to_string(), "on doc-2".to_string()]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_two_dimensions_are_combined(pool: PgPool) {
+    let repo = seed_filterable_reminders(&pool).await;
+
+    assert_eq!(
+        listed_descriptions(
+            &repo,
+            &ReminderFilter {
+                entity_types: vec![EntityType::Channel],
+                entity_ids: vec![
+                    DOC_1.parse().expect("valid uuid"),
+                    DOC_2.parse().expect("valid uuid"),
+                ],
+                ..Default::default()
+            },
+        )
+        .await,
+        vec!["on channel doc-2".to_string()]
+    );
+
+    assert!(
+        listed_descriptions(
+            &repo,
+            &ReminderFilter {
+                entity_types: vec![EntityType::Channel],
+                entity_ids: vec![DOC_1.parse().expect("valid uuid")],
+                ..Default::default()
+            },
+        )
+        .await
+        .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn either_constrained_dimension_excludes_standalone_reminders(pool: PgPool) {
+    let repo = seed_filterable_reminders(&pool).await;
+
+    for filter in [
+        ReminderFilter {
+            entity_types: vec![EntityType::Document, EntityType::Channel],
+            ..Default::default()
+        },
+        ReminderFilter {
+            entity_ids: vec![
+                DOC_1.parse().expect("valid uuid"),
+                DOC_2.parse().expect("valid uuid"),
+            ],
+            ..Default::default()
+        },
+    ] {
+        let listed = listed_descriptions(&repo, &filter).await;
+        assert!(
+            !listed.contains(&"standalone".to_string()),
+            "standalone leaked through {filter:?}"
+        );
+        assert_eq!(listed.len(), 3);
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_filtered_list_still_pages_and_hides_completed(pool: PgPool) {
+    let repo = seed_filterable_reminders(&pool).await;
     let filter = ReminderFilter {
-        entity: Some(EntityType::Document.with_entity_string(DOC_1.to_string())),
+        entity_ids: vec![
+            DOC_1.parse().expect("valid uuid"),
+            DOC_2.parse().expect("valid uuid"),
+        ],
         ..Default::default()
     };
-    let batch = repo
-        .list_reminders(&user(USER_A), &filter, 100)
+
+    let first = repo
+        .list_reminders(&user(USER_A), &filter, 2)
         .await
         .expect("list should succeed");
+    assert_eq!(first.reminders.len(), 2);
+    let second = repo
+        .list_reminders(
+            &user(USER_A),
+            &ReminderFilter {
+                cursor: first.last_examined,
+                ..filter.clone()
+            },
+            2,
+        )
+        .await
+        .expect("list should succeed");
+    assert_eq!(second.reminders.len(), 1);
 
-    assert_eq!(batch.reminders.len(), 1);
-    assert_eq!(batch.reminders[0].description, "on doc-1");
+    let paged: Vec<String> = first
+        .reminders
+        .iter()
+        .chain(second.reminders.iter())
+        .map(|reminder| reminder.description.clone())
+        .collect();
+    let mut sorted = paged.clone();
+    sorted.sort();
+    assert_eq!(
+        sorted,
+        vec![
+            "on channel doc-2".to_string(),
+            "on doc-1".to_string(),
+            "on doc-2".to_string(),
+        ],
+        "paging within a filter must return each matching reminder exactly once"
+    );
+
+    sqlx::query(r#"UPDATE reminder SET completed_at = now() WHERE description = 'on doc-1'"#)
+        .execute(&pool)
+        .await
+        .expect("complete should update");
+
+    let mut hidden = listed_descriptions(&repo, &filter).await;
+    hidden.sort();
+    assert_eq!(
+        hidden,
+        vec!["on channel doc-2".to_string(), "on doc-2".to_string()]
+    );
+
+    let mut shown = listed_descriptions(
+        &repo,
+        &ReminderFilter {
+            include_completed: true,
+            ..filter
+        },
+    )
+    .await;
+    shown.sort();
+    assert_eq!(
+        shown,
+        vec![
+            "on channel doc-2".to_string(),
+            "on doc-1".to_string(),
+            "on doc-2".to_string(),
+        ]
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

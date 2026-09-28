@@ -1,22 +1,5 @@
-use rmcp::RoleClient;
-use rmcp::model::{ClientInfo, Implementation};
-use rmcp::service::RunningService;
-
 pub use macro_user_id::user_id::MacroUserIdStr;
-
-/// Our MCP client publishes this name to servers on-connect.
-pub const MCP_CLIENT_NAME: &str = "Macro";
-
-/// A connected MCP server session.
-pub type McpServer = RunningService<RoleClient, ClientInfo>;
-
-/// Build the client info sent to MCP servers during initialization.
-pub fn client_info() -> ClientInfo {
-    ClientInfo::new(
-        Default::default(),
-        Implementation::new(MCP_CLIENT_NAME, env!("CARGO_PKG_VERSION")),
-    )
-}
+pub use mcp_toolset::{MCP_CLIENT_NAME, McpServer, client_info};
 
 /// An MCP connector a user has connected through Pipedream.
 ///
@@ -86,12 +69,4 @@ pub struct CatalogPage {
 }
 
 /// Errors from Pipedream MCP tool dispatch.
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    /// The requested tool was not found on any connected server.
-    #[error("unknown tool: {0}")]
-    UnknownTool(String),
-    /// A tool invocation failed.
-    #[error("tool call failed: {0}")]
-    ToolCall(String),
-}
+pub use mcp_toolset::Error;

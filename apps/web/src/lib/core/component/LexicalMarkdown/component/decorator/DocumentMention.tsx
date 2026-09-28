@@ -1,5 +1,6 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
-import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
+import { calendarMentionOpen } from '@app/features/calendar-view/mention-open-target';
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   type BlockAlias,
@@ -14,8 +15,8 @@ import {
 } from '@core/component/DocumentPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { HoverCard } from '@core/component/HoverCard';
+import { InlineTaskProperties } from '@core/component/InlineTaskProperties';
 import { useItemPreviewData } from '@core/component/ItemPreview';
-import { UserIcon } from '@core/component/UserIcon';
 import {
   itemToBlockName,
   resolveBlockAlias,
@@ -26,7 +27,7 @@ import { canNestBlock } from '@core/orchestrator';
 import { formatDate } from '@core/util/date';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   $convertMentionToCard,
   $isDocumentMentionNode,
@@ -35,16 +36,12 @@ import {
 } from '@macro-inc/lexical-core';
 import EyeSlashDuo from '@phosphor/eye-slash.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
-import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { useEntityProperties } from '@property/hooks';
 import {
   type ItemEntity,
   isAccessiblePreviewItem,
   isCalendarEventPreviewItem,
   type PreviewCalendarEventAccess,
   type PreviewItemNoAccess,
-  useItemPreview,
 } from '@queries/preview';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { blockNameToItemType } from '@service-storage/client';
@@ -127,8 +124,8 @@ function SkillSlashText(props: {
   const systemSkills = useSystemSkillsQuery();
   const openSkill = createCallback((e: MouseEvent) => {
     if (systemSkills.isSystemSkillId(props.documentId)) return;
-    // Also keeps the outer mention click handler (read-only contexts) from
-    // opening the skill a second time.
+    // Also keeps the outer mention click handler from opening the skill a
+    // second time.
     e.stopPropagation();
     openDocument(
       'skill',
@@ -170,68 +167,28 @@ export function calendarMentionTimeLabel(
   return startDate ? formatDate(startDate) : undefined;
 }
 
-function InlineTaskProperties(props: { taskId: string }) {
-  const { properties, isLoading } = useEntityProperties(
-    props.taskId,
-    'TASK',
-    false
-  );
-
-  const statusOptionId = createMemo(() => {
-    const p = properties().find(
-      (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS
-    );
-    return p?.valueType === 'SELECT_STRING' ? p.value?.[0] : undefined;
-  });
-
-  const priorityOptionId = createMemo(() => {
-    const p = properties().find(
-      (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY
-    );
-    return p?.valueType === 'SELECT_STRING' ? p.value?.[0] : undefined;
-  });
-
-  const firstAssigneeId = createMemo(() => {
-    const p = properties().find(
-      (p) => p.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
-    );
-    return p?.valueType === 'ENTITY' ? p.value?.[0]?.entity_id : undefined;
-  });
-
-  const hasAny = createMemo(
-    () =>
-      !isLoading() &&
-      !!(statusOptionId() || priorityOptionId() || firstAssigneeId())
-  );
-
+function MentionAccessories(props: {
+  blockName: BlockName | BlockAlias;
+  blockParams?: Record<string, string>;
+}) {
+  const accessories = () =>
+    mentionsAccessories(props.blockName as BlockName, props.blockParams ?? {});
   return (
-    <Show when={hasAny()}>
-      <span class="inline-flex items-center gap-1 mx-1 align-middle relative top-[-0.05em]">
-        <Show when={statusOptionId()}>
-          {(id) => <PropertyValueIcon optionId={id()} class="size-3" />}
-        </Show>
-        <Show when={priorityOptionId()}>
-          {(id) => <PropertyValueIcon optionId={id()} class="size-3" />}
-        </Show>
-        <Show when={firstAssigneeId()}>
-          {(id) => (
-            <span class="inline-flex ml-0.5 size-3.25">
-              <UserIcon
-                id={id()}
-                isDeleted={false}
-                size="fill"
-                suppressClick
-                showTooltip={false}
-              />
-            </span>
-          )}
-        </Show>
-      </span>
-    </Show>
+    <span class="relative text-[0.8em] text-current/50 rounded-xs">
+      <Show when={accessories()}>
+        {(value) => (
+          <>
+            {` ${value().note ?? ''}`}
+            {getMentionsIcon(value().icon)}
+          </>
+        )}
+      </Show>
+    </span>
   );
 }
 
 function InlinePreview(props: {
+  previewData: ReturnType<typeof useItemPreviewData>;
   entity: ItemEntity;
   blockName: BlockName | BlockAlias;
   blockParams: Record<string, string>;
@@ -241,7 +198,7 @@ function InlinePreview(props: {
   createdAt?: number;
   isRecentMention: () => boolean;
 }) {
-  const { item, ItemEntityIcon } = useItemPreviewData(() => props.entity);
+  const { item, ItemEntityIcon, documentProperties } = props.previewData;
 
   const shouldShowFallback = createMemo(() => {
     return (
@@ -276,6 +233,10 @@ function InlinePreview(props: {
                   <Show when={props.documentName} fallback={'Loading...'}>
                     {(name) => name().replaceAll('\n', ' ').trim()}
                   </Show>
+                  <MentionAccessories
+                    blockName={props.blockName}
+                    blockParams={props.blockParams}
+                  />
                 </span>
               }
               collapsed={props.collapsed}
@@ -308,22 +269,10 @@ function InlinePreview(props: {
                   <Show when={props.documentName} fallback={'Unknown'}>
                     {(name) => name().replaceAll('\n', ' ').trim()}
                   </Show>
-                  <span class="relative text-[0.8em] text-current/50 rounded-md">
-                    {(() => {
-                      const accessories = mentionsAccessories(
-                        props.blockName as BlockName,
-                        props.blockParams
-                      );
-                      if (accessories) {
-                        return (
-                          <>
-                            {` ${accessories.note ?? ''}`}
-                            {getMentionsIcon(accessories.icon)}
-                          </>
-                        );
-                      }
-                    })()}
-                  </span>
+                  <MentionAccessories
+                    blockName={props.blockName}
+                    blockParams={props.blockParams}
+                  />
                 </span>
               }
               collapsed={props.collapsed}
@@ -389,25 +338,16 @@ function InlinePreview(props: {
                         </Show>
                       )}
                     </Show>
-                    <span class="relative text-[0.8em] text-current/50 rounded-xs">
-                      {(() => {
-                        const accessories = mentionsAccessories(
-                          props.blockName as BlockName,
-                          props.blockParams
-                        );
-                        if (accessories) {
-                          return (
-                            <>
-                              {` ${accessories.note ?? ''}`}
-                              {getMentionsIcon(accessories.icon)}
-                            </>
-                          );
-                        }
-                      })()}
-                    </span>
+                    <MentionAccessories
+                      blockName={props.blockName}
+                      blockParams={props.blockParams}
+                    />
                     <Show when={props.blockName === 'task'}>
                       <Suspense>
-                        <InlineTaskProperties taskId={accessibleItem().id} />
+                        <InlineTaskProperties
+                          taskId={accessibleItem().id}
+                          previewProperties={documentProperties()}
+                        />
                       </Suspense>
                     </Show>
                   </span>
@@ -439,6 +379,23 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
   if (lexicalWrapper?.skipPreviewFetch) {
     return <DocumentMentionStatic {...props} />;
   }
+  // Only skill mentions need to distinguish built-ins from stored documents.
+  // Ordinary mentions must not wait for a once-per-session skills request.
+  return (
+    <Show
+      when={props.blockName === 'skill'}
+      fallback={
+        <Suspense fallback={<DocumentMentionStatic {...props} />}>
+          <DocumentMentionInner {...props} />
+        </Suspense>
+      }
+    >
+      <SkillDocumentMention {...props} />
+    </Show>
+  );
+}
+
+function SkillDocumentMention(props: DocumentMentionDecoratorProps) {
   const systemSkills = useSystemSkillsQuery();
   return (
     <Switch>
@@ -452,7 +409,7 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
         <DocumentMentionStatic {...props} />
       </Match>
       <Match when={true}>
-        <Suspense>
+        <Suspense fallback={<DocumentMentionStatic {...props} />}>
           <DocumentMentionInner {...props} />
         </Suspense>
       </Match>
@@ -478,18 +435,20 @@ function SystemSkillMention(
 }
 
 /** Lightweight mention display that skips all backend fetches. Uses only the stored name. */
-function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
+export function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
   if (props.blockName === 'skill') {
     return (
       <SkillSlashText
         documentId={props.documentId}
         name={props.documentName ?? ''}
+        collapsed={props.collapsed}
       />
     );
   }
   return (
     <MentionContainer
       icon={<EntityIcon targetType={props.blockName as any} size="fill" />}
+      collapsed={props.collapsed}
       text={
         <span
           data-document-mention="true"
@@ -497,7 +456,11 @@ function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
           data-block-name={props.blockName}
           data-document-name={props.documentName}
         >
-          {props.documentName ?? props.documentId}
+          {(props.documentName || 'Loading...').replaceAll('\n', ' ').trim()}
+          <MentionAccessories
+            blockName={verifyBlockName(props.blockName)}
+            blockParams={props.blockParams}
+          />
         </span>
       }
     />
@@ -558,7 +521,8 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return baseEntity;
   };
 
-  const [item] = useItemPreview(itemEntity);
+  const previewData = useItemPreviewData(itemEntity);
+  const { item } = previewData;
 
   const isSelectedAsNode = createMemo(() => {
     const sel = selection();
@@ -576,24 +540,31 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return props.blockName;
   });
 
+  const [previewCardOpen, setPreviewCardOpen] = createSignal(false);
+
+  const calendarOpen = createMemo(() =>
+    verifyBlockName(props.blockName) === 'calendar'
+      ? calendarMentionOpen(
+          item(),
+          props.documentId,
+          props.blockParams?.occurrenceKey
+        )
+      : undefined
+  );
+
   const open = createCallback((e: MouseEvent | KeyboardEvent | null) => {
     // The calendar is a singleton block: open it aimed at the viewer's own
-    // copy of the meeting, which the preview resolved through the shared
-    // iCalendar UID.
-    if (verifyBlockName(props.blockName) === 'calendar') {
-      const i = item();
-      const event = isCalendarEventPreviewItem(i) ? i.event : undefined;
-      const paramKey = props.blockParams?.occurrenceKey;
+    // copy of the meeting. A meeting shared through the channel but absent
+    // from the viewer's calendars has nothing to open, so its read-only
+    // preview card is shown instead.
+    const target = calendarOpen();
+    if (target) {
+      if (target.kind === 'read_only') {
+        setPreviewCardOpen(true);
+        return;
+      }
       openCalendarEventSplit({
-        eventId: event?.viewerEventId ?? props.documentId,
-        occurrenceKey: paramKey ?? event?.occurrenceKey ?? undefined,
-        // The preview's time only locates the instance it previewed; a
-        // mention aimed at a different instance derives its range from the
-        // occurrence key instead.
-        time:
-          !paramKey || paramKey === event?.occurrenceKey
-            ? event?.time
-            : undefined,
+        ...target.target,
         openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
       });
       return;
@@ -670,7 +641,10 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     });
   };
 
-  const navHandlers = useSplitNavigationHandler<HTMLSpanElement>((e) => {
+  // Native listeners: inside an editable editor (the agent and chat
+  // composers) the shell stops click propagation before Solid's delegated
+  // handlers run, which left the chip inert there.
+  const navHandlers = useNativeSplitNavigationHandler<HTMLSpanElement>((e) => {
     e.stopPropagation();
     const i = item();
     if (
@@ -684,6 +658,9 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
 
   return (
     <HoverCard
+      open={previewCardOpen()}
+      onOpenChange={setPreviewCardOpen}
+      keepOpenOnTriggerPress={calendarOpen()?.kind === 'read_only'}
       trigger={
         <span class="relative">
           <span
@@ -699,6 +676,7 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
             <Switch>
               <Match when={item()}>
                 <InlinePreview
+                  previewData={previewData}
                   entity={itemEntity()}
                   blockName={verifyBlockName(props.blockName)}
                   blockParams={props.blockParams || {}}

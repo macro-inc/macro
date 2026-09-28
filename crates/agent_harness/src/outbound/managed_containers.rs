@@ -1,6 +1,7 @@
 use std::hash::Hash;
 use std::time::{Duration, Instant};
 
+use agent_session::domain::model::AgentSessionId;
 use dashmap::DashMap;
 
 #[cfg(test)]
@@ -15,6 +16,10 @@ enum ContainerState {
 
 pub(crate) struct ManagedContainers<Id> {
     entries: DashMap<Id, ContainerState>,
+    /// The session each container id was registered for, so a reaper -
+    /// which only ever sees `Id` - can ask whether the harness has a
+    /// command in flight for it.
+    sessions: DashMap<Id, AgentSessionId>,
 }
 
 impl<Id> ManagedContainers<Id>
@@ -24,11 +29,18 @@ where
     pub(crate) fn new() -> Self {
         Self {
             entries: DashMap::new(),
+            sessions: DashMap::new(),
         }
     }
 
-    pub(crate) fn register(&self, id: Id) {
-        self.entries.insert(id, ContainerState::Pending);
+    pub(crate) fn register(&self, id: Id, session: AgentSessionId) {
+        self.entries.insert(id.clone(), ContainerState::Pending);
+        self.sessions.insert(id, session);
+    }
+
+    /// The session `id` was registered for, if it is still tracked.
+    pub(crate) fn session_of(&self, id: &Id) -> Option<AgentSessionId> {
+        self.sessions.get(id).map(|entry| *entry)
     }
 
     pub(crate) fn activate(&self, id: &Id, now: Instant) -> bool {
@@ -50,16 +62,31 @@ where
     }
 
     pub(crate) fn remove(&self, id: &Id) -> bool {
+        self.sessions.remove(id);
         self.entries.remove(id).is_some()
     }
 
-    pub(crate) fn reap_stale(&self, now: Instant, max_idle: Duration) -> Vec<Id> {
+    /// Stop-candidate ids idle at least `max_idle`, excluding any `skip`
+    /// answers true for.
+    ///
+    /// `skip` is checked before a candidate is claimed as stale: a session
+    /// with a command already admitted but not yet turn-active - the harness
+    /// marks this at admission, before the runtime visibly starts a turn -
+    /// looks idle by activity timestamp alone, and reaping it now would only
+    /// race that command's delivery.
+    pub(crate) fn reap_stale(
+        &self,
+        now: Instant,
+        max_idle: Duration,
+        skip: impl Fn(&Id) -> bool,
+    ) -> Vec<Id> {
         let candidates = self
             .entries
             .iter()
             .filter_map(|entry| match entry.value() {
                 ContainerState::Active { last_activity }
-                    if now.saturating_duration_since(*last_activity) >= max_idle =>
+                    if now.saturating_duration_since(*last_activity) >= max_idle
+                        && !skip(entry.key()) =>
                 {
                     Some(entry.key().clone())
                 }
@@ -73,6 +100,7 @@ where
             };
             if let ContainerState::Active { last_activity } = *state
                 && now.saturating_duration_since(last_activity) >= max_idle
+                && !skip(&id)
             {
                 *state = ContainerState::Stopping { last_activity };
                 stale.push(id);

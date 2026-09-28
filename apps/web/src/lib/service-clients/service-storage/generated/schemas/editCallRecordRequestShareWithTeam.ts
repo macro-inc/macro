@@ -6,8 +6,9 @@
  */
 
 /**
- * If `Some(true)`, grant the creator's team View access on the call.
-If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
+ * Deprecated alias for `sharePermission.teamShareAccessLevel`:
+`Some(true)` behaves like `"view"`, `Some(false)` like `null`, and
+`None` is a no-op. Supplying both with disagreeing values is rejected.
 The team is resolved from the call's `created_by`, not the acting user.
  */
 export type EditCallRecordRequestShareWithTeam = boolean | null;

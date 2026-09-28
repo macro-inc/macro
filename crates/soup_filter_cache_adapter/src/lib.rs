@@ -1,5 +1,5 @@
 #![deny(missing_docs)]
-//! Soup-specific browser adapter for the generic predicate-index cache.
+//! Soup-specific host adapter for the generic predicate-index cache.
 //!
 //! This crate owns the application GraphQL schema and Soup projection policy.
 //! Cache crates receive only the generic query and projection IR produced here.
@@ -10,7 +10,7 @@ use cache_core::predicate::{ProjectionIncompleteKind, ProjectionMutation};
 use graphql_soup_filter_input::materialize_graphql_filter;
 use indexmap::IndexMap;
 use item_filter_index::{
-    LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, compile_soup_flat_v2, vocabulary,
+    LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, compile_soup_flat_v4, vocabulary,
 };
 use predicate_index::{
     ExactAttributePatch, ExactValue, IndexDocument, OptimisticProjectionMutation, RecordKey,
@@ -18,10 +18,18 @@ use predicate_index::{
 };
 use soup_filter_projection::{
     DirectProjectionInput, DirectProjectionPatchInput, DocumentSubType,
-    SoupCacheProjectionSupplement, SoupFlatEntityKind, compose_soup_flat_v2,
-    decode_cache_projection_supplement, patch_direct_fields, project_direct_fields,
+    SoupCacheProjectionSupplement, SoupFlatEntityKind, compose_soup_flat_v3,
+    decode_cache_projection_supplement, patch_direct_fields,
 };
 use std::collections::HashSet;
+
+mod channels;
+pub mod mail;
+mod notifications;
+pub mod properties;
+pub use notifications::{
+    notification_deletion_updates, notification_projection_updates, optimistic_notification_updates,
+};
 
 /// Failure to materialize or compile a Soup filter request.
 #[derive(Debug, thiserror::Error)]
@@ -44,6 +52,26 @@ pub fn compile_filter_request(
     sort_direction: &str,
     limit: u16,
 ) -> Result<SoupFilterCompileOutcome, SoupFilterCacheAdapterError> {
+    compile_request(filters, sort_method, sort_direction, limit, false)
+}
+
+/// Compile the property-aware profile used by current browser and native hosts.
+pub fn compile_current_filter_request(
+    filters: serde_json::Value,
+    sort_method: &str,
+    sort_direction: &str,
+    limit: u16,
+) -> Result<SoupFilterCompileOutcome, SoupFilterCacheAdapterError> {
+    compile_request(filters, sort_method, sort_direction, limit, true)
+}
+
+fn compile_request(
+    filters: serde_json::Value,
+    sort_method: &str,
+    sort_direction: &str,
+    limit: u16,
+    current: bool,
+) -> Result<SoupFilterCompileOutcome, SoupFilterCacheAdapterError> {
     let ast = materialize_graphql_filter(filters)
         .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
     let sort = match sort_method {
@@ -60,7 +88,12 @@ pub fn compile_filter_request(
             ));
         }
     };
-    compile_soup_flat_v2(
+    let compile = if current {
+        item_filter_index::properties::compile_soup
+    } else {
+        compile_soup_flat_v4
+    };
+    compile(
         &ast,
         SoupFlatRequest {
             sort,
@@ -76,16 +109,38 @@ pub fn compile_filter_request(
     })
 }
 
+/// Convert server-page sort evidence without losing sub-millisecond precision.
+/// The caller scopes the baseline to the same filter and sort as the request.
+pub fn reconciliation_baseline_entry(
+    record_key: String,
+    sort_timestamp: &str,
+) -> Result<
+    cache_core::predicate::reconciliation::PredicateBaselineEntry,
+    SoupFilterCacheAdapterError,
+> {
+    let record_key = RecordKey::new(record_key)
+        .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
+    let timestamp = chrono::DateTime::parse_from_rfc3339(sort_timestamp)
+        .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
+    Ok(
+        cache_core::predicate::reconciliation::PredicateBaselineEntry {
+            record_key,
+            sort_value: predicate_index::utc_timestamp_micros(timestamp.to_utc()),
+        },
+    )
+}
+
 /// Derive authoritative generic projection mutations from a selected GraphQL response.
 ///
 /// Document supplements are decoded only where `cacheProjection` is selected
 /// for the surrounding entity and are merged with direct fields from that same
-/// object. A selected null or missing Document supplement marks v2 incomplete;
-/// selected null values on direct-only Projects and Chats are expected. Mutation
-/// payloads that omit the field become bounded v2 direct-field patches,
-/// preserving relation-owned facts from an existing complete projection. Query
-/// and subscription documents without the field retain the legacy v1 direct
-/// projection during the staged rollout.
+/// object. The immutable v3 Document supplement is composed with the complete
+/// active-notification edge into the browser's v4 profile. Selected null values
+/// on Projects and Chats are expected; missing notification snapshots cannot
+/// establish v4 completeness. Payloads omitting `cacheProjection` become bounded
+/// v4 patches, preserving server-owned facts and any unselected notification
+/// membership from an existing complete projection. A missing base remains
+/// explicitly incomplete.
 pub fn authoritative_projection_mutations(
     query: &str,
     operation_name: Option<&str>,
@@ -117,14 +172,13 @@ pub fn authoritative_projection_mutations(
         &operation.selection_set,
         root_type,
         root,
-        operation.kind,
         &mut mutations,
         &mut has_unbound_incomplete_entity,
     );
     let has_incomplete_projection = has_unbound_incomplete_entity
         || mutations
             .values()
-            .any(|mutation| matches!(mutation, ProjectionMutation::MarkIncomplete { profile, .. } if profile == &vocabulary::profile_v2()));
+            .any(|mutation| matches!(mutation, ProjectionMutation::MarkIncomplete { profile, .. } if profile == &vocabulary::profile_v4()));
     if operation_name.is_some_and(|name| name.starts_with("SoupBackfill"))
         && has_incomplete_projection
     {
@@ -139,7 +193,6 @@ fn walk_authoritative_object(
     selections: &[Selection],
     declared_type: &str,
     object: &serde_json::Map<String, serde_json::Value>,
-    operation_kind: OperationKind,
     mutations: &mut IndexMap<String, ProjectionMutation>,
     has_unbound_incomplete_entity: &mut bool,
 ) {
@@ -151,6 +204,21 @@ fn walk_authoritative_object(
     collect_applicable_fields(selections, concrete_type, &mut fields);
 
     if let Some(partition) = projection_partition(concrete_type) {
+        let (mut projection_object, valid_selection) =
+            if partition == vocabulary::channel_partition() {
+                match channels::selected_object(object, &fields) {
+                    Ok(selected) => (selected, true),
+                    // Use the original ID only to invalidate a conflicting snapshot;
+                    // never interpret conflicting nullable aliases as absent facts.
+                    Err(()) => (object.clone(), false),
+                }
+            } else {
+                (object.clone(), true)
+            };
+        projection_object.remove("notifications");
+        if let Some(snapshot) = notifications::selected_snapshot(object, &fields) {
+            projection_object.insert("notifications".into(), snapshot);
+        }
         let mut projection_fields = fields
             .iter()
             .copied()
@@ -159,7 +227,7 @@ fn walk_authoritative_object(
         projection_fields.sort_by(|left, right| left.response_key.cmp(&right.response_key));
         projection_fields.dedup_by(|left, right| left.response_key == right.response_key);
 
-        let normalized_key = object
+        let normalized_key = projection_object
             .get("id")
             .and_then(serde_json::Value::as_str)
             .map(|id| format!("{concrete_type}:{id}"))
@@ -169,58 +237,46 @@ fn walk_authoritative_object(
                     .map(|key| (key_text, key))
             });
         if let Some((key_text, record_key)) = normalized_key {
-            let kind = projection_kind(&partition).expect("supported partition has a kind");
-            let mutation = if projection_fields.is_empty() {
-                if operation_kind == OperationKind::Mutation {
-                    match authoritative_v2_patch_for_object(
-                        record_key.clone(),
-                        partition.clone(),
-                        object,
-                    ) {
-                        Ok(mutation) => mutation,
-                        Err(()) => Some(ProjectionMutation::MarkIncomplete {
-                            record_key,
-                            profile: vocabulary::profile_v2(),
-                            partition,
-                            kind: ProjectionIncompleteKind::Dirty,
-                        }),
-                    }
-                } else {
-                    Some(
-                        direct_projection_for_object(
-                            record_key.clone(),
-                            partition.clone(),
-                            object,
-                            None,
-                        )
-                        .map(ProjectionMutation::Replace)
-                        .unwrap_or(ProjectionMutation::MarkIncomplete {
-                            record_key,
-                            profile: vocabulary::profile(),
-                            partition,
-                            kind: ProjectionIncompleteKind::Dirty,
-                        }),
-                    )
+            let mutation = if !valid_selection {
+                Some(ProjectionMutation::MarkIncomplete {
+                    record_key,
+                    profile: vocabulary::profile_v4(),
+                    partition,
+                    kind: ProjectionIncompleteKind::Dirty,
+                })
+            } else if projection_fields.is_empty() {
+                match authoritative_v4_patch_for_object(
+                    record_key.clone(),
+                    partition.clone(),
+                    &projection_object,
+                ) {
+                    Ok(mutation) => Some(mutation),
+                    Err(()) => Some(ProjectionMutation::MarkIncomplete {
+                        record_key,
+                        profile: vocabulary::profile_v4(),
+                        partition,
+                        kind: ProjectionIncompleteKind::Dirty,
+                    }),
                 }
-            } else if kind == SoupFlatEntityKind::Document {
+            } else if partition == vocabulary::document_partition() {
                 Some(selected_document_projection_for_object(
                     record_key,
                     partition,
-                    object,
+                    &projection_object,
                     &projection_fields,
                 ))
             } else {
                 Some(
-                    complete_v2_projection_for_object(
+                    complete_v4_projection_for_object(
                         record_key.clone(),
                         partition.clone(),
-                        object,
+                        &projection_object,
                         None,
                     )
                     .map(ProjectionMutation::Replace)
                     .unwrap_or(ProjectionMutation::MarkIncomplete {
                         record_key,
-                        profile: vocabulary::profile_v2(),
+                        profile: vocabulary::profile_v4(),
                         partition,
                         kind: ProjectionIncompleteKind::IncompatibleVersion,
                     }),
@@ -254,7 +310,6 @@ fn walk_authoritative_object(
                 &field.selection_set,
                 field_meta.ty.name,
                 child,
-                operation_kind,
                 mutations,
                 has_unbound_incomplete_entity,
             ),
@@ -265,7 +320,6 @@ fn walk_authoritative_object(
                             &field.selection_set,
                             field_meta.ty.name,
                             child,
-                            operation_kind,
                             mutations,
                             has_unbound_incomplete_entity,
                         );
@@ -307,7 +361,7 @@ fn selected_document_projection_for_object(
 ) -> ProjectionMutation {
     let incomplete = |kind| ProjectionMutation::MarkIncomplete {
         record_key: record_key.clone(),
-        profile: vocabulary::profile_v2(),
+        profile: vocabulary::profile_v4(),
         partition: partition.clone(),
         kind,
     };
@@ -334,13 +388,13 @@ fn selected_document_projection_for_object(
     let Ok(supplement) = decode_cache_projection_supplement(encoded) else {
         return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
     };
-    if supplement.target_profile() != &vocabulary::profile_v2()
+    if supplement.target_profile() != &vocabulary::profile_v3()
         || supplement.record_key() != &record_key
         || supplement.partition() != &partition
     {
         return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
     }
-    complete_v2_projection_for_object(
+    complete_v4_projection_for_object(
         record_key.clone(),
         partition.clone(),
         object,
@@ -355,6 +409,46 @@ fn insert_authoritative_mutation(
     key: String,
     mutation: ProjectionMutation,
 ) {
+    let mutation_is_empty_patch = matches!(
+        &mutation,
+        ProjectionMutation::Patch {
+            exact,
+            integers,
+            sorts,
+            ..
+        } if exact.is_empty() && integers.is_empty() && sorts.is_empty()
+    );
+    if mutation_is_empty_patch && mutations.contains_key(&key) {
+        return;
+    }
+
+    if let (
+        Some(ProjectionMutation::Patch {
+            exact: prior_exact,
+            integers: prior_integers,
+            sorts: prior_sorts,
+            ..
+        }),
+        ProjectionMutation::Patch {
+            exact,
+            integers,
+            sorts,
+            ..
+        },
+    ) = (mutations.get_mut(&key), &mutation)
+    {
+        prior_exact.retain(|prior| !exact.iter().any(|next| next.attribute == prior.attribute));
+        prior_exact.extend(exact.iter().cloned());
+        prior_integers.retain(|prior| {
+            !integers
+                .iter()
+                .any(|next| next.attribute == prior.attribute)
+        });
+        prior_integers.extend(integers.iter().cloned());
+        prior_sorts.retain(|prior| !sorts.iter().any(|next| next.attribute == prior.attribute));
+        prior_sorts.extend(sorts.iter().cloned());
+        return;
+    }
     let existing_is_replace = matches!(mutations.get(&key), Some(ProjectionMutation::Replace(_)));
     if matches!(mutation, ProjectionMutation::Replace(_)) || !existing_is_replace {
         mutations.insert(key, mutation);
@@ -394,7 +488,7 @@ pub fn optimistic_projection_mutations(
                             key_text,
                             OptimisticProjectionMutation::Delete {
                                 record_key,
-                                profile: vocabulary::profile_v2(),
+                                profile: vocabulary::profile_v4(),
                                 partition,
                             },
                         );
@@ -416,7 +510,7 @@ pub fn optimistic_projection_mutations(
                         )
                         .unwrap_or(OptimisticProjectionMutation::Unknown {
                             record_key,
-                            profile: vocabulary::profile_v2(),
+                            profile: vocabulary::profile_v4(),
                             partition,
                             affected_attributes: Vec::new(),
                         });
@@ -449,7 +543,7 @@ pub fn dirty_projection_mutations(keys: &[String]) -> Vec<ProjectionMutation> {
             let partition = projection_partition(typename)?;
             Some(ProjectionMutation::MarkIncomplete {
                 record_key: RecordKey::new(key.clone()).ok()?,
-                profile: vocabulary::profile_v2(),
+                profile: vocabulary::profile_v4(),
                 partition,
                 kind: ProjectionIncompleteKind::Dirty,
             })
@@ -489,27 +583,15 @@ fn direct_projection_input_for_object(
     })
 }
 
-fn direct_projection_for_object(
-    record_key: RecordKey,
-    partition: Token,
-    object: &serde_json::Map<String, serde_json::Value>,
-    updated_at_fallback_ms: Option<i64>,
-) -> Option<IndexDocument> {
-    project_direct_fields(direct_projection_input_for_object(
-        record_key,
-        &partition,
-        object,
-        updated_at_fallback_ms,
-    )?)
-    .ok()
-}
-
-fn complete_v2_projection_for_object(
+fn complete_v4_projection_for_object(
     record_key: RecordKey,
     partition: Token,
     object: &serde_json::Map<String, serde_json::Value>,
     supplement: Option<&SoupCacheProjectionSupplement>,
 ) -> Result<IndexDocument, ()> {
+    if partition == vocabulary::channel_partition() {
+        return channels::complete(record_key, object);
+    }
     let input =
         direct_projection_input_for_object(record_key, &partition, object, None).ok_or(())?;
     let sub_type = if input.kind == SoupFlatEntityKind::Document {
@@ -517,14 +599,36 @@ fn complete_v2_projection_for_object(
     } else {
         None
     };
-    compose_soup_flat_v2(input, sub_type, supplement).map_err(|_| ())
+    let document = compose_soup_flat_v3(input, sub_type, supplement).map_err(|_| ())?;
+    notifications::compose_active_notifications(document, object)
 }
 
-fn authoritative_v2_patch_for_object(
+fn authoritative_v4_patch_for_object(
     record_key: RecordKey,
     partition: Token,
     object: &serde_json::Map<String, serde_json::Value>,
-) -> Result<Option<ProjectionMutation>, ()> {
+) -> Result<ProjectionMutation, ()> {
+    if partition == vocabulary::channel_partition() {
+        let OptimisticProjectionMutation::Patch {
+            record_key,
+            profile,
+            partition,
+            exact,
+            integers,
+            sorts,
+        } = channels::patch(record_key, object, None)?
+        else {
+            return Err(());
+        };
+        return Ok(ProjectionMutation::Patch {
+            record_key,
+            profile,
+            partition,
+            exact,
+            integers,
+            sorts,
+        });
+    }
     let kind = projection_kind(&partition).ok_or(())?;
     let project_field = if kind == SoupFlatEntityKind::Project {
         "parentId"
@@ -536,8 +640,15 @@ fn authoritative_v2_patch_for_object(
         .any(|field| object.contains_key(*field))
         || (kind == SoupFlatEntityKind::Document
             && (object.contains_key("fileType") || object.contains_key("subType")));
-    if !has_direct_patch {
-        return Ok(None);
+    if !has_direct_patch && !object.contains_key("notifications") {
+        return Ok(ProjectionMutation::Patch {
+            record_key,
+            profile: vocabulary::profile_v4(),
+            partition,
+            exact: Vec::new(),
+            integers: Vec::new(),
+            sorts: Vec::new(),
+        });
     }
 
     let patch = patch_direct_fields(DirectProjectionPatchInput {
@@ -587,14 +698,17 @@ fn authoritative_v2_patch_for_object(
             values: document_sub_type_values(value)?,
         });
     }
-    Ok(Some(ProjectionMutation::Patch {
+    if object.contains_key("notifications") {
+        exact.extend(notifications::snapshot_patches(&record_key, object)?);
+    }
+    Ok(ProjectionMutation::Patch {
         record_key,
-        profile: vocabulary::profile_v2(),
+        profile: vocabulary::profile_v4(),
         partition,
         exact,
         integers,
         sorts,
-    }))
+    })
 }
 
 fn document_sub_type(value: &serde_json::Value) -> Result<Option<DocumentSubType>, ()> {
@@ -605,6 +719,9 @@ fn document_sub_type(value: &serde_json::Value) -> Result<Option<DocumentSubType
                 Some("GraphqlTaskSubType") => Ok(Some(DocumentSubType::Task)),
                 Some("GraphqlSnippetSubType") => Ok(Some(DocumentSubType::Snippet)),
                 Some("GraphqlSkillSubType") => Ok(Some(DocumentSubType::Skill)),
+                Some("GraphqlInitiativeDescriptionSubType") => {
+                    Ok(Some(DocumentSubType::InitiativeDescription))
+                }
                 _ => Err(()),
             }
         }
@@ -626,6 +743,11 @@ fn optimistic_projection_for_object(
     object: &serde_json::Map<String, serde_json::Value>,
     created_at_ms: i64,
 ) -> Option<OptimisticProjectionMutation> {
+    if partition == vocabulary::channel_partition() {
+        // Cached channel access is authoritative. Optimism may patch a known
+        // base but cannot fabricate a complete, newly accessible channel.
+        return channels::patch(record_key, object, Some(created_at_ms)).ok();
+    }
     let kind = projection_kind(&partition)?;
     if kind != SoupFlatEntityKind::Document
         && let Some(input) = direct_projection_input_for_object(
@@ -634,8 +756,9 @@ fn optimistic_projection_for_object(
             object,
             Some(created_at_ms),
         )
+        && let Ok(document) = compose_soup_flat_v3(input, None, None)
+        && let Ok(document) = notifications::compose_active_notifications(document, object)
     {
-        let document = compose_soup_flat_v2(input, None, None).ok()?;
         return Some(OptimisticProjectionMutation::Replace(document));
     }
 
@@ -691,9 +814,12 @@ fn optimistic_projection_for_object(
             values: document_sub_type_values(value).ok()?,
         });
     }
+    if object.contains_key("notifications") {
+        exact.extend(notifications::snapshot_patches(&record_key, object).ok()?);
+    }
     Some(OptimisticProjectionMutation::Patch {
         record_key,
-        profile: vocabulary::profile_v2(),
+        profile: vocabulary::profile_v4(),
         partition,
         exact,
         integers,
@@ -742,6 +868,7 @@ fn projection_partition(typename: &str) -> Option<Token> {
         "GraphqlSoupDocument" => Some(vocabulary::document_partition()),
         "GraphqlSoupProject" => Some(vocabulary::project_partition()),
         "GraphqlSoupChat" => Some(vocabulary::chat_partition()),
+        "GraphqlSoupChannel" => Some(vocabulary::channel_partition()),
         _ => None,
     }
 }

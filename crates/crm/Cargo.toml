@@ -12,12 +12,12 @@ ai_tools = [
   "dep:models_properties",
   "dep:properties",
   "dep:schemars",
-  "dep:system_properties",
   "entity_access/ports",
   "ports",
 ]
 axum = [
   "dep:axum",
+  "dep:messages",
   "dep:macro_authorization",
   "dep:macro_uuid",
   "dep:model-error-response",
@@ -27,9 +27,19 @@ axum = [
   "entity_access/ports",
   "ports",
 ]
-default = ["ai_tools", "inbound", "outbound", "ports"]
+default = ["ai_tools", "inbound", "lookup", "outbound", "ports"]
 inbound = ["axum", "ports"]
-outbound = ["dep:reqwest", "dep:sqlx", "dep:unfurl", "ports"]
+# Read-only company/contact identity for other domains. Pulls only sqlx + ports.
+lookup = ["dep:messages", "dep:rootcause", "dep:sqlx", "ports"]
+outbound = [
+  "dep:macro_user_id",
+  "dep:models_properties",
+  "dep:properties",
+  "dep:reqwest",
+  "dep:sqlx",
+  "dep:unfurl",
+  "ports",
+]
 ports = []
 # Read-only CRM search (name/domain). Pulls only sqlx + ports — no
 # reqwest/unfurl/axum — so search consumers stay lightweight.
@@ -45,6 +55,8 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 
 entity_access = { path = "../entity_access", default-features = false }
+messages = { path = "../messages", default-features = false, features = ["ports"], optional = true }
+rootcause = { workspace = true, optional = true }
 
 # AI toolset dependencies
 ai_toolset = { path = "../ai_toolset", optional = true }
@@ -55,7 +67,7 @@ properties = { path = "../properties", default-features = false, features = [
   "ports",
 ], optional = true }
 schemars = { workspace = true, optional = true }
-system_properties = { path = "../system_properties", optional = true }
+system_properties = { path = "../system_properties" }
 
 # Axum / inbound dependencies
 axum = { workspace = true, optional = true }
@@ -72,7 +84,12 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+messages = { path = "../messages", default-features = false, features = ["outbound", "test-utils"] }
 macro_user_id = { path = "../macro_user_id" }
+properties = { path = "../properties", default-features = false, features = [
+  "outbound",
+  "ports",
+] }
 rootcause = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 tower = { workspace = true }

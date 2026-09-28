@@ -8,16 +8,18 @@ import {
   MODEL_PROVIDER,
   Model,
   modelsForPlan,
+  modelUsageHint,
+  PAID_MODELS,
   type TModel,
 } from './model';
 
 const PROVIDER_OF = (m: TModel) => MODEL_PROVIDER[m];
 
 describe('modelsForPlan / defaultModelForPlan', () => {
-  it('gives paid users every model and an Anthropic-smart default', () => {
+  it('gives paid users every picker model and an Anthropic-smart default', () => {
     const paid = modelsForPlan(true);
-    // Every known model is selectable for a paid user.
-    expect([...paid].sort()).toEqual([...Object.values(Model)].sort());
+    expect(paid).toEqual(PAID_MODELS);
+    expect(paid).not.toContain(Model.fable51);
     expect(DEFAULT_MODEL).toBe(Model.sonnet5);
     expect(defaultModelForPlan(true)).toBe(DEFAULT_MODEL);
   });
@@ -29,6 +31,23 @@ describe('modelsForPlan / defaultModelForPlan', () => {
     // The premium models are *not* in a free user's selectable set.
     expect(free).not.toContain(Model.opus5);
     expect(free).not.toContain(Model.gpt56);
+  });
+});
+
+describe('modelUsageHint', () => {
+  it('flags the heavy paid models and stays quiet for the default and cheaper', () => {
+    expect(modelUsageHint(Model.fable51)).toBe('5× usage');
+    expect(modelUsageHint(Model.gpt6Astra)).toBe('5× usage');
+    expect(modelUsageHint(Model.opus5)).toBe('2.5× usage');
+    expect(modelUsageHint(Model.sonnet5)).toBeUndefined();
+    expect(modelUsageHint(Model.haiku45)).toBeUndefined();
+  });
+
+  it('removes Fable from plan options while keeping Astra paid-only', () => {
+    expect(modelsForPlan(false)).not.toContain(Model.fable51);
+    expect(modelsForPlan(false)).not.toContain(Model.gpt6Astra);
+    expect(modelsForPlan(true)).not.toContain(Model.fable51);
+    expect(modelsForPlan(true)).toContain(Model.gpt6Astra);
   });
 });
 

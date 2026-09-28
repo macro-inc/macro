@@ -1,6 +1,6 @@
+mod calendar_invitations;
 use anyhow::Context;
 use axum::Router;
-use calendar_events::inbound::mutation_router::CalendarMutationRouterState;
 use context::ApiContext;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
@@ -10,7 +10,6 @@ use utoipa_swagger_ui::SwaggerUi;
 // Routes
 mod health;
 
-mod calendar_watch;
 mod email;
 
 // Misc
@@ -20,20 +19,22 @@ mod internal;
 mod middleware;
 pub(crate) mod swagger;
 
+#[cfg(test)]
+mod test;
+
+const GATEWAY_PATH_PREFIX: &str = "/email";
+
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let env = state.config.environment;
     let port = state.config.port;
-    let app = api_router(state.clone())
-        .with_state(state)
-        .merge(health::router())
-        .layer(
-            ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
-                .layer(macro_cors::cors_layer())
-                .layer(CompressionLayer::new().gzip(true)),
-        )
-        // The health router is attached here so we don't attach the logging middleware to it
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+    let traced_api = api_router(state.clone()).with_state(state).layer(
+        ServiceBuilder::new()
+            .layer(TraceLayer::new_for_http())
+            .layer(macro_cors::cors_layer())
+            .layer(CompressionLayer::new().gzip(true)),
+    );
+    let health = health::router();
+    let app = mount_at_root_and_prefix(traced_api.merge(health)).merge(swagger_ui());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -49,24 +50,28 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .context("error starting service")
 }
 
-fn api_router(state: ApiContext) -> Router<ApiContext> {
-    // Calendar mutations follow the calendar sync kill switch: without sync
-    // a provider write would never be reflected locally.
-    let calendar_router = if state.config.calendar_sync_enabled {
-        calendar_watch::router().merge(
-            calendar_events::inbound::mutation_router::calendar_mutation_router(
-                CalendarMutationRouterState::new(
-                    state.calendar_mutation_service.clone(),
-                    state.authorization_state.clone(),
-                ),
-            ),
-        )
-    } else {
-        calendar_watch::router()
-    };
+fn mount_at_root_and_prefix(inner: Router) -> Router {
     Router::new()
+        .merge(inner.clone())
+        .nest(GATEWAY_PATH_PREFIX, inner)
+}
+
+fn swagger_ui() -> Router {
+    Router::new()
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(
+            SwaggerUi::new("/email/docs")
+                .url("/email/api-doc/openapi.json", swagger::ApiDoc::openapi()),
+        )
+}
+
+fn api_router(state: ApiContext) -> Router<ApiContext> {
+    Router::new()
+        .route(
+            "/email/threads/{thread_id}/calendar-invitations",
+            axum::routing::get(calendar_invitations::handler),
+        )
         .nest("/email", email::router(state))
         .nest("/gmail", gmail::router())
         .nest("/internal", internal::router())
-        .nest("/calendar", calendar_router)
 }

@@ -10,11 +10,9 @@ import {
   ResponsivePermissionsBadge,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
-import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import {
+  BlockSplitFileMenu,
   type FileOperation,
-  SplitFileMenu,
 } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -29,19 +27,21 @@ import {
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
-import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
-import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
-import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
+import {
+  useCanEdit,
+  useGetPermissions,
+  useIsDocumentOwner,
+} from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import IconShared from '@icon/wide-share.svg';
-import Info from '@phosphor/info.svg';
+import { useCopyLink } from '@core/util/useCopyLink';
+import IconShared from '@icon/share.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
 
@@ -57,29 +57,20 @@ export function TopBar() {
     () => projectBlockDataSignal()?.projectMetadata.name ?? ''
   );
 
-  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
-  const shareCtx = useShareDialogContext();
-
-  function handleCopyLink() {
-    navigator.clipboard.writeText(
-      buildSimpleEntityUrl({
-        type: 'project',
-        id,
-      })
-    );
-    toast.success('Link copied to clipboard');
-  }
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id,
+    blockAlias: 'project',
+    itemType: 'project',
+    name: name(),
+    userPermissions: permissions(),
+    owner: projectBlockDataSignal()?.projectMetadata.userId,
+  }));
+  const copyLink = useCopyLink();
+  const handleCopyLink = () =>
+    copyLink(buildSimpleEntityUrl({ type: 'project', id }));
 
   const ops = createMemo<FileOperation[]>(() => [
-    ...(!isSpecialProject
-      ? [
-          {
-            label: 'Details',
-            icon: Info,
-            action: detailsControl.toggle,
-          },
-        ]
-      : []),
     ...(isOwner() && !isSpecialProject
       ? [
           { op: 'rename' as const },
@@ -109,9 +100,11 @@ export function TopBar() {
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
+      action: openShare,
       condition: () => ENABLE_PROJECT_SHARING && !isSpecialProject,
-      buttonComponent: () => <ShareTrigger copyLink={handleCopyLink} />,
+      buttonComponent: () => (
+        <ShareTrigger onClick={openShare} copyLink={handleCopyLink} />
+      ),
       focusTarget: getShareDrawerRecipientInput,
     },
   ];
@@ -126,13 +119,13 @@ export function TopBar() {
       <SplitHeaderRight>
         <div class="order-[1000] flex items-center gap-1">
           <Show when={showShare()}>
-            <ShareTrigger copyLink={handleCopyLink} />
+            <ShareTrigger onClick={openShare} copyLink={handleCopyLink} />
           </Show>
         </div>
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
       <SplitTitleFileMenu>
-        <SplitFileMenu
+        <BlockSplitFileMenu
           id={id}
           itemType="project"
           name={name()}
@@ -162,7 +155,6 @@ export function TopBar() {
               </Show>
             )}
           </For>
-          <PreviewButton />
         </SplitToolbarRight>
       </Show>
       <CreateDialog />

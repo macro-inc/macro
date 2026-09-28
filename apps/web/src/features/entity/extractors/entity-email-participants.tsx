@@ -9,7 +9,7 @@ import {
   highlightTermsInText,
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
-import WideCopy from '@icon/wide-copy.svg';
+import CopyIcon from '@phosphor/copy.svg';
 import { Surface } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
@@ -27,18 +27,23 @@ function getEmailLocalPart(email: string): string {
 
 /**
  * Resolves the best display name for a participant
- * Priority: macroDisplayName > participant.name > email local part
+ * Priority: participant.name > macroDisplayName > email local part
+ *
+ * `participant.name` is the From display name of that sender's message in
+ * this thread, so it comes first: the Macro lookup is keyed by address alone
+ * and falls back to the viewer's address book, which pins one person's name
+ * onto every message from a shared sender such as notifications@cal.com.
  */
 function resolveParticipantName(
   participant: EmailThreadParticipants[number],
   macroDisplayName?: string
 ): string {
-  if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
-    return macroDisplayName;
-  }
   const participantFullName = participant.name ?? '';
   if (participantFullName && !isLikelyEmail(participantFullName)) {
     return participantFullName;
+  }
+  if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
+    return macroDisplayName;
   }
   return getEmailLocalPart(participant.email);
 }
@@ -162,7 +167,7 @@ function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {
                 onClick={[copyEmail, r.participant.email]}
               >
                 <span class="truncate">{r.participant.email}</span>
-                <WideCopy class="size-3 shrink-0 opacity-60" />
+                <CopyIcon class="size-3 shrink-0 opacity-60" />
               </div>
             )}
           </For>

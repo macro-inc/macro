@@ -13,6 +13,9 @@ pub struct CalendarEventForIndex {
     pub source_link_id: Uuid,
     pub ical_uid: String,
     pub title: String,
+    /// Every copy's title, the canonical one included, so a search for a
+    /// shared calendar's bracketed re-import finds the same entity.
+    pub source_titles: Vec<String>,
     pub status: String,
     pub starts_at: Option<DateTime<Utc>>,
     pub ends_at: Option<DateTime<Utc>>,
@@ -58,7 +61,16 @@ pub async fn get_calendar_event_for_index(
                     WHERE attendee.event_id = event.id
                 ),
                 '{}'
-            ) AS "attendee_emails!"
+            ) AS "attendee_emails!",
+            COALESCE(
+                (
+                    SELECT array_agg(DISTINCT source.title ORDER BY source.title)
+                    FROM calendar_event_sources source
+                    WHERE source.event_id = event.id
+                      AND source.title <> ''
+                ),
+                '{}'
+            ) AS "source_titles!"
         FROM calendar_events event
         WHERE event.id = $1
         "#,
@@ -73,6 +85,7 @@ pub async fn get_calendar_event_for_index(
         source_link_id: row.source_link_id,
         ical_uid: row.ical_uid,
         title: row.title,
+        source_titles: row.source_titles,
         status: row.status,
         starts_at: row.starts_at,
         ends_at: row.ends_at,

@@ -2,9 +2,8 @@ import { analytics } from '@app/lib/analytics';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
-  ENABLE_GRAPHQL_SOUP,
-  ENABLE_GRAPHQL_SOUP_FLAG,
-  ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  enableGraphqlSoup,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import {
@@ -19,6 +18,8 @@ import type {
 } from '@property/types';
 import { isInstantiatedProperty } from '@property/utils';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
+import { DeleteEntityPropertyDocument } from '@service-storage/graphql/generated/graphql';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, batch } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
@@ -41,6 +42,7 @@ import {
   createGraphqlBulkSaveEntityPropertiesMutation,
   createGraphqlEntityPropertiesQuery,
   type EntityPropertyMutationDisposition,
+  refetchGraphqlInitiativeProperties,
 } from './graphql/entity';
 import { updateGraphqlEntityPropertyOptions } from './graphql/entity-options';
 import {
@@ -94,9 +96,7 @@ export function useEntityPropertiesQuery(
   entityId: Accessor<string>,
   includeMetadata: boolean
 ) {
-  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
-    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
-  });
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
 
   // Metadata properties are computed by the REST properties endpoint and are
   // not part of the GraphQL Soup property edge. USER is not represented in
@@ -104,7 +104,9 @@ export function useEntityPropertiesQuery(
   const graphqlQuery = createGraphqlEntityPropertiesQuery({
     entityType,
     entityId,
-    enabled: () => graphqlSoupFlag().enabled && !includeMetadata,
+    enabled: () =>
+      entityType() === 'INITIATIVE' ||
+      (graphqlSoupFlag().enabled && !includeMetadata),
   });
 
   const usesGraphql = graphqlQuery.isEnabled;
@@ -151,6 +153,15 @@ export function useEntityPropertiesQuery(
 
   return {
     get data() {
+      if (
+        entityType() === 'INITIATIVE' &&
+        graphqlQuery.result.error?.graphQLErrors.some((error) =>
+          ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'].includes(
+            String(error.extensions.code)
+          )
+        )
+      )
+        return [];
       return usesGraphql() ? graphqlQuery.result.data : restQuery.data;
     },
     get error() {
@@ -173,13 +184,20 @@ export function useEntityPropertiesQuery(
   };
 }
 
-function invalidatePropertiesForEntity(
+async function invalidatePropertiesForEntity(
   entityType: EntityType | PropertyTargetEntityType,
   entityId: string
 ) {
-  return queryClient.invalidateQueries({
+  const invalidate = queryClient.invalidateQueries({
     queryKey: propertiesKeys.entity({ entityType, entityId }).queryKey,
   });
+  if (entityType !== 'INITIATIVE') {
+    await invalidate;
+    return;
+  }
+  // Attaching/removing a property changes the initiative's property link list,
+  // which cannot be inferred from the returned property record alone.
+  await Promise.all([invalidate, refetchGraphqlInitiativeProperties(entityId)]);
 }
 
 function getPropertyDefinitionId(
@@ -202,7 +220,7 @@ function optimisticUpdateSoupEntityProperties(
     // A miss here means the write silently lost its optimism. Expected on the
     // GraphQL transport, whose rows live in the normalized cache instead and
     // carry their own optimistic write.
-    if (!ENABLE_GRAPHQL_SOUP()) {
+    if (!isFeatureEnabled(enableGraphqlSoup)) {
       console.warn(
         'no soup cache entry for entity; skipping optimistic property update',
         entityId
@@ -348,6 +366,18 @@ export function useDeleteEntityPropertyMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: DeleteEntityPropertyParams) => {
+      if (vars.entityType === 'INITIATIVE') {
+        const result = await getGraphqlSoupClient()
+          .mutation(DeleteEntityPropertyDocument, {
+            entityType: 'INITIATIVE',
+            entityId: vars.entityId,
+            entityPropertyId: vars.entityPropertyId,
+          })
+          .toPromise();
+        if (result.error) throw result.error;
+        if (!result.data) throw new Error('Property removal returned no data');
+        return;
+      }
       await throwOnErr(
         async () =>
           await propertiesServiceClient.deleteEntityProperty({
@@ -464,24 +494,26 @@ export function useAddEntityPropertyMutation(
 
   return {
     get isPending() {
-      return ENABLE_GRAPHQL_SOUP()
-        ? graphqlMutation.isPending
-        : restMutation.isPending;
+      return graphqlMutation.isPending || restMutation.isPending;
     },
     get error() {
-      return ENABLE_GRAPHQL_SOUP()
-        ? graphqlMutation.error
-        : (restMutation.error ?? null);
+      return graphqlMutation.error ?? restMutation.error ?? null;
     },
     mutate(variables) {
-      if (ENABLE_GRAPHQL_SOUP()) {
+      if (
+        variables.entityType === 'INITIATIVE' ||
+        isFeatureEnabled(enableGraphqlSoup)
+      ) {
         graphqlMutation.mutate(variables);
       } else {
         restMutation.mutate(variables);
       }
     },
     async mutateAsync(variables) {
-      if (ENABLE_GRAPHQL_SOUP()) {
+      if (
+        variables.entityType === 'INITIATIVE' ||
+        isFeatureEnabled(enableGraphqlSoup)
+      ) {
         const result = await graphqlMutation.mutateAsync(variables);
         if (result.error) throw result.error;
       } else {
@@ -573,6 +605,22 @@ export function useAddEntityPropertyOptionMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: EntityPropertyOptionParams) => {
+      if (vars.entityType === 'INITIATIVE') {
+        await updateGraphqlEntityPropertyOptions({
+          entityType: vars.entityType,
+          entityId: vars.entityId,
+          properties: [
+            {
+              property: vars.property,
+              currentOptionIds: vars.optimisticOptionIds.filter(
+                (id) => id !== vars.optionId
+              ),
+              nextOptionIds: vars.optimisticOptionIds,
+            },
+          ],
+        });
+        return;
+      }
       await throwOnErr(
         async () =>
           await propertiesServiceClient.addEntityPropertyOption({
@@ -601,6 +649,20 @@ export function useRemoveEntityPropertyOptionMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: EntityPropertyOptionParams) => {
+      if (vars.entityType === 'INITIATIVE') {
+        await updateGraphqlEntityPropertyOptions({
+          entityType: vars.entityType,
+          entityId: vars.entityId,
+          properties: [
+            {
+              property: vars.property,
+              currentOptionIds: [...vars.optimisticOptionIds, vars.optionId],
+              nextOptionIds: vars.optimisticOptionIds,
+            },
+          ],
+        });
+        return;
+      }
       await throwOnErr(
         async () =>
           await propertiesServiceClient.removeEntityPropertyOption({
@@ -646,7 +708,10 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
       // The transport swaps, the mutation shell does not: the per-entity scope
       // that serializes commits and the in-flight overlay both read this
       // mutation's state, whichever cache the selection lands in.
-      if (ENABLE_GRAPHQL_SOUP()) {
+      if (
+        variables.entityType === 'INITIATIVE' ||
+        isFeatureEnabled(enableGraphqlSoup)
+      ) {
         return updateGraphqlEntityPropertyOptions(variables);
       }
       const response = await throwOnErr(async () =>
@@ -990,24 +1055,26 @@ export function useBulkSaveEntityPropertiesMutation(
 
   return {
     get isPending() {
-      return ENABLE_GRAPHQL_SOUP()
-        ? graphqlMutation.isPending
-        : restMutation.isPending;
+      return graphqlMutation.isPending || restMutation.isPending;
     },
     get error() {
-      return ENABLE_GRAPHQL_SOUP()
-        ? graphqlMutation.error
-        : (restMutation.error ?? null);
+      return graphqlMutation.error ?? restMutation.error ?? null;
     },
     mutate(variables) {
-      if (ENABLE_GRAPHQL_SOUP()) {
+      if (
+        variables.properties.some((item) => item.entityType === 'INITIATIVE') ||
+        isFeatureEnabled(enableGraphqlSoup)
+      ) {
         graphqlMutation.mutate(variables);
       } else {
         restMutation.mutate(variables);
       }
     },
     async mutateAsync(variables) {
-      if (ENABLE_GRAPHQL_SOUP()) {
+      if (
+        variables.properties.some((item) => item.entityType === 'INITIATIVE') ||
+        isFeatureEnabled(enableGraphqlSoup)
+      ) {
         const result = await graphqlMutation.mutateAsync(variables);
         if (result.error) throw result.error;
       } else {

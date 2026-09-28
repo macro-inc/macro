@@ -82,6 +82,18 @@ impl<T> NonEmpty<Vec<T>> {
         self.inner.push(value);
     }
 
+    /// Insert an element at `index`, shifting everything after it.
+    ///
+    /// Cannot break the invariant for the same reason as [`Self::push`]: the
+    /// vector only grows.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index > len`, as [`Vec::insert`] does.
+    pub fn insert(&mut self, index: usize, value: T) {
+        self.inner.insert(index, value);
+    }
+
     /// A mutable reference to the element at `index`, or `None` when the
     /// index is out of bounds.
     ///

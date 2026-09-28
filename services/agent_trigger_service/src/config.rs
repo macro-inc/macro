@@ -1,5 +1,6 @@
 //! Environment-backed service configuration.
 
+use agent_trigger::domain::sources::TriggerEventSource;
 use anyhow::Context as _;
 use database_env_vars::DatabaseUrl;
 use macro_env_var::env_vars;
@@ -19,6 +20,12 @@ pub struct Config {
     pub kafka_brokers: KafkaBrokers,
     /// Key for internal service-to-service calls (the lexical service).
     pub internal_api_key: String,
+    /// Which committed-post topic feeds the trigger: `messages` (the default,
+    /// channel and document posts) or `channels` (the pre-parent channel
+    /// event, kept until its producer retires it). Never both: every channel
+    /// post is on both topics, so both would evaluate each mention twice.
+    #[macro_config_default(TriggerEventSource::default())]
+    pub agent_trigger_event_source: TriggerEventSource,
 }
 
 impl Config {

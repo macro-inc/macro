@@ -13,8 +13,40 @@ name: SDK Check
     - apps/web/scripts/generate-api-schema.ts
     - apps/web/scripts/services.ts
     - '.github/workflows/sdk-check.yml'
+  push:
+    branches:
+    - main
+    paths:
+    - packages/sdk/**
+    - '.github/workflows/sdk-check.yml'
 jobs:
+  check-package:
+    name: SDK Package Check
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: '1.3.5'
+    - name: Install dependencies
+      run: bun install --frozen-lockfile
+      working-directory: packages/sdk
+    - name: Typecheck SDK
+      run: bun run check
+      working-directory: packages/sdk
+    - name: Test SDK
+      run: bun test
+      working-directory: packages/sdk
+    - name: Check endpoint coverage
+      run: bun run coverage
+      working-directory: packages/sdk
   check-sdk:
+    if: ${{ github.event_name == 'pull_request' }}
     name: SDK Generated Code Check
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
@@ -78,12 +110,6 @@ jobs:
           git diff -- packages/sdk | head -200
           exit 1
         fi
-    - name: Typecheck SDK
-      run: bun run check
-      working-directory: packages/sdk
-    - name: Check endpoint coverage
-      run: bun run coverage
-      working-directory: packages/sdk
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'

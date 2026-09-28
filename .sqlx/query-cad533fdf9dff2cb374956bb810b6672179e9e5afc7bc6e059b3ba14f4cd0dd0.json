@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.\"documentId\" AS document_id, first.message_id AS \"root_id?\"\n           FROM \"Thread\" t\n           LEFT JOIN LATERAL (\n               SELECT m.message_id FROM \"Comment\" c\n               JOIN migrated_comment_id m ON m.comment_id = c.id\n               WHERE c.\"threadId\" = t.id\n               ORDER BY c.\"order\" NULLS LAST, c.\"createdAt\", c.id LIMIT 1\n           ) first ON true\n           WHERE t.\"documentId\" = ANY($1)\n             AND NOT EXISTS (SELECT 1 FROM migrated_comment_thread_id m WHERE m.thread_id = t.id)\n           ORDER BY t.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "document_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "root_id?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "cad533fdf9dff2cb374956bb810b6672179e9e5afc7bc6e059b3ba14f4cd0dd0"
+}

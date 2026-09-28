@@ -1,7 +1,7 @@
 use axum::{Json, extract::State};
 use macro_authorization::{MacroAuthorizationExtractor, UserOnly};
 
-use super::{CursorApiKeyError, CursorApiKeyStatus, require_macro_staff};
+use super::{CursorApiKeyError, CursorApiKeyStatus};
 use crate::api::context::{ApiContext, AuthorizationService};
 
 /// Whether the caller has a Cursor API key registered.
@@ -24,7 +24,6 @@ pub async fn handler(
     user_context: MacroAuthorizationExtractor<AuthorizationService, UserOnly>,
 ) -> Result<Json<CursorApiKeyStatus>, CursorApiKeyError> {
     let user_id = &user_context.authorization.macro_user_id;
-    require_macro_staff(user_id)?;
 
     // Read even when the deployment has no KMS key: a key registered before the
     // deployment lost its configuration is still stored, and reporting it as

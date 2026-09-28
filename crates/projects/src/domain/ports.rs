@@ -23,6 +23,7 @@ use models_bulk_upload::{
     UploadExtractFolderResponseData,
 };
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
@@ -77,6 +78,13 @@ pub trait ProjectRepo: Send + Sync + 'static {
         project_id: &str,
     ) -> impl Future<Output = Result<SharePermissionV2, Self::Err>> + Send;
 
+    /// Load the canonical team-share facts (persisted owner, owner's team,
+    /// current explicit grant, revision) the owner policy authorizes against.
+    fn get_team_share_facts(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<TeamShareFacts, ProjectError>> + Send;
+
     /// Get previews for the supplied project identifiers.
     fn batch_get_project_preview(
         &self,
@@ -100,7 +108,7 @@ pub trait ProjectRepo: Send + Sync + 'static {
     fn edit_project(
         &self,
         args: EditProjectArgs,
-    ) -> impl Future<Output = Result<MutatedProject, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<MutatedProject, ProjectError>> + Send;
 
     /// Return whether the proposed parent is inside the project's subtree.
     fn is_project_recursively_nested(

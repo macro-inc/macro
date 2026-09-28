@@ -3,10 +3,10 @@ import { toast } from '@core/component/Toast/Toast';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   EMAIL_DIGEST_NOTIFICATION_TYPE,
-  mutedEntityTypeLabel,
   NOTIFICATION_EVENT_GROUPS,
 } from '@notifications/notification-event-catalog';
 import { useNotificationSettings } from '@notifications/notification-settings';
+import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
 import { queryReadyGate } from '@queries/gate';
 import {
   useNotificationTypePreferencesQuery,
@@ -17,7 +17,8 @@ import {
   useUnmuteItemMutation,
 } from '@queries/notification/unsubscribes';
 import { ToggleSwitch } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, getOwner, Show } from 'solid-js';
+import { MutedItemRow } from './MutedItemRow';
 import {
   SettingsCard,
   SettingsPage,
@@ -26,6 +27,7 @@ import {
 } from './primitives';
 
 export function Notifications() {
+  const dialogOwner = getOwner();
   const analytics = useAnalytics();
   const platformSettings = useNotificationSettings();
   const preferencesQuery = useNotificationTypePreferencesQuery();
@@ -45,6 +47,10 @@ export function Notifications() {
         ? preferencesQuery.data.disabled_types
         : []
     );
+  const snoozedEntities = () =>
+    mutedEntities().filter((item) => item.snoozed_until);
+  const permanentlyMutedEntities = () =>
+    mutedEntities().filter((item) => !item.snoozed_until);
 
   const isTypeEnabled = (type: string) => !disabledTypes().has(type);
 
@@ -148,12 +154,63 @@ export function Notifications() {
       </For>
 
       <SettingsSection
+        title="Snoozed items"
+        description="Notifications pause until the time you choose. Items stay visible in your inbox."
+      >
+        <SettingsCard>
+          <Show when={mutedEntitiesQuery.isError}>
+            <SettingsRow label="Could not load snoozed items">
+              <button
+                type="button"
+                onClick={() => void mutedEntitiesQuery.refetch()}
+              >
+                Retry
+              </button>
+            </SettingsRow>
+          </Show>
+          <Show
+            when={
+              !mutedEntitiesQuery.isError && queryReadyGate(mutedEntitiesQuery)
+            }
+            fallback={
+              !mutedEntitiesQuery.isError && (
+                <SettingsRow label="Loading snoozed items…" />
+              )
+            }
+          >
+            <Show
+              when={snoozedEntities().length > 0}
+              fallback={
+                <SettingsRow
+                  label="Nothing snoozed"
+                  description="Right-click an item or use the command menu and choose Snooze notifications."
+                />
+              }
+            >
+              <For each={snoozedEntities()}>
+                {(item) => (
+                  <MutedItemRow
+                    item={item}
+                    onUnmute={() => void unmuteEntity(item)}
+                    onSnooze={() =>
+                      openSnoozeNotifications([item], { owner: dialogOwner })
+                    }
+                    pending={unmuteItem.isPending}
+                  />
+                )}
+              </For>
+            </Show>
+          </Show>
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection
         title="Muted items"
         description="These items will not send you notifications."
       >
         <SettingsCard>
           <Show
-            when={mutedEntities().length > 0}
+            when={permanentlyMutedEntities().length > 0}
             fallback={
               <SettingsRow
                 label="Nothing muted"
@@ -161,20 +218,16 @@ export function Notifications() {
               />
             }
           >
-            <For each={mutedEntities()}>
+            <For each={permanentlyMutedEntities()}>
               {(item) => (
-                <SettingsRow
-                  label={mutedEntityTypeLabel(item.item_type)}
-                  description={item.item_id}
-                >
-                  <button
-                    type="button"
-                    class="text-sm text-ink-muted hover:text-ink"
-                    onClick={() => unmuteEntity(item)}
-                  >
-                    Unmute
-                  </button>
-                </SettingsRow>
+                <MutedItemRow
+                  item={item}
+                  onUnmute={() => void unmuteEntity(item)}
+                  onSnooze={() =>
+                    openSnoozeNotifications([item], { owner: dialogOwner })
+                  }
+                  pending={unmuteItem.isPending}
+                />
               )}
             </For>
           </Show>

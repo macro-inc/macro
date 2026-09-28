@@ -61,6 +61,7 @@ export type FilterContext = {
    * functions bucket companies exactly like the kanban does.
    */
   resolveCompanyStage?: (entity: EntityData) => string | undefined;
+  companyStageLabel?: (optionId: string) => string | undefined;
 };
 
 export type Predicate = (entity: EntityData, ctx: FilterContext) => boolean;

@@ -1,3 +1,4 @@
+import { projectRouteId } from '@app/features/projects/core/route';
 import { getChannelParams } from '@channel/Channel/link';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -20,8 +21,16 @@ export function itemsPerRow(containerWidth: number): number {
 
 export function getEntityClickContent(entity: EntityData): SplitContent {
   return match(entity)
+    .with({ type: 'initiative' }, (entity) => ({
+      type: 'component' as const,
+      id: projectRouteId({ id: entity.id, section: 'overview' }),
+    }))
     .with({ type: 'document' }, (e) => ({
       type: fileTypeToBlockName(e.subType?.type ?? e.fileType),
+      id: e.id,
+    }))
+    .with({ type: 'agent_session' }, (e) => ({
+      type: 'agent' as const,
       id: e.id,
     }))
     .with({ type: 'chat' }, (e) => ({ type: 'chat' as const, id: e.id }))

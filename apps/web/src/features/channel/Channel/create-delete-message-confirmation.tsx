@@ -10,6 +10,11 @@ export type DeleteMessageConfirmation = {
   ConfirmationDialog: () => JSX.Element;
 };
 
+/** Deleting the root of a discussion deletes the discussion under it. */
+function isDiscussionRoot(input: DeleteMessageInput | undefined) {
+  return !!input && input.parent.type !== 'channel' && !input.threadID;
+}
+
 /**
  * Wraps a `deleteMessage` mutation with a confirmation step. Deleting a
  * channel message is destructive, so every entry point (action menu, mobile
@@ -46,14 +51,15 @@ export function createDeleteMessageConfirmation(
             <CloseIcon />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
-            Delete message
+            {isDiscussionRoot(pending()) ? 'Delete comment' : 'Delete message'}
           </Dialog.Title>
         </div>
 
         <div class="p-3 flex flex-col gap-3">
           <Dialog.Description class="text-sm text-ink-muted">
-            This message will be permanently deleted. This action cannot be
-            undone.
+            {isDiscussionRoot(pending())
+              ? 'This comment and every reply to it will be permanently deleted. This action cannot be undone.'
+              : 'This message will be permanently deleted. This action cannot be undone.'}
           </Dialog.Description>
 
           <div class="flex justify-end gap-2">

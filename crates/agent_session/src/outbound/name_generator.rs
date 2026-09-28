@@ -56,7 +56,12 @@ impl AgentSessionNameGenerator for HaikuAgentSessionNameGenerator {
             "<agent_session_first_prompt>\n{}\n</agent_session_first_prompt>\n\nGenerate the session title now.",
             initial_prompt.trim()
         );
-        let usage_ctx = UsageContext::new(AiFeature::ChatRename, session.owner_id.clone())
+        // Usage is billed to a person; a session owned by anything else has
+        // nobody to bill, so it keeps its default name.
+        let owner = session
+            .owner_user()
+            .map_err(|error| rootcause::report!(error))?;
+        let usage_ctx = UsageContext::new(AiFeature::ChatRename, owner.clone())
             .with_entity(Some(session.id.as_uuid()));
         let response = agent::complete(
             PredefinedModel::Fast,

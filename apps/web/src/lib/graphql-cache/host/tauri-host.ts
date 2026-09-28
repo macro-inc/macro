@@ -8,30 +8,38 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
   AffectedOperationsResult,
   CachedQueryInstanceWire,
   CachedQueryVariantWire,
   CacheRevision,
   ClaimedMutation,
+  CommitOptimisticWriteResult,
+  DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
+  EntityFilterCacheArgs,
+  EntityFilterCacheResult,
   HydrationResult,
   MutationClaim,
   MutationSettlement,
   ReadRecordsByKeysArgs,
   ReadRecordsByKeysResult,
   ReadResult,
+  RollbackOptimisticWriteResult,
   SearchCacheArgs,
   SearchCachePage,
   WriteResult,
 } from '../protocol';
 import {
   parseCacheRevision,
+  parseStorageGeneration,
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
 } from '../protocol';
 import type {
+  CacheChangeOptions,
+  CacheGenerationChange,
   CacheHost,
   CacheReadArgs,
   CacheWriteArgs,
@@ -45,6 +53,8 @@ import type {
 const OPS_AFFECTED_EVENT = 'graphql-cache://ops-affected';
 /** Keep in sync with `CACHE_CHANGED_EVENT` in the native plugin. */
 const CACHE_CHANGED_EVENT = 'graphql-cache://cache-changed';
+// Published by the JS host after hydration, including on older native binaries.
+const CACHE_HYDRATED_EVENT = 'graphql-cache://cache-hydrated';
 /** Keep in sync with `MUTATION_SETTLED_EVENT` in graphql_cache_plugin. */
 const MUTATION_SETTLED_EVENT = 'graphql-cache://mutation-settled';
 
@@ -54,7 +64,10 @@ type OpsAffectedPayload = {
   keys: string[];
 };
 
-type CacheChangedPayload = { revision: string };
+type CacheChangedPayload = { revision: string; reset?: boolean };
+
+// Older native binaries omit the advancement bit and still receive OTA JS.
+type NativeHydrationResult = HydrationResult & { revisionAdvanced?: boolean };
 
 export interface TauriHostOptions {
   scope: string;
@@ -70,16 +83,37 @@ export interface TauriHostOptions {
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+const ENTITY_FILTER_COMMAND = 'graphql_cache_entity_filter';
 
 export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
   const cacheChangeSubscribers = new Set<(revision: CacheRevision) => void>();
+  const hydrationSubscribers = new Set<(revision: CacheRevision) => void>();
+  const generationChangeSubscribers = new Set<
+    (change: CacheGenerationChange) => void
+  >();
   const settlementSubscribers = new Set<
     (settlement: MutationSettlement) => void
   >();
   const requestTimeoutMs =
     options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+
+  // TODO(native-full-release): Remove this flag and the missing-command fallback
+  // once a full native/iOS release includes entity filtering AND older binaries
+  // no longer receive these OTA bundles. OTA updates cannot add Rust commands.
+  // Keep this per host so a new native binary is probed again after restarting.
+  let entityFilterUnavailable = false;
+
+  // Revisions are monotonic for the native engine's lifetime. This also gates
+  // repeated no-op hydrations on older binaries without revisionAdvanced.
+  let latestObservedRevision = 0n;
+  function observeRevision(revision: CacheRevision): boolean {
+    const next = BigInt(revision);
+    if (next <= latestObservedRevision) return false;
+    latestObservedRevision = next;
+    return true;
+  }
 
   function request<T>(
     command: string,
@@ -134,11 +168,36 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const unlistenCacheChanges: Promise<UnlistenFn | undefined> =
     listen<CacheChangedPayload>(CACHE_CHANGED_EVENT, (event) => {
       const revision = parseCacheRevision(event.payload.revision);
+      observeRevision(revision);
+      if (event.payload.reset) {
+        for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
+      }
       for (const cb of cacheChangeSubscribers) cb(revision);
     }).catch((error) => {
       console.warn('graphql cache change listener failed', error);
       return undefined;
     });
+
+  async function listenForHydration(): Promise<UnlistenFn | undefined> {
+    try {
+      return await listen<CacheChangedPayload>(
+        CACHE_HYDRATED_EVENT,
+        (event) => {
+          const revision = parseCacheRevision(event.payload.revision);
+          observeRevision(revision);
+          for (const cb of hydrationSubscribers) cb(revision);
+        }
+      );
+    } catch (error) {
+      console.warn('graphql cache hydration listener failed', error);
+      return undefined;
+    }
+  }
+  const unlistenHydration = listenForHydration();
+  async function removeHydrationListener(): Promise<void> {
+    const unlisten = await unlistenHydration;
+    unlisten?.();
+  }
 
   const ready = request<void>('graphql_cache_init', {
     scope: options.scope,
@@ -163,6 +222,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       await ready;
       return parseCacheRevision(
         await request<string>('graphql_cache_current_revision', {})
+      );
+    },
+
+    async currentStorageGeneration(): Promise<string> {
+      await ready;
+      return parseStorageGeneration(
+        await request<string>('graphql_cache_current_storage_generation', {})
       );
     },
 
@@ -201,9 +267,27 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
-    async entityFilter() {
-      // The first profile is browser Turso/OPFS-only.
-      return { kind: 'unsupported' };
+    async entityFilter(
+      args: EntityFilterCacheArgs
+    ): Promise<EntityFilterCacheResult> {
+      await ready;
+      if (entityFilterUnavailable) return { kind: 'unsupported' };
+      try {
+        return await request<EntityFilterCacheResult>(ENTITY_FILTER_COMMAND, {
+          request: args,
+        });
+      } catch (error) {
+        // Match Tauri's exact unknown-command response, not storage, validation,
+        // ACL or timeout failures. Preserve the pre-OTA behavior on old binaries.
+        if (
+          !(error instanceof Error) ||
+          error.message !== `Command ${ENTITY_FILTER_COMMAND} not found`
+        ) {
+          throw error;
+        }
+        entityFilterUnavailable = true;
+        return { kind: 'unsupported' };
+      }
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
@@ -229,13 +313,27 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       args: Omit<CacheWriteArgs, 'opKey'>
     ): Promise<HydrationResult> {
       await ready;
-      return await request<HydrationResult>('graphql_cache_hydrate', {
-        query: args.query,
-        operationName: args.operationName,
-        variables: args.variables,
-        data: args.data,
-        identity: args.identity,
-      });
+      const result = await request<NativeHydrationResult>(
+        'graphql_cache_hydrate',
+        {
+          query: args.query,
+          operationName: args.operationName,
+          variables: args.variables,
+          data: args.data,
+          identity: args.identity,
+        }
+      );
+      const newlyObserved = observeRevision(
+        parseCacheRevision(result.revision)
+      );
+      if (result.revisionAdvanced === false || !newlyObserved) return result;
+      try {
+        await emit(CACHE_HYDRATED_EVENT, { revision: result.revision });
+      } catch (error) {
+        // Notification failure must not turn a committed hydration into a retry.
+        console.warn('graphql cache hydration notification failed', error);
+      }
+      return result;
     },
 
     async enqueueOptimisticMutation(
@@ -247,6 +345,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         'graphql_cache_enqueue_optimistic_mutation',
         {
           originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+          uuid: args.uuid,
           query: args.query,
           operationName: args.operationName,
           variables: args.variables,
@@ -308,24 +407,27 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       claim: MutationClaim,
       nextAttemptAtMs: number,
       error: string
-    ): Promise<void> {
+    ): Promise<DeferOptimisticWriteResult> {
       await ready;
-      await request('graphql_cache_defer_optimistic_write', {
-        transactionId,
-        leaseOwner: claim.owner,
-        leaseGeneration: claim.generation,
-        nextAttemptAtMs,
-        error,
-      });
+      return await request<DeferOptimisticWriteResult>(
+        'graphql_cache_defer_optimistic_write',
+        {
+          transactionId,
+          leaseOwner: claim.owner,
+          leaseGeneration: claim.generation,
+          nextAttemptAtMs,
+          error,
+        }
+      );
     },
 
     async commitOptimisticWrite(
       transactionId: string,
       claim: MutationClaim,
       args: CacheWriteArgs
-    ): Promise<WriteResult> {
+    ): Promise<CommitOptimisticWriteResult> {
       await ready;
-      return await request<WriteResult>(
+      return await request<CommitOptimisticWriteResult>(
         'graphql_cache_commit_optimistic_write',
         {
           transactionId,
@@ -343,9 +445,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       transactionId: string,
       claim: MutationClaim,
       error: string
-    ): Promise<WriteResult> {
+    ): Promise<RollbackOptimisticWriteResult> {
       await ready;
-      return await request<WriteResult>(
+      return await request<RollbackOptimisticWriteResult>(
         'graphql_cache_rollback_optimistic_write',
         {
           transactionId,
@@ -391,14 +493,23 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return () => affectedSubscribers.delete(cb);
     },
 
-    onCacheChanged(cb: (revision: CacheRevision) => void): () => void {
+    onCacheChanged(
+      cb: (revision: CacheRevision) => void,
+      options?: CacheChangeOptions
+    ): () => void {
       cacheChangeSubscribers.add(cb);
-      return () => cacheChangeSubscribers.delete(cb);
+      if (options?.includeHydration) hydrationSubscribers.add(cb);
+      return () => {
+        cacheChangeSubscribers.delete(cb);
+        hydrationSubscribers.delete(cb);
+      };
     },
 
-    onCacheGenerationChanged(): () => void {
-      // The native host process owns one engine generation for its lifetime.
-      return () => undefined;
+    onCacheGenerationChanged(
+      cb: (change: CacheGenerationChange) => void
+    ): () => void {
+      generationChangeSubscribers.add(cb);
+      return () => generationChangeSubscribers.delete(cb);
     },
 
     onMutationSettled(
@@ -411,9 +522,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     dispose() {
       affectedSubscribers.clear();
       cacheChangeSubscribers.clear();
+      hydrationSubscribers.clear();
+      generationChangeSubscribers.clear();
       settlementSubscribers.clear();
       void unlistenOps.then((fn) => fn?.());
       void unlistenCacheChanges.then((fn) => fn?.());
+      void removeHydrationListener();
       void unlistenSettlements.then((fn) => fn?.());
     },
   };

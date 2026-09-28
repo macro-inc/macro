@@ -15,13 +15,13 @@ export function DropOverlay(props: DropOverlayProps) {
     <Show when={input().isDraggedOver}>
       <div
         class={cn(
-          'absolute inset-0 z-20 bg-modal-overlay pattern-diagonal-8 pattern-edge-muted flex items-center justify-center',
+          'absolute inset-0 z-20 bg-modal-overlay flex items-center justify-center',
           local.class
         )}
         data-input-drop-overlay
         {...rest}
       >
-        <div class="bg-surface border border-edge px-8 py-4 text-xs text-ink-muted shadow-md font-mono">
+        <div class="max-w-[min(28rem,calc(100%-3rem))] min-w-0 bg-surface border border-edge rounded-full px-4 py-2 font-sans text-xs text-ink-muted shadow-md">
           {resolved() ??
             local.hint ??
             'Drop any file here to add it to the conversation'}

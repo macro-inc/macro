@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH thread_owner AS (\n            SELECT el.macro_id\n            FROM email_threads t\n            JOIN email_links el ON el.id = t.link_id\n            WHERE t.id = $1::uuid\n        ),\n        shared_teams AS (\n            SELECT tcs.team_id, requester.team_role\n            FROM team_user requester\n            JOIN team_user owner_member ON owner_member.team_id = requester.team_id\n            JOIN thread_owner o ON o.macro_id = owner_member.user_id\n            JOIN team_crm_settings tcs ON tcs.team_id = requester.team_id\n            WHERE requester.user_id = $2\n              AND tcs.crm_enabled\n        ),\n        participants AS (\n            SELECT DISTINCT LOWER(ec.email_address) AS email\n            FROM email_messages m\n            JOIN email_contacts ec ON ec.id = m.from_contact_id\n            WHERE m.thread_id = $1::uuid\n            UNION\n            SELECT DISTINCT LOWER(ec.email_address)\n            FROM email_messages m\n            JOIN email_message_recipients r ON r.message_id = m.id\n            JOIN email_contacts ec ON ec.id = r.contact_id\n            WHERE m.thread_id = $1::uuid\n        )\n        SELECT st.team_id, st.team_role AS \"team_role!: TeamRole\"\n        FROM shared_teams st\n        WHERE EXISTS (\n            SELECT 1\n            FROM participants p\n            WHERE split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)\n        )\n          AND NOT EXISTS (\n              SELECT 1\n              FROM participants p\n              JOIN crm_contacts ct ON ct.email = p.email\n              JOIN crm_companies c ON c.id = ct.company_id\n              WHERE c.team_id = st.team_id\n                AND split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)\n                AND (\n                    NOT c.email_sync\n                    OR (\n                        (ct.hidden OR c.hidden)\n                        AND st.team_role = 'member'\n                    )\n                )\n          )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_role!: TeamRole",
+        "type_info": {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d74790877ddb0911dfc195c545fe984857acecb5e83e45464a522405f0b0be03"
+}

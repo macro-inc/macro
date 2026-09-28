@@ -15,11 +15,13 @@ function extractRawTitle(entity: EntityData): JSX.Element {
           fullyQualifiedBlockName: true,
         })
       )
+      .with({ type: 'initiative' }, (e) => e.name || 'Untitled project')
       .with({ type: 'project' }, (e) => e.name)
       .with({ type: 'channel' }, (e) => e.name)
       .with({ type: 'channel_message' }, (e) => e.channelName)
       .with({ type: 'channel_thread' }, (e) => e.name)
       .with({ type: 'email' }, (e) => e.name || '(No Subject)')
+      .with({ type: 'agent_session' }, (e) => e.name || 'Agent session')
       .with({ type: 'chat' }, (e) => e.name)
       .with({ type: 'call' }, (e) => e.name || blockNameToDefaultFile('call'))
       .with(

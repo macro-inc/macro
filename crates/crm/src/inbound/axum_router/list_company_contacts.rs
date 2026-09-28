@@ -83,9 +83,14 @@ impl From<CrmContact> for CrmContactResponse {
     ),
 )]
 #[tracing::instrument(skip_all, err, fields(company_id = %company_id))]
-pub async fn handler<C: CrmService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+pub async fn handler<
+    C: CrmService,
+    St,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     access: CrmCompanyAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
-    State(state): State<CrmRouterState<C, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Path(company_id): Path<Uuid>,
 ) -> Result<Json<Vec<CrmContactResponse>>, CrmError> {
     let contacts = state

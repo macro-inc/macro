@@ -39,7 +39,10 @@ function buildHarness(input?: {
   const removeReaction = vi.fn();
 
   const getMessageActions = createChannelMessageActions({
-    channelId: () => input?.channelId ?? 'channel-1',
+    parent: () => ({
+      type: 'channel',
+      id: (() => input?.channelId ?? 'channel-1')(),
+    }),
     userId: () => input?.userId,
     deleteMessage,
     addReaction,
@@ -90,7 +93,7 @@ describe('createChannelMessageActions', () => {
 
     expect(harness.addReaction).toHaveBeenCalledTimes(1);
     expect(harness.addReaction).toHaveBeenCalledWith({
-      channelId: 'channel-1',
+      parent: { type: 'channel', id: 'channel-1' },
       messageId: 'reply-1',
       emoji: '👍',
       userId: 'user-1',

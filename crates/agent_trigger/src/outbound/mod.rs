@@ -1,9 +1,15 @@
 //! Adapters implementing the trigger's implicit-evaluation ports.
 
-mod channel_thread_history;
+mod bot_repo_agent_lookup;
+mod channel_type_lookup;
 mod fast_model_judge;
-mod lexical_reply_detector;
+mod image_caption;
+mod lexical_explicit_reply_extractor;
+mod message_thread_history;
 
-pub use channel_thread_history::ChannelThreadHistory;
+pub use bot_repo_agent_lookup::BotRepoAgentLookup;
+pub use channel_type_lookup::ChannelRepoTypeLookup;
 pub use fast_model_judge::FastModelTriggerJudge;
-pub use lexical_reply_detector::LexicalReplyDetector;
+pub use image_caption::{ImageCaptioner, VisionImageCaptioner};
+pub use lexical_explicit_reply_extractor::LexicalExplicitReplyExtractor;
+pub use message_thread_history::MessageThreadHistory;

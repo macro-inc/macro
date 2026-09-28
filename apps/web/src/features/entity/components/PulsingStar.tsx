@@ -1,5 +1,5 @@
-import { AnimatedStarIcon } from '@icon/wide-star';
-import { createSignal, onCleanup } from 'solid-js';
+import SparkleIcon from '@phosphor/sparkle.svg';
+import { cn } from '@ui';
 
 const kind = {
   listIcon: 'size-4 text-chat',
@@ -13,21 +13,11 @@ export function PulsingStar(props: {
   animate?: boolean;
   class?: string;
 }) {
-  const [pulse, setPulse] = createSignal(false);
-
-  const interval = setInterval(() => {
-    if (props.animate) {
-      setPulse((p) => !p);
-    } else {
-      setPulse(false);
-    }
-  }, 900);
-
-  onCleanup(() => clearInterval(interval));
-
   return (
     <div class={kind[props.kind]}>
-      <AnimatedStarIcon class={props.class} triggerAnimation={pulse()} />
+      <SparkleIcon
+        class={cn('size-full', props.class, props.animate && 'animate-pulse')}
+      />
     </div>
   );
 }

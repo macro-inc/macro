@@ -11,6 +11,7 @@ use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
 use livekit_api::services::agent_dispatch::AgentDispatchClient;
 use livekit_api::services::egress::{EgressClient, EgressOutput, RoomCompositeOptions, encoding};
 use livekit_api::services::room::{CreateRoomOptions, RoomClient};
+use livekit_api::services::{ServiceError, TwirpError, TwirpErrorCode};
 use livekit_api::webhooks::WebhookReceiver;
 use livekit_protocol::{
     AudioCodec, CreateAgentDispatchRequest, EncodedFileOutput, EncodedFileType, S3Upload,
@@ -20,6 +21,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::apple::VoipPushPayload;
 
+use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     CallError, CallWebhookEvent, EgressS3Config, VerifiedRingToken, VoipPushPayloadRequest,
 };
@@ -105,6 +107,7 @@ fn build_room_composite_egress_request(
     });
 
     let options = RoomCompositeOptions {
+        layout: "speaker".to_owned(),
         encoding: encoding::EncodingOptions {
             audio_codec: AudioCodec::Aac,
             video_codec: VideoCodec::H264Main,
@@ -162,6 +165,37 @@ impl CallRtcClient for LivekitRtcClient {
             })
             .to_jwt()?;
         Ok(token)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn generate_guest_token(
+        &self,
+        room_name: &str,
+        guest_id: GuestId,
+        display_name: &str,
+    ) -> anyhow::Result<String> {
+        Ok(AccessToken::with_api_key(&self.api_key, &self.api_secret)
+            .with_identity(&guest_id.to_string())
+            .with_name(display_name)
+            .with_ttl(std::time::Duration::from_secs(6 * 3600))
+            .with_grants(VideoGrants {
+                room_join: true,
+                room: room_name.to_string(),
+                can_publish: true,
+                can_subscribe: true,
+                can_publish_data: true,
+                ..Default::default()
+            })
+            .to_jwt()?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn remove_guest(&self, room_name: &str, guest_id: GuestId) -> anyhow::Result<()> {
+        interpret_remove_participant_result(
+            self.room_client
+                .remove_participant(room_name, &guest_id.to_string())
+                .await,
+        )
     }
 
     #[tracing::instrument(
@@ -227,10 +261,28 @@ impl CallRtcClient for LivekitRtcClient {
         room_name: &str,
         participant_identity: MacroUserIdStr<'_>,
     ) -> anyhow::Result<()> {
-        self.room_client
-            .remove_participant(room_name, participant_identity.as_ref())
-            .await?;
-        Ok(())
+        interpret_remove_participant_result(
+            self.room_client
+                .remove_participant(room_name, participant_identity.as_ref())
+                .await,
+        )
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn list_participant_identities(
+        &self,
+        room_name: &str,
+    ) -> anyhow::Result<Option<Vec<String>>> {
+        match self.room_client.list_participants(room_name).await {
+            Ok(participants) => Ok(Some(
+                participants
+                    .into_iter()
+                    .map(|participant| participant.identity)
+                    .collect(),
+            )),
+            Err(error) if is_not_found(&error) => Ok(None),
+            Err(error) => Err(error.into()),
+        }
     }
 
     #[tracing::instrument(err, skip(self, s3_config))]
@@ -308,27 +360,48 @@ impl CallRtcClient for LivekitRtcClient {
             None => (None, None),
         };
 
+        // Keep UUID guests separate from Macro users and agent identities.
+        let guest_identity = event
+            .participant
+            .as_ref()
+            .filter(|p| MacroUserIdStr::parse_from_str(&p.identity).is_err())
+            .and_then(|p| GuestId::parse_rtc_identity(&p.identity));
+
         Ok(CallWebhookEvent {
+            guest_identity,
             event: event.event,
             id: event.id,
             room_name: event.room.map(|r| r.name),
-            participant_identity: event
-                .participant
-                .and_then(|p| {
-                    // The transcription agent joins with its agent name as the
-                    // identity, which is not a MacroUserId — short-circuit so
-                    // join/leave events for the agent don't fail parsing.
-                    if Some(p.identity.as_str()) == self.transcription_agent_name.as_deref() {
+            participant_identity: event.participant.and_then(|p| {
+                match MacroUserIdStr::parse_from_str(&p.identity) {
+                    Ok(id) => Some(id.into_owned()),
+                    Err(_) => {
+                        tracing::debug!(
+                            identity = %p.identity,
+                            "skipping non-user LiveKit participant identity"
+                        );
                         None
-                    } else {
-                        Some(MacroUserIdStr::parse_from_str(&p.identity).map(CowLike::into_owned))
                     }
-                })
-                .transpose()
-                .map_err(anyhow::Error::from)?,
+                }
+            }),
             egress_id,
             file_url,
             created_at: event.created_at,
         })
     }
+}
+
+fn interpret_remove_participant_result(result: Result<(), ServiceError>) -> anyhow::Result<()> {
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) if is_not_found(&error) => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn is_not_found(error: &ServiceError) -> bool {
+    matches!(
+        error,
+        ServiceError::Twirp(TwirpError::Twirp(code)) if code.code == TwirpErrorCode::NOT_FOUND
+    )
 }

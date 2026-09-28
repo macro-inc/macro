@@ -2,14 +2,14 @@
  * The messages exchanged with the agent-fold worker.
  *
  * Request/response pairs correlated by `id`, because one worker serves every
- * agent channel a session might have open and replies can interleave.
+ * agent surface a session might have open and replies can interleave.
  *
- * The worker keeps one fold machine per `sessionId`, which is what makes
- * {@link FoldOpenRequest} and {@link FoldPushRequest} halves of one thing
- * rather than two ways to fold: a channel opened mid-session catches up by
- * opening the machine with its fetched log and then pushes live frames into
- * that same machine. Two machines over two halves of one log would derive the
- * same messages twice.
+ * The worker keeps one fold machine per `sessionId`, created on the first
+ * `push` and fed every input after it in order: the fetched log as a
+ * snapshot, confirmed rows as they stream in, and this client's own actions
+ * the moment they are issued. One machine over one ordered input stream is
+ * what keeps a surface opened mid-session from deriving the same messages
+ * twice.
  */
 
 import type {
@@ -17,41 +17,55 @@ import type {
   FoldedStreamEvent,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
-import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
+import type {
+  AgentAction,
+  AgentSessionLogEntryDto,
+} from '@service-agent-harness/generated/schemas';
 
 /**
- * Open (or reopen) a session's machine and seed it with a fetched log.
- *
- * Always starts a fresh machine: the entries are a snapshot from the top of
- * the log, so folding them into a machine that already holds them would
- * double-count. A caller that has been following the session and does not
- * want to lose that state simply does not send this.
+ * One thing that can happen to a client's view of a session log. Mirrors
+ * `FoldInput` in `crates/agent_fold/src/domain/speculation.rs`.
  */
-export interface FoldOpenRequest {
-  id: number;
-  kind: 'open';
-  sessionId: string;
-  entries: AgentSessionLogEntryDto[];
-}
+export type FoldInput =
+  /**
+   * Authoritative history from the top of the log. Resets the machine's
+   * confirmed tier and settles any speculation the rows already contain.
+   * Must be the first input a session's machine sees.
+   */
+  | { kind: 'snapshot'; rows: AgentSessionLogEntryDto[] }
+  /** One durable row, in delivery order. */
+  | { kind: 'confirmed'; row: AgentSessionLogEntryDto }
+  /**
+   * An action this client issued that the log has not confirmed. `action`
+   * is the control endpoint's request body, `actionId` the id it will be
+   * accepted under, `userId` the caller so the folded message is attributed
+   * exactly as the confirmed row will be.
+   */
+  | {
+      kind: 'speculated';
+      actionId: string;
+      action: AgentAction;
+      userId?: string;
+    }
+  /** An action the server will never log: failed POST, refused control. */
+  | { kind: 'retracted'; actionId: string };
 
-/** Fold more frames into an already-open session, in log order. */
+/** Fold inputs into a session's machine, in order. */
 export interface FoldPushRequest {
   id: number;
   kind: 'push';
   sessionId: string;
-  entries: AgentSessionLogEntryDto[];
+  inputs: FoldInput[];
 }
 
 /**
- * Read an open session's messages without folding anything.
- *
- * What a second reader of an already-followed session asks, instead of
- * opening the machine again and throwing away the frames it has folded since
- * that reader's snapshot was taken.
+ * Read a session's machine without folding anything: what a surface joining
+ * an already-followed session asks, instead of refetching a log the machine
+ * is ahead of.
  */
-export interface FoldMessagesRequest {
+export interface FoldReadRequest {
   id: number;
-  kind: 'messages';
+  kind: 'read';
   sessionId: string;
 }
 
@@ -62,34 +76,17 @@ export interface FoldCloseRequest {
   sessionId: string;
 }
 
-/** Fold a log with no machine kept — the one-shot form. */
-export interface FoldOnceRequest {
-  id: number;
-  kind: 'once';
-  sessionId: string;
-  entries: AgentSessionLogEntryDto[];
-}
-
-export type FoldRequest =
-  | FoldOpenRequest
-  | FoldPushRequest
-  | FoldMessagesRequest
-  | FoldCloseRequest
-  | FoldOnceRequest;
+export type FoldRequest = FoldPushRequest | FoldReadRequest | FoldCloseRequest;
 
 /** What the worker sends back, one per request. */
 export type FoldResponse =
-  | { id: number; ok: true; kind: 'once'; messages: FoldedMessage[] }
-  // Machine-backed reads also answer with the machine's current metadata,
-  // so a caller catching up (or joining late) does not have to wait for the
-  // next `{kind: 'metadata'}` push event to learn the session's title/model.
+  | { id: number; ok: true; kind: 'push'; changes: FoldedStreamEvent[] }
   | {
       id: number;
       ok: true;
-      kind: 'open' | 'messages';
+      kind: 'read';
       messages: FoldedMessage[];
       metadata: SessionMetadata;
     }
-  | { id: number; ok: true; kind: 'push'; changes: FoldedStreamEvent[] }
   | { id: number; ok: true; kind: 'close' }
   | { id: number; ok: false; error: string };

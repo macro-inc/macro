@@ -12,7 +12,7 @@ vi.mock('@phosphor-icons/core/regular/x.svg?component-solid', () => ({
 }));
 
 const deleteInput = {
-  channelID: 'channel-1',
+  parent: { type: 'channel' as const, id: 'channel-1' },
   messageID: 'message-1',
   threadID: 'thread-1',
 };
@@ -48,5 +48,37 @@ describe('createDeleteMessageConfirmation', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(deleteMessage).not.toHaveBeenCalled();
+  });
+
+  it('warns that a discussion root takes its replies with it', async () => {
+    const { requestDelete, ConfirmationDialog } =
+      createDeleteMessageConfirmation(vi.fn());
+
+    render(() => <ConfirmationDialog />);
+
+    requestDelete({
+      parent: { type: 'document', id: 'doc-1' },
+      messageID: 'root-1',
+    });
+    await screen.findByText('Delete comment');
+    expect(
+      screen.getByText(
+        'This comment and every reply to it will be permanently deleted. This action cannot be undone.'
+      )
+    ).toBeTruthy();
+  });
+
+  it('keeps the message-only warning for a reply', async () => {
+    const { requestDelete, ConfirmationDialog } =
+      createDeleteMessageConfirmation(vi.fn());
+
+    render(() => <ConfirmationDialog />);
+
+    requestDelete({
+      parent: { type: 'document', id: 'doc-1' },
+      messageID: 'reply-1',
+      threadID: 'root-1',
+    });
+    await screen.findByText('Delete message');
   });
 });

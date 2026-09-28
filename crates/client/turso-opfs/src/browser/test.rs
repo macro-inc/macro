@@ -15,6 +15,8 @@ use web_sys::{FileSystemGetDirectoryOptions, FileSystemGetFileOptions, FileSyste
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
+mod write_batch;
+
 #[derive(Debug)]
 struct TrackedCompletion {
     completion: Completion,
@@ -509,6 +511,7 @@ async fn real_worker_opfs_contract_and_consuming_lifecycle() {
         );
         assert_completion(&vectored, Ok(4));
         assert_eq!(main.size().expect("size after writes"), 10);
+        write_batch::check(&main);
 
         let before_overflow = main.size().expect("size before overflow probes");
         let overflow = write_completion();

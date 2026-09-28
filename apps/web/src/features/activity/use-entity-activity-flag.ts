@@ -1,8 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_ENTITY_ACTIVITY_SECTION_FLAG,
-  ENABLE_ENTITY_ACTIVITY_SECTION_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableEntityActivitySection } from '@core/constant/featureFlags';
 import type { Accessor } from 'solid-js';
 
 /**
@@ -11,8 +8,6 @@ import type { Accessor } from 'solid-js';
  * issued while off.
  */
 export function useEntityActivityFlag(): Accessor<boolean> {
-  const flag = useFeatureFlag(ENABLE_ENTITY_ACTIVITY_SECTION_FLAG, {
-    enabledOverride: ENABLE_ENTITY_ACTIVITY_SECTION_OVERRIDE,
-  });
+  const flag = useFeatureFlag(enableEntityActivitySection);
   return () => flag().enabled;
 }

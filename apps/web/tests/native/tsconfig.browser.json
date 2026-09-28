@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "types": ["vite/client", "vite-plugin-solid-svg/types-component-solid", "vite-plugin-solid-svg/types", "wicg-file-system-access", "@types/gtag.js", "@types/facebook-pixel"] },
+  "include": ["./filter-matrix.ts", "../../src/**/*.d.ts"],
+  "exclude": []
+}

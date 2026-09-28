@@ -12,7 +12,9 @@ use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use super::property_option_queries;
-use crate::domain::model::{EntityPropertyInfo, PropertyOptionInfo};
+use crate::domain::model::{
+    CRM_TEAM_STAGE_DEFINITION_NAME, EntityPropertyInfo, PropertyOptionInfo,
+};
 
 /// Database row from the joined query.
 struct PropertyRow {
@@ -627,17 +629,18 @@ WHERE (ep.entity_id, ep.entity_type) IN (
 
 /// Gets entity properties with their definitions and values for multiple entities, filtered by property definition IDs.
 /// Returns a HashMap where the key is the entity_id and the value is Vec<EntityPropertyWithDefinition>.
-/// Only returns properties matching the specified property_ids. When `tag_viewer_user_id` is set,
-/// also returns TAG properties whose definition is owned by that user or their team.
+/// Only returns properties matching the specified property_ids. When `viewer_user_id` is set,
+/// also returns TAG properties owned by that user or their team, and the team's CRM stage
+/// definition ([`CRM_TEAM_STAGE_DEFINITION_NAME`]).
 #[tracing::instrument(skip(pool))]
 pub async fn get_bulk_entity_properties_values_filtered(
     pool: &Pool<Postgres>,
     entity_refs: &[EntityReference],
     property_ids: &[Uuid],
-    tag_viewer_user_id: Option<&macro_user_id::user_id::MacroUserIdStr<'_>>,
+    viewer_user_id: Option<&macro_user_id::user_id::MacroUserIdStr<'_>>,
 ) -> anyhow::Result<HashMap<String, Vec<EntityPropertyWithDefinition>>> {
-    let tag_viewer_user_id: Option<&str> = tag_viewer_user_id.map(|u| u.as_ref());
-    if entity_refs.is_empty() || (property_ids.is_empty() && tag_viewer_user_id.is_none()) {
+    let viewer_user_id: Option<&str> = viewer_user_id.map(|u| u.as_ref());
+    if entity_refs.is_empty() || (property_ids.is_empty() && viewer_user_id.is_none()) {
         // If no property_ids specified, return empty map for each entity
         let mut result = HashMap::new();
         for entity_ref in entity_refs {
@@ -683,13 +686,23 @@ AND (
             OR pd.team_id IN (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $4)
         )
     )
+    OR (
+        $4::text IS NOT NULL
+        AND pd.is_system = FALSE
+        AND pd.is_multi_select = FALSE
+        AND pd.data_type = $6
+        AND pd.display_name = $7
+        AND pd.team_id IN (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $4)
+    )
 )
         "#,
         &entity_ids,
         &entity_types as &[EntityType],
         &property_ids,
-        tag_viewer_user_id,
-        DataType::Tag as DataType
+        viewer_user_id,
+        DataType::Tag as DataType,
+        DataType::SelectString as DataType,
+        CRM_TEAM_STAGE_DEFINITION_NAME
     )
     .fetch_all(pool)
     .await?;

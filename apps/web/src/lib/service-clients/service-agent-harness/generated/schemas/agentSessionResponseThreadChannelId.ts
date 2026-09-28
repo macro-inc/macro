@@ -7,6 +7,6 @@
 
 /**
  * The channel `thread_id` lives in, when the session was spawned from a
-thread.
+channel thread. Derived from `thread_parent`.
  */
 export type AgentSessionResponseThreadChannelId = string | null;

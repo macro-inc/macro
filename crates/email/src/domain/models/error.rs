@@ -17,9 +17,19 @@ pub enum EmailErr {
     /// The referenced message was not found.
     #[error("Message with id {0} not found")]
     MessageNotFound(Uuid),
+    /// No sending inbox could be resolved: the requested link is not
+    /// accessible to the caller, or the caller has no primary inbox.
+    #[error("Email inbox not found")]
+    InboxNotFound,
     /// The referenced message has already been sent and cannot be modified.
     #[error("Message with id {0} has already been sent")]
     MessageAlreadySent(Uuid),
+    /// Delivery has been committed, claimed, or completed and cannot be edited.
+    #[error("Message with id {0} is scheduled, processing, or already sent")]
+    MessageDeliveryConflict(Uuid),
+    /// Explicit scheduled delivery requires a time in the future.
+    #[error("Scheduled send time must be in the future")]
+    InvalidScheduleTime,
     /// Cannot reply to a draft message.
     #[error("Cannot reply to a draft")]
     CannotReplyToDraft,
@@ -38,6 +48,9 @@ pub enum EmailErr {
     /// No messages found for thread.
     #[error("No messages found for thread")]
     ThreadEmpty,
+
+    #[error("thread has no received messages and cannot be unarchived")]
+    ThreadHasNoInboundMessages,
     /// Thread not found.
     #[error("Thread not found")]
     ThreadNotFound,

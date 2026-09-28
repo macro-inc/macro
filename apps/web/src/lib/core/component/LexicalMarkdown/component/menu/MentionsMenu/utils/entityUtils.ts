@@ -14,6 +14,7 @@ export function getBlockNameFromEntity(
     .with('channel', () => 'channel' as const)
     .with('dm', () => 'channel' as const)
     .with('email', () => 'email' as const)
+    .with('agent_session', () => 'agent' as const)
     .with('chat', () => 'chat' as const)
     .with('project', () => 'project' as const)
     .with('task', () => 'task' as const)
@@ -44,6 +45,13 @@ export function getMentionItemName(item: MentionItem): string {
       return `@${item.data.groupAlias}`;
     case 'date':
       return item.data.displayText;
+    case 'agentSession':
+      return [
+        item.data.name || 'Agent session',
+        item.data.bot?.name ? `@${item.data.bot.name}` : undefined,
+      ]
+        .filter(Boolean)
+        .join(' ');
     case 'entity':
       return item.data.name ?? (item.bucket === 'email' ? 'No Subject' : '');
   }

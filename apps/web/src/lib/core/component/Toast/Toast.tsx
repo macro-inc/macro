@@ -275,8 +275,8 @@ function ActionButtons(props: { actions: ToastAction[]; mobile?: boolean }) {
           size={props.mobile ? 'sm' : 'md'}
           onClick={action.onClick}
           variant="outline"
-          class="px-2 py-1 bg-lift"
-          depth={3}
+          class="px-2 py-1 bg-surface"
+          depth={4}
         >
           <Show when={action.icon}>
             {(icon) => (
@@ -304,7 +304,8 @@ function ToastBodyWrapper(props: {
       fallback={
         <Surface
           highlightColor={props.accentColor}
-          class="relative w-[90vw] sm:w-md p-2 sm:p-3 rounded-xl bg-toast shadow-lg shadow-drop-shadow"
+          hideBorder
+          class="relative w-[90vw] sm:w-md p-2 sm:p-3 rounded-xl glass bg-toast"
         >
           {props.children}
         </Surface>
@@ -336,6 +337,9 @@ function ToastContent(props: {
   onDismiss?: () => void;
 }) {
   const styles = () => (props.toastType ? TOAST_STYLES[props.toastType] : null);
+  // Two actions beside the title squeeze it to a few characters; like the
+  // stacked custom layout, they get their own row under the description.
+  const stackActions = () => (props.actions?.length ?? 0) > 1;
 
   const accentColor = () => {
     if (props.custom?.color) return props.custom.color;
@@ -526,7 +530,7 @@ function ToastContent(props: {
                   >
                     {props.message}
                   </Toast.Title>
-                  <Show when={props.actions?.length}>
+                  <Show when={props.actions?.length && !stackActions()}>
                     <ActionButtons
                       actions={props.actions!}
                       mobile={props.mobile}
@@ -540,10 +544,20 @@ function ToastContent(props: {
                     </Toast.CloseButton>
                   </Show>
                 </div>
-                <Show when={props.subtext && !props.mobile}>
-                  <Toast.Description class="text-sm text-ink-extra-muted ml-7">
+                <Show when={props.subtext && (!props.mobile || stackActions())}>
+                  <Toast.Description
+                    class={cn(
+                      'ml-7 text-ink-extra-muted',
+                      props.mobile ? 'text-xs' : 'text-sm'
+                    )}
+                  >
                     {props.subtext}
                   </Toast.Description>
+                </Show>
+                <Show when={stackActions()}>
+                  <div class="mt-2 ml-7 flex flex-wrap gap-2">
+                    <ActionButtons actions={props.actions!} mobile />
+                  </div>
                 </Show>
               </>
             )}

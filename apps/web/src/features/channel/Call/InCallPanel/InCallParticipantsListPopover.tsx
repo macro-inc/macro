@@ -49,7 +49,7 @@ export function InCallParticipantNameRow(props: {
   /** When false, the row is display-only (no DM on click). Default true. */
   allowOpenDm?: boolean;
 }) {
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
     onError: () => toast.failure('Could not open direct message'),
   });
@@ -57,7 +57,10 @@ export function InCallParticipantNameRow(props: {
   const label = createMemo(() => {
     props.panel.callCtx.trackVersion();
     const r = profilePictureIdForMember(props.panel, props.member);
-    const displayName = getDisplayName(tryMacroId(r ?? ''));
+    const displayName =
+      (props.member.kind === 'remote'
+        ? props.member.participant.name?.trim()
+        : undefined) || getDisplayName(tryMacroId(r ?? ''));
     return (
       displayName ||
       r ||
@@ -67,9 +70,13 @@ export function InCallParticipantNameRow(props: {
 
   const isRemote = () => props.member.kind === 'remote';
   const allowDm = () => props.allowOpenDm !== false;
-  const isInteractive = () => isRemote() && allowDm();
+  const isInteractive = () =>
+    isRemote() &&
+    allowDm() &&
+    props.member.kind === 'remote' &&
+    !!tryMacroId(props.member.participant.identity);
 
-  const openDm = () => {
+  const openDm = (event: MouseEvent | KeyboardEvent) => {
     if (props.member.kind !== 'remote') return;
     const { identity } = props.member.participant;
     if (!identity.startsWith('macro|') || !identity.slice(6).includes('@'))
@@ -79,7 +86,10 @@ export function InCallParticipantNameRow(props: {
       {
         onSuccess: ({ channel_id }) => {
           props.onClose();
-          replaceOrInsertSplit({ type: 'channel', id: channel_id });
+          openWithSplit(
+            { type: 'channel', id: channel_id },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
         },
       }
     );
@@ -91,7 +101,7 @@ export function InCallParticipantNameRow(props: {
       tabIndex={isInteractive() ? 0 : undefined}
       onClick={isInteractive() ? openDm : undefined}
       onKeyDown={
-        isInteractive() ? (e) => e.key === 'Enter' && void openDm() : undefined
+        isInteractive() ? (e) => e.key === 'Enter' && void openDm(e) : undefined
       }
       class={cn(
         'flex min-w-0 items-center gap-2 rounded-xs p-1',
@@ -154,7 +164,11 @@ export function InCallParticipantsListPopover(
 
       <Popover.Portal>
         <Popover.Content class="z-modal">
-          <Surface depth={3} class="min-w-48 max-w-72">
+          <Surface
+            depth={3}
+            hideBorder
+            class="min-w-48 max-w-72 rounded-xl glass bg-menu-glass"
+          >
             <InCallRosterListSection
               panel={props.panel}
               members={members()}

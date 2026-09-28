@@ -1,12 +1,15 @@
+use std::sync::Arc;
+
 use async_graphql::{Context, ID, Object, SimpleObject, dataloader::DataLoader};
 use email::domain::models::{
-    AttachmentDraft, AttachmentForwarded, ContactInfo, EmailThreadMetadata, Message,
-    MessageAttachment, ParsedLabel, ParsedMessage,
+    AttachmentDraft, AttachmentForwarded, ContactInfo, EmailThreadMailProjection,
+    EmailThreadMetadata, Message, MessageAttachment, ParsedLabel, ParsedMessage,
 };
 
 use crate::loaders::{
     EmailContentKey, EmailContentLoad, EmailContentLoader, EmailContentMessage,
-    EmailThreadMetadataLoad, EmailThreadMetadataLoader, SoupEmailContentEdgeReader,
+    EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader, EmailThreadMetadataLoad,
+    EmailThreadMetadataLoader, SoupEmailContentEdgeReader, SoupEmailThreadMailProjectionEdgeReader,
     SoupEmailThreadMetadataEdgeReader,
 };
 
@@ -17,6 +20,7 @@ const FULL_MESSAGE_FIELDS: &[&str] = &[
     "attachments",
     "attachmentsDraft",
     "attachmentsForwarded",
+    "calendarInvitations",
 ];
 
 /// Whether the selected message fields require fully hydrated email messages.
@@ -27,10 +31,50 @@ pub fn email_message_selection_requires_full_payload(ctx: &Context<'_>) -> bool 
         .any(|field| lookahead.field(field).exists())
 }
 
+/// A body-free normalized message snapshot used by canonical Mail preview edges.
+/// Its ID identifies the same message across ALL, Drafts and Sent references.
+#[derive(SimpleObject)]
+pub struct GraphqlMailPreviewMessage {
+    /// Global message ID.
+    id: ID,
+    /// Message subject.
+    subject: Option<String>,
+    /// Message snippet, never a body.
+    snippet: Option<String>,
+    /// Whether this message is a draft.
+    is_draft: bool,
+    /// Sender email address.
+    sender_email: Option<String>,
+    /// Sender display name.
+    sender_name: Option<String>,
+    /// Sender photo URL.
+    sender_photo_url: Option<String>,
+}
+
+impl From<email::domain::models::EmailPreview> for GraphqlMailPreviewMessage {
+    fn from(preview: email::domain::models::EmailPreview) -> Self {
+        Self {
+            id: ID(preview.id.to_string()),
+            subject: preview.subject,
+            snippet: preview.snippet,
+            is_draft: preview.is_draft,
+            sender_email: preview.sender_email,
+            sender_name: preview.sender_name,
+            sender_photo_url: preview.sender_photo_url,
+        }
+    }
+}
+
 /// An adaptively hydrated email content projection for Soup queries.
 pub struct GraphqlSoupEmailMessage(EmailContentMessage);
 
 impl GraphqlSoupEmailMessage {
+    /// Wraps a message produced outside the DataLoader path (e.g. a
+    /// mutation payload's draft record).
+    pub(crate) fn from_content(message: EmailContentMessage) -> Self {
+        Self(message)
+    }
+
     fn parsed(&self) -> &ParsedMessage {
         self.0.parsed()
     }
@@ -45,6 +89,16 @@ impl GraphqlSoupEmailMessage {
 /// An adaptively hydrated email content projection for Soup queries.
 #[Object]
 impl GraphqlSoupEmailMessage {
+    /// Immutable scheduling snapshots; JSON keeps both transports identical.
+    async fn calendar_invitations(
+        &self,
+    ) -> async_graphql::Result<
+        async_graphql::Json<Vec<email::domain::models::calendar_invitation::CalendarInvitation>>,
+    > {
+        Ok(async_graphql::Json(
+            self.full()?.calendar_invitations.clone(),
+        ))
+    }
     /// The unique message identifier.
     async fn id(&self) -> ID {
         ID(self.parsed().db_id.to_string())
@@ -398,6 +452,24 @@ where
     }
 }
 
+/// Load Mail-specific cache facts and canonical previews for an email thread.
+pub async fn load_email_thread_mail_projection<R>(
+    ctx: &Context<'_>,
+    thread_id: uuid::Uuid,
+) -> async_graphql::Result<Arc<EmailThreadMailProjection>>
+where
+    R: SoupEmailThreadMailProjectionEdgeReader,
+{
+    let loader = ctx.data::<DataLoader<EmailThreadMailProjectionLoader<R>>>()?;
+    match loader.load_one(thread_id).await? {
+        Some(EmailThreadMailProjectionLoad::Found(projection)) => Ok(projection),
+        Some(EmailThreadMailProjectionLoad::Missing | EmailThreadMailProjectionLoad::Failed)
+        | None => Err(async_graphql::Error::new(
+            "email thread Mail projection is unavailable",
+        )),
+    }
+}
+
 /// Load a paginated adaptively hydrated message page for an email thread.
 pub async fn load_email_messages<R>(
     ctx: &Context<'_>,
@@ -488,6 +560,19 @@ mod tests {
                         }),
                     )
                 })
+                .collect()
+        }
+    }
+
+    impl SoupEmailThreadMailProjectionEdgeReader for ContentReader {
+        async fn get_email_thread_mail_projections(
+            &self,
+            _user_id: &MacroUserIdStr<'static>,
+            thread_ids: Vec<Uuid>,
+        ) -> HashMap<Uuid, EmailThreadMailProjectionLoad> {
+            thread_ids
+                .into_iter()
+                .map(|thread_id| (thread_id, EmailThreadMailProjectionLoad::Missing))
                 .collect()
         }
     }

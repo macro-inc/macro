@@ -10,21 +10,22 @@ import { type GroupByField, type GroupMeta, NOT_SET_GROUP_KEY } from './types';
 /** Sort methods the grouped soup endpoints accept. */
 export type GroupedSortMethod = Exclude<
   NonNullable<Params['sort_method']>,
-  'frecency' | 'touched_by_me'
+  'frecency' | 'touched_by_me' | 'notified_at'
 >;
 
 /**
  * Maps a flat-feed sort method onto what the grouped endpoints support.
- * Frecency and touched-by-me pages are built from their own data sources
- * (relevance scores / the activity log) that the grouped queries cannot
- * reproduce, so grouping such a view falls back to update recency within
- * each group.
+ * Frecency, touched-by-me and notified-at pages are built from their own
+ * data sources (relevance scores / the activity log / notifications) that
+ * the grouped queries cannot reproduce, so grouping such a view falls back
+ * to update recency within each group.
  */
 export function groupedSortMethod(
   sort: Params['sort_method']
 ): GroupedSortMethod | undefined {
   if (sort == null) return undefined;
-  if (sort === 'frecency' || sort === 'touched_by_me') return 'updated_at';
+  if (sort === 'frecency' || sort === 'touched_by_me' || sort === 'notified_at')
+    return 'updated_at';
   return sort;
 }
 

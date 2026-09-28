@@ -1,0 +1,28 @@
+query NativeMailBackfill {
+  user {
+    id @cacheOnly
+    emailLinks @cacheOnly { id }
+    soup(input: { initial: { limit: 100, emailView: ALL } }) {
+      items @cacheOnly {
+        __typename
+        id
+        cacheProjection
+        ... on GraphqlSoupEmailThread {
+          name
+          ownerId
+          linkId
+          isRead
+          inboxVisible
+          isSignal
+          latestInboundMessageTs
+          updatedAt
+          properties { id }
+          mailAllPreview { id subject snippet isDraft senderEmail senderName senderPhotoUrl }
+          mailDraftPreview { id subject snippet isDraft senderEmail senderName senderPhotoUrl }
+          mailSentPreview { id subject snippet isDraft senderEmail senderName senderPhotoUrl }
+        }
+      }
+      nextCursor
+    }
+  }
+}

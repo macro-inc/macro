@@ -1,5 +1,6 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use sqlx::{Postgres, Transaction};
+use uuid::Uuid;
 
 use crate::domain::models::{PurgedProjectTree, SoftDeleteResult};
 
@@ -137,6 +138,7 @@ async fn delete_items(
     )
     .execute(transaction.as_mut())
     .await?;
+    delete_registered_entities(transaction, &all_ids).await?;
     sqlx::query!(r#"DELETE FROM "Document" WHERE id = ANY($1)"#, document_ids)
         .execute(transaction.as_mut())
         .await?;
@@ -170,8 +172,6 @@ pub(super) async fn soft_delete_project(
     .fetch_all(transaction.as_mut())
     .await?;
 
-    // Unlike the legacy implementation, child reads use the same transaction
-    // as the writes. This intentionally removes read skew during concurrent moves.
     let document_ids = sqlx::query_scalar!(
         r#"SELECT id FROM "Document" WHERE "projectId" = ANY($1)"#,
         &project_ids,
@@ -204,32 +204,67 @@ pub(super) async fn soft_delete_project(
     .execute(transaction.as_mut())
     .await?;
 
-    let deleted_at = Utc::now().naive_utc();
+    let deleted_at = Utc::now();
     sqlx::query!(
         r#"UPDATE "Document" SET "deletedAt" = $2 WHERE id = ANY($1)"#,
         &document_ids,
-        deleted_at,
+        deleted_at.naive_utc(),
     )
     .execute(transaction.as_mut())
     .await?;
     sqlx::query!(
         r#"UPDATE "Chat" SET "deletedAt" = $2 WHERE id = ANY($1)"#,
         &chat_ids,
-        deleted_at,
+        deleted_at.naive_utc(),
     )
     .execute(transaction.as_mut())
     .await?;
     sqlx::query!(
         r#"UPDATE "Project" SET "deletedAt" = $2 WHERE id = ANY($1)"#,
         &project_ids,
-        deleted_at,
+        deleted_at.naive_utc(),
     )
     .execute(transaction.as_mut())
     .await?;
+    mark_registered_entities_deleted(transaction, &all_ids, deleted_at).await?;
 
     Ok(SoftDeleteResult {
         project_ids,
         document_ids,
         chat_ids,
     })
+}
+
+fn parse_entity_id(id: &str) -> Result<Uuid, sqlx::Error> {
+    id.parse()
+        .map_err(|error| sqlx::Error::Decode(Box::new(error)))
+}
+
+fn registry_protocol_error(error: impl ToString) -> sqlx::Error {
+    sqlx::Error::Protocol(error.to_string())
+}
+
+async fn mark_registered_entities_deleted(
+    transaction: &mut Transaction<'_, Postgres>,
+    ids: &[String],
+    deleted_at: DateTime<Utc>,
+) -> Result<(), sqlx::Error> {
+    for id in ids {
+        entity_registry_db_utils::mark_deleted(transaction, parse_entity_id(id)?, deleted_at)
+            .await
+            .map_err(registry_protocol_error)?;
+    }
+    Ok(())
+}
+
+async fn delete_registered_entities(
+    transaction: &mut Transaction<'_, Postgres>,
+    ids: &[String],
+) -> Result<(), sqlx::Error> {
+    for id in ids {
+        entity_registry_db_utils::delete_entity(transaction, parse_entity_id(id)?)
+            .await
+            .map_err(registry_protocol_error)?;
+    }
+    Ok(())
 }

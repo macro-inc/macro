@@ -1,3 +1,5 @@
+import { openProject } from '@app/features/projects/open-project';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import DeleteIcon from '@phosphor/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -16,17 +18,34 @@ type EntityValueDisplayProps = ParentProps<{
   isSaving?: boolean;
 }>;
 
+function NativeProjectLink(props: ParentProps<{ id: string }>) {
+  const layout = useSplitLayout();
+  return (
+    <button
+      type="button"
+      class="inline-flex max-w-full text-left hover:underline"
+      onClick={(event) => {
+        event.stopPropagation();
+        openProject(layout, props.id, { newSplit: event.shiftKey });
+      }}
+    >
+      {props.children}
+    </button>
+  );
+}
+
 export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
   const [isHovered, setIsHovered] = createSignal(false);
   let containerRef: HTMLDivElement | undefined;
 
-  const { name, icon, blockOrFileType, linkParams } = usePropertyEntityDisplay(
-    () => props.entityId,
-    () => props.entityType,
-    {
-      specificMessageId: () => props.specificMessageId,
-    }
-  );
+  const { name, icon, blockOrFileType, linkParams, nativeProjectId } =
+    usePropertyEntityDisplay(
+      () => props.entityId,
+      () => props.entityType,
+      {
+        specificMessageId: () => props.specificMessageId,
+      }
+    );
 
   const content = (
     <div class="flex items-center gap-2">
@@ -36,15 +55,26 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
   );
 
   const innerContent = (
-    <Show when={blockOrFileType()} fallback={props.children ?? content}>
-      {(linkType) => (
-        <BlockLink
-          blockOrFileName={linkType()}
-          id={props.entityId}
-          params={linkParams()}
-        >
+    <Show
+      when={nativeProjectId()}
+      fallback={
+        <Show when={blockOrFileType()} fallback={props.children ?? content}>
+          {(linkType) => (
+            <BlockLink
+              blockOrFileName={linkType()}
+              id={props.entityId}
+              params={linkParams()}
+            >
+              {props.children ?? content}
+            </BlockLink>
+          )}
+        </Show>
+      }
+    >
+      {(id) => (
+        <NativeProjectLink id={id()}>
           {props.children ?? content}
-        </BlockLink>
+        </NativeProjectLink>
       )}
     </Show>
   );

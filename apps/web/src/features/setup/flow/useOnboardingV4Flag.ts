@@ -1,8 +1,5 @@
 import { useFeatureFlag, usePosthog } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_ONBOARDING_V4_FLAG,
-  ENABLE_ONBOARDING_V4_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableOnboardingV4 } from '@core/constant/featureFlags';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 
 /**
@@ -30,9 +27,7 @@ export type OnboardingV4Flag = {
  */
 export function useOnboardingV4Flag(): Accessor<OnboardingV4Flag> {
   const posthog = usePosthog();
-  const flag = useFeatureFlag(ENABLE_ONBOARDING_V4_FLAG, {
-    enabledOverride: ENABLE_ONBOARDING_V4_OVERRIDE,
-  });
+  const flag = useFeatureFlag(enableOnboardingV4);
 
   const [waited, setWaited] = createSignal(false);
   const timer = setTimeout(() => setWaited(true), FLAG_WAIT_MS);
@@ -41,7 +36,7 @@ export function useOnboardingV4Flag(): Accessor<OnboardingV4Flag> {
   return () => ({
     enabled: flag().enabled,
     loading:
-      ENABLE_ONBOARDING_V4_OVERRIDE === undefined &&
+      enableOnboardingV4.override === undefined &&
       !posthog.featureFlags().length &&
       !waited(),
   });

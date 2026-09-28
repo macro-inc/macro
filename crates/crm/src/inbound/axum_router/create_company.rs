@@ -44,9 +44,14 @@ pub struct CreateCrmCompanyRequest {
     ),
 )]
 #[tracing::instrument(skip_all, err)]
-pub async fn handler<C: CrmService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+pub async fn handler<
+    C: CrmService,
+    St,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<CrmRouterState<C, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Json(req): Json<CreateCrmCompanyRequest>,
 ) -> Result<Json<CrmCompanyResponse>, CrmError> {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;

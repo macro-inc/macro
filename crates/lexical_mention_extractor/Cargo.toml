@@ -10,4 +10,6 @@ channels = { path = "../channels", default-features = false, features = [
   "ports",
 ] }
 lexical_client = { path = "../lexical_client" }
+messages = { path = "../messages", features = ["ports"] }
+rootcause = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

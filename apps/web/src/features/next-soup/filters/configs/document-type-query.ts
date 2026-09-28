@@ -7,6 +7,7 @@ import type {
 const DOCUMENT_TYPE_FILTER_IDS = [
   'doc-markdown',
   'doc-canvas',
+  'doc-spreadsheet',
   'file-code',
   'file-image',
   'file-pdf',
@@ -37,6 +38,7 @@ const documentTypeExpressions: Record<
     ],
   },
   'doc-canvas': { include: { fileType: ['canvas'] } },
+  'doc-spreadsheet': { include: { fileType: ['spreadsheet'] } },
   'file-code': { include: { fileAssoc: ['assoc:code'] } },
   'file-image': { include: { fileAssoc: ['assoc:image'] } },
   'file-pdf': { include: { fileType: ['pdf'] } },

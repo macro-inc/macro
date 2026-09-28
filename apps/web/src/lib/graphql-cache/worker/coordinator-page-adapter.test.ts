@@ -172,6 +172,42 @@ describe('CacheCoordinatorPageAdapter', () => {
     expect(attach?.transfer).toHaveLength(1);
   });
 
+  it('forwards startup phases once, ignores stale epochs, and rejects a backwards phase', async () => {
+    const port = new FakeCoordinatorPort();
+    const progress = vi.fn();
+    const error = vi.fn();
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+      createDedicatedWorker: () => new FakeWorker(),
+      onStartupProgress: progress,
+      onTerminalError: error,
+    });
+    const started = adapter.start();
+    await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+    port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+    const loading = {
+      ...version,
+      kind: 'engine-startup',
+      ownerEpoch: 2,
+      phase: 'loading-assets',
+      databaseAction: 'open-existing',
+      timeoutMs: 300_000,
+    };
+    port.receive(loading);
+    port.receive(loading);
+    port.receive({ ...loading, ownerEpoch: 1 });
+    expect(progress).toHaveBeenCalledTimes(1);
+    port.receive({ ...loading, phase: 'opening-database', timeoutMs: 20_000 });
+    expect(progress).toHaveBeenCalledTimes(2);
+    port.receive(loading);
+    expect(error).toHaveBeenCalledOnce();
+    expect(port.closed).toBe(true);
+  });
+
   it('terminates and clears a failed worker before reporting owner loss', async () => {
     const order: string[] = [];
     const coordinatorPort = new FakeCoordinatorPort();
@@ -389,6 +425,34 @@ describe('CacheCoordinatorPageAdapter', () => {
     expect(terminalErrors).toEqual([]);
     expect(coordinatorPort.closed).toBe(false);
     await adapter.dispose();
+  });
+
+  it('treats retry exhaustion from the coordinator as terminal', async () => {
+    const coordinatorPort = new FakeCoordinatorPort();
+    const terminalErrors: string[] = [];
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({
+        port: coordinatorPort as unknown as MessagePort,
+      }),
+      createDedicatedWorker: () => new FakeWorker(),
+      onTerminalError: (error) => terminalErrors.push(error.message),
+    });
+    const started = adapter.start();
+    await vi.waitFor(() => expect(coordinatorPort.messages).toHaveLength(1));
+    coordinatorPort.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+
+    coordinatorPort.receive({
+      ...version,
+      kind: 'terminal-error',
+      error: 'cache recovery failed after 5 attempts',
+    });
+
+    expect(terminalErrors).toEqual(['cache recovery failed after 5 attempts']);
+    expect(coordinatorPort.closed).toBe(true);
   });
 
   it('terminates an owned engine before closing a failed SharedWorker transport', async () => {
@@ -747,7 +811,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     const firstWorker = new FakeWorker();
     const workers = [firstWorker, new FakeWorker()];
     const dedicatedFactory = vi.fn(() => workers.shift() as FakeWorker);
-    const replacements: number[] = [];
+    const replacements = vi.fn();
     const terminalErrors: string[] = [];
     const adapter = createCacheCoordinatorPageAdapter({
       scope: 'scope',
@@ -757,7 +821,7 @@ describe('CacheCoordinatorPageAdapter', () => {
         port: coordinatorPort as unknown as MessagePort,
       }),
       createDedicatedWorker: dedicatedFactory,
-      onEngineReplaced: (epoch) => replacements.push(epoch),
+      onEngineReplaced: replacements,
       onTerminalError: (error) => terminalErrors.push(error.message),
     });
     const started = adapter.start();
@@ -769,11 +833,13 @@ describe('CacheCoordinatorPageAdapter', () => {
       ...version,
       kind: 'engine-replaced',
       ownerEpoch: 1,
+      openOutcome: 'opened-existing',
     });
     coordinatorPort.receive({
       ...version,
       kind: 'engine-replaced',
       ownerEpoch: 1,
+      openOutcome: 'reset-corrupt',
     });
     coordinatorPort.receive({
       ...version,
@@ -784,7 +850,7 @@ describe('CacheCoordinatorPageAdapter', () => {
     });
     coordinatorPort.receive(election(1));
 
-    expect(replacements).toEqual([1]);
+    expect(replacements).toHaveBeenCalledExactlyOnceWith(1, 'opened-existing');
     expect(dedicatedFactory).toHaveBeenCalledOnce();
     expect(firstWorker.messages).toHaveLength(1);
     expect(firstWorker.messages[0]?.message).toMatchObject({

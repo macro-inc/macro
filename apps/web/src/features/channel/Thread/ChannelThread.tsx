@@ -2,20 +2,23 @@ import { DebugSuspense } from '@channel/DebugSuspense';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
-import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
+import { queryReadyGate } from '@queries/gate';
+import { useThreadRepliesQuery } from '@queries/messages/thread-replies';
+import type { Message as EntityMessage } from '@service-storage/messages';
 import {
   createEffect,
+  createMemo,
   createSignal,
   on,
   onCleanup,
+  type ParentProps,
   Show,
   untrack,
 } from 'solid-js';
 import { createMessageSelection } from '../Channel/create-message-selection';
 import { ChannelMessage } from '../Message';
-import { isUnifiedInputMode } from '../unified-input-mode';
 import { createTargetReplyNavigationController } from './create-target-reply-navigation-controller';
 import { createTargetReplyScroller } from './create-target-reply-scroller';
 import { createThreadHotkeys } from './create-thread-hotkeys';
@@ -26,10 +29,10 @@ import { ThreadTypingIndicator } from './ThreadTypingIndicator';
 import type { ThreadProps } from './types';
 import { channelReplyInputOffsetX } from './utils/thread-rail-geometry';
 import {
-  DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
   getThreadLatestReplyAt,
   getUniqueReplyUserIds,
+  getVisibleReplyCount,
 } from './utils/thread-reply-indicator-helpers';
 
 export function ChannelThread(props: ThreadProps) {
@@ -55,44 +58,47 @@ export function ChannelThread(props: ThreadProps) {
   // bound either to the root or to one of this thread's replies.
   const unifiedReplyBinding = () => {
     const target = props.unifiedReplyTarget;
-    if (!isUnifiedInputMode() || target?.threadId !== props.data().id) {
+    if (props.inputMode !== 'unified' || target?.threadId !== props.data().id) {
       return undefined;
     }
     return { boundToRoot: !target.replyId, boundReplyId: target.replyId };
   };
 
   const repliesQuery = useThreadRepliesQuery(
-    props.channelId,
+    props.parent,
     () => props.data().id,
     fetchRepliesEnabled
   );
+  // A project's cached root must not outlive an explicit denial from its
+  // thread read while the surrounding project is revalidating access.
+  const projectUnavailable = () =>
+    props.parent().type === 'initiative' &&
+    ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'].some((code) =>
+      thrownResultErrorHasCode(repliesQuery.error, code)
+    );
 
-  const queryReplies = (): Array<ApiThreadReply> | undefined => {
-    if (repliesQuery.isLoading) return undefined;
-    return repliesQuery.data;
+  const queryReplies = (): Array<EntityMessage> | undefined => {
+    if (projectUnavailable()) return [];
+    return queryReadyGate(repliesQuery) ? repliesQuery.data : undefined;
   };
 
   const loadedReplies = () => queryReplies() ?? [];
   const canScrollToTargetReply = () => queryReplies() !== undefined;
 
-  const activeReplies = (): Array<ApiThreadReply> => {
+  const activeReplies = (): Array<EntityMessage> => {
     return queryReplies() ?? thread().preview ?? [];
   };
 
-  const displayReplies = (): Array<ApiThreadReply> => {
-    const preview = thread().preview ?? [];
-    // When collapsed, use preview directly without reading query state.
-    if (!props.isExpanded()) {
-      return preview.length > DEFAULT_VISIBLE_REPLY_COUNT
-        ? preview.slice(0, DEFAULT_VISIBLE_REPLY_COUNT)
-        : preview;
-    }
-
-    // When expanded, prefer fetched data (full reply list).
-    const fetched = queryReplies();
-    if (fetched) return fetched;
-    return preview;
-  };
+  // Full replies can extend the server preview's final group. The guarded
+  // query read lets collapsed threads update without suspending while fetching.
+  const visibleReplyCount = createMemo(() =>
+    getVisibleReplyCount(activeReplies())
+  );
+  const displayReplies = createMemo(() =>
+    props.isExpanded()
+      ? activeReplies()
+      : activeReplies().slice(0, visibleReplyCount())
+  );
 
   // Thread-local reply selection
   const replySelection = createMessageSelection({
@@ -178,18 +184,20 @@ export function ChannelThread(props: ThreadProps) {
   });
 
   const collapsedRepliesCount = () =>
-    getCollapsedRepliesCount(thread().reply_count, DEFAULT_VISIBLE_REPLY_COUNT);
+    getCollapsedRepliesCount(thread().reply_count, visibleReplyCount());
   const collapsedRepliesContainsNewMessages = () =>
     activeReplies()
-      .slice(DEFAULT_VISIBLE_REPLY_COUNT)
-      .some((reply: ApiThreadReply) => props.isNewMessage?.(reply));
+      .slice(visibleReplyCount())
+      .some((reply: EntityMessage) => props.isNewMessage?.(reply));
   const collapsedReplyUsers = () =>
-    getUniqueReplyUserIds(activeReplies().slice(DEFAULT_VISIBLE_REPLY_COUNT));
+    getUniqueReplyUserIds(activeReplies().slice(visibleReplyCount()));
   const collapsedLatestReplyAt = () =>
     getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
   // Replying to this thread — inline input open, or the unified input bound.
   const isReplyingToThread = () =>
     props.isReplying() || unifiedReplyBinding() !== undefined;
+  const hasInlineReplyInput = () =>
+    props.isReplying() && props.inputMode !== 'unified';
   const shouldShowCollapsedIndicator = () =>
     !isReplyingToThread() && !props.isExpanded() && collapsedRepliesCount() > 0;
   const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
@@ -281,10 +289,12 @@ export function ChannelThread(props: ThreadProps) {
   onCleanup(targetReplyNavigation.dispose);
 
   return (
-    <DebugSuspense name="ChannelThread.root">
+    <ThreadReadBoundary available={!projectUnavailable()}>
       <Thread.Row
         ref={setThreadRowElement}
-        channelId={props.channelId()}
+        channelId={
+          props.parent().type === 'channel' ? props.parent().id : undefined
+        }
         message={props.data()}
         listMeta={props.listMeta}
         onDismissNewMessages={props.threadActions?.onDismissNewMessages}
@@ -299,21 +309,21 @@ export function ChannelThread(props: ThreadProps) {
               messages carry no rail. */}
           <div class="relative">
             <Thread.RootRail
-              visible={hasReplies() || isReplyingToThread()}
+              visible={hasReplies() || hasInlineReplyInput()}
               grouped={props.listMeta?.isGroupedWithPrevious}
             />
             <MarkMessageNotifications
               messageId={props.data().id}
-              channelId={props.channelId()}
+              parent={props.parent()}
             >
               <DebugSuspense name="ChannelThread.message">
                 <ChannelMessage
-                  channelId={props.channelId()}
+                  parent={props.parent()}
                   message={props.data()}
                   actions={props.getMessageActions?.(props.data())}
                   listMeta={props.listMeta}
+                  inputMode={props.inputMode}
                   messageEditor={props.messageEditor}
-                  participants={props.participants}
                   onClick={selectThreadMessage}
                   selected={isSelected() && !isThreadFocused()}
                   targeted={
@@ -325,29 +335,30 @@ export function ChannelThread(props: ThreadProps) {
               </DebugSuspense>
             </MarkMessageNotifications>
           </div>
-          <Show
-            when={hasReplies() || (props.isReplying() && !isUnifiedInputMode())}
-          >
+          <Show when={hasReplies() || hasInlineReplyInput()}>
             <div class="relative w-full">
               <Thread.RepliesBridgeRail />
               {/* Terminal branch: the spine's final curve into the footer
                   button's left edge. Its vertical part starts exactly at the
                   last reply row's bottom (button h-8 + mb-2 + container pb). */}
               <Show
-                when={shouldShowCollapsedIndicator() || shouldShowReplyButton()}
+                when={
+                  !props.monorail &&
+                  (shouldShowCollapsedIndicator() || shouldShowReplyButton())
+                }
               >
                 <Thread.TerminalRail />
               </Show>
               <DebugSuspense name="ChannelThread.replies">
-                <Thread.RepliesContainer>
+                <Thread.RepliesContainer flat={props.monorail}>
                   <DebugSuspense name="ChannelThread.ReplyList">
                     <Thread.ReplyList
-                      channelId={props.channelId()}
+                      parent={props.parent()}
                       threadId={props.data().id}
                       replies={displayReplies()}
                       getMessageActions={props.getMessageActions}
+                      inputMode={props.inputMode}
                       messageEditor={props.messageEditor}
-                      participants={props.participants}
                       isNewMessage={props.isNewMessage}
                       onReady={setReplyListHandle}
                       positionTarget={props.targetNavigation?.positionTarget}
@@ -358,10 +369,16 @@ export function ChannelThread(props: ThreadProps) {
                       }
                       isThreadFocused={isThreadFocused}
                       onSelectReply={selectReply}
+                      monorail={props.monorail}
+                      railContinues={
+                        hasInlineReplyInput() ||
+                        shouldShowCollapsedIndicator() ||
+                        shouldShowReplyButton()
+                      }
                     />
                   </DebugSuspense>
 
-                  <Show when={props.isReplying() && !isUnifiedInputMode()}>
+                  <Show when={hasInlineReplyInput()}>
                     <div
                       ref={(el) => {
                         attachReplyInputRef(el);
@@ -373,20 +390,22 @@ export function ChannelThread(props: ThreadProps) {
                           composer, so this branch turns at the avatar's
                           center. Once replies exist, it instead joins the
                           composer at its vertical center. */}
-                      <div
-                        class="pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-thread-rail rounded-bl-[14px]"
-                        style={{
-                          left: 'calc(var(--user-icon-width) / 2 + var(--message-padding-x) - var(--thread-shift) - var(--channel-rail-width) / 2)',
-                          width:
-                            'calc(var(--thread-shift) - var(--user-icon-width) / 2 - var(--channel-rail-clearance))',
-                          ...(hasReplies()
-                            ? { bottom: '50%' }
-                            : {
-                                height:
-                                  'calc(var(--message-padding-x) + var(--user-icon-width) / 2)',
-                              }),
-                        }}
-                      />
+                      <Show when={!props.monorail}>
+                        <div
+                          class="pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-thread-rail rounded-bl-[14px]"
+                          style={{
+                            left: 'calc(var(--user-icon-width) / 2 + var(--message-padding-x) - var(--thread-shift) - var(--channel-rail-width) / 2)',
+                            width:
+                              'calc(var(--thread-shift) - var(--user-icon-width) / 2 - var(--channel-rail-clearance))',
+                            ...(hasReplies()
+                              ? { bottom: '50%' }
+                              : {
+                                  height:
+                                    'calc(var(--message-padding-x) + var(--user-icon-width) / 2)',
+                                }),
+                          }}
+                        />
+                      </Show>
                       <Show when={!hasReplies()}>
                         <Thread.ReplyAuthor
                           userId={replyUserId()}
@@ -396,7 +415,7 @@ export function ChannelThread(props: ThreadProps) {
                       <Thread.ReplyInput
                         connector={false}
                         offsetX={channelReplyInputOffsetX}
-                        channelId={props.channelId()}
+                        parent={props.parent()}
                         messageId={props.data().id}
                         replyInputState={props.replyInputState}
                         setReplyInputState={props.setReplyInputState}
@@ -427,7 +446,7 @@ export function ChannelThread(props: ThreadProps) {
                       <Show when={shouldShowReplyButton()}>
                         <Thread.ReplyButton
                           getFocusTarget={() =>
-                            !isUnifiedInputMode()
+                            props.inputMode !== 'unified'
                               ? (replyInputContainerRef?.querySelector<HTMLElement>(
                                   '[contenteditable]'
                                 ) ?? null)
@@ -448,13 +467,18 @@ export function ChannelThread(props: ThreadProps) {
             </div>
           </Show>
           <Show when={props.isNewestThread}>
-            <ThreadTypingIndicator
-              channelId={props.channelId()}
-              threadId={null}
-            />
+            <ThreadTypingIndicator parent={props.parent()} threadId={null} />
           </Show>
         </div>
       </Thread.Row>
+    </ThreadReadBoundary>
+  );
+}
+
+function ThreadReadBoundary(props: ParentProps<{ available: boolean }>) {
+  return (
+    <DebugSuspense name="ChannelThread.root">
+      <Show when={props.available}>{props.children}</Show>
     </DebugSuspense>
   );
 }

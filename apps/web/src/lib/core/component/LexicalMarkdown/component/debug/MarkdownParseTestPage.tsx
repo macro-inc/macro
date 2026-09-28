@@ -17,6 +17,7 @@ import {
 import {
   codePlugin,
   createAccessoryStore,
+  listSwipeIndentPlugin,
   mediaPlugin,
   mentionsPlugin,
   tabIndentationPlugin,
@@ -211,6 +212,7 @@ export function TestEditor(props: {
       .delete()
       .history(400)
       .use(tabIndentationPlugin())
+      .use(listSwipeIndentPlugin(() => false))
       .use(mentionsPlugin({}))
       .use(mediaPlugin())
       .use(tablePlugin({}))

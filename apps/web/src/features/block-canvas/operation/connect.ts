@@ -4,11 +4,11 @@ import {
   radiansToDegrees,
   snapTo,
 } from '@block-canvas/util/math';
-import { createBlockSignal } from '@core/block';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { unwrap } from 'solid-js/store';
 import type { Edge } from '../constants';
 import { OPERATION_LOGGING, Tools } from '../constants';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import type {
   CanvasEdge,
   CanvasId,
@@ -18,11 +18,7 @@ import type {
 import { useCachedStyle } from '../signal/cachedStyle';
 import { useCanvasHistory } from '../signal/canvasHistory';
 import { useSelection } from '../signal/selection';
-import {
-  highestOrderSignal,
-  useCanvasEdges,
-  useEdgeUtils,
-} from '../store/canvasData';
+import { useCanvasEdges, useEdgeUtils } from '../store/canvasData';
 import { useRenderState } from '../store/RenderState';
 import { sharedInstance } from '../util/sharedInstance';
 import { type Vector2, vec2 } from '../util/vector2';
@@ -70,9 +66,6 @@ export type ConnectOperation = Operation & {
   editExisting?: true;
 };
 
-export const currentConnectOperationSignal =
-  createBlockSignal<ConnectOperation>();
-
 function freeEnd(x: number, y: number): FreeEnd {
   return {
     type: 'free',
@@ -93,13 +86,13 @@ export type ConnectOperator = ReturnType<typeof useConnect>;
 
 export const useConnect = sharedInstance(() => {
   const [currentConnectOperation, setCurrentConnectOperation] =
-    currentConnectOperationSignal;
+    useCanvasDocument().state.signals.currentConnectOperation;
   const edges = useCanvasEdges();
   const { selectEdge, deselectAll } = useSelection();
   const { clientToCanvas } = useRenderState();
   const history = useCanvasHistory();
   const cachedStyle = useCachedStyle();
-  const highestOrder = highestOrderSignal.get;
+  const highestOrder = useCanvasDocument().state.signals.highestOrder[0];
   const { setSelectedTool } = useToolManager();
   const edgeUtils = useEdgeUtils();
 

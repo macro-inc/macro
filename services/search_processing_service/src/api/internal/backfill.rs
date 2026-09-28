@@ -36,6 +36,7 @@ use crate::domain::service::BackfillService;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
+        .route("/agent-sessions", post(agent_sessions))
         .route("/calls", post(calls))
         .route("/chats", post(chats))
         .route("/channels", post(channels))
@@ -50,6 +51,24 @@ pub fn router() -> Router<ApiContext> {
 #[derive(Debug, Serialize)]
 struct AcceptedReceipt {
     job_id: JobId,
+}
+
+#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
+async fn agent_sessions(
+    State(service): State<Arc<crate::AgentSessionIndexer>>,
+    State(jobs): State<BackfillJobs>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+    extract::Json(req): extract::Json<
+        crate::domain::agent_session_index::AgentSessionBackfillRequest,
+    >,
+) -> Response {
+    spawn_backfill(
+        service,
+        jobs,
+        "agent-sessions",
+        move |svc, progress, cancel| async move { svc.backfill(req, progress, cancel).await },
+    )
+    .await
 }
 
 #[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
@@ -212,15 +231,16 @@ async fn status(
 /// to the worker future the caller built, spawn it, and return
 /// `202 Accepted` with the job id. The worker future captures the request
 /// body so the HTTP body reference doesn't outlive the handler.
-async fn spawn_backfill<F, Fut>(
-    service: Arc<BackfillServiceImpl>,
+async fn spawn_backfill<S, F, Fut>(
+    service: Arc<S>,
     jobs: BackfillJobs,
     entity: &'static str,
     run: F,
 ) -> Response
 where
+    S: Send + Sync + 'static,
     F: FnOnce(
-            Arc<BackfillServiceImpl>,
+            Arc<S>,
             Arc<crate::domain::jobs::JobProgress>,
             tokio_util::sync::CancellationToken,
         ) -> Fut

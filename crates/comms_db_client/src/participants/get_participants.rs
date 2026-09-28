@@ -132,10 +132,12 @@ pub async fn get_channel_participants_for_thread_id(
         r#"
         SELECT DISTINCT id as "id!" FROM (
             SELECT m.sender_id AS id
-            FROM comms_channel_participants cp
-            JOIN comms_channels c ON c.id = cp.channel_id
-            JOIN comms_messages m ON m.channel_id = c.id
-            WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
+            FROM comms_messages m
+            JOIN comms_channel_participants cp
+              ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
+            WHERE (m.id = $1 OR m.thread_id = $1)
+              AND m.deleted_at IS NULL
+              AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id
             FROM comms_entity_mentions em
@@ -143,6 +145,7 @@ pub async fn get_channel_participants_for_thread_id(
             JOIN comms_channel_participants cp
               ON cp.channel_id = m.channel_id AND cp.user_id = em.entity_id
             WHERE (m.id = $1 OR m.thread_id = $1)
+              AND m.deleted_at IS NULL
               AND em.source_entity_type = 'message'
               AND em.entity_type = 'user'
               AND cp.left_at IS NULL
@@ -198,6 +201,12 @@ mod tests {
             participants.contains(&MacroUserIdStr::parse_from_str("macro|user5@test.com").unwrap())
         );
 
+        // departed authored a thread-1 reply but has since left the channel, so the
+        // sender path must exclude them even though other participants are active.
+        assert!(
+            !participants
+                .contains(&MacroUserIdStr::parse_from_str("macro|departed@test.com").unwrap())
+        );
         // user6 is mentioned in a message that belongs to a different thread and
         // must not leak into this thread's participant set.
         assert!(

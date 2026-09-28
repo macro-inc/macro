@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_messages (\n               id, parent_entity_type, parent_entity_id, thread_id, sender_id, imported_author,\n               content, created_at, updated_at, edited_at, deleted_at, import_metadata, import_order\n           )\n           SELECT cm.message_id, 'document', t.\"documentId\",\n               CASE WHEN cm.message_id = tm.root_id THEN NULL ELSE tm.root_id END,\n               c.owner, c.sender, c.text,\n               c.\"createdAt\" AT TIME ZONE 'UTC', c.\"updatedAt\" AT TIME ZONE 'UTC',\n               CASE WHEN c.\"updatedAt\" > c.\"createdAt\" THEN c.\"updatedAt\" END,\n               COALESCE(c.\"deletedAt\", t.\"deletedAt\"), c.metadata,\n               row_number() OVER (PARTITION BY t.id ORDER BY c.\"order\" NULLS LAST, c.\"createdAt\", c.id)\n           FROM \"Comment\" c\n           JOIN \"Thread\" t ON t.id = c.\"threadId\"\n           JOIN migrated_comment_id cm ON cm.comment_id = c.id\n           JOIN migrated_comment_thread_id tm ON tm.thread_id = t.id\n           WHERE t.\"documentId\" = ANY($1)\n           ON CONFLICT (id) DO UPDATE SET\n               content = EXCLUDED.content,\n               updated_at = EXCLUDED.updated_at,\n               edited_at = EXCLUDED.edited_at,\n               deleted_at = EXCLUDED.deleted_at,\n               imported_author = EXCLUDED.imported_author,\n               import_metadata = EXCLUDED.import_metadata,\n               import_order = EXCLUDED.import_order\n           WHERE comms_messages.updated_at <= EXCLUDED.updated_at\n             AND (comms_messages.content, comms_messages.updated_at, comms_messages.edited_at,\n                  comms_messages.deleted_at, comms_messages.imported_author,\n                  comms_messages.import_metadata, comms_messages.import_order)\n                 IS DISTINCT FROM\n                 (EXCLUDED.content, EXCLUDED.updated_at, EXCLUDED.edited_at, EXCLUDED.deleted_at,\n                  EXCLUDED.imported_author, EXCLUDED.import_metadata, EXCLUDED.import_order)\n           RETURNING (xmax = 0) AS \"inserted!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "inserted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a6fe5e93cc6b7ed25934216cfa647b8591213be9dc848d874b3b3f2a78226669"
+}

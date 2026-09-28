@@ -1,0 +1,2339 @@
+[
+  {
+    "sequence": 1,
+    "turn": null,
+    "input": "HistoryComplete"
+  },
+  {
+    "sequence": 2,
+    "turn": null,
+    "input": {
+      "Prompt": [
+        {
+          "type": "text",
+          "text": "wh atis this repo how is ti going man"
+        }
+      ]
+    }
+  },
+  {
+    "sequence": 3,
+    "turn": "record_1",
+    "input": {
+      "PromptAccepted": {
+        "task": "record_2",
+        "turn": "record_1"
+      }
+    }
+  },
+  {
+    "sequence": 4,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 5,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 6,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 7,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 8,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 9,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 10,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 11,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 12,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_4\",\"event\":{\"method\":\"item/reasoning/summaryPartAdded\",\"params\":{\"itemId\":\"record_5\",\"summaryIndex\":0,\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 13,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_8\",\"event\":{\"method\":\"item/reasoning/summaryTextDelta\",\"params\":{\"delta\":\"**Inspecting AGENTS and files**\",\"itemId\":\"record_5\",\"summaryIndex\":0,\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 14,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_9\",\"event\":{\"method\":\"item/completed\",\"params\":{\"item\":{\"content\":[],\"id\":\"record_5\",\"summary\":[\"**Inspecting AGENTS and files**\"],\"type\":\"reasoning\"},\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 15,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 16,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_10\",\"event\":{\"method\":\"item/reasoning/summaryPartAdded\",\"params\":{\"itemId\":\"record_11\",\"summaryIndex\":0,\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 17,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_12\",\"event\":{\"method\":\"item/reasoning/summaryTextDelta\",\"params\":{\"delta\":\"**Inspecting hidden files and git history**\",\"itemId\":\"record_11\",\"summaryIndex\":0,\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 18,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_13\",\"event\":{\"method\":\"item/completed\",\"params\":{\"item\":{\"content\":[],\"id\":\"record_11\",\"summary\":[\"**Inspecting hidden files and git history**\"],\"type\":\"reasoning\"},\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 19,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_14\",\"event\":{\"method\":\"item/completed\",\"params\":{\"item\":{\"aggregatedOutput\":\"--- directory ---\\nd ./.git\\nd ./.git/branches\\nd ./.git/hooks\\nd ./.git/info\\nd ./.git/logs\\nd ./.git/objects\\nd ./.git/refs\\nf ./.git/FETCH_HEAD\\nf ./.git/HEAD\\nf ./.git/config\\nf ./.git/description\\nf ./.git/index\\nf ./.git/packed-refs\\nf ./.gitkeep\\n--- recent commits ---\\ndb7978a (HEAD -> work) Initialize repository\\n--- HEAD tree ---\\n.gitkeep\\n--- remotes ---\\n\",\"command\":\"/bin/bash -lc \\\"printf '%s\\\\\\\\n' '--- directory ---' && find . -maxdepth 2 -mindepth 1 -printf '%y %p\\\\\\\\n' | sort | sed -n '1,160p' && printf '%s\\\\\\\\n' '--- recent commits ---' && git log --oneline --decorate --all -10 && printf '%s\\\\\\\\n' '--- HEAD tree ---' && git ls-tree -r --name-only HEAD 2>&1 || true && printf '%s\\\\\\\\n' '--- remotes ---' && git remote -v\\\"\",\"commandActions\":[{\"command\":\"printf '%s\\\\n' '--- directory ---' && find . -maxdepth 2 -mindepth 1 -printf '%y %p\\\\n' | sort | sed -n '1,160p' && printf '%s\\\\n' '--- recent commits ---' && git log --oneline --decorate --all -10 && printf '%s\\\\n' '--- HEAD tree ---' && git ls-tree -r --name-only HEAD 2>&1 || true && printf '%s\\\\n' '--- remotes ---' && git remote -v\",\"type\":\"unknown\"}],\"cwd\":\"/workspace/temp-test-repo\",\"durationMs\":0,\"exitCode\":0,\"id\":\"record_15\",\"processId\":\"38458\",\"source\":\"unifiedExecStartup\",\"status\":\"completed\",\"type\":\"commandExecution\"},\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 20,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 21,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_16\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"!\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 22,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_18\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"\\n\\n\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 23,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_19\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"’m\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 24,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_20\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"—\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 25,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_21\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"##\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 26,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_22\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" this\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 27,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_23\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"?\\n\\n\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 28,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_24\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"empty\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 29,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_25\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\":\\n\\n\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 30,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_26\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" It\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 31,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_27\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" contains\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 32,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_28\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" no\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 33,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_29\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" application\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 34,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_30\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" dependencies\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 35,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_31\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\",\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 36,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_32\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" tracked\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 37,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_33\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" `.\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 38,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_34\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" to\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 39,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_35\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" keep\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 40,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_36\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" otherwise\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 41,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_37\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" directory\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 42,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_38\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"L\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 43,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_39\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"-\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 44,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_40\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" named\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 45,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_41\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" **\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 46,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_42\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" repository\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 47,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_43\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" the\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 48,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_44\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"`\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 49,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_45\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\".\\n\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 50,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_46\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"-\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 51,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_47\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" so\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 52,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_48\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" it\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 53,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_49\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" currently\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 54,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_50\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" a\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 55,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_51\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" or\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 56,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_52\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" other\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 57,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_53\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" remote\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 58,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_54\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" **\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 59,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_55\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" just\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 60,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_56\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" blank\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 61,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_57\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" used\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 62,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_58\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" to\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 63,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_59\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" or\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 64,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_60\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" a\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 65,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_61\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" project\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 66,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_62\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"##\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 67,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_63\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" performed\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 68,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_64\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"pwd\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 69,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_65\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"-\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 70,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_66\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" ✅\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 71,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_67\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" `\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 72,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_68\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"find\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 73,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_69\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" ..\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 74,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_70\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\".md\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 75,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_71\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" -\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 76,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 77,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_72\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"print\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 78,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_73\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"`\\n\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 79,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_74\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"-\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 80,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_75\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" ✅\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 81,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_76\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" `\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 82,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_77\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"rg\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 83,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_78\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" '!\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 84,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_79\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"node\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 85,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_80\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"git\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 86,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_81\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"short\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 87,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_82\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" ✅\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 88,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_83\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"2\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 89,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_84\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"mind\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 90,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_85\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" '%\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 91,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_86\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"git\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 92,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_87\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" --\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 93,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_88\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" -\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 94,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_89\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" ✅\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 95,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_90\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" `\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 96,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_91\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"git\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 97,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_92\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" -\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 98,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_93\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"-only\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 99,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_94\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"-\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 100,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_95\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" `\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 101,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_96\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"git\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 102,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_97\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" remote\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 103,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_98\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" -\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 104,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_99\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"`\\n\\n\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 105,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_100\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" modify\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 106,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_101\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" anything\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 107,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_102\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" so\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 108,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_103\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" commit\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 109,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_104\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" open\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 110,
+    "turn": "record_1",
+    "input": {
+      "TransportError": "EOF"
+    }
+  },
+  {
+    "sequence": 111,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [
+                "## Hey! 👋\n\nI’m doing well, man—thanks for asking.\n\n## What is this repository?\n\nThis is currently an **empty temporary test repository**:\n\n- It contains no application source code, documentation, dependencies, or tests.\n- Its only tracked file is `.gitkeep`, which is commonly used to keep an otherwise empty directory in Git. ",
+                "\n- The repository has a single commit named **“Initialize repository.”**\n- You’re on the `work` branch.\n- No Git remote is configured, so it is not currently connected to a GitHub or other remote repository.\n\nIn short: **it’s just a blank sandbox that can be used to test changes or start a new project.**\n\n## Checks performed\n\n- ✅ `pwd`\n- ✅ `find .. -name AGENTS.md -print`\n- ✅ `rg --files -g '!node_modules'`\n- ✅ `git status --short --branch`\n- ✅ `find . -maxdepth 2 -mindepth 1 -printf '%y %p\\n'`\n- ✅ `git log --oneline --decorate --all -10`\n- ✅ `git ls-tree -r --name-only HEAD`\n- ✅ `git remote -v`\n\nI didn’t modify anything, so there was nothing to commit or open a pull request for."
+              ],
+              "output_types": [
+                "message",
+                "partial_repo_snapshot"
+              ]
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "completed"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 112,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_4\",\"event\":{\"method\":\"item/reasoning/summaryPartAdded\",\"params\":{\"itemId\":\"record_5\",\"summaryIndex\":0,\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 113,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_8\",\"event\":{\"method\":\"item/reasoning/summaryTextDelta\",\"params\":{\"delta\":\"**Inspecting AGENTS and files**\",\"itemId\":\"record_5\",\"summaryIndex\":0,\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 114,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_9\",\"event\":{\"method\":\"item/completed\",\"params\":{\"item\":{\"content\":[],\"id\":\"record_5\",\"summary\":[\"**Inspecting AGENTS and files**\"],\"type\":\"reasoning\"},\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 115,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_105\",\"event\":{\"method\":\"item/completed\",\"params\":{\"item\":{\"aggregatedOutput\":\"/workspace/temp-test-repo\\n--- AGENTS files ---\\n--- top-level files ---\\n--- git status ---\\n## work\\n\",\"command\":\"/bin/bash -lc \\\"pwd && printf '%s\\\\\\\\n' '--- AGENTS files ---' && find .. -name AGENTS.md -print && printf '%s\\\\\\\\n' '--- top-level files ---' && rg --files -g '\\\"'!node_modules'\\\"' | sed -n '1,120p' && printf '%s\\\\\\\\n' '--- git status ---' && git status --short --branch\\\"\",\"commandActions\":[{\"command\":\"pwd && printf '%s\\\\n' '--- AGENTS files ---' && find .. -name AGENTS.md -print && printf '%s\\\\n' '--- top-level files ---' && rg --files -g '!node_modules' | sed -n '1,120p' && printf '%s\\\\n' '--- git status ---' && git status --short --branch\",\"type\":\"unknown\"}],\"cwd\":\"/workspace/temp-test-repo\",\"durationMs\":0,\"exitCode\":0,\"id\":\"record_106\",\"processId\":\"3929\",\"source\":\"unifiedExecStartup\",\"status\":\"completed\",\"type\":\"commandExecution\"},\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 116,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_10\",\"event\":{\"method\":\"item/reasoning/summaryPartAdded\",\"params\":{\"itemId\":\"record_11\",\"summaryIndex\":0,\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 117,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_12\",\"event\":{\"method\":\"item/reasoning/summaryTextDelta\",\"params\":{\"delta\":\"**Inspecting hidden files and git history**\",\"itemId\":\"record_11\",\"summaryIndex\":0,\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 118,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_13\",\"event\":{\"method\":\"item/completed\",\"params\":{\"item\":{\"content\":[],\"id\":\"record_11\",\"summary\":[\"**Inspecting hidden files and git history**\"],\"type\":\"reasoning\"},\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 119,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_14\",\"event\":{\"method\":\"item/completed\",\"params\":{\"item\":{\"aggregatedOutput\":\"--- directory ---\\nd ./.git\\nd ./.git/branches\\nd ./.git/hooks\\nd ./.git/info\\nd ./.git/logs\\nd ./.git/objects\\nd ./.git/refs\\nf ./.git/FETCH_HEAD\\nf ./.git/HEAD\\nf ./.git/config\\nf ./.git/description\\nf ./.git/index\\nf ./.git/packed-refs\\nf ./.gitkeep\\n--- recent commits ---\\ndb7978a (HEAD -> work) Initialize repository\\n--- HEAD tree ---\\n.gitkeep\\n--- remotes ---\\n\",\"command\":\"/bin/bash -lc \\\"printf '%s\\\\\\\\n' '--- directory ---' && find . -maxdepth 2 -mindepth 1 -printf '%y %p\\\\\\\\n' | sort | sed -n '1,160p' && printf '%s\\\\\\\\n' '--- recent commits ---' && git log --oneline --decorate --all -10 && printf '%s\\\\\\\\n' '--- HEAD tree ---' && git ls-tree -r --name-only HEAD 2>&1 || true && printf '%s\\\\\\\\n' '--- remotes ---' && git remote -v\\\"\",\"commandActions\":[{\"command\":\"printf '%s\\\\n' '--- directory ---' && find . -maxdepth 2 -mindepth 1 -printf '%y %p\\\\n' | sort | sed -n '1,160p' && printf '%s\\\\n' '--- recent commits ---' && git log --oneline --decorate --all -10 && printf '%s\\\\n' '--- HEAD tree ---' && git ls-tree -r --name-only HEAD 2>&1 || true && printf '%s\\\\n' '--- remotes ---' && git remote -v\",\"type\":\"unknown\"}],\"cwd\":\"/workspace/temp-test-repo\",\"durationMs\":0,\"exitCode\":0,\"id\":\"record_15\",\"processId\":\"38458\",\"source\":\"unifiedExecStartup\",\"status\":\"completed\",\"type\":\"commandExecution\"},\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 120,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_107\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"##\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 121,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_108\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" Hey\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 122,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_16\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"!\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 123,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_109\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" 👋\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 124,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_18\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"\\n\\n\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 125,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_110\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"I\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 126,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_19\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"’m\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 127,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_111\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" doing\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 128,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_112\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" well\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 129,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_113\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\",\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 130,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_114\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" man\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 131,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_20\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"—\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 132,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_115\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"thanks\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 133,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_116\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" for\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 134,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_117\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" asking\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 135,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_118\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\".\\n\\n\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 136,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_21\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"##\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 137,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_119\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" What\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 138,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_120\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" is\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 139,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_22\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" this\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 140,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_121\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" repository\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 141,
+    "turn": "record_1",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_23\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"?\\n\\n\",\"itemId\":\"record_17\",\"threadId\":\"record_6\",\"turnId\":\"record_7\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 142,
+    "turn": "record_1",
+    "input": {
+      "Terminal": "completed"
+    }
+  },
+  {
+    "sequence": 143,
+    "turn": "record_1",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_3",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_1",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [
+                "## Hey! 👋\n\nI’m doing well, man—thanks for asking.\n\n## What is this repository?\n\nThis is currently an **empty temporary test repository**:\n\n- It contains no application source code, documentation, dependencies, or tests.\n- Its only tracked file is `.gitkeep`, which is commonly used to keep an otherwise empty directory in Git. ",
+                "\n- The repository has a single commit named **“Initialize repository.”**\n- You’re on the `work` branch.\n- No Git remote is configured, so it is not currently connected to a GitHub or other remote repository.\n\nIn short: **it’s just a blank sandbox that can be used to test changes or start a new project.**\n\n## Checks performed\n\n- ✅ `pwd`\n- ✅ `find .. -name AGENTS.md -print`\n- ✅ `rg --files -g '!node_modules'`\n- ✅ `git status --short --branch`\n- ✅ `find . -maxdepth 2 -mindepth 1 -printf '%y %p\\n'`\n- ✅ `git log --oneline --decorate --all -10`\n- ✅ `git ls-tree -r --name-only HEAD`\n- ✅ `git remote -v`\n\nI didn’t modify anything, so there was nothing to commit or open a pull request for."
+              ],
+              "output_types": [
+                "message",
+                "partial_repo_snapshot"
+              ]
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "completed"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 144,
+    "turn": "record_1",
+    "input": {
+      "Prompt": [
+        {
+          "type": "text",
+          "text": "what is your name"
+        }
+      ]
+    }
+  },
+  {
+    "sequence": 145,
+    "turn": "record_122",
+    "input": {
+      "PromptAccepted": {
+        "task": "record_2",
+        "turn": "record_122"
+      }
+    }
+  },
+  {
+    "sequence": 146,
+    "turn": "record_122",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_123",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_122",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 147,
+    "turn": "record_122",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_123",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_122",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 148,
+    "turn": "record_122",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_123",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_122",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "in_progress"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 149,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_124\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" is\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 150,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_127\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"**\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 151,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_128\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"’m\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 152,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_129\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" an\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 153,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_130\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" AI\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 154,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_131\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" coding\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 155,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_132\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" assistant\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 156,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_133\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" by\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 157,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_134\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"AI\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 158,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_135\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\".\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 159,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_136\",\"event\":{\"method\":\"item/completed\",\"params\":{\"item\":{\"id\":\"record_125\",\"phase\":\"final_answer\",\"text\":\"My name is **Codex**. I’m an AI coding assistant created by OpenAI.\",\"type\":\"agentMessage\"},\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 160,
+    "turn": "record_122",
+    "input": {
+      "TransportError": "EOF"
+    }
+  },
+  {
+    "sequence": 161,
+    "turn": "record_122",
+    "input": {
+      "Poll": {
+        "snapshot": {
+          "title": null,
+          "turns": [
+            {
+              "id": "record_123",
+              "source": "current_user_turn",
+              "has_diff": false,
+              "messages": [],
+              "output_types": []
+            },
+            {
+              "id": "record_122",
+              "source": "current_assistant_turn",
+              "has_diff": false,
+              "messages": [
+                "My name is **Codex**. I’m an AI coding assistant created by OpenAI."
+              ],
+              "output_types": [
+                "message",
+                "partial_repo_snapshot"
+              ]
+            }
+          ],
+          "task_id": "record_2",
+          "pull_requests": [],
+          "assistant_status": "completed"
+        },
+        "native": null
+      }
+    }
+  },
+  {
+    "sequence": 162,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_137\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"My\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 163,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_138\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" name\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 164,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_124\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" is\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 165,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_139\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" **\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 166,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_140\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"Cod\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 167,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_141\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"ex\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 168,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_127\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"**\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 169,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_142\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\".\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 170,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_143\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" I\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 171,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_128\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"’m\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 172,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_129\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" an\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 173,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_130\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" AI\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 174,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_131\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" coding\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 175,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_132\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" assistant\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 176,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_144\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" created\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 177,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_133\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" by\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 178,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_145\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\" Open\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 179,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_134\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"AI\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 180,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_135\",\"event\":{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\".\",\"itemId\":\"record_125\",\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 181,
+    "turn": "record_122",
+    "input": {
+      "Native": {
+        "event": "",
+        "id": null,
+        "data": "{\"item_type\":\"thread_event\",\"id\":\"record_136\",\"event\":{\"method\":\"item/completed\",\"params\":{\"item\":{\"id\":\"record_125\",\"phase\":\"final_answer\",\"text\":\"My name is **Codex**. I’m an AI coding assistant created by OpenAI.\",\"type\":\"agentMessage\"},\"threadId\":\"record_6\",\"turnId\":\"record_126\"}}}"
+      }
+    }
+  },
+  {
+    "sequence": 182,
+    "turn": "record_122",
+    "input": {
+      "Terminal": "completed"
+    }
+  }
+]

@@ -95,8 +95,8 @@ export function usePersonalCrmViews() {
   }));
 
   const views = createMemo((): PersonalCrmView[] =>
-    (viewsQuery.data?.views ?? []).filter((view): view is PersonalCrmView =>
-      isCrmViewConfig(view.config)
+    (viewsQuery.isSuccess ? viewsQuery.data.views : []).filter(
+      (view): view is PersonalCrmView => isCrmViewConfig(view.config)
     )
   );
 

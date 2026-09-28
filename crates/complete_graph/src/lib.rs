@@ -1,6 +1,6 @@
 //! Composition of the domain GraphQL adapter crates (`graphql_soup`,
 //! `graphql_channel`, `graphql_properties`, `graphql_notification`, `graphql_email`,
-//! `graphql_entity_mutation`) into the complete schema served by
+//! `graphql_favorite`, `graphql_entity_mutation`) into the complete schema served by
 //! `document_storage_service` and exported as SDL.
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
@@ -12,7 +12,10 @@ mod schema;
 #[cfg(test)]
 mod sdl_test;
 
-pub use edges::{SoupEdges, SoupEmailThreadEdges};
+pub use edges::{
+    AgentSessionBotDataLoader, AgentSessionBotLoader, GraphqlSessionBot, SoupAgentSessionEdges,
+    SoupEdges, SoupEmailThreadEdges, agent_session_bot_loader,
+};
 pub use graphql_activity::{
     ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader,
     ActivityOverviewInput, ActivityPortReader, ActivityReader, EntityActivityLoader,
@@ -27,12 +30,15 @@ pub use graphql_channel::{
 };
 pub use graphql_common::GraphqlRequestParts;
 pub use graphql_email::{
-    EmailContentKey, EmailContentLoad, EmailContentLoader, EmailMutationService,
-    EmailServiceEmailContentReader, EmailThreadMetadataLoad, EmailThreadMetadataLoader,
-    GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings, GraphqlEmailMutation,
-    GraphqlEmailProvider, GraphqlEmailQuery, GraphqlEmailSyncStatus, MarkEmailThreadSeenInput,
-    NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader, SoupEmailEdgeReader,
-    SoupEmailThreadMetadataEdgeReader, UpdateEmailThreadLabelInput, email_content_loader,
+    DeleteEmailDraftInput, DeleteEmailDraftPayload, EmailContentKey, EmailContentLoad,
+    EmailContentLoader, EmailMutationService, EmailServiceEmailContentReader,
+    EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader, EmailThreadMetadataLoad,
+    EmailThreadMetadataLoader, GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings,
+    GraphqlEmailMutation, GraphqlEmailProvider, GraphqlEmailQuery, GraphqlEmailSyncStatus,
+    MarkEmailThreadSeenInput, NoOpSoupEmailContentEdgeReader, SaveEmailDraftContactInput,
+    SaveEmailDraftInput, SaveEmailDraftPayload, SoupEmailContentEdgeReader, SoupEmailEdgeReader,
+    SoupEmailThreadMailProjectionEdgeReader, SoupEmailThreadMetadataEdgeReader,
+    UpdateEmailThreadLabelInput, email_content_loader, email_thread_mail_projection_loader,
     email_thread_metadata_loader,
 };
 pub use graphql_entity_mutation::{
@@ -43,7 +49,9 @@ pub use graphql_entity_mutation::{
     RenameEntityInput, UpdateEntitySharePolicyInput,
 };
 pub use graphql_favorite::{
-    EntityFavoriteEdgeReader, EntityFavoriteLoader, entity_favorite_loader,
+    EntityFavoriteEdgeReader, EntityFavoriteLoader, FavoriteMutationRoot, FavoriteQueryReader,
+    FavoritesFilterInput, GraphqlFavorite, NoOpFavoriteMutationService, ReorderFavoritesInput,
+    entity_favorite_loader, resolve_favorites,
 };
 pub use graphql_notification::{
     EntityNotificationsLoader, GraphqlNotificationUpdateOperation, NoOpNotificationMutationService,

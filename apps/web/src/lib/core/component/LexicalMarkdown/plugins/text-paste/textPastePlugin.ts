@@ -69,8 +69,9 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
       };
     }
 
-    const _block: string = pathParts[1];
-    if (!ValidBlockNames.includes(_block as any)) {
+    const routeBlock = pathParts[1] === 'agents' ? 'agent' : pathParts[1];
+    const block = ValidBlockNames.find((name) => name === routeBlock);
+    if (!block) {
       return {
         isValid: false,
         id: undefined,
@@ -78,7 +79,6 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
         params: undefined,
       };
     }
-    const block: BlockName | BlockAlias = _block as BlockName | BlockAlias;
 
     const idRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

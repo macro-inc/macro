@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 use utoipa::ToSchema;
 
+#[cfg(test)]
+mod test;
+
 /// Type of entity that can be referenced by entity properties.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq, Hash, sqlx::Type)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -19,6 +22,8 @@ pub enum EntityType {
     Chat,
     Company,
     Document,
+    /// Initiative, displayed as a Project in the application.
+    Initiative,
     Project,
     Task,
     Thread,
@@ -34,6 +39,7 @@ impl fmt::Display for EntityType {
             EntityType::Chat => write!(f, "chat"),
             EntityType::Company => write!(f, "company"),
             EntityType::Document => write!(f, "document"),
+            EntityType::Initiative => write!(f, "initiative"),
             EntityType::Project => write!(f, "project"),
             EntityType::Task => write!(f, "task"),
             EntityType::Thread => write!(f, "thread"),
@@ -56,6 +62,7 @@ impl FromStr for EntityType {
             "chat" => Ok(Self::Chat),
             "company" => Ok(Self::Company),
             "document" => Ok(Self::Document),
+            "initiative" => Ok(Self::Initiative),
             "project" => Ok(Self::Project),
             "task" => Ok(Self::Task),
             "thread" => Ok(Self::Thread),
@@ -69,8 +76,9 @@ impl From<DocumentSubType> for EntityType {
     fn from(sub_type: DocumentSubType) -> Self {
         match sub_type {
             DocumentSubType::Task => EntityType::Task,
-            // No dedicated property entity type for snippets or skills; they key under Document.
-            DocumentSubType::Snippet | DocumentSubType::Skill => EntityType::Document,
+            DocumentSubType::Snippet
+            | DocumentSubType::Skill
+            | DocumentSubType::InitiativeDescription => EntityType::Document,
         }
     }
 }

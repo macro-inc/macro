@@ -13,6 +13,7 @@ import {
   TextLayerBuilder,
 } from 'pdfjs-dist/web/pdf_viewer';
 import { PageModel } from '../model/Page';
+import { selectedTextBounds } from '../util/pdfjsUtils';
 import { PDF_TO_CSS_UNITS } from '../util/pixelsPerInch';
 import { destHrefToDest } from './DestArray';
 import {
@@ -1478,15 +1479,12 @@ export class InternalPDFViewer {
     location: Rect;
   } | null {
     const range = selection.getRangeAt(0);
-    // focus node will be the end span
-    let lastTextNode = selection.focusNode?.parentElement;
-    if (lastTextNode?.tagName !== 'SPAN') {
-      // fixes triple click line selection
-      lastTextNode = range.startContainer.parentElement;
-    }
-    const rect = lastTextNode
-      ? lastTextNode.getBoundingClientRect()
-      : range.getBoundingClientRect();
+    const textLayer = this._viewer
+      .getPageView(pageIndex)
+      ?.div.querySelector<HTMLElement>('.textLayer');
+    const rect =
+      (textLayer && selectedTextBounds(range, textLayer)) ??
+      range.getBoundingClientRect();
     const pdfCoords = this.windowToPagePercentCoords(pageIndex, rect);
     return this.setSelectionOverlay(pageIndex, pdfCoords, false);
   }

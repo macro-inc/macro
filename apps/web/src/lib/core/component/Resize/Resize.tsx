@@ -6,7 +6,6 @@ import {
   createMemo,
   createSignal,
   Index,
-  on,
   onCleanup,
   type ParentProps,
   Show,
@@ -35,6 +34,8 @@ export const ResizeZoneContext = createContext<ResizeZoneCtx>();
 type ZoneProps = {
   direction: 'horizontal' | 'vertical';
   gutter?: number;
+  /** Paint a divider in each gutter. Defaults to true. */
+  showDividers?: boolean;
   minSize?: number;
   class?: string;
   id?: string;
@@ -109,7 +110,6 @@ function Zone(props: ParentProps<ZoneProps>) {
       minSize?: number;
       maxSize?: number;
       redistributionPreferredSize?: number;
-      shareGroup?: string;
     }
   ) {
     solver.updatePanel(id, config);
@@ -128,6 +128,42 @@ function Zone(props: ParentProps<ZoneProps>) {
     return layouts().filter((layout) => !solver.isHidden(layout.id));
   });
 
+  const sizeChangeEndHandlers = new Map<PanelId, (size: number) => void>();
+  let sizesBeforeChange: ReadonlyMap<PanelId, number> | undefined;
+
+  const registerSizeChangeEndHandler: ResizeZoneCtx['registerSizeChangeEndHandler'] =
+    (id, handler) => {
+      sizeChangeEndHandlers.set(id, handler);
+      return () => {
+        if (sizeChangeEndHandlers.get(id) === handler) {
+          sizeChangeEndHandlers.delete(id);
+        }
+      };
+    };
+
+  const beginResizeChange = () => {
+    sizesBeforeChange = new Map(solver.solve().sizes);
+  };
+
+  const endResizeChange = () => {
+    const before = sizesBeforeChange;
+    sizesBeforeChange = undefined;
+    if (!before) return;
+
+    const after = solver.solve().sizes;
+    for (const [id, handler] of sizeChangeEndHandlers) {
+      const previousSize = before.get(id);
+      const size = after.get(id);
+      if (
+        previousSize !== undefined &&
+        size !== undefined &&
+        previousSize !== size
+      ) {
+        handler(size);
+      }
+    }
+  };
+
   const offsetOf = (id: PanelId) =>
     createMemo(() => solver.solve().offsets.get(id) ?? 0);
 
@@ -143,6 +179,7 @@ function Zone(props: ParentProps<ZoneProps>) {
     size: zoneSize,
     offsetOf,
     sizeOf,
+    registerSizeChangeEndHandler,
     canFit: solver.canFitPanel,
     swap: solver.swap,
     hide: solver.hide,
@@ -170,7 +207,10 @@ function Zone(props: ParentProps<ZoneProps>) {
     >
       <ResizeZoneContext.Provider value={ctx}>
         {props.children}
-        <Show when={gutterEnabled() && visibleLayouts().length > 1}>
+        {/* A gutter renders between every visible pair of panels so the
+            divider it paints is present even in a fixed layout; only a
+            resizable zone makes it draggable. */}
+        <Show when={gutterPx() > 0 && visibleLayouts().length > 1}>
           <Index each={visibleLayouts()}>
             {(panel, visibleIndex) => {
               const actualIndex = solver.order().indexOf(panel().id);
@@ -179,7 +219,11 @@ function Zone(props: ParentProps<ZoneProps>) {
                   <Gutter
                     offset={panel().offset + panel().size}
                     index={actualIndex}
+                    resizable={gutterEnabled()}
+                    showDivider={props.showDividers ?? true}
                     nudge={solver.moveHandle}
+                    onChangeStart={beginResizeChange}
+                    onChangeEnd={endResizeChange}
                     root={root}
                   />
                 </Show>
@@ -216,13 +260,6 @@ type PanelProps = {
   maxSize?: number;
   redistributionPreferredSize?: number;
   /**
-   * Panels sharing a `shareGroup` count as ONE unit for automatic share
-   * allocation: an incoming member carves its share out of the group, a
-   * departing member returns it, and redistribution-preference deltas settle
-   * within the group before touching other panels.
-   */
-  shareGroup?: string;
-  /**
    * Initial target size for the panel at registration time.
    * - number: interpreted as a percentage (e.g., 25 = 25%)
    * - PanelSizeSpec: explicit spec like { kind: 'percent', percent: 25 } or { kind: 'px', px: 300 }
@@ -235,6 +272,8 @@ type PanelProps = {
   /** The index position for this panel in the layout order */
   index?: number;
   persistent?: boolean;
+  /** Called with the solved panel size after a drag or keyboard resize. */
+  onSizeChangeEnd?: (size: number) => void;
 };
 
 /**
@@ -276,83 +315,45 @@ function Panel(props: ParentProps<PanelProps>) {
     return props.target;
   };
 
-  let registered = false;
-  createEffect(
-    on(ctx.size, (size) => {
-      if (size <= 0 || registered || props.collapsed?.() === false) return;
-
-      registered = true;
-
-      ctx.register(
-        {
-          id: props.id,
-          minSize: props.minSize,
-          maxSize: props.maxSize ?? Infinity,
-          redistributionPreferredSize: props.redistributionPreferredSize,
-          shareGroup: props.shareGroup,
-          target: getTarget(),
-        },
-        props.index
-      );
-    })
-  );
+  const config = (): PanelConfig => ({
+    id: props.id,
+    minSize: props.minSize,
+    maxSize: props.maxSize ?? Infinity,
+    redistributionPreferredSize: props.redistributionPreferredSize,
+    target: getTarget(),
+  });
 
   createEffect(() => {
-    ctx.update(props.id, {
-      minSize: props.minSize,
-      maxSize: props.maxSize ?? Infinity,
-      redistributionPreferredSize: props.redistributionPreferredSize,
-      shareGroup: props.shareGroup,
+    const next = config();
+    const collapsed = props.collapsed?.() ?? false;
+    const hidden = props.hidden?.() ?? false;
+
+    if (collapsed || (hidden && !props.persistent)) {
+      ctx.unregister(next.id);
+      return;
+    }
+
+    if (ctx.size() <= 0) return;
+
+    ctx.register(next, props.index);
+    ctx.update(next.id, {
+      minSize: next.minSize,
+      maxSize: next.maxSize,
+      redistributionPreferredSize: next.redistributionPreferredSize,
     });
-  });
 
-  createEffect(() => {
-    const collapsed = props.collapsed?.();
-    if (collapsed === undefined) return;
-    if (collapsed) {
-      ctx.unregister(props.id);
+    if (hidden) {
+      ctx.hide(next.id);
     } else {
-      ctx.register(
-        {
-          id: props.id,
-          minSize: props.minSize,
-          maxSize: props.maxSize ?? Infinity,
-          redistributionPreferredSize: props.redistributionPreferredSize,
-          shareGroup: props.shareGroup,
-          target: getTarget(),
-        },
-        props.index
-      );
+      ctx.show(next.id);
     }
   });
 
   createEffect(() => {
-    const hidden = props.hidden?.();
-    if (hidden === undefined) return;
+    const handler = props.onSizeChangeEnd;
+    if (!handler) return;
 
-    if (props.persistent) {
-      if (hidden) {
-        ctx.hide(props.id);
-      } else {
-        ctx.show(props.id);
-      }
-    } else {
-      if (hidden) {
-        ctx.unregister(props.id);
-      } else {
-        ctx.register(
-          {
-            id: props.id,
-            minSize: props.minSize,
-            maxSize: props.maxSize ?? Infinity,
-            redistributionPreferredSize: props.redistributionPreferredSize,
-            shareGroup: props.shareGroup,
-            target: getTarget(),
-          },
-          props.index
-        );
-      }
-    }
+    onCleanup(ctx.registerSizeChangeEndHandler(props.id, handler));
   });
 
   onCleanup(() => ctx.unregister(props.id));
@@ -404,30 +405,47 @@ function Panel(props: ParentProps<PanelProps>) {
  * @property nudge - Function to call when the gutter is moved, with index and movement amount
  */
 type GutterProps = {
+  showDivider: boolean;
   offset: number;
   index: number;
+  /** Draggable and keyboard-focusable; otherwise a static divider. */
+  resizable: boolean;
   nudge: (index: number, amt: number) => void;
+  onChangeStart: () => void;
+  onChangeEnd: () => void;
   root: () => HTMLDivElement | undefined;
 };
 
+/**
+ * Minimum drag target across the gutter axis. The layout gutter itself can be
+ * as thin as the 1px divider it paints, so the hit area grows symmetrically
+ * over the neighbouring panels' edges to stay grabbable.
+ */
+const GUTTER_HIT_AREA = 8;
+
 function Gutter(props: GutterProps) {
   const ctx = useContext(ResizeZoneContext)!;
+  const hitSize = () =>
+    props.resizable
+      ? Math.max(ctx.gutterSize(), GUTTER_HIT_AREA)
+      : ctx.gutterSize();
   const styles = createMemo(() => {
+    const inset = (hitSize() - ctx.gutterSize()) / 2;
     if (ctx.direction() === 'horizontal') {
       return {
         top: '0px',
         bottom: '0px',
         height: '100%',
-        left: props.offset + 'px',
-        width: ctx.gutterSize() + 'px',
+        left: props.offset - inset + 'px',
+        width: hitSize() + 'px',
       };
     } else {
       return {
         left: '0px',
         right: '0px',
         width: '100%',
-        top: props.offset + 'px',
-        height: ctx.gutterSize() + 'px',
+        top: props.offset - inset + 'px',
+        height: hitSize() + 'px',
       };
     }
   });
@@ -455,6 +473,7 @@ function Gutter(props: GutterProps) {
 
   function onPointerDown(ev: PointerEvent) {
     if (ev.button !== 0) return;
+    props.onChangeStart();
     (ev.currentTarget as HTMLElement).setPointerCapture?.(ev.pointerId);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp, { once: true });
@@ -480,6 +499,7 @@ function Gutter(props: GutterProps) {
     window.removeEventListener('pointercancel', onPointerUp);
     lastPointerPosition = undefined;
     setPtrDown(false);
+    props.onChangeEnd();
   }
 
   function onKeyDown(ev: KeyboardEvent) {
@@ -494,6 +514,7 @@ function Gutter(props: GutterProps) {
     ev.stopImmediatePropagation();
 
     const step = ev.shiftKey ? 100 : 20;
+    props.onChangeStart();
     if (ctx?.direction() === 'horizontal') {
       const sign = ev.key === 'ArrowLeft' ? -1 : 1;
       props.nudge(props.index, sign * step);
@@ -501,42 +522,60 @@ function Gutter(props: GutterProps) {
       const sign = ev.key === 'ArrowUp' ? -1 : 1;
       props.nudge(props.index, sign * step);
     }
+    queueMicrotask(props.onChangeEnd);
   }
+
+  const horizontal = () => ctx.direction() === 'horizontal';
+  // Centre a bar of the given thickness on the gutter axis.
+  const barStyle = (thickness: string) => ({
+    left: horizontal() ? '50%' : '0',
+    top: horizontal() ? '0' : '50%',
+    width: horizontal() ? thickness : '100%',
+    height: horizontal() ? '100%' : thickness,
+    transform: horizontal() ? 'translateX(-50%)' : 'translateY(-50%)',
+  });
 
   return (
     <div
-      class="group"
+      class={cn('group', !props.resizable && 'pointer-events-none')}
       role="separator"
-      aria-orientation={
-        ctx.direction() === 'horizontal' ? 'vertical' : 'horizontal'
-      }
-      tabIndex={0}
-      aria-label={`resize at ${props.index}`}
+      aria-orientation={horizontal() ? 'vertical' : 'horizontal'}
+      aria-hidden={!props.resizable}
+      tabIndex={props.resizable ? 0 : undefined}
+      aria-label={props.resizable ? `resize at ${props.index}` : undefined}
       style={{
         position: 'absolute',
-        cursor: ctx.direction() === 'horizontal' ? 'col-resize' : 'row-resize',
+        cursor: props.resizable
+          ? horizontal()
+            ? 'col-resize'
+            : 'row-resize'
+          : undefined,
         ...styles(),
       }}
-      onPointerDown={onPointerDown}
-      onKeyDown={onKeyDown}
+      onPointerDown={props.resizable ? onPointerDown : undefined}
+      onKeyDown={props.resizable ? onKeyDown : undefined}
     >
-      <div
-        class={cn(
-          'bg-accent absolute opacity-0 group-focus:opacity-100 rounded-[1px]',
-          !ptrDown() && 'group-hover:opacity-50',
-          ptrDown() && 'opacity-100'
-        )}
-        style={{
-          left: ctx.direction() === 'horizontal' ? '50%' : '0',
-          top: ctx.direction() === 'vertical' ? '50%' : '0',
-          width: ctx.direction() === 'horizontal' ? '2px' : '100%',
-          height: ctx.direction() === 'vertical' ? '2px' : '100%',
-          transform:
-            ctx.direction() === 'horizontal'
-              ? 'translateX(-50%)'
-              : 'translateY(-50%)',
-        }}
-      ></div>
+      {/* Spaced panels can omit the divider while retaining resize feedback. */}
+      <Show when={props.showDivider}>
+        <div
+          class={cn(
+            'absolute border-edge-muted touch:hidden',
+            horizontal() ? 'border-l-[1px]' : 'border-t-[1px]'
+          )}
+          style={barStyle('1px')}
+        />
+      </Show>
+      {/* Hover, focus and drag feedback paints over the divider. */}
+      <Show when={props.resizable}>
+        <div
+          class={cn(
+            'bg-accent absolute opacity-0 group-focus:opacity-100 rounded-[1px]',
+            !ptrDown() && 'group-hover:opacity-50',
+            ptrDown() && 'opacity-100'
+          )}
+          style={barStyle('2px')}
+        />
+      </Show>
     </div>
   );
 }

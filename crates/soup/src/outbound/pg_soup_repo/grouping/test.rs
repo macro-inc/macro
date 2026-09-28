@@ -1,3 +1,7 @@
+mod access;
+mod pagination;
+mod sorting;
+
 use super::*;
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup_grouped,
@@ -337,12 +341,11 @@ async fn tagged_calendar_event_participates_in_grouped_property_soup(
         r#"
         INSERT INTO calendar_events (
             id, owner_id, source_link_id, ical_uid, title,
-            starts_at, ends_at, canonical_source_kind, canonical_source_updated_at
+            starts_at, ends_at, canonical_source_kind
         )
         VALUES (
             $1, $2, $3, 'grouped@example.com', 'Grouped calendar event',
-            '2026-07-24T14:00:00Z', '2026-07-24T15:00:00Z', 'google',
-            '2026-07-24T12:00:00Z'
+            '2026-07-24T14:00:00Z', '2026-07-24T15:00:00Z', 'google'
         )
         "#,
         EVENT_ID,
@@ -432,11 +435,11 @@ async fn grouped_recency_sort_uses_reminder_delivery_time(
         INSERT INTO calendar_events (
             id, owner_id, source_link_id, ical_uid, title,
             starts_at, ends_at, canonical_source_kind,
-            canonical_source_updated_at, updated_at, last_reminder_fired_at
+            updated_at, last_reminder_fired_at
         )
         VALUES (
             $1, $2, $3, 'reminded-grouped@example.com', 'Reminded event',
-            now(), now() + interval '1 hour', 'google', now(),
+            now(), now() + interval '1 hour', 'google',
             now() - interval '10 days', now()
         )
         "#,
@@ -451,11 +454,11 @@ async fn grouped_recency_sort_uses_reminder_delivery_time(
         INSERT INTO calendar_events (
             id, owner_id, source_link_id, ical_uid, title,
             starts_at, ends_at, canonical_source_kind,
-            canonical_source_updated_at, updated_at
+            updated_at
         )
         VALUES (
             $1, $2, $3, 'edited-grouped@example.com', 'Edited event',
-            now(), now() + interval '1 hour', 'google', now(),
+            now(), now() + interval '1 hour', 'google',
             now() - interval '1 day'
         )
         "#,
@@ -631,7 +634,7 @@ async fn grouped_soup_runs_when_calendar_arm_excluded(pool: Pool<Postgres>) -> a
 }
 
 /// The inbox surfaces calendar events through the grouped query with a
-/// `NotificationDone(false)` filter: only events carrying a not-done
+/// `Unseen OR Seen` filter: only events carrying a not-done
 /// notification for the requester appear, and the filter renders bind-free so
 /// it survives this query's hand-numbered parameters.
 #[sqlx::test(
@@ -664,12 +667,11 @@ async fn grouped_soup_renders_bind_bearing_calendar_literals(
         r#"
         INSERT INTO calendar_events (
             id, owner_id, source_link_id, ical_uid, title, organizer_email,
-            starts_at, ends_at, canonical_source_kind, canonical_source_updated_at
+            starts_at, ends_at, canonical_source_kind
         )
         VALUES (
             $1, $2, $3, 'binds@example.com', 'Bind-bearing event', 'Host@Example.com',
-            '2026-07-24T14:00:00Z', '2026-07-24T15:00:00Z', 'google',
-            '2026-07-24T12:00:00Z'
+            '2026-07-24T14:00:00Z', '2026-07-24T15:00:00Z', 'google'
         )
         "#,
         EVENT_ID,
@@ -773,12 +775,11 @@ async fn grouped_soup_filters_calendar_events_by_notification_done(
             r#"
             INSERT INTO calendar_events (
                 id, owner_id, source_link_id, ical_uid, title,
-                starts_at, ends_at, canonical_source_kind, canonical_source_updated_at
+                starts_at, ends_at, canonical_source_kind
             )
             VALUES (
                 $1, $2, $3, $4, $5,
-                '2026-07-24T14:00:00Z', '2026-07-24T15:00:00Z', 'google',
-                '2026-07-24T12:00:00Z'
+                '2026-07-24T14:00:00Z', '2026-07-24T15:00:00Z', 'google'
             )
             "#,
             event_id,
@@ -817,8 +818,8 @@ async fn grouped_soup_filters_calendar_events_by_notification_done(
         .await?;
         sqlx::query!(
             r#"
-            INSERT INTO user_notification (user_id, notification_id, done)
-            VALUES ($1, $2, $3)
+            INSERT INTO user_notification (user_id, notification_id, state)
+            VALUES ($1, $2, CASE WHEN $3::bool THEN 'done'::notification_state ELSE 'unseen'::notification_state END)
             "#,
             OWNER_ID,
             notification_id,
@@ -830,9 +831,14 @@ async fn grouped_soup_filters_calendar_events_by_notification_done(
 
     let user_id = MacroUserIdStr::parse_from_str(OWNER_ID).unwrap();
     let filter = EntityFilterAst {
-        calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::NotificationDone(
-            false,
-        )))),
+        calendar_event_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(CalendarEventLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(CalendarEventLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
         ..EntityFilterAst::mock_empty()
     };
 

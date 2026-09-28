@@ -1,6 +1,13 @@
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import { useHasPermission } from '@core/context/user';
-import type { Accessor } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import {
   buildRecommendationPrompt,
   pickRecommendations,
@@ -56,8 +63,29 @@ export function createHomeRecommendations(
 
   const items = () => pickRecommendations(smart.data(), fast.data());
 
+  const [timedOut, setTimedOut] = createSignal(false);
+  const [attempt, setAttempt] = createSignal(0);
+  const waiting = createMemo(
+    () =>
+      enabled() &&
+      items() === undefined &&
+      (fast.isGenerating() || smart.isGenerating())
+  );
+
+  // Bound the visible loading state even if the server never leaves "loading".
+  // Keep accepting a late result; cached items always take precedence.
+  createEffect(
+    on([waiting, attempt], ([pending]) => {
+      setTimedOut(false);
+      if (!pending) return;
+      const timer = setTimeout(() => setTimedOut(true), 45_000);
+      onCleanup(() => clearTimeout(timer));
+    })
+  );
+
   const retry = async () => {
     if (!enabled()) return;
+    setAttempt((value) => value + 1);
     const requests = [fast.refresh()];
     if (smartEnabled()) requests.push(smart.refresh());
     await Promise.allSettled(requests);
@@ -69,15 +97,13 @@ export function createHomeRecommendations(
     /** Smart pass still running — the visible items may improve shortly. */
     isThinking: () => smartEnabled() && smart.isGenerating(),
     /** Nothing to render yet. */
-    isLoading: () =>
-      enabled() &&
-      items() === undefined &&
-      (fast.isGenerating() || smart.isGenerating()),
-    /** Every enabled projection failed and there is nothing to show. */
+    isLoading: () => waiting() && !timedOut(),
+    /** Generation failed or timed out, with no cached result to show. */
     hasError: () =>
       items() === undefined &&
-      fast.error() !== undefined &&
-      (!smartEnabled() || smart.error() !== undefined),
+      (timedOut() ||
+        (fast.error() !== undefined &&
+          (!smartEnabled() || smart.error() !== undefined))),
     retry,
   };
 }

@@ -44,11 +44,28 @@ maybe_env_vars! {
 /// `APP_SECRETS_JSON` (the way the rest of our config is injected, see `macro_env_var`) is ignored
 /// and our tracing filter ends up wrong. This reads `RUST_LOG` the same way `macro_env_var` does —
 /// `APP_SECRETS_JSON` first, then the process environment as a fallback.
+/// Both branches carry an INFO floor, for the same reason
+/// [`otel_trace_filter`] does. A builder with no default directive and an
+/// absent or empty `RUST_LOG` yields a filter with *zero* directives, which
+/// logs nothing at all - not even ERROR. A service deployed without an
+/// explicit `RUST_LOG` is then silent, while its spans keep flowing, so it
+/// reads as healthy-but-quiet rather than as misconfigured.
 fn rust_log_env_filter() -> EnvFilter {
     match RustLog::new() {
-        Some(value) => EnvFilter::builder().parse_lossy(value),
-        None => EnvFilter::from_default_env(),
+        Some(value) => rust_log_filter(Some(&value)),
+        // `from_env_lossy` reads `RUST_LOG` itself, so the process
+        // environment stays behind the builder rather than a direct
+        // `std::env::var` (CS-14).
+        None => rust_log_builder().from_env_lossy(),
     }
+}
+
+fn rust_log_builder() -> tracing_subscriber::filter::Builder {
+    EnvFilter::builder().with_default_directive(LevelFilter::INFO.into())
+}
+
+fn rust_log_filter(value: Option<&str>) -> EnvFilter {
+    rust_log_builder().parse_lossy(value.unwrap_or(""))
 }
 
 /// Build an [`EnvFilter`] for the OpenTelemetry span exporter from `OTEL_TRACE_FILTER`.
@@ -80,6 +97,8 @@ pub struct MacroEntrypoint {
     env: Environment,
     /// describes options that only apply in local dev
     local: LocalOptions,
+    /// Dependency targets whose instrumentation can include credentials or application payloads.
+    suppressed_targets: &'static [&'static str],
 }
 
 impl Default for MacroEntrypoint {
@@ -89,6 +108,7 @@ impl Default for MacroEntrypoint {
         MacroEntrypoint {
             env: Environment::new_or_prod(),
             local: Default::default(),
+            suppressed_targets: &[],
         }
     }
 }
@@ -118,6 +138,12 @@ impl InitializedEntrypoint {
 }
 
 impl MacroEntrypoint {
+    /// Suppress credential-bearing dependency diagnostics in every sink, even if RUST_LOG enables trace.
+    pub fn suppress_dependency_logs(mut self, targets: &'static [&'static str]) -> Self {
+        self.suppressed_targets = targets;
+        self
+    }
+
     /// create a new instance of [Self] from an input [Environment]
     pub fn new(env: Environment) -> Self {
         Self {
@@ -154,6 +180,9 @@ impl MacroEntrypoint {
                     });
 
                     Registry::default()
+                        .with(tracing_subscriber::filter::filter_fn(move |metadata| {
+                            dependency_logs_allowed(self.suppressed_targets, metadata.target())
+                        }))
                         .with(RootcauseLayer.with_filter(rootcause_filter))
                         .with(
                             tracing_subscriber::fmt::layer()
@@ -168,6 +197,9 @@ impl MacroEntrypoint {
                         .init();
                 } else {
                     Registry::default()
+                        .with(tracing_subscriber::filter::filter_fn(move |metadata| {
+                            dependency_logs_allowed(self.suppressed_targets, metadata.target())
+                        }))
                         .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
                         .with(
                             tracing_subscriber::fmt::layer()
@@ -193,6 +225,9 @@ impl MacroEntrypoint {
             ) => {
                 let rust_log_filter = rust_log_env_filter();
                 let subscriber = Registry::default()
+                    .with(tracing_subscriber::filter::filter_fn(move |metadata| {
+                        dependency_logs_allowed(self.suppressed_targets, metadata.target())
+                    }))
                     .with(RootcauseLayer.with_filter(rust_log_filter.clone()))
                     .with(HierarchicalLayer::new(level).with_filter(rust_log_filter));
                 tracing::subscriber::set_global_default(subscriber).unwrap();
@@ -232,6 +267,9 @@ impl MacroEntrypoint {
                     .with_filter(rust_log_filter);
 
                 Registry::default()
+                    .with(tracing_subscriber::filter::filter_fn(move |metadata| {
+                        dependency_logs_allowed(self.suppressed_targets, metadata.target())
+                    }))
                     .with(RootcauseLayer.with_filter(rootcause_filter))
                     .with(fmt_layer)
                     .with(otel_layer)
@@ -385,6 +423,7 @@ impl LocalOptionsBuilder {
         MacroEntrypoint {
             env: self.prev.env,
             local: self.next,
+            suppressed_targets: self.prev.suppressed_targets,
         }
     }
 }
@@ -392,4 +431,13 @@ impl LocalOptionsBuilder {
 #[derive(Debug, Default)]
 struct LocalOptions {
     tree_tracing: Option<usize>,
+}
+
+fn dependency_logs_allowed(suppressed: &[&str], target: &str) -> bool {
+    !suppressed.iter().any(|prefix| {
+        target == *prefix
+            || target
+                .strip_prefix(prefix)
+                .is_some_and(|suffix| suffix.starts_with("::"))
+    })
 }

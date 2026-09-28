@@ -31,6 +31,7 @@ import {
   TableCellHeaderStates,
   type TableNode,
 } from '@lexical/table';
+import { $createAgentSessionMentionNode } from '@macro-inc/lexical-core/nodes/AgentSessionMentionNode';
 import { $createContactMentionNode } from '@macro-inc/lexical-core/nodes/ContactMentionNode';
 import {
   $createDateMentionNode,
@@ -46,6 +47,8 @@ import {
   $createImageNode,
   ImageNode,
 } from '@macro-inc/lexical-core/nodes/ImageNode';
+import { $createPullRequestMentionNode } from '@macro-inc/lexical-core/nodes/PullRequestMentionNode';
+import { $createTagMentionNode } from '@macro-inc/lexical-core/nodes/TagMentionNode';
 import { $createUserMentionNode } from '@macro-inc/lexical-core/nodes/UserMentionNode';
 import {
   $createVideoNode,
@@ -72,7 +75,6 @@ import * as blocks from '../ai-toolkit/blocks';
 import * as inline from '../ai-toolkit/inline';
 import * as lists from '../ai-toolkit/lists';
 import * as locate from '../ai-toolkit/locate';
-import { assertSubstringMatched } from './substring-miss';
 import * as modify from '../ai-toolkit/modify';
 import type { LexicalSession } from '../ai-toolkit/session';
 import * as tables from '../ai-toolkit/tables';
@@ -88,6 +90,7 @@ import type {
 } from '../editor';
 import { EditError } from '../editor';
 import type { DocReader, DocWriter, Match } from './interfaces';
+import { assertSubstringMatched } from './substring-miss';
 
 const FORMAT_BIT: Record<
   Format,
@@ -234,6 +237,24 @@ export class Doc implements DocReader, DocWriter {
     return locate.$blockById(this.session, node);
   }
 
+  /** Text writers need a content block, not a table/list container. Reject
+   * ambiguous container ids instead of choosing one of their descendants. */
+  private textBlock(id: NodeRef): ElementNode {
+    const block = this.block(id);
+    if (
+      $isTableNode(block) ||
+      $isTableRowNode(block) ||
+      $isTableCellNode(block) ||
+      $isListNode(block) ||
+      block.getType() === 'root'
+    ) {
+      throw new EditError(
+        `id "${id}" is a ${block.getType()} container — target a paragraph or list item id; use setCell to replace a table cell.`
+      );
+    }
+    return block;
+  }
+
   /** Resolve a table by id, rejecting non-table ids. `setCell`/cell resolution
    *  otherwise walk up to the enclosing table, so a <tr>/<td> id "works" but
    *  reindexes row/col against the table — silently clobbering the wrong cell
@@ -290,7 +311,7 @@ export class Doc implements DocReader, DocWriter {
         const c = target.getTextContent();
         target.setTextContent(c.slice(0, at) + text + c.slice(at));
       } else {
-        insertTextAt(this.block(node), at, text);
+        insertTextAt(this.textBlock(node), at, text);
       }
     });
   }
@@ -329,16 +350,16 @@ export class Doc implements DocReader, DocWriter {
         else target.setTextContent(text);
         return;
       }
-      blocks.$setText(this.block(node), text);
+      blocks.$setText(this.textBlock(node), text);
     });
   }
 
   private appendText(node: NodeRef, text: string): void {
-    this.tx(() => inline.$appendText(this.block(node), text));
+    this.tx(() => inline.$appendText(this.textBlock(node), text));
   }
 
   private prependText(node: NodeRef, text: string): void {
-    this.tx(() => inline.$prependText(this.block(node), text));
+    this.tx(() => inline.$prependText(this.textBlock(node), text));
   }
 
   private insertTextAfterInline(
@@ -486,12 +507,13 @@ export class Doc implements DocReader, DocWriter {
         : block === 'code'
           ? { type: 'code', language: opts.language }
           : { type: block };
-    this.tx(() =>
+    this.tx(() => {
+      this.textBlock(node);
       modify.$modifyNode(this.session, node, {
         op: 'blockType',
         block: data,
-      })
-    );
+      });
+    });
   }
 
   private setListType(nodes: NodeRef[], list: ListKind): void {
@@ -583,7 +605,7 @@ export class Doc implements DocReader, DocWriter {
     spec: NodeSpec
   ): void {
     this.tx(() => {
-      const block = this.block(node);
+      const block = this.textBlock(node);
       const inline = buildNode(spec);
       insertInlineAt(block, at, inline);
       this.assignRef(ref, inline);
@@ -994,25 +1016,51 @@ export function buildNode(spec: NodeSpec): LexicalNode {
         displayFormat: session.displayFormat ?? session.date,
       })
     )
-    .with({ inline: 'mention' }, (session) => {
-      const m = session.mention;
-      if (m.kind === 'user')
-        return $createUserMentionNode({ userId: m.userId, email: m.email });
-      if (m.kind === 'contact')
-        return $createContactMentionNode({
-          contactId: m.contactId,
-          name: m.name,
-          emailOrDomain: m.emailOrDomain,
-          isCompany: m.isCompany,
-        });
-      if (m.kind === 'group')
-        return $createGroupMentionNode({ groupAlias: m.groupAlias });
-      return $createDocumentMentionNode({
-        documentId: m.documentId,
-        documentName: m.documentName,
-        blockName: m.blockName,
-      });
-    })
+    .with({ inline: 'mention' }, (session) =>
+      match(session.mention)
+        .with({ kind: 'user' }, (m) =>
+          $createUserMentionNode({ userId: m.userId, email: m.email })
+        )
+        .with({ kind: 'contact' }, (m) =>
+          $createContactMentionNode({
+            contactId: m.contactId,
+            name: m.name,
+            emailOrDomain: m.emailOrDomain,
+            isCompany: m.isCompany,
+          })
+        )
+        .with({ kind: 'group' }, (m) =>
+          $createGroupMentionNode({ groupAlias: m.groupAlias })
+        )
+        .with({ kind: 'document' }, (m) =>
+          $createDocumentMentionNode({
+            documentId: m.documentId,
+            documentName: m.documentName,
+            blockName: m.blockName,
+            blockParams: m.blockParams,
+          })
+        )
+        .with({ kind: 'agent_session' }, (m) =>
+          $createAgentSessionMentionNode({
+            id: m.id,
+            label: m.label,
+            expanded: m.expanded,
+          })
+        )
+        .with({ kind: 'pr' }, (m) =>
+          $createPullRequestMentionNode({ id: m.id, label: m.label })
+        )
+        .with({ kind: 'tag' }, (m) =>
+          $createTagMentionNode({
+            optionId: m.optionId,
+            propertyDefinitionId: m.propertyDefinitionId,
+            scope: m.scope,
+            name: m.name,
+            color: m.color,
+          })
+        )
+        .exhaustive()
+    )
     .exhaustive();
 }
 

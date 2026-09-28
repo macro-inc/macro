@@ -36,8 +36,15 @@ pub fn sign(secret: &str, timestamp: &str, raw_body: &[u8]) -> Option<String> {
 }
 
 /// Verify a delivery's `x-macro-signature` value in constant time.
+///
+/// An empty secret can never verify: HMAC accepts a zero-length key, so a
+/// caller that has not yet learned its real secret would otherwise accept
+/// signatures anyone could forge. Fail closed instead.
 #[must_use]
 pub fn verify(secret: &str, timestamp: &str, raw_body: &[u8], signature: &str) -> bool {
+    if secret.is_empty() {
+        return false;
+    }
     let Some(hex_digest) = signature.strip_prefix("v1=") else {
         return false;
     };

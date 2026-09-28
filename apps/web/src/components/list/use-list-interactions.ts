@@ -28,11 +28,21 @@ type ListInteractionConditions = Partial<
 >;
 
 export type ListInteractionNavigation<TItem> = {
+  /**
+   * Return false to consume a move without changing focus.
+   * Useful when a list must load more rows before crossing a boundary.
+   */
+  onBeforeMove?: (event: ListInteractionBeforeMoveEvent<TItem>) => boolean;
   move?: ListNavigationOptions<TItem>;
   first?: ListNavigationOptions<TItem>;
   last?: ListNavigationOptions<TItem>;
   extendSelection?: ListNavigationOptions<TItem>;
   onNavigate?: (event: ListInteractionNavigationEvent<TItem>) => void;
+};
+
+export type ListInteractionBeforeMoveEvent<TItem> = {
+  direction: 1 | -1;
+  current: ListItemResult<TItem> | undefined;
 };
 
 export type ListInteractionNavigationEvent<TItem> =
@@ -98,6 +108,15 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   };
 
   const move = (offset: 1 | -1) => {
+    if (
+      options.navigation?.onBeforeMove?.({
+        direction: offset,
+        current: list.focus.result(),
+      }) === false
+    ) {
+      return true;
+    }
+
     const result = list.navigate.by(offset, options.navigation?.move);
     options.navigation?.onNavigate?.({
       kind: 'move',

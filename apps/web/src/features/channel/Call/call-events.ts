@@ -187,7 +187,7 @@ export function createCallEventsEffect(handlers: CallEventHandlers) {
     // Check the type before parsing so we don't JSON.parse every frame the app
     // receives just to discard it.
     if (!isCallEventType(data.type)) return;
-    if (!ENABLE_CALLS()) return;
+    if (!ENABLE_CALLS) return;
 
     const event = parseCallEvent(data.type, data.data);
     if (!event) return;

@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH previous AS (\n                SELECT patch_blob_key FROM agent_session_changes WHERE agent_session_id = $1\n            )\n            INSERT INTO agent_session_changes (\n                agent_session_id, changeset_id, source, repository,\n                base_ref, base_sha, head_ref, head_sha,\n                files, additions, deletions, patch_blob_key, patch_bytes, truncated,\n                captured_at, attempt_started_at, attempt_finished_at, attempt_outcome, attempt_error\n            )\n            VALUES (\n                $1, $2, $3, $4,\n                $5, $6, $7, $8,\n                $9, $10, $11, $12, $13, $14,\n                $15, $16, $16, 'captured', NULL\n            )\n            ON CONFLICT (agent_session_id) DO UPDATE SET\n                changeset_id = EXCLUDED.changeset_id,\n                source = EXCLUDED.source,\n                repository = EXCLUDED.repository,\n                base_ref = EXCLUDED.base_ref,\n                base_sha = EXCLUDED.base_sha,\n                head_ref = EXCLUDED.head_ref,\n                head_sha = EXCLUDED.head_sha,\n                files = EXCLUDED.files,\n                additions = EXCLUDED.additions,\n                deletions = EXCLUDED.deletions,\n                patch_blob_key = EXCLUDED.patch_blob_key,\n                patch_bytes = EXCLUDED.patch_bytes,\n                truncated = EXCLUDED.truncated,\n                captured_at = EXCLUDED.captured_at,\n                attempt_finished_at = EXCLUDED.attempt_finished_at,\n                attempt_outcome = 'captured',\n                attempt_error = NULL,\n                updated_at = now()\n            RETURNING (SELECT patch_blob_key FROM previous) AS \"superseded?\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "superseded?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Int4",
+        "Int4",
+        "Text",
+        "Int8",
+        "Bool",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4cc8e9f875c58a30df475c97230a3621f63ab0d1c5551d9f88a4886d37df928a"
+}

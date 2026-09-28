@@ -1,0 +1,45 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT entity_type, owner_type AS \"owner_type: OwnerType\", owner_id\n            FROM entity WHERE id = $1\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_type: OwnerType",
+        "type_info": {
+          "Custom": {
+            "name": "entity_owner_type",
+            "kind": {
+              "Enum": [
+                "user",
+                "bot",
+                "team"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4dd5e1d3f6244ad18760fe3827baffcc5433d3e134144f34ce44650295f7540f"
+}

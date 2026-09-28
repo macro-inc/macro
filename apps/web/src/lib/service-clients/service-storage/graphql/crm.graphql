@@ -1,0 +1,10 @@
+fragment GraphqlCrmCompanyQuickAccessFields on GraphqlSoupCrmCompany {
+	__typename
+	name
+	teamId
+	hidden
+	domains
+	createdAt
+	updatedAt
+	viewedAt
+}

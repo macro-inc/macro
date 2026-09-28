@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(DISTINCT \"documentId\") AS \"count!\" FROM \"Thread\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f4387247669703803329aa0d090c0b6427a7b17676d1fdf8fdfd950dbf685dd0"
+}

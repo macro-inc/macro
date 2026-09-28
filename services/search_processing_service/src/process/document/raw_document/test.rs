@@ -1,5 +1,3 @@
-use macro_user_id::user_id::MacroUserIdStr;
-
 use super::*;
 
 #[tokio::test]
@@ -7,7 +5,7 @@ async fn test_generate_upsert() {
     let document_info = DocumentMetadata {
         document_id: "AAA".to_string(),
         document_version_id: 0,
-        owner: MacroUserIdStr::parse_from_str("macro|nobody@macro.com").unwrap(),
+        owner: "macro|nobody@macro.com".to_string().try_into().unwrap(),
         document_name: "test_document".to_string(),
         file_type: Some("md".to_string()),
         sha: None,
@@ -52,7 +50,7 @@ async fn test_generate_upsert_with_sub_type() {
     let document_info = DocumentMetadata {
         document_id: "BBB".to_string(),
         document_version_id: 0,
-        owner: MacroUserIdStr::parse_from_str("macro|nobody@macro.com").unwrap(),
+        owner: "macro|nobody@macro.com".to_string().try_into().unwrap(),
         document_name: "test_task".to_string(),
         file_type: Some("md".to_string()),
         sha: None,
@@ -86,7 +84,7 @@ fn parent_only_document_info(file_type: Option<&str>) -> DocumentMetadata {
     DocumentMetadata {
         document_id: "CCC".to_string(),
         document_version_id: 0,
-        owner: MacroUserIdStr::parse_from_str("macro|nobody@macro.com").unwrap(),
+        owner: "macro|nobody@macro.com".to_string().try_into().unwrap(),
         document_name: "pdf copy".to_string(),
         file_type: file_type.map(|ft| ft.to_string()),
         sha: None,
@@ -102,6 +100,24 @@ fn parent_only_document_info(file_type: Option<&str>) -> DocumentMetadata {
         sub_type: None,
         deleted_at: None,
     }
+}
+
+#[test]
+fn generate_upserts_preserves_a_bot_owner_principal() {
+    const BOT_PRINCIPAL: &str = "bot|00000000-0000-0000-0000-00000000a1a1";
+
+    let mut document_info = parent_only_document_info(Some("md"));
+    document_info.owner = BOT_PRINCIPAL.to_string().try_into().unwrap();
+    let markdown_result = vec![MarkdownParseResult {
+        node_id: "node1".to_string(),
+        raw_content: "# Bot document".to_string(),
+        content: "Bot document".to_string(),
+    }];
+
+    let upserts = generate_upserts(document_info, markdown_result).expect("valid upsert");
+
+    assert_eq!(upserts.len(), 1);
+    assert_eq!(upserts[0].owner_id, BOT_PRINCIPAL);
 }
 
 #[test]

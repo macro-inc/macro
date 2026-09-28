@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use doppleganger::Doppleganger;
+use doppleganger::{Doppleganger, Mirror};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -136,6 +136,10 @@ pub struct SoupEmailThreadPreview {
     pub is_draft: bool,
     /// Whether the thread is marked important.
     pub is_important: bool,
+    /// The denormalized `email_threads.is_signal` importance classification —
+    /// the same flag the soup Importance filter evaluates, distinct from
+    /// `is_important` (Gmail's IMPORTANT label).
+    pub is_signal: bool,
     /// Thread display name or subject.
     pub name: Option<String>,
     /// Thread snippet.
@@ -175,4 +179,16 @@ pub struct SoupEnrichedEmailThreadPreview<T = ()> {
     /// Extra fields passed from above
     #[serde(flatten)]
     pub extra: T,
+}
+
+impl From<email::domain::models::EnrichedEmailThreadPreview> for SoupEnrichedEmailThreadPreview<()> {
+    fn from(preview: email::domain::models::EnrichedEmailThreadPreview) -> Self {
+        Self {
+            thread: SoupEmailThreadPreview::mirror(preview.thread),
+            attachments: Vec::<SoupAttachment>::mirror(preview.attachments),
+            participants: Vec::<SoupContact>::mirror(preview.participants),
+            labels: Vec::<SoupLabel>::mirror(preview.labels),
+            extra: (),
+        }
+    }
 }

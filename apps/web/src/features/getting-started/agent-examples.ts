@@ -1,5 +1,5 @@
-import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
-import { AnimatedTaskIcon } from '@icon/wide-task';
+import FileIcon from '@phosphor/file.svg';
+import TaskIcon from '@phosphor/list-checks.svg';
 import TagIcon from '@phosphor/tag.svg';
 import type { Component } from 'solid-js';
 
@@ -31,14 +31,14 @@ export const AGENT_EXAMPLES: AgentExample[] = [
   },
   {
     id: 'example-pull-tasks',
-    icon: AnimatedTaskIcon,
+    icon: TaskIcon,
     title: 'Pull tasks from inbox',
     description: 'Turn important emails into tasks',
     prompt: `Find my most important recent emails and create tasks from them. Link me to ${TASKS_LIST_LINK} where I can see all of my tasks.`,
   },
   {
     id: 'example-weekly-brief',
-    icon: AnimatedFileMdIcon,
+    icon: FileIcon,
     title: 'Build weekly brief',
     description: 'Summarize your week with links to sources',
     prompt:

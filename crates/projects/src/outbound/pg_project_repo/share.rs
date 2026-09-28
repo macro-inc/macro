@@ -35,6 +35,7 @@ pub(super) async fn get_project_share_permission(
             permission.id,
             permission."linkShare" AS "link_share?",
             permission."linkShareAccessLevel" AS "link_share_access_level?: AccessLevel",
+            permission.team_share_access_level AS "team_share_access_level?: AccessLevel",
             project."userId" AS owner,
             COALESCE(
                 json_agg(json_build_object(
@@ -73,6 +74,7 @@ pub(super) async fn get_project_share_permission(
         id: row.id,
         link_share,
         link_share_access_level: row.link_share_access_level,
+        team_share_access_level: row.team_share_access_level,
         owner: row.owner,
         channel_share_permissions,
     })

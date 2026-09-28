@@ -100,7 +100,11 @@ export function checkAutoRejoinTarget(params: {
   if (params.activeCall === 'unavailable') return 'lookup_failed';
   if (params.activeCall === null) return 'call_ended';
   if (params.attempt.callId === null) return 'call_unknown';
-  if (params.activeCall.callId !== params.attempt.callId) {
+  // Native UUID.uuidString is uppercase; the server serializes lowercase UUIDs.
+  if (
+    params.activeCall.callId.toLowerCase() !==
+    params.attempt.callId.toLowerCase()
+  ) {
     return 'call_replaced';
   }
   return null;

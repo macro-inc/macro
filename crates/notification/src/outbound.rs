@@ -6,10 +6,12 @@
 pub mod device_registration;
 pub mod digest_batcher;
 pub mod email;
+mod entity_notifications;
 /// Notification status update fanout across multiple realtime publishers.
 pub mod fanout_notification_realtime;
 /// Realtime notification fanout across multiple delivery adapters.
 pub mod fanout_realtime;
+pub mod item_preferences;
 /// Kafka-backed notification status update publication.
 pub mod kafka_notification_realtime;
 /// Kafka-backed realtime notification delivery.

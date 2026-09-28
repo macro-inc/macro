@@ -165,9 +165,9 @@ describe('notification utils', () => {
   describe('filterNotDoneNotifications', () => {
     it('filters out notifications marked as done', () => {
       const notifications: Notification[] = [
-        { id: '1', done: false } as Notification,
-        { id: '2', done: true } as Notification,
-        { id: '3', done: false } as Notification,
+        { id: '1', state: 'unseen' } as Notification,
+        { id: '2', state: 'done' } as Notification,
+        { id: '3', state: 'unseen' } as Notification,
       ];
 
       const result = filterNotDoneNotifications(notifications);
@@ -177,7 +177,7 @@ describe('notification utils', () => {
 
     it('keeps notifications with undefined done property', () => {
       const notifications = [
-        { id: '1', done: false } as Notification,
+        { id: '1', state: 'unseen' } as Notification,
         { id: '2' } as Notification,
       ];
 
@@ -514,7 +514,7 @@ describe('notification utils', () => {
       it('returns true for unviewed notification', () => {
         const notification = {
           viewed_at: null,
-          done: false,
+          state: 'unseen',
         } as Notification;
 
         expect(isNotificationUnread(notification)).toBe(true);
@@ -523,7 +523,7 @@ describe('notification utils', () => {
       it('returns false for viewed notification', () => {
         const notification = {
           viewed_at: new Date(1234567890).toISOString(),
-          done: false,
+          state: 'seen',
         } as Notification;
 
         expect(isNotificationUnread(notification)).toBe(false);
@@ -532,7 +532,7 @@ describe('notification utils', () => {
       it('returns false for done notification', () => {
         const notification = {
           viewed_at: null,
-          done: true,
+          state: 'done',
         } as Notification;
 
         expect(isNotificationUnread(notification)).toBe(false);
@@ -541,7 +541,7 @@ describe('notification utils', () => {
       it('returns false for viewed and done notification', () => {
         const notification = {
           viewed_at: new Date(1234567890).toISOString(),
-          done: true,
+          state: 'done',
         } as Notification;
 
         expect(isNotificationUnread(notification)).toBe(false);
@@ -554,12 +554,12 @@ describe('notification utils', () => {
           notifications: [
             {
               viewed_at: new Date(1234567890).toISOString(),
-              done: false,
+              state: 'seen',
             } as Notification,
-            { viewed_at: null, done: false } as Notification,
+            { viewed_at: null, state: 'unseen' } as Notification,
             {
               viewed_at: new Date(1234567890).toISOString(),
-              done: false,
+              state: 'seen',
             } as Notification,
           ],
         } as any;
@@ -572,11 +572,11 @@ describe('notification utils', () => {
           notifications: [
             {
               viewed_at: new Date(1234567890).toISOString(),
-              done: false,
+              state: 'seen',
             } as Notification,
             {
               viewed_at: new Date(1234567890).toISOString(),
-              done: false,
+              state: 'seen',
             } as Notification,
           ],
         } as any;
@@ -587,8 +587,8 @@ describe('notification utils', () => {
       it('returns false if all notifications are done', () => {
         const stack = {
           notifications: [
-            { viewed_at: null, done: true } as Notification,
-            { viewed_at: null, done: true } as Notification,
+            { viewed_at: null, state: 'done' } as Notification,
+            { viewed_at: null, state: 'done' } as Notification,
           ],
         } as any;
 

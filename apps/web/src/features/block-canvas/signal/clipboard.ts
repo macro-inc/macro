@@ -6,6 +6,7 @@ import { blockNameToFileExtensions } from '@core/constant/allBlocks';
 import { CANVAS_SVG_IMPORT } from '@core/constant/featureFlags';
 import { nanoid } from 'nanoid';
 import { batch } from 'solid-js';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import {
   type Canvas,
   type CanvasEdge,
@@ -13,7 +14,6 @@ import {
   CanvasSchema,
 } from '../model/CanvasModel';
 import {
-  highestOrderSignal,
   useBoundingBox,
   useCanvasEdges,
   useCanvasGroups,
@@ -39,7 +39,7 @@ export const useClipboard = sharedInstance(() => {
   const nodes = useCanvasNodes();
   const edges = useCanvasEdges();
   const groups = useCanvasGroups();
-  const highestOrder = highestOrderSignal.get;
+  const highestOrder = useCanvasDocument().state.signals.highestOrder[0];
   const history = useCanvasHistory();
   const { staticImageUpload, parseSVGStringToNodes } = useCanvasFileDrop();
   const boundingBox = useBoundingBox();

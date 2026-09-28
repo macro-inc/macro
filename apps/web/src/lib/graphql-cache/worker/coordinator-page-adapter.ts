@@ -8,6 +8,7 @@ import {
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CoordinatorToTabEnvelope,
+  type EngineOpenOutcome,
   isCacheRequest,
   type PageToEngineEnvelope,
   type TabToCoordinatorEnvelope,
@@ -18,6 +19,7 @@ import {
   createEffectWorkerTransport,
   type EffectWorkerTransport,
 } from './effect-worker-transport';
+import { CacheBootstrapExhaustedError } from './startup';
 
 export interface SharedWorkerLike {
   readonly port: MessagePort;
@@ -41,7 +43,13 @@ export interface CacheCoordinatorPageAdapterOptions {
     ownerEpoch: number
   ) => DedicatedWorkerLike;
   lockManager?: Pick<LockManager, 'request'>;
-  onEngineReplaced?: (ownerEpoch: number) => void;
+  onEngineReplaced?: (
+    ownerEpoch: number,
+    openOutcome: EngineOpenOutcome
+  ) => void;
+  onStartupProgress?: (
+    progress: Extract<CoordinatorToTabEnvelope, { kind: 'engine-startup' }>
+  ) => void;
   onOwnerChanged?: (ownerEpoch: number | undefined) => void;
   onWorkerCreated?: (worker: DedicatedWorkerLike, ownerEpoch: number) => void;
   onWorkerTerminated?: (ownerEpoch: number, reason: string) => void;
@@ -67,7 +75,7 @@ interface CoordinatorConnection {
 
 const DEFAULT_GRACEFUL_TIMEOUT_MS = 10_000;
 
-const withVersion = <T extends { coordinatorVersion: 2 }>(
+const withVersion = <T extends { coordinatorVersion: 5 }>(
   value: T extends unknown ? Omit<T, 'coordinatorVersion'> : never
 ): T =>
   ({
@@ -124,6 +132,9 @@ export class CacheCoordinatorPageAdapter {
   private readonly terminatedOwnerEpochs = new Set<number>();
   private highestOwnerEpochSeen = 0;
   private latestEngineReplacedEpoch = 0;
+  private startupProgress:
+    | Extract<CoordinatorToTabEnvelope, { kind: 'engine-startup' }>
+    | undefined;
   private closed = false;
   private readonly telemetry: CacheTelemetryRecorderLike;
   private readonly now = (): number =>
@@ -535,6 +546,30 @@ export class CacheCoordinatorPageAdapter {
         }
         this.finishDispose();
         break;
+      case 'engine-startup': {
+        if (!this.registered) {
+          this.failTerminal(new Error('engine startup preceded registration'));
+          return;
+        }
+        const previous = this.startupProgress;
+        if (
+          previous &&
+          (message.ownerEpoch < previous.ownerEpoch ||
+            (message.ownerEpoch === previous.ownerEpoch &&
+              message.phase === previous.phase))
+        )
+          return;
+        if (
+          previous?.ownerEpoch === message.ownerEpoch &&
+          previous.phase === 'opening-database'
+        ) {
+          this.failTerminal(new Error('engine startup phase moved backwards'));
+          return;
+        }
+        this.startupProgress = message;
+        this.options.onStartupProgress?.(message);
+        break;
+      }
       case 'engine-replaced':
         if (message.ownerEpoch <= this.latestEngineReplacedEpoch) return;
         this.latestEngineReplacedEpoch = message.ownerEpoch;
@@ -542,7 +577,10 @@ export class CacheCoordinatorPageAdapter {
           this.highestOwnerEpochSeen,
           message.ownerEpoch
         );
-        this.options.onEngineReplaced?.(message.ownerEpoch);
+        this.options.onEngineReplaced?.(
+          message.ownerEpoch,
+          message.openOutcome
+        );
         break;
       case 'protocol-error': {
         const error = new Error(message.error);
@@ -550,6 +588,13 @@ export class CacheCoordinatorPageAdapter {
         else this.options.onProtocolError?.(error);
         break;
       }
+      case 'terminal-error':
+        this.failTerminal(
+          message.storageUntouched
+            ? new CacheBootstrapExhaustedError(message.error)
+            : new Error(message.error)
+        );
+        break;
     }
   }
 

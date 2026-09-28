@@ -4,23 +4,24 @@ import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@components/app/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
+import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
+import { useChatInputContext } from '@core/component/AI/context';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
-import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
+import { useShareModal } from '@core/component/TopBar/shareModal';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+import { blockMetadataSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import IconShared from '@icon/wide-share.svg';
+import IconShared from '@icon/share.svg';
 import ChatDebugIcon from '@phosphor/chat-text.svg';
-import Info from '@phosphor/info.svg';
 import Notepad from '@phosphor/notepad.svg';
 import type { Accessor } from 'solid-js';
 
@@ -29,21 +30,24 @@ export function TopBar(props: {
   toggleStreamDebug?: () => void;
 }) {
   const blockId = useBlockId();
+  const input = useChatInputContext();
 
   const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
   const chatName = () => name();
 
   const openInstructions = useOpenInstructionsMd();
 
-  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
-  const shareCtx = useShareDialogContext();
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: blockId,
+    blockAlias: 'chat',
+    itemType: 'chat',
+    name: name() ?? '',
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
 
   const ops: FileOperation[] = [
-    {
-      label: 'Details',
-      icon: Info,
-      action: detailsControl.toggle,
-    },
     {
       label: 'Edit AI Instructions',
       icon: Notepad,
@@ -71,8 +75,8 @@ export function TopBar(props: {
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
-      buttonComponent: () => <ShareTrigger />,
+      action: openShare,
+      buttonComponent: () => <ShareTrigger onClick={openShare} />,
       focusTarget: getShareDrawerRecipientInput,
     },
   ];
@@ -81,6 +85,7 @@ export function TopBar(props: {
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel
+          icon={<ProviderIcon model={input.model()} class="size-4 shrink-0" />}
           fallbackName={DEFAULT_CHAT_NAME}
           lockRename={false}
         />

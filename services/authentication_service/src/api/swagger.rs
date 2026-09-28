@@ -3,10 +3,15 @@ use github::domain::models::{
     EnrichedGithubPullRequest, GithubPullRequestCheckRun, GithubPullRequestComment,
     GithubPullRequestRef, GithubPullRequestStatus,
 };
+use gtm_invite::inbound::axum_router::dto::{
+    CreateGtmInviteLinkRequest, GtmInviteLink, GtmInviteLinkList, GtmInviteLinkStatus,
+    GtmInviteOffer, GtmInviteOfferStatus, PublicGtmInviteLink, RedeemGtmInviteLinkRequest,
+};
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use teams::domain::model::{
-    PatchTeamCrmSettingsRequest, PatchTeamCrmSettingsResponse, PatchTeamRequest, PatchTeamUserRole,
-    Team, TeamInviteDetails, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+    PatchTeamCrmSettingsRequest, PatchTeamCrmSettingsResponse, PatchTeamMemberPlanRequest,
+    PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamMember, TeamPlan, TeamRole,
+    TeamWithMembers,
 };
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
@@ -36,9 +41,10 @@ use crate::api::user::patch_user_group::PatchUserGroupRequest;
 use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
 use crate::api::user::post_get_names::PostGetNamesRequestBody;
 use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
-use crate::api::user::stripe::StripeSessionResponse;
+use crate::api::user::stripe::change_plan::{ChangePlanRequest, ChangePlanResponse};
 use crate::api::user::stripe::create_checkout_session_v2::CreateCheckoutSessionV2Request;
 use crate::api::user::stripe::create_portal_session::CreatePortalSessionRequest;
+use crate::api::user::stripe::{PaidPlan, StripeSessionResponse};
 use crate::api::{
     email, github_pull_requests, health, jwt, link, login, logout, merge, mobile_welcome_email,
     oauth, oauth2, permissions, session, user,
@@ -87,6 +93,13 @@ use model::user::{
                 // Cursor API key (settings -> Connections). Fully qualified:
                 // the `cursor_api_key` crate shadows the module of the same
                 // name in this path position.
+                crate::api::codex::status,
+                crate::api::codex::start_login,
+                crate::api::codex::poll_login,
+                crate::api::codex::cancel_login,
+                crate::api::codex::disconnect,
+                crate::api::codex::environments,
+                crate::api::codex::configure,
                 crate::api::cursor_api_key::get_cursor_api_key::handler,
                 crate::api::cursor_api_key::put_cursor_api_key::handler,
                 crate::api::cursor_api_key::delete_cursor_api_key::handler,
@@ -125,6 +138,13 @@ use model::user::{
                 user::patch_tutorial::handler,
                 user::stripe::create_checkout_session_v2::create_checkout_session,
                 user::stripe::create_portal_session::create_portal_session,
+                user::stripe::change_plan::change_plan,
+
+                /// /ai-billing
+                ai_billing::inbound::axum_router::get_summary_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
+                ai_billing::inbound::axum_router::get_plans_handler,
+                ai_billing::inbound::axum_router::update_overage_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
+                ai_billing::inbound::axum_router::create_credit_checkout_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
 
                 /// /session
                 session::session_login::handler,
@@ -151,11 +171,20 @@ use model::user::{
                 teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::get_user_teams::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::remove_user_from_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::patch_team_member_plan::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::delete_team_invite::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
 
                 /// /referral
                 referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
                 referral::inbound::axum_router::post_referral_invite_handler::<crate::api::context::ReferralServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+
+                /// /gtm-invite
+                gtm_invite::inbound::axum_router::create_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+                gtm_invite::inbound::axum_router::list_links::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+                gtm_invite::inbound::axum_router::revoke_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+                gtm_invite::inbound::axum_router::resolve_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+                gtm_invite::inbound::axum_router::redeem_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+                gtm_invite::inbound::axum_router::get_offer::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
 
                 /// /mobile-welcome-email
                 mobile_welcome_email::handler,
@@ -197,6 +226,30 @@ use model::user::{
                         CursorApiKeyStatus,
                         PutCursorApiKeyRequest,
 
+                        // GTM invite links
+                        GtmInviteLink,
+                        GtmInviteLinkStatus,
+                        GtmInviteLinkList,
+                        CreateGtmInviteLinkRequest,
+                        PublicGtmInviteLink,
+                        RedeemGtmInviteLinkRequest,
+                        GtmInviteOffer,
+                        GtmInviteOfferStatus,
+
+                        // Plans and AI billing
+                        PaidPlan,
+                        ChangePlanRequest,
+                        ChangePlanResponse,
+                        ai_billing::UsageSnapshot,
+                        ai_billing::PlanTier,
+                        ai_billing::DenyReason,
+                        ai_billing::inbound::axum_router::AiBillingErrorBody,
+                        ai_billing::inbound::axum_router::PlanCatalogEntry,
+                        ai_billing::inbound::axum_router::PlanCatalogResponse,
+                        ai_billing::inbound::axum_router::UpdateOverageRequest,
+                        ai_billing::inbound::axum_router::CreditCheckoutRequestBody,
+                        ai_billing::inbound::axum_router::CreditCheckoutResponse,
+
                         // GitHub pull requests
                         EnrichGithubPullRequestsProxyRequest,
                         EnrichGithubPullRequestsResponse,
@@ -231,6 +284,7 @@ use model::user::{
                         CreateTeamRequest,
                         InviteToTeamRequest,
                         PatchTeamRequest,
+                        PatchTeamMemberPlanRequest,
                         PatchTeamUserRole,
                         PatchTeamCrmSettingsRequest,
                         PatchTeamCrmSettingsResponse,

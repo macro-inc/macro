@@ -3,7 +3,8 @@ import {
   type EntityActionViewContext,
   makeAddTagAction,
 } from '@app/features/next-soup/actions';
-import { ContextMenuContent } from '@core/component/ContextMenu';
+import { ProjectAssignmentDialog } from '@app/features/projects/projects';
+import { ContextMenuContent, MenuSeparator } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
@@ -15,10 +16,12 @@ import {
 } from '@property/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { cn } from '@ui';
 import {
   type Accessor,
   createSignal,
   type FlowComponent,
+  type JSX,
   Match,
   Show,
   Switch,
@@ -31,7 +34,15 @@ interface SoupEntityContextMenuProps {
   list: EntityActionListState;
   selectedEntities: Accessor<EntityData[]>;
   viewContext: EntityActionViewContext;
+  class?: string;
+  /** Use a div trigger when the row already renders its own button. */
+  as?: 'div';
   onOpenChange?: (open: boolean) => void;
+  /**
+   * View-specific items appended after the entity actions, separated from
+   * them. Desktop only: the mobile long-press drawer shows the actions alone.
+   */
+  extraItems?: JSX.Element;
 }
 
 function RowTagPicker(props: {
@@ -66,6 +77,7 @@ export const SoupEntityContextMenu: FlowComponent<
   const addTagAction = makeAddTagAction();
 
   const [tagPickerOpen, setTagPickerOpen] = createSignal(false);
+  const [projectTasks, setProjectTasks] = createSignal<string[]>();
   const [menuPosition, setMenuPosition] = createSignal<{
     x: number;
     y: number;
@@ -88,7 +100,7 @@ export const SoupEntityContextMenu: FlowComponent<
     <Switch>
       <Match when={isMobile()}>
         <div
-          class="size-full"
+          class={cn('h-full w-full', props.class)}
           data-soup-entity
           ref={(el) => {
             touchHandler(el, () => ({
@@ -109,7 +121,8 @@ export const SoupEntityContextMenu: FlowComponent<
       <Match when={true}>
         <ContextMenu onOpenChange={props.onOpenChange}>
           <ContextMenu.Trigger
-            class="size-full group/cm-trigger"
+            as={props.as}
+            class={cn('h-full w-full group/cm-trigger', props.class)}
             on:contextmenu={(event: MouseEvent) =>
               setMenuPosition({ x: event.clientX, y: event.clientY })
             }
@@ -123,16 +136,32 @@ export const SoupEntityContextMenu: FlowComponent<
                   entities={menuEntities()}
                   list={props.list}
                   viewContext={props.viewContext}
+                  onSetProject={() => {
+                    const ids = menuEntities().map((entity) => entity.id);
+                    setTimeout(() => setProjectTasks(ids), 0);
+                  }}
                   onEditTags={
                     canEditTags()
                       ? () => setTimeout(() => setTagPickerOpen(true), 0)
                       : undefined
                   }
                 />
+                <Show when={props.extraItems}>
+                  <MenuSeparator />
+                  {props.extraItems}
+                </Show>
               </ContextMenuContent>
             </Show>
           </ContextMenu.Portal>
         </ContextMenu>
+        <Show when={projectTasks()}>
+          {(ids) => (
+            <ProjectAssignmentDialog
+              taskIds={ids()}
+              onClose={() => setProjectTasks(undefined)}
+            />
+          )}
+        </Show>
         <Show when={tagPickerOpen() && tagEntityType(props.entity)}>
           {(entityType) => (
             <RowTagPicker

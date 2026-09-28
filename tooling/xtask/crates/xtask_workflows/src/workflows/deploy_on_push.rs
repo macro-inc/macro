@@ -1,9 +1,23 @@
 //! `Deploy on Push` — the single push-to-main dev deploy pipeline. Mirrors the
-//! production release flow (cloud storage first, then the sync service and web
-//! app), except every stage is gated behind the `check-to-deploy` path diff so
-//! only the stages whose inputs actually changed deploy — the release always
-//! deploys everything. Replaces the separate `deploy_cloud_storage_on_push`
-//! and `deploy_web_app_dev_push` workflows. Generated into `deploy_on_push.yml`
+//! production release flow: cloud storage first, then the sync service and web
+//! app, with every stage deploying unconditionally.
+//!
+//! Nothing is path-gated, deliberately. The pipeline serializes on one
+//! concurrency group, and GitHub cancels a *pending* run as soon as a newer one
+//! queues behind the same group — `cancel-in-progress: false` only protects the
+//! run that is already executing. A gated pipeline therefore loses changes: a
+//! backend-only push that gets superseded while queued is cancelled before its
+//! deploy job starts, and the frontend-only push that replaced it skips the
+//! backend stage, so that commit never ships. Deploying every stage from
+//! whatever HEAD survives makes the coalescing safe — the surviving run is
+//! always a superset of the ones it displaced.
+//!
+//! The called workflows already avoid redundant work internally (the service
+//! matrix is Nix-cached and Pulumi no-ops unchanged stacks), so the cost of
+//! dropping the gate is small next to a silently undeployed commit.
+//!
+//! Replaces the separate `deploy_cloud_storage_on_push` and
+//! `deploy_web_app_dev_push` workflows. Generated into `deploy_on_push.yml`
 //! (keep [`crate::workflows::cancel_stuck_cloud_storage_deploys`]'s
 //! `WORKFLOW_FILE` in sync with this filename).
 //!
@@ -15,60 +29,34 @@
 //! against manual dispatches of the individual pipelines.
 
 use anyhow::Result;
-use gh_workflow::{Concurrency, Event, Expression, Job, Push, Step, Use, Workflow};
-use xtask_paths::RepoGlob;
+use gh_workflow::{Concurrency, Event, Expression, Job, Push, Workflow};
 
-use crate::workflows::{runners, web_artifact_paths};
-
-/// Repository inputs that can change the deployed cloud-storage services —
-/// the trigger paths of the replaced `deploy_cloud_storage_on_push` workflow,
-/// expressed as a diff-checker group so the other stages can share one
-/// push-to-main trigger.
-const CLOUD_STORAGE_PATHS: &[RepoGlob<'static>] = &[
-    xtask_paths::repo_glob!("Cargo.toml"),
-    xtask_paths::repo_glob!("Cargo.lock"),
-    xtask_paths::repo_glob!("Cross.toml"),
-    xtask_paths::repo_glob!("clippy.toml"),
-    xtask_paths::repo_glob!("deny.toml"),
-    xtask_paths::repo_glob!("rust-toolchain.toml"),
-    xtask_paths::repo_glob!(".cargo/**"),
-    xtask_paths::repo_glob!(".config/**"),
-    xtask_paths::repo_glob!(".sqlx/**"),
-    xtask_paths::repo_glob!("crates/**"),
-    xtask_paths::repo_glob!("services/**"),
-    xtask_paths::repo_glob!("tooling/xtask/**"),
-    xtask_paths::repo_glob!("tooling/just/**"),
-    xtask_paths::repo_glob!("tooling/scripts/**"),
-    xtask_paths::repo_glob!("static_assets/**"),
-    xtask_paths::repo_glob!("docker/**"),
-    xtask_paths::repo_glob!("nix/**"),
-    xtask_paths::repo_glob!("nix-support/**"),
-    xtask_paths::repo_glob!("infra/**"),
-    xtask_paths::repo_glob!(".github/workflows/deploy_on_push.yml"),
-    xtask_paths::repo_glob!(".github/workflows/deploy_all_services.yml"),
-    xtask_paths::repo_glob!(".github/actions/deploy-cloud-storage-pulumi/**"),
-    xtask_paths::repo_glob!(".github/actions/setup-nix/**"),
-    xtask_paths::repo_glob!(".github/actions/teardown-nix/**"),
-    xtask_paths::repo_glob!(".github/actions/migrate-cloud-storage-db/**"),
-    xtask_paths::repo_glob!(".github/scripts/build-cloud-storage-lambdas-nix.sh"),
-    xtask_paths::repo_glob!(".github/services-config.json"),
-    xtask_paths::repo_glob!(".github/workspace-dep-closures.json"),
-    xtask_paths::repo_glob!("flake.nix"),
-    xtask_paths::repo_glob!("flake.lock"),
-];
-
-/// Inputs that can change the deployed sync-service worker — the push trigger
-/// paths the [`crate::workflows::deploy_sync_service`] workflow used before it
-/// became call/dispatch-only.
-const SYNC_SERVICE_PATHS: &[RepoGlob<'static>] = &[
-    xtask_paths::repo_glob!("services/sync-service/**"),
-    xtask_paths::repo_glob!("crates/macro_sync_service_jwt/**"),
-    xtask_paths::repo_glob!("Cargo.toml"),
-    xtask_paths::repo_glob!("Cargo.lock"),
-    xtask_paths::repo_glob!("rust-toolchain.toml"),
-    xtask_paths::repo_glob!(".github/workflows/deploy_on_push.yml"),
-    xtask_paths::repo_glob!(".github/workflows/deploy_sync_service.yml"),
-];
+/// Prepended to the generated YAML, under the "do not edit" header. The
+/// no-gating decision is the single most likely thing for someone to try to
+/// "optimize" while reading the workflow file rather than this module, so the
+/// reasoning has to live in the generated output too.
+pub const NOTICE: &str = indoc::indoc! {"
+    #
+    # Every stage here deploys on every push — deliberately NOT path-gated.
+    # Do not add `if:` change filters to these jobs.
+    #
+    # This pipeline serializes on one concurrency group, and GitHub keeps only
+    # ONE pending run per group: a newly queued run cancels the run already
+    # waiting. `cancel-in-progress: false` does not prevent that — it only
+    # protects the run that is actively executing.
+    #
+    # So with change filters, pushes get silently dropped. Push A (backend) is
+    # queued behind a running deploy; push B (frontend-only) arrives and
+    # cancels A before its deploy job ever starts; B runs and its filter skips
+    # the backend stage. A's commit is on main and was never deployed.
+    #
+    # Deploying everything unconditionally makes the coalescing lossless: the
+    # surviving run always deploys a superset of the runs it displaced. The
+    # called workflows already avoid redundant work internally (Nix-cached
+    # builds, Pulumi no-ops on unchanged stacks), so the cost is small next to
+    # an undeployed commit.
+    #
+"};
 
 /// Build the workflow. The caller jobs' `with:`/`secrets:` are filled in by
 /// [`patch`].
@@ -77,10 +65,10 @@ pub fn deploy_on_push() -> Workflow {
         .on(Event::default().push(Push::default().add_branch("main")))
         .concurrency(
             // Never cancel an in-progress deployment — that could leave a
-            // stack half-applied. Queued pushes coalesce to the newest.
+            // stack half-applied. Queued pushes coalesce to the newest, which
+            // is only lossless because no stage is path-gated (see module docs).
             Concurrency::new(Expression::new("${{ github.workflow }}")).cancel_in_progress(false),
         )
-        .add_job("check-to-deploy", check_to_deploy())
         .add_job("deploy-cloud-storage", deploy_cloud_storage())
         .add_job("deploy-sync-service", deploy_sync_service())
         .add_job("deploy-web-app", deploy_web_app())
@@ -144,96 +132,26 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
     Ok(())
 }
 
-fn check_to_deploy() -> Job {
-    Job::default()
-        .runs_on(runners::Runner::TinyNoCache.to_string())
-        .add_output(
-            "cloud-storage",
-            "${{ steps.changes.outputs.cloud-storage }}",
-        )
-        .add_output("sync-service", "${{ steps.changes.outputs.sync-service }}")
-        .add_output("web-app", "${{ steps.changes.outputs.web-app }}")
-        .add_step(checkout())
-        .add_step(diff_checker())
-}
-
 fn deploy_cloud_storage() -> Job {
     Job::default()
         .name("Deploy Cloud Storage Services")
-        .needs(vec!["check-to-deploy".to_string()])
-        .cond(Expression::new(
-            "${{ needs.check-to-deploy.outputs.cloud-storage == 'true' }}",
-        ))
         .uses("./.github/workflows/deploy_all_services.yml")
 }
 
-/// The worker calls DSS/SPS, so don't ship it ahead of them (same ordering as
-/// the production release) — but do ship it when the cloud-storage stage was
-/// *skipped* for having no changes, hence `!failure()` instead of the implicit
-/// `success()`.
+/// The worker calls DSS/SPS, so don't ship it ahead of them — same ordering as
+/// the production release. The implicit `success()` on `needs` is what holds it
+/// back when the backend deploy fails.
 fn deploy_sync_service() -> Job {
     Job::default()
         .name("Deploy Sync Service")
-        .needs(vec![
-            "check-to-deploy".to_string(),
-            "deploy-cloud-storage".to_string(),
-        ])
-        .cond(Expression::new(
-            "${{ !failure() && !cancelled() && needs.check-to-deploy.outputs.sync-service == 'true' }}",
-        ))
+        .needs(vec!["deploy-cloud-storage".to_string()])
         .uses("./.github/workflows/deploy_sync_service.yml")
 }
 
-/// Same skipped-backend tolerance as [`deploy_sync_service`].
+/// Same ordering rationale as [`deploy_sync_service`].
 fn deploy_web_app() -> Job {
     Job::default()
         .name("Deploy Web App")
-        .needs(vec![
-            "check-to-deploy".to_string(),
-            "deploy-cloud-storage".to_string(),
-        ])
-        .cond(Expression::new(
-            "${{ !failure() && !cancelled() && needs.check-to-deploy.outputs.web-app == 'true' }}",
-        ))
+        .needs(vec!["deploy-cloud-storage".to_string()])
         .uses("./.github/workflows/deploy_web_app.yml")
-}
-
-fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    ) // v6
-}
-
-fn diff_checker() -> Step<Use> {
-    let diff = [
-        diff_entry("cloud-storage", CLOUD_STORAGE_PATHS),
-        diff_entry("sync-service", SYNC_SERVICE_PATHS),
-        format!(
-            "web-app: ./infra/stacks/web-app/** ./.github/workflows/deploy_on_push.yml ./.github/workflows/deploy_web_app.yml {}",
-            web_artifact_paths::diff_checker_list()
-        ),
-    ]
-    .join("\n");
-
-    Step::new("Check changed paths")
-        .uses(
-            "whutchinson98",
-            "diff-checker-action",
-            "d25a22ee8f84f5e44abda3027c80c2e6d71f68a6",
-        ) // v1.0.2
-        .id("changes")
-        .add_with(("token", "${{ github.token }}"))
-        .add_with(("diff", diff))
-}
-
-/// Render one diff-checker group line (`<group>: ./a ./b/** …`).
-fn diff_entry(group: &str, paths: &[RepoGlob<'static>]) -> String {
-    let list = paths
-        .iter()
-        .map(|path| format!("./{}", path.as_str()))
-        .collect::<Vec<_>>()
-        .join(" ");
-    format!("{group}: {list}")
 }
