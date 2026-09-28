@@ -103,8 +103,9 @@ selection participates in browser Back/Forward independently per pane. Explicit
 return controls navigate to the workspace's list root. Multiple panes navigate
 their child routes and history independently; returning to a list does not
 activate another pane. Opening a resource already displayed in another pane
-still activates its owner through router claim arbitration; the compatibility
-preview guard can instead reject a conflicting embedded preview. On touch, or
+activates its owner through router claim arbitration, preserves the owner's route,
+and applies compatible search targets to that pane. The compatibility preview
+guard can instead reject a conflicting embedded preview. On touch, or
 when the new-app-view flag cannot render the detail, Home, Email, Tasks, and
 Channels detail URLs fall back to the existing full-block surface. Legacy email
 and channel message targets are normalized into per-pane search by ingress
