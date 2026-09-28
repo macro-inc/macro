@@ -68,6 +68,9 @@ const adapter = createCacheCoordinatorPageAdapter({
   onProtocolError: (error) => {
     report({ kind: 'protocol-error', error: error.message });
   },
+  onCacheUnavailable: (reason) => {
+    report({ kind: 'cache-unavailable', reason });
+  },
 });
 
 adapter.onmessage = (event) => {
@@ -202,6 +205,17 @@ const handleCommand = (command: ProductionHarnessCommand): void => {
       }
       currentWorker.terminate();
       report({ kind: 'command-result', commandId: value.commandId, ok: true });
+    })
+    .with({ kind: 'navigate-away' }, (value) => {
+      void (async () => {
+        await adapter.dispose({ graceful: false, preserveDatabase: true });
+        report({
+          kind: 'command-result',
+          commandId: value.commandId,
+          ok: true,
+        });
+        setTimeout(() => window.close());
+      })();
     })
     .exhaustive();
 };

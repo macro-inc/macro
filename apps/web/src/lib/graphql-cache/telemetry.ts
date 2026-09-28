@@ -133,6 +133,10 @@ export const CACHE_OWNER_EVENTS = [
   'abrupt-loss',
   'replacement',
   'multiple-owner-detected',
+  'owner-lock-unavailable',
+  'storage-busy',
+  'stale-databases-removed',
+  'stale-database-kept',
 ] as const;
 export type CacheOwnerEvent = (typeof CACHE_OWNER_EVENTS)[number];
 

@@ -13,10 +13,11 @@ import {
   validateCoordinatorToEngineEnvelope,
   validatePageToEngineEnvelope,
 } from '../coordinator-protocol';
+import { OWNER_LOCK_RETRY_DELAYS_MS } from '../startup';
 
 declare const self: DedicatedWorkerGlobalScope;
 
-const withVersion = <T extends { coordinatorVersion: 5 }>(
+const withVersion = <T extends { coordinatorVersion: 6 }>(
   value: T extends unknown ? Omit<T, 'coordinatorVersion'> : never
 ): T =>
   ({
@@ -157,7 +158,9 @@ async function activate(
   activationValue = activation;
   controlPort = port;
   telemetry = new BroadcastChannel(`graphql-cache-wp08:${activation.scope}`);
-  await new Promise<void>((resolve) => {
+  // Like the production engine: announce assets, take the owner lock, then
+  // touch storage only after the coordinator's `open-engine` grant.
+  const storageGrant = new Promise<void>((resolve) => {
     port.onmessage = ({ data }) => {
       const parsed = validateCoordinatorToEngineEnvelope(
         Array.isArray(data) ? data[1] : data
@@ -169,180 +172,221 @@ async function activate(
       )
         resolve();
     };
-    port.start();
-    port.postMessage([0]);
-    sendEngine(
-      withVersion<EngineToCoordinatorEnvelope>({
-        kind: 'engine-assets-ready',
-        tabId: activation.tabId,
-        ownerEpoch: activation.ownerEpoch,
-      })
-    );
   });
-  await navigator.locks.request(
-    activation.ownerLockName,
-    { mode: 'exclusive' },
-    async (lock) => {
-      if (!lock) throw new Error('owner lock was not acquired');
-      telemetry?.postMessage({
-        kind: 'lock-acquired',
-        tabId: activation.tabId,
-        ownerEpoch: activation.ownerEpoch,
-      });
-      let database: IDBDatabase | undefined;
-      const engineState: FakeEngineState = { revision: 0n };
-      let queue = Promise.resolve();
-      let draining = false;
-      let requestShutdown: (() => void) | undefined;
-      const shutdown = new Promise<void>((resolve) => {
-        requestShutdown = resolve;
-      });
-      try {
-        if (activation.databaseAction === 'wipe-before-open') {
-          telemetry?.postMessage({
-            kind: 'wipe-started',
-            ownerEpoch: activation.ownerEpoch,
-          });
-          await deleteDatabase(activation.scope);
-          telemetry?.postMessage({
-            kind: 'wipe-completed',
-            ownerEpoch: activation.ownerEpoch,
-          });
+  port.start();
+  port.postMessage([0]);
+  sendEngine(
+    withVersion<EngineToCoordinatorEnvelope>({
+      kind: 'engine-assets-ready',
+      tabId: activation.tabId,
+      ownerEpoch: activation.ownerEpoch,
+    })
+  );
+  // Never queue for the owner lock: retry it briefly, then give up without
+  // touching storage, exactly like the production engine.
+  const waitStartedAt = performance.now();
+  for (let attempt = 1; ; attempt += 1) {
+    let lockWasBusy = false;
+    await navigator.locks.request(
+      activation.ownerLockName,
+      { mode: 'exclusive', ifAvailable: true },
+      async (lock) => {
+        if (!lock) {
+          lockWasBusy = true;
+          return;
         }
-        database = await openDatabase(activation.scope);
-        const activeDatabase = database;
-        port.onmessage = (event: MessageEvent<unknown>) => {
-          if (Array.isArray(event.data) && event.data[0] === 1) {
-            requestShutdown?.();
-            return;
+        telemetry?.postMessage({
+          kind: 'lock-acquired',
+          tabId: activation.tabId,
+          ownerEpoch: activation.ownerEpoch,
+        });
+        sendEngine(
+          withVersion<EngineToCoordinatorEnvelope>({
+            kind: 'owner-lock-acquired',
+            tabId: activation.tabId,
+            ownerEpoch: activation.ownerEpoch,
+          })
+        );
+        await storageGrant;
+        let database: IDBDatabase | undefined;
+        const engineState: FakeEngineState = { revision: 0n };
+        let queue = Promise.resolve();
+        let draining = false;
+        let requestShutdown: (() => void) | undefined;
+        const shutdown = new Promise<void>((resolve) => {
+          requestShutdown = resolve;
+        });
+        try {
+          if (activation.databaseAction === 'wipe-before-open') {
+            telemetry?.postMessage({
+              kind: 'wipe-started',
+              ownerEpoch: activation.ownerEpoch,
+            });
+            await deleteDatabase(activation.scope);
+            telemetry?.postMessage({
+              kind: 'wipe-completed',
+              ownerEpoch: activation.ownerEpoch,
+            });
           }
-          const payload =
-            Array.isArray(event.data) && event.data[0] === 0
-              ? event.data[1]
-              : event.data;
-          const parsed = validateCoordinatorToEngineEnvelope(payload);
-          if (!parsed.ok) return;
-          const message: CoordinatorToEngineEnvelope = parsed.value;
-          if (message.ownerEpoch !== activation.ownerEpoch) return;
-          switch (message.kind) {
-            case 'heartbeat':
-              if (!ignoreHeartbeats) {
-                sendEngine(
-                  withVersion<EngineToCoordinatorEnvelope>({
-                    kind: 'heartbeat-ack',
-                    ownerEpoch: activation.ownerEpoch,
-                    heartbeatId: message.heartbeatId,
-                  })
-                );
-              }
-              break;
-            case 'drain-engine':
-              if (draining) return;
-              draining = true;
-              void queue.finally(() => requestShutdown?.());
-              break;
-            case 'engine-request':
-              if (draining) return;
-              telemetry?.postMessage({
-                kind: 'request-started',
-                tabId: activation.tabId,
-                ownerEpoch: activation.ownerEpoch,
-                routeId: message.routeId,
-                requestKind: message.request.kind,
-                requestId: message.request.id,
-                slow:
-                  message.request.kind === 'read' &&
-                  message.request.query.includes('Slow'),
-              });
-              queue = queue.then(async () => {
-                let response: CacheResponse;
-                try {
-                  response = await execute(
-                    activeDatabase,
-                    message.request,
-                    engineState
-                  );
-                } catch (error) {
-                  response = {
-                    id: message.request.id,
-                    ok: false,
-                    error:
-                      error instanceof Error ? error.message : String(error),
-                  };
-                }
-                sendEngine(
-                  withVersion<EngineToCoordinatorEnvelope>({
-                    kind: 'engine-response',
-                    ownerEpoch: activation.ownerEpoch,
-                    routeId: message.routeId,
-                    response,
-                  })
-                );
-                if (
-                  response.ok &&
-                  (message.request.kind === 'write' ||
-                    message.request.kind === 'clear')
-                ) {
+          database = await openDatabase(activation.scope);
+          const activeDatabase = database;
+          port.onmessage = (event: MessageEvent<unknown>) => {
+            if (Array.isArray(event.data) && event.data[0] === 1) {
+              requestShutdown?.();
+              return;
+            }
+            const payload =
+              Array.isArray(event.data) && event.data[0] === 0
+                ? event.data[1]
+                : event.data;
+            const parsed = validateCoordinatorToEngineEnvelope(payload);
+            if (!parsed.ok) return;
+            const message: CoordinatorToEngineEnvelope = parsed.value;
+            if (message.ownerEpoch !== activation.ownerEpoch) return;
+            switch (message.kind) {
+              case 'heartbeat':
+                if (!ignoreHeartbeats) {
                   sendEngine(
                     withVersion<EngineToCoordinatorEnvelope>({
-                      kind: 'engine-push',
+                      kind: 'heartbeat-ack',
                       ownerEpoch: activation.ownerEpoch,
-                      push: {
-                        kind: 'cache-changed',
-                        revision:
-                          engineState.revision.toString() as typeof INITIAL_CACHE_REVISION,
-                      },
+                      heartbeatId: message.heartbeatId,
                     })
                   );
                 }
-              });
-              break;
-          }
-        };
-        sendEngine(
-          withVersion<EngineToCoordinatorEnvelope>({
-            kind: 'engine-ready',
+                break;
+              case 'drain-engine':
+                if (draining) return;
+                draining = true;
+                void queue.finally(() => requestShutdown?.());
+                break;
+              case 'engine-request':
+                if (draining) return;
+                telemetry?.postMessage({
+                  kind: 'request-started',
+                  tabId: activation.tabId,
+                  ownerEpoch: activation.ownerEpoch,
+                  routeId: message.routeId,
+                  requestKind: message.request.kind,
+                  requestId: message.request.id,
+                  slow:
+                    message.request.kind === 'read' &&
+                    message.request.query.includes('Slow'),
+                });
+                queue = queue.then(async () => {
+                  let response: CacheResponse;
+                  try {
+                    response = await execute(
+                      activeDatabase,
+                      message.request,
+                      engineState
+                    );
+                  } catch (error) {
+                    response = {
+                      id: message.request.id,
+                      ok: false,
+                      error:
+                        error instanceof Error ? error.message : String(error),
+                    };
+                  }
+                  sendEngine(
+                    withVersion<EngineToCoordinatorEnvelope>({
+                      kind: 'engine-response',
+                      ownerEpoch: activation.ownerEpoch,
+                      routeId: message.routeId,
+                      response,
+                    })
+                  );
+                  if (
+                    response.ok &&
+                    (message.request.kind === 'write' ||
+                      message.request.kind === 'clear')
+                  ) {
+                    sendEngine(
+                      withVersion<EngineToCoordinatorEnvelope>({
+                        kind: 'engine-push',
+                        ownerEpoch: activation.ownerEpoch,
+                        push: {
+                          kind: 'cache-changed',
+                          revision:
+                            engineState.revision.toString() as typeof INITIAL_CACHE_REVISION,
+                        },
+                      })
+                    );
+                  }
+                });
+                break;
+            }
+          };
+          sendEngine(
+            withVersion<EngineToCoordinatorEnvelope>({
+              kind: 'engine-ready',
+              tabId: activation.tabId,
+              ownerEpoch: activation.ownerEpoch,
+              ownerLockName: activation.ownerLockName,
+              ownerLockHeld: true,
+              databaseActionProof:
+                activation.databaseAction === 'wipe-before-open'
+                  ? 'wiped-before-open'
+                  : 'opened-existing',
+              openOutcome:
+                activation.databaseAction === 'wipe-before-open'
+                  ? 'reset-storage-uncertain'
+                  : 'opened-existing',
+            })
+          );
+          telemetry?.postMessage({
+            kind: 'ready',
             tabId: activation.tabId,
             ownerEpoch: activation.ownerEpoch,
-            ownerLockName: activation.ownerLockName,
-            ownerLockHeld: true,
-            databaseActionProof:
-              activation.databaseAction === 'wipe-before-open'
-                ? 'wiped-before-open'
-                : 'opened-existing',
-            openOutcome:
-              activation.databaseAction === 'wipe-before-open'
-                ? 'reset-storage-uncertain'
-                : 'opened-existing',
-          })
-        );
-        telemetry?.postMessage({
-          kind: 'ready',
-          tabId: activation.tabId,
-          ownerEpoch: activation.ownerEpoch,
-        });
+          });
 
-        await shutdown;
-        await queue;
-        database.close();
-        database = undefined;
-        sendEngine(
-          withVersion<EngineToCoordinatorEnvelope>({
-            kind: 'engine-drained',
+          await shutdown;
+          await queue;
+          database.close();
+          database = undefined;
+          sendEngine(
+            withVersion<EngineToCoordinatorEnvelope>({
+              kind: 'engine-drained',
+              tabId: activation.tabId,
+              ownerEpoch: activation.ownerEpoch,
+            })
+          );
+        } finally {
+          database?.close();
+          telemetry?.postMessage({
+            kind: 'lock-releasing',
             tabId: activation.tabId,
             ownerEpoch: activation.ownerEpoch,
-          })
-        );
-      } finally {
-        database?.close();
-        telemetry?.postMessage({
-          kind: 'lock-releasing',
+          });
+        }
+      }
+    );
+    if (!lockWasBusy) break;
+    sendEngine(
+      withVersion<EngineToCoordinatorEnvelope>({
+        kind: 'owner-lock-busy',
+        tabId: activation.tabId,
+        ownerEpoch: activation.ownerEpoch,
+        attempt,
+        elapsedMs: Math.round(performance.now() - waitStartedAt),
+      })
+    );
+    const delayMs = OWNER_LOCK_RETRY_DELAYS_MS[attempt - 1];
+    if (delayMs === undefined) {
+      sendEngine(
+        withVersion<EngineToCoordinatorEnvelope>({
+          kind: 'owner-lock-unavailable',
           tabId: activation.tabId,
           ownerEpoch: activation.ownerEpoch,
-        });
-      }
+        })
+      );
+      return;
     }
-  );
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, delayMs);
+    });
+  }
   port.close();
   telemetry?.close();
   self.close();

@@ -42,6 +42,7 @@ export default defineConfig(({ command }) => ({
           'host.html',
           'cutover.html',
           'production.html',
+          'production-busy.html',
           'production-tab.html',
           'tab.html',
           'performance.html',

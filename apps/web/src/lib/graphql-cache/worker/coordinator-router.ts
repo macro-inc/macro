@@ -16,6 +16,7 @@ import {
   type CoordinatorAction,
   CoordinatorCore,
   type CoordinatorSnapshot,
+  startupPhaseMayTouchStorage,
 } from './coordinator-core';
 import {
   type ActivationFailureCode,
@@ -27,6 +28,7 @@ import {
   type EngineOpenOutcome,
   type EngineToCoordinatorEnvelope,
   type TabToCoordinatorEnvelope,
+  tabIdFromLivenessLockName,
   tabLivenessLockName,
   validateEngineToCoordinatorEnvelope,
   validateTabToCoordinatorEnvelope,
@@ -38,6 +40,8 @@ import {
 import {
   ENGINE_ASSET_LOAD_TIMEOUT_MS,
   ENGINE_DATABASE_OPEN_TIMEOUT_MS,
+  OWNER_LOCK_OTHER_BUILD_GRACE_MS,
+  OWNER_LOCK_WAIT_TIMEOUT_MS,
 } from './startup';
 
 export interface CoordinatorMessagePort {
@@ -52,11 +56,15 @@ export type CancelLivenessWatch = () => void;
 
 export interface CoordinatorRouterOptions {
   assetLoadTimeoutMs?: number;
+  ownerLockWaitTimeoutMs?: number;
+  otherBuildGraceMs?: number;
   activationTimeoutMs?: number;
   heartbeatIntervalMs?: number;
   heartbeatTimeoutMs?: number;
   verifyTabLockHeld?: (lockName: string) => Promise<boolean>;
   verifyOwnerLockHeld?: (lockName: string) => Promise<boolean>;
+  /** Names of every Web Lock currently held in this storage partition. */
+  queryHeldLockNames?: () => Promise<string[]>;
   watchTabLock?: (
     lockName: string,
     onReleased: () => void
@@ -72,7 +80,7 @@ type TabConnection = {
   cancelLivenessWatch: CancelLivenessWatch;
 };
 
-type PendingRegistration = { cancelled: boolean };
+type PendingRegistration = { cancelled: boolean; tabId: string };
 
 type EngineRoute = {
   tabId: string;
@@ -122,7 +130,7 @@ type WithoutVersion<T> = T extends unknown
   ? Omit<T, 'coordinatorVersion'>
   : never;
 
-const envelope = <T extends { coordinatorVersion: 5 }>(
+const envelope = <T extends { coordinatorVersion: 6 }>(
   value: WithoutVersion<T>
 ): T =>
   ({
@@ -138,6 +146,13 @@ export async function verifyExclusiveLockHeld(
     lockName,
     { mode: 'exclusive', ifAvailable: true },
     (lock) => lock === null
+  );
+}
+
+export async function queryHeldLockNames(): Promise<string[]> {
+  const snapshot = await navigator.locks.query();
+  return (snapshot.held ?? []).flatMap((lock) =>
+    lock.name === undefined ? [] : [lock.name]
   );
 }
 
@@ -186,11 +201,14 @@ export class CoordinatorRouter {
     | undefined;
 
   private readonly assetLoadTimeoutMs: number;
+  private readonly ownerLockWaitTimeoutMs: number;
+  private readonly otherBuildGraceMs: number;
   private readonly activationTimeoutMs: number;
   private readonly heartbeatIntervalMs: number;
   private readonly heartbeatTimeoutMs: number;
   private readonly verifyTabLockHeld: (lockName: string) => Promise<boolean>;
   private readonly verifyOwnerLockHeld: (lockName: string) => Promise<boolean>;
+  private readonly queryHeldLockNames: () => Promise<string[]>;
   private readonly watchTabLock: (
     lockName: string,
     onReleased: () => void
@@ -222,6 +240,10 @@ export class CoordinatorRouter {
   constructor(options: CoordinatorRouterOptions = {}) {
     this.assetLoadTimeoutMs =
       options.assetLoadTimeoutMs ?? ENGINE_ASSET_LOAD_TIMEOUT_MS;
+    this.ownerLockWaitTimeoutMs =
+      options.ownerLockWaitTimeoutMs ?? OWNER_LOCK_WAIT_TIMEOUT_MS;
+    this.otherBuildGraceMs =
+      options.otherBuildGraceMs ?? OWNER_LOCK_OTHER_BUILD_GRACE_MS;
     this.activationTimeoutMs =
       options.activationTimeoutMs ?? ENGINE_DATABASE_OPEN_TIMEOUT_MS;
     this.heartbeatIntervalMs =
@@ -232,6 +254,7 @@ export class CoordinatorRouter {
       options.verifyTabLockHeld ?? verifyExclusiveLockHeld;
     this.verifyOwnerLockHeld =
       options.verifyOwnerLockHeld ?? verifyExclusiveLockHeld;
+    this.queryHeldLockNames = options.queryHeldLockNames ?? queryHeldLockNames;
     this.watchTabLock = options.watchTabLock ?? watchTabLivenessLock;
     this.setTimeoutFn =
       options.setTimeout ?? globalThis.setTimeout.bind(globalThis);
@@ -374,7 +397,10 @@ export class CoordinatorRouter {
       return;
     }
 
-    const registration: PendingRegistration = { cancelled: false };
+    const registration: PendingRegistration = {
+      cancelled: false,
+      tabId: message.tabId,
+    };
     this.pendingRegistrations.set(port, registration);
     let lockHeld = false;
     try {
@@ -544,11 +570,25 @@ export class CoordinatorRouter {
 
     switch (message.kind) {
       case 'engine-assets-ready': {
-        if (!core.beginEngineOpen(message.tabId, message.ownerEpoch)) {
+        // The engine now tries to take the owner lock without touching
+        // storage, and gives up by itself if another context keeps it.
+        if (!core.beginOwnerLockWait(message.tabId, message.ownerEpoch)) {
           this.failOwner(
             message.tabId,
             message.ownerEpoch,
             'unexpected engine asset readiness'
+          );
+          break;
+        }
+        this.armStartupWatchdog(message.tabId, message.ownerEpoch);
+        break;
+      }
+      case 'owner-lock-acquired': {
+        if (!core.beginEngineOpen(message.tabId, message.ownerEpoch)) {
+          this.failOwner(
+            message.tabId,
+            message.ownerEpoch,
+            'unexpected owner lock acquisition'
           );
           break;
         }
@@ -562,6 +602,16 @@ export class CoordinatorRouter {
         );
         break;
       }
+      case 'owner-lock-busy':
+        void this.checkBusyOwnerLock(route, message.elapsedMs);
+        break;
+      case 'owner-lock-unavailable':
+        this.closeUnavailable(
+          route.tabId,
+          route.ownerEpoch,
+          'the engine stopped retrying'
+        );
+        break;
       case 'engine-ready': {
         const actions = core.engineReady({
           ...message,
@@ -626,6 +676,7 @@ export class CoordinatorRouter {
           this.clearActivationTimer();
           this.resetRecoveryRetries();
           this.scheduleHeartbeat(message.ownerEpoch);
+          void this.allowStaleDatabaseRemoval(route);
         }
         break;
       }
@@ -684,6 +735,15 @@ export class CoordinatorRouter {
         );
         break;
       case 'activation-failed':
+        if (message.failureCode === 'storage-busy') {
+          this.closeUnavailable(
+            route.tabId,
+            route.ownerEpoch,
+            message.reason,
+            'storage-busy'
+          );
+          break;
+        }
         this.failOwner(
           message.tabId,
           message.ownerEpoch,
@@ -844,6 +904,14 @@ export class CoordinatorRouter {
         case 'schedule-reset-activation':
           this.scheduleResetActivation();
           break;
+        case 'broadcast-cache-unavailable':
+          this.broadcast(
+            envelope<CoordinatorToTabEnvelope>({
+              kind: 'cache-unavailable',
+              reason: action.reason,
+            })
+          );
+          break;
         case 'broadcast-engine-replaced':
           this.telemetry.record({
             name: 'graphql_cache.owner',
@@ -912,10 +980,11 @@ export class CoordinatorRouter {
       ownerEpoch: state.ownerEpoch,
       phase: state.phase,
       databaseAction: state.databaseAction,
-      timeoutMs:
-        state.phase === 'loading-assets'
-          ? this.assetLoadTimeoutMs
-          : this.activationTimeoutMs,
+      timeoutMs: match(state.phase)
+        .with('loading-assets', () => this.assetLoadTimeoutMs)
+        .with('awaiting-owner-lock', () => this.ownerLockWaitTimeoutMs)
+        .with('opening-database', () => this.activationTimeoutMs)
+        .exhaustive(),
     });
   }
 
@@ -924,15 +993,136 @@ export class CoordinatorRouter {
     const progress = this.startupProgress();
     if (!progress) return;
     this.broadcast(progress);
+    const { phase, timeoutMs } = progress;
     this.activationTimer = this.setTimeoutFn(() => {
       this.failOwner(
         tabId,
         ownerEpoch,
-        progress.phase === 'loading-assets'
-          ? 'engine asset loading watchdog timed out'
-          : 'engine database opening watchdog timed out'
+        match(phase)
+          .with(
+            'loading-assets',
+            () => 'engine asset loading watchdog timed out'
+          )
+          .with(
+            'awaiting-owner-lock',
+            () => 'engine owner lock watchdog timed out'
+          )
+          .with(
+            'opening-database',
+            () => 'engine database opening watchdog timed out'
+          )
+          .exhaustive()
       );
-    }, progress.timeoutMs);
+    }, timeoutMs);
+  }
+
+  /** Tab ids holding this scope's liveness locks without registering here,
+   * so they belong to another coordinator: another deployed build. */
+  private async otherBuildTabIds(): Promise<string[] | undefined> {
+    const core = this.coreValue;
+    if (!core) return;
+    let names: string[];
+    try {
+      names = await this.queryHeldLockNames();
+    } catch {
+      return;
+    }
+    const known = new Set(this.tabs.keys());
+    for (const registration of this.pendingRegistrations.values()) {
+      known.add(registration.tabId);
+    }
+    return names.flatMap((name) => {
+      const tabId = tabIdFromLivenessLockName(core.scope, name);
+      return tabId === undefined || known.has(tabId) ? [] : [tabId];
+    });
+  }
+
+  /** A lock this build's previous owner frees within milliseconds; while
+   * another build has live tabs, a lock still busy past the grace is theirs. */
+  private async checkBusyOwnerLock(
+    route: EngineRoute,
+    elapsedMs: number
+  ): Promise<void> {
+    if (elapsedMs < this.otherBuildGraceMs) return;
+    const others = await this.otherBuildTabIds();
+    if (!others?.length || this.engineRoute !== route) return;
+    this.closeUnavailable(
+      route.tabId,
+      route.ownerEpoch,
+      'another build has live tabs'
+    );
+  }
+
+  /** Fails closed without touching storage again: the owner lock stayed with
+   * another context, or it kept the database files open (`storage-busy`). */
+  private closeUnavailable(
+    tabId: string,
+    ownerEpoch: number,
+    detail: string,
+    cause: 'owner-lock' | 'storage-busy' = 'owner-lock'
+  ): void {
+    const core = this.coreValue;
+    if (!core) return;
+    const state = core.state;
+    const actions =
+      cause === 'storage-busy'
+        ? core.storageBusy(tabId, ownerEpoch)
+        : core.ownerLockUnavailable(tabId, ownerEpoch);
+    if (actions.length === 0) return;
+    this.activationStarted.delete(ownerEpoch);
+    // Storage was not changed, or a busy wipe removed only part of it, so a
+    // pending recovery wipe carries over to the next attempt exactly as after
+    // a navigation departure.
+    const interruptedResetReason =
+      state.kind === 'activating' && state.databaseAction === 'wipe-before-open'
+        ? this.pendingRecoveryResetEpochs.get(ownerEpoch)
+        : undefined;
+    if (interruptedResetReason !== undefined) {
+      this.pendingRecoveryResetEpochs.delete(ownerEpoch);
+      this.nextRecoveryResetReason = interruptedResetReason;
+    }
+    this.telemetry.record({
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      outcome: 'error',
+      ownerEvent:
+        cause === 'storage-busy' ? 'storage-busy' : 'owner-lock-unavailable',
+      errorCode: cause === 'storage-busy' ? 'opfs-io' : 'lock',
+    });
+    this.postTerminateEngine(
+      tabId,
+      ownerEpoch,
+      cause === 'storage-busy'
+        ? `cache database files stayed busy: ${detail}`
+        : `cache database owner lock is unavailable: ${detail}`
+    );
+    this.clearEngineWatchdogs();
+    this.resetRecoveryRetries();
+    this.applyActions(actions);
+  }
+
+  /** Stale databases are deleted only once no other build could still use
+   * them; the cleanup itself also skips any database whose lock is held. */
+  private async allowStaleDatabaseRemoval(route: EngineRoute): Promise<void> {
+    const others = await this.otherBuildTabIds();
+    const state = this.coreValue?.state;
+    if (
+      others === undefined ||
+      others.length > 0 ||
+      this.engineRoute !== route ||
+      state?.kind !== 'active' ||
+      state.ownerEpoch !== route.ownerEpoch
+    ) {
+      return;
+    }
+    this.postToTab(
+      route.tabId,
+      envelope<CoordinatorToTabEnvelope>({
+        kind: 'remove-stale-databases',
+        tabId: route.tabId,
+        ownerEpoch: route.ownerEpoch,
+      })
+    );
   }
 
   private scheduleResetActivation(): void {
@@ -1091,7 +1281,7 @@ export class CoordinatorRouter {
       this.activationStarted.delete(state.ownerEpoch);
       if (
         state.kind !== 'activating' ||
-        state.phase !== 'loading-assets' ||
+        startupPhaseMayTouchStorage(state.phase) ||
         state.databaseAction === 'wipe-before-open'
       ) {
         const pendingReason = this.recordPendingResetFailure(

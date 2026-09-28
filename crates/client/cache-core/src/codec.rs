@@ -1,10 +1,10 @@
 //! Binary record codec shared by all persistent Turso backends (browser and
 //! native hosts). Records are stored as postcard bytes; the logical namespace
-//! embeds [`CACHE_FORMAT_VERSION`] and [`CACHE_SCHEMA_COMPATIBILITY_EPOCH`].
-//! A healthy, graceful browser reopen with matching versions preserves records,
-//! queued mutations, and optimistic layers. A compatibility/format mismatch or
-//! abrupt/uncertain browser owner loss physically resets the database and
-//! discards all three.
+//! embeds [`CACHE_FORMAT_VERSION`] and [`CACHE_SCHEMA_COMPATIBILITY_EPOCH`],
+//! and so does the browser's physical database name. A healthy, graceful
+//! browser reopen with matching versions preserves records, queued mutations,
+//! and optimistic layers. A compatibility/format mismatch or abrupt/uncertain
+//! browser owner loss physically resets the database and discards all three.
 
 use crate::normalize::RecordUpdates;
 use crate::queue::{PersistedOptimisticLayer, StoredMutation};
@@ -86,15 +86,26 @@ pub fn cache_namespace(scope: &str) -> String {
     format!("graphql-cache:{scope}:s{CACHE_SCHEMA_COMPATIBILITY_EPOCH}:v{CACHE_FORMAT_VERSION}")
 }
 
-/// Stable physical database name for a cache scope.
+/// Physical database name for a cache scope at one storage version.
 ///
-/// Unlike [`cache_namespace`], this deliberately excludes the schema
-/// compatibility epoch and cache format version so the browser can acquire the
-/// same main/WAL paths and validate their metadata. Only a healthy, graceful
-/// close and compatible reopen preserves those files. A compatibility/format
-/// mismatch or abrupt/uncertain owner loss physically resets both files,
-/// discarding every row, including queued mutations and optimistic layers.
-pub fn cache_database_name(scope: &str) -> String {
+/// It embeds the schema compatibility epoch, the cache format version, and the
+/// backend's `storage_schema_version`, so builds that cannot share records use
+/// separate files and owner locks instead of resetting each other's database
+/// while tabs of both stay open after a deploy. Builds with matching versions
+/// share one database: only a healthy, graceful close and reopen preserves its
+/// files. Metadata is still validated on open, and a mismatch or an
+/// abrupt/uncertain owner loss physically resets both files, discarding every
+/// row, including queued mutations and optimistic layers.
+pub fn cache_database_name(scope: &str, storage_schema_version: u32) -> String {
+    format!(
+        "{}:s{CACHE_SCHEMA_COMPATIBILITY_EPOCH}.v{CACHE_FORMAT_VERSION}.t{storage_schema_version}",
+        legacy_cache_database_name(scope)
+    )
+}
+
+/// Physical name every storage version shared before [`cache_database_name`]
+/// embedded versions; kept so stale files can be found and removed.
+pub fn legacy_cache_database_name(scope: &str) -> String {
     format!("graphql-cache:{scope}")
 }
 
@@ -143,6 +154,22 @@ mod tests {
         assert_eq!(
             cache_namespace("client-token-1"),
             "graphql-cache:client-token-1:s3:v3"
+        );
+    }
+
+    #[test]
+    fn database_name_separates_storage_versions() {
+        assert_eq!(
+            cache_database_name("client-token-1", 11),
+            "graphql-cache:client-token-1:s3.v3.t11"
+        );
+        assert_ne!(
+            cache_database_name("client-token-1", 12),
+            cache_database_name("client-token-1", 11)
+        );
+        assert_eq!(
+            legacy_cache_database_name("client-token-1"),
+            "graphql-cache:client-token-1"
         );
     }
 }

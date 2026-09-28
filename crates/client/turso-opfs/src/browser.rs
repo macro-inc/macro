@@ -24,7 +24,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     AbortController, DedicatedWorkerGlobalScope, DomException, FileSystemDirectoryHandle,
     FileSystemFileHandle, FileSystemGetFileOptions, FileSystemReadWriteOptions,
-    FileSystemRemoveOptions, FileSystemSyncAccessHandle,
+    FileSystemRemoveOptions, FileSystemSyncAccessHandle, WorkerGlobalScope,
 };
 
 #[cfg(test)]
@@ -79,6 +79,9 @@ pub enum OpfsErrorKind {
     Poisoned,
     /// Turso requested a synchronous operation that this adapter forbids.
     Unsupported,
+    /// Another context kept a database path open for the whole busy-entry
+    /// wait. The operation touched neither file, so this is not damage.
+    Busy,
 }
 
 /// A payload-free OPFS adapter error.
@@ -148,7 +151,11 @@ impl OpfsOwner {
     pub async fn acquire(database_identity: &str) -> Result<Self, OpfsError> {
         let paths = approved_paths(database_identity)?;
         let lock_name = owner_lock_name(database_identity);
-        let id = acquire_database_lock(database_identity, &lock_name).await?;
+        let id = acquire_database_lock(database_identity, &lock_name, false)
+            .await?
+            .ok_or_else(|| {
+                OpfsError::new(OpfsErrorKind::Lock, "exclusive Web Lock was not granted")
+            })?;
         Ok(Self {
             id,
             paths,
@@ -156,6 +163,24 @@ impl OpfsOwner {
             fresh: false,
             armed: true,
         })
+    }
+
+    /// Acquires this identity's exclusive Web Lock only if it is free now,
+    /// never queueing behind another holder or waiter.
+    ///
+    /// Returns `None`, having touched no storage, when the lock is taken.
+    pub async fn try_acquire(database_identity: &str) -> Result<Option<Self>, OpfsError> {
+        let paths = approved_paths(database_identity)?;
+        let lock_name = owner_lock_name(database_identity);
+        Ok(acquire_database_lock(database_identity, &lock_name, true)
+            .await?
+            .map(|id| Self {
+                id,
+                paths,
+                lock_name,
+                fresh: false,
+                armed: true,
+            }))
     }
 
     /// Returns the canonical database identity bound into this owner.
@@ -207,6 +232,7 @@ impl OpfsOwner {
     /// A one-sided pre-existing pair returns [`OpenResult::ResetRequired`], a
     /// type that exposes no Turso I/O and can only be physically reset.
     pub async fn open(mut self) -> Result<OpenResult, OpenFailure> {
+        let deadline = BusyDeadline::start();
         let paths = self.paths.clone();
         let session = match REGISTRY.with(|registry| {
             registry
@@ -236,15 +262,16 @@ impl OpfsOwner {
                 return Err(open_failure_after_cleanup(error, self));
             }
 
-            let (handle, was_created) = match open_sync_handle(&root, paths.get(role)).await {
-                Ok(value) => value,
-                Err(error) => {
-                    let adapter_error =
-                        js_error(OpfsErrorKind::Open, "OPFS sync handle open", &error);
-                    cleanup_failed_open(self.id, session, &adapter_error);
-                    return Err(open_failure_after_cleanup(adapter_error, self));
-                }
-            };
+            let (handle, was_created) =
+                match open_sync_handle(&root, paths.get(role), deadline).await {
+                    Ok(value) => value,
+                    Err(error) => {
+                        let adapter_error =
+                            entry_error(OpfsErrorKind::Open, "OPFS sync handle open", &error);
+                        cleanup_failed_open(self.id, session, &adapter_error);
+                        return Err(open_failure_after_cleanup(adapter_error, self));
+                    }
+                };
             created[role.index()] = was_created;
 
             let handle_id = match REGISTRY.with(|registry| {
@@ -331,6 +358,29 @@ impl OpfsOwner {
             .map_err(state_error)?;
         guard.disarm();
         Ok(())
+    }
+
+    /// Deletes both approved paths without recreating them, then releases the
+    /// lock. This discards a database that no context uses any more.
+    ///
+    /// Unlike [`Self::recovery_wipe`], a failed removal does not poison the
+    /// registry: the lock is still released, the error is returned, and any
+    /// path left behind can be removed by a later attempt.
+    pub async fn remove_and_release(self) -> Result<(), OpfsError> {
+        REGISTRY
+            .with(|registry| {
+                registry
+                    .borrow_mut()
+                    .machine
+                    .start_wipe(self.id, self.paths.clone())
+            })
+            .map_err(state_error)?;
+        let removed = remove_paths(&self.paths).await;
+        REGISTRY
+            .with(|registry| registry.borrow_mut().machine.finish_wipe(self.id))
+            .map_err(state_error)?;
+        self.release().await?;
+        removed
     }
 }
 
@@ -1261,10 +1311,13 @@ impl Drop for PendingAcquireGuard {
     }
 }
 
+/// Requests the exclusive lock, queueing unless `if_available` is set. With
+/// `if_available`, returns `None` without an owner when the lock is taken.
 async fn acquire_database_lock(
     database_identity: &str,
     lock_name: &str,
-) -> Result<OwnerId, OpfsError> {
+    if_available: bool,
+) -> Result<Option<OwnerId>, OpfsError> {
     let worker = js_sys::global()
         .dyn_into::<DedicatedWorkerGlobalScope>()
         .map_err(|error| js_error(OpfsErrorKind::Lock, "DedicatedWorker lock scope", &error))?;
@@ -1299,12 +1352,23 @@ async fn acquire_database_lock(
         &JsValue::from_str("exclusive"),
     )
     .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock mode", &error))?;
-    Reflect::set(
-        options.as_ref(),
-        &JsValue::from_str("signal"),
-        controller.signal().as_ref(),
-    )
-    .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock abort signal", &error))?;
+    // The Web Locks API rejects an abort signal combined with ifAvailable. An
+    // ifAvailable request settles at once, so it needs no cancellation.
+    if if_available {
+        Reflect::set(
+            options.as_ref(),
+            &JsValue::from_str("ifAvailable"),
+            &JsValue::TRUE,
+        )
+        .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock ifAvailable", &error))?;
+    } else {
+        Reflect::set(
+            options.as_ref(),
+            &JsValue::from_str("signal"),
+            controller.signal().as_ref(),
+        )
+        .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock abort signal", &error))?;
+    }
 
     let mut acquired_resolve = None;
     let mut acquired_reject = None;
@@ -1322,6 +1386,11 @@ async fn acquire_database_lock(
         lock_name: lock_name.to_owned(),
     };
     let grant = Closure::wrap(Box::new(move |lock: JsValue| -> Promise {
+        if (lock.is_null() || lock.is_undefined()) && if_available {
+            // Another context holds or awaits the lock; nothing was claimed.
+            let _ = callback_resolve.call1(&JsValue::UNDEFINED, &JsValue::FALSE);
+            return Promise::resolve(&JsValue::UNDEFINED);
+        }
         if lock.is_null() || lock.is_undefined() {
             let _ = callback_reject.call1(
                 &JsValue::UNDEFINED,
@@ -1495,9 +1564,14 @@ async fn acquire_database_lock(
         ));
     }
 
-    JsFuture::from(acquired)
+    let granted = JsFuture::from(acquired)
         .await
         .map_err(|error| js_error(OpfsErrorKind::Lock, "Web Lock acquisition", &error))?;
+    if granted.as_bool() == Some(false) {
+        REGISTRY.with(|registry| registry.borrow_mut().pending_lock = None);
+        guard.disarm();
+        return Ok(None);
+    }
 
     let owner = REGISTRY.with(|registry| {
         let mut registry = registry.borrow_mut();
@@ -1530,7 +1604,7 @@ async fn acquire_database_lock(
         Ok(registered.owner)
     })?;
     guard.disarm();
-    Ok(owner)
+    Ok(Some(owner))
 }
 
 fn cancel_database_lock_acquire(lock_name: &str) {
@@ -1648,9 +1722,86 @@ async fn worker_root() -> Result<FileSystemDirectoryHandle, JsValue> {
         .dyn_into::<FileSystemDirectoryHandle>()
 }
 
+/// How long one open or removal waits for a predecessor to release the files.
+///
+/// Chromium can grant the canonical owner Web Lock to a successor before it
+/// releases the file lock of a predecessor that is still being torn down, such
+/// as a page's cache worker terminated during `pagehide`. Production logs show
+/// that gap outlasting two seconds. Every holder of a sync handle on these
+/// paths first holds that Web Lock, so while this worker holds it,
+/// `NoModificationAllowedError` from an entry operation is a draining
+/// predecessor, not evidence about the files. The wait stays well inside the
+/// coordinator's 20 second database-open watchdog.
+#[cfg(not(test))]
+const BUSY_ENTRY_WAIT_MS: f64 = 10_000.0;
+#[cfg(test)]
+const BUSY_ENTRY_WAIT_MS: f64 = 400.0;
+const BUSY_ENTRY_FIRST_DELAY_MS: i32 = 2;
+const BUSY_ENTRY_MAX_DELAY_MS: i32 = 512;
+
+/// The end of one operation's busy-entry wait, shared by both paths.
+#[derive(Clone, Copy)]
+struct BusyDeadline(f64);
+
+impl BusyDeadline {
+    fn start() -> Self {
+        Self(performance_now() + BUSY_ENTRY_WAIT_MS)
+    }
+}
+
+/// Runs an idempotent OPFS entry operation, retrying only a busy entry until
+/// `deadline`.
+async fn retry_busy_entry(
+    deadline: BusyDeadline,
+    mut operation: impl FnMut() -> Promise,
+) -> Result<JsValue, JsValue> {
+    let mut delay = BUSY_ENTRY_FIRST_DELAY_MS;
+    loop {
+        match JsFuture::from(operation()).await {
+            Err(error) if is_entry_busy(&error) => {
+                let remaining = deadline.0 - performance_now();
+                if remaining <= 0.0 {
+                    return Err(error);
+                }
+                sleep_ms(delay.min(remaining.ceil() as i32)).await?;
+                delay = (delay * 2).min(BUSY_ENTRY_MAX_DELAY_MS);
+            }
+            result => return result,
+        }
+    }
+}
+
+fn is_entry_busy(value: &JsValue) -> bool {
+    dom_exception_name(value).as_deref() == Some("NoModificationAllowedError")
+}
+
+/// Classifies an entry that stayed busy until its deadline as
+/// [`OpfsErrorKind::Busy`], keeping the usual message.
+fn entry_error(kind: OpfsErrorKind, operation: &'static str, value: &JsValue) -> OpfsError {
+    if is_entry_busy(value) {
+        OpfsError::new(
+            OpfsErrorKind::Busy,
+            format!("{operation} failed (NoModificationAllowedError)"),
+        )
+    } else {
+        js_error(kind, operation, value)
+    }
+}
+
+async fn sleep_ms(delay: i32) -> Result<(), JsValue> {
+    let worker = js_sys::global().dyn_into::<WorkerGlobalScope>()?;
+    let mut scheduled = Ok(0);
+    let timer = Promise::new(&mut |resolve, _reject| {
+        scheduled = worker.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, delay);
+    });
+    scheduled?;
+    JsFuture::from(timer).await.map(|_| ())
+}
+
 async fn open_sync_handle(
     root: &FileSystemDirectoryHandle,
     path: &str,
+    deadline: BusyDeadline,
 ) -> Result<(FileSystemSyncAccessHandle, bool), JsValue> {
     let (file, created) = match JsFuture::from(root.get_file_handle(path)).await {
         Ok(file) => (file.dyn_into::<FileSystemFileHandle>()?, false),
@@ -1666,7 +1817,7 @@ async fn open_sync_handle(
         }
         Err(error) => return Err(error),
     };
-    let handle = JsFuture::from(file.create_sync_access_handle())
+    let handle = retry_busy_entry(deadline, || file.create_sync_access_handle())
         .await?
         .dyn_into::<FileSystemSyncAccessHandle>()?;
     Ok((handle, created))
@@ -1844,11 +1995,12 @@ fn close_sync_handle(handle: &FileSystemSyncAccessHandle) -> Result<(), JsValue>
 }
 
 async fn reset_paths(paths: &Paths, recursive: bool) -> Result<(), OpfsError> {
+    let deadline = BusyDeadline::start();
     let root = worker_root()
         .await
         .map_err(|error| js_error(OpfsErrorKind::Remove, "OPFS reset root open", &error))?;
     for role in FileRole::ALL {
-        remove_if_present(&root, paths.get(role), recursive).await?;
+        remove_if_present(&root, paths.get(role), recursive, deadline).await?;
         #[cfg(test)]
         if role == FileRole::Main && take_reset_failure(ResetFault::AfterMainRemoval) {
             return Err(OpfsError::new(
@@ -1878,22 +2030,37 @@ async fn reset_paths(paths: &Paths, recursive: bool) -> Result<(), OpfsError> {
     Ok(())
 }
 
+/// Removes both approved paths, attempting each even if the other fails.
+async fn remove_paths(paths: &Paths) -> Result<(), OpfsError> {
+    let deadline = BusyDeadline::start();
+    let root = worker_root()
+        .await
+        .map_err(|error| js_error(OpfsErrorKind::Remove, "OPFS remove root open", &error))?;
+    let mut first_error = None;
+    for role in FileRole::ALL {
+        if let Err(error) = remove_if_present(&root, paths.get(role), true, deadline).await {
+            first_error.get_or_insert(error);
+        }
+    }
+    first_error.map_or(Ok(()), Err)
+}
+
 async fn remove_if_present(
     root: &FileSystemDirectoryHandle,
     path: &str,
     recursive: bool,
+    deadline: BusyDeadline,
 ) -> Result<(), OpfsError> {
-    let remove = if recursive {
-        let options = FileSystemRemoveOptions::new();
-        options.set_recursive(true);
-        root.remove_entry_with_options(path, &options)
-    } else {
-        root.remove_entry(path)
-    };
-    match JsFuture::from(remove).await {
+    let options = FileSystemRemoveOptions::new();
+    options.set_recursive(recursive);
+    match retry_busy_entry(deadline, || root.remove_entry_with_options(path, &options)).await {
         Ok(_) => Ok(()),
         Err(error) if is_not_found(&error) => Ok(()),
-        Err(error) => Err(js_error(OpfsErrorKind::Remove, "OPFS path remove", &error)),
+        Err(error) => Err(entry_error(
+            OpfsErrorKind::Remove,
+            "OPFS path remove",
+            &error,
+        )),
     }
 }
 

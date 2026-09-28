@@ -33,6 +33,7 @@ import {
   type EnqueueOptimisticMutationResult,
   INITIAL_CACHE_REVISION,
   type MutationClaim,
+  OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
   type ReadResult,
   type WriteResult,
 } from '../protocol';
@@ -3016,6 +3017,63 @@ describe('normalizedCacheExchange', () => {
       expect(onCacheError).toHaveBeenCalledOnce();
       expect(host.begins[0]?.linkPatches).toEqual([]);
       expect(host.commits).toHaveLength(1);
+    });
+
+    it('sends a patched mutation directly while another context owns the database', async () => {
+      const base = makeMutationOp(1, optimistic);
+      const op = makeOperation(base.kind, base, {
+        ...base.context,
+        normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
+          optimisticResponse: optimistic,
+          linkPatches: [
+            {
+              query:
+                'query Group { user { groupSoup { bins { items { id } } } } }',
+              operationName: 'Group',
+              variablesJson: '{}',
+              path: [
+                { field: 'user' },
+                { field: 'groupSoup' },
+                { field: 'bins' },
+              ],
+              operation: {
+                kind: 'remove',
+                entityKey: 'GraphqlSoupItem:task-1',
+              },
+            },
+          ],
+          revalidations: [],
+        },
+      });
+      host.enqueueOptimisticMutation = vi.fn().mockRejectedValue(
+        Object.assign(new Error('owner lock is held by another build'), {
+          errorCode: OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
+        })
+      );
+      const warn = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => undefined);
+      const onCacheError = vi.fn();
+      const { ops, results, forwarded } = harness(host, undefined, {
+        onCacheError,
+      });
+      try {
+        ops.next(op);
+        await tick();
+
+        // No link-patch degradation retry: the refusal says nothing about
+        // the patches, and nothing was admitted to a durable queue.
+        expect(host.enqueueOptimisticMutation).toHaveBeenCalledOnce();
+        expect(forwarded.map((forwardedOp) => forwardedOp.kind)).toEqual([
+          'mutation',
+        ]);
+        expect(results[0]?.data).toEqual({ from: 'network' });
+        expect(onCacheError).not.toHaveBeenCalled();
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it('bounds queued network attempts to one minute', async () => {

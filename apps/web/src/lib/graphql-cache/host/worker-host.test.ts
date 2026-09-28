@@ -138,6 +138,10 @@ class FakePageAdapter {
     this.options.onTerminalError?.(error);
   }
 
+  unavailable(reason: string): void {
+    this.options.onCacheUnavailable?.(reason);
+  }
+
   private emit(message: WorkerMessage): void {
     this.onmessage?.({ data: message } as MessageEvent<WorkerMessage>);
   }
@@ -1285,6 +1289,70 @@ describe('createWorkerCacheHost', () => {
     await expect(host.clear()).rejects.toThrow(
       'coordinator MessagePort messageerror'
     );
+  });
+
+  it('stops using the cache without quarantine when another context holds the database', async () => {
+    configureAdapter = (fake) => {
+      fake.ignoredKinds.add('init');
+    };
+    localStorage.setItem('graphql-cache:scope', 'scope-1');
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    const read = host.readQuery({ query: 'query Q { q }' });
+    const unavailable = expect(read).rejects.toMatchObject({
+      errorCode: 'owner-lock-unavailable',
+    });
+    await vi.waitFor(() =>
+      expect(requireAdapter().requests.map(({ kind }) => kind)).toContain(
+        'init'
+      )
+    );
+    const adapter = requireAdapter();
+
+    adapter.unavailable('cache database owner lock is held by another context');
+
+    await unavailable;
+    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ errorCode: 'owner-lock-unavailable' })
+    );
+    expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
+    // Storage was never touched, so the scope stays reusable next load.
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
+    await expect(
+      host.readQuery({ query: 'query Q { q }' })
+    ).rejects.toMatchObject({ errorCode: 'owner-lock-unavailable' });
+    adapter.unavailable('duplicate notice');
+    expect(onInitializationError).toHaveBeenCalledOnce();
+  });
+
+  it('retires a ready host once a request is refused because the database is unavailable', async () => {
+    localStorage.setItem('graphql-cache:scope', 'scope-1');
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    await host.clear();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('read');
+    const read = host.readQuery({ query: 'query Q { q }' });
+    await vi.waitFor(() => expect(adapter.requests.at(-1)?.kind).toBe('read'));
+
+    adapter.reject(
+      adapter.requests.at(-1)?.id ?? -1,
+      'cache database owner lock is held by another context',
+      'owner-lock-unavailable'
+    );
+
+    await expect(read).rejects.toMatchObject({
+      errorCode: 'owner-lock-unavailable',
+    });
+    expect(onInitializationError).toHaveBeenCalledOnce();
+    expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
   });
 
   it('quarantines transport scope before invoking the product failure callback', async () => {

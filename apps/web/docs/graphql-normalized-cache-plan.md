@@ -198,18 +198,56 @@ heartbeat without changing epochs or touching storage. A released lock confirms
 silent worker termination and triggers the usual fenced recovery. Read deadlines
 still bound callers waiting on an unresponsive engine.
 
-Protocol v3 separates startup into asset loading and database opening. The engine
-loads/compiles WASM without touching OPFS, reports `engine-assets-ready`, and waits
-for the coordinator's `open-engine` grant. The coordinator records that storage may
-be touched before sending this grant. Pre-grant failures preserve the current
-open/reset requirement; an earlier required wipe is never forgotten. Startup phase
-budgets are relayed to every page, including late joiners: asset loading gets five
-minutes and database opening gets twenty seconds, plus a five-second page response
-grace. Ordinary read deadlines remain ten seconds. Coordinator registration gets
-sixty seconds per attempt, with three attempts; engine recovery retains its bounded
-five retries. Exhausted bootstrap retries preserve the cache scope only when the
-coordinator explicitly proves storage was untouched, not from a page's last-seen
-phase. Missing/broken transports remain conservatively uncertain.
+Protocol v6 separates startup into asset loading, taking the database owner
+lock, and database opening. The engine loads/compiles WASM without touching OPFS
+and reports `engine-assets-ready`. It then takes the owner lock only if it is
+free (`ifAvailable`), never queueing behind another holder: a busy lock is retried
+for about ten seconds with `owner-lock-busy` reports. Once it holds the lock it
+reports `owner-lock-acquired` and waits for the coordinator's `open-engine` grant;
+the coordinator records that storage may be touched before sending this grant.
+Pre-grant failures, including every failure while taking the lock, preserve the
+current open/reset requirement; an earlier required wipe is never forgotten.
+Startup phase budgets are relayed to every page, including late joiners: asset
+loading gets five minutes, taking the lock gets the retry window plus five
+seconds, and database opening gets twenty seconds, plus a five-second page
+response grace. Ordinary read deadlines remain ten seconds. Coordinator
+registration gets sixty seconds per attempt, with three attempts; engine recovery
+retains its bounded five retries. Exhausted bootstrap retries preserve the cache
+scope only when the coordinator explicitly proves storage was untouched, not from
+a page's last-seen phase. Missing/broken transports remain conservatively
+uncertain.
+
+Each build's coordinator is a separate SharedWorker (its script URL is
+content-hashed), so after a deploy two builds can target one database. The
+current owner keeps it. When the lock stays busy while tabs of another build are
+alive (liveness locks this coordinator did not register, after a 750 ms grace
+for an in-build handoff), or when the engine exhausts its retries, the
+coordinator fails closed: it refuses queued requests with `owner-lock-unavailable`
+and tells every registered page `cache-unavailable`. Those pages retire their host
+for the rest of the page session, without quarantine, toast, or error report;
+only a tab that registers later tries again. Nothing waits in line for the lock,
+so a deploy cannot make one build take the database from the other mid-handoff.
+
+The browser can also hand the owner lock to the next engine before a departing
+page's terminated worker has let go of the database files. Production logs show
+that gap outlasting two seconds after a reload. Every holder of these files
+first holds the owner lock, so a busy file seen while holding it is a predecessor
+still exiting, not damage. The OPFS adapter waits up to ten seconds for busy
+files within one open or wipe. If they stay busy, the engine reports
+`storage-busy`, and the coordinator fails closed as above. It keeps that
+attempt's open or wipe requirement instead of escalating a failed open to a
+wipe, which could not remove open files anyway.
+
+The physical database name embeds the storage versions,
+`graphql-cache:{scope}:s{epoch}.v{format}.t{storage}`, so builds with different
+compatibility epochs, record formats, or storage schemas use separate files and
+owner locks instead of resetting each other's data. Once an owner is active and
+no other build has live tabs, the coordinator lets that page delete stale
+databases of its scope: the pre-versioning `graphql-cache:{scope}` and other
+storage versions. The page lists OPFS and, only if a stale name exists, starts a
+disposable worker (a file Turso cannot read may poison its OPFS registry) that
+deletes each stale database whose owner lock is free and whose `mutation_queue`
+is empty. Databases still queueing mutations are kept and reported.
 
 Browsers missing the required worker, lock, or OPFS
 capabilities use a storage-free no-op cache host. Tauri
@@ -322,8 +360,9 @@ apps/web/src/lib/graphql-cache/ # JS glue
   compatibility epoch, record format, and storage schema) before creating the
   fixture database and again before fault injection. This matched-build check
   is intentionally stricter than normal cache compatibility.
-- Deferred: stale-namespace DB cleanup (browser), `scan_prefix`/
-  `approx_size` for GC (hardening phase).
+- Stale-version DB cleanup for the current scope (browser) is done; see §4.2.
+  Deferred: cleanup of other scopes' databases (quarantined or rotated
+  scopes), `scan_prefix`/`approx_size` for GC (hardening phase).
 
 **Phase 3 — hosts + JS glue** *(done)*
 - ~~`cache-wasm`~~: wasm-bindgen shell (async-mutex engine, string op-id

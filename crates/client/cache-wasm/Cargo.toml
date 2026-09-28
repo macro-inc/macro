@@ -2,8 +2,9 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for durable hydration generations and viewed-first search projections.
-version = "0.6.27"
+# Rebuild for storage-versioned database names, stale-database cleanup, and
+# waiting out database files a departing worker still holds.
+version = "0.6.28"
 
 [features]
 default = []

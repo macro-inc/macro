@@ -25,6 +25,7 @@ import {
   type MutationClaim,
   type MutationSettlement,
   OWNER_EPOCH_LOST_ERROR_CODE,
+  OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
   parseStorageGeneration,
   type ReadRecordsByKeysArgs,
   type ReadRecordsByKeysResult,
@@ -177,6 +178,10 @@ const isOwnerEpochLoss = (error: unknown): error is CacheResponseError =>
   error instanceof CacheResponseError &&
   error.errorCode === OWNER_EPOCH_LOST_ERROR_CODE;
 
+const isOwnerLockUnavailable = (error: unknown): error is CacheResponseError =>
+  error instanceof CacheResponseError &&
+  error.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
+
 export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let pageTelemetry = options.telemetry
     ? undefined
@@ -318,6 +323,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       if (entry.timer !== undefined) clearTimeout(entry.timer);
       recordRequestOutcome(entry, 'error', error);
       entry.reject(error);
+      if (isOwnerLockUnavailable(error)) retireUnavailable(msg.error);
       finishGracefulDisposeIfDrained();
       return;
     }
@@ -449,6 +455,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         // reporting a terminal failure or quarantining any cache scope.
         if (adapter === created && !registrationInProgress && !suspension)
           failTransport(error);
+      },
+      onCacheUnavailable: (reason) => {
+        if (adapter === created) retireUnavailable(reason);
       },
       telemetry,
     });
@@ -605,6 +614,47 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       durationMs:
         initializationStartedAt > 0 ? now() - initializationStartedAt : 0,
     });
+    state = 'failed';
+    initialization = undefined;
+    initializationError = error;
+    rejectPending(error);
+    clearSubscribers();
+    unregisterPagehide();
+    void disposeAdapter(false).then(finishTelemetry);
+    reportFailure(error);
+  }
+
+  /**
+   * Another context, usually a tab on another deployed build, holds the
+   * database, and the coordinator touched no storage. Nothing is quarantined:
+   * this page stops using the cache until it reloads, and a later page load
+   * tries again.
+   */
+  function retireUnavailable(reason: string): void {
+    if (
+      terminalFailureHandled ||
+      state === 'failed' ||
+      state === 'suspended' ||
+      state === 'disposing' ||
+      state === 'disposed'
+    )
+      return;
+    terminalFailureHandled = true;
+    const error = new CacheResponseError(
+      reason,
+      OWNER_LOCK_UNAVAILABLE_ERROR_CODE
+    );
+    if (state === 'initializing') {
+      telemetry?.record({
+        name: 'graphql_cache.host_ready',
+        operationCategory: 'initialization',
+        outcome: 'error',
+        errorCode: 'lock',
+        durationMs:
+          initializationStartedAt > 0 ? now() - initializationStartedAt : 0,
+      });
+    }
+    stopStorageHealthSampling();
     state = 'failed';
     initialization = undefined;
     initializationError = error;

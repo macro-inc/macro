@@ -15,21 +15,35 @@ import {
 import { workerCacheTelemetry } from '../telemetry-relay';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  type CleanupToPageEnvelope,
   type CoordinatorToEngineEnvelope,
   type EngineFatalCode,
   type EngineOpenOutcome,
   type EngineToCoordinatorEnvelope,
   isCachePush,
   isCacheResponse,
+  type PageToCleanupEnvelope,
   type PageToEngineEnvelope,
   validateCoordinatorToEngineEnvelope,
+  validatePageToCleanupEnvelope,
   validatePageToEngineEnvelope,
 } from './coordinator-protocol';
 import {
   createEffectWorkerRunnerTransport,
   type EffectWorkerRunnerTransport,
 } from './effect-worker-transport';
-import { cacheWasmLinearMemoryBytes } from './wasm-module';
+import {
+  listOpfsRootNames,
+  removeStaleCacheDatabases,
+  type StaleDatabaseCleanupTally,
+  staleCacheDatabaseIdentities,
+} from './stale-databases';
+import { OWNER_LOCK_RETRY_DELAYS_MS } from './startup';
+import {
+  type CacheWasmModule,
+  cacheWasmLinearMemoryBytes,
+  loadCacheWasm,
+} from './wasm-module';
 import { CacheWorkerCore, type CacheWorkerCoreOptions } from './worker-core';
 
 export type CacheEngineRuntimeEvent =
@@ -38,6 +52,11 @@ export type CacheEngineRuntimeEvent =
       kind: 'request-admitted';
       activation: PageToEngineEnvelope;
       request: CacheRequest;
+    }
+  | {
+      kind: 'owner-lock-busy';
+      activation: PageToEngineEnvelope;
+      attempt: number;
     }
   | { kind: 'ready'; activation: PageToEngineEnvelope }
   | { kind: 'drained'; activation: PageToEngineEnvelope }
@@ -80,11 +99,14 @@ export interface CacheEngineRuntimeOptions {
   telemetry?: CacheTelemetryRecorderLike;
   /** Injectable clock/memory source for throttling tests. */
   now?: () => number;
+  sleep?: (delayMs: number) => Promise<void>;
+  loadWasm?: () => Promise<CacheWasmModule>;
+  listOpfsRootNames?: () => Promise<string[]>;
   readLinearMemoryBytes?: () => number;
   memoryTelemetryIntervalMs?: number;
 }
 
-const withVersion = <T extends { coordinatorVersion: 5 }>(
+const withVersion = <T extends { coordinatorVersion: 6 }>(
   value: T extends unknown ? Omit<T, 'coordinatorVersion'> : never
 ): T =>
   ({
@@ -94,6 +116,11 @@ const withVersion = <T extends { coordinatorVersion: 5 }>(
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
+
+const sleep = (delayMs: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
 
 async function initializeCore(
   core: CacheWorkerCoreLike,
@@ -181,7 +208,12 @@ async function activate(
   };
   emitEvent({ kind: 'activation-started', activation });
   let failed = false;
-  let assetsReady = false;
+  let ownerLockAcquired = false;
+  // Set when retries for a busy owner lock ran out; storage stayed untouched.
+  let ownerLockGaveUp = false;
+  // Set when opening outwaited database files another context kept open.
+  let storageBusy = false;
+  let ownerLockWaitStartedAt = activationStartedAt;
   let openGranted = false;
   let resolveOpen!: () => void;
   const openPermission = new Promise<void>((resolve) => {
@@ -246,8 +278,51 @@ async function activate(
     ((coreOptions: CacheWorkerCoreOptions) => new CacheWorkerCore(coreOptions));
   const core = createCore({
     recoveryOpen: activation.databaseAction === 'wipe-before-open',
+    // WASM holds the owner lock but has not touched OPFS yet. The coordinator
+    // records that this epoch may change storage before granting the open.
+    onOwnerLockAcquired: async () => {
+      if (failed || ownerLockAcquired) {
+        throw new Error('cache engine was not waiting for a storage grant');
+      }
+      ownerLockAcquired = true;
+      post(
+        withVersion<EngineToCoordinatorEnvelope>({
+          kind: 'owner-lock-acquired',
+          tabId: activation.tabId,
+          ownerEpoch: activation.ownerEpoch,
+        })
+      );
+      await openPermission;
+      if (failed)
+        throw new Error('cache engine failed before its storage grant');
+    },
+    // Never queue for the lock. The coordinator decides from these reports
+    // whether another build holds it and may end this activation early.
+    onOwnerLockBusy: async (attempt) => {
+      if (failed) throw new Error('cache engine failed while waiting to open');
+      emitEvent({ kind: 'owner-lock-busy', activation, attempt });
+      post(
+        withVersion<EngineToCoordinatorEnvelope>({
+          kind: 'owner-lock-busy',
+          tabId: activation.tabId,
+          ownerEpoch: activation.ownerEpoch,
+          attempt,
+          elapsedMs: Math.max(0, Math.round(now() - ownerLockWaitStartedAt)),
+        })
+      );
+      const delayMs = OWNER_LOCK_RETRY_DELAYS_MS[attempt - 1];
+      if (delayMs === undefined) {
+        ownerLockGaveUp = true;
+        throw new Error('cache database owner lock stayed unavailable');
+      }
+      await (options.sleep ?? sleep)(delayMs);
+      if (failed) throw new Error('cache engine failed while waiting to open');
+    },
     onStorageResetRequired: () => {
       fatal('cache storage requested physical reset', 'storage-reset-required');
+    },
+    onStorageBusy: () => {
+      storageBusy = true;
     },
     onInitializationOutcome: (outcome) => {
       initializationOpenOutcome = outcome;
@@ -322,7 +397,7 @@ async function activate(
       }
       match(message)
         .with({ kind: 'open-engine' }, () => {
-          if (!assetsReady || openGranted) {
+          if (!ownerLockAcquired || openGranted) {
             fatal('unexpected database-open grant');
             return;
           }
@@ -397,7 +472,6 @@ async function activate(
   try {
     await core.prepare?.();
     if (failed) return;
-    assetsReady = true;
     post(
       withVersion<EngineToCoordinatorEnvelope>({
         kind: 'engine-assets-ready',
@@ -405,10 +479,9 @@ async function activate(
         ownerEpoch: activation.ownerEpoch,
       })
     );
-    // Sending readiness is not permission: the coordinator must first record
-    // that this epoch may touch storage before the first OPFS operation.
-    await openPermission;
-    if (failed) return;
+    // Opening first takes the database owner lock, retrying briefly while
+    // another context holds it. Storage is touched only after `open-engine`.
+    ownerLockWaitStartedAt = now();
     await initializeCore(core, activation);
     if (failed) return;
     const ownerLockIsHeld = options.ownerLockIsHeld ?? defaultOwnerLockIsHeld;
@@ -447,19 +520,72 @@ async function activate(
       durationMs: now() - activationStartedAt,
     });
     telemetry.flush();
-    post(
-      withVersion<EngineToCoordinatorEnvelope>({
-        kind: 'activation-failed',
-        tabId: activation.tabId,
-        ownerEpoch: activation.ownerEpoch,
-        reason: errorMessage(error),
-        failureCode:
-          activation.databaseAction === 'wipe-before-open'
-            ? 'recovery-open-failed'
-            : 'initialization-failed',
+    // A fatal report already ended this activation; the open only unwound.
+    if (!failed) {
+      post(
+        ownerLockGaveUp
+          ? withVersion<EngineToCoordinatorEnvelope>({
+              kind: 'owner-lock-unavailable',
+              tabId: activation.tabId,
+              ownerEpoch: activation.ownerEpoch,
+            })
+          : withVersion<EngineToCoordinatorEnvelope>({
+              kind: 'activation-failed',
+              tabId: activation.tabId,
+              ownerEpoch: activation.ownerEpoch,
+              reason: errorMessage(error),
+              failureCode: storageBusy
+                ? 'storage-busy'
+                : activation.databaseAction === 'wipe-before-open'
+                  ? 'recovery-open-failed'
+                  : 'initialization-failed',
+            })
+      );
+    }
+    await closeLifecycle();
+  }
+}
+
+/** Deletes this scope's stale databases in a worker used for nothing else,
+ * because a file Turso cannot read can poison the worker's OPFS registry. */
+async function removeStaleDatabases(
+  request: PageToCleanupEnvelope,
+  port: MessagePort,
+  workerScope: DedicatedWorkerScopeLike,
+  options: CacheEngineRuntimeOptions
+): Promise<void> {
+  const failed: StaleDatabaseCleanupTally = {
+    removed: 0,
+    inUse: 0,
+    keptWithQueuedMutations: 0,
+    failed: true,
+  };
+  let tally = failed;
+  try {
+    const wasm = await (options.loadWasm ?? loadCacheWasm)();
+    const removeOne = wasm.removeStaleCacheDatabase;
+    if (removeOne) {
+      const identities = staleCacheDatabaseIdentities(
+        request.scope,
+        await (options.listOpfsRootNames ?? listOpfsRootNames)()
+      );
+      tally = await removeStaleCacheDatabases(identities, (identity) =>
+        removeOne(request.scope, identity)
+      );
+    }
+  } catch {
+    tally = failed;
+  }
+  try {
+    port.postMessage(
+      withVersion<CleanupToPageEnvelope>({
+        kind: 'stale-databases-removed',
+        ...tally,
       })
     );
-    await closeLifecycle();
+  } finally {
+    port.close();
+    workerScope.close();
   }
 }
 
@@ -471,10 +597,25 @@ export function installCacheEngineWorker(
     options.scope ?? (self as unknown as DedicatedWorkerScopeLike);
   let activated = false;
   workerScope.onmessage = (event: MessageEvent<unknown>) => {
-    const parsed = validatePageToEngineEnvelope(event.data);
     const directPort = event.ports[0];
-    if (!parsed.ok || event.ports.length !== 1 || !directPort || activated) {
+    if (event.ports.length !== 1 || !directPort || activated) {
       for (const port of event.ports) port.close();
+      return;
+    }
+    const cleanup = validatePageToCleanupEnvelope(event.data);
+    if (cleanup.ok) {
+      activated = true;
+      void removeStaleDatabases(
+        cleanup.value,
+        directPort,
+        workerScope,
+        options
+      );
+      return;
+    }
+    const parsed = validatePageToEngineEnvelope(event.data);
+    if (!parsed.ok) {
+      directPort.close();
       return;
     }
     activated = true;

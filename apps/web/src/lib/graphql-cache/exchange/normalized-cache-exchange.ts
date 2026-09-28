@@ -71,6 +71,7 @@ import {
   isAdmittedEnqueueUncertainError,
   isCacheRevision,
   isOwnerEpochLostError,
+  isOwnerLockUnavailableError,
   type QueryRevalidationWire,
 } from '../protocol';
 import { createDeferredQueryRereads } from './deferred-query-rereads';
@@ -1078,6 +1079,12 @@ export function normalizedCacheExchange(
             // The old-scope queue may already contain the side effect. It is
             // unsafe to forward or retry without a coordinator fence.
             return uncertainEnqueueResult(op, error);
+          }
+          // Another context holds the database, so the enqueue never reached
+          // an engine. Send it as a disabled cache would.
+          if (isOwnerLockUnavailableError(error)) {
+            enqueueForward(op);
+            return undefined;
           }
           // A cached bin/page may disappear between inspect and enqueue. Do
           // not expose a partial relation move: retain entity optimism and
