@@ -24,11 +24,15 @@ import type {
   LoadAgentModelsResponse,
   PreviewAgentSessionsRequest,
   PreviewAgentSessionsResponse,
+  PullRequestSessionsResponse,
+  PullRequestUrl,
   RenameAgentSessionRequest,
   SandboxSizeBody,
+  SessionPullRequestsResponse,
   SharePermissionV2,
   StartResponse,
   StatusResponse,
+  UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
 } from './schemas';
 
@@ -453,6 +457,72 @@ export const createAgentSession = async (
     status: res.status,
     headers: res.headers,
   } as createAgentSessionResponse;
+};
+
+/**
+ * @summary List the sessions associated with a pull request that the caller can view.
+ */
+export type agentSessionsForPullRequestResponse200 = {
+  data: PullRequestSessionsResponse;
+  status: 200;
+};
+
+export type agentSessionsForPullRequestResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type agentSessionsForPullRequestResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type agentSessionsForPullRequestResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type agentSessionsForPullRequestResponseSuccess =
+  agentSessionsForPullRequestResponse200 & {
+    headers: Headers;
+  };
+export type agentSessionsForPullRequestResponseError = (
+  | agentSessionsForPullRequestResponse400
+  | agentSessionsForPullRequestResponse401
+  | agentSessionsForPullRequestResponse500
+) & {
+  headers: Headers;
+};
+
+export type agentSessionsForPullRequestResponse =
+  | agentSessionsForPullRequestResponseSuccess
+  | agentSessionsForPullRequestResponseError;
+
+export const getAgentSessionsForPullRequestUrl = () => {
+  return `/agent-sessions/by-pull-request`;
+};
+
+export const agentSessionsForPullRequest = async (
+  pullRequestUrl: PullRequestUrl,
+  options?: RequestInit
+): Promise<agentSessionsForPullRequestResponse> => {
+  const res = await fetch(getAgentSessionsForPullRequestUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pullRequestUrl),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentSessionsForPullRequestResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentSessionsForPullRequestResponse;
 };
 
 /**
@@ -1195,6 +1265,233 @@ export const updateAgentSessionPermissions = async (
     status: res.status,
     headers: res.headers,
   } as updateAgentSessionPermissionsResponse;
+};
+
+/**
+ * @summary List the pull requests associated with a session the caller can view.
+ */
+export type listAgentSessionPullRequestsResponse200 = {
+  data: SessionPullRequestsResponse;
+  status: 200;
+};
+
+export type listAgentSessionPullRequestsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listAgentSessionPullRequestsResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type listAgentSessionPullRequestsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listAgentSessionPullRequestsResponseSuccess =
+  listAgentSessionPullRequestsResponse200 & {
+    headers: Headers;
+  };
+export type listAgentSessionPullRequestsResponseError = (
+  | listAgentSessionPullRequestsResponse401
+  | listAgentSessionPullRequestsResponse403
+  | listAgentSessionPullRequestsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAgentSessionPullRequestsResponse =
+  | listAgentSessionPullRequestsResponseSuccess
+  | listAgentSessionPullRequestsResponseError;
+
+export const getListAgentSessionPullRequestsUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/pull-requests`;
+};
+
+export const listAgentSessionPullRequests = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<listAgentSessionPullRequestsResponse> => {
+  const res = await fetch(getListAgentSessionPullRequestsUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentSessionPullRequestsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentSessionPullRequestsResponse;
+};
+
+/**
+ * @summary Link a pull request to a session the caller can edit.
+ */
+export type linkAgentSessionPullRequestResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type linkAgentSessionPullRequestResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type linkAgentSessionPullRequestResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type linkAgentSessionPullRequestResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type linkAgentSessionPullRequestResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type linkAgentSessionPullRequestResponseSuccess =
+  linkAgentSessionPullRequestResponse204 & {
+    headers: Headers;
+  };
+export type linkAgentSessionPullRequestResponseError = (
+  | linkAgentSessionPullRequestResponse400
+  | linkAgentSessionPullRequestResponse401
+  | linkAgentSessionPullRequestResponse403
+  | linkAgentSessionPullRequestResponse500
+) & {
+  headers: Headers;
+};
+
+export type linkAgentSessionPullRequestResponse =
+  | linkAgentSessionPullRequestResponseSuccess
+  | linkAgentSessionPullRequestResponseError;
+
+export const getLinkAgentSessionPullRequestUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/pull-requests`;
+};
+
+export const linkAgentSessionPullRequest = async (
+  sessionId: string,
+  pullRequestUrl: PullRequestUrl,
+  options?: RequestInit
+): Promise<linkAgentSessionPullRequestResponse> => {
+  const res = await fetch(getLinkAgentSessionPullRequestUrl(sessionId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pullRequestUrl),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: linkAgentSessionPullRequestResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as linkAgentSessionPullRequestResponse;
+};
+
+/**
+ * @summary Unlink a pull request a person linked to a session the caller can edit. The pull request
+the session's agent opened stays linked.
+ */
+export type unlinkAgentSessionPullRequestResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type unlinkAgentSessionPullRequestResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type unlinkAgentSessionPullRequestResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type unlinkAgentSessionPullRequestResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type unlinkAgentSessionPullRequestResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type unlinkAgentSessionPullRequestResponseSuccess =
+  unlinkAgentSessionPullRequestResponse204 & {
+    headers: Headers;
+  };
+export type unlinkAgentSessionPullRequestResponseError = (
+  | unlinkAgentSessionPullRequestResponse400
+  | unlinkAgentSessionPullRequestResponse401
+  | unlinkAgentSessionPullRequestResponse403
+  | unlinkAgentSessionPullRequestResponse500
+) & {
+  headers: Headers;
+};
+
+export type unlinkAgentSessionPullRequestResponse =
+  | unlinkAgentSessionPullRequestResponseSuccess
+  | unlinkAgentSessionPullRequestResponseError;
+
+export const getUnlinkAgentSessionPullRequestUrl = (
+  sessionId: string,
+  params: UnlinkAgentSessionPullRequestParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-sessions/${sessionId}/pull-requests?${stringifiedParams}`
+    : `/agent-sessions/${sessionId}/pull-requests`;
+};
+
+export const unlinkAgentSessionPullRequest = async (
+  sessionId: string,
+  params: UnlinkAgentSessionPullRequestParams,
+  options?: RequestInit
+): Promise<unlinkAgentSessionPullRequestResponse> => {
+  const res = await fetch(
+    getUnlinkAgentSessionPullRequestUrl(sessionId, params),
+    {
+      ...options,
+      method: 'DELETE',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unlinkAgentSessionPullRequestResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unlinkAgentSessionPullRequestResponse;
 };
 
 /**
