@@ -1030,6 +1030,35 @@ describe('layoutManager', () => {
       }
     );
 
+    it('uses a remaining visible pane when the active pane was removed', async () => {
+      const { manager, router, dispose } = ingressRouter('/search');
+      await router.settled();
+      const source = manager.splits()[0];
+      const removed = manager.createNewSplit({
+        content: { type: 'md', id: 'removed' },
+        activate: true,
+        referredFrom: null,
+      })!;
+      await router.settled();
+      manager.removeSplit(removed.id);
+      await router.settled();
+      expect(manager.activeSplit()).toBeUndefined();
+      manager.openWithSplit(
+        { type: 'channel', id: 'entity' },
+        {
+          search: searchLocationUpdates('entity', {
+            type: 'channel',
+            messageId: 'hit',
+          }),
+        }
+      );
+      await router.settled();
+      expect(router.search(source.id, 'channels')?.messageId).toEqual(['hit']);
+      expect(manager.activeSplitId()).toBe(source.id);
+      router.dispose();
+      dispose();
+    });
+
     it('reuses an agent target inside Home', async () => {
       const { manager, router, dispose } = ingressRouter(
         '/home/agent/entity/~/search'

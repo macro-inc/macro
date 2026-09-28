@@ -16,7 +16,11 @@ export function createContentNavigator(
   routes: SplitRoutesManifest
 ) {
   return (content: SplitContent, options: OpenWithSplitOptions) => {
-    const source = options.handle ?? manager.activeSplit();
+    const firstVisible = manager.getVisibleSplits()[0];
+    const source =
+      options.handle ??
+      manager.activeSplit() ??
+      (firstVisible ? manager.getSplit(firstVisible.id) : undefined);
     if (!source) return;
     const location = resolveContentLocation(routes, content);
     const path = `/${encodeRoute(routes, { location }).map(encodeURIComponent).join('/')}`;

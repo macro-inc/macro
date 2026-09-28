@@ -47,6 +47,10 @@ export function EmailBlockAdapter(props: {
     routeSearch.messageId ||
       (Array.isArray(rawTarget) ? rawTarget[0] : rawTarget)
   );
+  let routeOwnsTarget = Boolean(routeSearch.messageId);
+  const [targetRequest, setTargetRequest] = createSignal<string | undefined>(
+    routeOwnsTarget ? routeSearch.seek : undefined
+  );
   const split = useSplitPanel();
   const listNavigation = useEmailListNavigation(props.threadId);
   const canAutofocus = useCanAutofocusSplitContent();
@@ -58,8 +62,18 @@ export function EmailBlockAdapter(props: {
     on(
       () => [routeSearch.messageId, routeSearch.seek],
       () => {
+        if (!routeSearch.messageId) {
+          if (routeOwnsTarget) {
+            routeOwnsTarget = false;
+            setTargetMessageId(undefined);
+            setTargetRequest(undefined);
+          }
+          return;
+        }
         clearTimeout(targetTimer);
-        setTargetMessageId(routeSearch.messageId || undefined);
+        routeOwnsTarget = true;
+        setTargetMessageId(routeSearch.messageId);
+        setTargetRequest(routeSearch.seek);
       },
       { defer: true }
     )
@@ -69,7 +83,9 @@ export function EmailBlockAdapter(props: {
       const id = params[URL_PARAMS.messageId];
       if (typeof id !== 'string' || !id) return;
       clearTimeout(targetTimer);
+      routeOwnsTarget = false;
       setTargetMessageId(undefined);
+      setTargetRequest(undefined);
       targetTimer = setTimeout(() => setTargetMessageId(id), 0);
     },
   });
@@ -83,7 +99,7 @@ export function EmailBlockAdapter(props: {
   const host: EmailThreadHost = {
     listNavigation,
     targetMessageId,
-    targetRequest: () => routeSearch.seek,
+    targetRequest,
     focusContainer,
     isActive: () => split?.isPanelActive() !== false,
     registerKeyboard: (handlers) => {
