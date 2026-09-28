@@ -24,8 +24,8 @@ export function localDevServer(
 
   return {
     hmr,
-    // Local stacks are also reached through private tunnels and machine names.
-    allowedHosts: true,
+    // The launcher calls hostname; localhost and IPs remain Vite defaults.
+    allowedHosts: env.MACRO_LOCAL_HOSTNAME ? [env.MACRO_LOCAL_HOSTNAME] : [],
     proxy: Object.fromEntries(
       routes.map((route) => [
         // Include bare WebSocket paths, but not /authentic or /sync-other.

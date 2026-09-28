@@ -113,7 +113,7 @@ This command:
 
 When startup finishes, the command prints the frontend URL and the important service URLs.
 
-The reverse proxy is HTTPS at `https://localhost:8090` (or the instance's proxy port) using the checked-in certificate in `infra/local/certs`. Trust `infra/local/certs/ca.pem` once so the browser accepts it; see that directory's README. Local Caddy also reflects any `Origin` (wildcard CORS) so `https://` and `*.localhost` frontends can call the proxy.
+The reverse proxy is HTTPS at `https://localhost:8090` (or the instance's proxy port) using a generated machine certificate signed by the checked-in development CA. Trust `infra/local/certs/ca.pem` once so the browser accepts it; see that directory's README. Local Caddy also reflects any `Origin` (wildcard CORS) so `https://` and `*.localhost` frontends can call the proxy.
 
 Open the frontend URL in your browser.
 
@@ -252,14 +252,25 @@ infra/local/generated/<instance>
 
 ### Access a remote dev server through one URL
 
-`run_local` and `run_dev` serve API requests and backend WebSockets through Vite,
-so the browser needs only the frontend port. For example, forward a remote
-instance's frontend with `ssh -N -L 3000:127.0.0.1:20110 your-dev-host`, then open
-`http://localhost:3000/app/`. A WebSocket-capable reverse proxy can instead expose
-that frontend under a different hostname/port, including HTTPS. Vite HMR follows
-the page's origin; no separate HMR or backend port forward is needed.
-With the local-stack proxy configured, Vite accepts any hostname, including
-machine names and private tunnel domains, without a separate host allowlist.
+`just local` (the `run_local` alias) and `run_dev` call `hostname`, add that
+name to Vite's allowed hosts, and issue a certificate for it using the stable
+CA in `infra/local/certs`. Startup prints `https://<hostname>:<proxy-port>/app/`.
+Caddy serves backend routes directly and forwards frontend assets and HMR to
+Vite, so the browser only needs the HTTPS proxy port.
+If your host firewall blocks Docker-to-host traffic, allow the instance's
+Docker network to reach the Vite port through `host.docker.internal`.
+
+Trust `infra/local/certs/ca.pem` in the visiting browser once (see the
+[certificate README](../infra/local/certs/README.md)), then open that URL.
+The visiting machine must resolve the hostname and reach the proxy port over
+your network. Tailscale is not required. The generated certificate also covers
+`localhost`, `*.localhost`, `127.0.0.1`, and `::1`. Other aliases require a
+matching certificate and a Vite allowlist entry; arbitrary names are not
+accepted automatically.
+
+An SSH forward to the HTTP Vite port still works for localhost-only access:
+`ssh -N -L 3000:127.0.0.1:20110 your-dev-host`, then open
+`http://localhost:3000/app/`. HMR follows the page's host, port, and protocol.
 
 The launcher sets `VITE_LOCAL_BACKEND_ORIGIN=same-origin` and supplies Vite's
 server-only `MACRO_LOCAL_BACKEND_PROXY` and `MACRO_LOCAL_BACKEND_ROUTES` from the
@@ -270,15 +281,9 @@ these variables still uses hosted services; `TAURI_DEV_HOST` remains an explicit
 native HMR override. Keep local dev stacks private: same-origin routing does not
 add authentication or make passwordless local login safe to publish.
 
-The backend proxy uses HTTPS with the checked-in local CA. The launcher sets
-`NODE_EXTRA_CA_CERTS` for Vite so its HTTP and WebSocket forwarding verifies
-that certificate. Browsers using the Vite origin do not need to trust the
-backend certificate themselves. Direct browser access to the HTTPS proxy
-requires trusting `infra/local/certs/ca.pem`.
-
-For access from another machine, expose Vite through an HTTPS reverse proxy
-(such as Tailscale Serve). Plain HTTP on a remote hostname cannot retain the
-app's secure login cookies; `http://localhost` is a browser exception.
+The launcher sets `NODE_EXTRA_CA_CERTS` for Vite so its HTTP and WebSocket
+forwarding verifies the backend certificate. Plain HTTP on a remote hostname
+cannot retain the app's secure login cookies; use the printed HTTPS URL.
 
 The stack launches Vite directly with Node (available in the Nix shell), because
 Bun's Node HTTP compatibility currently hangs on Vite's proxied WebSocket

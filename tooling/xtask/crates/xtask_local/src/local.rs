@@ -45,6 +45,7 @@ pub mod stack;
 pub mod stage;
 pub mod status;
 pub mod summary;
+pub mod tls;
 pub mod validate;
 
 #[cfg(test)]
@@ -442,7 +443,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         mode,
         &instance,
         &env,
-        &frontend::url(&instance),
+        &frontend::https_url(&instance)?,
         &mailpit_url,
         shared_app_url.as_deref(),
     );

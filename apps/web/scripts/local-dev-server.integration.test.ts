@@ -48,6 +48,7 @@ it('proxies real HTTP and WebSocket requests through Vite without rewriting path
       port: 0,
       ...localDevServer({
         MACRO_LOCAL_BACKEND_PROXY: target,
+        MACRO_LOCAL_HOSTNAME: 'wolf-macro-google',
         MACRO_LOCAL_BACKEND_ROUTES: '/auth,/connection-gateway,/i',
       }),
     },
@@ -86,6 +87,11 @@ it('proxies real HTTP and WebSocket requests through Vite without rewriting path
             }).on('error', reject);
           }
         );
+      if (host === 'arbitrary-host.example') {
+        expect((await request('/app/')).status).toBe(403);
+        expect((await request('/auth/health')).status).toBe(403);
+        continue;
+      }
       expect(await request('/app/')).toEqual({ status: 200, body: 'frontend' });
       const proxied = await request('/auth/health');
       expect(proxied.status).toBe(200);

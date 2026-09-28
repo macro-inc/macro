@@ -21,8 +21,10 @@ Local stack conventions used in examples: frontend `http://localhost:<fe>/app`, 
 `https://localhost:<be>` (checked-in self-signed cert; trust `infra/local/certs/ca.pem`), Mailpit `http://localhost:<mp>` (ports come from the `--instance`;
 e.g. the `lgtm` instance uses 27910 / 27909 / 27908).
 
-For remote browser testing, open an HTTPS URL that forwards to the instance's
-Vite port. Vite trusts the backend proxy CA automatically and forwards API and
-WebSocket requests. Stack-managed Vite accepts any hostname. Plain HTTP on a
-remote hostname cannot retain secure login
-cookies. Direct proxy access still requires trusting the checked-in CA.
+For remote browser testing, trust `infra/local/certs/ca.pem` and open the
+printed `https://<hostname>:<proxy-port>/app/` URL. The launcher calls `hostname`
+and includes it in both the generated certificate and Vite's allowed hosts.
+Caddy forwards frontend assets and HMR to Vite while routing API and backend
+WebSockets directly. No Tailscale setup is required; the browser needs network
+access to that hostname and port. Plain HTTP on a remote hostname cannot retain
+secure login cookies.

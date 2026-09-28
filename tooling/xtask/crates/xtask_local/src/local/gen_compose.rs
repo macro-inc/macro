@@ -60,7 +60,7 @@ pub fn caddyfile_path(instance: &Instance) -> PathBuf {
     instance.artifact_dir().join("proxy/Caddyfile")
 }
 
-/// Checked-in local TLS materials mounted into the proxy container.
+/// Checked-in development CA and localhost fixtures.
 pub fn tls_certs_dir() -> PathBuf {
     repo_root().join("infra/local/certs")
 }
@@ -75,6 +75,7 @@ pub fn generate(
     static_frontend: bool,
     gmail_forwarder: bool,
 ) -> Result<PathBuf> {
+    super::tls::issue(instance)?;
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
 
@@ -297,7 +298,10 @@ fn add_proxy_service(
             "{}:/etc/caddy/Caddyfile:ro",
             caddyfile_path(instance).display()
         )),
-        dct::Volumes::Simple(format!("{}:/etc/caddy/certs:ro", tls_certs_dir().display())),
+        dct::Volumes::Simple(format!(
+            "{}:/etc/caddy/certs:ro",
+            super::tls::certs_dir(instance).display()
+        )),
     ];
     if static_frontend {
         volumes.push(dct::Volumes::Simple(format!(
@@ -317,7 +321,11 @@ fn add_proxy_service(
         "proxy".to_string(),
         Some(dct::Service {
             image: Some(CADDY_IMAGE.to_string()),
-            environment: kv(&[("PROXY_PORT", &proxy_port.to_string())]),
+            environment: kv(&[
+                ("PROXY_PORT", &proxy_port.to_string()),
+                ("VITE_PORT", &instance.port(Port::Frontend).to_string()),
+            ]),
+            extra_hosts: vec!["host.docker.internal:host-gateway".to_string()],
             ports: dct::Ports::Short(ports),
             volumes,
             networks: dct::Networks::Simple(vec!["services".to_string(), "databases".to_string()]),

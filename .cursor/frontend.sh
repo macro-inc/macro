@@ -47,14 +47,22 @@ if ! curl -fsS --cacert "${WORKSPACE_ROOT}/infra/local/certs/ca.pem" --max-time 
 fi
 
 : >"${DEV_LOG}"
+\cd "${WORKSPACE_ROOT}"
+BACKEND_ROUTES="$(cargo x frontend-proxy-routes)"
+just ensure-cache-wasm
+just ensure-agent-fold-wasm
 \cd "${WORKSPACE_ROOT}/apps/web"
 setsid env \
   PORT="${FRONTEND_PORT}" \
+  NODE_EXTRA_CA_CERTS="${WORKSPACE_ROOT}/infra/local/certs/ca.pem" \
+  MACRO_LOCAL_HOSTNAME="$(hostname)" \
   VITE_LOCAL_SERVERS=ALL \
   VITE_LOCAL_BACKEND_ORIGIN="same-origin" \
   MACRO_LOCAL_BACKEND_PROXY="${PROXY_ORIGIN}" \
+  MACRO_LOCAL_BACKEND_ROUTES="${BACKEND_ROUTES}" \
   VITE_AI_EDITING_WORKER_URL="/ai-editing" \
-  bun run --bun dev >>"${DEV_LOG}" 2>&1 </dev/null &
+  python3 -c 'import subprocess; child = subprocess.Popen(["node", "../../node_modules/vite/bin/vite.js", "-c", "vite.config.ts"], stdin=subprocess.PIPE); raise SystemExit(child.wait())' \
+  >>"${DEV_LOG}" 2>&1 </dev/null &
 echo "$!" >"${PID_FILE}"
 
 # Cold starts build wasm packages before Vite binds; be patient once.

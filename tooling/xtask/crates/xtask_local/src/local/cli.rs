@@ -29,6 +29,8 @@ enum Cmd {
     RuntimeImage(ForceArg),
     /// Render the per-instance compose override and print its path.
     GenCompose(InstanceArgs),
+    /// Print the inventoried backend path prefixes for an external Vite launcher.
+    FrontendProxyRoutes,
     /// Render merged compose and assert the no-build / runtime-image invariants.
     ValidateLocalCompose(InstanceArgs),
     /// Resolve env layers and assert mode-appropriate invariants.
@@ -250,6 +252,10 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Zigbuild => super::zigbuild_only(),
         Cmd::RuntimeImage(a) => super::runtime_image_only(a.force),
         Cmd::GenCompose(a) => super::gen_compose_only(&a),
+        Cmd::FrontendProxyRoutes => {
+            println!("{}", super::proxy::frontend_path_prefixes().join(","));
+            Ok(())
+        }
         Cmd::ValidateLocalCompose(a) => {
             let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
             super::validate::local_compose(&instance, Mode::Local)
