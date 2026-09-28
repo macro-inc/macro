@@ -1,0 +1,4 @@
+# Datadog monitors are org-global, so this project uses only the prod stack.
+# The provider reads credentials and the Datadog site from DD_API_KEY,
+# DD_APP_KEY, and DD_HOST, supplied locally or by the deployment workflow.
+config: {}
