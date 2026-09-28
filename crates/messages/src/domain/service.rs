@@ -248,15 +248,29 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         }
         self.validate_references(&access, &input.mentions, &input.attachments)
             .await?;
-        if let Some(root) = input.thread_id {
-            self.active_thread(&parent, root).await?;
-        }
+        let canonical_root_id = match parent {
+            MessageParent::Call(call_id) => {
+                if input.thread_id.is_some_and(|root| root != call_id) {
+                    return Err(MessageError::Invalid(
+                        "call messages belong to the call thread",
+                    ));
+                }
+                Some(call_id)
+            }
+            _ => {
+                if let Some(root) = input.thread_id {
+                    self.active_thread(&parent, root).await?;
+                }
+                None
+            }
+        };
         let notification_policy = input.notification_policy;
         let nonce = input.nonce.clone();
         let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
         let message = self
             .repo
             .create(CreateMessage {
+                canonical_root_id,
                 parent: parent.clone(),
                 actor: actor.clone(),
                 triggered_by: access
@@ -785,6 +799,7 @@ fn parent_from_receipt<P: RequiredPermission>(
         EntityType::Initiative => "initiative",
         EntityType::CrmCompany => "crm_company",
         EntityType::CrmContact => "crm_contact",
+        EntityType::Call => "call",
         _ => return Err(MessageError::Forbidden),
     };
     MessageParent::parse(kind, &entity.entity_id)

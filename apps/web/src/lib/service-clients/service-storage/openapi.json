@@ -24613,6 +24613,22 @@
                 "enum": ["crm_contact"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A video call and its persistent chat thread.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A video call and its persistent chat thread."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["call"]
+              }
+            }
           }
         ],
         "description": "The entity whose permissions and lifecycle govern a message."

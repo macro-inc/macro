@@ -24,7 +24,9 @@ impl<Remote: MessageEventPublisher, Local: MessageEventPublisher, Parent: Messag
 {
     async fn publish(&self, event: MessageEvent) -> Result<(), rootcause::Report> {
         // Typing is ephemeral; it does not enter agent event delivery.
-        if matches!(event.change, MessageChange::Typing { .. }) {
+        if matches!(event.change, MessageChange::Typing { .. })
+            || matches!(event.parent, super::models::MessageParent::Call(_))
+        {
             return self.parent.publish(event).await;
         }
         let mut first_error = None;

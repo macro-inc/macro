@@ -984,6 +984,12 @@ async fn human_can_post_canonical_agent_mentions_on_documents_and_channels() {
                     access_level: AccessLevel::Comment,
                 },
             ),
+            MessageParent::Call(_) => (
+                EntityType::Call,
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::Comment,
+                },
+            ),
             MessageParent::Channel(_) => (
                 EntityType::Channel,
                 EntityPermission::ChannelRole {
@@ -1535,4 +1541,134 @@ async fn spreadsheet_anchors_require_a_spreadsheet_root_and_valid_range() {
         range: "A1".into(),
     });
     assert!(validate_post(&MessageParent::parse("document", "doc").unwrap(), &input).is_err());
+}
+
+fn call_receipt<P: RequiredPermission>(
+    user: &str,
+    call_id: Uuid,
+    level: AccessLevel,
+) -> Result<EntityAccessReceipt<P>, entity_access::domain::models::AccessError> {
+    EntityAccessReceipt::try_new_authenticated_user(
+        user.to_owned().try_into().unwrap(),
+        entity_access::domain::models::Entity {
+            entity_id: call_id.to_string(),
+            entity_type: EntityType::Call,
+        },
+        EntityPermission::AccessLevel {
+            access_level: level,
+        },
+    )
+}
+
+#[tokio::test]
+async fn call_posts_use_the_canonical_thread_and_reject_another_root() {
+    let call_id = Uuid::from_u128(10);
+    let repo = fixture();
+    let service = MessageService::new(repo.clone(), Events::default());
+    for thread_id in [None, Some(call_id)] {
+        let mut input = post_input();
+        input.thread_id = thread_id;
+        service
+            .post(
+                call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),
+                input,
+            )
+            .await
+            .unwrap();
+    }
+    let creates = repo.creates.lock().unwrap();
+    assert_eq!(creates.len(), 2);
+    assert!(
+        creates
+            .iter()
+            .all(|command| command.canonical_root_id == Some(call_id))
+    );
+    drop(creates);
+    let mut input = post_input();
+    input.thread_id = Some(Uuid::from_u128(11));
+    assert!(matches!(
+        service
+            .post(
+                call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),
+                input,
+            )
+            .await,
+        Err(MessageError::Invalid(_))
+    ));
+    assert_eq!(repo.creates.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn call_viewers_can_read_but_cannot_post() {
+    let call_id = Uuid::from_u128(10);
+    assert!(
+        call_receipt::<MessageView>("macro|viewer@example.com", call_id, AccessLevel::View).is_ok()
+    );
+    assert!(
+        call_receipt::<MessageWrite>("macro|viewer@example.com", call_id, AccessLevel::View)
+            .is_err()
+    );
+    assert!(
+        call_receipt::<MessageWrite>("macro|member@example.com", call_id, AccessLevel::Comment)
+            .is_ok()
+    );
+}
+
+#[tokio::test]
+async fn call_root_deletion_preserves_chat_and_cannot_delete_other_authors() {
+    let mut repo = fixture();
+    let call_id = repo.message.id;
+    repo.message.parent = MessageParent::Call(call_id);
+    repo.state.anchor = None;
+    let service = MessageService::new(repo.clone(), Events::default());
+    assert!(matches!(
+        service
+            .delete(
+                call_receipt("macro|other@example.com", call_id, AccessLevel::Edit).unwrap(),
+                call_id,
+                None,
+            )
+            .await,
+        Err(MessageError::Forbidden)
+    ));
+    service
+        .delete(
+            call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),
+            call_id,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(*repo.deletes.lock().unwrap(), vec![call_id]);
+    assert!(repo.thread_deletes.lock().unwrap().is_empty());
+    service
+        .post(
+            call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),
+            post_input(),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        service
+            .delete_thread(
+                call_receipt("macro|author@example.com", call_id, AccessLevel::Owner).unwrap(),
+                call_id,
+                None,
+            )
+            .await,
+        Err(MessageError::Invalid(_))
+    ));
+    assert!(matches!(
+        service
+            .patch_thread(
+                call_receipt("macro|author@example.com", call_id, AccessLevel::Owner).unwrap(),
+                call_id,
+                ThreadPatch {
+                    resolved: Some(true),
+                    ..Default::default()
+                },
+            )
+            .await,
+        Err(MessageError::Invalid(_))
+    ));
 }

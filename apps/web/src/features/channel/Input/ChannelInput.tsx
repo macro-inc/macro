@@ -83,6 +83,10 @@ export type ChannelInputProps = InputCallbacks & {
   participants?: Accessor<IUser[]>;
   /** Channel bots surfaced in the `@`-mention typeahead alongside users. */
   bots?: Accessor<IUser[]>;
+  /** Handles a failed send while preserving the composer's draft. */
+  onSendError?: (error: unknown) => void;
+  /** Dismiss the host after Escape has closed inline menus or dictation. */
+  onEscape?: () => void;
   onReady?: (handle: InputHandle) => void;
   children?: JSX.Element;
   /** Whether to auto-focus the input on mount. Defaults to `!isTouchDevice()`. */
@@ -176,6 +180,7 @@ export function ChannelInput(props: ChannelInputProps) {
     attachmentTracker: props.attachmentTracker,
     persistenceKey: props.persistenceKey,
     callbacks: props,
+    onSendError: props.onSendError,
     clearEditor: () => clearComposer(),
     trackTyping: () => acceptTyping,
     attachFiles: async (files) => {
@@ -263,10 +268,13 @@ export function ChannelInput(props: ChannelInputProps) {
       : () => [];
   // Connection-prompt behavior for the built-in agents lives in
   // useAgentMentionUsers; participants and channel/document bots feed it here.
-  const mentionUsers = useAgentMentionUsers(() => [
-    ...(props.participants?.() ?? parentParticipants()),
-    ...(props.bots?.() ?? parentBots()),
-  ]);
+  const mentionUsers = useAgentMentionUsers(
+    () => [
+      ...(props.participants?.() ?? parentParticipants()),
+      ...(props.bots?.() ?? parentBots()),
+    ],
+    () => props.parent?.type !== 'call'
+  );
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     groupMentions: !props.parent || props.parent.type === 'channel',
@@ -426,7 +434,10 @@ export function ChannelInput(props: ChannelInputProps) {
         return true;
       }
       // Block upstream escape handlers when ESC should close inline menus.
-      return markdownEditor.controls.isInlineMenuOpen();
+      if (markdownEditor.controls.isInlineMenuOpen()) return true;
+      if (!props.onEscape) return false;
+      props.onEscape();
+      return true;
     },
   });
 

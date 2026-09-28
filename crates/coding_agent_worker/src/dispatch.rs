@@ -76,6 +76,7 @@ impl WorkExecutor for Dispatcher {
                                 Some(*channel_id)
                             }
                             messages::domain::models::MessageParent::Document(_)
+                            | messages::domain::models::MessageParent::Call(_)
                             | messages::domain::models::MessageParent::Initiative(_)
                             | messages::domain::models::MessageParent::CrmCompany(_)
                             | messages::domain::models::MessageParent::CrmContact(_) => None,

@@ -3465,7 +3465,7 @@ async fn authenticated_meeting_attendee_gets_only_call_access_and_owner_keeps_ow
     repo.add_meeting_participant(&call.id, USER_B.deref().copied())
         .await?;
     for (user, expected) in [
-        (attendee.as_ref(), AccessLevel::View),
+        (attendee.as_ref(), AccessLevel::Comment),
         (USER_B.as_ref(), AccessLevel::Owner),
     ] {
         let level = sqlx::query_scalar!(

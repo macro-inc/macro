@@ -33,6 +33,10 @@ files:
   - apps/web/src/features/projects/components/**
   - apps/web/src/features/projects/views/**
   - apps/web/src/features/projects/context/**
+  - apps/web/src/features/channel/Call/chat/queries/**
+  - apps/web/src/features/channel/Call/chat/primitives/**
+  - apps/web/src/features/channel/Call/chat/components/**
+  - apps/web/src/features/channel/Call/chat/views/**
   - apps/web/src/features/block-agent/queries/**
   - apps/web/src/features/block-agent/primitives/**
   - apps/web/src/features/block-agent/ui/**

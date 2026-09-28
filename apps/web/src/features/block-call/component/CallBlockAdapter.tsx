@@ -41,6 +41,14 @@ export function CallBlockAdapter(props: CallBlockProps) {
       ? { transcriptId: initialTranscriptId, gen: 0 }
       : undefined
   );
+  const initialMessageId = ((): string | undefined => {
+    const fromProps = props[URL_PARAMS.messageId];
+    if (fromProps) return fromProps;
+    if (globalSplitManager()?.splits().length !== 1) return undefined;
+    const fromSearch = searchParams[URL_PARAMS.messageId];
+    return typeof fromSearch === 'string' ? fromSearch : undefined;
+  })();
+  const [messageTarget, setMessageTarget] = createSignal(initialMessageId);
 
   let routeOwnsTarget = Boolean(routeSearch.transcriptId);
   createEffect(
@@ -66,6 +74,8 @@ export function CallBlockAdapter(props: CallBlockProps) {
 
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: CallBlockProps) => {
+      const messageId = params[URL_PARAMS.messageId];
+      if (messageId) setMessageTarget(messageId);
       const next = params[URL_PARAMS.transcriptId];
       if (!next) return;
       routeOwnsTarget = false;
@@ -93,6 +103,8 @@ export function CallBlockAdapter(props: CallBlockProps) {
                   record={data()}
                   callId={callId}
                   transcriptTarget={transcriptTarget()}
+                  messageTarget={messageTarget()}
+                  onClearMessageTarget={() => setMessageTarget(undefined)}
                   showOverlayHeaderGap
                 />
               </div>

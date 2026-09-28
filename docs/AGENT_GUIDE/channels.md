@@ -756,6 +756,27 @@ produce one connection; leaving from either control ends the same call. Navigate
 away and return while connected to check that the call and its controls remain
 usable.
 
+The **Open chat** button in its own island at the far right of the bottom toolbar
+opens **Call chat** beside the video. The media controls stay centered. On
+narrow screens it overlays the video. **Close chat** or Escape closes the panel
+and returns focus to the chat button; reopening preserves the draft and scroll
+position. The call continues while chat is open or closed.
+
+Signed-in participants in channel, quick, and scheduled calls use the same chat
+panel. Guest meeting participants do not see chat because shared messages require
+a Macro account. Each call session has one persistent message thread, using the
+shared message composer, attachments, reactions, and message actions. Bot and
+agent mentions are not offered in call chat. Enter sends; subsequent messages
+join the same thread. Participants see new messages without reopening the panel.
+Check simultaneous first sends from two participants, edit/delete/reaction
+updates, a retained unsent draft after toggling chat, and a new incoming message
+while scrolled into history.
+
+After the call ends, its recording page shows a read-only **Call chat** below
+the transcript. A copied chat message link opens
+`/app/call/<callId>?call_message_id=<messageId>` and highlights that message in
+the recording's chat. A new call in the same channel starts a separate thread.
+
 For recovery checks, keep another participant connected and briefly interrupt
 the first participant's network. Recovery may rejoin that same live call. It
 must not start a replacement call if the original ended, or rejoin after the

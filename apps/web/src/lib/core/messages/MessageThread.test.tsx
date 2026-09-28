@@ -221,6 +221,23 @@ describe('document discussion controls', () => {
   });
 });
 
+it('offers a durable copy link without write actions for saved call chat', () => {
+  const callMessage: MessageListItem = {
+    ...message,
+    parent: { type: 'call', id: 'call-id' },
+  };
+  const link = 'https://macro.test/app/call/call-id?call_message_id=root';
+  const view = render(() => (
+    <MessageThread data={callMessage} canWrite={false} buildLink={() => link} />
+  ));
+  fireEvent.click(view.getByRole('button', { name: 'Long press message' }));
+  expect(view.queryByRole('button', { name: 'Reply' })).toBeNull();
+  expect(view.queryByRole('button', { name: 'Edit' })).toBeNull();
+  expect(view.queryByRole('button', { name: 'Delete' })).toBeNull();
+  fireEvent.click(view.getByRole('button', { name: 'Copy link' }));
+  expect(mocks.clipboard).toHaveBeenCalledWith(link);
+});
+
 describe('linked message highlight', () => {
   it('releases the highlight when the linked message is clicked, keeping the thread expanded', () => {
     const [targetId, setTargetId] = createSignal<string | null>('root');

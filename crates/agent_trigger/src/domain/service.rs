@@ -295,6 +295,7 @@ where
                 | MessageParent::CrmContact(_) => {
                     self.owner_allows(caller, bot.owner.as_ref()).await
                 }
+                MessageParent::Call(_) => Ok(false),
             },
         }
     }

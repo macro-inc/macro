@@ -211,4 +211,15 @@ describe('availableBotMentionUsers', () => {
       ).toEqual(['bot|doc-only']);
     }
   );
+
+  it('does not suggest agents in call chat', () => {
+    expect(
+      availableBotMentionUsers(
+        [bot('installed', 'Installed')],
+        [agent('global', 'Global', 'all')],
+        true,
+        'call'
+      )
+    ).toEqual([]);
+  });
 });

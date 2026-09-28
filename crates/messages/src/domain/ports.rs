@@ -90,6 +90,9 @@ pub struct MessagePage {
 /// Authenticated create command; attribution fields are never client controlled.
 #[derive(Debug, Clone)]
 pub struct CreateMessage {
+    /// Append to this canonical thread, creating its first message atomically when absent.
+    /// Its root identity is server-owned and overrides the first message's client id.
+    pub canonical_root_id: Option<Uuid>,
     /// Parent with verified actor access.
     pub parent: MessageParent,
     /// Verified actor.

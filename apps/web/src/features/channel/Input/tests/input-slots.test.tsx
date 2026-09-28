@@ -19,12 +19,27 @@ const editorMocks = vi.hoisted(() => ({
   mentionUsers: undefined as (() => IUser[]) | undefined,
   emitChange: undefined as ((markdown: string) => void) | undefined,
   onEnter: undefined as (() => boolean) | undefined,
+  inlineMenuOpen: false,
+  onEscape: undefined as ((event?: KeyboardEvent) => boolean) | undefined,
 }));
 
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({ StaticMarkdown: () => null })
 );
+
+vi.mock('@core/hotkey/hotkeys', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@core/hotkey/hotkeys')>();
+  return {
+    ...actual,
+    registerHotkey: (options: Parameters<typeof actual.registerHotkey>[0]) => {
+      if (options.description === 'block escape from moving up scope') {
+        editorMocks.onEscape = options.keyDownHandler;
+      }
+      return actual.registerHotkey(options);
+    },
+  };
+});
 
 // These slots render the microphone, so they run with dictation rolled out.
 // Other flags keep their real values.
@@ -176,6 +191,18 @@ vi.mock('@core/component/EntityIcon', () => ({
   EntityIcon: () => <span data-testid="entity-icon" />,
 }));
 
+// Input slots do not exercise rich message rendering. Keep collapsed drafts
+// outside StaticMarkdown's application/decorator import graph.
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({
+    StaticMarkdown: (props: { markdown: string }) => (
+      <span>{props.markdown}</span>
+    ),
+    StaticMarkdownContext: (props: { children: JSX.Element }) => props.children,
+  })
+);
+
 vi.mock('@core/component/ImagePreview', () => ({
   ImagePreview: (props: { image: { id: string } }) => (
     <div data-testid={`image-preview-${props.image.id}`} />
@@ -221,6 +248,7 @@ vi.mock(
       const controls = {
         clear: editorMocks.clear,
         focus: editorMocks.focus,
+        isInlineMenuOpen: () => editorMocks.inlineMenuOpen,
         setMarkdown: (markdown: string) => {
           editorMocks.emitChange?.(markdown);
         },
@@ -373,6 +401,8 @@ describe('Input slots', () => {
     editorMocks.focus.mockClear();
     editorMocks.emitChange = undefined;
     editorMocks.onEnter = undefined;
+    editorMocks.inlineMenuOpen = false;
+    editorMocks.onEscape = undefined;
     editorMocks.mentionUsers = undefined;
     vi.mocked(isMobile).mockReturnValue(false);
   });
@@ -406,6 +436,30 @@ describe('Input slots', () => {
     await handle?.send();
     expect(onSend).toHaveBeenCalledOnce();
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('existing draft');
+  });
+
+  it('handles dictation and inline menus before dismissing the composer host on Escape', async () => {
+    const user = userEvent.setup();
+    const closeHost = vi.fn();
+    render(() => <ChannelInput input={baseInput} onEscape={closeHost} />);
+
+    await user.click(screen.getByRole('button', { name: 'Start dictation' }));
+    expect(editorMocks.onEscape?.()).toBe(true);
+    expect(screen.queryByRole('group', { name: 'Dictation' })).toBeNull();
+    expect(closeHost).not.toHaveBeenCalled();
+
+    editorMocks.inlineMenuOpen = true;
+    expect(editorMocks.onEscape?.()).toBe(true);
+    expect(closeHost).not.toHaveBeenCalled();
+
+    editorMocks.inlineMenuOpen = false;
+    expect(editorMocks.onEscape?.()).toBe(true);
+    expect(closeHost).toHaveBeenCalledOnce();
+  });
+
+  it('lets Escape continue when there is no menu, dictation, or host handler', () => {
+    render(() => <ChannelInput input={baseInput} />);
+    expect(editorMocks.onEscape?.()).toBe(false);
   });
 
   it('starts dictation from the collapsed channel composer', async () => {

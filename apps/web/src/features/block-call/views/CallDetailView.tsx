@@ -110,6 +110,7 @@ function LoadedCallContent(props: {
   callId: string;
   record: CallRecord;
   transcriptTarget?: CallTranscriptTarget;
+  messageId?: string;
 }) {
   onMount(() => {
     optimisticUpdateSoupItemViewedAt(props.callId);
@@ -125,6 +126,7 @@ function LoadedCallContent(props: {
           record={props.record}
           callId={props.callId}
           transcriptTarget={props.transcriptTarget}
+          messageTarget={props.messageId}
         />
       </div>
     </SidePanel.Layout>
@@ -137,6 +139,7 @@ export function CallDetailContent(props: {
   query: ReturnType<typeof useCallRecordQuery>;
   data?: CallDetailData;
   transcriptId?: string;
+  messageId?: string;
   seek?: string;
 }) {
   // Include the route's seek token so selecting the same segment re-runs the seek.
@@ -191,6 +194,7 @@ export function CallDetailContent(props: {
               callId={props.callId}
               record={data().record}
               transcriptTarget={transcriptTarget()}
+              messageId={props.messageId}
             />
           </Suspense>
         )}
@@ -202,6 +206,7 @@ export function CallDetailContent(props: {
 export function StandaloneCallDetail(props: {
   callId: string;
   transcriptId?: string;
+  messageId?: string;
   seek?: string;
 }) {
   const detail = useCallDetail(() => props.callId);
@@ -229,6 +234,7 @@ export function StandaloneCallDetail(props: {
           query={detail.query}
           data={detail.data()}
           transcriptId={props.transcriptId}
+          messageId={props.messageId}
           seek={props.seek}
         />
       </div>
