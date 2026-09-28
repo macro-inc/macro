@@ -165,6 +165,12 @@ pub struct Config {
     #[macro_config_default(true)]
     pub legacy_comment_writes_enabled: bool,
 
+    /// Lets a team-scoped bot with no acting user own the documents it
+    /// creates. When `false` (the default) the document create routes answer
+    /// those bots with 403, so every new document stays user-owned.
+    #[macro_config_default(false)]
+    pub enable_non_user_owners: bool,
+
     /// The number of seconds a signed document or call recording URL is valid for.
     #[macro_config_default(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS)]
     pub document_storage_service_presigned_url_expiry_seconds: u64,

@@ -13,6 +13,7 @@ ai_tools = { path = "../ai_tools" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 axum = { workspace = true }
+bots = { path = "../bots", default-features = false, features = ["outbound"] }
 chrono = { workspace = true }
 call = { path = "../call", default-features = false, features = ["ai_tools", "outbound", "ports"] }
 futures = { workspace = true }
@@ -42,6 +43,8 @@ email = { path = "../email" }
 email_service_client = { path = "../email_service_client" }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management" }
+entity_registry = { path = "../entity_registry/entity_registry" }
+entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
 foreign_entity = { path = "../foreign_entity" }
 frecency = { path = "../frecency" }
 lexical_client = { path = "../lexical_client" }

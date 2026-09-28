@@ -14,6 +14,7 @@ use documents_hex::domain::ports::mentions::DocumentMentionTrackingPort;
 use documents_hex::domain::purge::DocumentPurgeService;
 use initiative::domain::models::{DescriptionDocumentId, InitiativeError, NewDescriptionDocument};
 use initiative::domain::ports::InitiativeDescriptionDocuments;
+use model_owner::CreationPrincipal;
 
 macro_rules! internal {
     ($error:expr) => {
@@ -68,7 +69,7 @@ where
         let created = self
             .creator
             .create_markdown_text(
-                owner,
+                &CreationPrincipal::User(owner),
                 NewMarkdownTextDocument {
                     metadata,
                     markdown: prefill_markdown,
