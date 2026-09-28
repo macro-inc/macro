@@ -9,14 +9,17 @@ use crate::domain::{
 };
 use chrono::Utc;
 use macro_uuid::Uuid;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use stripe::{
     CheckoutSession, CheckoutSessionMode, CollectionMethod, CreateCheckoutSession,
     CreateCheckoutSessionLineItems, CreateCheckoutSessionLineItemsPriceData,
     CreateCheckoutSessionLineItemsPriceDataProductData, CreateCheckoutSessionPaymentIntentData,
-    CreateInvoice, CreateInvoiceItem, Currency, CustomerId, FinalizeInvoiceParams, Invoice,
-    InvoiceId, InvoiceItem, InvoicePendingInvoiceItemsBehavior, InvoiceStatus, RequestStrategy,
+    CreateInvoice, CreateInvoiceItem, Currency, Customer, CustomerId, Expandable,
+    FinalizeInvoiceParams, Invoice, InvoiceId, InvoiceItem, InvoicePendingInvoiceItemsBehavior,
+    InvoiceStatus, ListSubscriptions, PaymentMethodId, RequestStrategy, Subscription,
+    SubscriptionStatus,
 };
 
 /// Metadata key stamped on every Stripe object this crate creates.
@@ -49,6 +52,50 @@ impl StripePaymentGateway {
             .clone()
             .with_strategy(RequestStrategy::Idempotent(key))
     }
+
+    async fn resolve_charge_method(&self, customer_id: &CustomerId) -> Result<ChargeMethod> {
+        let customer = Customer::retrieve(&self.client, customer_id, &[])
+            .await
+            .map_err(payment)?;
+        let subscriptions = self.non_canceled_subscriptions(customer_id).await?;
+        charge_method(customer_fallback(&customer), &subscriptions)
+    }
+
+    /// Stripe omits `status` to mean every subscription that is not canceled.
+    async fn non_canceled_subscriptions(
+        &self,
+        customer_id: &CustomerId,
+    ) -> Result<Vec<Subscription>> {
+        let mut params = ListSubscriptions::new();
+        params.customer = Some(customer_id.clone());
+        params.limit = Some(100);
+        let mut subscriptions = Vec::new();
+        let mut starting_after = None;
+        loop {
+            params.starting_after = starting_after.clone();
+            let page = Subscription::list(&self.client, &params)
+                .await
+                .map_err(payment)?;
+            let has_more = page.has_more;
+            let next = page.data.last().map(|subscription| subscription.id.clone());
+            subscriptions.extend(page.data);
+            if !has_more {
+                break;
+            }
+            let next = next.ok_or_else(|| {
+                BillingError::Payment(anyhow::anyhow!(
+                    "stripe returned an empty subscription page with more results"
+                ))
+            })?;
+            if starting_after.as_ref() == Some(&next) {
+                return Err(BillingError::Payment(anyhow::anyhow!(
+                    "stripe repeated a subscription page"
+                )));
+            }
+            starting_after = Some(next);
+        }
+        Ok(subscriptions)
+    }
 }
 
 fn payment(e: stripe::StripeError) -> BillingError {
@@ -62,6 +109,86 @@ fn parse_customer(id: &str) -> Result<CustomerId> {
 
 fn dollars(cents: i64) -> String {
     format!("${}.{:02}", cents / 100, cents % 100)
+}
+
+enum ChargeMethod {
+    Subscription(PaymentMethodId),
+    CustomerFallback(Option<PaymentMethodId>),
+}
+
+impl ChargeMethod {
+    fn payment_method(&self) -> Option<&PaymentMethodId> {
+        match self {
+            Self::Subscription(method) => Some(method),
+            Self::CustomerFallback(method) => method.as_ref(),
+        }
+    }
+
+    fn subscription_method(&self) -> Option<&PaymentMethodId> {
+        match self {
+            Self::Subscription(method) => Some(method),
+            Self::CustomerFallback(_) => None,
+        }
+    }
+}
+
+fn customer_fallback(customer: &Customer) -> Option<PaymentMethodId> {
+    customer
+        .invoice_settings
+        .as_ref()
+        .and_then(|settings| settings.default_payment_method.as_ref().map(Expandable::id))
+}
+
+fn payment_method_id(
+    method: &Option<Expandable<stripe::PaymentMethod>>,
+) -> Option<PaymentMethodId> {
+    method.as_ref().map(Expandable::id)
+}
+
+fn charge_method(
+    fallback: Option<PaymentMethodId>,
+    subscriptions: &[Subscription],
+) -> Result<ChargeMethod> {
+    let mut agreed = None;
+    let mut explicit = None;
+    for subscription in subscriptions {
+        if !matches!(
+            subscription.status,
+            SubscriptionStatus::Active | SubscriptionStatus::Trialing
+        ) {
+            continue;
+        }
+        let explicit_default = payment_method_id(&subscription.default_payment_method);
+        let effective = explicit_default.clone().or_else(|| fallback.clone());
+        if let Some(previous) = &agreed {
+            if previous != &effective {
+                return Err(BillingError::Payment(anyhow::anyhow!(
+                    "active subscriptions do not share a payment method"
+                )));
+            }
+        } else {
+            agreed = Some(effective);
+        }
+        if explicit.is_none() {
+            explicit = explicit_default;
+        }
+    }
+    match (agreed, explicit) {
+        (None, _) => Ok(ChargeMethod::CustomerFallback(fallback)),
+        (_, Some(method)) => Ok(ChargeMethod::Subscription(method)),
+        (Some(effective), None) => Ok(ChargeMethod::CustomerFallback(effective)),
+    }
+}
+
+#[derive(Serialize)]
+struct InvoiceDefaultPaymentMethod<'a> {
+    default_payment_method: &'a PaymentMethodId,
+}
+
+#[derive(Serialize)]
+struct PayInvoice<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    payment_method: Option<&'a PaymentMethodId>,
 }
 
 impl PaymentGateway for StripePaymentGateway {
@@ -119,6 +246,7 @@ impl PaymentGateway for StripePaymentGateway {
     #[tracing::instrument(skip(self, request), fields(charge = %request.charge_id, cents = request.amount_cents), err)]
     async fn open_overage_invoice(&self, request: OverageChargeRequest) -> Result<String> {
         let customer = parse_customer(&request.customer_id)?;
+        let resolved = self.resolve_charge_method(&customer).await?;
         let key = format!("ai_overage:{}", request.charge_id);
         let metadata: HashMap<String, String> = HashMap::from([
             (
@@ -142,6 +270,9 @@ impl PaymentGateway for StripePaymentGateway {
         invoice.pending_invoice_items_behavior = Some(InvoicePendingInvoiceItemsBehavior::Exclude);
         invoice.description = Some("Macro AI usage beyond plan");
         invoice.metadata = Some(metadata.clone());
+        if let Some(method) = resolved.subscription_method() {
+            invoice.default_payment_method = Some(method.as_str());
+        }
         let invoice = Invoice::create(&self.idempotent(format!("{key}:invoice")), invoice)
             .await
             .map_err(payment)?;
@@ -187,13 +318,51 @@ impl PaymentGateway for StripePaymentGateway {
         let invoice_id: InvoiceId = invoice_id.parse().map_err(|e| {
             BillingError::Payment(anyhow::anyhow!("invalid stripe invoice id: {e}"))
         })?;
+        let invoice = Invoice::retrieve(&self.client, &invoice_id, &[])
+            .await
+            .map_err(payment)?;
+        if invoice.status == Some(InvoiceStatus::Paid) {
+            return Ok(true);
+        }
+        let customer_id = invoice
+            .customer
+            .as_ref()
+            .map(Expandable::id)
+            .ok_or_else(|| {
+                BillingError::Payment(anyhow::anyhow!("overage invoice has no customer"))
+            })?;
+        let resolved = self.resolve_charge_method(&customer_id).await?;
+        let method = resolved.payment_method().cloned();
+        if invoice.status == Some(InvoiceStatus::Open)
+            && let Some(method) = &method
+            && payment_method_id(&invoice.default_payment_method).as_ref() != Some(method)
+        {
+            // A repeated set converges. An idempotency key would replay the
+            // previous card after the payer switches away and back.
+            self.client
+                .post_form::<Invoice, _>(
+                    &format!("/invoices/{invoice_id}"),
+                    &InvoiceDefaultPaymentMethod {
+                        default_payment_method: method,
+                    },
+                )
+                .await
+                .map_err(payment)?;
+        }
         // Every attempt is its own request: replaying the first attempt's key
         // would replay its decline instead of trying the payer's (new) card.
         let key = format!(
             "ai_overage:{charge_id}:pay:{}",
             Utc::now().timestamp_millis()
         );
-        match Invoice::pay(&self.idempotent(key), &invoice_id).await {
+        let pay = PayInvoice {
+            payment_method: method.as_ref(),
+        };
+        match self
+            .idempotent(key)
+            .post_form::<Invoice, _>(&format!("/invoices/{invoice_id}/pay"), &pay)
+            .await
+        {
             Ok(invoice) => Ok(invoice.status == Some(InvoiceStatus::Paid)),
             Err(e) => {
                 // A decline is a failed collection, not a failed request: the
