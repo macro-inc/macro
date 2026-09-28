@@ -351,6 +351,12 @@ while selected tag sets are pending. Background refreshes retain the current lis
 rapidly alternate Signal, Noise, and Sent, then change inboxes; a delayed cache or
 network read must not leave the old rows visible or expose their Load more action.
 
+Opening an email shows loading while its local draft identity and thread data
+resolve. Verify a cold open and switching directly between threads with delayed
+cache reads: neither should flash "Sorry, an unexpected error has occurred" or
+show the previous email. A failed load must still show its error and Retry action;
+reconciling an already-open offline draft must preserve its composer and text.
+
 If a saved inbox selection references an unlinked account, successfully loading
 linked accounts resets the filter to All inboxes while preserving an open or
 restored thread. Check this with a stale saved scope and a thread route, including

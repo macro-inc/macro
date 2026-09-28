@@ -95,6 +95,7 @@ it('clears the previous thread and read marker when a reused host navigates', ()
   setRoute('second');
   expect(screen.queryByRole('textbox')).toBeNull();
   expect(screen.queryByTestId('read-marker')).toBeNull();
+  expect(screen.getByText('Loading')).toBeTruthy();
   setPending(true);
   expect(screen.getByTestId('title').textContent).toBe('Loading email');
   expect(screen.getByText('Loading')).toBeTruthy();
@@ -108,6 +109,36 @@ it('clears the previous thread and read marker when a reused host navigates', ()
   expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe(
     'second'
   );
+});
+
+it('shows loading while identity resolution has not started the thread query', () => {
+  const [data, setData] = createSignal<string>();
+  const [error, setError] = createSignal<EntityLoadError>();
+  render(() => (
+    <EmailThreadLoadGate
+      result={{ data, error, isPending: () => false }}
+      notificationSource={
+        {} as EmailThreadLoadGateProps<string>['notificationSource']
+      }
+      threadId="thread"
+      onRetry={() => {}}
+    >
+      <div>Email content</div>
+    </EmailThreadLoadGate>
+  ));
+  expect(screen.getByText('Loading')).toBeTruthy();
+  expect(screen.queryByTestId('read-marker')).toBeNull();
+  expect(screen.queryByText(/unexpected error/)).toBeNull();
+
+  setError('LOAD_FAILED');
+  expect(screen.getByText('Unable to load this email')).toBeTruthy();
+  expect(screen.queryByText('Loading')).toBeNull();
+
+  setError(undefined);
+  expect(screen.getByText('Loading')).toBeTruthy();
+  setData('thread');
+  expect(screen.getByText('Email content')).toBeTruthy();
+  expect(screen.getByTestId('read-marker')).toBeTruthy();
 });
 
 it('retains the mounted composer during identity revalidation but respects server deletion', () => {

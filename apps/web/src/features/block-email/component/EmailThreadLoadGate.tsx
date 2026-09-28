@@ -31,8 +31,11 @@ export function EmailThreadLoadGate<Data>(
           // Hosts supply identity-checked data from createEmailThreadSource.
           // Keep that composer's data during server-ID adoption; navigation to
           // another thread clears it and restores the loading state.
+          // Identity resolution can precede the query's loading state. With
+          // no data or error yet, the email is still waiting to load.
           isPending: () =>
-            props.result.isPending() && props.result.data() === undefined,
+            props.result.data() === undefined &&
+            (props.result.isPending() || props.result.error() === undefined),
         }}
         loadErrorTitle="Unable to load this email"
         onRetry={props.onRetry}
