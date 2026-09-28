@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { message } from '../../email-message/tests/messages';
 import {
   DraftPersistRejected,
   type DraftSaveResult,
@@ -29,6 +30,54 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('draft session: reply composer', () => {
+  it('preserves a fetched draft ID when local draft lookup has no record', async () => {
+    const context = createComposeContext();
+    context.drafts.readDraft = vi.fn(async () => undefined);
+    context.drafts.watchDrafts = () => () => {};
+    const state = mountReplyComposer(context, undefined, {
+      draft: message('existing', { is_draft: true }),
+    });
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      await state.sendEmail();
+      expect(context.drafts.readDraft).toHaveBeenCalledWith('existing');
+      expect(context.drafts.saveDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          draft: expect.objectContaining({ db_id: 'existing' }),
+          clientHandles: undefined,
+        })
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('still blocks send when local storage identifies the seeded draft as queued', async () => {
+    const context = createComposeContext();
+    const draft = message('existing', { is_draft: true });
+    context.drafts.readDraft = vi.fn(async () => ({
+      draft,
+      persistence: 'queued' as const,
+    }));
+    context.drafts.watchDrafts = () => () => {};
+    vi.mocked(context.drafts.saveDraft).mockImplementation(async (input) =>
+      queued(input)
+    );
+    const state = mountReplyComposer(context, undefined, { draft });
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.drafts.readDraft).toHaveBeenCalledWith('existing');
+      await state.sendEmail();
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+        'Failed to send email',
+        { subtext: 'Draft still syncing, try again' }
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
   it('queues saves offline under one handle, refuses to send, then sends once a save commits', async () => {
     const context = createComposeContext();
     vi.mocked(context.connectivity.looksOffline).mockReturnValue(true);

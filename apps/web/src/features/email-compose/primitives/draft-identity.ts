@@ -8,8 +8,23 @@ export function observeDraftIdentity(
   session: DraftSession,
   reportError: (error: unknown) => void
 ) {
-  const read = storage.readDraft;
-  if (!read || !storage.watchDrafts) return;
+  createEffect(
+    on(
+      () => [storage.readDraft, storage.watchDrafts] as const,
+      ([read, watch]) => {
+        if (read && watch)
+          observeAvailableDraftIdentity(read, watch, session, reportError);
+      }
+    )
+  );
+}
+
+function observeAvailableDraftIdentity(
+  read: NonNullable<EmailDraftStorage['readDraft']>,
+  watch: NonNullable<EmailDraftStorage['watchDrafts']>,
+  session: DraftSession,
+  reportError: (error: unknown) => void
+) {
   let generation = 0;
   let mutationUuid: string | undefined;
   let disposed = false;
@@ -59,7 +74,7 @@ export function observeDraftIdentity(
     if (disposed) return false;
     return settlement.mutationUuid === (mutationUuid ?? session.draftId());
   };
-  const unsubscribe = storage.watchDrafts((settlement) => {
+  const unsubscribe = watch((settlement) => {
     void (async () => {
       if (
         settlement?.failed &&

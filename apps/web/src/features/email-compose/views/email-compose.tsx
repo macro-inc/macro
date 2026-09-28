@@ -31,11 +31,14 @@ export type EmailComposeViewProps = Pick<
   | 'initialTo'
 > & { context: EmailComposeContext };
 export function EmailComposeView(props: EmailComposeViewProps) {
+  // The split mounts one composer per initial draft. Keep this content load
+  // fixed to that mount; live queue changes refresh identity, not editor text.
   const initialDraftId = props.draft?.db_id ?? props.draftId;
+  const readInitialDraft = props.context.drafts.readDraft;
   const [saved, { refetch }] = createResource(
-    () => props.context.drafts.readDraft && initialDraftId,
+    () => readInitialDraft && initialDraftId,
     async (id) => {
-      const result = await props.context.drafts.readDraft!(id);
+      const result = await readInitialDraft!(id);
       if (!result && !props.draft && !hasComposeUndo(id)) {
         throw new Error('This draft is not available on this device.');
       }

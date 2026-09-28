@@ -27,8 +27,9 @@ export function EmailThreadLoadGate<Data>(
         result={{
           data: props.result.data,
           error: props.result.error,
-          // Adopting a server ID starts a new query for the same loaded thread.
-          // Keep its composer mounted while that page replaces the local one.
+          // Hosts supply identity-checked data from createEmailThreadSource.
+          // Keep that composer's data during server-ID adoption; navigation to
+          // another thread clears it and restores the loading state.
           isPending: () =>
             props.result.isPending() && props.result.data() === undefined,
         }}

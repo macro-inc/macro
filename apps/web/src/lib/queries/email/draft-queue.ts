@@ -58,6 +58,9 @@ export async function readEmailDraft(draftId: string) {
 export function watchEmailDrafts(
   changed: (settlement?: { mutationUuid?: string; failed: boolean }) => void
 ): () => void {
+  // A surface can enable the queue after mounting, before its first write
+  // initializes the client. Subscribe to that host before any save settles.
+  getGraphqlSoupClient();
   const host = getGraphqlCacheHost();
   const cache = host?.onCacheChanged(() => changed());
   const settlement = host?.onMutationSettled((result) =>

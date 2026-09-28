@@ -3,6 +3,7 @@ import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
+import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { EmailThreadLoadGate } from '@block-email/component/EmailThreadLoadGate';
 import { EmailThreadHostView } from '@block-email/EmailThreadHostView';
@@ -71,12 +72,9 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
-  const threadData = createMemo(
-    (previous: typeof threadQuery.data | undefined) =>
-      threadQuery.isSuccess || threadQuery.isError ? threadQuery.data : previous
-  );
+  const threadData = createEmailThreadSource(threadId, threadQuery).thread;
   const title = () => {
-    const thread = threadData()?.thread;
+    const thread = threadData();
     return (
       (thread &&
         displaySubject(
@@ -88,7 +86,7 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
   };
   const commandEntity = createMemo(() => {
     if (!threadQuery.isSuccess) return undefined;
-    const thread = threadQuery.data?.thread;
+    const thread = threadData();
     if (!thread) return undefined;
     return buildEntityData({
       id: thread.db_id,
@@ -201,7 +199,7 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
               result={loadResult}
               notificationSource={notificationSource}
               threadId={props.thread.id}
-              linkId={threadData()?.thread?.link_id}
+              linkId={threadData()?.link_id}
               debounceTime={100}
               onRetry={() => void threadQuery.refetch()}
             >

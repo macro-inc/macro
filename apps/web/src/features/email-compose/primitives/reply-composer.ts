@@ -241,7 +241,7 @@ export function createReplyComposer(
         ? {
             draftId: draftSeed.db_id,
             threadId: draftSeed.thread_db_id,
-            persistence: props.drafts.readDraft ? 'queued' : undefined,
+            persistence: props.drafts.readDraft ? 'committed' : undefined,
           }
         : undefined
   );

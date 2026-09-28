@@ -415,6 +415,10 @@ writes still stop retrying.
 Test this with a previously saved draft as well as a new one: a queued edit must
 block Send and scheduling until a save commits. Reopening a cached draft while
 offline must retain its uploaded attachments and confirmed scheduled time.
+Open an existing server reply draft before its durable cache record is available:
+editing and sending must reuse its server ID. If the live mail transport switches
+to GraphQL while the editor is open, queued saves must still adopt their server
+identity after settlement without replacing the editor's current text.
 
 
 With the persistent GraphQL Email cache enabled, a new standalone draft saved
@@ -432,6 +436,9 @@ Keep a reopened offline draft open while reconnecting: the composer must remain
 mounted when the local thread handle resolves to its server ID. After syncing,
 reopen the original local thread URL and confirm the composer still loads; then
 open a different thread and confirm the previous draft is not shown there.
+Throttle the next email's response while navigating within the inline detail:
+the previous subject and composer must disappear during loading, and the new
+thread must not be marked read using the previous thread's sending inbox.
 Make multiple edits while offline, reconnect, wait for syncing to finish, then
 send. Repeat after refreshing with queued edits: the first attempted save must
 recover its server identity and let newer saves complete, rather than leaving

@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import type { EmailDraftStorage } from '../context/compose-capabilities';
@@ -49,6 +49,79 @@ function mount(
 }
 
 describe('durable draft identity', () => {
+  it('starts observation when the queue activates and ignores reads after it deactivates', async () => {
+    const [enabled, setEnabled] = createSignal(false);
+    const pending = Promise.withResolvers<ReadResult>();
+    const read = vi.fn(
+      async (): Promise<ReadResult> => ({
+        draft: message('server'),
+        persistence: 'committed',
+      })
+    );
+    const unsubscribe = vi.fn();
+    let changed!: () => void;
+    const watch = vi.fn((callback: () => void) => {
+      changed = callback;
+      return unsubscribe;
+    });
+    const root = createRoot((dispose) => {
+      const session = createDraftSession({
+        draftId: 'local',
+        threadId: 'thread',
+        persistence: 'queued',
+      });
+      observeDraftIdentity(
+        {
+          ...createComposeContext().drafts,
+          get readDraft() {
+            return enabled() ? read : undefined;
+          },
+          get watchDrafts() {
+            return enabled() ? watch : undefined;
+          },
+        },
+        session,
+        vi.fn()
+      );
+      return { dispose, session };
+    });
+    try {
+      expect(watch).not.toHaveBeenCalled();
+      setEnabled(true);
+      await vi.waitFor(() => expect(root.session.serverConfirmed()).toBe(true));
+      expect(root.session.draftId()).toBe('server');
+      expect(watch).toHaveBeenCalledOnce();
+      read.mockReturnValueOnce(pending.promise);
+      changed();
+      setEnabled(false);
+      expect(unsubscribe).toHaveBeenCalledOnce();
+      pending.resolve({ draft: message('stale'), persistence: 'committed' });
+      await pending.promise;
+      expect(root.session.draftId()).toBe('server');
+      setEnabled(true);
+      expect(watch).toHaveBeenCalledTimes(2);
+    } finally {
+      root.dispose();
+    }
+    expect(unsubscribe).toHaveBeenCalledTimes(2);
+  });
+
+  it('marks a committed seed queued when local storage reports a pending save', async () => {
+    const root = mount(
+      async () => ({ draft: message('existing'), persistence: 'queued' }),
+      { draftId: 'existing', threadId: 'thread', persistence: 'committed' }
+    );
+    try {
+      expect(root.session.serverConfirmed()).toBe(true);
+      await vi.waitFor(() =>
+        expect(root.session.serverConfirmed()).toBe(false)
+      );
+      expect(root.session.draftId()).toBe('existing');
+    } finally {
+      root.dispose();
+    }
+  });
+
   it('adopts settlement IDs and unblocks send without repeatedly reading the cache', async () => {
     const read = vi.fn(
       async (): Promise<ReadResult> => ({

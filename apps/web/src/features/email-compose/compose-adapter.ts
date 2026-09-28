@@ -92,7 +92,12 @@ export function createEmailComposeContext(
   options: EmailComposeContextOptions = {}
 ): EmailComposeContext {
   const accounts = useMailAccountsQuery();
-  const queueActive = () => draftQueueActive(options.threadTransport?.());
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
+  const queueActive = () =>
+    draftQueueActive(
+      options.threadTransport?.() ??
+        (graphqlSoupFlag().enabled ? 'graphql' : 'rest')
+    );
   // Attach handlers run as event handlers, which have no Solid owner of
   // their own; the dialog needs the surface's.
   const dialogOwner = getOwner();
@@ -245,8 +250,12 @@ export function createEmailComposeContext(
       reportError,
     },
     drafts: {
-      readDraft: queueActive() ? readEmailDraft : undefined,
-      watchDrafts: queueActive() ? watchEmailDrafts : undefined,
+      get readDraft() {
+        return queueActive() ? readEmailDraft : undefined;
+      },
+      get watchDrafts() {
+        return queueActive() ? watchEmailDrafts : undefined;
+      },
       async saveDraft({
         completingThread,
         previousThreadId,

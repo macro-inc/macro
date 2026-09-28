@@ -17,6 +17,9 @@ use serde_json::Value as Json;
 use std::collections::BTreeSet;
 use thiserror::Error;
 
+#[cfg(test)]
+mod test;
+
 /// Synchronous view over records available right now (hot tier + any
 /// batch-fetched records).
 pub trait RecordSource {
@@ -168,6 +171,19 @@ impl<'a, S: RecordSource> Walk<'a, S> {
         type_name: &str,
         selections: &[Selection],
     ) -> Result<Option<Json>, DenormalizeError> {
+        let Some((key, record)) = self.resolve_record(key) else {
+            return Ok(None);
+        };
+        if record.fields.get(crate::identity::DELETED_FIELD) == Some(&CacheValue::Bool(true)) {
+            self.mark_miss(&key, "deleted cache identity".into());
+            return Ok(None);
+        }
+        let concrete = record.typename().unwrap_or(type_name).to_string();
+        self.read_fields(&key, &record.fields, &concrete, selections)
+    }
+
+    /// Resolve aliases while retaining dependencies, including tombstones.
+    fn resolve_record(&mut self, key: &EntityKey<'static>) -> Option<(EntityKey<'static>, Record)> {
         let mut key = key.clone();
         let mut visited = BTreeSet::new();
         let record = loop {
@@ -176,26 +192,20 @@ impl<'a, S: RecordSource> Walk<'a, S> {
                 || visited.len() > crate::identity::MAX_ALIAS_CHAIN_DEPTH
             {
                 self.mark_miss(&key, "cyclic cache identity".into());
-                return Ok(None);
+                return None;
             }
             let Some(record) = self.source.get(&key) else {
                 self.missing_records.insert(key);
-                return Ok(None);
+                return None;
             };
             if let Some(target) = crate::identity::alias_target(record) {
                 key = target.clone();
                 continue;
             }
-            if record.fields.get(crate::identity::DELETED_FIELD) == Some(&CacheValue::Bool(true)) {
-                self.mark_miss(&key, "deleted cache identity".into());
-                return Ok(None);
-            }
             break record;
         };
         // Clone is cheap relative to the walk; keeps borrows simple.
-        let record = record.clone();
-        let concrete = record.typename().unwrap_or(type_name).to_string();
-        self.read_fields(&key, &record.fields, &concrete, selections)
+        Some((key, record.clone()))
     }
 
     /// Reads selected fields out of a record's or embedded object's map.
@@ -246,8 +256,13 @@ impl<'a, S: RecordSource> Walk<'a, S> {
                     self.mark_miss(owner, storage_key);
                     continue;
                 };
-                let json =
-                    self.read_record(&target_key, &entity_resolver.target_type, &f.selection_set)?;
+                let target_ty = meta::FieldType {
+                    name: meta::type_meta(&entity_resolver.target_type)
+                        .expect("validated entity resolver target")
+                        .name,
+                    ..fmeta.ty
+                };
+                let json = self.read_value(owner, f, &target_ty, &CacheValue::Ref(target_key))?;
                 if let Some(json) = json {
                     out.insert(f.response_key.clone(), json);
                 }
@@ -258,7 +273,7 @@ impl<'a, S: RecordSource> Walk<'a, S> {
                 self.mark_miss(owner, storage_key);
                 continue;
             };
-            let json = self.read_value(owner, f, fmeta.ty.name, value)?;
+            let json = self.read_value(owner, f, &fmeta.ty, value)?;
             match json {
                 Some(j) => {
                     out.insert(f.response_key.clone(), j);
@@ -279,7 +294,7 @@ impl<'a, S: RecordSource> Walk<'a, S> {
         &mut self,
         owner: &EntityKey<'static>,
         field: &FieldNode,
-        named_type: &str,
+        ty: &meta::FieldType,
         value: &CacheValue,
     ) -> Result<Option<Json>, DenormalizeError> {
         Ok(match value {
@@ -290,7 +305,7 @@ impl<'a, S: RecordSource> Walk<'a, S> {
             CacheValue::Opaque(j) => {
                 Some(
                     serde_json::from_str(j).map_err(|_| DenormalizeError::Shape {
-                        type_name: named_type.to_string(),
+                        type_name: ty.name.to_string(),
                         field: field.name.clone(),
                     })?,
                 )
@@ -299,7 +314,10 @@ impl<'a, S: RecordSource> Walk<'a, S> {
                 let mut out = Vec::with_capacity(items.len());
                 let mut complete = true;
                 for item in items {
-                    match self.read_value(owner, field, named_type, item)? {
+                    match self.read_value(owner, field, ty, item)? {
+                        // A null reference denotes a known deletion. Preserve
+                        // explicit null list items, but omit deleted entities.
+                        Some(Json::Null) if matches!(item, CacheValue::Ref(_)) => {}
                         Some(j) => out.push(j),
                         None => complete = false,
                     }
@@ -310,11 +328,29 @@ impl<'a, S: RecordSource> Walk<'a, S> {
                     None
                 }
             }
-            CacheValue::Ref(key) => self.read_record(key, named_type, &field.selection_set)?,
+            CacheValue::Ref(key) => {
+                let Some((key, record)) = self.resolve_record(key) else {
+                    return Ok(None);
+                };
+                if record.fields.get(crate::identity::DELETED_FIELD)
+                    == Some(&CacheValue::Bool(true))
+                {
+                    if ty.nullable || ty.list {
+                        Some(Json::Null)
+                    } else {
+                        // A required singular link cannot be represented as null.
+                        self.mark_miss(&key, "deleted cache identity".into());
+                        None
+                    }
+                } else {
+                    let concrete = record.typename().unwrap_or(ty.name).to_string();
+                    self.read_fields(&key, &record.fields, &concrete, &field.selection_set)?
+                }
+            }
             CacheValue::Object(map) => {
                 let concrete = match map.get("__typename") {
                     Some(CacheValue::String(t)) => t.clone(),
-                    _ => named_type.to_string(),
+                    _ => ty.name.to_string(),
                 };
                 self.read_fields(owner, map, &concrete, &field.selection_set)?
             }
