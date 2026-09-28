@@ -1,4 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -25,21 +26,51 @@ import { ChannelDetailView } from './components/ChannelDetailView';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
 import {
+  type ChannelsSources,
   deduplicateChannels,
   resolveSelectedChannel,
   useChannelByIdQuery,
   useChannelsSources,
 } from './queries';
+import { useMobileChannelSearch } from './queries/mobile-channel-search';
 
 const ChannelSourcesContext =
   createContext<ReturnType<typeof useChannelsSources>>();
 
-import type { ChannelsViewStateOptions } from './types';
+import type { ChannelsQueryScope, ChannelsViewStateOptions } from './types';
 
 export type ChannelsViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
   initialState?: ChannelsViewStateOptions;
 };
+
+function MobileChannels(props: {
+  sources: ChannelsSources;
+  tab: ChannelsQueryScope;
+  onTabChange: (tab: ChannelsQueryScope) => void;
+}) {
+  const panel = useSplitPanelOrThrow();
+  // The dock lives outside the split. Derive its query only for the active
+  // mobile list so closing search or navigating away restores ordinary rows.
+  const searchText = () =>
+    SearchState.isOpen() && panel.handle.isActive()
+      ? SearchState.query().trim()
+      : '';
+  const source = useMobileChannelSearch({
+    text: searchText,
+    scope: () => props.tab,
+    source: () => props.sources[props.tab],
+  });
+
+  return (
+    <ChannelsMobileView
+      source={source}
+      tab={props.tab}
+      onTabChange={props.onTabChange}
+      searchText={searchText()}
+    />
+  );
+}
 
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
@@ -133,8 +164,8 @@ function ChannelsViewRoot() {
                     </div>
                   }
                 >
-                  <ChannelsMobileView
-                    source={sources[state.mobileTab]}
+                  <MobileChannels
+                    sources={sources}
                     tab={state.mobileTab}
                     onTabChange={setMobileTab}
                   />
