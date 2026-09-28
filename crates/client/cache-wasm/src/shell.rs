@@ -13,7 +13,7 @@ use cache_core::query_inspection::QueryInspection;
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationUpsertKind,
 };
-use cache_core::record_selection::RecordSelection;
+use cache_core::record_selection::cache::RecordSelectionCache;
 use cache_core::search::SearchRequest;
 use cache_core::store::QueueDiagnosticsAvailability;
 use cache_core::value::EntityKey;
@@ -424,6 +424,7 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
 }
 
 struct CacheState {
+    selections: RecordSelectionCache,
     engine: Option<BrowserEngine>,
     mail_generation: String,
     scope: String,
@@ -616,6 +617,7 @@ async fn open_cache_inner(
     Ok((
         CacheEngine {
             state: Rc::new(Mutex::new(CacheState {
+                selections: RecordSelectionCache::default(),
                 engine: Some(build_engine(storage, hot_capacity)),
                 mail_generation: soup_filter_cache_adapter::mail::new_generation(),
                 scope,
@@ -805,6 +807,37 @@ fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Read envelopes contain strings and JSON values. Converting the JSON in one
+/// call avoids a Wasm/JS crossing for every nested field and array element.
+fn read_response_to_js<'a, T: Serialize>(
+    response: &T,
+    values: impl IntoIterator<Item = &'a serde_json::Value>,
+) -> Result<JsValue, JsValue> {
+    // Preserve the existing rejection of integer values outside JS's safe
+    // range. JSON.parse would otherwise silently round them. Floating-point
+    // values already have JS Number semantics and are allowed at any magnitude.
+    if values.into_iter().any(has_unsafe_json_integer) {
+        return to_js(response);
+    }
+    let json = serde_json::to_string(response).map_err(err_js)?;
+    js_sys::JSON::parse(&json)
+}
+
+fn has_unsafe_json_integer(value: &serde_json::Value) -> bool {
+    const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
+    match value {
+        serde_json::Value::Number(number) => {
+            !number.is_f64()
+                && number
+                    .as_i64()
+                    .is_none_or(|n| !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&n))
+        }
+        serde_json::Value::Array(values) => values.iter().any(has_unsafe_json_integer),
+        serde_json::Value::Object(values) => values.values().any(has_unsafe_json_integer),
+        _ => false,
+    }
+}
+
 const RESET_REQUIRED_MARKER: &str = "cacheStorageResetRequired";
 const RESET_REQUIRED_MESSAGE: &str = "cache storage reset required";
 
@@ -985,10 +1018,15 @@ impl CacheEngine {
                 )
                 .await;
             let result = state.engine_result(result)?;
-            to_js(&match result {
+            let response = match result {
                 ReadResult::Hit { data } => JsReadResult::Hit { data },
                 ReadResult::Miss => JsReadResult::Miss,
-            })
+            };
+            let data = match &response {
+                JsReadResult::Hit { data } => Some(data),
+                JsReadResult::Miss => None,
+            };
+            read_response_to_js(&response, data)
         })
     }
 
@@ -1005,7 +1043,10 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let selection = RecordSelection::parse(&document, &fragment_name).map_err(err_js)?;
+            let selection = state
+                .selections
+                .get(document, fragment_name)
+                .map_err(err_js)?;
             let keys: Vec<String> = parse_vec(keys)?;
             let keys: Vec<_> = keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let result = state
@@ -1013,10 +1054,14 @@ impl CacheEngine {
                 .read_records_by_keys(&selection, &keys)
                 .await;
             let records = state.engine_result(result)?;
-            to_js(&JsRecordSelectionResult {
+            let response = JsRecordSelectionResult {
                 revision: records.revision.to_string(),
                 records: records.value,
-            })
+            };
+            read_response_to_js(
+                &response,
+                response.records.iter().map(|record| &record.record),
+            )
         })
     }
 

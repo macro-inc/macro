@@ -12,6 +12,75 @@ wasm_bindgen_test_configure!(run_in_dedicated_worker);
 mod mail_projection;
 
 #[wasm_bindgen_test]
+fn read_response_conversion_preserves_json_and_revision_strings() {
+    let data = serde_json::json!({
+        "text": "line\n\"quoted\" 🙂",
+        "nested": [null, true, {"value": 1.25}],
+        "maxInteger": 9_007_199_254_740_991_i64,
+        "minInteger": -9_007_199_254_740_991_i64,
+        "largeFloat": 15_588_948_318_755_801_000_f64,
+        "negativeZero": -0.0_f64,
+    });
+    let hit = JsReadResult::Hit { data: data.clone() };
+    let actual = read_response_to_js(&hit, [&data]).unwrap();
+    assert_eq!(
+        js_sys::JSON::stringify(&actual).unwrap(),
+        js_sys::JSON::stringify(&to_js(&hit).unwrap()).unwrap()
+    );
+    let js_data = js_sys::Reflect::get(&actual, &"data".into()).unwrap();
+    assert!(js_sys::Object::is(
+        &js_sys::Reflect::get(&js_data, &"negativeZero".into()).unwrap(),
+        &JsValue::from_f64(-0.0)
+    ));
+    assert_eq!(
+        js_sys::Reflect::get(&js_data, &"largeFloat".into())
+            .unwrap()
+            .as_f64(),
+        Some(15_588_948_318_755_801_000_f64)
+    );
+    let records = JsRecordSelectionResult {
+        revision: u64::MAX.to_string(),
+        records: vec![cache_core::record_selection::SelectedRecord {
+            record_key: EntityKey("Thing:one".into()),
+            record: data,
+        }],
+    };
+    assert_eq!(
+        js_sys::JSON::stringify(
+            &read_response_to_js(&records, records.records.iter().map(|r| &r.record)).unwrap()
+        )
+        .unwrap(),
+        js_sys::JSON::stringify(&to_js(&records).unwrap()).unwrap()
+    );
+    assert_eq!(
+        js_sys::JSON::stringify(
+            &read_response_to_js(&JsReadResult::Miss, std::iter::empty()).unwrap()
+        )
+        .unwrap(),
+        js_sys::JSON::stringify(&to_js(&JsReadResult::Miss).unwrap()).unwrap()
+    );
+}
+
+#[wasm_bindgen_test]
+fn read_response_conversion_preserves_unsafe_integer_errors() {
+    for number in [
+        serde_json::json!(9_007_199_254_740_992_u64),
+        serde_json::json!(-9_007_199_254_740_992_i64),
+        serde_json::json!(i64::MIN),
+        serde_json::json!(u64::MAX),
+    ] {
+        let data = serde_json::json!({"nested": [{"value": number}]});
+        let response = JsReadResult::Hit { data: data.clone() };
+        assert_eq!(
+            read_response_to_js(&response, [&data])
+                .unwrap_err()
+                .as_string(),
+            to_js(&response).unwrap_err().as_string()
+        );
+    }
+}
+
+#[wasm_bindgen_test]
 fn build_info_reports_compiled_versions_without_opening_storage() {
     let info: serde_json::Value =
         serde_wasm_bindgen::from_value(cache_build_info().unwrap()).unwrap();
@@ -2195,4 +2264,58 @@ async fn calls_serialize_and_owner_lock_excludes_a_second_open() {
         .await
         .expect("close releases owner lock");
     close_and_destroy(&reopened, SCOPE).await;
+}
+
+#[wasm_bindgen_test]
+async fn cached_fragment_plans_preserve_identity_and_recover_from_invalid_requests() {
+    let engine = fresh_engine("cache-wasm-fragment-plans").await;
+    resolved(engine.write_query(
+        write_context(None),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(variables()),
+        js(soup_data("doc-1")),
+        None,
+    ))
+    .await;
+    let keys = || js(serde_json::json!(["GraphqlSoupDocument:doc-1"]));
+    for _ in 0..2 {
+        let selected: serde_json::Value = from_js(
+            resolved(engine.read_records_by_keys(
+                RECORD_FRAGMENT.into(),
+                "CachedDocument".into(),
+                keys(),
+            ))
+            .await,
+        );
+        assert_eq!(selected["records"][0]["record"]["id"], "doc-1");
+    }
+    assert!(
+        JsFuture::from(engine.read_records_by_keys(
+            RECORD_FRAGMENT.into(),
+            "Missing".into(),
+            keys(),
+        ))
+        .await
+        .is_err()
+    );
+    let changed: serde_json::Value = from_js(
+        resolved(engine.read_records_by_keys(
+            "fragment CachedDocument on GraphqlSoupDocument { __typename }".into(),
+            "CachedDocument".into(),
+            keys(),
+        ))
+        .await,
+    );
+    assert!(changed["records"][0]["record"].get("id").is_none());
+    let original: serde_json::Value = from_js(
+        resolved(engine.read_records_by_keys(
+            RECORD_FRAGMENT.into(),
+            "CachedDocument".into(),
+            keys(),
+        ))
+        .await,
+    );
+    assert_eq!(original["records"][0]["record"]["id"], "doc-1");
+    resolved(engine.close()).await;
 }

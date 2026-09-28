@@ -162,3 +162,21 @@ Optimistic GraphQL mutations are persisted with their replay request before
 becoming visible. The exchange claims and applies them strictly in enqueue
 order; a configurable callback decides whether an error remains queued or
 permanently rolls back.
+
+## GraphQL cache query performance
+
+The [GraphQL benchmark suites](cache-turso/benches/README.md) cover production
+query documents and fragment selections over native Turso, the Tauri host and
+the real browser worker/WASM/OPFS path in Chromium and Firefox,
+including warm/cold reads, LRU pressure, query variants, serialization and
+concurrent clients. They validate fixtures before timing and emit per-operation
+latency distributions with a comparison tool.
+Independent scale matrices cover 50, 1,000 and 10,000 durable records, plus
+returned result sizes up to 10,000 items; cache population, selected records and
+hot-tier capacity are reported separately.
+The [page-read results](cache-turso/benches/PAGE_READ_RESULTS.md) measure 100, 250
+and 500 returned entries with exactly 10,000 normalized records in the cache,
+separating warm reads from Turso hydration.
+The [large-result optimization report](cache-turso/benches/SCALE_OPTIMIZATION_RESULTS.md)
+compares every operation before and after branch resumption, per-read field plans
+and batched Turso lookups.

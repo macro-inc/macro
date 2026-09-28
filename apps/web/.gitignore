@@ -92,3 +92,5 @@ packages/pdfium-worker/**/*
 
 storybook-static
 bunfig.toml
+
+**/.dist-benchmark

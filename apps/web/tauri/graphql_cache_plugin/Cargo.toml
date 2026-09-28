@@ -15,6 +15,14 @@ tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
+apollo-compiler = "1.32"
 pollster = { workspace = true }
 tempfile = "3"
 soup-filter-projection = { path = "../../../../crates/soup_filter_projection", default-features = false }
+apollo-parser = "0.8"
+clap = { version = "4", features = ["derive"] }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+
+[[bench]]
+name = "graphql_queries"
+harness = false

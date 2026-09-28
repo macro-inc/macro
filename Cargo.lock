@@ -3146,11 +3146,16 @@ dependencies = [
 name = "cache-turso"
 version = "0.1.0"
 dependencies = [
+ "apollo-compiler",
+ "apollo-parser",
  "cache-core",
+ "clap",
  "maybe_send",
  "pollster",
  "predicate-index",
+ "serde",
  "serde_json",
+ "soup-filter-projection",
  "tempfile",
  "thiserror 2.0.18",
  "turso-opfs",
