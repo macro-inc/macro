@@ -1,3 +1,4 @@
+import type { CacheHost } from '@graphql-cache/host/types';
 import type { Property } from '@property/types';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
@@ -15,6 +16,7 @@ import { filter, makeSubject, mergeMap, pipe } from 'wonka';
 
 const graphqlClientState = vi.hoisted(() => ({
   current: undefined as Client | undefined,
+  host: undefined as CacheHost | undefined,
 }));
 const mapGraphqlPropertiesMock = vi.hoisted(() => vi.fn());
 
@@ -23,7 +25,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
     if (!graphqlClientState.current) throw new Error('GraphQL client not set');
     return graphqlClientState.current;
   },
-  getGraphqlCacheHost: () => undefined,
+  getGraphqlCacheHost: () => graphqlClientState.host,
   mapGraphqlProperties: mapGraphqlPropertiesMock,
 }));
 
@@ -360,6 +362,87 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
   let dispose: (() => void) | undefined;
 
   afterEach(() => dispose?.());
+
+  it('installs every bulk layer before the first HTTP result, while retaining enqueue order', async () => {
+    const onCommitted = vi.fn();
+    const acknowledgements: Array<() => void> = [];
+    const responses: Array<() => void> = [];
+    const mutation = vi.fn((_document: unknown, _variables: unknown, context: Record<string, unknown>) => ({
+      toPromise: () => new Promise((resolve) => {
+        acknowledgements.push(context.normalizedCacheOptimisticEnqueued as () => void);
+        responses.push(() => resolve({
+          operation: { kind: 'mutation', context },
+          data: { setEntityProperty: { id: 'assignment' } }, stale: false, hasNext: false,
+        }));
+      }),
+    }));
+    graphqlClientState.current = { mutation } as unknown as Client;
+    const save = createRoot((rootDispose) => {
+      dispose = rootDispose;
+      return createGraphqlBulkSaveEntityPropertiesMutation({ onCommitted });
+    });
+    const property = {
+      propertyId: 'assignment', propertyDefinitionId: 'priority', displayName: 'Priority',
+      valueType: 'SELECT_STRING', isMultiSelect: false,
+    } as Property;
+    const pending = save.mutateAsync({ properties: ['task-1', 'task-2'].map((entityId) => ({
+      entityId, entityType: 'TASK', property,
+      apiValues: { valueType: 'SELECT_STRING', values: ['urgent'] },
+    })) });
+    await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(1));
+    // Preparing the next relation recipe must wait for cache installation.
+    expect(onCommitted).not.toHaveBeenCalled();
+    acknowledgements[0]();
+    await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(2));
+    expect(onCommitted).not.toHaveBeenCalled();
+    acknowledgements[1]();
+    expect(save.isPending).toBe(true);
+    responses[1]();
+    await vi.waitFor(() => expect(onCommitted).toHaveBeenCalledTimes(1));
+    expect(save.isPending).toBe(true);
+    responses[0]();
+    await pending;
+    expect(onCommitted).toHaveBeenCalledTimes(2);
+    expect(save.isPending).toBe(false);
+  });
+
+  it('links a task-grid placeholder when saving unset priority', async () => {
+    graphqlClientState.host = {
+      inspectQuery: vi.fn(async () => [{
+        variables: { input: { initial: { limit: 20 } } }, value: { items: [{ id: 'task-1' }] },
+      }]),
+      inspectQueryVariants: vi.fn(async () => []),
+    } as unknown as CacheHost;
+    const mutation = vi.fn((_document: unknown, _variables: unknown, context: Record<string, unknown>) => ({
+      toPromise: async () => ({ operation: { kind: 'mutation', context },
+        data: { setEntityProperty: { id: 'server-assignment' } }, stale: false, hasNext: false }),
+    }));
+    graphqlClientState.current = { mutation } as unknown as Client;
+    const save = createRoot((rootDispose) => {
+      dispose = rootDispose;
+      return createGraphqlBulkSaveEntityPropertiesMutation();
+    });
+    try {
+      await save.mutateAsync({ properties: [{
+        entityType: 'TASK', entityId: 'task-1',
+        property: { propertyId: 'pending:priority', propertyDefinitionId: 'priority',
+          displayName: 'Priority', valueType: 'SELECT_STRING', isMultiSelect: false, value: null } as Property,
+        apiValues: { valueType: 'SELECT_STRING', values: ['urgent'] },
+      }] });
+      expect(mutation).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({
+        normalizedCacheOptimistic: expect.objectContaining({
+          optimisticResponse: { setEntityProperty: expect.objectContaining({
+            id: 'optimistic-property:DOCUMENT:task-1:priority',
+            value: { __typename: 'GraphqlSelectOptionPropertyValue', optionIds: ['urgent'] },
+          }) },
+          linkPatches: [expect.objectContaining({ operation: {
+            kind: 'upsertByField', entityKey: 'GraphqlProperty:optimistic-property:DOCUMENT:task-1:priority',
+            whereField: 'propertyDefinitionId', equals: 'priority',
+          } })],
+        }),
+      }));
+    } finally { graphqlClientState.host = undefined; }
+  });
 
   it('runs bulk side effects through mutation callbacks', async () => {
     const events: string[] = [];

@@ -38,6 +38,7 @@ export {
   select,
   update,
   upsertEmbeddedLink,
+  upsertByField,
 } from './exchange/optimistic';
 export {
   type RecordSelection,

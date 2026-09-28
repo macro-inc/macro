@@ -45,7 +45,7 @@ const EPOCH = new Date(0).toISOString();
  */
 function buildStubProperty(col: TaskGridColumn): Property {
   const stubSoup: SoupProperty = {
-    id: col.defId,
+    id: `pending:${col.defId}`,
     definition: {
       id: col.defId,
       display_name: col.label,

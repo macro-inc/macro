@@ -81,6 +81,7 @@ import {
 import {
   normalizedEntityKey,
   optimisticContextOf,
+  notifyOptimisticMutationEnqueued,
   withOptimisticMutationDisposition,
 } from './optimistic';
 
@@ -1041,6 +1042,7 @@ export function normalizedCacheExchange(
         op: Operation
       ): Promise<OperationResult | undefined> {
         if (host.disabled) {
+          notifyOptimisticMutationEnqueued(op);
           enqueueForward(op);
           return undefined;
         }
@@ -1144,6 +1146,7 @@ export function normalizedCacheExchange(
             resolveRoute: resolve,
           });
         });
+        notifyOptimisticMutationEnqueued(op);
         try {
           await match(enqueue.initialClaim)
             .with({ kind: 'claimed' }, ({ mutation }) =>
