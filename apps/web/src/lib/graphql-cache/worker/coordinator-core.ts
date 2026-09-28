@@ -88,6 +88,9 @@ export type CoordinatorAction =
   | { kind: 'retire-tab'; tabId: string; ownerEpoch: OwnerEpoch }
   | { kind: 'schedule-reset-activation' }
   | { kind: 'broadcast-cache-unavailable'; reason: string }
+  | { kind: 'broadcast-cache-superseded'; reason: string }
+  | { kind: 'notify-cache-superseded'; tabId: string; reason: string }
+  | { kind: 'terminate-drained-engine'; tabId: string; ownerEpoch: OwnerEpoch }
   | {
       kind: 'broadcast-engine-replaced';
       ownerEpoch: OwnerEpoch;
@@ -125,6 +128,8 @@ const OWNER_LOCK_UNAVAILABLE_REASON =
   'cache database owner lock is held by another context, such as another app version';
 const STORAGE_BUSY_REASON =
   'cache database files are still open in another context, such as a closing tab';
+const SUPERSEDED_REASON =
+  'a newer version of the app took over the local cache';
 
 /** Pure election, epoch, routing, drain, and abrupt-loss state machine. */
 export class CoordinatorCore {
@@ -137,6 +142,8 @@ export class CoordinatorCore {
   /** Tabs told the database is unavailable, with the reason they were given;
    * their pages stay uncached. */
   private readonly unavailableTabs = new Map<string, string>();
+  /** Set once a newer app build took the database over; never cleared. */
+  private supersededReason: string | undefined;
   private readonly queuedRequests: QueuedRequest[] = [];
   private readonly inFlight = new Map<RouteId, InFlightRequest>();
   private currentEpoch = 0;
@@ -166,9 +173,24 @@ export class CoordinatorCore {
     };
   }
 
+  /** Whether a newer app build took the database over. */
+  get superseded(): boolean {
+    return this.supersededReason !== undefined;
+  }
+
   registerTab(tabId: string): CoordinatorAction[] {
     if (this.tabs.includes(tabId)) return [];
     this.tabs.push(tabId);
+    if (this.supersededReason !== undefined) {
+      this.unavailableTabs.set(tabId, this.supersededReason);
+      return [
+        {
+          kind: 'notify-cache-superseded',
+          tabId,
+          reason: this.supersededReason,
+        },
+      ];
+    }
     if (this.stateValue.kind === 'failed') {
       return [
         {
@@ -408,6 +430,20 @@ export class CoordinatorCore {
       ownerEpoch,
       'engine drained before delivering its response'
     );
+    if (this.supersededReason !== undefined) {
+      // The owner's page stays open until it reloads. Its engine closed the
+      // database, and the newer build opens it next.
+      actions.push(
+        { kind: 'close-engine-route', tabId, ownerEpoch },
+        { kind: 'terminate-drained-engine', tabId, ownerEpoch }
+      );
+      this.stateValue = {
+        kind: 'waiting-for-tab',
+        nextDatabaseAction: 'open-existing',
+      };
+      this.assertInvariants();
+      return actions;
+    }
     this.removeTabRecord(tabId);
     this.retiringTabs.delete(tabId);
     actions.push(
@@ -429,6 +465,46 @@ export class CoordinatorCore {
     reason: string
   ): CoordinatorAction[] {
     return this.transitionToAbruptLoss(tabId, ownerEpoch, reason);
+  }
+
+  /**
+   * A newer app build asked for the database. Every tab stops using the cache
+   * and reloads into that build, and the active engine drains, which closes
+   * the database and releases the owner lock. Nothing is elected afterwards.
+   */
+  yieldToNewerBuild(): CoordinatorAction[] {
+    const state = this.stateValue;
+    if (state.kind !== 'active' || this.supersededReason !== undefined) {
+      return [];
+    }
+    const actions = this.supersede();
+    this.stateValue = {
+      kind: 'draining',
+      tabId: state.tabId,
+      ownerEpoch: state.ownerEpoch,
+    };
+    actions.push({
+      kind: 'drain-owner',
+      tabId: state.tabId,
+      ownerEpoch: state.ownerEpoch,
+    });
+    this.assertInvariants();
+    return actions;
+  }
+
+  /** The same for a coordinator whose engine holds nothing: its tabs, cut
+   * off from the cache already, reload into the newer build. */
+  yieldIdleToNewerBuild(): CoordinatorAction[] {
+    const state = this.stateValue;
+    if (
+      (state.kind !== 'waiting-for-tab' && state.kind !== 'failed') ||
+      this.supersededReason !== undefined
+    ) {
+      return [];
+    }
+    const actions = this.supersede();
+    this.assertInvariants();
+    return actions;
   }
 
   /** Stops owner recovery and fails every current or future page connection. */
@@ -704,6 +780,19 @@ export class CoordinatorCore {
       error,
       ...(errorCode === undefined ? {} : { errorCode }),
     };
+  }
+
+  private supersede(): CoordinatorAction[] {
+    const reason = SUPERSEDED_REASON;
+    this.supersededReason = reason;
+    const actions: CoordinatorAction[] = this.queuedRequests
+      .splice(0)
+      .map(({ tabId, request }) =>
+        this.rejectUnavailable(tabId, request.id, reason)
+      );
+    for (const tabId of this.tabs) this.unavailableTabs.set(tabId, reason);
+    actions.push({ kind: 'broadcast-cache-superseded', reason });
+    return actions;
   }
 
   /** Refuses queued work, keeps every registered tab uncached, and waits for

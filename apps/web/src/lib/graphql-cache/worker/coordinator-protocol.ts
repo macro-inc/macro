@@ -65,6 +65,9 @@ export type TabToCoordinatorEnvelope =
       tabId: string;
       livenessLockName: string;
       hotCapacity?: number;
+      /** When the page's app build was made, in ms since the epoch; 0 if
+       * unstamped. A newer build takes the database over from an older one. */
+      buildTime: number;
     }
   | {
       coordinatorVersion: 6;
@@ -170,6 +173,13 @@ export type CoordinatorToTabEnvelope =
       /** Another context holds the database; stop using the cache until reload. */
       coordinatorVersion: 6;
       kind: 'cache-unavailable';
+      reason: string;
+    }
+  | {
+      /** A newer app build took the database over. The page stops using the
+       * cache and reloads into that build. */
+      coordinatorVersion: 6;
+      kind: 'cache-superseded';
       reason: string;
     }
   | {
@@ -754,10 +764,12 @@ export function validateTabToCoordinatorEnvelope(
           'tabId',
           'livenessLockName',
           'hotCapacity',
+          'buildTime',
         ]) &&
         isNonEmptyString(value.scope) &&
         isNonEmptyString(value.livenessLockName) &&
-        isOptionalPositiveInteger(value.hotCapacity)
+        isOptionalPositiveInteger(value.hotCapacity) &&
+        isSafeNonNegativeInteger(value.buildTime)
       ) {
         return pass(value as TabToCoordinatorEnvelope);
       }
@@ -976,6 +988,7 @@ export function validateCoordinatorToTabEnvelope(
       }
       break;
     case 'cache-unavailable':
+    case 'cache-superseded':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'reason']) &&
         isNonEmptyString(value.reason)

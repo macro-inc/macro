@@ -1,4 +1,5 @@
 import * as Effect from 'effect/Effect';
+import { APP_BUILD_TIME } from '../app-build';
 import type { CacheRequest, WorkerMessage } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
@@ -61,6 +62,11 @@ export interface CacheCoordinatorPageAdapterOptions {
   onOwnerChanged?: (ownerEpoch: number | undefined) => void;
   /** Another context holds the database, so the cache stays off until reload. */
   onCacheUnavailable?: (reason: string) => void;
+  /** A newer app build took the database over; this page should reload. */
+  onCacheSuperseded?: (reason: string) => void;
+  /** When this page's app build was made, in ms since the epoch. Defaults to
+   * the bundler's stamp; a newer build takes the database over. */
+  buildTime?: number;
   /** Disposable worker, running the engine script, that deletes stale databases. */
   createCleanupWorker?: (scope: string) => DedicatedWorkerLike;
   listOpfsRootNames?: () => Promise<string[]>;
@@ -484,6 +490,7 @@ export class CacheCoordinatorPageAdapter {
         tabId: this.tabId,
         livenessLockName,
         hotCapacity: this.options.hotCapacity,
+        buildTime: this.options.buildTime ?? APP_BUILD_TIME,
       })
     );
   }
@@ -621,6 +628,9 @@ export class CacheCoordinatorPageAdapter {
         break;
       case 'cache-unavailable':
         this.options.onCacheUnavailable?.(message.reason);
+        break;
+      case 'cache-superseded':
+        this.options.onCacheSuperseded?.(message.reason);
         break;
       case 'remove-stale-databases':
         // Only the engine's current owner cleans up, once per page.

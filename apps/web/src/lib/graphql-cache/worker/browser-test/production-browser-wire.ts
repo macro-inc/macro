@@ -52,5 +52,6 @@ export type ProductionHarnessEnvelope =
             error: string;
           }
         | { kind: 'protocol-error'; error: string }
-        | { kind: 'cache-unavailable'; reason: string };
+        | { kind: 'cache-unavailable'; reason: string }
+        | { kind: 'cache-superseded'; reason: string };
     };

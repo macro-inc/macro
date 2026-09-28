@@ -12,9 +12,12 @@ export const ENGINE_DATABASE_OPEN_TIMEOUT_MS = 20_000;
 export const OWNER_LOCK_RETRY_DELAYS_MS: readonly number[] = [
   25, 50, 100, 200, 400, 800, 1_600, 3_200, 3_200,
 ];
-/** When another build has live tabs, a busy lock is almost certainly theirs;
- * give only an in-build handoff this long before giving up. */
-export const OWNER_LOCK_OTHER_BUILD_GRACE_MS = 750;
+/** When another build has live tabs, a busy lock is almost certainly theirs.
+ * The coordinator asks that build to hand the database over and gives up
+ * unless the holder agrees this soon; builds from before handover never do. */
+export const TAKEOVER_REPLY_TIMEOUT_MS = 1_000;
+/** A yielding engine that has not drained by then is terminated. */
+export const YIELD_DRAIN_TIMEOUT_MS = 10_000;
 /** Coordinator backstop for an engine that stops reporting while it waits. */
 export const OWNER_LOCK_WAIT_TIMEOUT_MS =
   OWNER_LOCK_RETRY_DELAYS_MS.reduce((total, delay) => total + delay, 0) + 5_000;

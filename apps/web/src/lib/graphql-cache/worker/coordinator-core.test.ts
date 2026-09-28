@@ -178,6 +178,88 @@ describe('CoordinatorCore', () => {
     });
   });
 
+  it('yields to a newer build: drains, sends every tab on, never re-elects', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    ready(core, 'tab-a', 1, 'opened-existing');
+    expect(core.request('tab-b', init(1))).toMatchObject([
+      { kind: 'route-request', ownerEpoch: 1 },
+    ]);
+
+    const actions = core.yieldToNewerBuild();
+
+    expect(actions).toEqual([
+      {
+        kind: 'broadcast-cache-superseded',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+      { kind: 'drain-owner', tabId: 'tab-a', ownerEpoch: 1 },
+    ]);
+    expect(core.superseded).toBe(true);
+    expect(core.state).toEqual({
+      kind: 'draining',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    expect(core.yieldToNewerBuild()).toEqual([]);
+    // Work already routed finishes; new work is refused quietly.
+    expect(core.request('tab-b', clear(2))).toEqual([
+      expect.objectContaining({
+        kind: 'reject-request',
+        requestId: 2,
+        errorCode: 'owner-lock-unavailable',
+      }),
+    ]);
+
+    expect(core.engineDrained('tab-a', 1)).toEqual([
+      expect.objectContaining({
+        kind: 'reject-request',
+        tabId: 'tab-b',
+        requestId: 1,
+      }),
+      { kind: 'close-engine-route', tabId: 'tab-a', ownerEpoch: 1 },
+      { kind: 'terminate-drained-engine', tabId: 'tab-a', ownerEpoch: 1 },
+    ]);
+    expect(core.state).toEqual({
+      kind: 'waiting-for-tab',
+      nextDatabaseAction: 'open-existing',
+    });
+    expect(core.registerTab('tab-c')).toEqual([
+      {
+        kind: 'notify-cache-superseded',
+        tabId: 'tab-c',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+    expect(core.snapshot().tabIds).toEqual(['tab-a', 'tab-b', 'tab-c']);
+  });
+
+  it('yields only an active engine, and sends idle tabs on without a drain', () => {
+    const activating = new CoordinatorCore('scope');
+    activating.registerTab('tab-a');
+    grantStorage(activating, 'tab-a', 1);
+    // Mid-open the files may be changing, so nothing is handed over.
+    expect(activating.yieldToNewerBuild()).toEqual([]);
+    expect(activating.yieldIdleToNewerBuild()).toEqual([]);
+
+    const idle = new CoordinatorCore('scope');
+    idle.registerTab('tab-a');
+    idle.beginOwnerLockWait('tab-a', 1);
+    idle.ownerLockUnavailable('tab-a', 1);
+    expect(idle.yieldToNewerBuild()).toEqual([]);
+    expect(idle.yieldIdleToNewerBuild()).toEqual([
+      {
+        kind: 'broadcast-cache-superseded',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+    expect(idle.yieldIdleToNewerBuild()).toEqual([]);
+    expect(idle.registerTab('tab-b')).toEqual([
+      expect.objectContaining({ kind: 'notify-cache-superseded' }),
+    ]);
+  });
+
   it('keeps a pending recovery wipe when its files stay busy', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');

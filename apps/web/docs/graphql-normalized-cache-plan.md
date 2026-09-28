@@ -218,15 +218,35 @@ a page's last-seen phase. Missing/broken transports remain conservatively
 uncertain.
 
 Each build's coordinator is a separate SharedWorker (its script URL is
-content-hashed), so after a deploy two builds can target one database. The
-current owner keeps it. When the lock stays busy while tabs of another build are
-alive (liveness locks this coordinator did not register, after a 750 ms grace
-for an in-build handoff), or when the engine exhausts its retries, the
-coordinator fails closed: it refuses queued requests with `owner-lock-unavailable`
-and tells every registered page `cache-unavailable`. Those pages retire their host
-for the rest of the page session, without quarantine, toast, or error report;
-only a tab that registers later tries again. Nothing waits in line for the lock,
-so a deploy cannot make one build take the database from the other mid-handoff.
+content-hashed), so after a deploy two builds can target one database. The newer
+build takes it over. Pages report their build time (`__APP_BUILD_TIME__`,
+stamped by Vite) when they register. When the lock stays busy while tabs of
+another build are alive (liveness locks this coordinator did not register), the
+coordinator posts a takeover request on the cross-build
+`graphql-cache-takeover:{scope}` channel (`coordinator-takeover.ts`, a contract
+every later build must keep). Only the coordinator whose engine holds the
+database answers:
+
+- **Yield**, if the requester is strictly newer. Every one of its tabs gets
+  `cache-superseded`: the page retires its host to the network, and the app
+  reloads the page into the newer build. Hidden tabs reload at once. The visible
+  tab gets a prompt and reloads when the user leaves it, never while offline.
+  The engine then drains, which closes the database and releases the owner lock,
+  and nothing is elected again. The requester's engine, still retrying the lock,
+  opens the same database with its data and queued mutations. A yielding engine
+  that does not drain within 10 seconds is terminated.
+- **Keep**, if the requester is not newer. The requester fails closed as below.
+
+A coordinator that holds nothing but gets a request from a newer build sends
+its tabs there too, without answering. When no yield arrives within a second
+(builds from before handover never answer), when the holder keeps the
+database, or when the engine exhausts its retries, the coordinator fails closed:
+it refuses queued requests with `owner-lock-unavailable` and tells every
+registered page `cache-unavailable`. Those pages retire their host for the rest
+of the page session, without quarantine, toast, or error report; only a tab
+that registers later tries again. Nothing waits in line for the lock, and a
+build only ever yields to a newer one. A rollback therefore leaves the rolled-back
+build uncached until the newer tabs close, instead of reloading tabs in a loop.
 
 The browser can also hand the owner lock to the next engine before a departing
 page's terminated worker has let go of the database files. Production logs show

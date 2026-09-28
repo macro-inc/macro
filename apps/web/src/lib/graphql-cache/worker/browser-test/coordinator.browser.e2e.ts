@@ -376,3 +376,45 @@ test('production engine waits out a departing owner that still holds the files, 
   });
   expect(browserErrors).toEqual([]);
 });
+
+test('a newer build takes the production database over and older builds are turned away', async ({
+  context,
+  page,
+}, testInfo) => {
+  const browserErrors: string[] = [];
+  const watch = (candidate: typeof page): void => {
+    candidate.on('console', (message) => {
+      if (message.type() === 'error') browserErrors.push(message.text());
+    });
+    candidate.on('pageerror', (error) => browserErrors.push(error.message));
+  };
+  watch(page);
+  context.on('page', watch);
+
+  await page.goto(
+    harnessPath(testInfo.project.name, 'production-takeover.html')
+  );
+  const result = page.locator('#result');
+  await expect(result).toHaveAttribute('data-status', 'passed', {
+    timeout: 80_000,
+  });
+  const report = JSON.parse((await result.textContent()) ?? '') as Record<
+    string,
+    unknown
+  >;
+
+  expect(report).toEqual({
+    passed: true,
+    newBuildDatabaseAction: 'open-existing',
+    newBuildKeptData: true,
+    oldEngineDrained: true,
+    oldEngineTerminatedAfterDrain: true,
+    oldTabsSentOn: true,
+    oldTabReadFellBack: true,
+    olderBuildTurnedAway: true,
+    olderBuildSentOn: false,
+    newBuildSentOn: false,
+    protocolErrors: [],
+  });
+  expect(browserErrors).toEqual([]);
+});

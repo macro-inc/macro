@@ -8,6 +8,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
+import { reloadForNewerBuild } from '@core/util/reloadForNewerBuild';
 import {
   HYDRATE_ONLY_CONTEXT_KEY,
   normalizedCacheExchange,
@@ -491,6 +492,8 @@ export function getGraphqlSoupClient(): Client {
               scope,
               onInitializationError,
               rolloutCohort: rollout.cohort,
+              // A newer deploy took the local cache over: move to it.
+              onSuperseded: () => reloadForNewerBuild(),
             })
       );
       const graphqlWsClient = createGraphqlSoupWebSocketClient(

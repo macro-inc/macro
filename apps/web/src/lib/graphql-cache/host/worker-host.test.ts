@@ -142,6 +142,10 @@ class FakePageAdapter {
     this.options.onCacheUnavailable?.(reason);
   }
 
+  superseded(reason: string): void {
+    this.options.onCacheSuperseded?.(reason);
+  }
+
   private emit(message: WorkerMessage): void {
     this.onmessage?.({ data: message } as MessageEvent<WorkerMessage>);
   }
@@ -1353,6 +1357,33 @@ describe('createWorkerCacheHost', () => {
     expect(onInitializationError).toHaveBeenCalledOnce();
     expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
     expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
+  });
+
+  it('retires quietly and asks the app to reload when a newer build takes over', async () => {
+    localStorage.setItem('graphql-cache:scope', 'scope-1');
+    const onInitializationError = vi.fn();
+    const onSuperseded = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+      onSuperseded,
+    });
+    await host.clear();
+    const adapter = requireAdapter();
+
+    adapter.superseded('a newer version of the app took over the local cache');
+    adapter.superseded('duplicate notice');
+
+    expect(onSuperseded).toHaveBeenCalledOnce();
+    expect(onInitializationError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ errorCode: 'owner-lock-unavailable' })
+    );
+    expect(adapter.dispose).toHaveBeenCalledWith({ graceful: false });
+    // The newer build opens the same database, so the scope is kept.
+    expect(localStorage.getItem('graphql-cache:scope')).toBe('scope-1');
+    await expect(
+      host.readQuery({ query: 'query Q { q }' })
+    ).rejects.toMatchObject({ errorCode: 'owner-lock-unavailable' });
   });
 
   it('quarantines transport scope before invoking the product failure callback', async () => {

@@ -152,6 +152,7 @@ const registerTab = async (
     scope: 'scope',
     tabId,
     livenessLockName: `graphql-cache-tab:scope:${tabId}`,
+    buildTime: 0,
   });
 };
 

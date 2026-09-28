@@ -115,6 +115,9 @@ export interface WorkerHostOptions {
   initializationTimeoutMs?: number;
   /** Reports terminal initialization or coordinator-transport failure. */
   onInitializationError?: (error: Error) => void;
+  /** A newer app build took the local cache over. The host has already
+   * retired to the network; the app should reload the page into that build. */
+  onSuperseded?: () => void;
   /** Allowlisted rollout cohort attached to browser-cache telemetry. */
   rolloutCohort?: CacheRolloutCohort;
   /** Injectable recorder for deterministic tests or alternate exporters. */
@@ -238,6 +241,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let latestReplacementEpoch = 0;
   let failureReported = false;
   let terminalFailureHandled = false;
+  let superseded = false;
   let adapter: CacheCoordinatorPageAdapter | undefined;
   let registeredAdapter: CacheCoordinatorPageAdapter | undefined;
   let adapterDisposePromise: Promise<void> | undefined;
@@ -458,6 +462,12 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       },
       onCacheUnavailable: (reason) => {
         if (adapter === created) retireUnavailable(reason);
+      },
+      onCacheSuperseded: (reason) => {
+        if (adapter !== created || superseded) return;
+        superseded = true;
+        retireUnavailable(reason);
+        options.onSuperseded?.();
       },
       telemetry,
     });

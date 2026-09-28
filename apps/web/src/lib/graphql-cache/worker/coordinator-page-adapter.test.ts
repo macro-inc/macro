@@ -294,6 +294,37 @@ describe('CacheCoordinatorPageAdapter', () => {
     );
   });
 
+  it('registers with its build time and relays a newer build taking over', async () => {
+    const onCacheSuperseded = vi.fn();
+    const port = await registeredAdapter({
+      buildTime: 1_790_000_000_000,
+      onCacheSuperseded,
+    });
+    expect(port.messages[0]?.message).toMatchObject({
+      kind: 'register-tab',
+      buildTime: 1_790_000_000_000,
+    });
+
+    port.receive({
+      ...version,
+      kind: 'cache-superseded',
+      reason: 'a newer version of the app took over the local cache',
+    });
+
+    expect(onCacheSuperseded).toHaveBeenCalledExactlyOnceWith(
+      'a newer version of the app took over the local cache'
+    );
+  });
+
+  it('registers as an unstamped build outside app bundles', async () => {
+    const port = await registeredAdapter({});
+
+    expect(port.messages[0]?.message).toMatchObject({
+      kind: 'register-tab',
+      buildTime: 0,
+    });
+  });
+
   it('deletes stale databases in a disposable worker, once, for its own engine', async () => {
     const cleanupWorker = new FakeWorker();
     const createCleanupWorker = vi.fn(() => cleanupWorker);

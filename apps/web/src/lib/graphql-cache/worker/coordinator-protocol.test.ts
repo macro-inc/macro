@@ -143,17 +143,24 @@ describe('coordinator runtime protocol', () => {
       kind: 'cache-unavailable',
       reason: 'another app version holds the database',
     };
+    const superseded = {
+      ...version,
+      kind: 'cache-superseded',
+      reason: 'a newer version of the app took over the local cache',
+    };
     const removeStale = {
       ...version,
       kind: 'remove-stale-databases',
       tabId: 'tab',
       ownerEpoch: 2,
     };
-    for (const valid of [cacheUnavailable, removeStale]) {
+    for (const valid of [cacheUnavailable, superseded, removeStale]) {
       expect(validateCoordinatorToTabEnvelope(valid).ok).toBe(true);
     }
     for (const invalid of [
       { ...cacheUnavailable, reason: '' },
+      { ...superseded, reason: '' },
+      { ...superseded, buildTime: 1 },
       { ...removeStale, ownerEpoch: 0 },
     ]) {
       expect(validateCoordinatorToTabEnvelope(invalid).ok).toBe(false);
@@ -378,6 +385,7 @@ describe('coordinator runtime protocol', () => {
       scope: 'scope',
       tabId: 'tab',
       livenessLockName: 'graphql-cache-tab:scope:tab',
+      buildTime: 1_790_000_000_000,
     },
     {
       ...version,
@@ -625,6 +633,17 @@ describe('coordinator runtime protocol', () => {
   it('rejects missing versions, non-positive epochs, extra fields, and malformed nested payloads', () => {
     expect(
       validateTabToCoordinatorEnvelope({
+        kind: 'register-tab',
+        scope: 'scope',
+        tabId: 'tab',
+        livenessLockName: 'lock',
+        buildTime: 0,
+      }).ok
+    ).toBe(false);
+    // Every page reports its build, which decides database takeovers.
+    expect(
+      validateTabToCoordinatorEnvelope({
+        ...version,
         kind: 'register-tab',
         scope: 'scope',
         tabId: 'tab',
