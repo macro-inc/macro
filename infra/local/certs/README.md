@@ -7,6 +7,11 @@ and serves `server.pem` + `server-key.pem`. The certificate covers the detected
 hostname, `localhost`, `*.localhost`, and loopback IPs. The CA stays unchanged
 between starts, so coworkers only need to trust it once; Tailscale is optional.
 
+Standalone `bun run dev` in `apps/web` uses this same CA and certificate
+generator. Vite serves HTTPS directly and prints the hostname URL. Its leaf
+certificate is generated in a temporary directory, loaded into memory, and
+removed from disk; restarting Vite does not require trusting a new CA.
+
 These keys are not secrets. Anyone with the repo can mint a matching cert;
 do not reuse them outside local development.
 

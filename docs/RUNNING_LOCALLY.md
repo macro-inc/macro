@@ -66,7 +66,18 @@ cd apps/web
 bun run dev
 ```
 
-The first run, or a run after a wasm version change, may build wasm packages. Vite prints a local URL when it is ready.
+The first run, or a run after a wasm version change, may build wasm packages.
+Vite detects your hostname and prints `https://<hostname>:3000/app/` when ready
+(`PORT` overrides the port). It generates a certificate with the same stable
+development CA as `just local`; trust `infra/local/certs/ca.pem` once on the
+machine running the browser. See the [certificate README](../infra/local/certs/README.md).
+The visiting machine must resolve the hostname and reach that port. No Docker
+proxy or Tailscale is needed. Hosted service authentication and CORS rules still
+apply; HTTPS does not change which origins those services accept.
+
+Use `MACRO_DEV_HTTPS=false bun run dev` for an HTTP-only workflow. Tauri and the
+local stack's internal Vite server keep using HTTP automatically; the stack
+provides HTTPS through its proxy. Builds and preview servers are unchanged.
 
 ## Run the local stack
 
