@@ -10,7 +10,18 @@ use std::collections::HashSet;
 use thiserror::Error;
 use utoipa::ToSchema;
 
-/// Target gross margin on AI, in basis points. The list rate is provider cost
+/// Persisted usage-policy identity, independent of purchase availability or today's roles.
+/// A verified period activation selects this value; legacy records are never repriced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UsagePolicy {
+    /// Original 2.5x list-rate arithmetic and plan allowances.
+    Legacy,
+    /// Existing $40 offer: $20 public usage per seat, then public usage times 1.05.
+    PublicAllowanceV1,
+}
+
+/// Legacy target gross margin on AI, in basis points. The list rate is provider cost
 /// divided by `(1 - margin)`; at 60% that is a 2.5x markup.
 pub const TARGET_GROSS_MARGIN_BPS: i64 = 6_000;
 
@@ -25,7 +36,7 @@ pub const NON_BILLABLE_AI_FEATURES: [AiFeature; 4] = [
     AiFeature::Dictation,
 ];
 
-/// Convert a provider cost in USD to Macro's list rate in whole cents,
+/// Legacy only: convert a provider cost in USD to Macro's list rate in whole cents,
 /// rounding up so fractional cents never accrue in the customer's favour.
 pub fn list_rate_cents(provider_cost_usd: f64) -> i64 {
     if !provider_cost_usd.is_finite() || provider_cost_usd <= 0.0 {
@@ -87,7 +98,7 @@ impl PlanTier {
         }
     }
 
-    /// AI usage included per seat per period, in list-rate cents. Equal to the
+    /// Legacy AI usage included per seat per period, in list-rate cents. Equal to the
     /// plan price by construction: spending it all costs Macro
     /// `price x (1 - margin)`, which is exactly the target margin.
     pub const fn included_ai_cents_per_seat(self) -> i64 {

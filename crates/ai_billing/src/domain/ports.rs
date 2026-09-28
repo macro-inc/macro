@@ -287,7 +287,12 @@ impl SettlementTrigger for NoOpSettlementTrigger {
     fn request_settlement(&self, _payer: MacroUserIdStr<'static>) {}
 }
 
-/// The use cases offered to inbound adapters and other services.
+/// Existing billing use cases offered to inbound adapters and other services.
+///
+/// Admission and aggregate settlement here retain legacy semantics. Activated
+/// public-allowance traffic must instead use the awaited financial funding port
+/// (`ai_usage::domain::ports::InvocationFunding`) backed by the reservation and
+/// allocation rules in [`super::policy`]. It must never also enter legacy settlement.
 pub trait BillingService: Send + Sync + 'static {
     /// May `user` start another AI request?
     ///
