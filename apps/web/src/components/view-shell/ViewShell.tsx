@@ -14,6 +14,7 @@ import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {
   type Accessor,
   batch,
@@ -30,7 +31,6 @@ import {
   splitProps,
   useContext,
 } from 'solid-js';
-import { CollapseTransition } from './CollapseTransition';
 import { createSidebarMotion } from './create-sidebar-motion';
 import {
   type AsideLayout,
