@@ -132,7 +132,7 @@ export function NewChatPage(props: {
   };
 
   const attachmentTracker = createInputAttachmentTracker({
-    // Home owns the draft in memory; Agents remounts this page per route.
+    // Home supplies its own text draft; attachment persistence here is for Agents.
     persistenceKey: props.onDraftChange
       ? undefined
       : NEW_CONVERSATION_ATTACHMENTS_KEY,

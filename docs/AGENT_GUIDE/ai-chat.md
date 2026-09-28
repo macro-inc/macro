@@ -119,7 +119,11 @@ the shimmer.
   agents and **What should we build?** for coding agents. The draft stays intact
   when changing agents. Unsent New conversation text and attachments also come
   back after opening a session and returning, the same way channel replies persist
-  when switching channels. Sending or clearing the input removes the saved draft.
+  when switching channels. Home's agent input also restores unsent text, under a
+  separate key from Agents → New conversation. Check the Home path explicitly:
+  type a prompt on Home, visit an agent session, then return using the Home sidebar
+  button or Back. The Home prompt should remain after returning and after a reload.
+  Sending or clearing the input removes only that surface's saved text draft.
   **Create agent** stays pinned at the bottom of the dropdown
   while the agent and model lists scroll. It opens the roster on the selected kind's
   tab, where either kind can be created.

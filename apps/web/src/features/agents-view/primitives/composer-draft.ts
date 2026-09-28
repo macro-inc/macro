@@ -8,6 +8,12 @@ export const NEW_CONVERSATION_DRAFT_KEY = createPersistenceKey(
   0
 );
 
+/** Home owns its draft separately from the Agents page's New conversation. */
+export const HOME_CONVERSATION_DRAFT_KEY = createPersistenceKey(
+  'input-value-home-agent-conversation',
+  0
+);
+
 export const NEW_CONVERSATION_ATTACHMENTS_KEY = createPersistenceKey(
   'attachment-tracker-agents-new-conversation',
   0
