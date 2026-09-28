@@ -4,6 +4,8 @@
 #[cfg(test)]
 mod test;
 
+use super::pg_funding_repo::{credit_commitments, lock_payer, postpaid_commitments};
+use crate::domain::financial::legacy_cap_remaining;
 use crate::domain::{
     AllowanceStore, BillingError, BillingRepo, BillingSettings, OpenPeriodStart,
     OverageChargeStatus, PendingCharge, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
@@ -32,7 +34,37 @@ fn storage(e: sqlx::Error) -> BillingError {
     BillingError::Storage(e.into())
 }
 
+fn funding_storage(e: ai_usage::domain::financial::FinancialError) -> BillingError {
+    BillingError::Storage(anyhow::anyhow!(e))
+}
+
 impl BillingRepo for PgBillingRepo {
+    async fn legacy_seats(
+        &self,
+        _payer: &MacroUserIdStr<'_>,
+        period: crate::domain::BillingPeriod,
+        mut seats: Vec<SeatAllowance>,
+    ) -> Result<Vec<SeatAllowance>> {
+        let users: Vec<_> = seats
+            .iter()
+            .map(|seat| seat.user.as_ref().to_owned())
+            .collect();
+        // Exclude even a historical binding to another payer: changing membership
+        // must never route V1 analytics into a new owner's legacy settlement.
+        let activated = sqlx::query_scalar!(
+            "SELECT user_id FROM ai_billing_usage_period WHERE user_id = ANY($1)
+             AND policy = 'public_allowance_v1' AND period_start < $3 AND period_end > $2",
+            &users,
+            period.start,
+            period.end,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(storage)?;
+        seats.retain(|seat| !activated.iter().any(|user| user == seat.user.as_ref()));
+        Ok(seats)
+    }
+
     async fn settings(&self, payer: &MacroUserIdStr<'_>) -> Result<BillingSettings> {
         let row = sqlx::query!(
             r#"
@@ -333,6 +365,10 @@ impl BillingRepo for PgBillingRepo {
         stripe_reference: &str,
     ) -> Result<bool> {
         let id = macro_uuid::generate_uuid_v7();
+        let mut tx = self.pool.begin().await.map_err(storage)?;
+        lock_payer(&mut tx, payer.as_ref())
+            .await
+            .map_err(funding_storage)?;
         let result = sqlx::query!(
             r#"
             INSERT INTO ai_credit_ledger (id, user_id, kind, delta_cents, stripe_reference, note)
@@ -344,9 +380,10 @@ impl BillingRepo for PgBillingRepo {
             amount_cents,
             stripe_reference,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(storage)?;
+        tx.commit().await.map_err(storage)?;
         Ok(result.rows_affected() == 1)
     }
 
@@ -395,6 +432,16 @@ impl BillingRepo for PgBillingRepo {
         .fetch_one(&mut *tx)
         .await
         .map_err(storage)?;
+        let commitments = credit_commitments(&mut tx, payer)
+            .await
+            .map_err(funding_storage)?;
+        let balance = commitments
+            .legacy_available_cents(balance)
+            .map_err(funding_storage)?;
+        let committed_postpaid = postpaid_commitments(&mut tx, payer, period_start)
+            .await
+            .map_err(funding_storage)?;
+        let legacy_limit = legacy_cap_remaining(account.overage_limit_cents, committed_postpaid);
         let ledger = read_period_ledger(&mut tx, payer, period_start).await?;
         let overage_active = account.overage_enabled
             && account.overage_suspended_at.is_none()
@@ -409,7 +456,7 @@ impl BillingRepo for PgBillingRepo {
             },
             SettlementPolicy {
                 overage_active,
-                overage_limit_cents: account.overage_limit_cents,
+                overage_limit_cents: legacy_limit,
                 charge_threshold_cents: policy.charge_threshold_cents,
                 period_ended: policy.period_ended,
             },
@@ -444,6 +491,7 @@ impl BillingRepo for PgBillingRepo {
             FROM ai_overage_charge
             WHERE user_id = $1
               AND period_start = $2
+              AND accounting_policy = 'legacy'
               AND (
                 status = 'failed'
                 OR (
@@ -618,6 +666,7 @@ async fn read_period_ledger(
         SELECT COALESCE(-SUM(delta_cents), 0)::bigint AS "consumed!"
         FROM ai_credit_ledger
         WHERE user_id = $1 AND kind = 'consumption' AND period_start = $2
+          AND funding_invocation_id IS NULL
         "#,
         payer,
         period_start,
@@ -631,6 +680,7 @@ async fn read_period_ledger(
         FROM ai_overage_charge
         WHERE user_id = $1
           AND period_start = $2
+          AND accounting_policy = 'legacy'
           AND (status <> 'failed' OR stripe_invoice_id IS NOT NULL)
         "#,
         payer,

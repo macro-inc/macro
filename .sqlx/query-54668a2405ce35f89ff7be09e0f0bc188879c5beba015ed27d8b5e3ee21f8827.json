@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT identity, denied FROM ai_funding_intent WHERE invocation_id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "identity",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "denied",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "54668a2405ce35f89ff7be09e0f0bc188879c5beba015ed27d8b5e3ee21f8827"
+}

@@ -184,7 +184,15 @@ where
                     .usage
                     .list_rate_usage_cents_by_user(&users, *period)
                     .await?;
-                let used = usage_for(user, &usage);
+                let seats = self
+                    .repo
+                    .legacy_seats(&entitlement.payer, *period, seats)
+                    .await?;
+                let used = if seats.iter().any(|seat| seat.user.as_ref() == user.as_ref()) {
+                    usage_for(user, &usage)
+                } else {
+                    0
+                };
                 let chargeable = chargeable_usage_cents(&seats, &usage);
                 let ledger = self
                     .repo
@@ -251,6 +259,13 @@ where
         let usage = self
             .usage
             .list_rate_usage_cents_by_user(&users, period)
+            .await?;
+        // Read policy AFTER analytics. V1 execution requires a committed binding,
+        // so any V1 analytics just observed must now be excluded. Filtering before
+        // the usage read would race renewal activation and could double bill.
+        let seats = self
+            .repo
+            .legacy_seats(&entitlement.payer, period, seats)
             .await?;
         let chargeable_cents = chargeable_usage_cents(&seats, &usage);
         if chargeable_cents == 0 {

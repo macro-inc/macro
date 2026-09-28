@@ -1,6 +1,7 @@
 //! Domain layer: plans and margin math, the settlement ledger, ports, and the
 //! billing service.
 
+pub mod financial;
 pub mod ledger;
 pub mod models;
 pub mod policy;

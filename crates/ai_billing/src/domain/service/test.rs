@@ -156,6 +156,7 @@ struct RepoState {
     suspended: bool,
     allowances: HashMap<DateTime<Utc>, PeriodAllowance>,
     releases: Vec<(String, DateTime<Utc>, String)>,
+    activated_seats: Vec<String>,
 }
 
 impl RepoState {
@@ -206,6 +207,22 @@ impl FakeRepo {
 }
 
 impl BillingRepo for FakeRepo {
+    async fn legacy_seats(
+        &self,
+        _payer: &MacroUserIdStr<'_>,
+        _period: BillingPeriod,
+        mut seats: Vec<SeatAllowance>,
+    ) -> Result<Vec<SeatAllowance>> {
+        let state = self.state.lock().unwrap();
+        seats.retain(|seat| {
+            !state
+                .activated_seats
+                .iter()
+                .any(|user| user == seat.user.as_ref())
+        });
+        Ok(seats)
+    }
+
     async fn settings(&self, _payer: &MacroUserIdStr<'_>) -> Result<BillingSettings> {
         let s = self.state.lock().unwrap();
         let mut settings = s.settings.clone();
@@ -515,6 +532,59 @@ fn premium_service_in(
         payments,
         usage,
     )
+}
+
+#[tokio::test]
+async fn recorded_new_policy_never_enters_legacy_analytics_settlement() {
+    let (svc, repo, payments, _) = premium_service(100_000);
+    let payer = user("payer@x.com");
+    {
+        let mut state = repo.state.lock().unwrap();
+        state.activated_seats.push(payer.as_ref().to_owned());
+        state.balance = 10_000;
+        state.settings.overage_enabled = true;
+        state.settings.overage_limit_cents = 10_000;
+    }
+    svc.settle(&payer).await.unwrap();
+    assert!(repo.state.lock().unwrap().consumed.is_empty());
+    assert!(repo.charges().is_empty());
+    assert!(payments.opened().is_empty());
+    assert_eq!(repo.state.lock().unwrap().balance, 10_000);
+}
+
+#[tokio::test]
+async fn policy_activation_during_analytics_read_cannot_double_bill() {
+    struct ActivatingUsage(FakeRepo);
+    impl UsageReader for ActivatingUsage {
+        async fn list_rate_usage_cents_by_user(
+            &self,
+            users: &[MacroUserIdStr<'static>],
+            _period: BillingPeriod,
+        ) -> Result<Vec<SeatUsage>> {
+            self.0.state.lock().unwrap().activated_seats =
+                users.iter().map(ToString::to_string).collect();
+            Ok(users
+                .iter()
+                .map(|user| SeatUsage {
+                    user: user.clone(),
+                    used_cents: 100_000,
+                })
+                .collect())
+        }
+    }
+    let (svc, repo, payments, _) = premium_service(0);
+    repo.state.lock().unwrap().balance = 10_000;
+    let svc = BillingServiceImpl::new(
+        svc.entitlements,
+        ActivatingUsage(repo.clone()),
+        repo.clone(),
+        payments.clone(),
+        Environment::Develop,
+    );
+    svc.settle(&user("payer@x.com")).await.unwrap();
+    assert!(repo.state.lock().unwrap().consumed.is_empty());
+    assert!(repo.charges().is_empty());
+    assert!(payments.opened().is_empty());
 }
 
 #[tokio::test]
