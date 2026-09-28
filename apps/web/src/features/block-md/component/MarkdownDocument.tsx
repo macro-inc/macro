@@ -1,20 +1,16 @@
+import type { SnapshotStore } from '@macro-inc/browser-store/snapshot-store';
+import type { WALStore } from '@macro-inc/browser-store/wal-store';
 import {
   createLoroManager,
   type LoroManager,
 } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
-import {
-  IDBSnapshotStore,
-  LORO_SNAPSHOT_DB_NAME,
-} from '@macro-inc/collaboration/collab/snapshot-store';
+import { createDocumentSnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import type {
   InitialSync,
   SyncError,
 } from '@macro-inc/collaboration/collab/source';
-import {
-  BrowserWALStore,
-  LORO_WAL_DB_NAME,
-} from '@macro-inc/collaboration/collab/wal';
+import { createDocumentWALStore } from '@macro-inc/collaboration/collab/wal';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import type { Span } from '@macro-inc/observability';
 import { Scroll } from '@ui';
@@ -115,8 +111,8 @@ function startSnapshotIngest(
 
 async function ingestLocalSnapshot(
   loroManager: MarkdownLoroManager,
-  snapshotStore: IDBSnapshotStore<RawUpdate>,
-  walStore: BrowserWALStore<RawUpdate>
+  snapshotStore: SnapshotStore<RawUpdate>,
+  walStore: WALStore<RawUpdate>
 ): Promise<SnapshotResult> {
   const localSnapshot = await snapshotStore.load();
   if (!localSnapshot) return { outcome: 'unavailable' };
@@ -238,11 +234,8 @@ function useMarkdownSnapshotIngest(
 ) {
   const { documentId: getDocumentId } = useMarkdownDocument();
   const documentId = getDocumentId();
-  const snapshotStore = new IDBSnapshotStore<RawUpdate>(
-    LORO_SNAPSHOT_DB_NAME,
-    documentId
-  );
-  const walStore = new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, documentId);
+  const snapshotStore = createDocumentSnapshotStore(documentId);
+  const walStore = createDocumentWALStore(documentId);
 
   createEffect(
     on(

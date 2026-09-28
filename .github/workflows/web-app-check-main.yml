@@ -113,6 +113,9 @@ jobs:
     - name: Check Types
       run: bun run --bun --silent tsc --project ./tsconfig.json
       working-directory: apps/web
+    - name: Check Browser Store Package Types
+      run: bun run type-check
+      working-directory: packages/browser-store
     - name: Check Collaboration Package Types
       run: bun run type-check
       working-directory: packages/collaboration
@@ -148,6 +151,9 @@ jobs:
     - name: Run Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
       working-directory: apps/web
+    - name: Run Browser Store Package Biome
+      run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
+      working-directory: packages/browser-store
     - name: Run Collaboration Package Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
       working-directory: packages/collaboration
@@ -202,6 +208,9 @@ jobs:
     - name: Cycles Import Check
       run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
       working-directory: apps/web
+    - name: Browser Store Package Cycles Import Check
+      run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
+      working-directory: packages/browser-store
     - name: Collaboration Package Cycles Import Check
       run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
       working-directory: packages/collaboration

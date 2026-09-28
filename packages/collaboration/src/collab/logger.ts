@@ -1,3 +1,4 @@
+import type { StoreLogger } from '@macro-inc/browser-store/logger';
 import type { Attributes } from '@macro-inc/observability';
 import { type LogLevel, logTelemetry } from './telemetry';
 
@@ -51,4 +52,12 @@ export function logSyncService({
   if (level === 'debug' && !debugEnabled) return;
 
   logTelemetry(documentId, level, message, contextAttrs(context));
+}
+
+/** A store logger that narrates through the document's sync-service log. */
+export function documentStoreLogger(documentId: string): StoreLogger {
+  return {
+    debug: (message) =>
+      logSyncService({ documentId, level: 'debug', context: {}, message }),
+  };
 }
