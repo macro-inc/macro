@@ -1,6 +1,6 @@
 /**
  * Pane visibility belongs to the host (see `createPaneViewState`); the split
- * width stays local to the reviewer and scope.
+ * width and whether the file tree shows stay local to the reviewer and scope.
  */
 
 import type { Accessor } from 'solid-js';
@@ -23,21 +23,27 @@ export type PaneLayoutController = {
   /** Percent of the width the changes pane takes in the split. */
   changesShare: Accessor<number>;
   setChangesShare: (share: number) => void;
+  /** The file tree shows beside the diffs. */
+  treeOpen: Accessor<boolean>;
+  toggleTree: () => void;
   toggle: () => void;
   spotlight: () => void;
   open: () => void;
   close: () => void;
-  backToSplit: () => void;
 };
 
-type StoredShare = { share: number };
+type StoredLayout = { share: number; treeOpen: boolean };
 
-function parseShare(raw: unknown): StoredShare | undefined {
+function parseLayout(raw: unknown): StoredLayout | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
-  const { share } = raw as { share?: unknown };
-  return typeof share === 'number'
-    ? { share: clampChangesShare(share) }
-    : undefined;
+  const { share, treeOpen } = raw as { share?: unknown; treeOpen?: unknown };
+  return {
+    share:
+      typeof share === 'number'
+        ? clampChangesShare(share)
+        : DEFAULT_CHANGES_SHARE,
+    treeOpen: typeof treeOpen === 'boolean' ? treeOpen : true,
+  };
 }
 
 export function createPaneLayout(options: {
@@ -46,11 +52,11 @@ export function createPaneLayout(options: {
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 }): PaneLayoutController {
   const [layout, setLayout] = options.layout;
-  const [stored, setStored] = createPersistedSessionState<StoredShare>({
+  const [stored, setStored] = createPersistedSessionState<StoredLayout>({
     sessionId: options.sessionId,
     namespace: 'agent-changes:layout',
-    initial: () => ({ share: DEFAULT_CHANGES_SHARE }),
-    parse: parseShare,
+    initial: () => ({ share: DEFAULT_CHANGES_SHARE, treeOpen: true }),
+    parse: parseLayout,
     storage: options.storage,
   });
   const move = (next: (current: PaneLayout) => PaneLayout) =>
@@ -61,11 +67,17 @@ export function createPaneLayout(options: {
     changesVisible: () => isChangesVisible(layout()),
     sessionVisible: () => isSessionVisible(layout()),
     changesShare: () => stored().share,
-    setChangesShare: (share) => setStored({ share: clampChangesShare(share) }),
+    setChangesShare: (share) =>
+      setStored((previous) => ({
+        ...previous,
+        share: clampChangesShare(share),
+      })),
+    treeOpen: () => stored().treeOpen,
+    toggleTree: () =>
+      setStored((previous) => ({ ...previous, treeOpen: !previous.treeOpen })),
     toggle: () => move(toggleChanges),
     spotlight: () => move(toggleSpotlight),
     open: () => move(ensureChangesVisible),
     close: () => setLayout('closed'),
-    backToSplit: () => setLayout('split'),
   };
 }

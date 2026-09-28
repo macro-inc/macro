@@ -657,12 +657,17 @@ Copying the URL preserves that view, and reload restores it. Opening and closing
 the pane are Back/Forward steps; switching the diff layout is not. A plain
 session URL starts with Changes closed, and leaving the session or closing its
 split drops the state.
-Divider width, collapsed files, and review notes stay local.
-The pane header shows a `head → base` branch pill, a **Unified / Split**
-segmented control (`aria-label="Diff layout"`), a refresh button, the
-**View pull request** button (opens GitHub), and **Expand changes to the full width**
-(spotlight; **Bring the session back** returns to the split) and **Close the
-changes pane**. Below it is a **Collapse all / Expand all** button.
+Divider width, whether the file tree shows, collapsed files, and review notes
+stay local.
+The pane (`[role="region"][aria-label="Changes"]`) has a title row and a
+toolbar. The title row shows **Changes**, the linked pull request's number
+(**View pull request #N** opens GitHub), and the `head → base` range, with only
+the pane's own controls on the right: **Expand changes to the full width**
+(pressed while spotlit; its label becomes **Back to the split**) and **Close the
+changes pane**. The toolbar, shown once there are files, has **Hide file tree /
+Show file tree** and the file count on the left, and on the right the
+**Unified / Split** segmented control (`aria-label="Diff layout"`), **Collapse
+all / Expand all**, and **Refresh pull request changes**.
 The body is a file tree (`[role="group"][aria-label="Changed files"]`, rows
 styled like Drive's folder tree, directories compressed along single-child
 chains with **Collapse / Expand** buttons, each file's +/− counts and status
