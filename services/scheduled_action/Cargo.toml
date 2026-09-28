@@ -22,6 +22,7 @@ local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
 activity = { path = "../../crates/activity", default-features = false }
+bot_id = { path = "../../crates/bot_id" }
 channel_sender = { path = "../../crates/channel_sender" }
 channels = { path = "../../crates/channels", default-features = false }
 documents = { path = "../../crates/documents", default-features = false }

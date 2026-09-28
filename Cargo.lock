@@ -14993,6 +14993,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "bot_id",
  "channel_sender",
  "channels",
  "chat",

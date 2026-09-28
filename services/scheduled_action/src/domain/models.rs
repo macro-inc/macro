@@ -1,4 +1,5 @@
 use anyhow::Result;
+use bot_id::BotId;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
@@ -63,9 +64,78 @@ pub enum ActionKind {
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct AgentTask {
-    pub model: String,
+    /// Required for model targets; overrides the persona default for agent targets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<RoutineModelId>,
+    /// Absent for legacy model-only tasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentTaskAgent>,
     pub prompt: String,
     pub user_prompt: String,
+}
+
+/// A persona selection, independent of its runtime and current default model.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+pub struct AgentTaskAgent {
+    #[schema(value_type = String, format = Uuid)]
+    pub bot_id: BotId,
+}
+
+/// A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+#[serde(try_from = "String")]
+pub struct RoutineModelId(String);
+
+impl TryFrom<String> for RoutineModelId {
+    type Error = TaskTargetError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value.trim().is_empty() {
+            return Err(TaskTargetError::BlankModel);
+        }
+        Ok(Self(value))
+    }
+}
+
+impl RoutineModelId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Validated execution choice. Callers must not fall back from an agent to a model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolvedTaskTarget<'a> {
+    Model {
+        model: &'a RoutineModelId,
+    },
+    Agent {
+        bot_id: BotId,
+        /// None means use the selected persona's default at execution time.
+        model: Option<&'a RoutineModelId>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum TaskTargetError {
+    #[error("a supplied model must not be blank")]
+    BlankModel,
+    #[error("a task must select a model or an agent")]
+    MissingTarget,
+}
+
+impl AgentTask {
+    /// Resolve target policy once, without interpreting either prompt as configuration.
+    pub fn resolve_target(&self) -> Result<ResolvedTaskTarget<'_>, TaskTargetError> {
+        match (&self.agent, &self.model) {
+            (Some(agent), model) => Ok(ResolvedTaskTarget::Agent {
+                bot_id: agent.bot_id,
+                model: model.as_ref(),
+            }),
+            (None, Some(model)) => Ok(ResolvedTaskTarget::Model { model }),
+            (None, None) => Err(TaskTargetError::MissingTarget),
+        }
+    }
 }
 
 /// Canonical client configuration. Ownership and execution state are server-owned.

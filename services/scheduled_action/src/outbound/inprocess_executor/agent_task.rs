@@ -16,7 +16,7 @@ use model::chat::NewChatMessage;
 use notification::domain::service::NotificationIngress;
 
 use crate::domain::event_trigger::EventReference;
-use crate::domain::models::{AgentTask, ScheduledAction};
+use crate::domain::models::{AgentTask, ResolvedTaskTarget, RoutineModelId, ScheduledAction};
 use crate::domain::ports::ScheduledAgentRunner;
 
 #[cfg(test)]
@@ -58,6 +58,9 @@ where
     N: NotificationIngress,
 {
     async fn create_chat(&self, action: &ScheduledAction) -> Result<String> {
+        let task: AgentTask =
+            serde_json::from_value(action.task.clone()).context("invalid agent task definition")?;
+        required_model(&task)?;
         self.chats
             .create(
                 action.owner_user()?.clone(),
@@ -79,12 +82,15 @@ where
         let owner = action.owner_user()?.clone();
         let task: AgentTask =
             serde_json::from_value(action.task.clone()).context("invalid agent task definition")?;
+        let model = required_model(&task)?;
         let user_messages = user_messages(&task, event)?;
         for message in &user_messages {
-            self.store(chat_id, message.content.clone(), Role::User, &task)
+            self.store(chat_id, message.content.clone(), Role::User, model)
                 .await?;
         }
-        let parts = self.run_tool_loop(&owner, &task, user_messages).await?;
+        let parts = self
+            .run_tool_loop(&owner, &task, model, user_messages)
+            .await?;
         let final_text: String = parts
             .iter()
             .filter_map(|part| match part {
@@ -97,7 +103,7 @@ where
                 chat_id,
                 ChatMessageContent::AssistantMessageParts(parts),
                 Role::Assistant,
-                &task,
+                model,
             )
             .await?;
         }
@@ -106,6 +112,15 @@ where
             notify_completion(self.notifications.as_ref(), chat_id, &owner, &final_text).await;
         }
         Ok(())
+    }
+}
+
+fn required_model(task: &AgentTask) -> Result<&RoutineModelId> {
+    match task.resolve_target()? {
+        ResolvedTaskTarget::Model { model } => Ok(model),
+        ResolvedTaskTarget::Agent { .. } => {
+            anyhow::bail!("agent targets are not supported by the model runner")
+        }
     }
 }
 
@@ -169,13 +184,15 @@ where
         &self,
         owner: &MacroUserIdStr<'static>,
         task: &AgentTask,
+        model: &RoutineModelId,
         messages: Vec<ChatMessage>,
     ) -> Result<Vec<AssistantMessagePart>> {
         let tools = tools_for(AiHost::Chat);
         let system_prompt =
             system_prompt(&self.memory, owner, &tools.prompt.to_string(), &task.prompt).await;
         let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
-        let agent_loop = AgentLoop::new(self.tool_context.recorder.clone()).with_model(&task.model);
+        let agent_loop =
+            AgentLoop::new(self.tool_context.recorder.clone()).with_model(model.as_str());
         let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Automation, owner.clone());
         let mut tool_context = self.tool_context.clone();
         tool_context.usage_context = usage_ctx.clone();
@@ -198,7 +215,7 @@ where
         chat_id: &str,
         content: ChatMessageContent,
         role: Role,
-        task: &AgentTask,
+        model: &RoutineModelId,
     ) -> Result<()> {
         let now = chrono::Utc::now();
         self.messages
@@ -211,7 +228,7 @@ where
                     attachments: None,
                     created_at: now,
                     updated_at: now,
-                    model: task.model.clone(),
+                    model: model.as_str().to_string(),
                 },
             )
             .await
