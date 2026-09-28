@@ -133,7 +133,7 @@ impl From<teams::domain::model::SeatPlan> for PlanTier {
 }
 
 /// A half-open `[start, end)` window that usage is metered against.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BillingPeriod {
     /// Inclusive start.
     pub start: DateTime<Utc>,

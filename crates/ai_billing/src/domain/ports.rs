@@ -394,12 +394,14 @@ pub trait BillingService: Send + Sync + 'static {
         stripe_reference: &str,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Record the payer's subscription period (webhook).
+    /// Record the payer's explicit subscription interval. Optional verified item
+    /// facts feed the gated renewal use case; bare anchors remain legacy-only.
     fn sync_period(
         &self,
         payer: &MacroUserIdStr<'_>,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
+        verified: Option<super::period::SubscriptionPeriod>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Record the outcome of an overage invoice (webhook). Unknown invoices

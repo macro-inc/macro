@@ -13,6 +13,10 @@ use sqlx::{PgConnection, PgPool, types::Json};
 
 use crate::domain::financial::*;
 use crate::domain::models::{BillingPeriod, UsagePolicy};
+use crate::domain::period::{
+    self, ActivationException, EligibilityState, PeriodDecision, PeriodRepo, SeatPeriodObservation,
+    UsageRollout,
+};
 use crate::domain::policy::*;
 use crate::domain::ports::FundingRepo;
 
@@ -127,6 +131,112 @@ async fn read_period(
         })
     })
     .transpose()
+}
+
+impl PeriodRepo for PgFundingRepo {
+    async fn observe(
+        &self,
+        rollout: &UsageRollout,
+        observation: SeatPeriodObservation,
+        verified_binding: bool,
+    ) -> crate::domain::Result<PeriodDecision> {
+        self.observe_period(rollout, observation, verified_binding)
+            .await
+            .map_err(|error| crate::domain::BillingError::Storage(error.into()))
+    }
+}
+
+impl PgFundingRepo {
+    async fn observe_period(
+        &self,
+        rollout: &UsageRollout,
+        observation: SeatPeriodObservation,
+        verified_binding: bool,
+    ) -> FinancialResult<PeriodDecision> {
+        rollout.validate()?;
+        let facts = &observation.subscription;
+        let seat = observation.seat.as_ref();
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("INSERT INTO ai_billing_usage_rollout (policy, configuration) VALUES ('public_allowance_v1', $1) ON CONFLICT DO NOTHING", Json(rollout) as _)
+            .execute(&mut *tx).await?;
+        let configured = sqlx::query_scalar!(r#"SELECT configuration AS "configuration: Json<UsageRollout>" FROM ai_billing_usage_rollout WHERE policy = 'public_allowance_v1'"#)
+            .fetch_one(&mut *tx).await?;
+        if configured.0 != *rollout {
+            return Err(FinancialError::FundingDenied);
+        }
+        sqlx::query!(
+            "SELECT pg_advisory_xact_lock(hashtextextended($1, 7404))",
+            seat
+        )
+        .execute(&mut *tx)
+        .await?;
+        let previous = sqlx::query!(r#"SELECT facts AS "facts: Json<SeatPeriodObservation>", decision AS "decision: Json<PeriodDecision>"
+            FROM ai_billing_usage_observation WHERE event_id = $1 AND user_id = $2 AND subscription_id = $3 AND item_id = $4"#,
+            facts.event_id.as_str(), seat, facts.subscription_id.as_str(), facts.item_id.as_str()).fetch_optional(&mut *tx).await?;
+        if let Some(previous) = previous {
+            if previous.facts.0 != observation {
+                return Err(FinancialError::FundingDenied);
+            }
+            return Ok(previous.decision.0);
+        }
+        // The item renewal proof is shared by its seats; acquire the payer lock
+        // before reading it so concurrent seat events cannot regress that proof.
+        if verified_binding {
+            lock_payer(&mut tx, observation.payer.as_ref()).await?;
+        }
+        let identity = json!({"payer": observation.payer.as_ref(), "customer": facts.customer_id,
+            "created": facts.subscription_created_at, "price": facts.price_id, "product": facts.product_id});
+        let stored = sqlx::query!(r#"SELECT identity, state AS "state: Json<EligibilityState>" FROM ai_billing_usage_eligibility
+            WHERE user_id = $1 AND subscription_id = $2 AND item_id = $3"#,
+            observation.payer.as_ref(), facts.subscription_id.as_str(), facts.item_id.as_str()).fetch_optional(&mut *tx).await?;
+        let identity_matches = stored.as_ref().is_none_or(|row| row.identity == identity);
+        let mut state = stored.map(|row| row.state.0).unwrap_or_default();
+        let mut decision = if verified_binding && identity_matches {
+            period::transition(rollout, facts, &mut state)
+        } else {
+            PeriodDecision::Exception(ActivationException::AmbiguousBinding)
+        };
+        if let Some(policy) = decision.policy() {
+            let period = FundingPeriod {
+                seat: observation.seat.clone(),
+                payer: observation.payer.clone(),
+                subscription: FundingSubscription::new(facts.subscription_id.as_str().to_owned())?,
+                period: facts.period,
+                policy,
+            };
+            period.validate()?;
+            let overlaps = sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM ai_billing_usage_period
+                WHERE user_id = $1 AND (period_start > $2 OR (period_start < $3 AND period_end > $2))) AS "exists!""#,
+                seat, facts.period.start, facts.period.end).fetch_one(&mut *tx).await?;
+            let existing = read_period(&mut tx, seat, facts.period.start).await?;
+            let legacy_in_use = sqlx::query_scalar!(r#"SELECT (
+                EXISTS(SELECT 1 FROM ai_billing_period_allowance WHERE user_id = $1 AND period_start = $2 AND $3 = ANY(billed_users))
+                OR EXISTS(SELECT 1 FROM ai_overage_charge WHERE user_id = $1 AND period_start = $2 AND accounting_policy = 'legacy')
+                OR EXISTS(SELECT 1 FROM ai_credit_ledger WHERE user_id = $1 AND period_start = $2 AND kind = 'consumption' AND funding_invocation_id IS NULL)
+                ) AS "used!""#, observation.payer.as_ref(), facts.period.start, seat)
+                .fetch_one(&mut *tx).await?;
+            decision = decision.preserve_legacy(existing.is_none() && legacy_in_use);
+            if overlaps && existing.as_ref() != Some(&period) {
+                decision = PeriodDecision::Exception(ActivationException::AmbiguousBinding);
+            } else if decision.policy().is_some() {
+                let policy = match policy {
+                    UsagePolicy::Legacy => "legacy",
+                    UsagePolicy::PublicAllowanceV1 => "public_allowance_v1",
+                };
+                sqlx::query!("INSERT INTO ai_billing_usage_period (user_id, payer_id, subscription_id, period_start, period_end, policy)
+                    VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING", seat, observation.payer.as_ref(), facts.subscription_id.as_str(),
+                    facts.period.start, facts.period.end, policy).execute(&mut *tx).await?;
+                sqlx::query!("INSERT INTO ai_billing_usage_eligibility (user_id, subscription_id, item_id, identity, state)
+                    VALUES ($1,$2,$3,$4,$5) ON CONFLICT (user_id, subscription_id, item_id) DO UPDATE SET state = EXCLUDED.state",
+                    observation.payer.as_ref(), facts.subscription_id.as_str(), facts.item_id.as_str(), identity, Json(state) as _).execute(&mut *tx).await?;
+            }
+        }
+        sqlx::query!("INSERT INTO ai_billing_usage_observation (event_id, user_id, subscription_id, item_id, facts, decision)
+            VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING", facts.event_id.as_str(), seat, facts.subscription_id.as_str(),
+            facts.item_id.as_str(), Json(&observation) as _, Json(&decision) as _).execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(decision)
+    }
 }
 
 impl FundingRepo for PgFundingRepo {

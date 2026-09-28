@@ -9,6 +9,363 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 const DOLLAR: u64 = 1_000_000_000_000;
 
+fn rollout_observation() -> (UsageRollout, SeatPeriodObservation) {
+    let window = period().period;
+    let rollout = UsageRollout {
+        effective_at: window.start + Duration::days(10),
+        price_id: "price_40".parse().unwrap(),
+        product_id: "prod_40".parse().unwrap(),
+    };
+    let observation = SeatPeriodObservation {
+        seat: user("seat"),
+        payer: user("payer"),
+        subscription: crate::domain::period::SubscriptionPeriod {
+            event_id: "evt_baseline".parse().unwrap(),
+            event_at: rollout.effective_at,
+            subscription_id: "sub_verified".parse().unwrap(),
+            subscription_created_at: window.start - Duration::days(90),
+            customer_id: "cus_verified".parse().unwrap(),
+            team_id: None,
+            quantity: 1,
+            item_count: 1,
+            item_id: "si_verified".parse().unwrap(),
+            price_id: rollout.price_id.clone(),
+            product_id: rollout.product_id.clone(),
+            unit_amount: Some(4000),
+            currency: "usd".into(),
+            monthly: true,
+            activity: crate::domain::period::SubscriptionActivity::Active,
+            period: window,
+            evidence: crate::domain::period::PeriodEvidence::Snapshot,
+        },
+    };
+    (rollout, observation)
+}
+
+fn next_renewal(mut observation: SeatPeriodObservation) -> SeatPeriodObservation {
+    let facts = &mut observation.subscription;
+    facts.period.start = facts.period.end;
+    facts.period.end += Duration::days(31);
+    facts.event_at = facts.period.start;
+    facts.event_id = format!("evt_{}", facts.period.start.timestamp())
+        .try_into()
+        .unwrap();
+    facts.evidence = crate::domain::period::PeriodEvidence::Renewal;
+    observation
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn verified_renewal_freezes_history_and_preserves_shared_money(pool: PgPool) {
+    let repo = PgFundingRepo::new(pool.clone());
+    let billing = PgBillingRepo::new(pool);
+    let (rollout, baseline) = rollout_observation();
+    billing
+        .update_overage(&user("payer"), true, 5000)
+        .await
+        .unwrap();
+    billing
+        .record_credit_purchase(&user("payer"), 1000, "cs_before_rollout")
+        .await
+        .unwrap();
+    let settings = billing.settings(&user("payer")).await.unwrap();
+    assert_eq!(
+        repo.observe(&rollout, baseline.clone(), true)
+            .await
+            .unwrap(),
+        PeriodDecision::Legacy
+    );
+    let old = repo
+        .period(user("seat"), baseline.subscription.period.start)
+        .await
+        .unwrap()
+        .unwrap();
+    let renewed = next_renewal(baseline.clone());
+    assert_eq!(
+        repo.observe(&rollout, renewed.clone(), true).await.unwrap(),
+        PeriodDecision::Activate
+    );
+    let rate = rate();
+    let mut request = request(&rate, 20 * DOLLAR);
+    request.occurred_at = renewed.subscription.period.end - Duration::seconds(1);
+    let funding = repo.authorize(request.clone(), rate.clone()).await.unwrap();
+    let admission = AuthorizedInvocation {
+        request,
+        rate,
+        funding,
+    };
+    let next = next_renewal(renewed.clone());
+    assert_eq!(
+        repo.observe(&rollout, next.clone(), true).await.unwrap(),
+        PeriodDecision::Activate
+    );
+    // An invocation admitted before the boundary finishes after it, against its
+    // original immutable authorization, not the newly published allowance.
+    let mut record = completed(admission.clone(), 20 * DOLLAR);
+    if let InvocationState::Priced { evidence, .. } = &mut record.state {
+        evidence.occurred_at = next.subscription.period.start + Duration::seconds(5);
+    }
+    repo.finalize(record).await.unwrap();
+    assert_eq!(
+        repo.allocation(admission.request.invocation_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .included_public
+            .units(),
+        20 * DOLLAR
+    );
+    assert_eq!(
+        repo.period(user("seat"), baseline.subscription.period.start)
+            .await
+            .unwrap(),
+        Some(old)
+    );
+    assert_eq!(
+        billing.credit_balance_cents(&user("payer")).await.unwrap(),
+        1000
+    );
+    let after = billing.settings(&user("payer")).await.unwrap();
+    assert_eq!(after.overage_enabled, settings.overage_enabled);
+    assert_eq!(after.overage_limit_cents, settings.overage_limit_cents);
+    assert_eq!(
+        repo.observe(&rollout, next, true).await.unwrap(),
+        PeriodDecision::Activate
+    );
+    let mut delayed = baseline;
+    delayed.subscription.event_id = "evt_delayed".parse().unwrap();
+    assert_eq!(
+        repo.observe(&rollout, delayed, true).await.unwrap(),
+        PeriodDecision::Exception(ActivationException::Stale)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cancellation_departure_and_rejoin_cannot_replenish_allowance(pool: PgPool) {
+    let repo = PgFundingRepo::new(pool.clone());
+    let billing = PgBillingRepo::new(pool);
+    let (rollout, baseline) = rollout_observation();
+    repo.observe(&rollout, baseline.clone(), true)
+        .await
+        .unwrap();
+    let renewal = next_renewal(baseline);
+    repo.observe(&rollout, renewal.clone(), true).await.unwrap();
+    let rate = rate();
+    let mut request = request(&rate, 20 * DOLLAR);
+    request.occurred_at = renewal.subscription.period.start + Duration::seconds(1);
+    let funding = repo.authorize(request.clone(), rate.clone()).await.unwrap();
+    allocated(
+        &repo,
+        AuthorizedInvocation {
+            request: request.clone(),
+            rate: rate.clone(),
+            funding,
+        },
+        20 * DOLLAR,
+    )
+    .await;
+    let mut canceled = renewal.clone();
+    canceled.subscription.event_id = "evt_cancel".parse().unwrap();
+    canceled.subscription.activity = crate::domain::period::SubscriptionActivity::Inactive;
+    assert_eq!(
+        repo.observe(&rollout, canceled, true).await.unwrap(),
+        PeriodDecision::Exception(ActivationException::Ineligible)
+    );
+    let open = renewal
+        .subscription
+        .period
+        .open_start(request.occurred_at)
+        .unwrap();
+    billing
+        .release_open_seat(&user("payer"), open, &user("seat"))
+        .await
+        .unwrap();
+    let mut rejoin = renewal.clone();
+    rejoin.subscription.event_id = "evt_rejoin".parse().unwrap();
+    repo.observe(&rollout, rejoin, true).await.unwrap();
+    request.invocation_id = InvocationId::new();
+    request.token_budget = TrustedTokenUsage::from_disjoint(1, 0, 0, 0, 0);
+    assert!(repo.authorize(request.clone(), rate.clone()).await.is_err());
+    // Only a distinct verified renewal resets included usage.
+    let next = next_renewal(renewal);
+    repo.observe(&rollout, next.clone(), true).await.unwrap();
+    request.invocation_id = InvocationId::new();
+    request.occurred_at = next.subscription.period.start;
+    assert!(repo.authorize(request, rate).await.is_ok());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn activation_exceptions_are_durable_and_mixed_policy_seats_stay_separate(pool: PgPool) {
+    let repo = PgFundingRepo::new(pool.clone());
+    let billing = PgBillingRepo::new(pool.clone());
+    let (rollout, baseline) = rollout_observation();
+    let mut delayed = baseline.clone();
+    delayed.subscription.event_id = "evt_pre_rollout".parse().unwrap();
+    delayed.subscription.event_at = rollout.effective_at - Duration::seconds(1);
+    assert_eq!(
+        repo.observe(&rollout, delayed, true).await.unwrap(),
+        PeriodDecision::Exception(ActivationException::Delayed)
+    );
+    let mut unknown = baseline.clone();
+    unknown.seat = user("max");
+    unknown.subscription.price_id = "price_unknown".parse().unwrap();
+    assert_eq!(
+        repo.observe(&rollout, unknown, true).await.unwrap(),
+        PeriodDecision::Exception(ActivationException::Ineligible)
+    );
+    assert_eq!(
+        repo.observe(&rollout, baseline.clone(), false)
+            .await
+            .unwrap(),
+        PeriodDecision::Exception(ActivationException::AmbiguousBinding)
+    );
+    let mut baseline = baseline;
+    baseline.subscription.event_id = "evt_verified_baseline".parse().unwrap();
+    repo.observe(&rollout, baseline.clone(), true)
+        .await
+        .unwrap();
+    let renewal = next_renewal(baseline);
+    let mut ordinary = renewal.clone();
+    ordinary.subscription.event_id = "evt_update".parse().unwrap();
+    ordinary.subscription.evidence = crate::domain::period::PeriodEvidence::Snapshot;
+    assert_eq!(
+        repo.observe(&rollout, ordinary, true).await.unwrap(),
+        PeriodDecision::Exception(ActivationException::UnverifiedRenewal)
+    );
+    repo.observe(&rollout, renewal.clone(), true).await.unwrap();
+    let seats = billing
+        .legacy_seats(
+            &user("payer"),
+            renewal.subscription.period,
+            vec![
+                SeatAllowance {
+                    user: user("seat"),
+                    included_cents: 4000,
+                },
+                SeatAllowance {
+                    user: user("max"),
+                    included_cents: 20000,
+                },
+            ],
+        )
+        .await
+        .unwrap();
+    assert_eq!(seats.len(), 1);
+    assert_eq!(seats[0].user, user("max"));
+    let count = sqlx::query_scalar!("SELECT COUNT(*) FROM ai_billing_usage_observation")
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(count, 6);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn late_seat_uses_existing_item_proof_but_cannot_renew_it(pool: PgPool) {
+    let repo = PgFundingRepo::new(pool);
+    let (rollout, baseline) = rollout_observation();
+    repo.observe(&rollout, baseline.clone(), true)
+        .await
+        .unwrap();
+    let renewal = next_renewal(baseline);
+    repo.observe(&rollout, renewal.clone(), true).await.unwrap();
+    let mut joining = renewal.clone();
+    joining.seat = user("joining");
+    joining.subscription.event_id = "evt_join".parse().unwrap();
+    joining.subscription.evidence = crate::domain::period::PeriodEvidence::Snapshot;
+    assert_eq!(
+        repo.observe(&rollout, joining.clone(), true).await.unwrap(),
+        PeriodDecision::Activate
+    );
+    assert_eq!(
+        repo.period(user("joining"), renewal.subscription.period.start)
+            .await
+            .unwrap()
+            .unwrap()
+            .period,
+        renewal.subscription.period
+    );
+    let mut next = next_renewal(joining);
+    next.subscription.evidence = crate::domain::period::PeriodEvidence::Snapshot;
+    assert_eq!(
+        repo.observe(&rollout, next, true).await.unwrap(),
+        PeriodDecision::Exception(ActivationException::UnverifiedRenewal)
+    );
+    let mut changed_rollout = rollout;
+    changed_rollout.effective_at += Duration::days(1);
+    assert!(repo.observe(&changed_rollout, renewal, true).await.is_err());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delayed_renewal_does_not_convert_a_legacy_period_already_in_use(pool: PgPool) {
+    let repo = PgFundingRepo::new(pool.clone());
+    let billing = PgBillingRepo::new(pool);
+    let (rollout, baseline) = rollout_observation();
+    repo.observe(&rollout, baseline.clone(), true)
+        .await
+        .unwrap();
+    let renewal = next_renewal(baseline);
+    let period = renewal.subscription.period;
+    let seats = vec![SeatAllowance {
+        user: user("seat"),
+        included_cents: 4000,
+    }];
+    billing
+        .store_open_allowance(
+            &user("payer"),
+            period.open_start(period.start).unwrap(),
+            &seats,
+            Default::default(),
+        )
+        .await
+        .unwrap();
+    let old = billing
+        .period_allowance(&user("payer"), period.start)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.observe(&rollout, renewal, true).await.unwrap(),
+        PeriodDecision::Exception(ActivationException::LegacyPeriodInUse)
+    );
+    assert!(
+        repo.period(user("seat"), period.start)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        billing
+            .period_allowance(&user("payer"), period.start)
+            .await
+            .unwrap(),
+        old
+    );
+    // Explicit anchor regressions and mid-period end edits are ignored as well.
+    billing
+        .set_period(&user("payer"), period.start, period.end)
+        .await
+        .unwrap();
+    billing
+        .set_period(
+            &user("payer"),
+            period.start - Duration::days(31),
+            period.start,
+        )
+        .await
+        .unwrap();
+    billing
+        .set_period(&user("payer"), period.start, period.end + Duration::days(1))
+        .await
+        .unwrap();
+    assert_eq!(
+        billing
+            .settings(&user("payer"))
+            .await
+            .unwrap()
+            .period_anchor,
+        Some((period.start, period.end))
+    );
+}
+
 fn user(name: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(format!("macro|{name}@example.com")).unwrap()
 }

@@ -130,6 +130,11 @@ impl BillingRepo for PgBillingRepo {
             SET period_start = EXCLUDED.period_start,
                 period_end = EXCLUDED.period_end,
                 updated_at = NOW()
+            WHERE ai_billing_account.period_start IS NULL
+               OR (EXCLUDED.period_start > ai_billing_account.period_start
+                   AND EXCLUDED.period_start >= ai_billing_account.period_end)
+               OR (EXCLUDED.period_start = ai_billing_account.period_start
+                   AND EXCLUDED.period_end = ai_billing_account.period_end)
             "#,
             payer.as_ref(),
             start,
