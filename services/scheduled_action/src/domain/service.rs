@@ -11,7 +11,7 @@ use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
     ActionConfiguration, ActionExecutionRecord, ActionPolicyError, CreateScheduledAction,
-    DispatchEvent, InProgressExecution, MAX_ACTION_TIME, ScheduledAction, UpdateScheduledAction,
+    DispatchEvent, InProgressExecution, ScheduledAction, UpdateScheduledAction,
 };
 use super::ports::{ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService};
 
@@ -70,6 +70,30 @@ fn next_run(trigger: &ActionTrigger) -> Result<Option<DateTime<Utc>>> {
         // constructors can supply unbounded, empty or unsupported selectors.
         ActionTrigger::Events { .. } => Ok(None),
     }
+}
+
+pub(crate) async fn list_owned_actions<R: ScheduledActionRepo>(
+    repo: &R,
+    user_id: &MacroUserIdStr<'static>,
+) -> Result<Vec<ScheduledAction>> {
+    let mut actions = repo
+        .get_actions(user_id.clone())
+        .await?
+        .into_iter()
+        .filter(|action| action.owner.is_user(user_id))
+        .collect::<Vec<_>>();
+    actions.sort_by(|left, right| {
+        left.created_at
+            .cmp(&right.created_at)
+            .then(left.id.cmp(&right.id))
+    });
+    Ok(actions)
+}
+
+fn claim_blocks_replacement(action: &ScheduledAction, now: DateTime<Utc>) -> bool {
+    action
+        .claim_expires_at()
+        .is_some_and(|expires_at| now <= expires_at)
 }
 
 fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
@@ -156,12 +180,9 @@ where
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
     ) -> Result<Vec<ScheduledAction>> {
-        Ok(self
-            .repo
-            .get_actions(user_id.clone())
+        Ok(list_owned_actions(self.repo.as_ref(), &user_id)
             .await?
             .into_iter()
-            .filter(|action| action.owner.is_user(&user_id))
             .filter(|action| include_events || matches!(action.trigger, ActionTrigger::Cron { .. }))
             .collect())
     }
@@ -187,11 +208,7 @@ where
             self.check_event_management(&input.trigger)?;
         }
         let now = Utc::now();
-        if action
-            .claimed
-            .is_some_and(|claimed| claimed >= now - MAX_ACTION_TIME)
-            && !disable_only
-        {
+        if claim_blocks_replacement(&action, now) && !disable_only {
             return Err(ActionPolicyError::UpdateConflict.into());
         }
         if !disable_only {

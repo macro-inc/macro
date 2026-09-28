@@ -1,11 +1,11 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use macro_uuid::{Uuid, generate_uuid_v7};
 use model_owner::{Owner, OwnerType};
 use serde_json::json;
 
 use super::{
-    ActionConfiguration, ActionKind, CreateScheduledAction, Schedule, ScheduledAction,
-    UpdateScheduledAction,
+    ActionConfiguration, ActionKind, CreateScheduledAction, MAX_ACTION_TIME, Schedule,
+    ScheduledAction, UpdateScheduledAction,
 };
 use crate::domain::event_runs::ConfigurationRevision;
 use crate::domain::event_trigger::ActionTrigger;
@@ -156,4 +156,17 @@ fn event_action_round_trips_without_cron_fields() {
         decoded.configuration_revision,
         ConfigurationRevision::INITIAL
     );
+}
+
+#[test]
+fn claim_expires_at_is_claimed_plus_the_maximum_run_time() {
+    let mut action =
+        action_owned_by(Owner::from_principal_str(USER_PRINCIPAL).expect("user principal"));
+    assert_eq!(action.claim_expires_at(), None);
+
+    let claimed = DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .expect("timestamp")
+        .with_timezone(&Utc);
+    action.claimed = Some(claimed);
+    assert_eq!(action.claim_expires_at(), Some(claimed + MAX_ACTION_TIME));
 }

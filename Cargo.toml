@@ -55,6 +55,7 @@ members = [
   "crates/graphql_notification",
   "crates/graphql_permission",
   "crates/graphql_properties",
+  "crates/graphql_scheduled_action",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
   "crates/gtm_invite",

@@ -2,7 +2,9 @@ mod user_cleanup;
 
 use super::*;
 use crate::domain::event_runs::ClaimToken;
-use crate::domain::models::ActionKind;
+use crate::domain::models::{ActionKind, MAX_ACTION_TIME};
+use crate::domain::ports::ScheduledActionReadService;
+use crate::domain::read_service::ScheduledActionReadServiceImpl;
 use macro_uuid::generate_uuid_v7;
 use serde_json::json;
 use std::sync::Mutex;
@@ -461,4 +463,163 @@ async fn active_execution_blocks_replacement_but_allows_disabling_even_with_gate
     assert!(!disabled.enabled);
     assert!(disabled.claimed.is_some());
     assert_eq!(disabled.event_activated_at, action.event_activated_at);
+}
+
+#[test]
+fn claim_expiry_instant_still_blocks_replacement() {
+    let config = configuration(false);
+    let claimed = DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .expect("timestamp")
+        .with_timezone(&Utc);
+    let mut action = ScheduledAction {
+        id: Some(Uuid::from_u128(1)),
+        owner: Owner::User(user()),
+        name: config.name,
+        trigger: config.trigger,
+        kind: config.kind,
+        created_at: claimed,
+        updated_at: claimed,
+        configuration_revision: ConfigurationRevision::INITIAL,
+        event_activated_at: None,
+        task: config.task,
+        claimed: Some(claimed),
+        next_run_at: None,
+        enabled: true,
+    };
+    let expires_at = action
+        .claim_expires_at()
+        .expect("claimed action has an expiry");
+    assert_eq!(expires_at, claimed + MAX_ACTION_TIME);
+    assert!(super::claim_blocks_replacement(
+        &action,
+        expires_at - chrono::Duration::nanoseconds(1)
+    ));
+    assert!(super::claim_blocks_replacement(&action, expires_at));
+    assert!(!super::claim_blocks_replacement(
+        &action,
+        expires_at + chrono::Duration::nanoseconds(1)
+    ));
+    action.claimed = None;
+    assert_eq!(action.claim_expires_at(), None);
+    assert!(!super::claim_blocks_replacement(&action, expires_at));
+}
+
+#[tokio::test]
+async fn expired_claim_allows_configuration_replacement() {
+    let svc = service(true);
+    let mut config = configuration(false);
+    let action = svc
+        .create_action(CreateScheduledAction::Canonical(config.clone()), user())
+        .await
+        .unwrap();
+    let id = action.id.unwrap();
+    svc.repo.actions.lock().unwrap()[0].claimed =
+        Some(Utc::now() - MAX_ACTION_TIME - chrono::Duration::seconds(1));
+    config.name = "renamed".into();
+    let updated = svc
+        .update_action(&id, UpdateScheduledAction::Canonical(config), user())
+        .await
+        .unwrap();
+    assert_eq!(updated.name, "renamed");
+    assert!(updated.claimed.is_some());
+}
+
+fn at(seconds: i64) -> DateTime<Utc> {
+    DateTime::UNIX_EPOCH + chrono::Duration::seconds(seconds)
+}
+
+fn seeded(
+    id: u128,
+    owner: Owner,
+    created_at: DateTime<Utc>,
+    events: bool,
+    name: &str,
+) -> ScheduledAction {
+    let config = configuration(events);
+    ScheduledAction {
+        id: Some(Uuid::from_u128(id)),
+        owner,
+        name: name.to_owned(),
+        trigger: config.trigger,
+        kind: config.kind,
+        created_at,
+        updated_at: created_at,
+        configuration_revision: ConfigurationRevision::INITIAL,
+        event_activated_at: None,
+        task: config.task,
+        claimed: None,
+        next_run_at: None,
+        enabled: true,
+    }
+}
+
+#[tokio::test]
+async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
+    let early = at(10);
+    let later = at(20);
+    let repo = Arc::new(FakeRepo::default());
+    *repo.actions.lock().unwrap() = vec![
+        seeded(9, Owner::User(user()), later, true, "event"),
+        seeded(
+            1,
+            Owner::from_principal_str(FOREIGN_USER).unwrap(),
+            early,
+            false,
+            "foreign",
+        ),
+        seeded(4, Owner::User(user()), later, false, "first-equal"),
+        seeded(9, Owner::User(user()), early, false, "early-cron"),
+        seeded(
+            2,
+            Owner::from_principal_str(&format!("bot|{}", Uuid::from_u128(50))).unwrap(),
+            early,
+            false,
+            "bot",
+        ),
+        seeded(
+            8,
+            Owner::from_principal_str(&Uuid::from_u128(77).hyphenated().to_string()).unwrap(),
+            early,
+            false,
+            "team",
+        ),
+        seeded(4, Owner::User(user()), later, false, "second-equal"),
+        seeded(3, Owner::User(user()), later, false, "low-id"),
+    ];
+    let (tx, _rx) = tokio::sync::mpsc::channel(1);
+    let svc = TestService::new(repo.clone(), Arc::new(FakeExecutor::default()), tx);
+    let reader = ScheduledActionReadServiceImpl::new(repo);
+
+    let expected = vec![
+        "early-cron",
+        "low-id",
+        "first-equal",
+        "second-equal",
+        "event",
+    ];
+    let read = reader.list_owned(user()).await.unwrap();
+    let names = |actions: &[ScheduledAction]| {
+        actions
+            .iter()
+            .map(|action| action.name.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(names(&read), expected);
+    assert!(read.iter().all(|action| action.owner.is_user(&user())));
+    assert!(
+        read.iter()
+            .any(|action| matches!(action.trigger, ActionTrigger::Cron { .. }))
+    );
+    assert!(
+        read.iter()
+            .any(|action| matches!(action.trigger, ActionTrigger::Events { .. }))
+    );
+    assert_eq!(
+        names(&svc.get_actions(user(), true).await.unwrap()),
+        expected
+    );
+    assert_eq!(
+        names(&svc.get_actions(user(), false).await.unwrap()),
+        vec!["early-cron", "low-id", "first-equal", "second-equal"]
+    );
 }
