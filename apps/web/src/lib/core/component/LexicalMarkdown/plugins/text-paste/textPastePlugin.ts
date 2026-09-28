@@ -67,7 +67,7 @@ export function parseMacroAppUrl(text: string): MacroAppUrlParsed {
     }
 
     const pathParts: string[] = url.pathname.split('/').filter((part) => part);
-    if (pathParts.length < 3) {
+    if (pathParts.length !== 3) {
       return {
         isValid: false,
         id: undefined,

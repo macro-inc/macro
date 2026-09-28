@@ -34,6 +34,14 @@ describe('parseMacroAppUrl', () => {
     }
   );
 
+  it('does not treat a legacy first pane as a complete legacy link', () => {
+    expect(
+      parseMacroAppUrl(
+        `https://dev.macro.com/app/md/${sessionId}/~/drive/pdf/${sessionId}`
+      ).isValid
+    ).toBe(false);
+  });
+
   it.each([
     'https://dev.macro.com/app/agents',
     'https://dev.macro.com/app/agents/not-a-uuid',
@@ -94,6 +102,21 @@ describe('route-aware paste resolver', () => {
       expect(resolveAppLink).not.toHaveBeenCalled();
     }
   );
+
+  it('delegates a copied layout with a legacy first pane to the route resolver', () => {
+    const url = `https://dev.macro.com/app/md/${sessionId}/~/drive/pdf/${sessionId}`;
+    const resolveLayout = vi.fn(() => ({
+      id: sessionId,
+      block: 'pdf' as const,
+      params: {},
+    }));
+    expect(resolvePastedMacroAppUrl(url, resolveLayout)).toEqual({
+      id: sessionId,
+      block: 'pdf',
+      params: {},
+    });
+    expect(resolveLayout).toHaveBeenCalledWith(url);
+  });
 
   it('leaves unknown links unconverted without an app resolver', () => {
     expect(
