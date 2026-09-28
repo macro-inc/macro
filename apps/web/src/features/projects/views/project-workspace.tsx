@@ -2,7 +2,6 @@ import { SidePanel } from '@components/app/side-panel';
 import { EntityDetailsGrid } from '@components/app/side-panel/EntityDetailsGrid';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
-import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { EntityPropertiesSection } from '@property/side-panel/properties/EntityPropertiesSection';
 import { Button, Dialog } from '@ui';
@@ -43,8 +42,6 @@ export function ProjectWorkspace(props: {
 }) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
   const [deleting, setDeleting] = createSignal(false);
-  const [adding, setAdding] = createSignal(false);
-  const [selected, setSelected] = createSignal(new Set<string>());
   const [error, setError] = createSignal<string>();
   const canEdit = () => canEditProject(props.project);
   const run = async (action: () => Promise<void>) => {
@@ -57,19 +54,6 @@ export function ProjectWorkspace(props: {
       );
     }
   };
-  const assign = () =>
-    run(async () => {
-      const results = await props.commands.assignTasks(props.project.id, [
-        ...selected(),
-      ]);
-      const failed = results.filter((item) => item.error);
-      setSelected(new Set(failed.map((item) => item.taskId)));
-      if (failed.length)
-        setError(
-          `${failed.length} tasks could not be added. ${failed[0].error}`
-        );
-      else setAdding(false);
-    });
 
   return (
     <SidePanel.Layout headerToggle={false}>
@@ -190,64 +174,11 @@ export function ProjectWorkspace(props: {
                 projectId={props.project.id}
                 onOpenTask={props.onOpenTask}
                 onCreateTask={canEdit() ? props.onCreateTask : undefined}
-                onAddExistingTasks={
-                  canEdit()
-                    ? () => {
-                        setError(undefined);
-                        setSelected(new Set<string>());
-                        setAdding(true);
-                      }
-                    : undefined
-                }
               />
             </Match>
           </Switch>
         </div>
       </div>
-      <Show when={adding()}>
-        <Dialog
-          open
-          onOpenChange={(open) => {
-            if (!open && !props.commands.pending()) setAdding(false);
-          }}
-          class="max-w-lg"
-        >
-          <div class="flex flex-col gap-4 p-5">
-            <Dialog.Title>Add tasks to project</Dialog.Title>
-            <PropertyEntitySelector
-              config={{
-                isMultiSelect: true,
-                specificEntityType: 'TASK',
-                placeholder: 'Search tasks',
-              }}
-              selectedOptions={selected}
-              setSelectedOptions={setSelected}
-            />
-            <Show when={error()}>
-              {(message) => (
-                <p role="alert" class="text-sm text-failure">
-                  {message()}
-                </p>
-              )}
-            </Show>
-            <div class="flex justify-end gap-2">
-              <Button
-                disabled={props.commands.pending()}
-                onClick={() => setAdding(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="cta"
-                disabled={props.commands.pending() || !selected().size}
-                onClick={() => void assign()}
-              >
-                Add tasks
-              </Button>
-            </div>
-          </div>
-        </Dialog>
-      </Show>
       <Show when={deleting()}>
         <Dialog
           open

@@ -15,6 +15,7 @@ import type { initiativeClient } from '@service-storage/initiative';
 import {
   type QueryClient,
   useInfiniteQuery,
+  useIsMutating,
   useMutation,
   useQuery,
 } from '@tanstack/solid-query';
@@ -22,9 +23,11 @@ import type { Accessor } from 'solid-js';
 import type { ProjectsContext } from '../context/projects-context';
 import { assignProjectTasks } from '../core/assignment';
 import type {
+  ProjectDetail,
   ProjectSharingPatch,
   TaskProjectReference,
 } from '../core/project';
+import { createProjectTaskMutation } from './create-project-task';
 import { projectKeys } from './keys';
 import { createProjectChannelNamesSource } from './project-channel-names';
 import { toProjectDetail } from './project-model';
@@ -95,12 +98,17 @@ export function createProjectSources(
     },
     createProjectSource(id) {
       const readEnabled = createReadGate();
+      const creating = useIsMutating(
+        () => ({ mutationKey: projectKeys.createTask._def }),
+        () => cache
+      );
       const query = useQuery(
         () => {
           const projectId = id();
           return {
             queryKey: projectKeys.detail(userId(), projectId).queryKey,
-            enabled: readEnabled() && Boolean(userId() && projectId),
+            enabled:
+              readEnabled() && Boolean(userId() && projectId) && !creating(),
             queryFn: async ({ signal }) => {
               const project = await throwOnErr(() =>
                 client.get(projectId, signal)
@@ -190,12 +198,40 @@ export function createProjectSources(
     },
     createReferencesSource(ids) {
       const readEnabled = createReadGate();
+      const creating = useIsMutating(
+        () => ({ mutationKey: projectKeys.createTask._def }),
+        () => cache
+      );
       const query = useQuery(
         () => {
           const taskIds = [...new Set(ids())].sort();
           return {
             queryKey: projectKeys.taskReferences(userId(), taskIds).queryKey,
-            enabled: readEnabled() && Boolean(userId() && taskIds.length),
+            enabled:
+              readEnabled() &&
+              Boolean(userId() && taskIds.length) &&
+              !creating(),
+            initialData: () => {
+              if (!creating()) return undefined;
+              const projects = cache.getQueriesData<{
+                project: ProjectDetail;
+              }>({ queryKey: projectKeys.detail._def });
+              const references = new Map<string, TaskProjectReference>();
+              for (const taskId of taskIds) {
+                const project = projects.find(([, data]) =>
+                  data?.project.taskIds.includes(taskId)
+                )?.[1]?.project;
+                if (!project) return undefined;
+                references.set(taskId, {
+                  state: 'visible',
+                  id: project.id,
+                  name: project.name,
+                });
+              }
+              return references;
+            },
+            initialDataUpdatedAt: 0,
+            placeholderData: (previous) => previous,
             queryFn: async ({ signal }) => {
               const references = new Map<string, TaskProjectReference>();
               for (let offset = 0; offset < taskIds.length; offset += 100) {
@@ -236,6 +272,17 @@ export function createProjectSources(
       };
     },
     createCommands() {
+      const createTask = createProjectTaskMutation(
+        client,
+        cache,
+        userId,
+        async () => {
+          await Promise.all([
+            refresh(),
+            cache.invalidateQueries({ queryKey: soupKeys._def }),
+          ]);
+        }
+      );
       const create = useMutation(
         () => ({
           mutationFn: async (input: { name: string; shareWithTeam: boolean }) =>
@@ -329,6 +376,7 @@ export function createProjectSources(
         () => cache
       );
       return {
+        createTask,
         pending: () =>
           create.isPending ||
           update.isPending ||

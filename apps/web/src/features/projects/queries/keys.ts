@@ -1,6 +1,7 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
 
 export const projectKeys = createQueryKeys('initiatives', {
+  createTask: (id: string) => [id],
   identity: (userId: string | undefined, id: string) => ({
     queryKey: [userId, id],
   }),

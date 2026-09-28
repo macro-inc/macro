@@ -430,13 +430,12 @@ export const enableCrmLists = defineFlag({
 });
 
 // Native Projects frontend: navigation, creation, task assignment and project
-// views. Off until PostHog enables it, including in dev. Override locally with
-// VITE_ENABLE_PROJECTS; legacy Files folders are unaffected.
+// views. Enabled in development; PostHog controls production rollout. Override
+// with VITE_ENABLE_PROJECTS; legacy Files folders are unaffected.
 export const enableProjects = defineFlag({
   key: 'enable-projects',
   env: 'ENABLE_PROJECTS',
-  // Analytics is disabled in Vite dev mode, so there is no remote answer to wait for.
-  default: import.meta.env.DEV ? false : undefined,
+  default: onInDev,
 });
 
 // Reminders: the "Remind me" entry in the command menu, the soup

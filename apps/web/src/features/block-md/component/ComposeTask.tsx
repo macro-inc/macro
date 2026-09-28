@@ -333,6 +333,7 @@ export type ComposeTaskSuccess = {
 };
 
 export interface ComposeTaskProps {
+  createTask?: typeof createTaskWithProperties;
   onCreateTask?: (title: string, content: string) => void;
   onClose?: () => void;
   initialTitle?: string;
@@ -571,21 +572,19 @@ export function ComposeTask(props: ComposeTaskProps) {
         propertyValues: structuredClone(unwrap(propertyValues)),
       };
       clearTaskComposerDraft();
-      // Close the dialog immediately
-      splitPanel.handle.close();
-      props.onClose?.();
-      console.log(
-        '[ComposeTask] dispatching onCreateStart, hasHandler=',
-        Boolean(props.onCreateStart)
-      );
-      props.onCreateStart?.({ title: taskTitle, content: taskContent });
-
-      const createdTask = await createTaskWithProperties(
+      const createdTask = await (props.createTask ?? createTaskWithProperties)(
         taskTitle,
         taskContent,
         properties,
         createDefinitions(),
-        (params) => upsertToHistoryMutation.mutate(params)
+        (params) => upsertToHistoryMutation.mutate(params),
+        {
+          onMutate: () => {
+            splitPanel.handle.close();
+            props.onClose?.();
+            props.onCreateStart?.({ title: taskTitle, content: taskContent });
+          },
+        }
       );
 
       setIsCreating(false);
@@ -621,15 +620,18 @@ export function ComposeTask(props: ComposeTaskProps) {
       return;
     }
 
-    resetTitleAndBody();
-    setIsCreating(false);
-
-    const createdTask = await createTaskWithProperties(
+    const createdTask = await (props.createTask ?? createTaskWithProperties)(
       taskTitle,
       taskContent,
       properties,
       createDefinitions(),
-      (params) => upsertToHistoryMutation.mutate(params)
+      (params) => upsertToHistoryMutation.mutate(params),
+      {
+        onMutate: () => {
+          resetTitleAndBody();
+          setIsCreating(false);
+        },
+      }
     );
 
     if (!createdTask) {
@@ -673,20 +675,24 @@ export function ComposeTask(props: ComposeTaskProps) {
     };
     clearTaskComposerDraft();
 
-    splitPanel.handle.close();
-    props.onClose?.();
+    let split: ReturnType<typeof openWithSplit>['split'];
 
-    const split = openWithSplit(
-      { type: 'component', id: 'loading' },
-      { referredFrom: 'launcher', preferNewSplit: true }
-    ).split;
-
-    const createdTask = await createTaskWithProperties(
+    const createdTask = await (props.createTask ?? createTaskWithProperties)(
       taskTitle,
       taskContent,
       properties,
       createDefinitions(),
-      (params) => upsertToHistoryMutation.mutate(params)
+      (params) => upsertToHistoryMutation.mutate(params),
+      {
+        onMutate: () => {
+          splitPanel.handle.close();
+          props.onClose?.();
+          split = openWithSplit(
+            { type: 'component', id: 'loading' },
+            { referredFrom: 'launcher', preferNewSplit: true }
+          ).split;
+        },
+      }
     );
 
     setIsCreating(false);

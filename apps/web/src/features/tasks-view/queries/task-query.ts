@@ -17,6 +17,8 @@ import {
 } from '../filters/task-facets';
 import type { TaskGroupBy, TaskSortId, TaskTab } from '../types';
 
+import { taskMembershipScope } from './task-membership';
+
 type TaskAst = BackendAstNode;
 
 const entityPropertyLiteral = (
@@ -104,22 +106,6 @@ export type BuildTaskQueryOptions = {
   taskIds?: readonly string[];
 };
 
-const membershipScope = (ids: readonly string[]): TaskAst => {
-  if (!ids.length) return literal('id', NIL_UUID);
-  // A project may contain thousands of tasks. Balance the binary AST to stay
-  // below the JSON parser's recursion limit while keeping every membership ID.
-  let level = ids.map((id) => literal('id', id));
-  while (level.length > 1) {
-    const next: TaskAst[] = [];
-    for (let index = 0; index < level.length; index += 2) {
-      const right = level[index + 1];
-      next.push(right ? { '|': [level[index], right] } : level[index]);
-    }
-    level = next;
-  }
-  return level[0];
-};
-
 /** Builds the concrete Soup AST used only by the production Tasks view. */
 export function buildTaskQuery(
   options: BuildTaskQueryOptions
@@ -149,7 +135,7 @@ export function buildTaskQuery(
     ? { '&': [taskDocuments, compiledFacets.df] }
     : taskDocuments;
   if (options.taskIds !== undefined) {
-    documents = { '&': [documents, membershipScope(options.taskIds)] };
+    documents = { '&': [documents, taskMembershipScope(options.taskIds)] };
   }
 
   const body: SoupAstBody = {

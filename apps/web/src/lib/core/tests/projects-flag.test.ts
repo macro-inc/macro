@@ -9,7 +9,8 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it('defaults deployed Projects to off while allowing PostHog rollout', async () => {
+it('defaults production Projects to off while allowing PostHog rollout', async () => {
+  vi.stubEnv('MODE', 'production');
   vi.stubEnv('DEV', false);
   vi.stubEnv('VITE_ENABLE_PROJECTS', undefined);
   const { enableProjects, isFeatureEnabled } = await import(
@@ -31,6 +32,7 @@ it('defaults deployed Projects to off while allowing PostHog rollout', async () 
 it.each([false, true])(
   'honors an explicit local override of %s',
   async (enabled) => {
+    vi.stubEnv('MODE', 'development');
     vi.stubEnv('DEV', true);
     vi.stubEnv('VITE_ENABLE_PROJECTS', String(enabled));
     const { enableProjects, isFeatureEnabled } = await import(
@@ -42,13 +44,14 @@ it.each([false, true])(
   }
 );
 
-it('resolves off immediately in dev where the analytics SDK is disabled', async () => {
+it('enables Projects by default in development', async () => {
+  vi.stubEnv('MODE', 'development');
   vi.stubEnv('DEV', true);
   vi.stubEnv('VITE_ENABLE_PROJECTS', undefined);
   const { enableProjects, isFeatureEnabled } = await import(
     '../constant/featureFlags'
   );
-  expect(enableProjects.override).toBe(false);
-  expect(isFeatureEnabled(enableProjects)).toBe(false);
+  expect(enableProjects.override).toBe(true);
+  expect(isFeatureEnabled(enableProjects)).toBe(true);
   expect(posthog.isFeatureEnabled).not.toHaveBeenCalled();
 });

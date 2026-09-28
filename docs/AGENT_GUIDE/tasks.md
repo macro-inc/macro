@@ -89,8 +89,9 @@ also show up in Files/`All` and in AI-chat document listings.
 
 ## Projects
 
-Projects are gated by PostHog `enable-projects` and are off by default. Local
-development can opt in with `VITE_ENABLE_PROJECTS=true`. When off, Tasks hides
+Projects are enabled by default in development. Production rollout is gated by
+PostHog `enable-projects`; `VITE_ENABLE_PROJECTS` overrides either environment.
+When off, Tasks hides
 the Projects tab, project column, and assignment actions. A saved Projects tab
 temporarily shows My Tasks without overwriting the saved selection.
 
@@ -159,8 +160,13 @@ An unavailable connection shows `Retry description` without clearing saved conte
 
 The project's Tasks tab starts with the task search, controls, and unified list;
 the project title and property pills appear only on Overview. Use
-`New task` to create a task associated with the project, or `Add existing tasks`
-to choose existing tasks. `Remove` clears a task's project association.
+`New task` to create a task associated with the project. The normal task row is
+inserted into the query cache before the composer closes, including its selected
+properties and project chip. It stays in its group while saving and assigning,
+then uses the saved task ID. Failed creations or assignments roll back that row.
+Verify this with GraphQL Soup both enabled and disabled. The section tabs
+use the same control as Channels. Existing tasks can be assigned through their
+`Set project…` context menu; there is no bulk-add dialog in the project view.
 The regular Tasks list includes a Project column; clicking a project chip opens
 that project. Right-click a task and choose `Set project…` to choose or clear its
 project. On mobile the same action is in the long-press menu. Selecting several

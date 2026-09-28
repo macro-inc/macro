@@ -79,6 +79,8 @@ export type GraphqlSoupAstItemsQueryArgs = {
 
 export type GraphqlSoupAstItemsQueryOptions = {
   enabled: boolean;
+  networkPaused?: boolean;
+  keepPreviousData?: boolean;
   projection?: 'channel-list';
   /** Reconcile indexed members while retaining server-only email rows. */
   localReconciliation?: 'without-email';
@@ -612,8 +614,10 @@ export function createGraphqlSoupAstItemsQuery(
       getNextPageParam: (lastPage) =>
         lastPage.user.soup.nextCursor ?? undefined,
       enabled: queryOptions.enabled && firstInput !== undefined,
-      requestPolicy: 'cache-and-network',
-      keepPreviousData: false,
+      requestPolicy: queryOptions.networkPaused
+        ? 'cache-only'
+        : 'cache-and-network',
+      keepPreviousData: queryOptions.keepPreviousData ?? false,
       onResult: (result, page) => {
         if (!result.data) return;
         setBaselineGeneration(cacheGeneration);

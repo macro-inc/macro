@@ -92,8 +92,9 @@ changing tabs updates the URL, and browser Back/Forward restores the selection
 independently in each pane. Inline detail links preserve these keys. Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
 
-Projects require the PostHog `enable-projects` flag (off by default). For local
-testing, use `VITE_ENABLE_PROJECTS=true`. When disabled, project navigation,
+Projects are enabled by default in development; production uses the PostHog
+`enable-projects` flag. `VITE_ENABLE_PROJECTS` overrides either environment.
+When disabled, project navigation,
 creation, assignment, chips, and Cmd+K results are hidden; direct project links
 return to Tasks after flags resolve. Existing Files folders stay available.
 

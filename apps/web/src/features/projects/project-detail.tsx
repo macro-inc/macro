@@ -6,13 +6,14 @@ import {
   tasksSplitRoute,
 } from '@app/features/tasks-view/route';
 import { useNavigate } from '@app/lib/split-router';
+import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { toast } from '@core/component/Toast/Toast';
+import { TabsInset } from '@core/component/TabsInset';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import StackIcon from '@phosphor/stack.svg';
-import { Button, Tabs } from '@ui';
+import { Button } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { useProjectsContext } from './context/projects-context';
 import {
@@ -21,7 +22,6 @@ import {
   type ProjectSection,
 } from './core/project';
 import { type ProjectRoute, projectRouteId } from './core/route';
-import { createProjectTaskComposerCallbacks } from './primitives/project-task-composer';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
 import { ProjectShareHost } from './project-share-host';
@@ -89,16 +89,16 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       params: { projectId: props.route.id, section },
     });
   const createTask = () => {
-    const callbacks = createProjectTaskComposerCallbacks({
-      projectId: props.route.id,
-      assignTasks: commands.assignTasks,
-      openProjectTasks: () => section('tasks'),
-      reportFailure: toast.failure,
-    });
+    const projectId = props.route.id;
     layout.popoverSplit({
       type: 'component',
       id: 'task-compose',
-      params: callbacks,
+      params: {
+        createTask: (
+          ...args: Parameters<NonNullable<ComposeTaskProps['createTask']>>
+        ) => commands.createTask(projectId, ...args),
+        onSuccess: () => section('tasks'),
+      },
     });
   };
   return (
@@ -109,7 +109,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       <EntityDetailTopBar
         navigation={
           <Show when={source.project()}>
-            <Tabs
+            <TabsInset
               list={[
                 { value: 'overview', label: 'Overview' },
                 { value: 'tasks', label: 'Tasks' },

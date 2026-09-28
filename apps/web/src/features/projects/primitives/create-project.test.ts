@@ -18,6 +18,7 @@ const project: ProjectDetail = {
 };
 function commands() {
   return {
+    createTask: vi.fn(async () => null),
     pending: () => false,
     create: vi.fn(async () => project),
     rename: vi.fn(async () => {}),

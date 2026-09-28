@@ -53,6 +53,9 @@ vi.mock('@queries/client', async () => {
     }),
   };
 });
+vi.mock('./queries/create-project-task', () => ({
+  createProjectTaskMutation: () => vi.fn(),
+}));
 // These independent property/hydration adapters are not used by this fixture.
 vi.mock('@entity', () => ({ isTaskEntity: () => false }));
 vi.mock('@entity/extractors-property/property-helpers', () => ({

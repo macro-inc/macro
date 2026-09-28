@@ -1,3 +1,4 @@
+import type { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
 import type { TaskEntityWithProperties } from '@entity';
 import type { Property, PropertyApiValues } from '@property/types';
 import type { Accessor, ParentProps } from 'solid-js';
@@ -74,6 +75,10 @@ export type ProjectsContext = {
     error: Accessor<Error | undefined>;
   };
   createCommands(): {
+    createTask(
+      projectId: string,
+      ...args: Parameters<typeof createTaskWithProperties>
+    ): ReturnType<typeof createTaskWithProperties>;
     pending: Accessor<boolean>;
     create(input: {
       name: string;

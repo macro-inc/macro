@@ -21,6 +21,9 @@ vi.mock('@entity', async () => ({
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({ notificationsByEntity: () => ({}) }),
 }));
+vi.mock('@queries/soup/transform-utils', () => ({
+  mapApiSoupItemToEntity: vi.fn(),
+}));
 vi.mock('@queries/soup/items', () => ({
   useSoupAstItemsQuery: () => fixture.query,
 }));
@@ -30,9 +33,10 @@ vi.mock('@queries/soup/grouped/create-grouped-soup-queries', () => ({
 
 import { useTasksDataSource } from './use-tasks-query';
 
-it('reports loading while a membership change hides placeholder rows', () => {
+it('retains cached rows during membership changes but filters them by current access', () => {
   const [placeholder, setPlaceholder] = createSignal(false);
   const [enabled, setEnabled] = createSignal(true);
+  const [members, setMembers] = createSignal(['task']);
   const task: TaskEntityWithProperties = {
     type: 'document',
     fileType: 'md',
@@ -66,15 +70,18 @@ it('reports loading while a membership change hides placeholder rows', () => {
           tagSets: () => [],
           tagSetsReady: () => true,
           isGroupExpanded: () => true,
-          taskIds: () => ['task'],
+          taskIds: members,
           enabled,
         }
       );
       expect(source.items()).toHaveLength(1);
       expect(source.isLoading()).toBe(false);
       setPlaceholder(true);
+      expect(source.items()).toHaveLength(1);
+      expect(source.isLoading()).toBe(false);
+      setMembers([]);
       expect(source.items()).toEqual([]);
-      expect(source.isLoading()).toBe(true);
+      setMembers(['task']);
       setPlaceholder(false);
       expect(source.items()).toHaveLength(1);
       expect(source.isLoading()).toBe(false);
