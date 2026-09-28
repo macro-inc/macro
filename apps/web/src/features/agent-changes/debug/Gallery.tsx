@@ -24,7 +24,17 @@ import { gallerySummary } from './gallery-fixture';
 const GALLERY_QUEUE = Array.from({ length: 12 }, (_, index) => ({
   actionId: `gallery-queued-${index + 1}`,
   kind: 'prompt',
-  prompt: `Queued follow-up #${index + 1}: tighten the unread rail query.`,
+  prompt:
+    index === 0
+      ? [
+          'Add regression coverage for queued messages and review readiness.',
+          ...Array.from(
+            { length: 12 },
+            (_, step) =>
+              `Scenario ${step + 1}: queue a follow-up while the agent is working. Verify that the changes-ready card stays hidden, the next prompt stays reachable, and editing a queued message preserves its attachments.`
+          ),
+        ].join('\n\n')
+      : `Queued follow-up #${index + 1}: tighten the unread rail query.`,
 }));
 
 export default function AgentChangesGallery() {
@@ -62,6 +72,7 @@ export default function AgentChangesGallery() {
   }
   const [transcript, setTranscript] = createSignal<string[]>([]);
   const [queued, setQueued] = createSignal(false);
+  const [queueItems, setQueueItems] = createSignal(GALLERY_QUEUE);
   context.host.hasQueuedMessages = queued;
   // The mock host records prompts; surface them like a transcript would.
   const originalSend = context.host.agent.send;
@@ -103,7 +114,10 @@ export default function AgentChangesGallery() {
                 size="sm"
                 class="self-start"
                 aria-pressed={queued()}
-                onClick={() => setQueued((value) => !value)}
+                onClick={() => {
+                  setQueueItems(GALLERY_QUEUE);
+                  setQueued((value) => !value);
+                }}
               >
                 {queued()
                   ? 'Clear queued messages'
@@ -123,9 +137,21 @@ export default function AgentChangesGallery() {
             <ReviewNotesDock />
             <Show when={queued()}>
               <QueuedPrompts
-                items={GALLERY_QUEUE}
-                onEdit={() => {}}
-                onRemove={() => {}}
+                items={queueItems()}
+                onEdit={(id, prompt) =>
+                  setQueueItems((items) =>
+                    items.map((item) =>
+                      item.actionId === id ? { ...item, prompt } : item
+                    )
+                  )
+                }
+                onRemove={(id) => {
+                  const remaining = queueItems().filter(
+                    (item) => item.actionId !== id
+                  );
+                  setQueueItems(remaining);
+                  if (remaining.length === 0) setQueued(false);
+                }}
               />
             </Show>
             <div class="rounded-2xl border border-edge px-4 py-3 text-sm text-ink-placeholder">

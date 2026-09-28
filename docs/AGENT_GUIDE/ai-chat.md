@@ -510,7 +510,7 @@ video previews that open the same lightbox as channel media; file chips that
 open the file). A prompt may be files only, including the
 first message in a new conversation. Uploading attachments survive switching the
 agent or opening repository settings; sending clears the attachment previews.
-Queued prompts
+Expanded queued prompts
 list their attached file names under the text; editing a queued prompt keeps them.
 
 Cursor walkthrough files the run re-hosts appear in the transcript after the
@@ -815,9 +815,15 @@ must stay hidden; subsequent live messages must still appear.
   top — the prompt about to be sent sits at the bottom, immediately above the input.
   The list is capped at the smaller of 40% of the viewport height and 24rem. Past that
   it scrolls on its own and starts scrolled to the bottom, so the next-to-send row stays
-  visible. Scroll up inside the list to reach newer entries. Each row shows a `Queued` label (with `by {user}` when someone else queued it —
+  visible. Scroll up inside the list to reach newer entries; no extra count row hides
+  messages. Each prompt starts as a single-line preview, including long messages.
+  Click a preview (or press Enter/Space on it) to open its editor; opening another
+  row collapses the previous one. The expanded editor scrolls within the smaller of
+  32% of the viewport and 16rem. Click the preview again or press Escape to collapse
+  it, retaining edits and editor state. Each row shows a `Queued` label (with `by
+  {user}` when someone else queued it —
   several users can stack prompts in one session's queue) and an always-visible remove
-  (`X`) button. A queued prompt's text is itself an editor: click in and type — changes
+  (`X`) button. Type in the expanded editor — changes
   autosave (debounced, and on blur) with no save button. Editing and removal are
   possible only until the entry dispatches; after that the row simply becomes the next
   user message in the transcript.
