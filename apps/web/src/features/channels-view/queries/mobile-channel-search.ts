@@ -1,6 +1,7 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { debouncedDependent } from '@core/util/debounce';
-import { isChannelEntity } from '@entity/types/entity';
+import { type ChannelEntity, isChannelEntity } from '@entity/types/entity';
+import type { WithSearch } from '@entity/types/search';
 import {
   useSearchSoupQuery,
   validateSearchServiceText,
@@ -59,10 +60,14 @@ export function useMobileChannelSearch(options: {
     // belongs to the previous query or tab and must never appear as a new hit.
     const remote =
       serviceEnabled() && query.isSuccess && !query.isPlaceholderData
-        ? query.data.filter(isChannelEntity).filter((channel) => {
-            const types = channelTypes();
-            return !types || types.includes(channel.channelType);
-          })
+        ? query.data
+            .filter((entity): entity is WithSearch<ChannelEntity> =>
+              isChannelEntity(entity)
+            )
+            .filter((channel) => {
+              const types = channelTypes();
+              return !types || types.includes(channel.channelType);
+            })
         : [];
     return deduplicateChannels([local, remote]);
   });
