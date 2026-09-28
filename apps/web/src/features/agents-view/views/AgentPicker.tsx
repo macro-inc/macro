@@ -214,6 +214,12 @@ function AgentPickerRow(props: {
             class="min-w-0 flex-1 gap-2"
             textValue={props.agent.name}
             onClick={() => props.onSelect()}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              event.stopPropagation();
+              props.onSelect();
+            }}
           >
             {identity()}
             <CaretRightIcon class="size-3 shrink-0 text-ink-muted" />

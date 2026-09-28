@@ -103,8 +103,11 @@ permission failures should display a failed tool call without a successful resul
   available agent is selected initially; otherwise Macro is selected.
   Hover an agent (or use the right arrow key) to open its model submenu, with
   the searchable Settings catalog, provider icons, and scrollable **More models**.
-  Clicking an agent directly uses its default; choosing a submenu model selects
-  both the agent and that model. A checkmark identifies the selected model,
+  Clicking an agent directly, or pressing Enter/Space on its focused row, uses
+  its default and clears any previous model override. Right Arrow still opens
+  the model submenu; choosing a submenu model selects both the agent and that
+  model. Escape dismisses the picker and restores focus to its trigger.
+  A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Runtimes.
   The built-in sandbox and paired macrod runtimes are not offered here.
