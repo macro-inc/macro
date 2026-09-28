@@ -57,6 +57,7 @@ fn deploy() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
+        .add_step(steps::start_sccache_server())
         .add_step(build())
         .add_step(steps::show_sccache_stats())
         .add_step(configure_aws_credentials())

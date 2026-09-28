@@ -82,6 +82,14 @@ fn build_job_uses_remote_sccache_and_wasm_cache() {
         build.contains("nsc cache sccache setup --cache_name web-ci"),
         "build must use the shared web-ci remote sccache: {build}"
     );
+    let configure = build
+        .find("nsc cache sccache setup")
+        .expect("remote cache configuration");
+    let start = build
+        .find("run: sccache --start-server")
+        .expect("start the server in a separate step with the exported credentials");
+    let build_command = build.find("just build-").expect("web build command");
+    assert!(configure < start && start < build_command);
     assert!(
         build.contains(".wasm-pack"),
         "build must persist wasm-pack's wasm-opt cache: {build}"

@@ -325,6 +325,13 @@ pub fn setup_reqs_web(name: &str, playwright: bool) -> Step<Use> {
     .when(playwright, |step| step.add_with(("playwright", "true")))
 }
 
+/// Start the server before parallel compiler invocations can race to launch it.
+/// Keep this in a separate step after remote configuration so `GITHUB_ENV`
+/// has supplied the selected backend's credentials to the process.
+pub fn start_sccache_server() -> Step<Run> {
+    Step::new("Start sccache server").run("sccache --start-server")
+}
+
 /// `sccache --show-stats` at the end of a job (never fails the job).
 pub fn show_sccache_stats() -> Step<Run> {
     Step::new("show sccache stats")

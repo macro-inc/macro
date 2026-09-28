@@ -91,6 +91,8 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
+    - name: Start sccache server
+      run: sccache --start-server
     - name: Build
       run: just build-${{ inputs.environment }}
       env:
