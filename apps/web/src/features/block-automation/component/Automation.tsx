@@ -26,9 +26,11 @@ import {
   useUpdateScheduleMutation,
 } from '@queries/agent-schedule/schedules';
 import { getCronTrigger } from '@queries/agent-schedule/triggers';
+import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { useChatQuery } from '@queries/chat';
 import { Button, cn } from '@ui';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -41,6 +43,7 @@ import {
 } from 'solid-js';
 import { createRoutineAutosave } from '../primitives/routine-autosave';
 import { RoutineExecutionPicker } from '../routine-execution-picker';
+import { type HistoryMetadata, RoutineHistory } from '../views/routine-history';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
 import { AutomationRenameModal } from './AutomationRenameModal';
 import { AutomationTimePicker } from './AutomationTimePicker';
@@ -62,92 +65,34 @@ type SaveIntent =
   | { type: 'edit'; draft: ScheduleDraft }
   | { type: 'pause'; draft: ScheduleDraft };
 
-type HistoryRecord = {
-  id?: string | null;
-  resource_id?: string | null;
-  start_time?: string | null;
-  is_success?: boolean | null;
-};
-
-function HistoryRow(props: { record: HistoryRecord }) {
-  const { openWithSplit } = useSplitLayout();
-  const chatId = () => props.record.resource_id ?? undefined;
-  const chatQuery = useChatQuery(chatId);
-  const name = () =>
-    chatQuery.data?.chat?.name?.trim() ||
-    (chatQuery.isLoading ? '' : 'Untitled run');
-
-  const clickable = () => Boolean(chatId());
-  // Synthetic pending rows (no id) are inserted by the websocket sync on
-  // `started` and replaced on `stopped`. Treat them as neutral rather than
-  // failures — the panel header already surfaces running state.
-  const isPending = () => !props.record.id;
-
-  return (
-    <div
-      class={cn(
-        'flex items-center gap-2 border-b border-edge-muted px-3 py-2 text-sm',
-        clickable() ? 'cursor-default hover:bg-hover' : 'cursor-default'
-      )}
-      onClick={(event) => {
-        const id = chatId();
-        if (id)
-          openWithSplit(
-            { type: 'chat', id },
-            { activate: true, preferNewSplit: event.shiftKey }
-          );
-      }}
-    >
-      <div class="size-4 shrink-0">
-        <EntityIcon targetType="chat" size="xs" />
-      </div>
-      <span class="min-w-0 flex-1 truncate">{name()}</span>
-      <span
-        class={cn(
-          'ml-auto shrink-0 text-xs font-mono uppercase font-light',
-          isPending() || props.record.is_success
-            ? 'text-ink-extra-muted'
-            : 'text-failure'
-        )}
-      >
-        {formatDateAndTime(props.record.start_time ?? new Date())}
-      </span>
-    </div>
-  );
+function createChatHistoryMetadata(id: string): Accessor<HistoryMetadata> {
+  const query = useChatQuery(() => id);
+  return () => {
+    if (query.isPending) return { status: 'pending' };
+    if (!query.isSuccess) return { status: 'unavailable' };
+    const chat = query.data?.chat;
+    return chat
+      ? { status: 'ready', name: chat.name }
+      : { status: 'unavailable' };
+  };
 }
 
-function HistoryList(props: { records: HistoryRecord[]; isPending: boolean }) {
-  return (
-    <Show
-      when={props.records.length > 0}
-      fallback={
-        <Show
-          when={!props.isPending}
-          fallback={
-            <div class="px-3 py-8 text-center text-xs text-ink-muted">
-              Loading…
-            </div>
-          }
-        >
-          <div class="px-3 py-8 text-center text-xs text-ink-muted">
-            No runs yet.
-          </div>
-        </Show>
-      }
-    >
-      <div class="min-h-0 h-full overflow-y-scroll">
-        <For each={props.records.slice(0, 50)}>
-          {(record) => <HistoryRow record={record} />}
-        </For>
-      </div>
-    </Show>
-  );
+function createAgentHistoryMetadata(id: string): Accessor<HistoryMetadata> {
+  const query = useAgentSessionQuery(() => id);
+  return () => {
+    if (query.isPending) return { status: 'pending' };
+    if (!query.isSuccess) return { status: 'unavailable' };
+    const session = query.data;
+    return session
+      ? { status: 'ready', name: session.name }
+      : { status: 'unavailable' };
+  };
 }
 
 export function Automation() {
   const scheduleId = useBlockId();
   const panel = useSplitPanelOrThrow();
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit, replaceOrInsertSplit } = useSplitLayout();
 
   const schedulesQuery = useSchedulesQuery(() => true);
   const schedule = createMemo(() =>
@@ -644,9 +589,17 @@ export function Automation() {
               <div class="border-b border-edge-muted px-3 py-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
                 History
               </div>
-              <HistoryList
+              <RoutineHistory
                 records={history()}
                 isPending={historyQuery.isPending}
+                createChatMetadata={createChatHistoryMetadata}
+                createAgentMetadata={createAgentHistoryMetadata}
+                onOpen={(resource, newSplit) =>
+                  openWithSplit(resource, {
+                    activate: true,
+                    preferNewSplit: newSplit,
+                  })
+                }
               />
             </div>
           </div>

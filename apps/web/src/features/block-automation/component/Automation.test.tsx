@@ -3,11 +3,22 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type JSX, type Setter } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoutineTarget } from '../core/routine-target';
+import type { HistoryRecord } from '../views/routine-history';
 import { Automation } from './Automation';
 
 const mocks = vi.hoisted(() => ({
   readSchedules: (): ScheduledAction[] => [],
   status: (): string => 'success',
+  history: (): HistoryRecord[] => [],
+  metadataStatus: (): string => 'success',
+  chatMetadata: (): { chat?: { name: string } } | undefined => ({
+    chat: { name: 'Run transcript' },
+  }),
+  agentMetadata: (): { name: string } | undefined => ({
+    name: 'Agent transcript',
+  }),
+  chatQuery: vi.fn(),
+  agentQuery: vi.fn(),
   update: vi.fn(),
   create: vi.fn(),
   run: vi.fn(),
@@ -107,7 +118,36 @@ vi.mock('@ui', () => ({
   cn: (...classes: string[]) => classes.join(' '),
 }));
 vi.mock('@queries/chat', () => ({
-  useChatQuery: () => ({ data: { chat: { name: 'Run transcript' } } }),
+  useChatQuery: (id: () => string) => {
+    mocks.chatQuery(id());
+    return {
+      get isSuccess() {
+        return mocks.metadataStatus() === 'success';
+      },
+      get isPending() {
+        return mocks.metadataStatus() === 'pending';
+      },
+      get data() {
+        return mocks.chatMetadata();
+      },
+    };
+  },
+}));
+vi.mock('@queries/agent-session/session', () => ({
+  useAgentSessionQuery: (id: () => string) => {
+    mocks.agentQuery(id());
+    return {
+      get isSuccess() {
+        return mocks.metadataStatus() === 'success';
+      },
+      get isPending() {
+        return mocks.metadataStatus() === 'pending';
+      },
+      get data() {
+        return mocks.agentMetadata();
+      },
+    };
+  },
 }));
 vi.mock('@queries/agent-schedule/schedules', () => ({
   useSchedulesQuery: () => ({
@@ -130,14 +170,9 @@ vi.mock('@queries/agent-schedule/schedules', () => ({
   useScheduleHistoryQuery: () => ({
     isSuccess: true,
     isPending: false,
-    data: [
-      {
-        id: 'run-id',
-        resource_id: 'chat-id',
-        start_time: '2026-09-22T12:00:00Z',
-        is_success: true,
-      },
-    ],
+    get data() {
+      return mocks.history();
+    },
   }),
   useUpdateScheduleMutation: () => ({ mutateAsync: mocks.update }),
   useCreateScheduleMutation: () => ({ mutate: mocks.create, isPending: false }),
@@ -179,6 +214,18 @@ beforeEach(() => {
   vi.useFakeTimers();
   [mocks.status, setStatus] = createSignal('success');
   [mocks.readSchedules, setSchedules] = createSignal([cron]);
+  mocks.metadataStatus = () => 'success';
+  mocks.chatMetadata = () => ({ chat: { name: 'Run transcript' } });
+  mocks.agentMetadata = () => ({ name: 'Agent transcript' });
+  mocks.history = () => [
+    {
+      id: 'run-id',
+      resource_id: 'chat-id',
+      result: null,
+      start_time: '2026-09-22T12:00:00Z',
+      is_success: true,
+    },
+  ];
 });
 afterEach(() => {
   cleanup();
@@ -426,6 +473,87 @@ describe('automation execution target autosave', () => {
       expect(mocks.update).toHaveBeenCalledTimes(1);
     }
   );
+});
+
+describe('automation history integration', () => {
+  function mixedHistory(): void {
+    const legacy = mocks.history();
+    mocks.history = () => [
+      ...legacy,
+      {
+        id: 'agent-run',
+        resource_id: 'agent-id',
+        result: { version: 1, resource: { type: 'agent', id: 'agent-id' } },
+        start_time: '2026-09-23T12:00:00Z',
+        is_success: false,
+      },
+    ];
+  }
+
+  it('keeps mixed history navigation stable while switching model to agent and back', async () => {
+    mixedHistory();
+    render(() => <Automation />);
+    for (const target of [
+      agentTarget,
+      { kind: 'model', model: 'new-model' } satisfies RoutineTarget,
+    ]) {
+      mocks.changeTarget(target);
+      await vi.advanceTimersByTimeAsync(300);
+      const saved = mocks.update.mock.lastCall![0].body;
+      setSchedules([{ ...cron, ...saved }]);
+      fireEvent.click(screen.getByText('Run transcript'));
+      expect(mocks.openWithSplit).toHaveBeenLastCalledWith(
+        { type: 'chat', id: 'chat-id' },
+        { activate: true, preferNewSplit: false }
+      );
+      fireEvent.click(screen.getByText('Agent transcript'), { shiftKey: true });
+      expect(mocks.openWithSplit).toHaveBeenLastCalledWith(
+        { type: 'agent', id: 'agent-id' },
+        { activate: true, preferNewSplit: true }
+      );
+    }
+    expect(mocks.chatQuery.mock.calls.every(([id]) => id === 'chat-id')).toBe(
+      true
+    );
+    expect(mocks.agentQuery.mock.calls.every(([id]) => id === 'agent-id')).toBe(
+      true
+    );
+  });
+
+  it.each(['pending', 'error'])(
+    'never reads %s metadata or blanks the editor',
+    (status) => {
+      mixedHistory();
+      mocks.metadataStatus = () => status;
+      mocks.chatMetadata = () => {
+        throw new Error('Unsafe chat data read');
+      };
+      mocks.agentMetadata = () => {
+        throw new Error('Unsafe agent data read');
+      };
+      render(() => <Automation />);
+      expect(
+        screen.getByRole('textbox', { name: 'Instructions' })
+      ).toBeTruthy();
+      const labels = screen.getAllByText(
+        status === 'pending' ? 'Loading…' : 'Run unavailable'
+      );
+      expect(labels).toHaveLength(2);
+      for (const label of labels) fireEvent.click(label);
+      expect(mocks.openWithSplit).not.toHaveBeenCalled();
+    }
+  );
+
+  it('renders missing/deleted chat and agent metadata without invalid navigation', () => {
+    mixedHistory();
+    mocks.chatMetadata = () => ({});
+    mocks.agentMetadata = () => undefined;
+    render(() => <Automation />);
+    const unavailable = screen.getAllByText('Run unavailable');
+    expect(unavailable).toHaveLength(2);
+    for (const label of unavailable) fireEvent.click(label);
+    expect(mocks.openWithSplit).not.toHaveBeenCalled();
+  });
 });
 
 describe('automation editor trigger guards', () => {
