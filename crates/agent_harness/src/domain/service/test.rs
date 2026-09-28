@@ -936,11 +936,11 @@ async fn composer_failure_stops_open_delivery_and_keeps_the_prompt_queued() {
     ));
 }
 
-/// The agent's instructions are its system prompt, and the runtime reads
-/// them off the session row - so a mention snapshots them there, the same as
-/// the create menu does, and never folds them into the prompt body.
+/// A mention snapshots the agent's instructions onto the session row, the
+/// same as the create menu does, and a runtime without a system prompt gets
+/// them in its first prompt's hidden context, beside the conversation.
 #[tokio::test]
-async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
+async fn open_sends_context_and_agent_instructions_in_the_first_prompt() {
     let context = ConversationContext {
         channel: vec![ContextThread {
             root_id: Uuid::from_u128(40),
@@ -981,7 +981,14 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
     result.unwrap();
 
     assert_eq!(announcer.announced()[0].prompted_content, raw);
-    assert_eq!(composer.calls(), [(raw.clone(), None, Some(context))]);
+    assert_eq!(
+        composer.calls(),
+        [(
+            raw.clone(),
+            Some("Diagnose first.".to_owned()),
+            Some(context)
+        )]
+    );
     assert_eq!(
         prompts(&container.agent()),
         [vec![ContentBlock::from(context_prompt(&raw))]]
@@ -1259,6 +1266,52 @@ async fn forward_to_a_live_session_reuses_the_transport() {
         MessageParent::Channel(Uuid::from_u128(0xf0))
     );
     assert_eq!(announced[1].origin_thread_id, Uuid::from_u128(0xf1));
+}
+
+/// A session's instructions are stated once, in the prompt that opens its
+/// first turn: the runtime keeps them in its history from there.
+#[tokio::test]
+async fn only_the_first_prompt_carries_the_agent_instructions() {
+    let composer = PromptComposerMock::default();
+    let ((service, _repo, containers, _announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), composer.clone());
+    let id = AgentSessionId::new();
+    let mut command = open_command();
+    command.runtime.instructions = "Always speak in all caps.".to_owned();
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(id).unwrap();
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.expect("open should succeed");
+    turns.settled(id).await;
+
+    service
+        .execute(
+            id,
+            HarnessCommand::Deliver(forward_message("and add a regression test")),
+        )
+        .await
+        .expect("forward to a live session should succeed");
+    container.agent().wait_for_requests(4).await;
+
+    let instructions: Vec<_> = composer
+        .calls()
+        .into_iter()
+        .map(|(_, instructions, _)| instructions)
+        .collect();
+    assert_eq!(
+        instructions,
+        [Some("Always speak in all caps.".to_owned()), None]
+    );
 }
 
 /// The failure this exists to stop: a rolling deploy's outgoing task keeps

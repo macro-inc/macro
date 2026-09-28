@@ -151,24 +151,33 @@ where
     /// Message context is loaded when the prompt named an origin. The actor's
     /// current access to that origin gates composition; a failed history read
     /// still composes, with empty history, so a transient context outage
-    /// cannot eat the prompt.
+    /// cannot eat the prompt. The prompt that opens a session's first turn
+    /// also carries the session's instructions, unless its runtime already
+    /// reads them as a system prompt.
     pub(super) async fn compose_action(
         &self,
         session_id: AgentSessionId,
         action: &mut AgentAction,
         actor: Option<&MacroUserIdStr<'static>>,
         announce: Option<&AnnounceOrigin>,
+        first_turn: bool,
     ) -> Result<()> {
         let AgentAction::Prompt(prompt) = action else {
             return Ok(());
         };
         let raw_prompt = prompt.prompt.clone();
-        let session = self.sessions.get_session(session_id).await?;
-        // macrod's ACP transport carries no system prompt, so its agent's
-        // instructions ride in the hidden context node instead.
-        let instructions = (session.harness == harness_id::MACROD_HARNESS_SLUG)
-            .then_some(session.instructions.as_deref())
-            .flatten();
+        let session = if first_turn {
+            Some(self.sessions.get_session(session_id).await?)
+        } else {
+            None
+        };
+        let instructions = session
+            .as_ref()
+            .filter(|session| {
+                AgentKind::for_session(session.bot_id, &session.harness).folds_instructions()
+            })
+            .and_then(|session| session.instructions.as_deref())
+            .filter(|instructions| !instructions.trim().is_empty());
         let context = if let Some(origin) = announce {
             Some(self.load_prompt_context(origin, actor).await?)
         } else {
