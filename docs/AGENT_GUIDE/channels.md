@@ -504,9 +504,11 @@ query, and offers **Clear search**. Clearing restores the selected tab's list
 and keeps the dock search session open. The tab's usual empty state and create
 actions appear only when no search text is entered; loading and request errors
 keep their own states.
-Recent search automatically skips pages with no conversations containing messages,
-stopping at a match, the last page, or a search error. Ordinary list errors do not
-affect an active search.
+Recent search includes both channels and DMs, including service hits without
+message previews. It does not require message metadata or an importance filter.
+Loaded conversation metadata is preserved when a service hit has the same ID.
+Pending and placeholder service results never appear as current hits. Ordinary
+list errors do not affect an active search.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.

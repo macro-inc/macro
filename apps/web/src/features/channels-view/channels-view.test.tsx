@@ -266,7 +266,9 @@ describe('mobile dock search wiring', () => {
     render(() => <ChannelsView />);
     expect(screen.getByText('hutch')).toBeTruthy();
     setText('Julia');
-    await waitFor(() => expect(screen.getByText('Julia Westphal')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText('Julia Westphal')).toBeTruthy()
+    );
     await waitFor(() => expect(screen.queryByText('hutch')).toBeNull());
     setActive(false);
     expect(screen.getByText('hutch')).toBeTruthy();

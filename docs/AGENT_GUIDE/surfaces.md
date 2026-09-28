@@ -153,7 +153,7 @@ labels the top left of the block, matching the **Email**, **Tasks**, **Chat**, a
 starting pane; it does not create a chat. Email and Tasks have matching top pills
 for **New email** and **New task**.
 
-The Inbox provider honors an explicit initial tab, search, grouping, and facet
+The Home provider honors an explicit initial tab, search, grouping, and facet
 selection. Filters persist per user across reloads and fresh Home navigation;
 split history restores that entry's filter selection. An explicit facet selection
 overrides saved filters. Returning through split history resets navigation to Signal.
@@ -1587,3 +1587,7 @@ action is unavailable.
 focus to its trigger. Busy overlapping events are labeled, while cancelled, declined,
 and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
 already-open invitation cards as well as the calendar view.
+
+Mobile dock search overlays Home and top-level Tasks search without persisting
+the dock query into view preferences. Closing search restores each saved query.
+Embedded project task lists retain their own search while the dock is open.

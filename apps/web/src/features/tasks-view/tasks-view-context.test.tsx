@@ -86,8 +86,15 @@ vi.mock('@components/app/createPreviewSelectionGuard', () => ({
   createPreviewSelectionGuard: () =>
     Object.assign(() => true, { canSelect: () => true }),
 }));
-vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => mocks.touch }));
-vi.mock('@app/features/command/mobile/mobileSearchState', () => ({ SearchState: { isOpen: () => mocks.dockOpen(), query: () => mocks.dockText() } }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => mocks.touch,
+}));
+vi.mock('@app/features/command/mobile/mobileSearchState', () => ({
+  SearchState: {
+    isOpen: () => mocks.dockOpen(),
+    query: () => mocks.dockText(),
+  },
+}));
 vi.mock('@app/components/view-shell', () => ({
   setSidebarSectionCollapsed: () => [],
   createCollapsedSidebarSectionsStorage: () => ({
@@ -283,22 +290,44 @@ it('hides project tabs and columns while disabled without overwriting a restored
   expect(mocks.captors.get('tasks.view')!()).toMatchObject({ tab: 'my-tasks' });
 });
 
-
-it.each([undefined, 'initiative:one:tasks'])('isolates dock search from saved and embedded task search (scope %s)', (scopeKey) => {
-  mocks.touch = true;
-  const [open, setOpen] = createSignal(true);
-  mocks.dockOpen = open;
-  mocks.dockText = () => 'dock query';
-  let current!: TasksViewContext;
-  const sourceFactory = (): TasksDataSource => ({
-    items: () => [], isLoading: () => false, isFetching: () => false, error: () => undefined,
-    hasMore: () => false, isLoadingMore: () => false, loadMore: async () => {}, loadMoreGroup: async () => {}, refresh: async () => {},
-  });
-  const Probe = () => { current = useTasksView(); return null; };
-  render(() => <TasksViewProvider scopeKey={scopeKey} initialState={{ search: 'saved query' }} sourceFactory={sourceFactory}><Probe /></TasksViewProvider>);
-  expect(current.state.search).toBe(scopeKey ? 'saved query' : 'dock query');
-  current.setState('search', 'updated saved query');
-  expect(current.state.search).toBe(scopeKey ? 'updated saved query' : 'dock query');
-  setOpen(false);
-  expect(current.state.search).toBe('updated saved query');
-});
+it.each([undefined, 'initiative:one:tasks'])(
+  'isolates dock search from saved and embedded task search (scope %s)',
+  (scopeKey) => {
+    mocks.touch = true;
+    const [open, setOpen] = createSignal(true);
+    mocks.dockOpen = open;
+    mocks.dockText = () => 'dock query';
+    let current!: TasksViewContext;
+    const sourceFactory = (): TasksDataSource => ({
+      items: () => [],
+      isLoading: () => false,
+      isFetching: () => false,
+      error: () => undefined,
+      hasMore: () => false,
+      isLoadingMore: () => false,
+      loadMore: async () => {},
+      loadMoreGroup: async () => {},
+      refresh: async () => {},
+    });
+    const Probe = () => {
+      current = useTasksView();
+      return null;
+    };
+    render(() => (
+      <TasksViewProvider
+        scopeKey={scopeKey}
+        initialState={{ search: 'saved query' }}
+        sourceFactory={sourceFactory}
+      >
+        <Probe />
+      </TasksViewProvider>
+    ));
+    expect(current.state.search).toBe(scopeKey ? 'saved query' : 'dock query');
+    current.setState('search', 'updated saved query');
+    expect(current.state.search).toBe(
+      scopeKey ? 'updated saved query' : 'dock query'
+    );
+    setOpen(false);
+    expect(current.state.search).toBe('updated saved query');
+  }
+);
