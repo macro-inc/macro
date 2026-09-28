@@ -113,6 +113,16 @@ describe('application route mentions', () => {
     });
     expect(
       resolveMention(
+        `https://dev.macro.com/app/md/${mentionId}/~/drive/md/${mentionId}`
+      )
+    ).toEqual({ id: mentionId, block: 'md', params: {} });
+    expect(
+      resolveMention(
+        `https://dev.macro.com/app/not-a-route/~/drive/md/${mentionId}`
+      )
+    ).toBeUndefined();
+    expect(
+      resolveMention(
         `https://dev.macro.com/app/drive/md/${mentionId}/~/reviews`
       )
     ).toBeUndefined();

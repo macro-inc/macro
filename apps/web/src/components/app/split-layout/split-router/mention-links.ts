@@ -3,7 +3,7 @@ import {
   BlockRegistry,
 } from '@app/lib/constants/block-registry';
 import {
-  decodeRoute,
+  decodeRouteLayout,
   getExternalSearchKeys,
   parseRoutePathname,
   SPLIT_PATH_SEPARATOR,
@@ -56,11 +56,13 @@ export function createMacroMentionLinkResolver(
     if (!link) return;
 
     const segments = parseRoutePathname(routes, link.path);
+    if (!segments) return;
+    const entries = decodeRouteLayout(routes, segments);
+    const paneCount =
+      segments.filter((segment) => segment === SPLIT_PATH_SEPARATOR).length + 1;
+    if (entries.length !== paneCount) return;
     // A copied layout URL lists panes from left to right without an active-pane id.
-    const pane = segments?.slice(
-      segments.lastIndexOf(SPLIT_PATH_SEPARATOR) + 1
-    );
-    const entry = pane && decodeRoute(routes, pane);
+    const entry = entries.at(-1);
     if (!entry) return;
 
     const leaf = entry.location.route.matches.at(-1);
