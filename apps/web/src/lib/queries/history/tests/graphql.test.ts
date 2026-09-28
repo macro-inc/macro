@@ -135,6 +135,8 @@ describe('cached GraphQL history', () => {
             createdAt: isChat
               ? '2025-01-01T00:00:00.000Z'
               : '2024-12-31T00:00:00.000Z',
+            updatedAt: '2025-01-02T00:00:00.000Z',
+            viewedAt: isChat ? null : '2025-01-01T12:00:00.000Z',
             ...(!isChat && {
               subType: isTask
                 ? { __typename: 'GraphqlTaskSubType', isCompleted: true }
@@ -171,6 +173,12 @@ describe('cached GraphQL history', () => {
     expect(result[0]).toMatchObject({
       ownerId: 'document-owner',
       createdAt: '2024-12-31T00:00:00.000Z',
+      updatedAt: '2025-01-02T00:00:00.000Z',
+      viewedAt: '2025-01-01T12:00:00.000Z',
+    });
+    expect(result[1]).toMatchObject({
+      updatedAt: '2025-01-02T00:00:00.000Z',
+      viewedAt: null,
     });
     expect(result[2]).toMatchObject({
       type: 'document',
@@ -186,6 +194,8 @@ describe('cached GraphQL history', () => {
     for (const [{ document }] of readRecordsByKeys.mock.calls) {
       expect(document).toMatch(/QuickAccessName on GraphqlSoup/);
       expect(document).toMatch(/name/);
+      expect(document).toMatch(/updatedAt/);
+      expect(document).toMatch(/viewedAt/);
     }
   });
 

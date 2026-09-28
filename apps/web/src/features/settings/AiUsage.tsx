@@ -31,7 +31,7 @@ function formatPeriodEnd(iso: string): string {
 
 const BLOCKED_COPY: Record<AiDenyReason, string> = {
   allowance_exhausted:
-    "You've used this period's included AI. Add credits, turn on usage billing, or upgrade to keep going.",
+    "You've used this period's included AI. Add credits or turn on usage billing to keep going.",
   overage_limit_reached:
     "You've reached your usage billing limit for this period. Raise the limit or add credits to keep going.",
   overage_payment_failed:
@@ -192,8 +192,7 @@ export function AiUsageControls(props: {
       fallback={
         <p class="text-xs text-ink-extra-muted">
           AI usage for your team is managed by the team owner. Ask them to add
-          credits or turn on usage billing, or ask a team admin to move your
-          seat to Max.
+          credits or turn on usage billing.
         </p>
       }
     >

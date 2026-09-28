@@ -454,9 +454,17 @@ Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.
 A failed local refresh keeps displayed rows and their continuation available for
-another pagination attempt. A missing item may still be uncached, but should appear after hydration without retyping. Cmd+K's
+another pagination attempt. Missing items may still be uncached, but should appear
+after hydration without retyping, including channels outside the first cached
+page. Cmd+K's
 local search excludes unsupported email hits before limiting entity results;
 email mentions keep their separate search-service path.
+
+Cmd+K merges cached and locally available items before applying recency order.
+An empty query prefers when an item was last viewed, falling back to its update
+time; equal timestamps have a stable entity-type and ID order. Searching retains the menu's
+relevance/recency ranking and DM boost with GraphQL enabled. Verify that refreshing
+the cache or reopening the menu with unchanged data does not reorder the results.
 
 Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
 must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
@@ -471,10 +479,14 @@ then catch up with one coalesced refresh. Verify with cache reads slower than th
 waiting for background updates to stop. Changing the query/category or closing
 the menu still discards obsolete search results. A failed background
 refresh retains available history/channel items and recently-viewed ordering.
-Placeholder results also remain usable while replacement data loads. A normal cache-worker
-handoff between tabs preserves backfill cursors and watermarks; only a replacement
-that creates or resets stored cache data discards them. Per-lane full-refresh and
-Shared Mail restart rules still apply.
+Placeholder results also remain usable while replacement data loads. A normal
+cache-worker handoff between tabs preserves backfill cursors and watermarks.
+Hydration checkpoints belong to the stored cache generation: resetting or
+recreating the database starts a full scan even when an old checkpoint survives
+or the page missed the reset notification. Verify that clearing only the cache
+database and reloading recovers older channels as well as recent ones. A reset
+during hydration must also restart the scan. Per-lane full-refresh and Shared Mail
+restart rules still apply.
 
 ## Keyboard model (from the in-app guide; verified partially)
 
