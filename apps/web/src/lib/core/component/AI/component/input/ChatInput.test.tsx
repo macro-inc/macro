@@ -49,7 +49,7 @@ vi.mock('@core/component/LexicalMarkdown/utils/create-composer-layout', () => ({
 vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => false }));
 vi.mock('@core/component/AI/constant', () => ({
   SUPPORTED_ATTACHMENT_EXTENSIONS: ['pdf', 'png'],
-  Model: { test: 'test' },
+  PAID_MODELS: ['test'],
   modelsForPlan: () => ['test'],
   defaultModelForPlan: () => 'test',
 }));

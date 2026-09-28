@@ -28,7 +28,7 @@ fn error(error: impl std::fmt::Display) -> SoupFilterCacheAdapterError {
 
 fn current_profile(profile: &Profile) -> Profile {
     if profile == &vocabulary::profile_v4() {
-        vocabulary::profile_v5()
+        vocabulary::profile_v6()
     } else if profile == &item_filter_index::mail::profile() {
         facts::mail_profile()
     } else {
@@ -37,7 +37,7 @@ fn current_profile(profile: &Profile) -> Profile {
 }
 
 fn legacy_profile(profile: &Profile) -> Profile {
-    if profile == &vocabulary::profile_v5() {
+    if profile == &vocabulary::profile_v6() {
         vocabulary::profile_v4()
     } else if profile == &facts::mail_profile() {
         item_filter_index::mail::profile()
@@ -47,7 +47,11 @@ fn legacy_profile(profile: &Profile) -> Profile {
 }
 
 fn is_current(profile: &Profile) -> bool {
-    profile == &vocabulary::profile_v5() || profile == &facts::mail_profile()
+    profile == &vocabulary::profile_v6() || profile == &facts::mail_profile()
+}
+
+fn is_extension_attribute(attribute: &Token) -> bool {
+    facts::is_property_attribute(attribute) || attribute.as_str() == "is-favorited"
 }
 
 fn property_facts(state: Option<&ProjectionState>) -> Option<Vec<ExactFact>> {
@@ -58,7 +62,7 @@ fn property_facts(state: Option<&ProjectionState>) -> Option<Vec<ExactFact>> {
         document
             .exact_facts
             .iter()
-            .filter(|fact| facts::is_property_attribute(&fact.attribute))
+            .filter(|fact| is_extension_attribute(&fact.attribute))
             .cloned()
             .collect()
     })
@@ -70,7 +74,7 @@ fn legacy_state(mut state: ProjectionState) -> ProjectionState {
             document.profile = legacy_profile(&document.profile);
             document
                 .exact_facts
-                .retain(|fact| !facts::is_property_attribute(&fact.attribute));
+                .retain(|fact| !is_extension_attribute(&fact.attribute));
         }
         ProjectionState::Incomplete { profile, .. } => *profile = legacy_profile(profile),
     }
@@ -91,12 +95,14 @@ fn extend_document(
     properties: Option<Vec<ExactFact>>,
 ) -> ProjectionMutation {
     document.profile = current_profile(&document.profile);
-    if document.partition != vocabulary::channel_partition() {
-        let Some(properties) = properties else {
-            return incomplete(document.record_key, document.profile, document.partition);
-        };
-        document.exact_facts.extend(properties);
-    }
+    let Some(properties) = properties.filter(|facts| {
+        facts
+            .iter()
+            .any(|fact| fact.attribute.as_str() == "is-favorited")
+    }) else {
+        return incomplete(document.record_key, document.profile, document.partition);
+    };
+    document.exact_facts.extend(properties);
     document.canonicalize();
     if document.validate().is_err() {
         return incomplete(document.record_key, document.profile, document.partition);
@@ -199,9 +205,7 @@ pub fn current_mutations(mutations: Vec<ProjectionMutation>) -> Vec<ProjectionMu
         .map(|mut mutation| {
             match &mut mutation {
                 ProjectionMutation::Replace(document) => {
-                    if !is_current(&document.profile)
-                        && document.partition != vocabulary::channel_partition()
-                    {
+                    if !is_current(&document.profile) {
                         return incomplete(
                             document.record_key.clone(),
                             current_profile(&document.profile),

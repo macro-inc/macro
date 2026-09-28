@@ -17,6 +17,8 @@ name = "agent_harness_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
+crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 codex_connection = { path = "../../crates/codex_connection" }
 agent_changes = { path = "../../crates/agent_changes" }
@@ -64,6 +66,7 @@ lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 messages = { path = "../../crates/messages", features = ["broker", "delivery"] }
+static_file = { path = "../../crates/static_file" }
 static_file_service_client = { path = "../../crates/static_file_service_client" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 notification = { path = "../../crates/notification" }

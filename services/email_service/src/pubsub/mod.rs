@@ -1,5 +1,6 @@
 pub mod backfill;
 pub mod context;
+pub mod invitation_extraction;
 /// The flag-selected CRM metadata resolver, re-exported for the
 /// pubsub_workers binary to construct.
 pub use context::CrmMetadataResolver;

@@ -5,6 +5,7 @@
  * `agent-changes-ui` component.
  */
 
+import { SAMPLE_PATCH } from '@app/components/diff-view/debug/fixtures';
 import { Button } from '@ui';
 import { createSignal, For } from 'solid-js';
 import { AgentChangesControllerProvider } from '../context/agent-changes-controller';
@@ -17,12 +18,12 @@ import {
   ChangesToggle,
   ReviewNotesDock,
 } from '../views/SessionChangesControls';
-import { GALLERY_PATCH, gallerySummary } from './gallery-fixture';
+import { gallerySummary } from './gallery-fixture';
 
 export default function AgentChangesGallery() {
   const context = createMockAgentChangesContext({
     summary: gallerySummary(),
-    patch: GALLERY_PATCH,
+    patch: SAMPLE_PATCH,
     sessionId: 'gallery-session',
   });
   const view = createPaneViewState();

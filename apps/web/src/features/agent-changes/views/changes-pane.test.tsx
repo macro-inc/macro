@@ -23,10 +23,16 @@ import {
 
 // Pierre mounts a custom element and highlights with shiki; the pane test
 // covers everything around it and leaves the diff body to the browser.
-vi.mock('../components/PierreFileDiff', () => ({
+vi.mock('@app/components/diff-view/pierre/PierreFileDiff', () => ({
   PierreFileDiff: (props: { path: string }) => (
     <div data-testid="diff" data-path={props.path} />
   ),
+}));
+
+// jsdom has no ResizeObserver; the file tree's collapse animation measures with one.
+vi.mock('@solid-primitives/resize-observer', () => ({
+  createResizeObserver: () => {},
+  createElementSize: () => ({ width: 0, height: 0 }),
 }));
 
 // Module-load quarantine, not a dependency substitute: the connection-gateway
@@ -97,9 +103,9 @@ describe('ChangesPane', () => {
       screen.queryByRole('button', { name: 'Mark all viewed' })
     ).toBeNull();
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^Hide / })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide a.ts' }));
     expect(screen.getAllByTestId('diff')).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: /^Show / })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Show a.ts' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
     expect(screen.queryAllByTestId('diff')).toHaveLength(0);
@@ -197,9 +203,24 @@ describe('ChangesPane', () => {
     expect(
       screen.queryByRole('button', { name: 'Create pull request' })
     ).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'View pull request' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'View pull request #1482' })
+    );
     expect(context.opened).toEqual([url]);
     expect(context.sent).toEqual([]);
+  });
+
+  it('hides and shows the file tree from the toolbar', async () => {
+    const context = readyContext();
+    const { controller } = mount(context, () => <ChangesPane />);
+    controller().layout.open();
+    const tree = () => screen.queryByRole('group', { name: 'Changed files' });
+    expect(tree()).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide file tree' }));
+    await waitFor(() => expect(tree()).toBeNull());
+    expect(controller().layout.treeOpen()).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Show file tree' }));
+    await waitFor(() => expect(tree()).toBeTruthy());
   });
 
   it('closes and spotlights from its header', () => {
@@ -210,9 +231,7 @@ describe('ChangesPane', () => {
       screen.getByRole('button', { name: 'Expand changes to the full width' })
     );
     expect(controller().layout.layout()).toBe('full');
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Bring the session back' })
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the split' }));
     expect(controller().layout.layout()).toBe('split');
     fireEvent.click(
       screen.getByRole('button', { name: 'Close the changes pane' })

@@ -156,6 +156,12 @@ impl SeatPlan {
     /// Every plan.
     pub const ALL: [SeatPlan; 2] = [SeatPlan::Premium, SeatPlan::Max];
 
+    /// Plans available for a new purchase or plan move.
+    pub const PURCHASABLE: [SeatPlan; 1] = [
+        SeatPlan::Premium,
+        // SeatPlan::Max,
+    ];
+
     /// The role tier recorded on a user holding this seat.
     pub fn product_tier(self) -> ProductTier {
         match self {

@@ -130,7 +130,7 @@ collaborative rows and columns have stable identities. Adding blank rows at the
 bottom remains available. Hidden cells are skipped by keyboard navigation.
 
 Cells support Macro mentions without Markdown formatting. Type `@` in a cell or
-the formula bar to search people, documents, channels and email, then choose an
+the formula bar to search people, documents, channels, email and dates, then choose an
 item with the pointer or keyboard. Pasting a Macro app link renders a document
 pill, preserving navigation parameters. Formulas still use the formula editor;
 `@` inside a formula or email address does not start mention search. Other Markdown
@@ -138,8 +138,16 @@ is literal text. Mentions remain attached through copy/fill, undo and collaborat
 Excel/CSV export uses their display text. Plain URLs and email addresses are clickable;
 web links use the same hover preview as channel messages. Click the surrounding cell
 or use the formula bar to edit link text. AI `set_cells` accepts Macro URLs or the
-same `<m-user-mention>` / `<m-document-mention>` encoding as docs. Formula references
-to mention cells use literal labels, never execute a label as a formula.
+same `<m-user-mention>` / `<m-document-mention>` / `<m-date-mention>` encoding as docs.
+Formula references to mention cells use literal labels, never execute a label as a formula.
+
+Dates: `@tomorrow`, `@next friday` or `@sep 28` offer a **Dates** bucket and insert
+the same clock chip as docs; hover it for the full date, and edit the cell to change
+it. A cell holding only a date chip is a date value: `=A1+7` produces a date, and
+Excel export writes a dated number rather than the label. Typed dates such as
+`9/28/2026` or `2026-09-28`, `=DATE(...)`, and arithmetic on date cells display as
+dates without choosing the Date number format. A difference of two dates stays a
+plain day count, and an explicit number format from the toolbar always wins.
 
 CSV imports a file up to 1 MB into the selection, adding rows if needed within the
 1,000 × 26 limit. Existing cells in that rectangle
@@ -445,8 +453,10 @@ access to the title and property controls.
 1. Click `Edit with AI` (button directly under the editor body).
 2. A focused prompt box appears (placeholder `Describe the edit…`). Type the instruction,
    press Enter (or click `Send`).
-3. While running, the button row shows an author chip (e.g. `Wolf (AI)`) and a `Stop` button
-   (a11y text `Stop AI edit`). Edits stream directly into the document — there is no
+3. While running, the button row shows a `Stop` button (a11y text `Stop AI edit`), and the
+   live cursor walking the text is labelled with the editor's name: `Macro (AI)` for an
+   inline edit, or the name of the agent or persona whose session asked for the edit
+   (e.g. `Grunk (AI)`). Edits stream directly into the document — there is no
    accept/reject step. The editor can insert the same `@` mention chips a person can:
    dates/times, people, documents, channels, agent sessions (including the expanded
    Magic Chip card), and the other chip types.

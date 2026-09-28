@@ -574,6 +574,27 @@ fn channel_mention_title_falls_back_to_bot_display_name() {
     assert_eq!(title, "Helper Bot mentioned you in #general");
 }
 
+#[test]
+fn channel_message_body_renders_mentioned_agent_by_its_own_name() {
+    let notification = ChannelMessageSendMetadata {
+        sender: Some(uid("macro|teo@macro.com")),
+        sender_display_name: None,
+        message_content: r#"<m-user-mention>{"userId":"bot|00000000-0000-0000-0000-00000000c5c5","email":"Cursor","displayName":"Cursor"}</m-user-mention> push notifications resolve mentions wrong"#.to_string(),
+        message_id: Uuid::nil().to_string(),
+        has_attachments: false,
+        common: CommonChannelMetadata {
+            channel_type: ChannelType::Team,
+            channel_name: "AI Team".to_string(),
+        },
+        sender_profile_picture_url: None,
+    };
+
+    assert_eq!(
+        notification.format_body(None).unwrap(),
+        "Cursor push notifications resolve mentions wrong"
+    );
+}
+
 fn document_mention(sub_type: Option<NotificationDocumentSubType>) -> DocumentMentionMetadata {
     DocumentMentionMetadata {
         document_name: "Q3 plan".to_string(),

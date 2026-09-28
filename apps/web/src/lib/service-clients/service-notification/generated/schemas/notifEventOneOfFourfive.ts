@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AgentSessionSettledMetadata } from './agentSessionSettledMetadata';
+import type { GithubPrMention } from './githubPrMention';
 import type { NotifEventOneOfFourfiveTag } from './notifEventOneOfFourfiveTag';
 
 /**
- * An agent finished a turn with nothing queued behind it.
+ * The user was mentioned on a GitHub pull request.
  */
 export type NotifEventOneOfFourfive = {
-  /** An agent finished a turn with nothing queued behind it. */
-  content: AgentSessionSettledMetadata;
+  /** The user was mentioned on a GitHub pull request. */
+  content: GithubPrMention;
   tag: NotifEventOneOfFourfiveTag;
 };

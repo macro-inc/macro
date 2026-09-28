@@ -8,6 +8,7 @@ import type { AgentActionId } from './agentActionId';
 import type { MacroUserIdStr } from './macroUserIdStr';
 import type { SessionIdentity } from './sessionIdentity';
 import type { SessionMentionedMetadataMentionedBy } from './sessionMentionedMetadataMentionedBy';
+import type { SessionMentionedMetadataOriginMessageId } from './sessionMentionedMetadataOriginMessageId';
 
 /**
  * A prompt named other users who can open the session. Published when the
@@ -23,4 +24,8 @@ export interface SessionMentionedMetadata {
 and never including the author. */
   mentioned: MacroUserIdStr[];
   mentioned_by?: SessionMentionedMetadataMentionedBy;
+  /** The channel or document message the prompt was posted as, when it
+arrived from a thread rather than the session view. That message
+already notified the users it named when it was posted. */
+  origin_message_id?: SessionMentionedMetadataOriginMessageId;
 }

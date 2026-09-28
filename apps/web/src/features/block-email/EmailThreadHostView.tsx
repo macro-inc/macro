@@ -1,3 +1,4 @@
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import type {
   EmailThreadHost,
@@ -64,6 +65,9 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       source={props.source}
       threadTransport={props.threadTransport}
       host={props.host}
+      openCalendar={(target) => {
+        void openCalendarEventSplit(target);
+      }}
       header={props.topBar?.({ createTask })}
       actions={<ThreadActions title={props.title} onCreateTask={createTask} />}
       frame={(content) => (

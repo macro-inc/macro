@@ -35,6 +35,7 @@ export function useMutedEntitiesQuery(args?: { limit?: number }) {
     initialPageParam: { limit },
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
+    refetchOnWindowFocus: 'always',
   }));
 }
 
@@ -66,9 +67,10 @@ function updateUnsubscribes(
 }
 
 function addUnsubscribe(item: UserUnsubscribe) {
-  updateUnsubscribes((prev) =>
-    prev.some((entry) => sameMuteItem(entry, item)) ? prev : [...prev, item]
-  );
+  updateUnsubscribes((prev) => [
+    ...prev.filter((entry) => !sameMuteItem(entry, item)),
+    item,
+  ]);
 }
 
 function removeUnsubscribe(item: UserUnsubscribe) {
@@ -100,9 +102,16 @@ export function useMuteItemMutation() {
     },
     onMutate: async (item) => {
       await cancelUnsubscribesFetch();
+      const previous = queryClient
+        .getQueryData<UserUnsubscribe[]>(notificationKeys.unsubscribes.queryKey)
+        ?.find((entry) => sameMuteItem(entry, item));
       addUnsubscribe(item);
+      return { previous };
     },
-    onError: (_error, item) => removeUnsubscribe(item),
+    onError: (_error, item, context) => {
+      if (context?.previous) addUnsubscribe(context.previous);
+      else removeUnsubscribe(item);
+    },
     onSettled: () => {
       void invalidateUnsubscribesWhenIdle();
     },
@@ -119,9 +128,15 @@ export function useUnmuteItemMutation() {
     },
     onMutate: async (item) => {
       await cancelUnsubscribesFetch();
+      const previous = queryClient
+        .getQueryData<UserUnsubscribe[]>(notificationKeys.unsubscribes.queryKey)
+        ?.find((entry) => sameMuteItem(entry, item));
       removeUnsubscribe(item);
+      return { previous };
     },
-    onError: (_error, item) => addUnsubscribe(item),
+    onError: (_error, _item, context) => {
+      if (context?.previous) addUnsubscribe(context.previous);
+    },
     onSettled: () => {
       void invalidateUnsubscribesWhenIdle();
     },

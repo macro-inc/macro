@@ -30,6 +30,7 @@ use display_results::DisplayResults;
 use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
 use import::inbound::toolset::import_toolset;
+use initiative::inbound::toolset::initiative_toolset;
 use notification::inbound::ai_tool::notification_toolset;
 use projects::inbound::toolset::project_toolset;
 use properties::inbound::toolset::properties_toolset;
@@ -60,19 +61,19 @@ pub use tool_context::{
     ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
     ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
     ToolForeignEntityService, ToolFrecencyService, ToolGithubPullRequestService, ToolImportService,
-    ToolImportToolContext, ToolMcpSelector, ToolNotificationQueue, ToolNotificationService,
-    ToolNotificationToolContext, ToolPipedreamConnection, ToolProjectService,
-    ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext, ToolRemindersService,
-    ToolRemindersToolContext, ToolServiceContext, ToolSkillService, ToolSkillToolContext,
-    ToolSoupService, ToolSystemPropertiesService, ToolTeamService, ToolTeamToolContext,
-    ToolUserEmailService, build_activity_tool_context, build_bot_tool_context,
+    ToolImportToolContext, ToolInitiativeToolContext, ToolMcpSelector, ToolNotificationQueue,
+    ToolNotificationService, ToolNotificationToolContext, ToolPipedreamConnection,
+    ToolProjectService, ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext,
+    ToolRemindersService, ToolRemindersToolContext, ToolServiceContext, ToolSkillService,
+    ToolSkillToolContext, ToolSoupService, ToolSystemPropertiesService, ToolTeamService,
+    ToolTeamToolContext, ToolUserEmailService, build_activity_tool_context, build_bot_tool_context,
     build_calendar_tool_context, build_channel_tool_context_with_dispatcher,
     build_channel_tool_context_with_side_effects, build_channel_tool_context_without_side_effects,
-    build_crm_tool_context, build_message_service_with_side_effects,
+    build_crm_tool_context, build_initiative_tool_context, build_message_service_with_side_effects,
     build_message_service_without_side_effects, build_project_tool_context,
-    build_properties_service, build_properties_tool_context, build_reminders_tool_context,
-    build_skill_tool_context, build_task_properties_adapter, build_team_repository,
-    build_team_tool_context,
+    build_properties_service, build_properties_service_with_broker, build_properties_tool_context,
+    build_reminders_tool_context, build_skill_tool_context, build_task_properties_adapter,
+    build_team_repository, build_team_tool_context,
 };
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
@@ -100,6 +101,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<ToolActivityToolContext>(activity_toolset())
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .add_subtoolset::<ToolProjectToolContext>(project_toolset())
+        .add_subtoolset::<ToolInitiativeToolContext>(initiative_toolset())
         .add_subtoolset::<ToolPropertiesToolContext>(properties_toolset())
         .add_subtoolset::<ToolCallToolContext>(call_toolset())
         .add_subtoolset::<ToolChatToolContext>(chat_toolset())

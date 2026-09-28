@@ -76,6 +76,9 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
       </Show>
     </>
   );
+  // Hover swaps the row's translucent fill. The button's gradient overlay
+  // stacked on that fill repaints only behind the text boxes, leaving stale
+  // patches.
   return (
     <Show
       when={entity()}
@@ -90,7 +93,8 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
             size: 'sm',
             fullWidth: true,
             noTouchResize: true,
-            class: 'h-8 min-w-0 justify-start rounded-lg bg-hover p-2',
+            class:
+              'h-8 min-w-0 justify-start rounded-lg bg-hover p-2 transition-none not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:bg-none not-disabled:active:bg-none',
           })}
           data-magic-chip-pull-request={props.url}
           on:click={(event) => event.stopPropagation()}
@@ -105,7 +109,7 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
           size="sm"
           fullWidth
           noTouchResize
-          class="h-8 min-w-0 justify-start rounded-lg bg-hover p-2"
+          class="h-8 min-w-0 justify-start rounded-lg bg-hover p-2 transition-none not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:bg-none not-disabled:active:bg-none"
           aria-label={label()}
           data-magic-chip-pull-request={props.url}
           on:click={(event) => {

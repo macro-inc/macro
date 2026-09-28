@@ -50,6 +50,7 @@ impl<S> Clone for SoupSkillLister<S> {
 /// entity type is force-filtered to the nil id so soup skips it entirely.
 fn skill_only_filter() -> EntityFilterAst {
     EntityFilterAst {
+        favorites_only: None,
         document_filter: Some(Arc::new(Expr::val(DocumentLiteral::SubType(
             DocumentSubType::Skill,
         )))),
@@ -70,6 +71,7 @@ fn skill_only_filter() -> EntityFilterAst {
         // Reminders are opt-in: leaving the filter empty excludes them.
         github_pull_request_filter: None,
         reminder_filter: None,
+        initiative_filter: None,
         // Agent sessions are opt-in as well.
         agent_session_filter: None,
         properties_filter: None,

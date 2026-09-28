@@ -24,6 +24,67 @@ function cacheHost(
 }
 
 describe('cached GraphQL history', () => {
+  it('filters cached backing descriptions while retaining notes, tasks and folders', async () => {
+    const entries = [
+      {
+        id: 'description',
+        typename: 'GraphqlSoupDocument',
+        bucket: 'note',
+        subType: { __typename: 'GraphqlInitiativeDescriptionSubType' },
+      },
+      {
+        id: 'note',
+        typename: 'GraphqlSoupDocument',
+        bucket: 'note',
+        subType: null,
+      },
+      {
+        id: 'task',
+        typename: 'GraphqlSoupDocument',
+        bucket: 'task',
+        subType: { __typename: 'GraphqlTaskSubType', isCompleted: false },
+      },
+      {
+        id: 'folder',
+        typename: 'GraphqlSoupProject',
+        bucket: 'project',
+        subType: null,
+      },
+    ];
+    const host = cacheHost(
+      async () => ({
+        documents: entries.map((entry) => ({
+          profile: 'quick-access-v1',
+          recordKey: `${entry.typename}:${entry.id}`,
+          bucket: entry.bucket,
+          searchText: 'Same title',
+          timestampMs: 1,
+          sourceHash: 'hash',
+        })),
+        nextCursor: null,
+      }),
+      async ({ keys }) =>
+        keys.map((recordKey) => {
+          const entry = entries.find(
+            (entry) => `${entry.typename}:${entry.id}` === recordKey
+          )!;
+          return {
+            recordKey,
+            record: {
+              __typename: entry.typename,
+              name: 'Same title',
+              ownerId: 'owner',
+              createdAt: '2026-09-11T00:00:00Z',
+              subType: entry.subType,
+            },
+          };
+        })
+    );
+    expect(
+      (await readCachedGraphqlHistoryItems(host)).map((item) => item.id)
+    ).toEqual(['note', 'task', 'folder']);
+  });
+
   it('browses the indexed recent projection and materializes only final keys', async () => {
     const search = vi.fn(
       async (): Promise<SearchCachePage> => ({
@@ -74,6 +135,8 @@ describe('cached GraphQL history', () => {
             createdAt: isChat
               ? '2025-01-01T00:00:00.000Z'
               : '2024-12-31T00:00:00.000Z',
+            updatedAt: '2025-01-02T00:00:00.000Z',
+            viewedAt: isChat ? null : '2025-01-01T12:00:00.000Z',
             ...(!isChat && {
               subType: isTask
                 ? { __typename: 'GraphqlTaskSubType', isCompleted: true }
@@ -110,6 +173,12 @@ describe('cached GraphQL history', () => {
     expect(result[0]).toMatchObject({
       ownerId: 'document-owner',
       createdAt: '2024-12-31T00:00:00.000Z',
+      updatedAt: '2025-01-02T00:00:00.000Z',
+      viewedAt: '2025-01-01T12:00:00.000Z',
+    });
+    expect(result[1]).toMatchObject({
+      updatedAt: '2025-01-02T00:00:00.000Z',
+      viewedAt: null,
     });
     expect(result[2]).toMatchObject({
       type: 'document',
@@ -125,6 +194,8 @@ describe('cached GraphQL history', () => {
     for (const [{ document }] of readRecordsByKeys.mock.calls) {
       expect(document).toMatch(/QuickAccessName on GraphqlSoup/);
       expect(document).toMatch(/name/);
+      expect(document).toMatch(/updatedAt/);
+      expect(document).toMatch(/viewedAt/);
     }
   });
 

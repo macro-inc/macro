@@ -4,6 +4,8 @@ use model_entity::{Entity, EntityType};
 /// GraphQL representation of Soup entity types.
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum GraphqlSoupEntityType {
+    /// Initiative entity, presented as a project in the frontend.
+    Initiative,
     /// Document entity.
     Document,
     /// Chat entity.
@@ -97,13 +99,13 @@ impl GraphqlSoupEntityType {
             EntityType::CalendarEvent => Self::CalendarEvent,
             EntityType::Reminder => Self::Reminder,
             EntityType::AgentSession => Self::AgentSession,
+            EntityType::Initiative => Self::Initiative,
             EntityType::User
             | EntityType::Team
             | EntityType::StaticFile
             | EntityType::CrmContact
             | EntityType::Skill
-            | EntityType::ScheduledAction
-            | EntityType::Initiative => return None,
+            | EntityType::ScheduledAction => return None,
         })
     }
 
@@ -122,6 +124,7 @@ impl GraphqlSoupEntityType {
             Self::CalendarEvent => EntityType::CalendarEvent,
             Self::Reminder => EntityType::Reminder,
             Self::AgentSession => EntityType::AgentSession,
+            Self::Initiative => EntityType::Initiative,
         }
     }
 }
@@ -243,7 +246,9 @@ mod test {
     }
 
     #[test]
-    fn initiative_is_not_a_soup_entity_type() {
-        assert!(GraphqlSoupEntityType::try_new(EntityType::Initiative).is_none());
+    fn initiative_round_trips_through_soup_entity_type() {
+        let graphql = GraphqlSoupEntityType::try_new(EntityType::Initiative).unwrap();
+        assert!(matches!(graphql, GraphqlSoupEntityType::Initiative));
+        assert_eq!(graphql.into_model(), EntityType::Initiative);
     }
 }

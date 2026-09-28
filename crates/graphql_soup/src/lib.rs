@@ -30,8 +30,8 @@ pub use objects::{
     GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelMessage,
     GraphqlSoupChannelMessagePreview, GraphqlSoupChat, GraphqlSoupCrmCompany, GraphqlSoupDocument,
     GraphqlSoupDocumentSubType, GraphqlSoupEmailThread, GraphqlSoupEntity,
-    GraphqlSoupForeignEntity, GraphqlSoupProject, GroupedSoup, SoupCacheProjection,
-    SoupEntityEdges, SoupPage, SoupPatch, SoupUpdated,
+    GraphqlSoupForeignEntity, GraphqlSoupInitiative, GraphqlSoupProject, GroupedSoup,
+    SoupCacheProjection, SoupEntityEdges, SoupPage, SoupPatch, SoupUpdated,
 };
 pub use resolvers::{
     SoupEmailThreadMutationOutput, resolve_grouped_soup, resolve_soup, resolve_soup_email_thread,

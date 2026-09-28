@@ -23,6 +23,15 @@ fn routed_models_have_house_names() {
         "DeepSeek V4 Pro"
     );
     assert_eq!(display_name("fireworks/muse-glimmer-30b"), "Muse Glimmer");
+    assert_eq!(display_name("fireworks/glm-5p3"), "GLM 5.3");
+    assert_eq!(display_name("fireworks/glm-5p3-flash"), "GLM 5.3 Flash");
+    assert_eq!(display_name("fireworks/qwen3p8-max"), "Qwen 3.8 Max");
+    assert_eq!(display_name("fireworks/minimax-m3"), "MiniMax M3");
+    assert_eq!(display_name("cerebras/gpt-oss-120b"), "GPT OSS 120B");
+    assert_eq!(
+        display_name("fireworks/nemotron-lightning-3p5-30b-a3b"),
+        "Nemotron Lightning 3.5 30B A3B"
+    );
     assert_eq!(display_name("google/gemini-3.8-flash"), "Gemini 3.8 Flash");
     assert_eq!(
         display_name("anthropic/claude-sonnet-5"),
@@ -37,7 +46,7 @@ fn routed_models_use_known_providers() {
     for (model, _) in ROUTED_MODELS {
         let provider = model.split('/').next().expect("a provider segment");
         assert!(
-            matches!(provider, "fireworks" | "google"),
+            matches!(provider, "cerebras" | "fireworks" | "google"),
             "unregistered provider in {model}"
         );
     }

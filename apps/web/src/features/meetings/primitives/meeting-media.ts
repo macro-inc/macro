@@ -1,8 +1,19 @@
+import type { BackgroundEffect } from '@core/media/background-effect';
 import { createSignal, onCleanup } from 'solid-js';
 import type { MeetingLocalTracks } from '../context/meeting-session';
 
 export type MeetingMediaAccess = {
   request: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
+  enumerate?: () => Promise<MediaDeviceInfo[]>;
+  onDeviceChange?: (refresh: () => void) => () => void;
+  canSelectSpeaker?: () => boolean;
+  processBackground?: (
+    track: MediaStreamTrack,
+    effect: BackgroundEffect
+  ) => Promise<{
+    stream: MediaStream;
+    dispose: () => void;
+  }>;
 };
 
 // Match LiveKit's capture quality when publishing preview tracks.
@@ -47,7 +58,10 @@ function mediaErrorMessage(device: 'microphone' | 'camera', error: unknown) {
 }
 
 /** Hand preview tracks to the call without reopening devices; release all others. */
-export function createMeetingMedia(access?: MeetingMediaAccess) {
+export function createMeetingMedia(
+  access?: MeetingMediaAccess,
+  initialBackground: BackgroundEffect = { type: 'none' }
+) {
   type Device = 'microphone' | 'camera';
   const devices: Device[] = ['microphone', 'camera'];
   const [microphoneEnabled, setMicrophone] = createSignal(true);
@@ -58,6 +72,27 @@ export function createMeetingMedia(access?: MeetingMediaAccess) {
     camera: false,
   });
   const [errors, setErrors] = createSignal<Partial<Record<Device, string>>>({});
+  const [availableDevices, setAvailableDevices] = createSignal<
+    MediaDeviceInfo[]
+  >([]);
+  const [selectedDevices, setSelectedDevices] = createSignal({
+    microphone: '',
+    camera: '',
+    speaker: '',
+  });
+  const [deviceError, setDeviceError] = createSignal<string>();
+  const [backgroundEffect, setBackground] = createSignal<BackgroundEffect>(
+    initialBackground.type === 'blur' &&
+      initialBackground.intensity === 'medium'
+      ? { type: 'blur', intensity: 'heavy' }
+      : initialBackground
+  );
+  const [backgroundPending, setBackgroundPending] = createSignal(false);
+  const [backgroundError, setBackgroundError] = createSignal<string>();
+  let preview: { dispose: () => void } | undefined;
+  let previewGeneration = 0;
+  let enumerationGeneration = 0;
+  let watchingDevices: (() => void) | undefined;
   const streams: Partial<Record<Device, MediaStream>> = {};
   const generations = { microphone: 0, camera: 0 };
   let disposed = false;
@@ -72,23 +107,119 @@ export function createMeetingMedia(access?: MeetingMediaAccess) {
     generations[device]++;
     streams[device]?.getTracks().forEach((track) => track.stop());
     delete streams[device];
-    if (device === 'camera') setVideo(undefined);
+    if (device === 'camera') {
+      previewGeneration++;
+      preview?.dispose();
+      preview = undefined;
+      setVideo(undefined);
+      setBackgroundPending(false);
+    }
     setDevicePending(device, false);
   };
+  async function refreshDevices() {
+    if (!access?.enumerate || disposed) return;
+    const generation = ++enumerationGeneration;
+    try {
+      const devices = await access.enumerate();
+      if (disposed || generation !== enumerationGeneration) return;
+      setAvailableDevices(devices);
+      setDeviceError(undefined);
+    } catch {
+      if (!disposed && generation === enumerationGeneration)
+        setDeviceError(
+          'Could not list your devices. Check browser permissions and try again.'
+        );
+    }
+  }
+  async function updatePreview() {
+    const generation = ++previewGeneration;
+    preview?.dispose();
+    preview = undefined;
+    setBackgroundError(undefined);
+    setBackgroundPending(false);
+    const stream = streams.camera;
+    const track = stream?.getVideoTracks()[0];
+    if (!track || !cameraEnabled()) {
+      setVideo(undefined);
+      return;
+    }
+    const effect = backgroundEffect();
+    if (effect.type === 'none') {
+      setVideo(stream);
+      return;
+    }
+    setVideo(undefined);
+    setBackgroundPending(true);
+    try {
+      if (!access?.processBackground)
+        throw new Error('Background effects are unavailable.');
+      const processed = await access.processBackground(track, effect);
+      if (disposed || generation !== previewGeneration) {
+        processed.dispose();
+        return;
+      }
+      preview = processed;
+      setVideo(processed.stream);
+    } catch (error) {
+      if (disposed || generation !== previewGeneration) return;
+      console.warn('[meeting] background preview failed', error);
+      setBackgroundError(
+        'Couldn’t apply the background. Your camera is off. Choose another background or None, then turn the camera on to retry.'
+      );
+      setCamera(false);
+      stop('camera');
+    } finally {
+      if (!disposed && generation === previewGeneration)
+        setBackgroundPending(false);
+    }
+  }
   const accept = (device: Device, stream: MediaStream) => {
     streams[device] = stream;
-    if (device === 'camera') setVideo(stream);
+    const track = stream.getTracks()[0];
+    const deviceId = track?.getSettings?.().deviceId;
+    if (deviceId)
+      setSelectedDevices((current) => ({ ...current, [device]: deviceId }));
+    track?.addEventListener?.('ended', () => {
+      if (streams[device] !== stream) return;
+      setEnabled(device, false);
+      stop(device);
+      setErrors((current) => ({
+        ...current,
+        [device]: `${device === 'camera' ? 'Camera' : 'Microphone'} disconnected. Select a device and turn it on to retry.`,
+      }));
+      void refreshDevices();
+    });
+    if (device === 'camera') void updatePreview();
+  };
+  const captureConstraints = (device: Device) => {
+    const deviceId = selectedDevices()[device];
+    const selection = deviceId ? { deviceId: { exact: deviceId } } : {};
+    return device === 'camera'
+      ? { ...CAMERA_CONSTRAINTS, ...selection }
+      : deviceId
+        ? selection
+        : true;
   };
   /** A camera that can't meet the preferred capture falls back to any mode. */
   async function open(device: Device) {
     if (!access) throw new Error('Media access is unavailable');
     if (device === 'microphone')
-      return access.request({ audio: true, video: false });
+      return access.request({
+        audio: captureConstraints(device),
+        video: false,
+      });
     try {
-      return await access.request({ audio: false, video: CAMERA_CONSTRAINTS });
+      return await access.request({
+        audio: false,
+        video: captureConstraints(device),
+      });
     } catch (error) {
       if (errorName(error) !== 'OverconstrainedError') throw error;
-      return access.request({ audio: false, video: true });
+      const deviceId = selectedDevices().camera;
+      return access.request({
+        audio: false,
+        video: deviceId ? { deviceId: { exact: deviceId } } : true,
+      });
     }
   }
   async function request(device: Device) {
@@ -104,6 +235,7 @@ export function createMeetingMedia(access?: MeetingMediaAccess) {
         return;
       }
       accept(device, stream);
+      void refreshDevices();
     } catch (error) {
       if (disposed || generations[device] !== generation) return;
       console.warn(`[meeting] ${device} request failed`, error);
@@ -131,7 +263,10 @@ export function createMeetingMedia(access?: MeetingMediaAccess) {
     setErrors({});
     let stream: MediaStream;
     try {
-      stream = await access.request({ audio: true, video: CAMERA_CONSTRAINTS });
+      stream = await access.request({
+        audio: captureConstraints('microphone'),
+        video: captureConstraints('camera'),
+      });
     } catch {
       return devices.filter(isCurrent);
     } finally {
@@ -162,6 +297,9 @@ export function createMeetingMedia(access?: MeetingMediaAccess) {
   };
   const release = () => {
     preparation++;
+    enumerationGeneration++;
+    watchingDevices?.();
+    watchingDevices = undefined;
     devices.forEach(stop);
   };
   onCleanup(() => {
@@ -172,17 +310,39 @@ export function createMeetingMedia(access?: MeetingMediaAccess) {
     microphoneEnabled,
     cameraEnabled,
     video,
-    pending: () => pending().microphone || pending().camera,
+    backgroundEffect,
+    backgroundPending,
+    backgroundError,
+    setBackgroundEffect: (effect: BackgroundEffect) => {
+      setBackground(effect);
+      void updatePreview();
+    },
+    availableDevices,
+    selectedDevices,
+    deviceError,
+    canSelectSpeaker: () => access?.canSelectSpeaker?.() ?? false,
+    refreshDevices,
+    selectDevice: (device: Device | 'speaker', deviceId: string) => {
+      setSelectedDevices((current) => ({ ...current, [device]: deviceId }));
+      if (device !== 'speaker' && enabled(device)) void request(device);
+    },
+    cameraError: () => errors().camera,
+    microphoneError: () => errors().microphone,
+    pending: () =>
+      pending().microphone || pending().camera || backgroundPending(),
     errors: () =>
       Object.values(errors()).filter((message): message is string =>
         Boolean(message)
       ),
     prepare: async () => {
       const current = ++preparation;
+      watchingDevices ??= access?.onDeviceChange?.(() => void refreshDevices());
+      void refreshDevices();
       for (const device of await requestTogether(current)) {
         if (disposed || current !== preparation) return;
         await request(device);
       }
+      if (!disposed && current === preparation) void refreshDevices();
     },
     setMicrophoneEnabled: (value: boolean) => toggle('microphone', value),
     setCameraEnabled: (value: boolean) => toggle('camera', value),

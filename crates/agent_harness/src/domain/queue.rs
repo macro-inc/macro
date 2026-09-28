@@ -89,9 +89,20 @@ pub struct InFlightTurn {
     /// [`SessionAnnouncer::resolve`](super::ports::SessionAnnouncer::resolve)).
     /// Downstream events carry it under this name for both.
     pub announcement_message_id: Option<Uuid>,
+    /// When delivery named this turn. What a prompt parked behind it, or
+    /// an idle check that keeps finding it, reports as the turn's age: a
+    /// turn hours old with nothing streaming is the shape of a wedged
+    /// session, and without this it looks exactly like a long one.
+    pub dispatched_at: DateTime<Utc>,
 }
 
 impl InFlightTurn {
+    /// How long this turn has been in flight.
+    #[must_use]
+    pub fn age(&self) -> chrono::Duration {
+        Utc::now().signed_duration_since(self.dispatched_at)
+    }
+
     /// This turn as a session that died underneath it reports it.
     #[must_use]
     pub fn summary(&self) -> InFlightTurnSummary {

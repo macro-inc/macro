@@ -26,7 +26,6 @@ import {
   type ToolCallContext,
   type ToolUsePart,
   toolLabel,
-  toolServer,
 } from './shared';
 import { TerminalToolCall } from './TerminalToolCall';
 import { UserToolCall } from './UserToolCall';
@@ -47,7 +46,6 @@ export function ToolCallPart(props: {
   const common = (): ToolCallCommon => ({
     id: props.part.id,
     label: toolLabel(props.part.name),
-    server: toolServer(props.part.name),
     status: status(),
     muted: failed(),
     trailing: failed()

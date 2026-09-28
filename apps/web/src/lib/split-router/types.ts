@@ -341,9 +341,14 @@ type BranchParams<TParams> =
       }
     : TParams;
 
+/** Builds a typed route target without resolving the route against a router. */
+type RouteTo<TRoute, TParams> = {} extends TParams
+  ? (params?: TParams) => { route: TRoute; params: TParams }
+  : (params: TParams) => { route: TRoute; params: TParams };
+
 type DefinedRoute<TRoute, TParent, TParentNavigation, TParentStateSchema> =
   TRoute extends unknown
-    ? Omit<TRoute, 'children' | typeof branchParams> & {
+    ? Omit<TRoute, 'children' | 'to' | typeof branchParams> & {
         readonly [branchParams]: {
           read: MergeRouteParams<
             TParent,
@@ -355,6 +360,13 @@ type DefinedRoute<TRoute, TParent, TParentNavigation, TParentStateSchema> =
           >;
           state: EffectiveRouteStateSchema<TRoute, TParentStateSchema>;
         };
+        to: RouteTo<
+          DefinedRoute<TRoute, TParent, TParentNavigation, TParentStateSchema>,
+          MergeRouteParams<
+            {},
+            TParentNavigation & BranchParams<LocalNavigationParams<TRoute>>
+          >
+        >;
       } & (TRoute extends {
           children: infer TChildren extends readonly unknown[];
         }

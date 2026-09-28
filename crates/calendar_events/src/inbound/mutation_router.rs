@@ -257,6 +257,8 @@ pub enum CalendarRsvpScopeParam {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RsvpCalendarEventRequest {
+    /// The owned connected address whose attendance is changed. Validated by the domain.
+    pub responding_email: Option<String>,
     /// Calendar whose copy of the event is answered, for an event synced
     /// from more than one calendar. Omit to answer on the canonical copy.
     pub calendar_id: Option<Uuid>,
@@ -664,6 +666,7 @@ where
             request.calendar_id,
             request.response,
             scope,
+            request.responding_email,
         )
         .await?;
     Ok(Json(event))

@@ -1,8 +1,7 @@
-import { Property } from '@property';
+import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyT } from '@property/types';
-import { getEntityValues } from '@property/utils';
-import { type Component, type JSX, Match, Switch } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
 
 type InlinePropertyValueProps = {
   property: PropertyT;
@@ -24,54 +23,15 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
 ) => {
   const ctx = usePropertiesContext();
 
-  const isUserEntity = () =>
-    props.property.valueType === 'ENTITY' &&
-    props.property.specificEntityType === 'USER';
-
-  const isMultiUserEntity = () =>
-    isUserEntity() && getEntityValues(props.property).length > 1;
-
   return (
-    <Property.Root
+    <PropertyValuePill
       property={props.property}
       canEdit={ctx.canEdit}
       onSave={ctx.saveHandler.saveProperty}
       onRefresh={ctx.onRefresh}
-    >
-      <Property.Tooltip property={props.property}>
-        <Property.Pill class={props.class} variant="outline">
-          <Switch
-            fallback={
-              <Property.Icon
-                property={props.property}
-                class="size-3 shrink-0"
-              />
-            }
-          >
-            <Match when={isMultiUserEntity()}>
-              <Property.UserStack property={props.property} maxUsers={2} />
-            </Match>
-            <Match when={isUserEntity()}>
-              <Property.Icon property={props.property} />
-            </Match>
-          </Switch>
-          <Property.Text
-            property={props.property}
-            fallback={
-              <Property.Empty
-                label={props.emptyLabel ?? props.property.displayName}
-              />
-            }
-          />
-          <Property.Caret />
-        </Property.Pill>
-      </Property.Tooltip>
-      <Property.PopoverEditor
-        entitySelfFilter={{
-          entityType: ctx.entityType,
-          blockId: props.entityId,
-        }}
-      />
-    </Property.Root>
+      class={props.class}
+      emptyLabel={props.emptyLabel}
+      entitySelfFilter={{ entityType: ctx.entityType, blockId: props.entityId }}
+    />
   );
 };

@@ -6270,7 +6270,7 @@
     "/crm/comment/{comment_id}": {
       "delete": {
         "tags": ["crm::inbound::axum_router::comments"],
-        "summary": "Soft-delete a CRM comment, scoped to the requesting user's team. When it\nwas the thread's last live comment, the thread is soft-deleted too\n(reported via `threadDeleted`).",
+        "summary": "Delete a CRM comment, scoped to the requesting user's team. Deleting a\nthread's first comment deletes the whole discussion, as on documents\n(reported via `threadDeleted`).",
         "operationId": "delete_crm_comment",
         "parameters": [
           {
@@ -17145,6 +17145,10 @@
           "ef": {
             "description": "the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` / `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors."
           },
+          "favorites_only": {
+            "type": ["boolean", "null"],
+            "description": "Restrict to the authenticated viewer's favorites before pagination when true."
+          },
           "fef": {
             "description": "the filters that should be applied to foreign entity records"
           },
@@ -20872,7 +20876,7 @@
         "required": ["text"],
         "properties": {
           "metadata": {
-            "description": "Arbitrary client metadata for the comment."
+            "description": "Ignored: messages keep no client metadata."
           },
           "text": {
             "type": "string",
@@ -20884,7 +20888,7 @@
             "description": "Existing thread to append to. Omit to start a new thread on the\naddressed entity."
           },
           "threadMetadata": {
-            "description": "Metadata to set on a newly created thread (ignored when replying\nwithout a value)."
+            "description": "Ignored: discussions keep no thread metadata."
           }
         }
       },
@@ -21104,7 +21108,7 @@
           },
           "shareWithTeam": {
             "type": ["boolean", "null"],
-            "description": "When true, share with the owner's team at create time."
+            "description": "Share with the owner's team at create time. Defaults to true; users without\na team create an unshared initiative. Explicit false skips the team grant."
           }
         }
       },
@@ -22180,7 +22184,7 @@
       },
       "DeleteCrmCommentResult": {
         "type": "object",
-        "description": "Outcome of soft-deleting a CRM comment: reports whether the parent thread\nwas soft-deleted too (it is when the deleted comment was its last live one).",
+        "description": "Outcome of deleting a CRM comment: reports whether its discussion went with\nit (it does when the deleted comment was the discussion's first).",
         "required": ["commentId", "threadId", "threadDeleted"],
         "properties": {
           "commentId": {
@@ -22190,7 +22194,7 @@
           },
           "threadDeleted": {
             "type": "boolean",
-            "description": "Whether the thread itself was soft-deleted because no live comments\nremained."
+            "description": "Whether the whole discussion was deleted because the comment was its\nfirst."
           },
           "threadId": {
             "type": "string",
@@ -22415,6 +22419,10 @@
           "document_name"
         ],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically created the copy."
+          },
           "document_id": {
             "type": "string",
             "description": "The id of the newly created copy."
@@ -22431,6 +22439,17 @@
               {
                 "$ref": "#/components/schemas/FileType",
                 "description": "File type of the document, when known."
+              }
+            ]
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this copy belongs on, when different from the actor."
               }
             ]
           },
@@ -23848,9 +23867,17 @@
             "$ref": "#/components/schemas/EmailFilters",
             "description": "the bundled [EmailFilters]"
           },
+          "favorites_only": {
+            "type": ["boolean", "null"],
+            "description": "Restrict results to the authenticated viewer's favorites when true."
+          },
           "foreign_entity_filters": {
             "$ref": "#/components/schemas/ForeignEntityFilters",
             "description": "the bundled [ForeignEntityFilters]"
+          },
+          "initiative_filters": {
+            "$ref": "#/components/schemas/InitiativeFilters",
+            "description": "Initiative filters. Initiatives are opt-in."
           },
           "project_filters": {
             "$ref": "#/components/schemas/ProjectFilters",
@@ -23997,6 +24024,7 @@
           "CHAT",
           "COMPANY",
           "DOCUMENT",
+          "INITIATIVE",
           "PROJECT",
           "TASK",
           "THREAD",
@@ -26366,6 +26394,44 @@
           }
         }
       },
+      "InitiativeFilters": {
+        "type": "object",
+        "description": "Filters for initiatives.",
+        "properties": {
+          "due_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive lower due-date bound."
+          },
+          "due_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive upper due-date bound."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in."
+          },
+          "initiative_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Initiative ids to filter by. Empty to include all accessible initiatives."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Case-insensitive name substring."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+          }
+        }
+      },
       "InitiativeId": {
         "type": "string",
         "format": "uuid",
@@ -27150,6 +27216,54 @@
               "type": {
                 "type": "string",
                 "enum": ["document"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An initiative, presented as a project in the application.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "An initiative, presented as a project in the application."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["initiative"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A CRM company.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A CRM company."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["crm_company"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A CRM contact.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A CRM contact."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["crm_contact"]
               }
             }
           }
@@ -29483,6 +29597,11 @@
                 "description": "Who wrote the prompt, absent when a bot acted on nobody's behalf."
               }
             ]
+          },
+          "origin_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The channel or document message the prompt was posted as, when it\narrived from a thread rather than the session view. That message\nalready notified the users it named when it was posted."
           }
         }
       },
@@ -31144,6 +31263,64 @@
           }
         }
       },
+      "SoupInitiative_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["id", "name", "ownerId", "createdAt", "updatedAt"],
+            "properties": {
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Creation timestamp."
+              },
+              "descriptionDocumentId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "Document holding the initiative description."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Initiative identifier."
+              },
+              "name": {
+                "type": "string",
+                "description": "Initiative display name."
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "Initiative owner."
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Last modification timestamp."
+              },
+              "viewedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "Last time the requesting user viewed the initiative."
+              }
+            }
+          }
+        ],
+        "description": "An initiative (called a project in the frontend) in the Soup feed."
+      },
       "SoupItem": {
         "oneOf": [
           {
@@ -31188,6 +31365,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["project"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Initiative entity.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupInitiative_SoupPropertiesField",
+                "description": "Initiative entity."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["initiative"]
               }
             }
           },
@@ -32253,7 +32445,7 @@
       },
       "ThreadPatch": {
         "type": "object",
-        "description": "Partial changes to the lifecycle and placement of a document discussion.",
+        "description": "Partial changes to discussion lifecycle or document anchor placement.",
         "properties": {
           "detach_anchor": {
             "type": "boolean",
@@ -32806,7 +32998,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Full replacement member list when present."
+            "description": "Full replacement collaborator list when present. Only the owner may send this field."
           },
           "name": {
             "type": ["string", "null"],

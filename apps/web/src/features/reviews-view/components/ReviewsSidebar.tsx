@@ -217,7 +217,10 @@ export function ReviewsSidebar(props: {
   return (
     <ViewSidebar.Root aria-label="Reviews navigation">
       <ViewSidebar.Header>
-        <ViewSidebar.Title>Reviews</ViewSidebar.Title>
+        <div class="flex min-w-0 items-center gap-1">
+          <ViewSidebar.CloseButton />
+          <ViewSidebar.Title>Reviews</ViewSidebar.Title>
+        </div>
       </ViewSidebar.Header>
       <ViewSidebar.Content>
         <ViewSidebar.Nav aria-label="Pull request views">

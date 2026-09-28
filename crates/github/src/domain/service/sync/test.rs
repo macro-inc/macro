@@ -16,9 +16,7 @@ use document_sub_type::DocumentSubType;
 use documents::domain::models::EditDocumentServiceArgs;
 use documents::domain::{
     content::{DocumentContent, DocumentContentLocation},
-    models::{
-        CreateDocumentRepoArgs, DocumentError, ImportEmailAttachmentRepoArgs, LocationQueryParams,
-    },
+    models::{DocumentError, ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument},
     ports::DocumentService,
     response::{
         CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
@@ -42,6 +40,7 @@ use github_pull_requests::domain::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentBasic, DocumentMetadata};
 use model_entity::Entity;
+use model_owner::CreationPrincipal;
 use models_permissions::share_permission::access_level::AccessLevel;
 use notification::domain::{
     models::{Notification, NotificationResult, SendNotificationRequest},
@@ -216,8 +215,8 @@ impl DocumentService for StubDocumentService {
     }
     async fn create_document(
         &self,
-        _user_id: MacroUserIdStr<'static>,
-        _args: CreateDocumentRepoArgs,
+        _principal: &CreationPrincipal,
+        _document: NewDocument,
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         unimplemented!()
@@ -225,7 +224,6 @@ impl DocumentService for StubDocumentService {
 
     async fn import_email_attachment(
         &self,
-        _user_id: MacroUserIdStr<'static>,
         _args: ImportEmailAttachmentRepoArgs,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         unimplemented!()
@@ -277,7 +275,7 @@ impl DocumentService for StubDocumentService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         _document_context: DocumentBasic,
-        _user_id: MacroUserIdStr<'static>,
+        _principal: &CreationPrincipal,
         _document_name: String,
         _query_version_id: Option<i64>,
         _sync_version_id: Option<model::sync_service::SyncServiceVersionID>,
@@ -287,10 +285,9 @@ impl DocumentService for StubDocumentService {
 
     async fn handle_task_properties(
         &self,
-        _user_id: MacroUserIdStr<'static>,
+        _principal: &CreationPrincipal,
         _document_id: &str,
         _request: &documents::domain::models::CreateTaskRequest,
-        _attribution: &activity::Attribution,
     ) -> Result<(), DocumentError> {
         unimplemented!()
     }

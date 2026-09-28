@@ -15,6 +15,7 @@ import {
 } from '@app/features/calendar-view/types';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
+import { projectRouteId } from '@app/features/projects/core/route';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
@@ -276,7 +277,9 @@ export const openEntityInNewTab = ({
 
   // Build URL for the entity
   let entityPath: string;
-  if (entity.type === 'calendar_event') {
+  if (entity.type === 'initiative') {
+    entityPath = `/app/component/${projectRouteId({ id: entity.id, section: 'overview' })}`;
+  } else if (entity.type === 'calendar_event') {
     entityPath = `/app${calendarPath(getPreferredCalendarPeriodView())}`;
   } else if (entity.type === 'document') {
     const { fileType, subType } = entity;
@@ -429,6 +432,8 @@ interface OpenEntityOptions {
    * opening a channel row. Callers that can open channels must provide it.
    */
   notificationSource?: NotificationSource;
+  /** False for Chat conversations; Inbox rows keep their thread-scoped reads. */
+  scopeChannelThreads?: boolean;
 }
 
 /**
@@ -763,14 +768,12 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const content = getEntitySplitContent(entity);
 
-  const channelTarget = getChannelEntityTarget(entity);
+  const channelTarget = getChannelEntityTarget(entity, {
+    scopeChannelThreads: options.scopeChannelThreads,
+  });
   const channelMessageTarget =
     channelTarget?.kind === 'message' ? channelTarget : undefined;
   const openChannelAtLatest = channelTarget?.kind === 'latest';
-
-  if (options.notificationSource) {
-    markChannelNotificationsSeenOnOpen(entity, options.notificationSource);
-  }
 
   let params: Record<string, string> | undefined;
   if (entity.type === 'agent_session' && location?.type === 'agent') {
@@ -849,6 +852,12 @@ export const openEntityInSplitFromUnifiedList = async (
     toast.alert('Content already open');
   }
 
+  if (result.status !== 'unavailable' && options.notificationSource) {
+    markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
+      scopeChannelThreads: options.scopeChannelThreads,
+    });
+  }
+
   // Routed calls have no block handle. Update a reused split's route search
   // instead of waiting for a legacy block method that will never register.
   if (location?.type === 'call_record') {
@@ -894,11 +903,13 @@ export const openEntityInSplitFromUnifiedList = async (
  * array (mobile Channels) or a list accessor. Only rows without an edge fall
  * back to the separately paginated global source. Passing these notifications
  * through the source keeps its REST cache and durable seen overrides in sync
- * while the configured mutation updates GraphQL edges.
+ * while the configured mutation updates GraphQL edges. Chat opens the whole
+ * conversation (scopeChannelThreads: false); Inbox opens only the row's stack.
  */
 export function markChannelNotificationsSeenOnOpen(
   entity: EntityWithRawNotifications<EntityData>,
-  notificationSource: NotificationSource
+  notificationSource: NotificationSource,
+  options: { scopeChannelThreads?: boolean } = {}
 ) {
   if (
     entity.type !== 'channel' &&
@@ -909,7 +920,7 @@ export function markChannelNotificationsSeenOnOpen(
   }
 
   const notifications = getEntityNotifications(entity, notificationSource, {
-    scopeChannelThreads: true,
+    scopeChannelThreads: options.scopeChannelThreads !== false,
   }).filter((notification) => !notificationIsRead(notification));
   if (notifications.length === 0) return;
 
@@ -1032,6 +1043,10 @@ export function reminderSplitTarget(entity: ReminderPreviewSelection) {
 function getEntitySplitContent(entity: EntityData) {
   return (
     match(entity)
+      .with({ type: 'initiative' }, (entity) => ({
+        type: 'component' as const,
+        id: projectRouteId({ id: entity.id, section: 'overview' }),
+      }))
       .with({ type: 'document' }, (entity) => {
         const { id, fileType, subType } = entity;
         const blockName = fileTypeToBlockName(subType?.type ?? fileType);

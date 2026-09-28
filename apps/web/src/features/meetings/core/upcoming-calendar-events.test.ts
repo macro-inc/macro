@@ -10,6 +10,7 @@ const call = (hour: number): UpcomingCalendarEvent => ({
   eventId: 'recurring-event',
   occurrenceKey: `occurrence-${hour}`,
   title: 'Planning',
+  color: 'var(--color-accent)',
   url: 'https://meet.google.com/one-room',
   start: `2026-09-23T${hour}:00:00Z`,
   end: `2026-09-23T${hour + 1}:00:00Z`,

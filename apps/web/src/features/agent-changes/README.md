@@ -10,9 +10,16 @@ and mounts `AgentChangesControllerProvider` around `ChangesPane` or
 `pr:<foreign-entity-id>`) to isolate its locally persisted collapse state and notes.
 The optional `agent` capability enables inline note creation and sending; omit it
 for a read-only PR viewer. The optional `canHaveChanges` accessor hides every
-control and the pane while false; the session host reports it from the harness so
-a chat-only (in-memory) session shows no GitHub chrome. Clipboard, external
-navigation, and notifications are host callbacks.
+control and the pane while false; the session host reports it from the harness and
+the linked pull request, so a chat-only (in-memory) session or a coding session
+without a pull request yet shows no GitHub chrome. Clipboard, external navigation,
+and notifications are host callbacks.
+
+`views/ChangesPane.tsx` composes the generic `FileTree`
+(`@ui/components/FileTree`) and `DiffView` (`src/components/diff-view`) from the
+controller: tree rows show status letters and counts, file headers add **Copy
+path**, and review notes hang under their lines through `DiffView.Stack`'s
+annotation slot. Another host composes the same components its own way.
 
 The source owns fetching, cache identity, and conversion into the feature's core
 changeset types. The PR page's adapter is `block-pr/data/pr-changes.ts`, over

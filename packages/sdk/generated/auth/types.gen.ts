@@ -1169,7 +1169,7 @@ export type PlanCatalogResponse = {
      */
     overage_limit_min_cents: number;
     /**
-     * Every plan, cheapest first.
+     * Free and every purchasable paid plan, cheapest first.
      */
     plans: Array<PlanCatalogEntry>;
 };

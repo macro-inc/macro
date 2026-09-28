@@ -59,7 +59,6 @@ pub async fn change_plan(
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Json(req): Json<ChangePlanRequest>,
 ) -> Result<Json<ChangePlanResponse>, StripeOperationError> {
-    let target_price = ctx.stripe_prices.price_id(req.plan)?.to_string();
     let user_id = &user.authorization.user.macro_user_id;
 
     // A member of a team billed per seat is billed through the team: move
@@ -138,14 +137,16 @@ pub async fn change_plan(
         })
         .ok_or(StripeOperationError::NoSubscription)?;
 
-    if seat_item
+    let current_plan = seat_item
         .price
         .as_ref()
-        .is_some_and(|price| price.id.as_str() == target_price)
-    {
+        .and_then(|price| ctx.stripe_prices.plan_for_price(price.id.as_str()))
+        .ok_or(StripeOperationError::NoSubscription)?;
+    if current_plan == req.plan {
         return Err(StripeOperationError::AlreadyOnPlan);
     }
 
+    let target_price = ctx.stripe_prices.price_id(req.plan)?.to_string();
     let params = stripe::UpdateSubscription {
         items: Some(vec![stripe::UpdateSubscriptionItems {
             id: Some(seat_item.id.to_string()),

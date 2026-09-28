@@ -38,11 +38,15 @@ export async function copyText(text: string): Promise<boolean> {
 
 export function AgentChangesProvider(props: ParentProps) {
   const session = useAgentSession();
+  const pullRequestUrl = () => session.session()?.pullRequestUrl ?? undefined;
   // Only a coding harness has a repository to diff; a chat-only session
   // (in-memory) never fetches changes and shows none of the GitHub chrome.
   const coding = () => isCoderHarness(session.session()?.harness);
+  // The harness captures a session's changeset from its linked pull
+  // request, so until one is linked there is nothing to fetch or show.
+  const canHaveChanges = () => coding() && pullRequestUrl() !== undefined;
   const source = createSessionChangesSource(() =>
-    coding() ? session.sessionId() : undefined
+    canHaveChanges() ? session.sessionId() : undefined
   );
   const sendPrompt = async (markdown: string) => {
     try {
@@ -55,10 +59,7 @@ export function AgentChangesProvider(props: ParentProps) {
     }
   };
   const pullRequestChangeCounts = createPullRequestStatsSource(
-    () =>
-      coding() && session.userId()
-        ? (session.session()?.pullRequestUrl ?? undefined)
-        : undefined,
+    () => (coding() && session.userId() ? pullRequestUrl() : undefined),
     () => source.summary()?.changeset?.id
   );
   const host: ChangesHost = {
@@ -71,8 +72,8 @@ export function AgentChangesProvider(props: ParentProps) {
         !session.loadFailed() &&
         (session.session()?.canEdit ?? true),
     },
-    canHaveChanges: coding,
-    pullRequestUrl: () => session.session()?.pullRequestUrl ?? undefined,
+    canHaveChanges,
+    pullRequestUrl,
     openExternal: openExternalUrl,
     copyText,
     notify: (message, tone) => {
