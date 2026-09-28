@@ -15,6 +15,7 @@ import {
 } from '@app/features/calendar-view/types';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
+import { projectRouteId } from '@app/features/projects/core/route';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
@@ -276,7 +277,9 @@ export const openEntityInNewTab = ({
 
   // Build URL for the entity
   let entityPath: string;
-  if (entity.type === 'calendar_event') {
+  if (entity.type === 'initiative') {
+    entityPath = `/app/component/${projectRouteId({ id: entity.id, section: 'overview' })}`;
+  } else if (entity.type === 'calendar_event') {
     entityPath = `/app${calendarPath(getPreferredCalendarPeriodView())}`;
   } else if (entity.type === 'document') {
     const { fileType, subType } = entity;
@@ -1032,6 +1035,10 @@ export function reminderSplitTarget(entity: ReminderPreviewSelection) {
 function getEntitySplitContent(entity: EntityData) {
   return (
     match(entity)
+      .with({ type: 'initiative' }, (entity) => ({
+        type: 'component' as const,
+        id: projectRouteId({ id: entity.id, section: 'overview' }),
+      }))
       .with({ type: 'document' }, (entity) => {
         const { id, fileType, subType } = entity;
         const blockName = fileTypeToBlockName(subType?.type ?? fileType);

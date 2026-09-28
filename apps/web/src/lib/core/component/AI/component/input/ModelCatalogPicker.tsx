@@ -18,6 +18,8 @@ import {
 
 type ModelCatalogPickerProps = {
   value: string | null;
+  /** Model to feature first without marking it selected. */
+  recommendedId?: string | null;
   options: CatalogModelOption[];
   onSelect: (id: string) => void;
   disabled?: boolean;
@@ -36,6 +38,7 @@ type ModelCatalogPickerProps = {
 function ModelRow(props: {
   option: CatalogModelOption;
   selected: boolean;
+  disabled?: boolean;
   /** Trailing muted text, e.g. the family a search hit belongs to. */
   hint?: string;
   onSelect: () => void;
@@ -43,6 +46,7 @@ function ModelRow(props: {
   return (
     <Dropdown.Item
       closeOnSelect
+      disabled={props.disabled}
       class={cn('h-8 gap-2', props.selected && 'bg-ink/5 text-ink font-medium')}
       title={props.option.description ?? props.option.label}
       onSelect={props.onSelect}
@@ -63,6 +67,7 @@ function ModelRow(props: {
 function FamilyList(props: {
   families: ModelFamily[];
   value: string | null;
+  disabled?: boolean;
   onSelect: (id: string) => void;
 }) {
   return (
@@ -77,6 +82,7 @@ function FamilyList(props: {
               <ModelRow
                 option={option}
                 selected={option.id === props.value}
+                disabled={props.disabled}
                 onSelect={() => props.onSelect(option.id)}
               />
             )}
@@ -143,7 +149,9 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
       >
         <ModelCatalogMenu
           value={props.value}
+          recommendedId={props.recommendedId}
           options={props.options}
+          disabled={props.disabled || props.pending}
           onSelect={props.onSelect}
           emptyMessage={props.emptyMessage}
           searchPlaceholder={props.searchPlaceholder}
@@ -163,8 +171,10 @@ export function ModelCatalogMenu(
   props: Pick<
     ModelCatalogPickerProps,
     | 'value'
+    | 'recommendedId'
     | 'options'
     | 'onSelect'
+    | 'disabled'
     | 'emptyMessage'
     | 'searchPlaceholder'
     | 'children'
@@ -187,7 +197,10 @@ export function ModelCatalogMenu(
   const catalog = createMemo(() =>
     props.options.length <= MAX_RECOMMENDED_MODELS
       ? { recommended: props.options, families: [] }
-      : buildModelCatalog(props.options, props.value ?? undefined)
+      : buildModelCatalog(
+          props.options,
+          props.value ?? props.recommendedId ?? undefined
+        )
   );
   const extraFamilies = createMemo(() => moreModelFamilies(catalog()));
   const extraCount = createMemo(() =>
@@ -247,6 +260,7 @@ export function ModelCatalogMenu(
                 <FamilyList
                   families={extraFamilies()}
                   value={props.value}
+                  disabled={props.disabled}
                   onSelect={props.onSelect}
                 />
               </Dropdown.Group>
@@ -261,6 +275,7 @@ export function ModelCatalogMenu(
                       option={option}
                       hint={modelFamilyHint(option)}
                       selected={option.id === props.value}
+                      disabled={props.disabled}
                       onSelect={() => props.onSelect(option.id)}
                     />
                   )}
@@ -307,6 +322,7 @@ export function ModelCatalogMenu(
                         <FamilyList
                           families={extraFamilies()}
                           value={props.value}
+                          disabled={props.disabled}
                           onSelect={props.onSelect}
                         />
                       </Dropdown.Group>
@@ -330,6 +346,7 @@ export function ModelCatalogMenu(
                 option={option}
                 hint={modelFamilyHint(option)}
                 selected={option.id === props.value}
+                disabled={props.disabled}
                 onSelect={() => props.onSelect(option.id)}
               />
             )}

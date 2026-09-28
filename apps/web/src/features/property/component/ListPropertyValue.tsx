@@ -1,4 +1,3 @@
-import { useMaybeBlockId } from '@core/block';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import { Property } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
@@ -7,13 +6,12 @@ import { getEntityValues, hasValue } from '@property/utils';
 import { Layer } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 
-/**
- * Tasks-owned adaptation of the established Soup task property cell.
- * It remains local so this view does not depend on legacy Soup orchestration.
- */
-export function ListPropertyValue(props: { property: PropertyType }) {
+/** Shared property cell for unified task and native project lists. */
+export function ListPropertyValue(props: {
+  property: PropertyType;
+  entityId: string;
+}) {
   const context = usePropertiesContext();
-  const blockId = useMaybeBlockId();
   const isUserEntity = () =>
     props.property.valueType === 'ENTITY' &&
     props.property.specificEntityType === 'USER';
@@ -112,7 +110,10 @@ export function ListPropertyValue(props: { property: PropertyType }) {
         </Layer>
       </Property.Tooltip>
       <Property.PopoverEditor
-        entitySelfFilter={{ entityType: context.entityType, blockId }}
+        entitySelfFilter={{
+          entityType: context.entityType,
+          blockId: props.entityId,
+        }}
       />
     </Property.Root>
   );

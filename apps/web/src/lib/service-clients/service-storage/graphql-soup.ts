@@ -652,9 +652,9 @@ function mapDocumentSubType(subType: GraphqlSoupDocument['subType']) {
     .with({ __typename: 'GraphqlSkillSubType' }, () => ({
       type: 'skill' as const,
     }))
-    .with({ __typename: 'GraphqlInitiativeDescriptionSubType' }, () => {
-      return undefined;
-    })
+    .with({ __typename: 'GraphqlInitiativeDescriptionSubType' }, () => ({
+      type: 'initiative_description' as const,
+    }))
     .exhaustive();
 }
 
@@ -1332,12 +1332,29 @@ function mapGraphqlReminderSchedule(entity: {
 }
 
 export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
-  // No client opts into initiatives until the Projects UI adds its fragment.
-  if (item.__typename === 'GraphqlSoupInitiative') return null;
-
   const frecency = item.frecencyScore ?? 0;
 
   return match(item)
+    .with(
+      { __typename: 'GraphqlSoupInitiative' },
+      (entity) =>
+        ({
+          tag: 'initiative',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            name: entity.displayName ?? 'Untitled project',
+            ownerId: entity.metadata.ownerId ?? '',
+            descriptionDocumentId: entity.descriptionDocumentId ?? null,
+            createdAt: entity.metadata.createdAt ?? '',
+            updatedAt: entity.metadata.updatedAt ?? '',
+            viewedAt: entity.metadata.viewedAt,
+            properties: mapGraphqlProperties(entity.properties),
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as SoupApiItem
+    )
     .with(
       { __typename: 'GraphqlSoupDocument' },
       (entity) =>

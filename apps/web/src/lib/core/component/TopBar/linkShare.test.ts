@@ -15,12 +15,16 @@ import {
 } from './linkShare';
 
 describe('isTeamShareSupportedForItem', () => {
-  it.each(['document', 'chat', 'call', 'project', 'agent_session'] as const)(
-    'supports %s',
-    (itemType) => {
-      expect(isTeamShareSupportedForItem(itemType)).toBe(true);
-    }
-  );
+  it.each([
+    'document',
+    'chat',
+    'call',
+    'project',
+    'agent_session',
+    'initiative',
+  ] as const)('supports %s', (itemType) => {
+    expect(isTeamShareSupportedForItem(itemType)).toBe(true);
+  });
 
   it.each(['email'] as const)(
     'does not offer team access for %s',
@@ -38,6 +42,7 @@ describe('getShareItemNoun', () => {
     ['email', 'email thread'],
     ['agent_session', 'agent session'],
     ['project', 'folder'],
+    ['initiative', 'project'],
   ] as const)('names %s as "%s"', (itemType, noun) => {
     expect(getShareItemNoun(itemType)).toBe(noun);
   });
@@ -196,4 +201,12 @@ describe('getShareStatus', () => {
       getLinkShareScopeCopy('TEAM').description
     );
   });
+});
+
+it('reports default team sharing instead of claiming the project is private', () => {
+  expect(getShareStatus(null, false, 'view')).toEqual({
+    label: 'Team',
+    tooltip: "Shared directly with the owner's team.",
+  });
+  expect(getShareStatus('PUBLIC', false, 'view').label).toBe('Public');
 });

@@ -109,10 +109,10 @@ export function MessageThread(
               ? { ...value, onReply: undefined }
               : value;
           }}
-          messageEditor={editor}
+          messageEditor={props.canWrite ? editor : undefined}
           isExpanded={() => expanded() || !!props.targetId}
           setIsExpanded={setExpanded}
-          isReplying={replying}
+          isReplying={() => props.canWrite && replying()}
           setIsReplying={setReplying}
           replyInputState={draft}
           setReplyInputState={setDraft}

@@ -395,7 +395,7 @@ export type ReminderEntity = EntityBase & {
     id: string;
     // Calendar events are excluded alongside reminders: neither has a
     // previewable block, and the mapper yields `undefined` for both.
-    type: Exclude<EntityType, 'reminder' | 'calendar_event'>;
+    type: Exclude<EntityType, 'reminder' | 'calendar_event' | 'initiative'>;
     fileType?: string;
     subType?: string;
   };
@@ -446,6 +446,13 @@ export type CalendarEventEntity = EntityBase & {
   properties?: SoupProperty[];
 };
 
+/** A native project, distinct from folder entities. */
+export type InitiativeEntity = EntityBase & {
+  type: 'initiative';
+  descriptionDocumentId: string;
+  properties?: SoupProperty[];
+};
+
 export type EntityData =
   | AgentSessionEntity
   | ChannelEntity
@@ -457,6 +464,7 @@ export type EntityData =
   | SnippetEntity
   | EmailEntity
   | ProjectEntity
+  | InitiativeEntity
   | CallEntity
   | CrmCompanyEntity
   | CrmContactEntity
@@ -474,6 +482,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'document',
   'email',
   'project',
+  'initiative',
   'call',
   'crm_company',
   'crm_contact',

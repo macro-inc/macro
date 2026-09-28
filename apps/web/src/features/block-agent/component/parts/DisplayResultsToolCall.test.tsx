@@ -47,7 +47,6 @@ function common(
   return {
     id: 'display-results',
     label: 'DisplayResults',
-    server: 'macro',
     status,
     muted: status === 'failed',
     trailing: status === 'failed' ? 'Failed' : undefined,

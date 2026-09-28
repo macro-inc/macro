@@ -22,6 +22,24 @@ function createItem(overrides: Partial<Item> = {}): Item {
 }
 
 describe('history transforms', () => {
+  it('omits backing descriptions without deduplicating ordinary entities by title', () => {
+    const result = transformHistoryResponse({
+      data: [
+        createItem({
+          id: 'description',
+          subType: { type: 'initiative_description' },
+        }),
+        createItem({ id: 'note', fileType: 'md' }),
+        createItem({
+          id: 'task',
+          subType: { type: 'task', is_completed: false },
+        }),
+        createItem({ id: 'folder', type: 'project' }),
+      ],
+    });
+    expect(result.map((item) => item.id)).toEqual(['note', 'task', 'folder']);
+  });
+
   it('transforms response', () => {
     const data = {
       data: [
