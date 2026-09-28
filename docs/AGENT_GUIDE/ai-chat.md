@@ -481,8 +481,14 @@ An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
 `Create` → `Agent`) leaves that composer focused — on mobile that is the same
 Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `/` to
-open slash commands the connected agent advertised (Claude, OpenCode, and
-Cursor). `/` stays ordinary text until that list arrives. Type `@` to insert the same mention chips
+open sections for **Skills**, **Pull requests**, and **Commands**. Skills are
+available even before the connected agent advertises commands. Select a skill
+to insert its mention, a pull request to reference it, or a harness command
+to insert `/name` as text. Search filters all sections; arrow keys move across
+sections and Enter selects the highlighted item. Saved skills have an **Edit**
+button that opens their document editor; skills you own also have **Delete**,
+which opens the usual deletion confirmation. Built-in skills have no edit or
+delete controls. **New skill** creates a skill and inserts its mention. Type `@` to insert the same mention chips
 used in chat and channels; they serialize as mention-chip tags in the prompt
 the agent sees (`<m-document-mention>` for docs/channels/chats/tasks/emails/calendar
 events/skills, `<m-date-mention>` for a day or time, `<m-agent-session-mention>`
