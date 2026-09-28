@@ -10,7 +10,7 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type AgentConversationEntity,
-  groupConversations,
+  partitionArchived,
 } from '../core/recent-conversations';
 import { AgentsSidebar } from './AgentsSidebar';
 
@@ -131,7 +131,7 @@ describe('mixed Agents sidebar', () => {
       <AgentsSidebar
         activePage="new"
         onOpenPage={openPage}
-        groups={groupConversations(conversations)}
+        {...partitionArchived(conversations)}
         modeForConversation={(conversation) =>
           conversation.id === 'code' ? 'code' : 'chat'
         }
@@ -175,7 +175,7 @@ describe('mixed Agents sidebar', () => {
       <AgentsSidebar
         activePage="new"
         onOpenPage={vi.fn()}
-        groups={groupConversations([
+        {...partitionArchived([
           {
             type: 'agent_session',
             id: 'code',
@@ -277,7 +277,8 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
         <AgentsSidebar
           activePage="new"
           onOpenPage={vi.fn()}
-          groups={groupConversations([entity()])}
+          conversations={[entity()]}
+          archived={[]}
           modeForConversation={() => 'code'}
           activeConversationId={undefined}
           search=""

@@ -33,7 +33,6 @@ import type { AgentsMode } from '../core/mode';
 import type { AgentsPage } from '../core/pages';
 import {
   type AgentConversationEntity,
-  type ConversationGroup,
   conversationTimestamp,
 } from '../core/recent-conversations';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
@@ -50,7 +49,8 @@ export type AgentsSidebarProps = {
   modeForConversation: (conversation: AgentConversationEntity) => AgentsMode;
   activeConversationId: string | undefined;
   search: string;
-  groups: ConversationGroup[];
+  conversations: AgentConversationEntity[];
+  archived: AgentConversationEntity[];
   loading: boolean;
   error: boolean;
   hasNextPage: boolean;
@@ -155,10 +155,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
   let searchInput: HTMLInputElement | undefined;
-  const conversations = () =>
-    props.groups.flatMap((group) => group.conversations);
   const actionController = createListController({
-    items: conversations,
+    items: () => [...props.conversations, ...props.archived],
     getKey: (conversation) => conversation.id,
     isSelectable: () => false,
   });
@@ -166,8 +164,32 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     controller: actionController,
     getEntity: (conversation) => conversation,
   });
-  const total = () =>
-    props.groups.reduce((sum, group) => sum + group.conversations.length, 0);
+  const total = () => props.conversations.length + props.archived.length;
+  // Both lists page through one query, so either reaching its end loads more.
+  const loadMoreNearEnd = (event: Event & { currentTarget: HTMLElement }) => {
+    const list = event.currentTarget;
+    if (!props.hasNextPage || props.loadingNextPage) return;
+    if (list.scrollTop + list.clientHeight >= list.scrollHeight - 200) {
+      props.onLoadMore();
+    }
+  };
+  const rows = (conversations: () => AgentConversationEntity[]) => (
+    <Key each={conversations()} by="id">
+      {(conversation) => (
+        <ConversationContextMenu
+          conversation={conversation()}
+          list={actionList}
+        >
+          <Row
+            conversation={conversation()}
+            mode={props.modeForConversation(conversation())}
+            active={props.activeConversationId === conversation().id}
+            onOpen={(event) => props.onOpenConversation(conversation(), event)}
+          />
+        </ConversationContextMenu>
+      )}
+    </Key>
+  );
 
   const openSearch = () => {
     setConversationsOpen(true);
@@ -269,54 +291,9 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 class="min-h-0 flex-1 shrink overflow-auto"
                 aria-label="Recent conversations"
                 aria-busy={props.loading || props.loadingNextPage}
-                onScroll={(event) => {
-                  const list = event.currentTarget;
-                  if (!props.hasNextPage || props.loadingNextPage) return;
-                  if (
-                    list.scrollTop + list.clientHeight >=
-                    list.scrollHeight - 200
-                  ) {
-                    props.onLoadMore();
-                  }
-                }}
+                onScroll={loadMoreNearEnd}
               >
-                <Key each={props.groups} by="id">
-                  {(group) => (
-                    <>
-                      <Show when={group().label}>
-                        {(label) => (
-                          <ViewSidebar.Toolbar>
-                            <h3 class="text-xs font-medium text-ink-muted">
-                              {label()}
-                            </h3>
-                            <span class="text-xs text-ink-extra-muted tabular-nums">
-                              {group().conversations.length}
-                            </span>
-                          </ViewSidebar.Toolbar>
-                        )}
-                      </Show>
-                      <Key each={group().conversations} by="id">
-                        {(conversation) => (
-                          <ConversationContextMenu
-                            conversation={conversation()}
-                            list={actionList}
-                          >
-                            <Row
-                              conversation={conversation()}
-                              mode={props.modeForConversation(conversation())}
-                              active={
-                                props.activeConversationId === conversation().id
-                              }
-                              onOpen={(event) =>
-                                props.onOpenConversation(conversation(), event)
-                              }
-                            />
-                          </ConversationContextMenu>
-                        )}
-                      </Key>
-                    </>
-                  )}
-                </Key>
+                {rows(() => props.conversations)}
                 <Show when={props.loading && total() === 0}>
                   <AgentSessionListSkeleton />
                 </Show>
@@ -339,6 +316,25 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               </ViewSidebar.Nav>
             </CollapsibleSection.Content>
           </CollapsibleSection.Root>
+          <Show when={props.archived.length}>
+            <section
+              aria-label="Archived conversations"
+              class="mt-auto flex min-h-0 shrink-0 basis-1/4 flex-col border-t border-edge-muted pt-2"
+            >
+              <ViewSidebar.Toolbar class="shrink-0">
+                <h3 class="text-xs font-medium text-ink-muted">Archived</h3>
+                <span class="text-xs text-ink-extra-muted tabular-nums">
+                  {props.archived.length}
+                </span>
+              </ViewSidebar.Toolbar>
+              <ViewSidebar.Nav
+                class="min-h-0 flex-1 shrink overflow-auto"
+                onScroll={loadMoreNearEnd}
+              >
+                {rows(() => props.archived)}
+              </ViewSidebar.Nav>
+            </section>
+          </Show>
         </ViewSidebar.Content>
       </ViewSidebar.Root>
     </MaybeSoupEntityActionDrawerManager>
