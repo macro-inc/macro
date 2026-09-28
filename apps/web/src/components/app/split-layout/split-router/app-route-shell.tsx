@@ -6,7 +6,6 @@ import { enableNewAppViews } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type Component,
-  createRenderEffect,
   createSignal,
   type JSX,
   onCleanup,
@@ -51,9 +50,10 @@ export function NewAppView(props: {
   detailRequested?: () => boolean;
   detailFallback?: JSX.Element;
   detailDesktopOnly?: boolean;
+  /** Keep routed details in their host shell when the list view flag is off. */
+  alwaysRenderDetail?: boolean;
 }) {
   usePageViewTracking(props.id);
-  const panel = useSplitPanelOrThrow();
   const flag = useFeatureFlag(enableNewAppViews);
   const [timedOut, setTimedOut] = createSignal(false);
   const timer = setTimeout(() => setTimedOut(true), 5_000);
@@ -66,21 +66,16 @@ export function NewAppView(props: {
     );
   const surfaceSupported = () => !props.desktopOnly || !isTouchDevice();
   const renderModern = () =>
-    enabled() && surfaceSupported() && !detailUnsupported();
+    (enabled() ||
+      (ready() &&
+        Boolean(props.alwaysRenderDetail && props.detailRequested?.()))) &&
+    surfaceSupported() &&
+    !detailUnsupported();
   const fallback = () => {
     if (!props.detailRequested?.()) return props.fallback;
     const detail = props.detailFallback;
     return detail === undefined ? props.fallback : detail;
   };
-  createRenderEffect(() => {
-    if (!ready()) return;
-    panel.handle.updateMeta?.({
-      splitPanelLayout:
-        renderModern() && (!isTouchDevice() || props.composableOnTouch)
-          ? 'composable'
-          : 'legacy',
-    });
-  });
   return (
     <Show
       when={

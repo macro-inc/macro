@@ -54,7 +54,7 @@ pub async fn augment_optimistic<S: PredicateIndexStorage>(
                     .exact_facts
                     .iter()
                     .chain(&document.exact_facts)
-                    .filter(|fact| !facts::is_property_attribute(&fact.attribute))
+                    .filter(|fact| !is_extension_attribute(&fact.attribute))
                     .map(|fact| fact.attribute.clone())
                     .collect();
                 OptimisticProjectionMutation::Patch {

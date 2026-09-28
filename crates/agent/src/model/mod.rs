@@ -5,5 +5,6 @@ mod predefined_model;
 pub(crate) mod types;
 pub use predefined_model::*;
 mod anthropic;
+mod gemini;
 mod openai;
 pub mod router;

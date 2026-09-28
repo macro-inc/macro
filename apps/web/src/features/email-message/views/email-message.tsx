@@ -6,12 +6,23 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 import { EmailMessageBody } from '@app/features/email-message/views/email-message-body';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { VideoPreview } from '@core/component/VideoPreview';
+import CaretRight from '@phosphor/caret-right.svg';
+import { Key } from '@solid-primitives/keyed';
 import type { JSX } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { CalendarInviteCard } from '../components/calendar-invite-card';
 import type { EmailMessageAction } from '../components/message-actions';
+import {
+  type CalendarInvitation,
+  groupCalendarInvitations,
+} from '../core/calendar-invitation';
 import type { EmailAttachment } from '../core/email-message';
 export interface EmailMessageViewProps {
   message: EmailMessage;
+  renderInvitation?: (
+    message: EmailMessage,
+    invitation: CalendarInvitation
+  ) => JSX.Element;
   renderAvatar?: (message: EmailMessage) => JSX.Element;
   viewerEmail?: string;
   isTouch: boolean;
@@ -31,9 +42,36 @@ export interface EmailMessageViewProps {
   children?: JSX.Element;
 }
 
+const DISCLOSURE_SUMMARY =
+  'flex min-h-10 list-none items-center gap-1.5 text-sm text-ink-muted [&::-webkit-details-marker]:hidden';
+const DISCLOSURE_CARET =
+  'size-3.5 shrink-0 text-ink-subtle transition-transform group-open:rotate-90 motion-reduce:transition-none';
+
 export function EmailMessageView(props: EmailMessageViewProps) {
   const [expandedHeader, setExpandedHeader] = createSignal(false);
   const isBodyExpanded = () => props.isExpanded;
+  const invitationGroups = createMemo(() =>
+    groupCalendarInvitations(props.message.calendar_invitations ?? [])
+  );
+  const renderInvitation = (invitation: CalendarInvitation) =>
+    props.renderInvitation ? (
+      props.renderInvitation(props.message, invitation)
+    ) : (
+      <CalendarInviteCard invitation={invitation} />
+    );
+  const body = () => (
+    <div class="ph-no-capture text-base text-ink pr-4 mobile:pr-0">
+      <EmailMessageBody
+        message={props.message}
+        isPersonal={props.isPersonal}
+        isBodyExpanded={isBodyExpanded}
+        setExpandedMessageBody={() => props.onExpandedChange?.(true)}
+        setFocusedMessageId={() => props.onSelect?.()}
+        showFullContent={props.showFullContent}
+        isFocused={props.isSelected}
+      />
+    </div>
+  );
 
   // Hide attachments that are referenced in inline images
   const inlineContentIds = createMemo(() => {
@@ -122,17 +160,41 @@ export function EmailMessageView(props: EmailMessageViewProps) {
               </div>
             }
           />
-          <div class="ph-no-capture text-base text-ink pr-4 mobile:pr-0">
-            <EmailMessageBody
-              message={props.message}
-              isPersonal={props.isPersonal}
-              isBodyExpanded={isBodyExpanded}
-              setExpandedMessageBody={() => props.onExpandedChange?.(true)}
-              setFocusedMessageId={() => props.onSelect?.()}
-              showFullContent={props.showFullContent}
-              isFocused={props.isSelected}
-            />
-          </div>
+          {/* Keyed by component so thread refreshes keep each card's state. */}
+          <Key each={invitationGroups()} by={(group) => group.primary.id}>
+            {(group) => {
+              const primary = renderInvitation(group().primary);
+              return (
+                <div>
+                  {primary}
+                  <Show when={group().related.length > 0}>
+                    <details class="group border-t border-edge-muted">
+                      <summary class={DISCLOSURE_SUMMARY}>
+                        <CaretRight class={DISCLOSURE_CARET} />
+                        View {group().related.length} related{' '}
+                        {group().related.length === 1
+                          ? 'occurrence'
+                          : 'occurrences'}
+                      </summary>
+                      <Key each={group().related} by={(invite) => invite.id}>
+                        {(invite) => renderInvitation(invite())}
+                      </Key>
+                    </details>
+                  </Show>
+                </div>
+              );
+            }}
+          </Key>
+          <Show when={invitationGroups().length > 0} fallback={body()}>
+            {/* The card replaces the body; the original stays one click away. */}
+            <details class="group mb-3 border-t border-edge-muted">
+              <summary class={DISCLOSURE_SUMMARY}>
+                <CaretRight class={DISCLOSURE_CARET} />
+                View original email
+              </summary>
+              {body()}
+            </details>
+          </Show>
           {/* Image attachments */}
           <Show when={imageAttachmentsWithSfs().length > 0}>
             <div class="flex flex-wrap gap-2 mt-2">

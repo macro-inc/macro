@@ -29,18 +29,45 @@ const commentAnchor = z.union([
   }),
 ]);
 
+const contextMessage = z.object({
+  id: z.string().min(1),
+  senderId: z.string(),
+  author: z.string(),
+  content: z.string(),
+  postedAt: z.string(),
+});
+
+const contextThread = z.object({
+  rootId: z.string().min(1),
+  messages: z.array(contextMessage),
+  messagesOmitted: z.boolean(),
+});
+
+const replyTarget = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('quote'),
+    messageId: z.string().min(1),
+    threadId: z.string().min(1),
+    preview: z.string(),
+    message: contextMessage.optional(),
+  }),
+  z.object({
+    kind: z.literal('thread'),
+    threadId: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal('none'),
+  }),
+]);
+
 const agentContextRequest = z.object({
   promptMarkdown: z.string(),
   parent: messageParent.optional(),
   anchor: commentAnchor.optional(),
-  messages: z
-    .array(
-      z.object({
-        sender: z.string(),
-        content: z.string(),
-      })
-    )
-    .optional(),
+  replyTarget: replyTarget.optional(),
+  promptMessageId: z.string().min(1).optional(),
+  thread: contextThread.optional(),
+  channel: z.array(contextThread).optional(),
 });
 
 const agentContextResponse = z.object({
@@ -51,7 +78,7 @@ export class AgentContextEndpoint extends OpenAPIRoute {
   schema = {
     summary: 'Compose an agent prompt with conversation context',
     description:
-      'Builds internal markdown containing the conversation parent, the comment anchor it was posted on, optional untrusted prior messages, and the user prompt.',
+      'Builds internal markdown containing the conversation the prompt was posted in - its thread, the channel around it, what it replies to, and the comment anchor it sits on - followed by the user prompt.',
     request: {
       body: {
         content: {

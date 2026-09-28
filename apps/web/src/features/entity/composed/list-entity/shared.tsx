@@ -28,7 +28,13 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   checked?: boolean;
   highlighted?: boolean;
   hovered?: boolean;
+  /** Caller-owned quick actions, revealed on pointer hover or keyboard focus. */
+  actions?: JSX.Element;
+  /** Persistent status/action immediately before the timestamp. */
+  leadingAction?: JSX.Element;
   hideContentHits?: boolean;
+  /** Resolved app display name for a linked GitHub PR author, when available. */
+  authorDisplayName?: string;
   /** Opt-in by the data-owning view; keep nonessential setup off initial render. */
   deferInteractions?: boolean;
   /** Hide the multi-select checkbox (e.g. read-only embeds outside soup). */
@@ -56,7 +62,10 @@ const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
 export interface LayoutProps {
   entity: WithNotification<EntityData>;
+  actions?: JSX.Element;
+  leadingAction?: JSX.Element;
   checked?: boolean;
+  authorDisplayName?: string;
   hideCheckbox?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
   unread: boolean;

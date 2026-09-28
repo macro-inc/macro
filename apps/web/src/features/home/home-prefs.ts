@@ -4,14 +4,10 @@ import type { ContextProviderProps } from '@solid-primitives/context';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 
 /** Dismissible home surfaces. Dismissals persist in localStorage. */
-export type HomeCard = 'examples' | 'setup' | 'getting-started-link';
+export type HomeCard = 'getting-started-link';
 
 const storage = createUserScopedStorage('macro:home:dismissed');
-const HOME_CARDS: readonly HomeCard[] = [
-  'examples',
-  'setup',
-  'getting-started-link',
-];
+const HOME_CARDS: readonly HomeCard[] = ['getting-started-link'];
 
 export function parseDismissedCards(raw: string | null): HomeCard[] {
   if (raw === null) return [];

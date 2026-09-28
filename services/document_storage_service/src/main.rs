@@ -442,7 +442,12 @@ async fn run() -> anyhow::Result<()> {
             Some(permission_checker),
             Some(notification_service),
         )
-        .with_event_broker(macro_event_broker.clone()),
+        .with_event_broker(macro_event_broker.clone())
+        .with_initiative_assignees(Arc::new(
+            initiative::domain::assignees::InitiativeAssignees::new(PgInitiativeRepo::new(
+                db.clone(),
+            )),
+        )),
     );
 
     // Create the channel list service used by soup.
@@ -728,12 +733,30 @@ async fn run() -> anyhow::Result<()> {
             .with_event_broker(macro_event_broker.clone()),
     );
 
+    consumer_tracker.spawn({
+        let service = call_service.clone();
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            cancellation_token
+                .run_until_cancelled(call::inbound::stale_call_sweeper::run_stale_call_sweeper(
+                    service,
+                    call::inbound::stale_call_sweeper::SWEEP_INTERVAL,
+                ))
+                .await;
+        }
+    });
+
     let call_state = CallRouterState::new(
         call_service.clone(),
         entity_access_service.clone(),
         authorization_state.clone(),
     );
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
+    let call_public_rate_limiter = RateLimitServiceImpl {
+        repo: RedisRateLimitAdapter {
+            redis: redis_client.clone(),
+        },
+    };
 
     let webhook_repository = webhook::outbound::PgRepository::new(db.clone());
     let webhook_endpoint_scheme_policy = if matches!(env, Environment::Local) {
@@ -1027,7 +1050,13 @@ async fn run() -> anyhow::Result<()> {
         conn_gateway_client.clone(),
     );
     let discussion_delivery = messages::domain::delivery::DiscussionDelivery::new(
-        messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()),
+        messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone())
+            .with_initiatives(
+                initiative::domain::lookup::InitiativeLookup::new(
+                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                ),
+                properties_service.clone(),
+            ),
         messages::outbound::entity_access_audience::EntityAccessMessageAudience(
             (*entity_access_service).clone(),
         ),
@@ -1045,7 +1074,10 @@ async fn run() -> anyhow::Result<()> {
     );
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(
-            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
+                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                )),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
                 channel_bots::outbound::conversation::LocalBotPublisher::new(bot_trigger_sender),
@@ -1195,15 +1227,33 @@ async fn run() -> anyhow::Result<()> {
             lexical_client.clone(),
         ),
     );
-    let initiative_service = Arc::new(InitiativeServiceImpl::new(
-        PgInitiativeRepo::new(db.clone()),
-        outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter::new(
-            document_creator.clone(),
-            db.clone(),
-            sqs_client.clone(),
-            macro_event_broker.clone(),
-        ),
-    ));
+    let initiative_service = Arc::new(
+        InitiativeServiceImpl::new(
+            PgInitiativeRepo::new(db.clone()),
+            initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
+                document_creator.clone(),
+                documents_hex::domain::purge::DocumentPurger::new(
+                    documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(
+                        db.clone(),
+                    ),
+                    documents_hex::outbound::document_purge::SqsDocumentPurgeQueue::new(
+                        sqs_client.clone(),
+                    ),
+                    macro_event_broker.clone(),
+                ),
+            ),
+            Arc::new(initiative::outbound::resources::ProjectResources::new(
+                properties_service.clone(),
+                system_properties_service.clone(),
+                entity_access_service.clone(),
+            )),
+        )
+        .with_event_publisher(Arc::new(
+            initiative::outbound::event_publisher::BrokerInitiativeEventPublisher::new(
+                macro_event_broker.clone(),
+            ),
+        )),
+    );
 
     let collab_surface_service = CollabSurfaceServiceImpl::new(
         Arc::new(PgCollabSurfaceRepo::new(db.clone())),
@@ -1213,6 +1263,31 @@ async fn run() -> anyhow::Result<()> {
         )),
         config.document_permission_jwt.as_ref().to_string(),
     );
+
+    // Individual initiative reads preserve read-after-write consistency when a
+    // newly created project opens immediately. Lists retain the replica reader.
+    // Reuse Soup hydration so detail and mutation metadata include viewer history.
+    let initiative_entity_soup = Arc::new(
+        SoupImpl::new(
+            PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
+            frecency_service.clone(),
+            ReadonlyEmailPreviewAdapter(email_service.clone()),
+            ChannelListServiceImpl::new(
+                PgChannelsRepo::new(db.clone()),
+                PgChannelsRepo::new(db.clone()),
+                frecency_storage.clone(),
+            ),
+            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
+            crm_service.clone(),
+            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+            reminders_service.clone(),
+        )
+        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
+            db.clone(),
+        )),
+    );
+
+    let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
 
     // Keep the replica-backed Soup reader alongside the primary-backed email
     // writer in SoupRouterState. REST, GraphQL lists, and realtime hydration
@@ -1235,6 +1310,7 @@ async fn run() -> anyhow::Result<()> {
             ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(readonly_db.clone())),
             reminders_service.clone(),
         )
+        .with_favorites(favorites_service.clone())
         .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
             readonly_db.clone(),
         )),
@@ -1414,7 +1490,6 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
-    let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
     let favorites_mutation_service = Arc::new(FavoritesMutationServiceImpl::new(
         favorites_service.clone(),
         entity_access_service.clone(),
@@ -1513,7 +1588,7 @@ async fn run() -> anyhow::Result<()> {
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),
-            email_service,
+            email_service.clone(),
             entity_access_service.clone(),
             authorization_state.clone(),
         )
@@ -1543,6 +1618,13 @@ async fn run() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
+        graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader(
+            graphql_soup::soup_item_loader(initiative_entity_soup, Arc::new(email_service.clone())),
+        ),
+        graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
+            initiative_service.clone(),
+            entity_access_service.clone(),
+        ),
         initiative_state: InitiativeRouterState::new(
             initiative_service,
             entity_access_service.clone(),
@@ -1563,7 +1645,10 @@ async fn run() -> anyhow::Result<()> {
         // GraphQL reads the activity log through the readonly pool; the
         // Kafka consumer's writer-pool repo above is separate on purpose.
         activity_reader: complete_graph::ActivityPortReader::new(Arc::new(
-            activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+            initiative::domain::personal_activity::ProjectVisibleActivityReads::new(
+                activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+                entity_access_service.clone(),
+            ),
         )),
         graphql_entity_mutation_service,
         github_sync_service: Arc::new(github_sync_service_impl),
@@ -1631,6 +1716,7 @@ async fn run() -> anyhow::Result<()> {
         channel_bot_webhook_state,
         call_state,
         call_webhook_state,
+        call_public_rate_limiter,
         webhook_state,
         sse_stream_state,
         call_internal_state,

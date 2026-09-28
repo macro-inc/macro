@@ -108,7 +108,7 @@ export function buildGraphqlEntitySoupInput(
     .with('CALENDAR_EVENT', () => ({
       calendarEventFilter: { literal: { id: entityId } },
     }))
-    .with('USER', () => undefined)
+    .with('USER', 'INITIATIVE', () => undefined)
     .exhaustive();
   if (!targetFilter) return undefined;
 

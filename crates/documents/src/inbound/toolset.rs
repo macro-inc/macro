@@ -21,7 +21,7 @@ use crate::{
     domain::create::DocumentCreator,
     domain::ports::DocumentService,
     domain::ports::create::DocumentCreationService,
-    domain::ports::editing::EditingWorkerService,
+    domain::ports::editing::{EditingWorkerService, EditorName},
     domain::ports::mentions::NoOpDocumentMentionTracker,
     inbound::toolset::{
         comment_on_document_text::CommentOnDocumentText,
@@ -104,6 +104,13 @@ pub struct DocumentToolContext<
     /// The bot these tools act as, on behalf of the requesting user. Defaults
     /// to Macro AI; hosts running a specific agent set it with [`Self::with_actor`].
     pub actor: BotId,
+
+    /// The display name of [`Self::actor`] as the host knows it, set with
+    /// [`Self::with_actor_name`]. First-party bots need none: their names are
+    /// compile-time constants. A user- or team-owned bot is a row the host has
+    /// already read, so it hands the name over rather than have every tool
+    /// look it up again.
+    actor_name: Option<EditorName>,
 }
 
 impl<
@@ -126,6 +133,7 @@ impl<
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             recorder: self.recorder.clone(),
             actor: self.actor,
+            actor_name: self.actor_name.clone(),
         }
     }
 }
@@ -182,6 +190,7 @@ impl<
             document_permission_jwt_secret,
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
             actor: bot_id::MACRO_AI_BOT_ID,
+            actor_name: None,
         }
     }
 
@@ -195,6 +204,23 @@ impl<
     pub fn with_actor(mut self, actor: BotId) -> Self {
         self.actor = actor;
         self
+    }
+
+    /// Set the display name of the bot these tools act as. A blank name is
+    /// no name: the actor's own is used, when it has one.
+    pub fn with_actor_name(mut self, name: &str) -> Self {
+        self.actor_name = EditorName::new(name);
+        self
+    }
+
+    /// The name readers see on what these tools write as it happens - the
+    /// label on the cursor the editing worker draws: the host-supplied name,
+    /// else the first-party bot's own. `None` for a user- or team-owned bot
+    /// the host did not name.
+    pub fn actor_editor_name(&self) -> Option<EditorName> {
+        self.actor_name
+            .clone()
+            .or_else(|| bot_id::system_bot(self.actor).and_then(|bot| EditorName::new(bot.name)))
     }
 
     /// Mint the bot's comment capability on the document on behalf of the

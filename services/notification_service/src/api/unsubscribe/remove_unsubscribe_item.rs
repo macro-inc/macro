@@ -29,22 +29,22 @@ pub async fn handler(
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(UnsubscribeItemPathParams { item_type, item_id }): Path<UnsubscribeItemPathParams>,
 ) -> Result<Response, Response> {
-    notification_db_client::unsubscribe::item::remove_unsubscribed_item_user(
-        &ctx.db,
-        &user.authorization.user.user_context.user_id,
-        &item_id,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "unable to remove unsubscribe item");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "unable to remove unsubscribe item".into(),
-            }),
+    ctx.item_preferences
+        .remove(
+            user.authorization.user.macro_user_id,
+            item_type.with_entity_string(item_id),
         )
-            .into_response()
-    })?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "unable to remove unsubscribe item");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to remove unsubscribe item".into(),
+                }),
+            )
+                .into_response()
+        })?;
 
     Ok((StatusCode::OK, Json(EmptyResponse {})).into_response())
 }

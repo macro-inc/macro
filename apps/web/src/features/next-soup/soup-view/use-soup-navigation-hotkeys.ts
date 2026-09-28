@@ -190,7 +190,7 @@ export const useSoupNavigationHotkeys = (
     return (
       contentType === 'component' ||
       contentType === 'project' ||
-      referredFrom === 'inbox' ||
+      referredFrom === 'home' ||
       referredFrom === 'mail'
     );
   };

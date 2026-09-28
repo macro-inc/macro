@@ -378,7 +378,7 @@ async fn creation_team_consent_is_explicit_and_uses_owner_membership(pool: Pool<
         .unwrap();
     let grant = facts.current.unwrap();
     assert_eq!(grant.team_id, TEST_TEAM_ID);
-    assert_eq!(grant.level, TeamShareLevel::Comment);
+    assert_eq!(grant.level, TeamShareLevel::Edit);
     assert_eq!(facts.revision, 1);
     assert_eq!(
         repo.get_team_task_metadata(&document.document_id)
@@ -396,7 +396,7 @@ async fn creation_team_consent_is_explicit_and_uses_owner_membership(pool: Pool<
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(level, AccessLevel::Comment);
+    assert_eq!(level, AccessLevel::Edit);
 }
 
 #[sqlx::test(

@@ -357,3 +357,28 @@ async fn mutation_effects_share_non_nullable_hydration_and_omit_misses() {
     let data = response.data.into_json().unwrap();
     assert!(data["result"]["effects"].as_array().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn initiative_patches_hydrate_and_delete_the_soup_record() {
+    let soup = CountingSoupService::default();
+    let id = Uuid::from_u128(42);
+    let removed_id = Uuid::from_u128(44);
+    soup.set_raw_response(vec![soup_initiative(id)]);
+    let responses = subscription_responses(
+        soup,
+        vec![
+            Patch::Updated(ModelEntityType::Initiative.with_entity_string(id.to_string())),
+            Patch::Deleted(ModelEntityType::Initiative.with_entity_string(removed_id.to_string())),
+        ],
+    )
+    .await;
+    assert_eq!(responses.len(), 1);
+    assert!(responses[0].errors.is_empty(), "{:?}", responses[0].errors);
+    let data = responses[0].data.clone().into_json().unwrap();
+    let patches = data["soupUpdates"].as_array().unwrap();
+    assert_eq!(patches.len(), 2);
+    assert_eq!(patches[0]["item"]["__typename"], "GraphqlSoupInitiative");
+    assert_eq!(patches[0]["item"]["id"], id.to_string());
+    assert_eq!(patches[1]["graphqlTypeName"], "GraphqlSoupInitiative");
+    assert_eq!(patches[1]["entityId"], removed_id.to_string());
+}

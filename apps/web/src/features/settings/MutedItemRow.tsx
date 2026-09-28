@@ -11,6 +11,7 @@ import {
   muteItemPreviewEntity,
   normalizeMuteItemType,
 } from '@entity/utils/notification';
+import { formatSnoozeDeadline } from '@notifications/core/snooze';
 import { mutedEntityTypeLabel } from '@notifications/notification-event-catalog';
 import {
   type ItemEntity,
@@ -27,6 +28,8 @@ import { createMemo, Show } from 'solid-js';
 export function MutedItemRow(props: {
   item: UserUnsubscribe;
   onUnmute: () => void;
+  onSnooze?: () => void;
+  pending?: boolean;
 }) {
   const entity = createMemo(() => muteItemPreviewEntity(props.item));
   return (
@@ -38,6 +41,8 @@ export function MutedItemRow(props: {
           name={mutedEntityTypeLabel(props.item.item_type)}
           iconType={muteItemFallbackIconType(props.item.item_type)}
           onUnmute={props.onUnmute}
+          onSnooze={props.onSnooze}
+          pending={props.pending}
         />
       }
     >
@@ -46,6 +51,8 @@ export function MutedItemRow(props: {
           item={props.item}
           entity={previewEntity()}
           onUnmute={props.onUnmute}
+          onSnooze={props.onSnooze}
+          pending={props.pending}
         />
       )}
     </Show>
@@ -56,6 +63,8 @@ function MutedItemPreviewRow(props: {
   item: UserUnsubscribe;
   entity: ItemEntity;
   onUnmute: () => void;
+  onSnooze?: () => void;
+  pending?: boolean;
 }) {
   const [preview] = useItemPreview(() => props.entity);
   const name = () => {
@@ -78,6 +87,8 @@ function MutedItemPreviewRow(props: {
       name={name()}
       iconType={iconType()}
       onUnmute={props.onUnmute}
+      onSnooze={props.onSnooze}
+      pending={props.pending}
     />
   );
 }
@@ -87,11 +98,13 @@ function MutedItemLayout(props: {
   name: string;
   iconType: EntityIconSelector;
   onUnmute: () => void;
+  onSnooze?: () => void;
+  pending?: boolean;
 }) {
   const dmRecipientId = useMutedChannelDmRecipientId(() => props.item);
 
   return (
-    <div class="flex items-center gap-3 px-6 py-3.5 min-h-[60px]">
+    <div class="flex items-center gap-3 px-6 py-3.5 min-h-[60px] mobile:grid mobile:grid-cols-[1.25rem_minmax(0,1fr)] mobile:gap-y-1 mobile:px-4">
       <div class="size-5 shrink-0 flex items-center justify-center">
         <Show
           when={dmRecipientId()}
@@ -109,14 +122,38 @@ function MutedItemLayout(props: {
           )}
         </Show>
       </div>
-      <div class="min-w-0 flex-1 truncate text-sm text-ink">{props.name}</div>
-      <button
-        type="button"
-        class="shrink-0 text-sm text-ink-muted hover:text-ink"
-        onClick={props.onUnmute}
-      >
-        Unmute
-      </button>
+      <div class="min-w-0 flex-1 text-sm text-ink">
+        <div class="truncate" title={props.name}>
+          {props.name}
+        </div>
+        <Show when={props.item.snoozed_until}>
+          {(until) => (
+            <div class="text-xs text-ink-muted">
+              Until {formatSnoozeDeadline(until())}
+            </div>
+          )}
+        </Show>
+      </div>
+      <div class="flex shrink-0 items-center gap-3 mobile:col-start-2 mobile:gap-2">
+        <Show when={props.onSnooze}>
+          <button
+            type="button"
+            class="shrink-0 text-sm text-ink-muted hover:text-ink disabled:opacity-50 mobile:min-h-11 mobile:rounded-full mobile:bg-ink/5 mobile:px-3"
+            disabled={props.pending}
+            onClick={props.onSnooze}
+          >
+            {props.item.snoozed_until ? 'Change time' : 'Snooze instead'}
+          </button>
+        </Show>
+        <button
+          type="button"
+          class="shrink-0 text-sm text-ink-muted hover:text-ink disabled:opacity-50 mobile:min-h-11 mobile:rounded-full mobile:bg-ink/5 mobile:px-3"
+          onClick={props.onUnmute}
+          disabled={props.pending}
+        >
+          {props.item.snoozed_until ? 'Resume' : 'Unmute'}
+        </button>
+      </div>
     </div>
   );
 }

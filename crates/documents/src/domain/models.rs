@@ -333,7 +333,7 @@ pub struct NewDocument {
     pub project_id: Option<uuid::Uuid>,
     /// Team to use when assigning a per-team task number, never sharing authority.
     pub team_id: Option<uuid::Uuid>,
-    /// Explicit task creation consent. Initializes Comment using the persisted owner's team.
+    /// Explicit task creation consent. Initializes Edit using the persisted owner's team.
     /// Ordinary documents, snippets, and imports must leave this false.
     pub share_with_team: bool,
     /// Custom creation timestamp.

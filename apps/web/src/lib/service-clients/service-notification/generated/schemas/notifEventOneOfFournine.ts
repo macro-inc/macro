@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AgentSessionMentionedMetadata } from './agentSessionMentionedMetadata';
+import type { AgentSessionWaitingForInputMetadata } from './agentSessionWaitingForInputMetadata';
 import type { NotifEventOneOfFournineTag } from './notifEventOneOfFournineTag';
 
 /**
- * The user was named in a prompt to an agent session.
+ * An agent is blocked on a question for the session's owner.
  */
 export type NotifEventOneOfFournine = {
-  /** The user was named in a prompt to an agent session. */
-  content: AgentSessionMentionedMetadata;
+  /** An agent is blocked on a question for the session's owner. */
+  content: AgentSessionWaitingForInputMetadata;
   tag: NotifEventOneOfFournineTag;
 };

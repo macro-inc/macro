@@ -130,7 +130,7 @@ function CommandMenuShellRoot(props: SurfaceProps) {
 
 function CommandMenuHeader(props: ParentProps<{ class?: string }>) {
   return (
-    <Panel.Header class={cn('gap-2 px-4 py-2', props.class)}>
+    <Panel.Header class={cn('gap-3 px-5 py-3', props.class)}>
       {props.children}
     </Panel.Header>
   );
@@ -153,7 +153,7 @@ function CommandMenuBody(
 function CommandMenuFooter(props: ParentProps<{ class?: string }>) {
   return (
     <Panel.Footer
-      class={cn('gap-4 px-4 text-xs text-ink-extra-muted/80', props.class)}
+      class={cn('gap-4 px-5 py-2 text-xs text-ink-extra-muted/80', props.class)}
     >
       {props.children}
     </Panel.Footer>
@@ -168,6 +168,7 @@ export const CommandMenuShell = Object.assign(CommandMenuShellRoot, {
 });
 
 export function CommandMenuList<T>(props: {
+  id?: string;
   items: readonly T[];
   selectedIndex: number;
   scrollSelectedIntoView?: boolean;
@@ -218,10 +219,11 @@ export function CommandMenuList<T>(props: {
 
   return (
     <div
+      id={props.id}
       ref={listRef}
       role="listbox"
       class={cn(
-        'max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2',
+        'max-h-54 overflow-y-auto overflow-x-hidden scrollbar-hidden p-2.5',
         props.class
       )}
       onScroll={() => {
@@ -234,6 +236,8 @@ export function CommandMenuList<T>(props: {
             {props.beforeItem?.(item, index())}
             <CommandMenuListItem
               as="div"
+              role="option"
+              aria-selected={isSelected(index())}
               id={itemId(item, index())}
               selected={isSelected(index())}
               disabled={props.itemDisabled?.(item, index())}
@@ -258,7 +262,7 @@ export function CommandMenuSearchInput(
   return (
     <input
       class={cn(
-        'min-w-0 flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder',
+        'min-w-0 flex-1 py-0.5 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder',
         local.class
       )}
       {...rest}
@@ -269,6 +273,8 @@ export function CommandMenuSearchInput(
 export function CommandMenuListItem(
   props: ParentProps<{
     id?: string;
+    role?: JSX.HTMLAttributes<HTMLElement>['role'];
+    'aria-selected'?: boolean;
     as?: 'button' | 'div';
     class?: string;
     selected?: boolean;
@@ -282,6 +288,8 @@ export function CommandMenuListItem(
       component={props.as ?? 'button'}
       type={props.as === 'div' ? undefined : 'button'}
       id={props.id}
+      role={props.role}
+      aria-selected={props['aria-selected']}
       disabled={props.as === 'div' ? undefined : props.disabled}
       aria-disabled={props.disabled || undefined}
       class={cn(

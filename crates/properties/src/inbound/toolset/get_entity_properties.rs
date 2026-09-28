@@ -23,6 +23,7 @@ use super::PropertiesToolContext;
 pub enum ToolEntityType {
     Document,
     Task,
+    Initiative,
     Project,
     Chat,
     // Listing and search tools report email threads as `email`. A doc comment
@@ -41,6 +42,7 @@ impl From<ToolEntityType> for EntityType {
         match t {
             ToolEntityType::Document => EntityType::Document,
             ToolEntityType::Task => EntityType::Task,
+            ToolEntityType::Initiative => EntityType::Initiative,
             ToolEntityType::Project => EntityType::Project,
             ToolEntityType::Chat => EntityType::Chat,
             ToolEntityType::Thread => EntityType::Thread,
@@ -59,6 +61,7 @@ impl From<ToolEntityType> for EntityType {
 #[serde(rename_all = "snake_case")]
 pub enum ToolPropertyTargetEntityType {
     Document,
+    Initiative,
     Project,
     Chat,
     // Listing and search tools report email threads as `email`. A doc comment
@@ -76,6 +79,7 @@ impl From<ToolPropertyTargetEntityType> for model_entity::EntityType {
     fn from(value: ToolPropertyTargetEntityType) -> Self {
         match value {
             ToolPropertyTargetEntityType::Document => Self::Document,
+            ToolPropertyTargetEntityType::Initiative => Self::Initiative,
             ToolPropertyTargetEntityType::Project => Self::Project,
             ToolPropertyTargetEntityType::Chat => Self::Chat,
             ToolPropertyTargetEntityType::Thread => Self::EmailThread,
@@ -96,7 +100,9 @@ pub struct GetEntityProperties {
     #[schemars(description = "The ID of the entity to get properties for.")]
     pub entity_id: String,
 
-    #[schemars(description = "The type of entity.")]
+    #[schemars(
+        description = "The type of entity. Use initiative for Projects in Tasks, and project for folders."
+    )]
     pub entity_type: ToolPropertyTargetEntityType,
 }
 

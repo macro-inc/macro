@@ -1,6 +1,9 @@
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { describe, expect, it, vi } from 'vitest';
-import { mapApiSoupItemToEntity } from './transform-utils';
+import {
+  isDisplayableSoupItem,
+  mapApiSoupItemToEntity,
+} from './transform-utils';
 
 vi.mock('@core/constant/allBlocks', () => ({
   blockNameToDefaultFile: {},
@@ -8,6 +11,28 @@ vi.mock('@core/constant/allBlocks', () => ({
 }));
 vi.mock('@core/context/channels', () => ({ useChannelsContext: vi.fn() }));
 vi.mock('@core/user', () => ({ emailToId: vi.fn() }));
+
+describe('initiative rollout compatibility', () => {
+  it('does not present opt-in initiatives as existing folders or tasks', () => {
+    const item = {
+      tag: 'initiative',
+      is_favorited: false,
+      frecency_score: 0,
+      data: {
+        id: 'initiative',
+        name: 'Launch',
+        ownerId: 'owner',
+        createdAt: '2026-09-01',
+        updatedAt: '2026-09-26',
+        properties: [],
+      },
+    } satisfies SoupApiItem;
+    expect(isDisplayableSoupItem(item)).toBe(false);
+    expect(() => mapApiSoupItemToEntity(item)).toThrow(
+      'Initiative Soup rendering is not enabled'
+    );
+  });
+});
 
 describe('chat soup entities', () => {
   it.each(['openai/gpt-5.6', 'anthropic/claude-sonnet-5', null, undefined])(
@@ -33,6 +58,7 @@ describe('chat soup entities', () => {
         type: 'chat',
         id: item.data.id,
         model,
+        isFavorited: false,
       });
     }
   );

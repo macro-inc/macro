@@ -644,7 +644,7 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem => Boolean(item);
+): item is DisplayableSoupItem => Boolean(item) && item.tag !== 'initiative';
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
@@ -746,6 +746,11 @@ export const mapApiSoupItemToEntity = (
   item: DisplayableSoupItem
 ): SoupEntity => {
   const entity = match(item)
+    // Initiatives are opt-in on the server. Their frontend adapter lands with
+    // the Projects UI; existing lists exclude them via isDisplayableSoupItem.
+    .with({ tag: 'initiative' }, () => {
+      throw new Error('Initiative Soup rendering is not enabled');
+    })
     .with({ tag: 'agentSession' }, (item) => ({
       ...item.data,
       type: 'agent_session' as const,
@@ -839,6 +844,7 @@ export const mapApiSoupItemToEntity = (
         attended: status === 'ATTENDED',
         durationMs: item.data.durationMs ?? undefined,
         participantIds: item.data.participants.map((p) => p.userId),
+        guests: item.data.guests,
         summary: item.data.summary ?? undefined,
         properties: item.data.properties,
       } satisfies CallEntity;
@@ -1056,7 +1062,10 @@ export const mapApiSoupItemToEntity = (
   );
   const notified = notifiedAt ? { ...touched, notifiedAt } : touched;
 
-  return withRawNotifications(notified, item);
+  return withRawNotifications(
+    { ...notified, isFavorited: item.is_favorited },
+    item
+  );
 };
 
 const toCalendarEventTime = (

@@ -85,7 +85,7 @@ function historyItemFromSearchDocument(
       return {
         ...base,
         type: 'document',
-        fileType: markdown ? 'md' : undefined,
+        fileType: record.fileType ?? (markdown ? 'md' : undefined),
         subType,
       } as HistoryItem;
     }

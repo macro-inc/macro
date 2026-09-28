@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT u.user_id\n        FROM user_notification_item_unsubscribe u\n        WHERE u.item_id = $1\n          AND (u.snoozed_until IS NULL OR u.snoozed_until > NOW())\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "85ad383f14e74e41639dd84ca0fddbd9fa8c2cc3f73e2a35ea1725f09b11f47c"
+}

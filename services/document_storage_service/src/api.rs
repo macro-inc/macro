@@ -99,7 +99,10 @@ fn api_router(state: ApiContext) -> Router {
     let webhook_router = Router::new()
         .nest(
             "/call",
-            call::inbound::axum_router::webhook_router(state.call_webhook_state.clone()),
+            call::inbound::axum_router::webhook_router(
+                state.call_webhook_state.clone(),
+                state.call_public_rate_limiter.clone(),
+            ),
         )
         .nest(
             "/cal",

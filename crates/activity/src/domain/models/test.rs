@@ -20,6 +20,20 @@ fn every_action_maps_to_stable_columns() {
         (Action::Messaged, "messaged", None),
         (Action::Sent, "sent", None),
         (
+            Action::TaskAdded(InitiativeTaskChange {
+                task_id: "task-1".into(),
+            }),
+            "task_added",
+            Some(json!({"task_id":"task-1"})),
+        ),
+        (
+            Action::TaskRemoved(InitiativeTaskChange {
+                task_id: "task-1".into(),
+            }),
+            "task_removed",
+            Some(json!({"task_id":"task-1"})),
+        ),
+        (
             Action::PropertyChanged(PropertyChange {
                 property: "prop-1".to_string(),
                 from: None,

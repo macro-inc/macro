@@ -80,7 +80,7 @@ use agent_inmem::rig_engine::RigTurnEngine;
 use agent_runtime_directory::PgAgentRuntimeDirectory;
 use agent_session::domain::model::{AgentMcpServers, ReplicaId};
 use agent_session::domain::ports::{NoOpRealtime, SessionOwnership as _};
-use agent_session::domain::service::AgentSessionServiceImpl;
+use agent_session::domain::service::{AgentSessionService, AgentSessionServiceImpl};
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
 };
@@ -727,7 +727,13 @@ async fn run() -> anyhow::Result<()> {
             message_realtime.clone(),
         ),
         messages::domain::delivery::DiscussionDelivery::new(
-            messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()),
+            messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
+                .with_initiatives(
+                    initiative::domain::lookup::InitiativeLookup::new(
+                        initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+                    ),
+                    ai_tools::build_properties_service(pool.clone(), entity_access.clone()),
+                ),
             messages::outbound::entity_access_audience::EntityAccessMessageAudience(
                 (*entity_access).clone(),
             ),
@@ -740,7 +746,10 @@ async fn run() -> anyhow::Result<()> {
     );
     let message_service: Arc<dyn messages::domain::api::MessageServiceApi> = Arc::new(
         messages::domain::service::MessageService::new(
-            messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+            messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone())
+                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                    initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+                )),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(broker.clone()),
                 messages::domain::ports::NoMessageEventPublisher,
@@ -848,6 +857,10 @@ async fn run() -> anyhow::Result<()> {
     // the repository route below serves, so what the app offers is exactly
     // what a session may select.
     let open_repositories = Arc::clone(&reachable_repositories);
+    // Kept back from the move below so the drain announcement has something
+    // to speak through: it is the same service instance the harness routes
+    // commands with, and a clone shares its replica identity.
+    let draining_sessions = sessions.clone();
     let harness = Arc::new(
         AgentHarnessService::new(
             sessions,
@@ -1132,6 +1145,22 @@ async fn run() -> anyhow::Result<()> {
         tokio::select! {
             () = &mut shutdown => {
                 tracing::info!("agent harness service shutting down");
+                // SIGTERM lands minutes before the process actually stops:
+                // ECS keeps the task draining while its heartbeat stays
+                // fresh, so peers go on resolving it as a session's live
+                // manager and forwarding it commands it will not live to
+                // finish - which is how a prompt reaches the harness, gets a
+                // 200, and is never seen again. Said here, before any
+                // teardown, so the work that follows goes to a replica that
+                // is staying.
+                match draining_sessions.begin_draining().await {
+                    Ok(()) => tracing::info!(%replica, "harness replica is draining"),
+                    Err(error) => tracing::error!(
+                        error = ?error,
+                        %replica,
+                        "failed to publish the harness replica drain",
+                    ),
+                }
                 break;
             }
             result = &mut trigger => {

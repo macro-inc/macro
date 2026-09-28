@@ -1,6 +1,7 @@
 import type { FacetSelection, SortSelection } from '@app/features/soup';
 
 export type TaskTab = 'my-tasks' | 'created-by-me' | 'team-tasks';
+export type TasksTab = TaskTab;
 
 export type TaskGroupBy =
   | 'none'
@@ -18,7 +19,7 @@ export type TaskDetailTarget = {
 };
 
 export type TasksViewState = {
-  tab: TaskTab;
+  tab: TasksTab;
   search: string;
   groupBy: TaskGroupBy;
   sort: SortSelection<TaskSortId>[];

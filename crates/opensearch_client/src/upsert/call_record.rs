@@ -20,7 +20,7 @@ pub struct UpsertCallRecordSegmentArgs {
     #[serde(rename = "entity_id")]
     pub call_id: String,
     pub transcript_id: String,
-    pub channel_id: String,
+    pub channel_id: Option<String>,
     pub participant_ids: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub channel_name: Option<String>,

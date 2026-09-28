@@ -430,12 +430,11 @@ body.tauri-ios {
 }
 
 /* Scope the panel semantic itself so nested bg-panel consumers share the same
-   inactive split chrome instead of only tinting the outer panel element. */
+   inactive split chrome instead of only tinting the outer panel element.
+   Lower lightness directly: mixing with ink reverses the effect in dark themes. */
 .split-panel-inactive {
-  --color-panel: color-mix(
-    in oklch,
-    var(--theme-panel, var(--color-surface-1)) 80%,
-    var(--color-page)
+  --color-panel: oklch(
+    from var(--theme-panel, var(--color-surface-1)) calc(l - 0.025) c h
   );
 }
 
@@ -791,9 +790,11 @@ html[data-theme-light='false'] {
   --color-composer: var(--color-surface-4);
 }
 
-/* Right-side header actions share a quiet, hover-only background. */
+/* Right-side header actions share a quiet, hover-only background. Touch header
+   islands own their controls' chrome (the compose island's filled send button,
+   say), so the flattening stops at an island boundary. */
 @utility header-actions {
-  & [data-button] {
+  & [data-button]:not([data-header-island] *) {
     @apply rounded-xl border-0 bg-transparent;
 
     &:not(:hover):not(:active) {

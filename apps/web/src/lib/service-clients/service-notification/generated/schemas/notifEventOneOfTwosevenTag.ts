@@ -10,5 +10,5 @@ export type NotifEventOneOfTwosevenTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfTwosevenTag = {
-  reminder: 'reminder',
+  task_assigned: 'task_assigned',
 } as const;

@@ -4,6 +4,10 @@ import { formatCallDuration } from '@block-call/utils';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
+import {
+  firstPartyBotMark,
+  firstPartyBotMarkTone,
+} from '@core/component/firstPartyBotMark';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
@@ -11,7 +15,6 @@ import {
   unifiedListMarkdownTheme,
 } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
-import { isMacroAgentId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { formatRelativeDay } from '@core/util/dateParser';
@@ -26,7 +29,6 @@ import {
   type WithNotification,
 } from '@entity';
 import { formatCompactRelativeTimestamp } from '@entity/utils/timestamp';
-import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import { formatCalendarReminderTime } from '@notifications';
 import { getNotificationSenderFallbackName } from '@notifications/notification-sender';
@@ -156,12 +158,13 @@ type SenderIconProps = {
 };
 
 export function SenderIcon(props: SenderIconProps) {
-  // Bot senders render their own avatar; Macro AI keeps its dedicated logo.
+  // Team bots render their uploaded avatar; first-party bots keep their brand
+  // mark, which UserIcon draws.
   const botSender = () => {
     const sender = props.senderId
       ? senderFromStorageId(props.senderId)
       : undefined;
-    if (sender?.type !== 'bot' || isMacroAgentId(sender.id)) return;
+    if (sender?.type !== 'bot' || firstPartyBotMark(sender.id)) return;
     return sender;
   };
 
@@ -188,9 +191,9 @@ function InboxAvatar(props: {
 }) {
   const parsedSender = () =>
     props.senderId ? senderFromStorageId(props.senderId) : undefined;
-  const isMacroAgent = () => {
+  const botMark = () => {
     const sender = parsedSender();
-    return sender?.type === 'bot' && isMacroAgentId(sender.id);
+    return sender?.type === 'bot' ? firstPartyBotMark(sender.id) : undefined;
   };
 
   return (
@@ -204,8 +207,13 @@ function InboxAvatar(props: {
       <Match when={props.imageUrl}>
         {(url) => <img src={url()} alt="" class="size-full object-cover" />}
       </Match>
-      <Match when={isMacroAgent()}>
-        <MacroLogo class="m-auto size-1/2 text-accent" />
+      <Match when={botMark()} keyed>
+        {(mark) => (
+          <Dynamic
+            component={mark.Icon}
+            class={cn('m-auto size-1/2', firstPartyBotMarkTone(mark))}
+          />
+        )}
       </Match>
       <Match when={props.senderId}>
         {(senderId) => <SenderIcon senderId={senderId()} />}

@@ -198,6 +198,21 @@ impl AgentSessionRepo for StubSessions {
     ) -> SessionResult<()> {
         unimplemented!("resizing is the harness service's job")
     }
+
+    async fn list_queued_actions(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<Vec<agent_session::domain::model::StoredQueuedAction>> {
+        unimplemented!("the manager never reads the queue")
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        _id: AgentSessionId,
+        _entries: &[agent_session::domain::model::StoredQueuedAction],
+    ) -> SessionResult<()> {
+        unimplemented!("the manager never writes the queue")
+    }
 }
 
 /// A fake Cursor API: create/get/archive/stream, canned. Returns its base url,

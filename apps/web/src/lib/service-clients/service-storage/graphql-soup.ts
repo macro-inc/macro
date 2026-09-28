@@ -845,6 +845,29 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'commented_on_document'>
     )
     .with(
+      { __typename: 'GraphqlInitiativeDiscussionMetadata' },
+      (metadata) =>
+        ({
+          tag: 'initiative_discussion',
+          content: {
+            projectName: metadata.initiativeDiscussionProjectName,
+            owner: metadata.initiativeDiscussionOwner,
+            reason: match(metadata.initiativeDiscussionReason)
+              .with('MENTION', () => 'mention' as const)
+              .with('REPLY', () => 'reply' as const)
+              .with('ASSIGNEE', () => 'assignee' as const)
+              .with('OWNER', () => 'owner' as const)
+              .exhaustive(),
+            messageId: metadata.initiativeDiscussionMessageId,
+            threadId: metadata.initiativeDiscussionThreadId,
+            text: metadata.initiativeDiscussionText,
+            senderDisplayName: metadata.initiativeDiscussionSenderDisplayName,
+            senderProfilePictureUrl:
+              metadata.initiativeDiscussionSenderProfilePictureUrl,
+          },
+        }) satisfies NotifEventMember<'initiative_discussion'>
+    )
+    .with(
       { __typename: 'GraphqlChannelInviteMetadata' },
       (metadata) =>
         ({
@@ -1288,6 +1311,9 @@ function mapGraphqlReminderSchedule(entity: {
 }
 
 export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
+  // No client opts into initiatives until the Projects UI adds its fragment.
+  if (item.__typename === 'GraphqlSoupInitiative') return null;
+
   const frecency = item.frecencyScore ?? 0;
 
   return match(item)
@@ -1531,7 +1557,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
           is_favorited: entity.isFavorited,
           data: {
             callId: entity.id,
-            channelId: entity.channelId,
+            channelId: entity.callChannelId ?? null,
             channelName: entity.channelName ?? undefined,
             createdBy: entity.createdBy,
             customName: entity.customName ?? undefined,
@@ -1546,6 +1572,12 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
               userId: participant.userId,
               joinedAt: participant.joinedAt,
               leftAt: participant.leftAt ?? undefined,
+            })),
+            guests: entity.guests.map((guest) => ({
+              id: guest.id,
+              displayName: guest.displayName,
+              joinedAt: guest.joinedAt,
+              leftAt: guest.leftAt ?? undefined,
             })),
             properties: mapGraphqlProperties(entity.properties),
             notifications: mapGraphqlNotifications(entity.notifications),

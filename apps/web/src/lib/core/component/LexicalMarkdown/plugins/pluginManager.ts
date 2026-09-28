@@ -21,6 +21,7 @@ import { checklistPlugin } from './checklist/';
 import { customDeletePlugin } from './custom-delete';
 import { markdownShortcutsPlugin } from './markdown-shortcuts';
 import { normalizeTripleClickPlugin } from './normalize-triple-click';
+import { wordNavigationPlugin } from './word-navigation/wordNavigationPlugin';
 
 export type PluginFunction = (editor: LexicalEditor) => () => void;
 
@@ -89,6 +90,7 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
       // selection normalization the way the newer RichTextExtension does, so
       // register it explicitly here.
       cleanupFunctions.push(normalizeTripleClickPlugin()(editor));
+      cleanupFunctions.push(wordNavigationPlugin()(editor));
       return pluginManager;
     },
 

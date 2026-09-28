@@ -15,6 +15,7 @@ use crate::domain::{
     },
     ports::AccessRepository,
 };
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -589,6 +590,29 @@ impl AccessRepository for PgAccessRepository {
         queries::get_entity_users(&self.pool, entity_id, entity_type)
             .await
             .map_err(anyhow_access_error)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_direct_entity_users(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        let users = sqlx::query_scalar!(
+            "SELECT source_id FROM entity_access WHERE entity_id = $1 AND entity_type = $2 AND source_type = 'user' AND granted_from_project_id IS NULL",
+            entity_id,
+            entity_type.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        users
+            .into_iter()
+            .map(|user| {
+                MacroUserIdStr::parse_from_str(&user)
+                    .map(|user| user.into_owned())
+                    .map_err(|error| anyhow_access_error(anyhow::anyhow!(error)))
+            })
+            .collect()
     }
 
     #[tracing::instrument(err, skip(self))]

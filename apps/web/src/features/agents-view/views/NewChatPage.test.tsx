@@ -19,6 +19,10 @@ const mocks = vi.hoisted(() => ({
   attachments: [] as InputAttachmentData[],
   recentIds: [] as string[],
   recentUrls: [] as string[],
+  preferredInmemModel: undefined as string | undefined,
+  rememberInmemModel: vi.fn((id: string) => {
+    mocks.preferredInmemModel = id;
+  }),
   repositories: [] as { url: string; defaultBranch?: string }[],
 }));
 vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
@@ -40,6 +44,12 @@ vi.mock('../primitives/recent-repositories', () => ({
   createRecentRepositories: () => ({
     urls: () => mocks.recentUrls,
     remember: vi.fn(),
+  }),
+}));
+vi.mock('../primitives/preferred-inmem-model', () => ({
+  createPreferredInmemModel: () => ({
+    model: () => mocks.preferredInmemModel,
+    remember: mocks.rememberInmemModel,
   }),
 }));
 vi.mock('../queries/reachable-repositories', () => ({
@@ -81,6 +91,10 @@ vi.mock('@queries/agents/models', () => ({
               : [
                   { id: 'chat-default', name: 'Chat default' },
                   { id: 'claude-sonnet-4', name: 'Sonnet 4' },
+                  {
+                    id: 'anthropic/claude-fable-5-1',
+                    name: 'Fable 5.1',
+                  },
                   {
                     id: 'anthropic/claude-sonnet-5',
                     name: 'anthropic/claude-sonnet-5',
@@ -127,7 +141,11 @@ vi.mock('../components/ChatComposer', () => ({
   ),
 }));
 
-function page(connected = true, agents: PersistedAgentLike[] = []) {
+function page(
+  connected = true,
+  agents: PersistedAgentLike[] = [],
+  availabilityLoading = false
+) {
   const onStart = vi.fn();
   render(() => (
     <NewChatPage
@@ -140,6 +158,7 @@ function page(connected = true, agents: PersistedAgentLike[] = []) {
         cursorDefaultModel: 'cursor-default',
       })}
       rosterLoading={false}
+      availabilityLoading={availabilityLoading}
       onStart={onStart}
       onOpenRoster={vi.fn()}
     />
@@ -177,10 +196,14 @@ describe('agent-led new conversation', () => {
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
     mocks.recentUrls = [];
+    mocks.preferredInmemModel = undefined;
     mocks.repositories = [
       { url: 'https://github.com/macro-inc/macro', defaultBranch: 'develop' },
     ];
     vi.clearAllMocks();
+    mocks.rememberInmemModel.mockImplementation((id: string) => {
+      mocks.preferredInmemModel = id;
+    });
     motionStyles = document.createElement('style');
     motionStyles.textContent =
       '[role="menu"] { animation-name: none; transition-duration: 0s; }';
@@ -464,6 +487,7 @@ describe('agent-led new conversation', () => {
     expect(
       models.queryByRole('menuitem', { name: /Cursor default|GPT-5/ })
     ).toBeNull();
+    expect(models.queryByRole('menuitem', { name: /Fable 5.1/ })).toBeNull();
     const sonnet = models.getByRole('menuitem', { name: 'Sonnet 5' });
     expect(
       sonnet.querySelector('[data-ai-provider="anthropic"] svg')
@@ -471,6 +495,9 @@ describe('agent-led new conversation', () => {
     expect(screen.queryByText('anthropic/claude-sonnet-5')).toBeNull();
     fireEvent.keyDown(sonnet, { key: 'Enter' });
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(mocks.rememberInmemModel).toHaveBeenCalledWith(
+      'anthropic/claude-sonnet-5'
+    );
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
       'Sonnet 5'
     );
@@ -487,6 +514,21 @@ describe('agent-led new conversation', () => {
       repoUrl: undefined,
       modelOverride: 'anthropic/claude-sonnet-5',
     });
+    // Macro Models picks stick: a second send still uses the preferred model.
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
+      'Sonnet 5'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send.mock.calls[1][0]).toMatchObject({
+      modelOverride: 'anthropic/claude-sonnet-5',
+    });
+  });
+  it('restores a preferred Macro model on a fresh composer', () => {
+    mocks.preferredInmemModel = 'anthropic/claude-sonnet-5';
+    page();
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
+      'Sonnet 5'
+    );
   });
   it('restores the most recently used supported agent', async () => {
     mocks.recentIds = [CURSOR_BOT_ID];
@@ -494,6 +536,14 @@ describe('agent-led new conversation', () => {
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
       'Cursor'
     );
+    expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
+  });
+  it('keeps the most recent agent while its connection status loads', () => {
+    mocks.recentIds = [CURSOR_BOT_ID];
+    page(false, [], true);
+    expect(
+      screen.getByRole('heading', { name: 'What should we build?' })
+    ).toBeTruthy();
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
   });
   it('offers Cursor setup when disconnected without switching to an unavailable agent', async () => {

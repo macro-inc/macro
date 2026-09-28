@@ -42,6 +42,7 @@ fragment GraphqlProjectHistoryFields on GraphqlSoupProject {
 fragment GraphqlDocumentQuickAccessName on GraphqlSoupDocument {
 	__typename
 	name
+	fileType
 	ownerId
 	createdAt
 	subType {

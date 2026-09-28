@@ -19,6 +19,7 @@ impl<A: EntityAccessService> MessageAudienceAccess for EntityAccessMessageAudien
         let kind = match parent {
             MessageParent::Channel(_) => EntityType::Channel,
             MessageParent::Document(_) => EntityType::Document,
+            MessageParent::Initiative(_) => EntityType::Initiative,
         };
         let mut viewers = HashSet::new();
         for candidate in candidates {

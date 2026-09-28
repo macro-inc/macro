@@ -46,6 +46,9 @@ vi.mock('../email-message/rendering-adapter', () => ({
 vi.mock('../email-message/sender-icon-adapter', () => ({
   EmailSenderIcon: () => null,
 }));
+vi.mock('./calendar-invitation', () => ({
+  EmailCalendarInvitation: () => null,
+}));
 vi.mock('./thread-action-adapter', () => ({
   createThreadActionAdapter: vi.fn(),
 }));

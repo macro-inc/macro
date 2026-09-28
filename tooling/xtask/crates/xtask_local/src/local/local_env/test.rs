@@ -84,6 +84,8 @@ fn emits_required_keys() {
         "LIVEKIT_API_KEY",
         "LIVEKIT_API_SECRET",
         "OPENAI_API_KEY",
+        "FIREWORK_API_KEY",
+        "GOOGLE_GENERATIVE_AI_API_KEY",
         "COHERE_API_KEY",
         "CAL_WEBHOOK_SECRET_KEY",
         "CAL_EVENT_TYPE_CONTENT_NAMES_KEY",
@@ -225,6 +227,10 @@ fn emits_in_network_service_url_overrides() {
         (
             "OVERRIDE_STATIC_FILE_SERVICE_URL",
             "http://static-file-service:8080",
+        ),
+        (
+            "OVERRIDE_AI_EDITING_WORKER_URL",
+            "http://ai-editing-worker:8933",
         ),
     ] {
         assert_eq!(env.get(key).map(String::as_str), Some(expected));
