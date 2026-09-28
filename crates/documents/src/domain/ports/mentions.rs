@@ -8,11 +8,11 @@ use macro_user_id::user_id::MacroUserIdStr;
 /// mentioned entity can surface the mentioning document in its references.
 pub trait DocumentMentionTrackingPort: Send + Sync {
     /// Record every mention embedded in `markdown` as a reference owned by
-    /// `document_id`, attributed to `user_id`.
+    /// `document_id`, attributed to `user_id` when one acted.
     fn track_document_mentions(
         &self,
         document_id: &str,
-        user_id: &MacroUserIdStr<'static>,
+        user_id: Option<&MacroUserIdStr<'static>>,
         markdown: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
@@ -25,7 +25,7 @@ impl DocumentMentionTrackingPort for NoOpDocumentMentionTracker {
     async fn track_document_mentions(
         &self,
         _document_id: &str,
-        _user_id: &MacroUserIdStr<'static>,
+        _user_id: Option<&MacroUserIdStr<'static>>,
         _markdown: &str,
     ) -> anyhow::Result<()> {
         Ok(())

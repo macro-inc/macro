@@ -8,6 +8,7 @@ import { useThreadRepliesQuery } from '@queries/messages/thread-replies';
 import type { Message as EntityMessage } from '@service-storage/messages';
 import {
   createEffect,
+  createMemo,
   createSignal,
   on,
   onCleanup,
@@ -26,10 +27,10 @@ import { ThreadTypingIndicator } from './ThreadTypingIndicator';
 import type { ThreadProps } from './types';
 import { channelReplyInputOffsetX } from './utils/thread-rail-geometry';
 import {
-  DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
   getThreadLatestReplyAt,
   getUniqueReplyUserIds,
+  getVisibleReplyCount,
 } from './utils/thread-reply-indicator-helpers';
 
 export function ChannelThread(props: ThreadProps) {
@@ -78,20 +79,16 @@ export function ChannelThread(props: ThreadProps) {
     return queryReplies() ?? thread().preview ?? [];
   };
 
-  const displayReplies = (): Array<EntityMessage> => {
-    const preview = thread().preview ?? [];
-    // When collapsed, use preview directly without reading query state.
-    if (!props.isExpanded()) {
-      return preview.length > DEFAULT_VISIBLE_REPLY_COUNT
-        ? preview.slice(0, DEFAULT_VISIBLE_REPLY_COUNT)
-        : preview;
-    }
-
-    // When expanded, prefer fetched data (full reply list).
-    const fetched = queryReplies();
-    if (fetched) return fetched;
-    return preview;
-  };
+  // Full replies can extend the server preview's final group. The guarded
+  // query read lets collapsed threads update without suspending while fetching.
+  const visibleReplyCount = createMemo(() =>
+    getVisibleReplyCount(activeReplies())
+  );
+  const displayReplies = createMemo(() =>
+    props.isExpanded()
+      ? activeReplies()
+      : activeReplies().slice(0, visibleReplyCount())
+  );
 
   // Thread-local reply selection
   const replySelection = createMessageSelection({
@@ -177,13 +174,13 @@ export function ChannelThread(props: ThreadProps) {
   });
 
   const collapsedRepliesCount = () =>
-    getCollapsedRepliesCount(thread().reply_count, DEFAULT_VISIBLE_REPLY_COUNT);
+    getCollapsedRepliesCount(thread().reply_count, visibleReplyCount());
   const collapsedRepliesContainsNewMessages = () =>
     activeReplies()
-      .slice(DEFAULT_VISIBLE_REPLY_COUNT)
+      .slice(visibleReplyCount())
       .some((reply: EntityMessage) => props.isNewMessage?.(reply));
   const collapsedReplyUsers = () =>
-    getUniqueReplyUserIds(activeReplies().slice(DEFAULT_VISIBLE_REPLY_COUNT));
+    getUniqueReplyUserIds(activeReplies().slice(visibleReplyCount()));
   const collapsedLatestReplyAt = () =>
     getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
   // Replying to this thread — inline input open, or the unified input bound.

@@ -4,12 +4,7 @@ import { ok } from 'neverthrow';
 import { createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Permissions } from '../SharePermissions';
-import {
-  ShareDialogContext,
-  ShareModal,
-  ShareOptions,
-  ShareTrigger,
-} from './ShareButton';
+import { ShareModal, ShareOptions, ShareTrigger } from './ShareButton';
 
 const mocks = vi.hoisted(() => ({
   sendToChannel: vi.fn(),
@@ -25,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   updateCallTeamShare: vi.fn(),
   setCallRecordTeamShareCache: vi.fn(),
   callRecordShared: true,
+  callRecordChannelId: 'channel-1' as string | null,
   callRecordQuerySuccess: true,
   getProjectPermissions: vi.fn(),
   editProject: vi.fn(),
@@ -200,6 +196,7 @@ vi.mock('@queries/call/call', () => ({
     get data() {
       return {
         callId: 'call-1',
+        channelId: mocks.callRecordChannelId,
         createdBy: 'owner',
         shareWithTeam: mocks.callRecordShared,
       };
@@ -319,6 +316,7 @@ beforeEach(() => {
   mocks.mobile = false;
   mocks.hasTeam = false;
   mocks.callRecordShared = true;
+  mocks.callRecordChannelId = 'channel-1';
   mocks.callRecordQuerySuccess = true;
   mocks.getAgentPermissions.mockResolvedValue(
     ok({
@@ -353,8 +351,8 @@ function mountShare(isOwner: boolean) {
       itemType="agent_session"
       blockAlias="agent"
       userPermissions={Permissions.OWNER}
-      isSharePermOpen
-      setIsSharePermOpen={onOpenChange}
+      open
+      onOpenChange={onOpenChange}
     />
   ));
   return { onOpenChange, onCopyLink };
@@ -509,11 +507,7 @@ describe('agent session sharing', () => {
   it('uses explicit identity outside a block', () => {
     mocks.inBlock = false;
     render(() => (
-      <ShareDialogContext.Provider
-        value={{ isOpen: () => false, open: vi.fn(), close: vi.fn() }}
-      >
-        <ShareTrigger id="task-1" blockType="task" />
-      </ShareDialogContext.Provider>
+      <ShareTrigger onClick={vi.fn()} id="task-1" blockType="task" />
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
     expect(mocks.copyLink).toHaveBeenCalledWith(
@@ -521,20 +515,27 @@ describe('agent session sharing', () => {
     );
   });
 
+  it('opens sharing through the provided handler', () => {
+    mocks.inBlock = false;
+    const onClick = vi.fn();
+    render(() => (
+      <ShareTrigger onClick={onClick} id="task-1" blockType="task" />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
   it('uses a host view contextual link when provided', () => {
     mocks.inBlock = false;
     const copyContextLink = vi.fn();
     render(() => (
-      <ShareDialogContext.Provider
-        value={{
-          isOpen: () => false,
-          open: vi.fn(),
-          close: vi.fn(),
-          copyLink: copyContextLink,
-        }}
-      >
-        <ShareTrigger id="task-1" blockType="task" />
-      </ShareDialogContext.Provider>
+      <ShareTrigger
+        onClick={vi.fn()}
+        id="task-1"
+        blockType="task"
+        copyLink={copyContextLink}
+      />
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
@@ -545,25 +546,17 @@ describe('agent session sharing', () => {
   it('uses the host view contextual link inside the share modal', () => {
     const copyContextLink = vi.fn();
     render(() => (
-      <ShareDialogContext.Provider
-        value={{
-          isOpen: () => true,
-          open: vi.fn(),
-          close: vi.fn(),
-          copyLink: copyContextLink,
-        }}
-      >
-        <ShareModal
-          id="persisted-session"
-          name="Fix the menu"
-          owner="someone-else"
-          itemType="agent_session"
-          blockAlias="agent"
-          userPermissions={Permissions.CAN_VIEW}
-          isSharePermOpen
-          setIsSharePermOpen={vi.fn()}
-        />
-      </ShareDialogContext.Provider>
+      <ShareModal
+        id="persisted-session"
+        name="Fix the menu"
+        owner="someone-else"
+        itemType="agent_session"
+        blockAlias="agent"
+        userPermissions={Permissions.CAN_VIEW}
+        open
+        onOpenChange={vi.fn()}
+        copyLink={copyContextLink}
+      />
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy Link' }));
@@ -573,13 +566,7 @@ describe('agent session sharing', () => {
 
   it('copies the saved session link from the shared header trigger', () => {
     const [id, setId] = createSignal('saved-session');
-    render(() => (
-      <ShareDialogContext.Provider
-        value={{ isOpen: () => false, open: vi.fn(), close: vi.fn() }}
-      >
-        <ShareTrigger id={id()} />
-      </ShareDialogContext.Provider>
-    ));
+    render(() => <ShareTrigger onClick={vi.fn()} id={id()} />);
     setId('current-session');
     fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
     expect(mocks.copyLink).toHaveBeenCalledWith(
@@ -726,8 +713,8 @@ function mountChatShare() {
       itemType="chat"
       blockAlias="chat"
       userPermissions={Permissions.OWNER}
-      isSharePermOpen
-      setIsSharePermOpen={vi.fn()}
+      open
+      onOpenChange={vi.fn()}
     />
   ));
 }
@@ -752,13 +739,33 @@ function mountCallShare() {
       itemType="call"
       blockAlias="call"
       userPermissions={Permissions.OWNER}
-      isSharePermOpen
-      setIsSharePermOpen={vi.fn()}
+      open
+      onOpenChange={vi.fn()}
     />
   ));
 }
 
 describe('call team sharing', () => {
+  it('hides team access for a standalone call even when stale permissions claim it is shared', () => {
+    mocks.hasTeam = true;
+    mocks.callRecordChannelId = null;
+    mountCallShare();
+
+    expect(screen.queryByText('Team access')).toBeNull();
+    expect(
+      screen.queryByRole('group', { name: 'Team access level' })
+    ).toBeNull();
+    expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
+    expect(mocks.updateCallTeamShare).not.toHaveBeenCalled();
+  });
+
+  it('does not offer team access until the call channel is known', () => {
+    mocks.hasTeam = true;
+    mocks.callRecordQuerySuccess = false;
+    mountCallShare();
+    expect(screen.queryByText('Team access')).toBeNull();
+  });
+
   it('lets the owner share the call with their team at view', async () => {
     mocks.hasTeam = true;
     mountCallShare();
@@ -922,8 +929,8 @@ function mountProjectShare() {
       itemType="project"
       blockAlias="project"
       userPermissions={Permissions.OWNER}
-      isSharePermOpen
-      setIsSharePermOpen={vi.fn()}
+      open
+      onOpenChange={vi.fn()}
     />
   ));
 }

@@ -46,7 +46,7 @@ impl ThreadOrigin {
     pub fn new(parent: MessageParent, thread_id: Uuid, originating_message_id: Uuid) -> Self {
         let channel_id = match &parent {
             MessageParent::Channel(channel_id) => Some(*channel_id),
-            MessageParent::Document(_) => None,
+            MessageParent::Document(_) | MessageParent::Initiative(_) => None,
         };
         Self {
             parent,
@@ -250,6 +250,11 @@ pub struct SessionMentionedMetadata {
     /// The users named, already narrowed to those who can open the session
     /// and never including the author.
     pub mentioned: Vec<MacroUserIdStr<'static>>,
+    /// The channel or document message the prompt was posted as, when it
+    /// arrived from a thread rather than the session view. That message
+    /// already notified the users it named when it was posted.
+    #[serde(default)]
+    pub origin_message_id: Option<Uuid>,
 }
 
 /// The session's live actor is gone: idle teardown, transport loss, or crash.

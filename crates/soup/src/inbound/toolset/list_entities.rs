@@ -312,6 +312,9 @@ impl EntityItem {
             SoupItem::Reminder(_) => {
                 unreachable!("ListEntities tool does not surface Reminder rows")
             }
+            SoupItem::Initiative(_) => {
+                unreachable!("ListEntities tool does not surface Initiative rows")
+            }
             SoupItem::AgentSession(_) => {
                 unreachable!("ListEntities tool does not surface AgentSession rows")
             }
@@ -357,6 +360,7 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             SoupItem::Document(doc) => &doc.extra.properties,
             SoupItem::Chat(chat) => &chat.extra.properties,
             SoupItem::Project(project) => &project.extra.properties,
+            SoupItem::Initiative(initiative) => &initiative.extra.properties,
             SoupItem::EmailThread(thread) => &thread.extra.properties,
             SoupItem::CalendarEvent(event) => &event.extra.properties,
             SoupItem::CrmCompany(company) => &company.extra.properties,
@@ -545,6 +549,7 @@ impl ListEntities {
         };
 
         let ast = EntityFilterAst {
+            favorites_only: None,
             calendar_event_filter: None,
             document_filter: self.document_filter.clone(),
             project_filter: self.project_filter.clone(),
@@ -570,6 +575,7 @@ impl ListEntities {
             reminder_filter: None,
             // Agent sessions are opt-in too; unset keeps them off the tool surface.
             agent_session_filter: None,
+            initiative_filter: None,
             properties_filter,
         };
 
@@ -589,6 +595,7 @@ impl ListEntities {
         };
 
         EntityFilterAst {
+            favorites_only: ast.favorites_only,
             calendar_event_filter: if include_types.contains(&ItemType::CalendarEvent) {
                 ast.calendar_event_filter
             } else {
@@ -645,6 +652,7 @@ impl ListEntities {
             // Same as CrmCompany — no ItemType::Reminder to toggle against.
             reminder_filter: ast.reminder_filter,
             agent_session_filter: ast.agent_session_filter,
+            initiative_filter: None,
             properties_filter: ast.properties_filter,
         }
     }

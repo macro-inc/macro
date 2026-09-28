@@ -32,6 +32,7 @@ return_passwordless_code = []
 
 [dependencies]
 ai_billing = { path = "../../crates/ai_billing" }
+initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 codex_connection = { path = "../../crates/codex_connection" }
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 cursor_api_key = { path = "../../crates/cursor_api_key" }

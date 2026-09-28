@@ -4,9 +4,10 @@
 //! provider fan-out so the rest of the crate stays provider-agnostic:
 //!
 //! - [`RoutedModel`] — the routed id bound to its provider client. One arm per
-//!   wire protocol: Anthropic-native, OpenAI Responses, and OpenAI-compatible
-//!   Chat Completions. Compatible providers live in a data registry keyed by
-//!   name, so adding one is [`with_openai_provider`](ModelRouter::with_openai_provider).
+//!   wire protocol: Anthropic-native, Gemini GenerateContent, OpenAI Responses,
+//!   and OpenAI-compatible Chat Completions. Compatible providers live in a
+//!   data registry keyed by name, so adding one is
+//!   [`with_openai_provider`](ModelRouter::with_openai_provider).
 //! - [`ProviderAgent`] — a built rig agent, with the same arms. Its
 //!   [`run_stream`](ProviderAgent::run_stream) matches internally, so callers
 //!   (e.g. `agent_loop`) hold one type and never fan out.
@@ -28,12 +29,13 @@ use rig_agent::streaming::StreamingPrompt;
 use rig_agent::tool::server::ToolServerHandle;
 use rig_core::completion::{CompletionModel, GetTokenUsage};
 use rig_core::message::Message;
-use rig_core::providers::{anthropic, openai};
+use rig_core::providers::{anthropic, gemini, openai};
 use rig_core::streaming::StreamedAssistantContent;
 use tracing::Instrument as _;
 
 use super::PredefinedModel;
 use super::anthropic::AnthropicModel;
+use super::gemini::GeminiModel;
 use super::openai::{OpenAiChatCompletionsModel, OpenAiResponsesModel};
 use super::types::Model;
 use crate::error::AgentError;
@@ -66,17 +68,15 @@ const CEREBRAS_BASE_URL: &str = "https://api.cerebras.ai/v1";
 const FIREWORKS_PROVIDER: &str = "fireworks";
 /// Fireworks inference endpoint (OpenAI-compatible Chat Completions API).
 const FIREWORKS_BASE_URL: &str = "https://api.fireworks.ai/inference/v1";
-/// Provider segment Google Gemini is registered under (OpenAI-compatible Chat
-/// Completions).
+/// Provider segment Google Gemini is registered under (native GenerateContent).
 const GOOGLE_PROVIDER: &str = "google";
-/// Gemini's OpenAI-compatible Chat Completions endpoint. The native
-/// `generativelanguage` API is a different wire format and is not used here.
-const GOOGLE_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta/openai";
 
 /// A routed model id bound to the provider client that serves it.
 pub(crate) enum RoutedModel<'a> {
     /// A model on Anthropic's native API.
     Anthropic(AnthropicModel<'a>),
+    /// A model on Gemini's native GenerateContent API.
+    Gemini(GeminiModel<'a>),
     /// A model on the OpenAI-compatible Chat Completions API.
     OpenAiChatCompletions(OpenAiChatCompletionsModel<'a>),
     /// A model on OpenAI's Responses API.
@@ -88,6 +88,7 @@ impl<'a> RoutedModel<'a> {
     pub(crate) fn provider(&self) -> &str {
         match self {
             RoutedModel::Anthropic(m) => m.model().provider(),
+            RoutedModel::Gemini(m) => m.model().provider(),
             RoutedModel::OpenAiChatCompletions(m) => m.model().provider(),
             RoutedModel::OpenAiResponses(m) => m.model().provider(),
         }
@@ -97,6 +98,7 @@ impl<'a> RoutedModel<'a> {
     pub(crate) fn model_name(&self) -> &str {
         match self {
             RoutedModel::Anthropic(m) => m.model().name(),
+            RoutedModel::Gemini(m) => m.model().name(),
             RoutedModel::OpenAiChatCompletions(m) => m.model().name(),
             RoutedModel::OpenAiResponses(m) => m.model().name(),
         }
@@ -116,6 +118,18 @@ impl<'a> RoutedModel<'a> {
             RoutedModel::Anthropic(m) => {
                 let thinking = m.thinking_params();
                 ProviderAgent::Anthropic(build_agent(
+                    m.completion(),
+                    thinking,
+                    handle,
+                    system_prompt,
+                    max_turns,
+                    max_tokens,
+                    telemetry,
+                ))
+            }
+            RoutedModel::Gemini(m) => {
+                let thinking = m.thinking_params();
+                ProviderAgent::Gemini(build_agent(
                     m.completion(),
                     thinking,
                     handle,
@@ -155,13 +169,15 @@ impl<'a> RoutedModel<'a> {
 
 /// A built rig agent bound to the provider serving the session's model.
 ///
-/// The two arms are different concrete `Agent<M>` types; [`run_stream`] hides
+/// The provider arms are different concrete `Agent<M>` types; [`run_stream`] hides
 /// that behind one concrete [`ChatCompletionStream`], so callers never match.
 ///
 /// [`run_stream`]: ProviderAgent::run_stream
 pub(crate) enum ProviderAgent {
     /// An agent over Anthropic's native completion model.
     Anthropic(Agent<TracedModel<anthropic::completion::CompletionModel>>),
+    /// An agent over Gemini's native GenerateContent model.
+    Gemini(Agent<TracedModel<gemini::completion::CompletionModel>>),
     /// An agent over the OpenAI Chat Completions model.
     OpenAiChatCompletions(Agent<TracedModel<openai::completion::CompletionModel>>),
     /// An agent over the OpenAI Responses model.
@@ -190,6 +206,21 @@ impl ProviderAgent {
     ) -> ChatCompletionStream<'static> {
         match self {
             ProviderAgent::Anthropic(agent) => {
+                drive_stream(
+                    agent,
+                    prompt,
+                    history,
+                    max_turns,
+                    inputs,
+                    recorder,
+                    usage_ctx,
+                    model,
+                    request_context.clone(),
+                    telemetry,
+                )
+                .await
+            }
+            ProviderAgent::Gemini(agent) => {
                 drive_stream(
                     agent,
                     prompt,
@@ -256,14 +287,15 @@ impl ProviderAgent {
 
 /// Routes model api-id strings to the provider client that serves them.
 ///
-/// Holds native Anthropic and OpenAI Responses clients plus a registry of
-/// OpenAI-compatible Chat Completions clients keyed by provider name. The
-/// built-in [`OPENAI_PROVIDER`] always uses Responses; register compatible
-/// providers with [`with_openai_provider`](Self::with_openai_provider).
+/// Holds native Anthropic, Gemini, and OpenAI Responses clients plus a
+/// registry of OpenAI-compatible Chat Completions clients keyed by provider
+/// name. The built-in [`OPENAI_PROVIDER`] always uses Responses; register
+/// compatible providers with [`with_openai_provider`](Self::with_openai_provider).
 #[derive(Clone)]
 pub struct ModelRouter {
     anthropic: Arc<anthropic::Client>,
     openai: Arc<openai::Client>,
+    gemini: Option<Arc<gemini::Client>>,
     openai_compatible: HashMap<String, Arc<openai::CompletionsClient>>,
 }
 
@@ -274,6 +306,7 @@ impl ModelRouter {
         Self {
             anthropic: Arc::new(anthropic),
             openai: Arc::new(openai),
+            gemini: None,
             openai_compatible: HashMap::new(),
         }
     }
@@ -293,20 +326,20 @@ impl ModelRouter {
         let openai = openai::Client::builder()
             .api_key(env.openai_api_key.to_string())
             .build()?;
-        // Cerebras, Fireworks, and Gemini all speak the OpenAI Chat Completions
-        // API, so they ride the compatible-provider registry: a `<provider>/`
-        // segment routes to the client registered under that name.
+        // Cerebras and Fireworks speak the OpenAI Chat Completions API, so they
+        // ride the compatible-provider registry: a `<provider>/` segment routes
+        // to the client registered under that name. Gemini uses GenerateContent
+        // so tool-call thought signatures survive the multi-step tool loop.
+        let gemini = gemini::Client::builder()
+            .api_key(env.google_generative_ai_api_key.to_string())
+            .build()?;
         Self::new(anthropic, openai)
+            .with_gemini_client(gemini)
             .with_openai_provider(CEREBRAS_PROVIDER, CEREBRAS_BASE_URL, &env.cerebras_api_key)?
             .with_openai_provider(
                 FIREWORKS_PROVIDER,
                 FIREWORKS_BASE_URL,
                 &env.firework_api_key,
-            )?
-            .with_openai_provider(
-                GOOGLE_PROVIDER,
-                GOOGLE_BASE_URL,
-                &env.google_generative_ai_api_key,
             )
     }
 
@@ -323,6 +356,12 @@ impl ModelRouter {
         }
         let router = Self::try_from_env()?;
         Ok(ROUTER.get_or_init(|| router))
+    }
+
+    /// Bind the native Gemini GenerateContent client. Google ids route here.
+    pub fn with_gemini_client(mut self, client: gemini::Client) -> Self {
+        self.gemini = Some(Arc::new(client));
+        self
     }
 
     /// Register an already-built OpenAI-compatible Chat Completions client under
@@ -393,6 +432,15 @@ impl ModelRouter {
             return Ok(RoutedModel::OpenAiResponses(OpenAiResponsesModel::new(
                 parsed,
                 self.openai.clone(),
+            )));
+        }
+        if parsed.provider() == GOOGLE_PROVIDER {
+            let Some(client) = &self.gemini else {
+                return Err(AgentError::UnknownModel(model.to_string()));
+            };
+            return Ok(RoutedModel::Gemini(GeminiModel::new(
+                parsed,
+                Arc::clone(client),
             )));
         }
         if let Some(client) = self.openai_compatible.get(parsed.provider()) {

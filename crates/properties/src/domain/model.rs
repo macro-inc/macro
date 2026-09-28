@@ -25,6 +25,7 @@ pub fn canonical_entity_type(entity_type: EntityType) -> AccessEntityType {
         EntityType::CallRecord => AccessEntityType::Call,
         EntityType::Chat => AccessEntityType::Chat,
         EntityType::Project => AccessEntityType::Project,
+        EntityType::Initiative => AccessEntityType::Initiative,
         EntityType::Thread => AccessEntityType::EmailThread,
         EntityType::Channel => AccessEntityType::Channel,
         EntityType::Company => AccessEntityType::CrmCompany,
@@ -44,6 +45,7 @@ pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> 
         AccessEntityType::Call => Some(EntityType::CallRecord),
         AccessEntityType::Chat => Some(EntityType::Chat),
         AccessEntityType::Project => Some(EntityType::Project),
+        AccessEntityType::Initiative => Some(EntityType::Initiative),
         AccessEntityType::EmailThread => Some(EntityType::Thread),
         AccessEntityType::Channel => Some(EntityType::Channel),
         AccessEntityType::CrmCompany => Some(EntityType::Company),
@@ -56,8 +58,7 @@ pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> 
         | AccessEntityType::Reminder
         | AccessEntityType::Skill
         | AccessEntityType::AgentSession
-        | AccessEntityType::ScheduledAction
-        | AccessEntityType::Initiative => None,
+        | AccessEntityType::ScheduledAction => None,
     }
 }
 

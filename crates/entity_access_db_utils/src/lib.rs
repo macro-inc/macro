@@ -195,6 +195,35 @@ pub async fn delete_entity_access_rows(
     Ok(())
 }
 
+/// Grant call-only view access to an active participant of a standalone call.
+///
+/// The participant must already have been admitted by the call domain. The query
+/// cannot grant access to other entities, channel calls, or nonparticipants, and
+/// preserves stronger grants. It does not commit the caller's transaction.
+pub async fn ensure_call_participant_view_access<'e, E>(
+    executor: E,
+    call_id: &macro_uuid::Uuid,
+    user_id: MacroUserIdStr<'_>,
+) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           SELECT c.id, 'call', p.user_id, 'user', 'view'
+           FROM calls c JOIN call_participants p ON p.call_id = c.id
+           WHERE c.id = $1 AND c.channel_id IS NULL AND p.user_id = $2 AND p.left_at IS NULL
+           ON CONFLICT (entity_id, entity_type, source_id, source_type)
+           WHERE granted_from_project_id IS NULL
+           DO NOTHING"#,
+        call_id,
+        user_id.as_ref(),
+    )
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
 /// Bulk upserts entity access for users.
 ///
 /// An owner row is never rewritten: the guard sits on the `DO UPDATE`, where

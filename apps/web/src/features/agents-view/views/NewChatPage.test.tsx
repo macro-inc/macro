@@ -92,6 +92,10 @@ vi.mock('@queries/agents/models', () => ({
                   { id: 'chat-default', name: 'Chat default' },
                   { id: 'claude-sonnet-4', name: 'Sonnet 4' },
                   {
+                    id: 'anthropic/claude-fable-5-1',
+                    name: 'Fable 5.1',
+                  },
+                  {
                     id: 'anthropic/claude-sonnet-5',
                     name: 'anthropic/claude-sonnet-5',
                   },
@@ -149,7 +153,11 @@ vi.mock('../components/ChatComposer', () => ({
   ),
 }));
 
-function page(connected = true, agents: PersistedAgentLike[] = []) {
+function page(
+  connected = true,
+  agents: PersistedAgentLike[] = [],
+  availabilityLoading = false
+) {
   const onStart = vi.fn();
   render(() => (
     <NewChatPage
@@ -162,6 +170,7 @@ function page(connected = true, agents: PersistedAgentLike[] = []) {
         cursorDefaultModel: 'cursor-default',
       })}
       rosterLoading={false}
+      availabilityLoading={availabilityLoading}
       onStart={onStart}
       onOpenRoster={vi.fn()}
     />
@@ -508,6 +517,7 @@ describe('agent-led new conversation', () => {
     expect(
       models.queryByRole('menuitem', { name: /Cursor default|GPT-5/ })
     ).toBeNull();
+    expect(models.queryByRole('menuitem', { name: /Fable 5.1/ })).toBeNull();
     const sonnet = models.getByTitle('Sonnet 5');
     expect(
       sonnet.querySelector('[data-ai-provider="anthropic"] svg')
@@ -557,6 +567,14 @@ describe('agent-led new conversation', () => {
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
       'Cursor'
     );
+    expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
+  });
+  it('keeps the most recent agent while its connection status loads', () => {
+    mocks.recentIds = [CURSOR_BOT_ID];
+    page(false, [], true);
+    expect(
+      screen.getByRole('heading', { name: 'What should we build?' })
+    ).toBeTruthy();
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
   });
   it('offers Cursor setup when disconnected without switching to an unavailable agent', async () => {

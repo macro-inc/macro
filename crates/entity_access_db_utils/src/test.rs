@@ -1,4 +1,5 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::cowlike::CowLike;
 use macro_uuid::Uuid;
 use model_entity::EntityType;
 use model_owner::{Owner, OwnerType};
@@ -1085,4 +1086,93 @@ async fn owner_grant_maps_user_bot_and_team_to_their_access_source(pool: Pool<Po
         assert_eq!(rows[0].access_level, AccessLevel::Owner);
         assert!(rows[0].granted_from_project_id.is_none());
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn ensuring_view_access_is_idempotent_and_preserves_stronger_grants(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let entity = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO \"SharePermission\" (id) VALUES ($1)",
+        entity.to_string()
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!("INSERT INTO calls (id, room_name, created_by, share_permission_id) VALUES ($1, 'test-room', 'macro|owner@test.com', $2)", entity, entity.to_string()).execute(&pool).await?;
+    for (email, existing) in [
+        ("owner@test.com", Some(AccessLevel::Owner)),
+        ("editor@test.com", Some(AccessLevel::Edit)),
+        ("viewer@test.com", None),
+    ] {
+        let user = MacroUserIdStr::try_from_email(email)?;
+        if let Some(level) = existing {
+            let mut tx = pool.begin().await?;
+            insert_entity_access_row(
+                &mut tx,
+                &entity,
+                EntityType::Call,
+                user.as_ref(),
+                EntityAccessSourceType::User,
+                level,
+            )
+            .await?;
+            tx.commit().await?;
+        }
+        sqlx::query!(
+            "INSERT INTO call_participants (call_id, user_id) VALUES ($1, $2)",
+            entity,
+            user.as_ref()
+        )
+        .execute(&pool)
+        .await?;
+        for _ in 0..2 {
+            ensure_call_participant_view_access(&pool, &entity, user.clone()).await?;
+        }
+        let level = sqlx::query_scalar!(
+            r#"SELECT access_level AS "access_level!: AccessLevel" FROM entity_access WHERE entity_id = $1 AND entity_type = 'call' AND source_id = $2 AND source_type = 'user' AND granted_from_project_id IS NULL"#,
+            entity, user.as_ref(),
+        ).fetch_one(&pool).await?;
+        assert_eq!(level, existing.unwrap_or(AccessLevel::View));
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../call/fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn participant_grants_reject_channel_calls_nonparticipants_and_departed_users(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let call_id = Uuid::from_u128(0x00000000_0000_0000_0000_0000000ca110);
+    let participant = MacroUserIdStr::try_from_email("user-b@test.com")?;
+    ensure_call_participant_view_access(&pool, &call_id, participant.copied()).await?;
+    assert!(
+        !fetch_entity_access_rows(&pool, &call_id, EntityType::Call)
+            .await
+            .iter()
+            .any(|row| row.source_id == participant.as_ref())
+    );
+
+    sqlx::query!("UPDATE calls SET channel_id = NULL WHERE id = $1", call_id)
+        .execute(&pool)
+        .await?;
+    let stranger = MacroUserIdStr::try_from_email("stranger@test.com")?;
+    ensure_call_participant_view_access(&pool, &call_id, stranger.copied()).await?;
+    sqlx::query!(
+        "UPDATE call_participants SET left_at = now() WHERE call_id = $1 AND user_id = $2",
+        call_id,
+        participant.as_ref()
+    )
+    .execute(&pool)
+    .await?;
+    ensure_call_participant_view_access(&pool, &call_id, participant.copied()).await?;
+    let rows = fetch_entity_access_rows(&pool, &call_id, EntityType::Call).await;
+    assert!(
+        !rows
+            .iter()
+            .any(|row| row.source_id == participant.as_ref() || row.source_id == stranger.as_ref())
+    );
+    Ok(())
 }

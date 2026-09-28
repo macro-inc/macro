@@ -99,6 +99,8 @@ export type EmailComposerOptions = {
   onRecipientsChange?: (recipients: EmailRecipient[]) => void;
   /** Prefill for the To field (e.g. from an intercepted mailto: link). Ignored when editing an existing draft. */
   initialTo?: string[];
+  /** Initial sending inbox for new messages. Existing drafts retain their sender. */
+  initialInboxId?: string;
 };
 
 export function createEmailComposer(props: EmailComposerOptions) {
@@ -127,14 +129,20 @@ export function createEmailComposer(props: EmailComposerOptions) {
     }
   );
 
+  if (!initialDraftId && props.initialInboxId) {
+    form.setSelectedInbox(props.initialInboxId);
+  }
+
   const primaryInboxId = props.accounts.primaryId;
   const link = createMemo(() => {
     const inboxes = props.accounts.inboxes();
     if (inboxes.length === 0) return undefined;
-    // Send from the inbox the user picked, else the inbox that owns the draft
-    // being edited, else the primary inbox — not whichever inbox sorts first.
-    const targetId =
-      form.selectedInboxId() ?? props.draft?.link_id ?? primaryInboxId();
+    // An explicit sender must resolve before sending from that account.
+    const selectedInboxId = form.selectedInboxId();
+    if (selectedInboxId !== undefined) {
+      return inboxes.find((inbox) => inbox.id === selectedInboxId);
+    }
+    const targetId = props.draft?.link_id ?? primaryInboxId();
     return inboxes.find((inbox) => inbox.id === targetId) ?? inboxes[0];
   });
 
@@ -602,7 +610,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     if (!currentLink) {
       setValidationError({
         type: 'no_link',
-        message: 'Unable to find linked email account',
+        message: 'Unable to find linked email account. Select a sending inbox.',
       });
       return;
     }
@@ -1053,6 +1061,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
     // Validation
     validationError: (type) => {
+      if (type === 'no_link' && link()) return undefined;
       const error = validationError();
       if (error?.type === type) return error;
       return undefined;

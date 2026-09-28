@@ -10,6 +10,22 @@ import type {
   SoupItemFieldsFragment,
 } from './graphql/generated/graphql';
 
+it('omits opt-in initiatives until the Projects renderer is available', async () => {
+  const { mapGraphqlSoupItem } = await import('./graphql-soup');
+  expect(
+    mapGraphqlSoupItem({
+      __typename: 'GraphqlSoupInitiative',
+      id: 'initiative',
+      entityType: 'INITIATIVE',
+      displayName: 'Launch',
+      isFavorited: false,
+      frecencyScore: null,
+      notifications: [],
+      cacheProjection: null,
+    })
+  ).toBeNull();
+});
+
 it('maps agent sessions without discarding persona, favorites or notifications', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   const mapped = mapGraphqlSoupItem({

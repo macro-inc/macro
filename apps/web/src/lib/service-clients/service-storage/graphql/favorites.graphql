@@ -25,6 +25,18 @@ mutation SetFavorite($entity: EntityRefInput!, $favorite: Boolean!) {
     __typename
     result {
       __typename
+      ... on GraphqlMutationSuccess {
+        effects {
+          __typename
+          ... on SoupUpdated {
+            item {
+              __typename
+              id
+              isFavorited
+            }
+          }
+        }
+      }
       ... on GraphqlMutationError {
         errorCode
         message

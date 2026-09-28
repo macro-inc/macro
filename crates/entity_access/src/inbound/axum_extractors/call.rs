@@ -54,8 +54,8 @@ pub struct CallAccessLevelExtractor<T: RequiredPermission, Svc, Auth> {
     pub entity_access_receipt: EntityAccessReceipt<T>,
     /// The call's share permission ID.
     pub share_permission_id: String,
-    /// The channel ID the call belongs to.
-    pub channel_id: Uuid,
+    /// The channel ID, absent for standalone calls.
+    pub channel_id: Option<Uuid>,
     _marker: PhantomData<(T, Svc, Auth)>,
 }
 

@@ -276,6 +276,7 @@ fn mentioned_notifies_exactly_the_people_named() {
                 user("alice@macro.com"),
                 user("carol@macro.com"),
             ],
+            origin_message_id: None,
         },
     ));
 
@@ -302,10 +303,33 @@ fn a_mention_of_nobody_is_nothing() {
             action_id: AgentActionId::mint(),
             mentioned_by: Some(owner()),
             mentioned: Vec::new(),
+            origin_message_id: None,
         },
     ));
 
     assert!(actions.is_empty());
+}
+
+/// A prompt posted as a channel or document message already notified the
+/// users it named on the post itself; the session does not tell them twice.
+/// Whether the bot is a coding agent makes no difference: the message service
+/// notifies the mention regardless of who else the message names.
+#[test]
+fn a_mention_in_a_posted_message_is_already_announced() {
+    for is_coding in [true, false] {
+        let actions = plan(
+            &AgentSessionLifecycleEvent::Mentioned(SessionMentionedMetadata {
+                identity: identity(),
+                action_id: AgentActionId::mint(),
+                mentioned_by: Some(owner()),
+                mentioned: vec![user("carol@macro.com"), user("alice@macro.com")],
+                origin_message_id: Some(Uuid::from_u128(7)),
+            }),
+            is_coding,
+        );
+
+        assert!(actions.is_empty(), "is_coding={is_coding}: {actions:#?}");
+    }
 }
 
 #[test]

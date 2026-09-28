@@ -23,6 +23,8 @@ export const makeFavoriteAction = () => {
   const removeMutation = useRemoveFavoriteMutation();
 
   const canExecute = (entity: EntityData): boolean =>
+    (entity.type !== 'foreign' ||
+      entity.foreignSource === 'github_pull_request') &&
     favoriteEntityType(entity.type) !== undefined;
 
   const isFavorited = (entity: EntityData): boolean => {

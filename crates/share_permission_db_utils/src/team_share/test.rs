@@ -279,9 +279,7 @@ async fn initialize_call_grants_view_to_creator_team_or_nothing(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("team_share"))
 )]
-async fn initialize_grants_comment_to_owner_team_for_initiative(
-    pool: PgPool,
-) -> rootcause::Result<()> {
+async fn initialize_explicit_task_grants_edit_to_owner_team(pool: PgPool) -> rootcause::Result<()> {
     let entity = initiative();
     let uuid = Uuid::parse_str(&entity.entity_id)?;
     let mut tx = pool.begin().await?;
@@ -300,13 +298,13 @@ async fn initialize_grants_comment_to_owner_team_for_initiative(
         facts.current,
         Some(TeamShareGrant {
             team_id,
-            level: TeamShareLevel::Comment,
+            level: TeamShareLevel::Edit,
         })
     );
     assert_eq!(facts.revision, 1);
     assert_eq!(
         direct_team_rows(&mut tx, &uuid, EntityType::Initiative, team_id).await?,
-        vec![AccessLevel::Comment]
+        vec![AccessLevel::Edit]
     );
     Ok(())
 }

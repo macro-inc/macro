@@ -84,7 +84,7 @@ pub trait MessageCommands: Send + Sync + 'static {
         active: bool,
         nonce: Option<String>,
     ) -> Result<(), MessageError>;
-    /// Update document discussion state or detach removed Markdown text.
+    /// Update entity discussion state or detach removed document Markdown text.
     async fn patch_thread(
         &self,
         access: EntityAccessReceipt<MessageWrite>,

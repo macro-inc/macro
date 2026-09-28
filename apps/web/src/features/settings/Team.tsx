@@ -1,3 +1,4 @@
+import { PLAN_BY_TIER, PLANS } from '@app/features/paywall/plans';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getLinkShareScope,
@@ -163,10 +164,31 @@ function RoleSelect(props: {
 
 type PlanOption = { value: PaidPlan; label: string; description: string };
 
-const planOptions: PlanOption[] = [
-  { value: 'premium', label: 'Premium', description: '$40 · $40 of AI' },
-  { value: 'max', label: 'Max', description: '$200 · $200 of AI' },
+const maxPlan = PLAN_BY_TIER.max;
+const MAX_PLAN_OPTION: PlanOption = {
+  value: 'max',
+  label: maxPlan.name,
+  description: `$${maxPlan.price} · $${maxPlan.aiIncluded} of AI`,
+};
+const purchasablePlanOptions: PlanOption[] = [
+  ...PLANS.flatMap((plan) =>
+    plan.tier === 'free'
+      ? []
+      : [
+          {
+            value: plan.tier,
+            label: plan.name,
+            description: `$${plan.price} · $${plan.aiIncluded} of AI`,
+          },
+        ]
+  ),
 ];
+
+function planOptionsFor(currentPlan: PaidPlan): PlanOption[] {
+  return currentPlan === 'max'
+    ? [...purchasablePlanOptions, MAX_PLAN_OPTION]
+    : purchasablePlanOptions;
+}
 
 /**
  * The plan a member's seat is billed at. Until the generated `TeamMember`
@@ -182,12 +204,13 @@ function PlanSelect(props: {
   onChange: (plan: PaidPlan) => void;
   disabled?: boolean;
 }) {
+  const options = () => planOptionsFor(props.value);
   const selectedOption = () =>
-    planOptions.find((o) => o.value === props.value) ?? planOptions[0];
+    options().find((option) => option.value === props.value) ?? options()[0];
 
   return (
     <Select<PlanOption>
-      options={planOptions}
+      options={options()}
       value={selectedOption()}
       onChange={(opt) => opt && props.onChange(opt.value)}
       optionValue="value"

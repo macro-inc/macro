@@ -75,15 +75,43 @@ export function FromInboxSelector(props: {
   portalScope?: 'local';
 }) {
   const activeInbox = () =>
-    props.links.find((l) => l.id === props.activeInboxId) ?? props.links[0];
+    props.links.find((l) => l.id === props.activeInboxId);
   const sortedLinks = () =>
     [...props.links].sort((a, b) =>
       a.email_address.localeCompare(b.email_address)
     );
 
+  const unresolvedInboxPicker = () => (
+    <Show when={props.links.length > 0}>
+      <Dropdown>
+        <Dropdown.Trigger
+          disabled={props.disabled}
+          class={cn(
+            'inline-flex items-center gap-1 text-sm text-ink-muted',
+            props.class
+          )}
+        >
+          Select sending inbox
+          <ChevronDown class="size-3 shrink-0" />
+        </Dropdown.Trigger>
+        <Dropdown.Content portalScope={props.portalScope}>
+          <Dropdown.Group>
+            <For each={sortedLinks()}>
+              {(inbox) => (
+                <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
+                  <FromInboxOption inbox={inbox} />
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+    </Show>
+  );
+
   if (props.compact) {
     return (
-      <Show when={activeInbox()}>
+      <Show when={activeInbox()} fallback={unresolvedInboxPicker()}>
         {(active) => (
           <Show
             when={props.links.length > 1}
@@ -120,7 +148,7 @@ export function FromInboxSelector(props: {
 
   if (props.pill) {
     return (
-      <Show when={activeInbox()}>
+      <Show when={activeInbox()} fallback={unresolvedInboxPicker()}>
         {(active) => (
           <Show
             when={props.links.length > 1}
@@ -162,7 +190,7 @@ export function FromInboxSelector(props: {
   }
 
   return (
-    <Show when={activeInbox()}>
+    <Show when={activeInbox()} fallback={unresolvedInboxPicker()}>
       {(active) => (
         <Show
           when={props.links.length > 1}

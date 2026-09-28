@@ -29,6 +29,9 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async currentRevision() {
       return INITIAL_CACHE_REVISION;
     },
+    async currentStorageGeneration() {
+      throw new Error('normalized GraphQL cache is unavailable');
+    },
     async readQuery(): Promise<ReadResult> {
       return { kind: 'miss' };
     },

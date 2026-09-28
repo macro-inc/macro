@@ -9,7 +9,6 @@ import { DebouncedNotificationReadMarker } from '@notifications';
 import { Show } from 'solid-js';
 import { chatBlockData } from '../signal/chatBlockData';
 import { Chat } from './Chat';
-import { ModalsProvider } from './ModalsProvider';
 import { ChatSidePanelSections } from './sidepanel/ChatSidePanelSections';
 
 export default function ChatBlock() {
@@ -25,14 +24,10 @@ export default function ChatBlock() {
           notificationSource={notificationSource}
           entity={{ type: 'chat', id: blockId }}
         />
-        <ModalsProvider>
-          <SidePanel.Layout defaultOpen={false}>
-            <ChatSidePanelSections />
-            <Show when={chatBlockData()}>
-              {(data) => <Chat data={data()} />}
-            </Show>
-          </SidePanel.Layout>
-        </ModalsProvider>
+        <SidePanel.Layout defaultOpen={false}>
+          <ChatSidePanelSections />
+          <Show when={chatBlockData()}>{(data) => <Chat data={data()} />}</Show>
+        </SidePanel.Layout>
       </div>
     </DocumentBlockContainer>
   );

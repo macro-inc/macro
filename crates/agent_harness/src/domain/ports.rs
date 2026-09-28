@@ -170,8 +170,9 @@ pub trait MessagePromptContext: Send + Sync + 'static {
         origin: &super::model::AnnounceOrigin,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Read up to ten preceding live messages, and the comment anchor the
-    /// prompt sits on, with a fresh access check.
+    /// Read the prompt's discussion, the channel activity around it, what the
+    /// prompt replies to, and the comment anchor it sits on, with a fresh
+    /// access check.
     fn conversation_context(
         &self,
         actor: &MacroUserIdStr<'static>,

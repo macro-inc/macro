@@ -24,6 +24,10 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
       description:
         'Low-priority email like newsletters and notifications collects here. Nothing to clear right now.',
     }))
+    .with('favorites', () => ({
+      title: 'No favorite emails',
+      description: 'Star an email to keep it here for easy access.',
+    }))
     .with('sent', () => ({
       title: 'No sent email',
       description: 'Email you send will appear here.',

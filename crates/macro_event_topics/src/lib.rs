@@ -57,6 +57,8 @@ topics! {
     MacroSoupRealtimeTopic => "macro.soup",
     /// Project lifecycle events (created, updated, deleted, restored, permanently deleted, and uploaded).
     MacroProjectsTopic => "macro.projects",
+    /// Initiative lifecycle and task membership changes.
+    MacroInitiativesTopic => "macro.initiatives",
     /// Property definition, option, and entity property value mutation events.
     MacroPropertiesTopic => "macro.properties",
     /// Team lifecycle, invite, and membership events.

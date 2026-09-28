@@ -1,7 +1,7 @@
 use super::*;
 use crate::PROTOCOL_VERSION;
 use crate::domain::model::{
-    DEFAULT_AGENT_SESSION_NAME, Message, ReplicaAddress, SessionBot, SessionManager,
+    DEFAULT_AGENT_SESSION_NAME, LeaseView, Message, ReplicaAddress, SessionBot,
 };
 use crate::domain::ports::NoOpRealtime;
 use crate::domain::ports::{NoOpTurnObserver, NoopLifecyclePublisher};
@@ -94,59 +94,64 @@ impl crate::domain::ports::SessionViewAccess for GrantingViewAccess {
 }
 
 #[tokio::test]
-async fn previews_resolve_document_and_link_access_through_the_view_port() {
-    let fx = fixture();
-    let mut document_session = test_agent_session(AgentSessionId::new());
-    document_session.thread_parent =
-        Some(messages::domain::models::MessageParent::parse("document", "doc-1").unwrap());
-    let mut channel_session = test_agent_session(AgentSessionId::new());
-    channel_session.thread_parent = Some(messages::domain::models::MessageParent::Channel(
-        Uuid::from_u128(9),
-    ));
-    fx.repo.insert_session(document_session.clone());
-    fx.repo.insert_session(channel_session.clone());
-    let collaborator =
-        macro_user_id::user_id::MacroUserIdStr::try_from_email("collaborator@example.com").unwrap();
-    let ids = vec![document_session.id, channel_session.id, fx.session];
+async fn previews_resolve_discussion_and_link_access_through_the_view_port() {
+    for parent in [
+        messages::domain::models::MessageParent::parse("document", "doc-1").unwrap(),
+        messages::domain::models::MessageParent::Initiative(Uuid::from_u128(902)),
+    ] {
+        let fx = fixture();
+        let mut discussion_session = test_agent_session(AgentSessionId::new());
+        discussion_session.thread_parent = Some(parent);
+        let mut channel_session = test_agent_session(AgentSessionId::new());
+        channel_session.thread_parent = Some(messages::domain::models::MessageParent::Channel(
+            Uuid::from_u128(9),
+        ));
+        fx.repo.insert_session(discussion_session.clone());
+        fx.repo.insert_session(channel_session.clone());
+        let collaborator =
+            macro_user_id::user_id::MacroUserIdStr::try_from_email("collaborator@example.com")
+                .unwrap();
+        let ids = vec![discussion_session.id, channel_session.id, fx.session];
 
-    // Without a view port, only materialized grants count.
-    let mut previews = fx
-        .service
-        .preview_sessions(&collaborator, ids.clone())
-        .await
-        .unwrap();
-    previews.sort_by_key(|preview| preview.id().as_uuid());
-    assert!(
-        previews
-            .iter()
-            .all(|preview| matches!(preview, AgentSessionPreview::NoAccess(_)))
-    );
-
-    // The view port can resolve document inheritance or link sharing.
-    let service = fx
-        .service
-        .clone()
-        .with_view_access(Arc::new(GrantingViewAccess(document_session.id)));
-    let previews = service.preview_sessions(&collaborator, ids).await.unwrap();
-    let access: Vec<_> = previews
-        .iter()
-        .filter_map(|preview| match preview {
-            AgentSessionPreview::Access(data) => Some(data.id),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(access, vec![document_session.id]);
-    let channel_service = fx
-        .service
-        .clone()
-        .with_view_access(Arc::new(GrantingViewAccess(channel_session.id)));
-    assert!(matches!(
-        channel_service
-            .preview_sessions(&collaborator, vec![channel_session.id])
+        // Without a view port, only materialized grants count.
+        let mut previews = fx
+            .service
+            .preview_sessions(&collaborator, ids.clone())
             .await
-            .unwrap().as_slice(),
-        [AgentSessionPreview::Access(data)] if data.id == channel_session.id
-    ));
+            .unwrap();
+        previews.sort_by_key(|preview| preview.id().as_uuid());
+        assert!(
+            previews
+                .iter()
+                .all(|preview| matches!(preview, AgentSessionPreview::NoAccess(_)))
+        );
+
+        // The view port can resolve discussion inheritance or link sharing.
+        let service = fx
+            .service
+            .clone()
+            .with_view_access(Arc::new(GrantingViewAccess(discussion_session.id)));
+        let previews = service.preview_sessions(&collaborator, ids).await.unwrap();
+        let access: Vec<_> = previews
+            .iter()
+            .filter_map(|preview| match preview {
+                AgentSessionPreview::Access(data) => Some(data.id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(access, vec![discussion_session.id]);
+        let channel_service = fx
+            .service
+            .clone()
+            .with_view_access(Arc::new(GrantingViewAccess(channel_session.id)));
+        assert!(matches!(
+            channel_service
+                .preview_sessions(&collaborator, vec![channel_session.id])
+                .await
+                .unwrap().as_slice(),
+            [AgentSessionPreview::Access(data)] if data.id == channel_session.id
+        ));
+    }
 }
 
 #[tokio::test]
@@ -592,6 +597,21 @@ impl AgentSessionRepo for BlockingPromptLogs {
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         self.repo.delete(id).await
     }
+
+    async fn list_queued_actions(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<Vec<crate::domain::model::StoredQueuedAction>> {
+        self.repo.list_queued_actions(id).await
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[crate::domain::model::StoredQueuedAction],
+    ) -> Result<()> {
+        self.repo.replace_queued_actions(id, entries).await
+    }
 }
 
 /// Pure delegation: the lease semantics under test live in the shared
@@ -609,8 +629,12 @@ impl SessionOwnership for BlockingPromptLogs {
         self.repo.heartbeat(replica, address).await
     }
 
-    async fn manager_of(&self, session: AgentSessionId) -> Result<Option<SessionManager>> {
-        self.repo.manager_of(session).await
+    async fn lease_view(&self, session: AgentSessionId, replica: ReplicaId) -> Result<LeaseView> {
+        self.repo.lease_view(session, replica).await
+    }
+
+    async fn begin_draining(&self, replica: ReplicaId) -> Result<()> {
+        self.repo.begin_draining(replica).await
     }
 }
 
@@ -909,6 +933,61 @@ async fn a_second_replica_cannot_attach_a_session_with_a_live_manager() {
         .await;
 
     assert!(matches!(result, Err(AgentSessionError::ManagedElsewhere(id)) if id == fx.session));
+}
+
+/// What a rolling deploy does to routing, from the service's side. The task
+/// being replaced keeps heartbeating for its whole drain window, so nothing
+/// about liveness stops work reaching it; the drain it publishes is what
+/// does. Both halves: the replica leaving reports itself as no place to send
+/// work, and the peer stops seeing it as the manager and takes the session
+/// over instead of waiting out a heartbeat that is still arriving.
+#[tokio::test]
+async fn a_draining_replica_stops_managing_its_sessions() {
+    let fx = fixture();
+    fx.service
+        .attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
+        .await
+        .expect("the first replica attaches");
+    let peer = AgentSessionServiceImpl::new(
+        fx.repo.clone(),
+        FoldedMessageService::new(fx.repo.clone()),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    assert!(matches!(
+        fx.service.management(fx.session).await.expect("management"),
+        SessionManagement::Ours
+    ));
+    assert!(matches!(
+        peer.management(fx.session).await.expect("management"),
+        SessionManagement::Peer(manager) if manager.replica == fx.service.replica_id()
+    ));
+
+    fx.service
+        .begin_draining()
+        .await
+        .expect("the drain is published");
+
+    assert!(
+        matches!(
+            fx.service.management(fx.session).await.expect("management"),
+            SessionManagement::Draining
+        ),
+        "a replica on its way out sends work nowhere, its own sessions included"
+    );
+    assert!(
+        matches!(
+            peer.management(fx.session).await.expect("management"),
+            SessionManagement::Unmanaged
+        ),
+        "the holder is leaving, so the session is the staying replica's to take"
+    );
+    peer.attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
+        .await
+        .expect("the peer takes over from a draining holder");
 }
 
 /// A command sent while the handshake never completes cannot hang its caller

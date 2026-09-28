@@ -8,6 +8,7 @@
 import type { AttendeeResponseStatus } from './attendeeResponseStatus';
 import type { RsvpCalendarEventRequestCalendarId } from './rsvpCalendarEventRequestCalendarId';
 import type { RsvpCalendarEventRequestRecurrenceId } from './rsvpCalendarEventRequestRecurrenceId';
+import type { RsvpCalendarEventRequestRespondingEmail } from './rsvpCalendarEventRequestRespondingEmail';
 import type { RsvpCalendarEventRequestScope } from './rsvpCalendarEventRequestScope';
 
 /**
@@ -19,6 +20,8 @@ from more than one calendar. Omit to answer on the canonical copy. */
   calendarId?: RsvpCalendarEventRequestCalendarId;
   /** Original-start key of the occurrence the response targets. */
   recurrenceId?: RsvpCalendarEventRequestRecurrenceId;
+  /** The owned connected address whose attendance is changed. Validated by the domain. */
+  respondingEmail?: RsvpCalendarEventRequestRespondingEmail;
   /** The response to record for the connected account. */
   response: AttendeeResponseStatus;
   scope?: RsvpCalendarEventRequestScope;

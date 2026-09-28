@@ -1,11 +1,11 @@
 import { joinChannelCall } from '@channel/Call/join-channel-call';
+import { NewMeetingButton } from '@channel/Call/NewMeetingButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
-import PlusCircleIcon from '@phosphor/plus-circle.svg';
 import XIcon from '@phosphor/x.svg';
 import {
   useGetOrCreateDirectMessageMutation,
@@ -33,6 +33,7 @@ export function NewCallButton() {
   }
 
   async function handleStartCall() {
+    if (isSubmitting()) return;
     const options = selectedOptions();
     if (!options || options.length === 0) {
       setTriedToSubmit(true);
@@ -43,6 +44,10 @@ export function NewCallButton() {
 
     try {
       const destination = getDestinationFromOptions(options);
+      if (destination.type === 'users' && destination.users.length === 0) {
+        setTriedToSubmit(true);
+        return;
+      }
       let channelId: string;
 
       if (destination.type === 'channel') {
@@ -60,33 +65,24 @@ export function NewCallButton() {
           channelId = result.channel_id;
         } catch {
           toast.failure('Failed to create channel for call');
-          setIsSubmitting(false);
           return;
         }
       }
 
+      await joinChannelCall(channelId);
       setIsOpen(false);
       reset();
-
-      await joinChannelCall(channelId);
     } catch (err) {
       console.error('Failed to start call', err);
       toast.failure('Failed to start call');
+    } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
     <>
-      <Button
-        variant="accent"
-        class="border-0 rounded-full px-3 py-2 pl-1 font-semibold"
-        size="sm"
-        onClick={() => setIsOpen(true)}
-      >
-        <PlusCircleIcon class="size-3.5 text-accent" />
-        <span>Call</span>
-      </Button>
+      <NewMeetingButton onChannelCall={() => setIsOpen(true)} />
       <Dialog
         open={isOpen()}
         onOpenChange={(open) => {

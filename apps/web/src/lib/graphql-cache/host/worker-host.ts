@@ -25,6 +25,7 @@ import {
   type MutationClaim,
   type MutationSettlement,
   OWNER_EPOCH_LOST_ERROR_CODE,
+  parseStorageGeneration,
   type ReadRecordsByKeysArgs,
   type ReadRecordsByKeysResult,
   type ReadResult,
@@ -278,6 +279,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         return;
       }
       if (msg.kind === 'cache-changed') {
+        if (msg.reset) {
+          for (const cb of generationChangeSubscribers)
+            cb({ storage: 'reset' });
+        }
         for (const cb of cacheChangeSubscribers) cb(msg.revision);
         return;
       }
@@ -854,6 +859,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         msg.kind === 'init'
           ? initializationTimeoutMs
           : msg.kind === 'current-revision' ||
+              msg.kind === 'current-storage-generation' ||
               msg.kind === 'read' ||
               msg.kind === 'read-records-by-keys' ||
               msg.kind === 'search' ||
@@ -1068,6 +1074,13 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return (await initializedRequest({
         kind: 'current-revision',
       })) as CacheRevision;
+    },
+
+    async currentStorageGeneration(): Promise<string> {
+      await ensureInitialized();
+      return parseStorageGeneration(
+        await request({ kind: 'current-storage-generation' })
+      );
     },
 
     async readQuery(args: CacheReadArgs): Promise<ReadResult> {

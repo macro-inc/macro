@@ -235,6 +235,8 @@ export function BlockItemSplitLabel(props: {
   name?: Accessor<string | undefined>;
   lockRename?: boolean;
   badges?: JSX.Element;
+  /** Rendered after the file name. */
+  trailingBadges?: JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
   if (!isInBlock())
@@ -290,6 +292,7 @@ export function BlockItemSplitLabel(props: {
             label={displayName() ?? ''}
             lockRename={!isOwner() || props.lockRename}
           />
+          {props.trailingBadges}
           <div
             class="shrink-0 flex items-center h-full"
             ref={(ref) => {

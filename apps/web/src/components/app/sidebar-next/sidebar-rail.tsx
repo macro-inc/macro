@@ -1,18 +1,23 @@
+import { useHasActiveChannelsCall } from '@app/features/channels-view/use-has-active-call';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
-import { useActiveCallsQuery } from '@queries/call/call';
 import { cn } from '@ui';
-import { For } from 'solid-js';
+import { For, Show, Suspense } from 'solid-js';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
-import { ListNav } from './list-nav';
+import { ListNav, type ListNavProps } from './list-nav';
 import { visibleNavItems } from './nav-items';
 import { useSidebarUnread } from './queries/use-sidebar-unread';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
+
+function ChannelsListNav(props: Omit<ListNavProps, 'activeCall'>) {
+  const hasActiveCall = useHasActiveChannelsCall();
+  return <ListNav {...props} activeCall={hasActiveCall()} />;
+}
 
 /**
  * The rebuilt app sidebar, behind `enable-new-app-views`: a single always-narrow
@@ -30,10 +35,6 @@ export const SidebarRail = () => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const hasUnread = useSidebarUnread();
-  const activeCallsQuery = useActiveCallsQuery();
-  // Keep the rail mounted while the shared call query loads.
-  const hasActiveCall = () =>
-    !activeCallsQuery.isPending && (activeCallsQuery.data?.length ?? 0) > 0;
 
   const _openHome = (event: MouseEvent) => {
     if (event.button !== 0) return;
@@ -66,11 +67,18 @@ export const SidebarRail = () => {
           <For each={visibleNavItems(gates())}>
             {(item) => (
               <li class="flex">
-                <ListNav
-                  item={item}
-                  unread={hasUnread(item.id)}
-                  activeCall={item.id === 'channels' && hasActiveCall()}
-                />
+                <Show
+                  when={item.id === 'channels'}
+                  fallback={<ListNav item={item} unread={hasUnread(item.id)} />}
+                >
+                  <Suspense
+                    fallback={
+                      <ListNav item={item} unread={hasUnread(item.id)} />
+                    }
+                  >
+                    <ChannelsListNav item={item} unread={hasUnread(item.id)} />
+                  </Suspense>
+                </Show>
               </li>
             )}
           </For>
