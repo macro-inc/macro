@@ -563,7 +563,15 @@ With the flag off, documents behave exactly as described above this section.
 
 Right side of a doc (toggle with `Hide/Show Side Panel`):
 
-- `Actions` → `Ask Macro` (opens a doc-scoped AI chat, see ai-chat.md).
+- `Actions` → `Ask Macro` (opens a doc-scoped AI chat, see ai-chat.md), and on
+  desktop a `Copy as prompt` pill for documents and tasks. Its primary button
+  runs the last-used agent action; the `Agent options` caret lists `Copy as
+  prompt`, `MCP setup instructions`, and an `Open in` group (Claude Code Web,
+  Codex Desktop, Cursor, Zed). Tasks add `Copy branch name`. A document prompt
+  wraps the title and markdown in `<document>` / `<document-content>` tags with
+  no branch instructions; the toast reads `Prompt copied to clipboard`. The
+  Files-view title menu (three dots beside the breadcrumb) also lists `Copy as
+  prompt` directly above `Download` for plain documents.
 - `Details` → Owner, Created, Last updated.
 - `Tags` → `Add tags` (dialog). `Properties` → `Add property`.
 - Collapsed sections: `Stats`, `History` (version time-travel), `Activity`.

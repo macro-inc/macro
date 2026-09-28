@@ -111,14 +111,21 @@ async function fetchBranchName(documentId: string) {
   return result.value;
 }
 
-/** Plain documents carry no branch, so the prompt frames them as context to read. */
+/**
+ * Plain documents carry no branch (the branch endpoint rejects non-tasks), so
+ * the prompt frames them as context to read.
+ */
 async function generateDocumentPrompt(
   documentId: string,
   documentName: string,
   content: string,
   threads: PromptThread[]
 ): Promise<string> {
-  const { shortId } = await fetchBranchName(documentId);
+  const result = await storageServiceClient.getDocumentShortId({ documentId });
+  if (!result.isOk()) {
+    throw new Error('Failed to fetch short id');
+  }
+  const shortId = result.value;
 
   const lines: string[] = [];
 
