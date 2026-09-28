@@ -1,3 +1,4 @@
+import { $createLinkNode } from '@lexical/link';
 import {
   $createTableNode,
   $createTableRowNode,
@@ -11,7 +12,7 @@ import {
   $createVideoNode,
   $isVideoNode,
 } from '@macro-inc/lexical-core/nodes/VideoNode';
-import type { LexicalEditor } from 'lexical';
+import { $createTextNode, $isElementNode, type LexicalEditor } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import {
   $createTextCell,
@@ -26,6 +27,44 @@ function createTableEditor(): LexicalEditor {
 }
 
 describe('table cell allowed content', () => {
+  it('preserves stray text and inline links in paragraphs, in order', async () => {
+    const editor = createTableEditor();
+    await buildTable(editor, textGrid([['hello']]));
+    let textKey = '';
+    let linkKey = '';
+    editor.update(
+      () => {
+        const text = $createTextNode('stray text');
+        const link = $createLinkNode('https://example.com');
+        link.append($createTextNode('linked text'));
+        textKey = text.getKey();
+        linkKey = link.getKey();
+        $getCell(0, 0).append(text, link);
+      },
+      { discrete: true }
+    );
+
+    editor.read(() => {
+      const children = $getCell(0, 0).getChildren();
+      expect(children.map((child) => child.getType())).toEqual([
+        'paragraph',
+        'paragraph',
+        'paragraph',
+      ]);
+      expect(children.map((child) => child.getTextContent())).toEqual([
+        'hello',
+        'stray text',
+        'linked text',
+      ]);
+      expect(
+        $isElementNode(children[1]) && children[1].getFirstChild()?.getKey()
+      ).toBe(textKey);
+      expect(
+        $isElementNode(children[2]) && children[2].getFirstChild()?.getKey()
+      ).toBe(linkKey);
+    });
+  });
+
   it('keeps an image appended to a table cell', async () => {
     const editor = createTableEditor();
     await buildTable(editor, textGrid([['hello']]));

@@ -678,14 +678,24 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     vi.restoreAllMocks();
   });
 
-  it('submits GraphQL optimism while offline for the durable cache queue', async () => {
+  it('submits GraphQL optimism while offline and waits for durable settlement', async () => {
     onlineManager.setOnline(false);
-    graphqlEntityPropertyMutationMock.mockResolvedValue({
-      kind: 'queued',
-      transactionId: 'txn-offline',
-    });
+    let commit!: (disposition: { kind: 'committed' }) => void;
+    graphqlEntityPropertyMutationMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          commit = resolve;
+        })
+    );
 
-    await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
+    const pending = mutation.mutateAsync(variables);
+    await vi.waitFor(() =>
+      expect(graphqlEntityPropertyMutationMock).toHaveBeenCalledOnce()
+    );
+    expect(mutation.isPending).toBe(true);
+    onlineManager.setOnline(true);
+    commit({ kind: 'committed' });
+    await expect(pending).resolves.toBeUndefined();
 
     expect(graphqlEntityPropertyMutationMock).toHaveBeenCalledOnce();
     expect(graphqlEntityPropertyMutationMock).toHaveBeenCalledWith({
@@ -695,13 +705,24 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
   });
 
-  it('treats queued GraphQL saves as accepted submissions', async () => {
-    graphqlEntityPropertyMutationMock.mockResolvedValue({
-      kind: 'queued',
-      transactionId: 'txn-queued',
-    });
+  it('keeps GraphQL saves pending until settlement without snapshot rollback', async () => {
+    let commit!: (disposition: { kind: 'committed' }) => void;
+    graphqlEntityPropertyMutationMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          commit = resolve;
+        })
+    );
 
-    await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
+    const pending = mutation.mutateAsync(variables);
+    await vi.waitFor(() =>
+      expect(graphqlEntityPropertyMutationMock).toHaveBeenCalledOnce()
+    );
+    expect(mutation.isPending).toBe(true);
+    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
+    expect(toastFailureMock).not.toHaveBeenCalled();
+    commit({ kind: 'committed' });
+    await expect(pending).resolves.toBeUndefined();
 
     expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
     expect(rollbackMock).not.toHaveBeenCalled();

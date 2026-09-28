@@ -22,6 +22,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
 import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
+import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   editorFocusSignal,
@@ -93,6 +94,8 @@ export type CollabMarkdownEditorProps = {
   onControls?: (controls: CollabMarkdownControls) => void;
   /** Called when the editor enters an error state. */
   onError?: (error: MarkdownEditorErrors) => void;
+  /** Convert routed app URLs to document mentions on paste. */
+  resolveAppLink?: MentionLinkResolver;
   /** Optional status UI rendered by the collab provider. */
   statusChrome?: JSX.Element;
 };
@@ -165,7 +168,7 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
         sourceDocumentId: props.sourceId,
       })
     )
-    .use(textPastePlugin())
+    .use(textPastePlugin(props.resolveAppLink))
     .use(markdownPastePlugin())
     .use(awaitPlugin())
     .use(

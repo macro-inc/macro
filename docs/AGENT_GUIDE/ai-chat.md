@@ -35,6 +35,12 @@ permission failures should display a failed tool call without a successful resul
 
 ## Where chats live
 
+The Agents conversation list shows row skeletons after a short delay on first
+load. Fetching another page appends three placeholders while existing sessions
+remain usable. Wait for named conversation buttons before selecting a session;
+the placeholders are decorative and cannot be focused. Reduced motion disables
+the shimmer.
+
 - If session creation fails, the session view shows **Unable to start this agent**
   with the service's reason. Repository access requires a GitHub connection to
   Macro that covers that repository; connecting only Cursor does not grant Macro
@@ -103,6 +109,7 @@ permission failures should display a failed tool call without a successful resul
   available agent is selected initially; otherwise Macro is selected.
   Hover an agent (or use the right arrow key) to open its model submenu, with
   the searchable Settings catalog, provider icons, and scrollable **More models**.
+  The submenu focuses the `Search models` field so you can type immediately.
   Clicking an agent directly uses its default; choosing a submenu model selects
   both the agent and that model. A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
@@ -671,19 +678,29 @@ toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it o
 Chat sessions on Macro's in-memory harness have no repository, so they show
 none of this: no **Changes** toggle, pane, hand-off card, or review-notes chip,
 and the title menu offers **Open repository** only when the session has one.
-The URL's `diff` query parameter stores each session's pane state and diff
-layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
-`split` for side-by-side diffs). Copying the URL preserves that view; reload
-and Back/Forward restore it. A plain session URL starts with Changes closed.
-Divider width, collapsed files, and review notes stay local.
-The pane header shows a `head → base` branch pill, a **Unified / Split**
-segmented control (`aria-label="Diff layout"`), a refresh button, the
-**View pull request** button (opens GitHub), and **Expand changes to the full width**
-(spotlight; **Bring the session back** returns to the split) and **Close the
-changes pane**. Below it is a **Collapse all / Expand all** button.
-The body is a file tree (`nav[aria-label="Changed files"]`, directories
-compressed along single-child chains, status letters A/M/D/R and +/− counts)
-next to a scrollable stack of file cards. Expanded cards keep their full height;
+The session's split stores the pane in its own search params:
+`s<N>.changes.pane` (`split`, or `full` when spotlit) and `s<N>.changes.style=split`
+for side-by-side diffs, where `<N>` is the split's index; defaults are left out.
+Copying the URL preserves that view, and reload restores it. Opening and closing
+the pane are Back/Forward steps; switching the diff layout is not. A plain
+session URL starts with Changes closed, and leaving the session or closing its
+split drops the state.
+Divider width, whether the file tree shows, collapsed files, and review notes
+stay local.
+The pane (`[role="region"][aria-label="Changes"]`) has a title row and a
+toolbar. The title row shows **Changes**, the linked pull request's number
+(**View pull request #N** opens GitHub), and the `head → base` range, with only
+the pane's own controls on the right: **Expand changes to the full width**
+(pressed while spotlit; its label becomes **Back to the split**) and **Close the
+changes pane**. The toolbar, shown once there are files, has **Hide file tree /
+Show file tree** and the file count on the left, and on the right the
+**Unified / Split** segmented control (`aria-label="Diff layout"`), **Collapse
+all / Expand all**, and **Refresh pull request changes**.
+The body is a file tree (`[role="group"][aria-label="Changed files"]`, rows
+styled like Drive's folder tree, directories compressed along single-child
+chains with **Collapse / Expand** buttons, each file's +/− counts and status
+letter A/M/D/R; the arrow keys move between rows and Left/Right close and open a
+directory) next to a scrollable stack of file cards. Expanded cards keep their full height;
 **Collapse all / Expand all** hides or restores their bodies. Each card's header has a disclosure
 caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; hover a
 line and click the accent **+** in the gutter (drag for a range) to leave a
@@ -715,6 +732,26 @@ with `set_pull_request`, then use **Refresh changes**. An unavailable or
 oversized PR is explained in the pane; there is no branch or container fallback.
 Refresh request failures show a retry banner while keeping the last diff visible.
 The pane does not create PRs or generate their descriptions.
+### Live development previews
+
+Coding agents can call the internal **SharePreview** tool with their local HTTP
+server port and execute the returned SSH script in that same environment. Keep
+the server running while editing; ordinary HTTP and WebSocket HMR traffic are
+forwarded. Never paste the script or its credentials into a final chat message.
+
+In an agent session (`/app/coders/<uuid>` for a coding session), the banner
+above the transcript moves from **Agent is
+connecting a preview…** to **Agent is sharing a preview** once HTTP is reachable.
+Click **View preview ↗** to open a new tab. Any viewer of the agent-session entity
+can open it; a copied preview URL alone does not authenticate another browser.
+Allow popups if opening is blocked. The destination is an isolated HTTPS origin
+with normal root paths and no authorization query parameters.
+
+The owner can click **Stop sharing** in the banner; open preview connections
+close. Disconnection and expiry leave a banner asking the agent to share again.
+Leases last up to one hour and expire after 15 minutes without browser requests.
+Continue prompting in the agent session while the preview tab stays open; page
+edits should arrive through the app's own HMR connection.
 
 ### Transcript navigation
 

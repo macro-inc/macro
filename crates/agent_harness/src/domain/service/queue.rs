@@ -633,6 +633,27 @@ where
         }
 
         let dispatched = if self.busy.is_pending(session_id) {
+            // Said out loud, with the turn it waits behind and that turn's
+            // age: a queue that never drains is otherwise silent on this
+            // replica, and the question "what is it waiting for, and since
+            // when" is the one that has to be answerable from the logs.
+            match self.busy.turn(session_id) {
+                Some(turn) => tracing::info!(
+                    %session_id,
+                    %action_id,
+                    in_flight_turn = turn.turn.0,
+                    in_flight_action_id = %turn.action_id,
+                    in_flight_age_secs = turn.age().num_seconds(),
+                    queued = self.queues.list(session_id).len(),
+                    "action queued behind the turn in flight"
+                ),
+                None => tracing::info!(
+                    %session_id,
+                    %action_id,
+                    queued = self.queues.list(session_id).len(),
+                    "action queued behind a command admitted but not yet dispatched"
+                ),
+            }
             Ok(())
         } else {
             // Marked before dispatching, not only once `dispatch_next`'s own
@@ -905,6 +926,7 @@ where
                     actor: entry.actor,
                     announce: entry.announce,
                     announcement_message_id: entry.announced,
+                    dispatched_at: chrono::Utc::now(),
                 };
                 self.busy.mark_turn(session_id, turn.clone());
                 self.publish_lifecycle(session_id, |identity| {

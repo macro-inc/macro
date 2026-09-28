@@ -81,6 +81,7 @@ describe('split route parameter schemas', () => {
     path: 'issue/:issueId',
     params: z.object({ issueId: z.coerce.number().int().positive() }),
     remountKey: ({ issueId }) => issueId.toFixed(0),
+    toReference: ({ issueId }) => ({ type: 'issue', id: issueId.toFixed(0) }),
   });
 
   it('coerces URL strings to typed runtime values', () => {
@@ -94,6 +95,15 @@ describe('split route parameter schemas', () => {
     expectTypeOf<InferSplitRouteParams<typeof issueRoute>>().toEqualTypeOf<{
       issueId: number;
     }>();
+  });
+
+  it('keeps the route reference callback on the matched definition', () => {
+    const manifest = createRoutesManifest({ definitions: [issueRoute] });
+    expect(manifest.byId.get(issueRoute.id)?.definition).toBe(issueRoute);
+    expect(issueRoute.toReference({ issueId: 42 })).toEqual({
+      type: 'issue',
+      id: '42',
+    });
   });
 
   it('rejects invalid values', () => {

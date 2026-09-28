@@ -107,6 +107,12 @@ pub(super) async fn cursor_soup(
     query.push(" AND (");
     push_filter(&mut query, filter);
     query.push(")");
+    // Inline @macro sessions (`list_hidden`) are absent from broad lists. A
+    // query that names the session still returns it, so favorites and direct
+    // id lookups keep working.
+    query.push(" AND (s.list_hidden = FALSE OR s.id = ANY(");
+    query.push_bind(explicitly_named_ids(filter));
+    query.push("))");
     if let (Some(timestamp), Some(id)) = (parts.timestamp, parts.id) {
         query.push(format!(" AND ({sort}, s.id) < ("));
         query.push_bind(timestamp);
@@ -251,6 +257,25 @@ fn sort_sql(sort: SimpleSortMethod) -> &'static str {
             r#"COALESCE(uh."updatedAt", s.modified_at)::timestamptz"#
         }
     }
+}
+
+/// Session ids the query asked for by name, ignoring ids under `NOT`.
+/// Those stay visible even when the session is hidden from broad lists.
+fn explicitly_named_ids(expression: &Expr<AgentSessionLiteral>) -> Vec<Uuid> {
+    fn walk(expression: &Expr<AgentSessionLiteral>, negated: bool, ids: &mut Vec<Uuid>) {
+        match expression {
+            Expr::Literal(AgentSessionLiteral::Id(id)) if !negated => ids.push(*id),
+            Expr::Not(inner) => walk(inner, true, ids),
+            Expr::And(left, right) | Expr::Or(left, right) => {
+                walk(left, negated, ids);
+                walk(right, negated, ids);
+            }
+            Expr::Literal(_) => {}
+        }
+    }
+    let mut ids = Vec::new();
+    walk(expression, false, &mut ids);
+    ids
 }
 
 fn push_filter(builder: &mut QueryBuilder<'_, Postgres>, expression: &Expr<AgentSessionLiteral>) {

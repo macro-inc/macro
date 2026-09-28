@@ -1,5 +1,12 @@
 # Other Surfaces
 
+## Home list loading
+
+Home shows compact row skeletons during initial loading, with taller notification
+placeholders on touch devices. Date grouping includes a placeholder heading.
+Pagination appends three placeholders without replacing existing items; refresh
+keeps loaded items visible. Wait for real rows before navigating or selecting.
+
 ## Top bars
 
 Right-aligned split-header actions (including Calendar's touch/preview New event
@@ -25,6 +32,13 @@ changing the swatch. The rectangle should have a light neutral fill and a dark
 outline; the text should be dark and visible. Also check the neutral swatch after
 selecting another color. Neutral colors use an OKLCH `none` hue, which must render
 as gray rather than transparent.
+
+## Canvas link paste
+
+Pasting a supported routed Macro app link onto the canvas creates a text
+node with an entity mention, as legacy links do. Routed links retain compatible
+block targets, but not workspace paths or pane-local search state; unsupported
+links remain text.
 
 ## Live updates in flat Soup lists
 
@@ -1160,6 +1174,13 @@ use the standalone contact page.
 Company and contact headers have `Copy link` beside the side-panel toggle.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
+
+Company and contact pages have a **Discussion** section built from the same
+message conversation as a document's Discussion: threaded replies, reactions,
+attachments, and edit/delete from the message menu. `@` suggests the team's
+members and agents. A message's copied link is the standalone record URL
+with `comment_id`; opening it, or a CRM discussion notification, scrolls to and
+highlights that message. Deleting a thread's first comment deletes the thread.
 
 Company selection actions **Set owner** and **Set revenue** remain available
 while team deal-stage definitions are loading. **Set stage** waits for the active

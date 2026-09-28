@@ -15,11 +15,19 @@ the linked pull request, so a chat-only (in-memory) session or a coding session
 without a pull request yet shows no GitHub chrome. Clipboard, external navigation,
 and notifications are host callbacks.
 
+`views/ChangesPane.tsx` composes the generic `FileTree`
+(`@ui/components/FileTree`) and `DiffView` (`src/components/diff-view`) from the
+controller: tree rows show status letters and counts, file headers add **Copy
+path**, and review notes hang under their lines through `DiffView.Stack`'s
+annotation slot. Another host composes the same components its own way.
+
 The source owns fetching, cache identity, and conversion into the feature's core
 changeset types. A PR entity adapter should resolve its GitHub owner/repository/PR
 number and implement this same contract using shared queries. It does not need to
 construct an agent session. That adapter and its backend endpoint are not yet wired.
 
-Layout and diff style are controlled accessor/setter pairs. Hosts using the app
-router can use `url-diff-state.ts`; embedded viewers can provide local signals.
-The URL codec supports namespaced ids and preserves neighboring viewer entries.
+Layout and diff style come from `createPaneViewState()` (`pane-view-state.ts`).
+Where the host's route lists `changesSearch.namespace` in its `search`, they live
+in that split's search params (`s0.changes.pane`, `s0.changes.style`), so the
+split router drops them when the split closes or navigates away; anywhere else,
+such as a preview, they are local signals.
