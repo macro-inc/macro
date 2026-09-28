@@ -27,6 +27,8 @@ const debugComponentIds = [
         'dynamic-ui',
         'agent-ui',
         'agent-replay',
+        'agent-changes-ui',
+        'diff-view-ui',
       ]
     : []),
   ...(import.meta.env.DEV ? ['spreadsheet-demo'] : []),
@@ -37,8 +39,6 @@ const debugComponentIds = [
         'md-parse',
         'md-builder',
         'collab-surface-demo',
-        'diff-view-ui',
-        'agent-changes-ui',
       ]
     : []),
 ];
