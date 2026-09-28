@@ -37,10 +37,16 @@ export function ProjectDescription(props: {
   canEdit: boolean;
 }) {
   const [attempt, setAttempt] = createSignal(0);
-  const identity = createMemo(() => ({
-    documentId: props.documentId,
-    attempt: attempt(),
-  }));
+  // Project refreshes re-read the same documentId; only a new id or retry reopens.
+  const identity = createMemo(
+    () => ({ documentId: props.documentId, attempt: attempt() }),
+    undefined,
+    {
+      equals: (previous, next) =>
+        previous.documentId === next.documentId &&
+        previous.attempt === next.attempt,
+    }
+  );
   return (
     <Show when={identity()} keyed>
       {(identity) => (
