@@ -28,6 +28,7 @@ use crate::{
     generated::schema::InitializeFromSnapshotRequest,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
     mutex::Mutex,
+    socket::{InboundBuffers, Socket, protocol},
     state::DocumentState,
     storage::{
         SessionStorage, backends::durable_kv::DurableKVStorage, get_snapshot_storage,
@@ -35,7 +36,6 @@ use crate::{
     },
     tags::{get_ws_id_from_tags, new_ws_id},
     timeit,
-    socket::{InboundBuffers, Socket, protocol},
 };
 
 pub const NO_SUCH_VALUE_ERR_STR: &str = "No such value in storage.";
@@ -330,7 +330,10 @@ impl DocumentSyncSession {
     }
 
     pub(crate) fn get_sockets(&self) -> Vec<Socket> {
-        self.active_websockets().into_iter().map(|ws| self.socket_for(&ws)).collect()
+        self.active_websockets()
+            .into_iter()
+            .map(|ws| self.socket_for(&ws))
+            .collect()
     }
 
     pub fn get_websockets(&self) -> Vec<WebSocket> {
@@ -1097,11 +1100,10 @@ impl DurableObject for DocumentSyncSession {
                 let ws_id = get_ws_id_from_tags(&self.state.get_tags(&ws)).ok();
                 telemetry.record_context(&document_id, ws_id);
 
-                let message =
-                    protocol::deserialize_message(&binary_message).inspect_err(|_| {
-                        telemetry.record_message_type("invalid");
-                        telemetry.record_error_stage("deserialize");
-                    })?;
+                let message = protocol::deserialize_message(&binary_message).inspect_err(|_| {
+                    telemetry.record_message_type("invalid");
+                    telemetry.record_error_stage("deserialize");
+                })?;
                 telemetry.record_message_type(protocol::message_type(&message));
 
                 protocol::process_message(
@@ -1244,12 +1246,8 @@ impl DurableObject for DocumentSyncSession {
                 let update = self.awareness.encode(&peer_id.to_string());
 
                 // Don't silently discard the error
-                protocol::broadcast_awareness(
-                    self,
-                    &self.socket_for(&ws),
-                    update.as_slice(),
-                )
-                .context("failed to broadcast awareness")?;
+                protocol::broadcast_awareness(self, &self.socket_for(&ws), update.as_slice())
+                    .context("failed to broadcast awareness")?;
             }
 
             if self.state.get_websockets().len() == 1

@@ -12,11 +12,11 @@ pub mod keepalive;
 mod metrics;
 mod mutex;
 mod secrets;
+mod socket;
 mod state;
 mod storage;
 mod tags;
 mod timeout;
-mod socket;
 
 use tracing_subscriber::{
     EnvFilter, fmt::time::UtcTime, layer::SubscriberExt, util::SubscriberInitExt,

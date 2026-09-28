@@ -1,5 +1,3 @@
-import { platformWebSocketFactory } from '../websocket/platform/factory';
-import { framedWebSocketFactory } from '../websocket/platform/framing';
 import {
   ArrayQueue,
   BebopSerializer,
@@ -11,6 +9,8 @@ import {
   type WebsocketEvent,
   type WebsocketEventListener,
 } from '../websocket';
+import { platformWebSocketFactory } from '../websocket/platform/factory';
+import { framedWebSocketFactory } from '../websocket/platform/framing';
 import { FromPeer, FromRemote, type IFromPeer } from './generated/schema';
 
 /** The concrete sync websocket: a {@link Websocket} speaking the Bebop protocol. */

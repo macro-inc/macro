@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { framedWebSocketFactory } from './framed-websocket';
 import type { MinimalWebSocket } from '../minimal-websocket';
+import { framedWebSocketFactory } from './framed-websocket';
 
 type MockWebSocket = MinimalWebSocket & {
   /** Payloads passed to `send`, in order. */

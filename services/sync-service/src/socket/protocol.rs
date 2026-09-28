@@ -134,7 +134,11 @@ pub fn send_initial_sync(socket: &Socket, snapshot: &[u8], awareness: &[u8]) -> 
 }
 
 /// Broadcasts an awareness update to every connected peer except `from`.
-pub fn broadcast_awareness(dss: &DocumentSyncSession, from: &Socket, awareness: &[u8]) -> Result<()> {
+pub fn broadcast_awareness(
+    dss: &DocumentSyncSession,
+    from: &Socket,
+    awareness: &[u8],
+) -> Result<()> {
     for socket in dss.get_sockets() {
         if socket == *from {
             continue;
@@ -168,7 +172,10 @@ pub async fn process_message(
 ) -> Result<()> {
     // Loading the document after hibernation can yield to a revocation. Check
     // the surface grant again immediately before handling any protocol message.
-    if !dss.validate_surface_sockets(Some(sender.websocket())).await? {
+    if !dss
+        .validate_surface_sockets(Some(sender.websocket()))
+        .await?
+    {
         return Ok(());
     }
     trace!(
@@ -202,7 +209,10 @@ pub async fn process_message(
                     None
                 }
             };
-            let peer_ids = Wsm::new(dss, sender.websocket()).get_peer_ids().await.unwrap_or_default();
+            let peer_ids = Wsm::new(dss, sender.websocket())
+                .get_peer_ids()
+                .await
+                .unwrap_or_default();
             let peer_id = peer_ids.first().copied();
             telemetry.peer_id = peer_id;
             let now_ms = web_time::SystemTime::now()
@@ -235,7 +245,8 @@ pub async fn process_message(
             }
 
             // ACK only after the update is durably stored.
-            sender.send(FromRemote::RemoteUpdateAck { id })
+            sender
+                .send(FromRemote::RemoteUpdateAck { id })
                 .inspect_err(|error| {
                     tracing::error!(error = ?error, op.id = %id, "failed to send update ack");
                 })
@@ -267,8 +278,7 @@ pub async fn process_message(
             let sockets = dss.get_sockets();
             telemetry.broadcast_targets =
                 Some(sockets.iter().filter(|socket| *socket != sender).count());
-            broadcast_awareness(dss, sender, &encodede)
-                .context("failed to broadcast awareness")?;
+            broadcast_awareness(dss, sender, &encodede).context("failed to broadcast awareness")?;
         }
         // Handle a peer requesting a specific set of updates from the document.
         // The client sends a version vector (not frontiers) so unknown peers
@@ -288,19 +298,23 @@ pub async fn process_message(
             // sent; `decode(vv).encode()` is not guaranteed to reproduce the same
             // bytes for a multi-peer version vector, which would make the client
             // discard a perfectly good response and time out.
-            sender.send(FromRemote::RemoteUpdateSince {
-                update: SliceWrapper::Raw(&update),
-                vv,
-            }).context("failed to send update")?;
+            sender
+                .send(FromRemote::RemoteUpdateSince {
+                    update: SliceWrapper::Raw(&update),
+                    vv,
+                })
+                .context("failed to send update")?;
         }
         // Peer is requesting a snapshot from the remote
         FromPeer::PeerRequestSnapshot {} => {
             let snapshot = document_state.export_shallow_snapshot()?;
             telemetry.response_bytes = Some(snapshot.len());
 
-            sender.send(FromRemote::RemoteSnapshot {
-                snapshot: SliceWrapper::Raw(&snapshot),
-            }).context("failed to send snapshot")?;
+            sender
+                .send(FromRemote::RemoteSnapshot {
+                    snapshot: SliceWrapper::Raw(&snapshot),
+                })
+                .context("failed to send snapshot")?;
         }
         FromPeer::Unknown => {
             return Err(worker::Error::from("unknown message type"));

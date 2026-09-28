@@ -1,3 +1,4 @@
+import { intoFrames, Reassembler } from '../../../packages/collaboration/src/websocket/platform/framing/frames';
 import { EphemeralStore, LoroDoc } from 'loro-crdt';
 import { Miniflare, type MiniflareOptions, type WebSocket } from 'miniflare';
 import { assert } from 'vitest';
@@ -161,7 +162,7 @@ export async function createTestUser(mf: Miniflare, documentId = 'test-doc', opt
   const registrationMessage = FromPeer.fromPeerRegisterId({ peerid: loroDoc.peerId }).encode();
 
 
-  connection.getWebSocket().send(registrationMessage);
+  connection.send(registrationMessage);
 
   return {
     doc: loroDoc,
@@ -210,11 +211,15 @@ export async function createTestUser(mf: Miniflare, documentId = 'test-doc', opt
 }
 
 export function createTestWebSocket(ws: WebSocket) {
-  const messages: ArrayBuffer[] = [];
-  const waiters: ((message: ArrayBuffer) => void)[] = [];
+  const reassembler = new Reassembler();
+  const messages: (ArrayBuffer | string)[] = [];
+  const waiters: ((message: ArrayBuffer | string) => void)[] = [];
 
   ws.addEventListener('message', (event) => {
-    const message = event.data as ArrayBuffer;
+    const message = typeof event.data === 'string'
+      ? event.data
+      : reassembler.push(new Uint8Array(event.data as ArrayBuffer))?.buffer;
+    if (message === undefined) return;
 
     if (waiters.length > 0) {
       const resolve = waiters.shift()!;
@@ -230,7 +235,7 @@ export function createTestWebSocket(ws: WebSocket) {
         return messages.shift()!;
       }
 
-      return new Promise<ArrayBuffer>((resolve, reject) => {
+      return new Promise<ArrayBuffer | string>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
           const index = waiters.indexOf(wrappedResolve);
           if (index !== -1) {
@@ -243,7 +248,7 @@ export function createTestWebSocket(ws: WebSocket) {
           );
         }, timeout);
 
-        const wrappedResolve = (message: ArrayBuffer) => {
+        const wrappedResolve = (message: ArrayBuffer | string) => {
           clearTimeout(timeoutId);
           resolve(message);
         };
@@ -253,7 +258,11 @@ export function createTestWebSocket(ws: WebSocket) {
     },
 
     send(message: string | ArrayBuffer | Uint8Array): void {
-      ws.send(message instanceof Uint8Array ? new Uint8Array(message) : message);
+      if (typeof message === 'string') {
+        ws.send(message);
+        return;
+      }
+      for (const frame of intoFrames(new Uint8Array(message))) ws.send(frame);
     },
 
     getWebSocket() {
