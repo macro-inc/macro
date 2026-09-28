@@ -84,6 +84,7 @@ export function MarkdownSidePanelSections() {
   const { displayName } = useMarkdownName();
   const isTask = () => kind() === 'task';
   const isSnippet = () => kind() === 'snippet';
+  const canDispatchToAgent = () => isTask() || kind() === 'document';
   const entity = (): Entity => ({
     id: documentId(),
     type: 'document',
@@ -108,7 +109,7 @@ export function MarkdownSidePanelSections() {
               fileType: 'md',
             }}
           />
-          <Show when={isTask() && !isMobile()}>
+          <Show when={canDispatchToAgent() && !isMobile()}>
             <DispatchAgentButton showPrimaryLabel />
           </Show>
         </div>
