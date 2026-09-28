@@ -1,9 +1,13 @@
 use anyhow::Context;
 pub use dictation::outbound::OpenaiApiKey;
+use entity_registry::NonUserOwners;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 use secretsmanager_client::LocalOrRemoteSecret;
+
+#[cfg(test)]
+mod test;
 
 pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
 /// Allow long recordings to play and seek without the signed URL expiring mid-session.
@@ -57,6 +61,8 @@ env_vars! {
 }
 
 maybe_env_vars! {
+    /// Rollout gate for entities owned by bots or teams.
+    pub struct EnableNonUserOwners;
     /// Optional name of the LiveKit agent to dispatch for call transcription.
     pub struct LivekitTranscriptionAgentName;
     /// Shared secret for internal call endpoints (e.g. transcript ingestion from the agent).
@@ -165,11 +171,8 @@ pub struct Config {
     #[macro_config_default(true)]
     pub legacy_comment_writes_enabled: bool,
 
-    /// Lets a team-scoped bot with no acting user own the documents it
-    /// creates. When `false` (the default) the document create routes answer
-    /// those bots with 403, so every new document stays user-owned.
-    #[macro_config_default(false)]
-    pub enable_non_user_owners: bool,
+    /// Lets a team-scoped bot with no acting user own the documents it creates.
+    pub enable_non_user_owners: EnableNonUserOwners,
 
     /// The number of seconds a signed document or call recording URL is valid for.
     #[macro_config_default(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS)]
@@ -198,4 +201,20 @@ impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>().context("failed to load config")
     }
+
+    pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
+        parse_non_user_owners(self.enable_non_user_owners.value())
+    }
+}
+
+fn parse_non_user_owners(value: Option<&str>) -> anyhow::Result<NonUserOwners> {
+    let enabled = value
+        .unwrap_or("false")
+        .parse::<bool>()
+        .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")?;
+    Ok(if enabled {
+        NonUserOwners::Enabled
+    } else {
+        NonUserOwners::Disabled
+    })
 }

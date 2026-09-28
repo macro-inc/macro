@@ -1,4 +1,4 @@
-import { DocumentConversation } from '@core/messages/DocumentConversation';
+import { EntityConversation } from '@core/messages/EntityConversation';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { projectRouteId } from './core/route';
 
@@ -9,7 +9,7 @@ export function ProjectDiscussion(props: {
   targetId?: string;
 }) {
   return (
-    <DocumentConversation
+    <EntityConversation
       parent={{ type: 'initiative', id: props.projectId }}
       canWrite={props.canWrite}
       targetId={props.targetId}

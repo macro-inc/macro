@@ -31,6 +31,8 @@ import {
 
 /** Private operation-context field carrying serializable optimistic data. */
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
+// Page-local acknowledgement; deliberately excluded from durable queue data.
+const OPTIMISTIC_ENQUEUED_CONTEXT_KEY = 'normalizedCacheOptimisticEnqueued';
 /** Private result-extension field carrying the queue disposition. */
 const OPTIMISTIC_MUTATION_DISPOSITION_KEY =
   'normalizedCacheMutationDisposition';
@@ -111,6 +113,8 @@ export type QueryRevalidation = {
 export type OptimisticMutationOptions = {
   /** Required RFC UUID; reuse only when the newer intent safely replaces the older one. */
   uuid: string;
+  /** Runs after durable layer installation, independently of HTTP settlement. */
+  onEnqueued?: () => void;
   updates?: readonly OptimisticUpdate[];
   /** Relevant queries that cannot safely be updated still revalidate on success. */
   revalidations?: readonly QueryRevalidation[];
@@ -301,6 +305,33 @@ export function update<TItem extends object>(
 }
 
 /**
+ * Upserts a logical list member using its matching mutation-response record.
+ * Settlement resolves the server's ID rather than persisting a temporary ID.
+ */
+export function upsertByField<TItem extends object, K extends ScalarKey<TItem>>(
+  selection: ListSelection<TItem>,
+  args: {
+    entity: NormalizedEntityIdentity;
+    whereField: K;
+    equals: Extract<Present<TItem[K]>, JsonScalar>;
+  }
+): OptimisticUpdate {
+  const patch: OptimisticLinkPatchWire = {
+    query: stringifyDocument(selection.document),
+    operationName: documentOperationName(selection.document),
+    variablesJson: JSON.stringify(selection.variables ?? {}),
+    path: [...selection.path],
+    operation: {
+      kind: 'upsertByField',
+      entityKey: normalizedEntityKey(args.entity),
+      whereField: args.whereField,
+      equals: args.equals,
+    },
+  };
+  return patch as OptimisticUpdate;
+}
+
+/**
  * Removes an entity link from a selected embedded list item and decrements
  * its count only when the link was present.
  */
@@ -406,7 +437,21 @@ export function executeOptimisticMutation<
   };
   return client.mutation(document, variables, {
     [OPTIMISTIC_MUTATION_CONTEXT_KEY]: context,
+    ...(options.onEnqueued
+      ? { [OPTIMISTIC_ENQUEUED_CONTEXT_KEY]: options.onEnqueued }
+      : {}),
   });
+}
+
+/** Acknowledge installation without allowing caller code to interrupt queue routing. */
+export function notifyOptimisticMutationEnqueued(op: Operation): void {
+  const notify: unknown = op.context[OPTIMISTIC_ENQUEUED_CONTEXT_KEY];
+  if (typeof notify !== 'function') return;
+  try {
+    notify();
+  } catch (error) {
+    console.warn('Optimistic enqueue acknowledgement failed', error);
+  }
 }
 
 /** Reads and defensively validates the private context at the exchange edge. */

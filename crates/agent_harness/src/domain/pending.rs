@@ -96,6 +96,7 @@ mod test {
             actor: None,
             announce: None,
             announcement_message_id: None,
+            dispatched_at: chrono::Utc::now(),
         }
     }
 

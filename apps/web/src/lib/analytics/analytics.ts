@@ -9,7 +9,7 @@ import {
 } from '@app/lib/analytics/providers';
 import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { getPlatform } from '@core/util/platform';
+import { getPlatform, isTauri } from '@core/util/platform';
 import {
   redactCallLinkProperties,
   redactCallLinkTokens,
@@ -186,13 +186,16 @@ const createAnalytics = () => {
   const posthog = new PostHog();
 
   const disabled = import.meta.env.DEV === true;
+  // Meta can submit events through hidden frames. Native navigation handlers
+  // can mistake those loads for external links and open the system browser.
+  const metaPixelEnabled = !isTauri();
 
   const initializeProviders = () => {
     if (disabled) return;
 
     if (!isPrivateCallPage()) {
       tryInitialize(initializeGoogleAnalytics);
-      tryInitialize(initializeMetaPixel);
+      if (metaPixelEnabled) tryInitialize(initializeMetaPixel);
     }
     tryInitialize(() => initializePosthog(posthog));
   };
@@ -219,6 +222,7 @@ const createAnalytics = () => {
           gtag('event', event, enriched);
         })
         .with('meta-pixel', () => {
+          if (!metaPixelEnabled) return;
           const fbqMethod = META_STANDARD_EVENTS.has(event)
             ? 'track'
             : 'trackCustom';
@@ -319,10 +323,12 @@ const createAnalytics = () => {
         ...(info.os && { os: info.os }),
       });
 
-      fbq('init', '639142540393286', {
-        external_id: userID,
-        em: info.email,
-      });
+      if (metaPixelEnabled) {
+        fbq('init', '639142540393286', {
+          external_id: userID,
+          em: info.email,
+        });
+      }
 
       posthog.identify(userID, { ...info });
     } catch (e) {
@@ -379,11 +385,13 @@ const createAnalytics = () => {
         page_path: pagePath,
       });
 
-      fbq('track', 'PageView', {
-        [DEVICE_PROPERTY]: deviceType,
-        [ENVIRONMENT_PROPERTY]: environment,
-        content_name: pageTitle,
-      });
+      if (metaPixelEnabled) {
+        fbq('track', 'PageView', {
+          [DEVICE_PROPERTY]: deviceType,
+          [ENVIRONMENT_PROPERTY]: environment,
+          content_name: pageTitle,
+        });
+      }
 
       posthog.capture('$pageview', {
         [DEVICE_PROPERTY]: deviceType,

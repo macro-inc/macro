@@ -11,26 +11,26 @@ import {
 
 describe('layout moves', () => {
   it('toggles the pane from the session header', () => {
-    expect(toggleChanges('agent-only')).toBe('split');
-    expect(toggleChanges('split')).toBe('agent-only');
-    expect(toggleChanges('changes-only')).toBe('agent-only');
+    expect(toggleChanges('closed')).toBe('split');
+    expect(toggleChanges('split')).toBe('closed');
+    expect(toggleChanges('full')).toBe('closed');
   });
 
   it('spotlights and comes back', () => {
-    expect(toggleSpotlight('split')).toBe('changes-only');
-    expect(toggleSpotlight('changes-only')).toBe('split');
-    expect(toggleSpotlight('agent-only')).toBe('changes-only');
+    expect(toggleSpotlight('split')).toBe('full');
+    expect(toggleSpotlight('full')).toBe('split');
+    expect(toggleSpotlight('closed')).toBe('full');
   });
 
   it('only opens a closed pane', () => {
-    expect(ensureChangesVisible('agent-only')).toBe('split');
-    expect(ensureChangesVisible('changes-only')).toBe('changes-only');
+    expect(ensureChangesVisible('closed')).toBe('split');
+    expect(ensureChangesVisible('full')).toBe('full');
     expect(ensureChangesVisible('split')).toBe('split');
   });
 
   it('knows which panes are on screen', () => {
-    expect(isChangesVisible('agent-only')).toBe(false);
-    expect(isSessionVisible('changes-only')).toBe(false);
+    expect(isChangesVisible('closed')).toBe(false);
+    expect(isSessionVisible('full')).toBe(false);
     expect(isChangesVisible('split') && isSessionVisible('split')).toBe(true);
   });
 });

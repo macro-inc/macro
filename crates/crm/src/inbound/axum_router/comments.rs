@@ -1,13 +1,15 @@
-//! Handlers for CRM comment threads.
+//! Handlers for CRM comment threads, served from the shared message store.
 //!
-//! Threads and comments hang off a CRM company or contact and mirror the
-//! document comment shape so the frontend reuses its thread assembly /
-//! rendering. List/create routes use [`EntityPermissionExtractor`] over
-//! the path's `crm_company`/`crm_contact` entity type. Edit/delete are
-//! keyed by `comment_id` only and use [`CrmCommentAccessLevelExtractor`],
-//! which resolves the comment's owning entity before checking access. In
-//! every case the extractor enforces the team-membership rule, so
-//! members can't reach hidden parents.
+//! CRM discussions live in `comms_messages` with `crm_company` / `crm_contact`
+//! parents; these routes keep the legacy request and response shapes for
+//! clients that still use them (see [`adapter`]). List/create routes use
+//! [`EntityPermissionExtractor`] over the path's `crm_company`/`crm_contact`
+//! entity type. Edit/delete are keyed by `comment_id` only and use
+//! [`CrmCommentAccessLevelExtractor`], which resolves the comment's parent
+//! before checking access. In every case the team-membership rule applies,
+//! so members can't reach hidden parents.
+
+mod adapter;
 
 use axum::{
     Json,
@@ -15,7 +17,7 @@ use axum::{
 };
 use entity_access::{
     domain::{
-        models::{TeamRole, ViewAccessLevel},
+        models::{EntityAccessReceipt, RequiredPermission, TeamRole, ViewAccessLevel},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::EntityPermissionExtractor,
@@ -37,6 +39,8 @@ use crate::{
     inbound::axum_extractors::CrmCommentAccessLevelExtractor,
 };
 
+pub use adapter::CrmCommentAdapter;
+
 use super::CrmRouterState;
 
 /// Request body for `POST /crm/comments/{entity_type}/{entity_id}`.
@@ -46,12 +50,11 @@ pub struct CreateCrmCommentRequest {
     /// Existing thread to append to. Omit to start a new thread on the
     /// addressed entity.
     pub thread_id: Option<Uuid>,
-    /// Metadata to set on a newly created thread (ignored when replying
-    /// without a value).
+    /// Ignored: discussions keep no thread metadata.
     pub thread_metadata: Option<Value>,
     /// The comment body (markdown).
     pub text: String,
-    /// Arbitrary client metadata for the comment.
+    /// Ignored: messages keep no client metadata.
     pub metadata: Option<Value>,
 }
 
@@ -92,13 +95,12 @@ pub async fn list_handler<
 >(
     access: EntityPermissionExtractor<Eas, Auth>,
     State(state): State<CrmRouterState<C, St, Eas, Auth>>,
-    Path((_entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
+    Path((entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
 ) -> Result<Json<Vec<CrmCommentThread>>, CrmError> {
-    let (team_id, team_role) = owning_team_for_entity(&state, &access).await?;
-    let receipt = CrmCommentReceipt::new(access.entity_access_receipt, team_id, team_role)?;
-
-    let threads = state.service.get_crm_comment_threads(&receipt).await?;
-
+    let view = message_receipt(&access.entity_access_receipt, CrmError::ThreadNotFound)?;
+    let threads = CrmCommentAdapter::new(state.messages.as_ref())
+        .list(view, entity_type, entity_id)
+        .await?;
     Ok(Json(threads))
 }
 
@@ -131,36 +133,27 @@ pub async fn create_handler<
 >(
     access: EntityPermissionExtractor<Eas, Auth>,
     State(state): State<CrmRouterState<C, St, Eas, Auth>>,
-    Path((_entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
+    Path((entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
     Json(req): Json<CreateCrmCommentRequest>,
 ) -> Result<Json<CrmCommentThread>, CrmError> {
-    let (team_id, team_role) = owning_team_for_entity(&state, &access).await?;
-
     let text = req.text.trim();
     if text.is_empty() {
         return Err(CrmError::InvalidRequest(
             "comment text cannot be empty".into(),
         ));
     }
-
-    let receipt = CrmCommentReceipt::new(access.entity_access_receipt, team_id, team_role)?;
-    let owner = receipt
-        .receipt()
-        .get_authenticated_user()
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-    let thread = state
-        .service
-        .create_crm_comment(
-            &receipt,
-            owner.as_ref(),
-            req.thread_id,
-            req.thread_metadata,
-            text,
-            req.metadata,
-        )
+    let view = message_receipt(&access.entity_access_receipt, CrmError::ThreadNotFound)?;
+    let write = message_receipt(&access.entity_access_receipt, CrmError::ThreadNotFound)?;
+    let adapter = CrmCommentAdapter::new(state.messages.as_ref());
+    let root = match req.thread_id {
+        None => None,
+        Some(thread_id) => {
+            Some(resolve_root(&state, &access, &adapter, view.clone(), thread_id).await?)
+        }
+    };
+    let thread = adapter
+        .create(write, view, entity_type, entity_id, root, text)
         .await?;
-
     Ok(Json(thread))
 }
 
@@ -199,17 +192,15 @@ pub async fn edit_handler<
             "comment text cannot be empty".into(),
         ));
     }
-
-    let comment = state
-        .service
-        .edit_crm_comment(&access.receipt, &comment_id, text)
+    let write = message_receipt(access.receipt.receipt(), CrmError::CommentNotFound)?;
+    let comment = CrmCommentAdapter::new(state.messages.as_ref())
+        .edit(write, comment_id, text)
         .await?;
-
     Ok(Json(comment))
 }
 
-/// Soft-delete a CRM comment, scoped to the requesting user's team. When it
-/// was the thread's last live comment, the thread is soft-deleted too
+/// Delete a CRM comment, scoped to the requesting user's team. Deleting a
+/// thread's first comment deletes the whole discussion, as on documents
 /// (reported via `threadDeleted`).
 #[utoipa::path(
     delete,
@@ -236,12 +227,47 @@ pub async fn delete_handler<
     State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Path(comment_id): Path<Uuid>,
 ) -> Result<Json<DeleteCrmCommentResult>, CrmError> {
-    let result = state
-        .service
-        .delete_crm_comment(&access.receipt, &comment_id)
+    let write = message_receipt(access.receipt.receipt(), CrmError::CommentNotFound)?;
+    let result = CrmCommentAdapter::new(state.messages.as_ref())
+        .delete(write, comment_id)
         .await?;
-
     Ok(Json(result))
+}
+
+/// Narrow a verified CRM receipt to the message capability a store call
+/// needs. A caller who can see the record but not comment on it gets
+/// `missing`, a 404, so the routes do not reveal what exists.
+fn message_receipt<P: RequiredPermission, T: RequiredPermission + Clone>(
+    receipt: &EntityAccessReceipt<T>,
+    missing: CrmError,
+) -> Result<EntityAccessReceipt<P>, CrmError> {
+    receipt.clone().try_into_requirement().map_err(|_| missing)
+}
+
+/// The discussion root a client's `threadId` names: a root message id, or a
+/// legacy `crm_thread` id that clients loaded before the import still hold.
+async fn resolve_root<
+    C: CrmService,
+    St,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    state: &CrmRouterState<C, St, Eas, Auth>,
+    access: &EntityPermissionExtractor<Eas, Auth>,
+    adapter: &CrmCommentAdapter<'_>,
+    view: EntityAccessReceipt<messages::domain::service::MessageView>,
+    thread_id: Uuid,
+) -> Result<Uuid, CrmError> {
+    if adapter.is_root(view, thread_id).await? {
+        return Ok(thread_id);
+    }
+    let (team_id, team_role) = owning_team_for_entity(state, access).await?;
+    let legacy = CrmCommentReceipt::new(access.entity_access_receipt.clone(), team_id, team_role)?;
+    state
+        .service
+        .legacy_thread_root(&legacy, &thread_id)
+        .await?
+        .ok_or(CrmError::ThreadNotFound)
 }
 
 /// Resolve the owning team of the entity the comment hangs off — and the

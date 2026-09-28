@@ -13,12 +13,14 @@ import {
   useParams,
   useRouteParams,
 } from '@app/lib/split-router';
+import { URL_PARAMS as MARKDOWN_URL_PARAMS } from '@block-md/constants';
 import { SidePanel } from '@components/app/side-panel';
 import {
   NewAppView,
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableProjects } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
@@ -89,6 +91,8 @@ export const taskDetailRoute = defineRoute({
     namespace: 'block',
     id: `md:${taskId}`,
   }),
+  toReference: ({ taskId }) => uuidRouteReference(taskId, 'task'),
+  externalSearch: Object.values(MARKDOWN_URL_PARAMS),
 });
 
 export const projectDetailSearch = {
@@ -202,6 +206,8 @@ export const projectTaskRoute = defineRoute({
   component: ProjectTaskRouteView,
   remountKey: ({ taskId }) => taskId,
   claim: ({ taskId }) => ({ namespace: 'block', id: `md:${taskId}` }),
+  toReference: ({ taskId }) => uuidRouteReference(taskId, 'task'),
+  externalSearch: Object.values(MARKDOWN_URL_PARAMS),
 });
 
 export const projectDetailRoute = defineRoute({

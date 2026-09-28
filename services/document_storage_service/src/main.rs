@@ -77,7 +77,7 @@ use email::{
     outbound::EmailPgRepo,
 };
 use embedding::embedding_provider::openai::TextEmbedding3Small;
-use entity_registry::{NonUserOwners, OwnerGrantPolicy};
+use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use favorites::{
     domain::{mutation_service::FavoritesMutationServiceImpl, service::FavoritesServiceImpl},
@@ -213,6 +213,7 @@ async fn run() -> anyhow::Result<()> {
         .resolve_remote_secrets(env, &secretsmanager_client)
         .await
         .context("expected to be able to resolve config secrets")?;
+    let non_user_owners = config.non_user_owners()?;
 
     tracing::trace!("initialized config");
 
@@ -1691,11 +1692,7 @@ async fn run() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
-            non_user_owners: if config.enable_non_user_owners {
-                NonUserOwners::Enabled
-            } else {
-                NonUserOwners::Disabled
-            },
+            non_user_owners,
         },
         config: Arc::new(config),
         channel_service: channels_service.clone(),
@@ -1734,6 +1731,7 @@ async fn run() -> anyhow::Result<()> {
             )),
             entity_access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
+            messages: message_service.clone(),
         },
     };
 
