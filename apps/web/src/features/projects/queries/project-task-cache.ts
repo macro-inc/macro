@@ -102,7 +102,9 @@ export function optimisticProjectTask(
 /** Seed the next membership query before publishing its task IDs to readers. */
 export async function updateProjectTaskCache(
   cache: QueryClient,
-  host: Pick<CacheHost, 'disabled' | 'readQuery' | 'writeQuery'> | undefined,
+  host:
+    | Pick<CacheHost, 'disabled' | 'readQuery' | 'writeQuery' | 'deleteRecords'>
+    | undefined,
   userId: string,
   projectId: string,
   removeId?: string,
@@ -359,6 +361,9 @@ export async function updateProjectTaskCache(
       });
     }
   }
+  // Lists no longer hold the optimistic record, but Quick Access would.
+  if (removeId && host && !host.disabled)
+    await host.deleteRecords([`GraphqlSoupDocument:${removeId}`]);
   cache.setQueryData<DetailData>(detailKey, (current) =>
     current
       ? {

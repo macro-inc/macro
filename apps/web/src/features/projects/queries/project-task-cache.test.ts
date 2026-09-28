@@ -186,26 +186,31 @@ it.each(['none', 'status'] as const)(
             },
           }
     );
-    const host: Pick<CacheHost, 'readQuery' | 'writeQuery'> = {
-      readQuery: vi.fn(async ({ variables }: CacheReadArgs) =>
-        data.has(hashKey([variables?.input]))
-          ? {
-              kind: 'hit' as const,
-              data: data.get(hashKey([variables?.input])),
-            }
-          : { kind: 'miss' as const }
-      ),
-      writeQuery: vi.fn(async ({ variables, data: next }: CacheWriteArgs) => {
-        data.set(hashKey([variables?.input]), next);
-        return {
+    const host: Pick<CacheHost, 'readQuery' | 'writeQuery' | 'deleteRecords'> =
+      {
+        readQuery: vi.fn(async ({ variables }: CacheReadArgs) =>
+          data.has(hashKey([variables?.input]))
+            ? {
+                kind: 'hit' as const,
+                data: data.get(hashKey([variables?.input])),
+              }
+            : { kind: 'miss' as const }
+        ),
+        writeQuery: vi.fn(async ({ variables, data: next }: CacheWriteArgs) => {
+          data.set(hashKey([variables?.input]), next);
+          return {
+            revision: 'test' as import('@graphql-cache/protocol').CacheRevision,
+            revisionAdvanced: true,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+          };
+        }),
+        deleteRecords: vi.fn(async () => ({
           revision: 'test' as import('@graphql-cache/protocol').CacheRevision,
-          revisionAdvanced: true,
-          changed: [],
           affectedOps: [],
-          reset: false,
-        };
-      }),
-    };
+        })),
+      };
     const task = optimisticProjectTask('temporary', 'viewer', [
       'GraphQL task',
       '',
@@ -243,6 +248,9 @@ it.each(['none', 'status'] as const)(
         ? rolledBack.user.groupSoup.bins.flatMap((bin) => bin.items)
         : rolledBack.user.soup.items
     ).toEqual([]);
+    expect(host.deleteRecords).toHaveBeenCalledWith([
+      'GraphqlSoupDocument:temporary',
+    ]);
   }
 );
 
