@@ -400,3 +400,86 @@ async fn by_ids_respects_access(pool: PgPool) -> anyhow::Result<()> {
     assert_eq!(ids(&member_items), vec![fixture.shared]);
     Ok(())
 }
+
+/// An inline `@macro` session (`list_hidden`) is missing from broad lists
+/// until the viewer opens it. The pin is per user, a named id still finds it,
+/// and hydrating by id does not require the pin.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn hidden_sessions_appear_only_after_that_viewer_opens_them(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    sqlx::query!(
+        "UPDATE agent_session SET list_hidden = TRUE WHERE id = $1",
+        fixture.shared,
+    )
+    .execute(&pool)
+    .await?;
+
+    let owner_before = cursor_soup(
+        &pool,
+        request(OWNER, Some(Expr::val(AgentSessionLiteral::Include))),
+    )
+    .await?;
+    assert_eq!(
+        ids(&owner_before),
+        vec![fixture.private],
+        "the owner's list omits the unopened inline session"
+    );
+    let member_before = cursor_soup(
+        &pool,
+        request(MEMBER, Some(Expr::val(AgentSessionLiteral::Include))),
+    )
+    .await?;
+    assert!(
+        member_before.is_empty(),
+        "a channel member does not inherit the owner's list"
+    );
+
+    let named = cursor_soup(
+        &pool,
+        request(
+            OWNER,
+            Some(Expr::val(AgentSessionLiteral::Id(fixture.shared))),
+        ),
+    )
+    .await?;
+    assert_eq!(ids(&named), vec![fixture.shared]);
+
+    let entities = [EntityType::AgentSession.with_entity_string(fixture.shared.to_string())];
+    let hydrated = by_ids(
+        &pool,
+        AdvancedSortParams {
+            entities: &entities,
+            user_id: MacroUserIdStr::parse_from_str(MEMBER)?,
+        },
+    )
+    .await?;
+    assert_eq!(ids(&hydrated), vec![fixture.shared]);
+
+    sqlx::query!(
+        "INSERT INTO agent_session_list_pin (user_id, agent_session_id) VALUES ($1, $2)",
+        MEMBER,
+        fixture.shared,
+    )
+    .execute(&pool)
+    .await?;
+
+    let member_after = cursor_soup(
+        &pool,
+        request(MEMBER, Some(Expr::val(AgentSessionLiteral::Include))),
+    )
+    .await?;
+    assert_eq!(ids(&member_after), vec![fixture.shared]);
+    let owner_after = cursor_soup(
+        &pool,
+        request(OWNER, Some(Expr::val(AgentSessionLiteral::Include))),
+    )
+    .await?;
+    assert_eq!(
+        ids(&owner_after),
+        vec![fixture.private],
+        "opening it for one person does not list it for the owner"
+    );
+    Ok(())
+}
