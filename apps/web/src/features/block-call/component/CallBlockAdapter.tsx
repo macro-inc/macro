@@ -42,14 +42,19 @@ export function CallBlockAdapter(props: CallBlockProps) {
       : undefined
   );
 
+  let routeOwnsTarget = Boolean(routeSearch.transcriptId);
   createEffect(
     on(
       () => [routeSearch.transcriptId, routeSearch.seek],
       () => {
         if (!routeSearch.transcriptId) {
-          setTranscriptTarget(undefined);
+          if (routeOwnsTarget) {
+            routeOwnsTarget = false;
+            setTranscriptTarget(undefined);
+          }
           return;
         }
+        routeOwnsTarget = true;
         setTranscriptTarget((previous) => ({
           transcriptId: routeSearch.transcriptId,
           gen: (previous?.gen ?? 0) + 1,
@@ -63,6 +68,7 @@ export function CallBlockAdapter(props: CallBlockProps) {
     goToLocationFromParams: async (params: CallBlockProps) => {
       const next = params[URL_PARAMS.transcriptId];
       if (!next) return;
+      routeOwnsTarget = false;
       setTranscriptTarget((prev) => ({
         transcriptId: next,
         gen: (prev?.gen ?? 0) + 1,

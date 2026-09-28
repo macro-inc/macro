@@ -401,6 +401,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const [targetRequest, setTargetRequest] = createSignal<
     ChannelTargetRequest | undefined
   >(toChannelTargetRequest(initialTargetMessageParams()));
+  let routeOwnsTarget = Boolean(routeSearch.messageId);
   let surfaceApi: ChannelSurfaceApi | undefined;
 
   const setActiveTab = (tab: ChannelTabId) => {
@@ -412,9 +413,13 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       () => [routeSearch.messageId, routeSearch.threadId, routeSearch.seek],
       () => {
         if (!routeSearch.messageId) {
-          setTargetRequest(undefined);
+          if (routeOwnsTarget) {
+            routeOwnsTarget = false;
+            setTargetRequest(undefined);
+          }
           return;
         }
+        routeOwnsTarget = true;
         setActiveTab(DEFAULT_CHANNEL_TAB);
         setTargetRequest({
           kind: 'message',
@@ -472,6 +477,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       // leaves it waiting for whenever the user returns to Messages.
       const target = toChannelTargetRequest(params);
       if (target) {
+        routeOwnsTarget = false;
         setActiveTab(DEFAULT_CHANNEL_TAB);
         setTargetRequest(target);
       }
@@ -487,6 +493,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       }
     },
     goToLatest: async () => {
+      routeOwnsTarget = false;
       setActiveTab(DEFAULT_CHANNEL_TAB);
       setTargetRequest({ kind: 'latest' });
     },

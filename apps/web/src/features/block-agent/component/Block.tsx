@@ -41,11 +41,15 @@ function AgentBlockContent(props: {
   const [searchTarget, setSearchTarget] = createSignal(
     routeTarget() ?? parseAgentMessageTarget(params)
   );
+  let routeOwnsTarget = Boolean(routeTarget());
   createEffect(
     on(
       routeTarget,
       (target) => {
-        setSearchTarget(target);
+        if (target || routeOwnsTarget) {
+          routeOwnsTarget = Boolean(target);
+          setSearchTarget(target);
+        }
       },
       { defer: true }
     )
@@ -53,7 +57,10 @@ function AgentBlockContent(props: {
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: (params: Record<string, unknown>) => {
       const target = parseAgentMessageTarget(params);
-      if (target) setSearchTarget(target);
+      if (target) {
+        routeOwnsTarget = false;
+        setSearchTarget(target);
+      }
     },
   });
   const {

@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   active: (): boolean => false,
   source: undefined as NotificationSource | undefined,
   target: (): AgentMessageTarget | undefined => undefined,
+  navigate: (_params: Record<string, unknown>) => {},
 }));
 
 // Keep both real session hosts and the real read marker. Replace unrelated
@@ -60,7 +61,14 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ isPanelActive: () => mocks.active() }),
 }));
 vi.mock('@core/block', () => ({ useBlockId: () => 'placeholder-session' }));
-vi.mock('@core/orchestrator', () => ({ createMethodRegistration: vi.fn() }));
+vi.mock('@core/orchestrator', () => ({
+  createMethodRegistration: (
+    _handle: unknown,
+    methods: { goToLocationFromParams: typeof mocks.navigate }
+  ) => {
+    mocks.navigate = methods.goToLocationFromParams;
+  },
+}));
 vi.mock('@core/signal/load', () => ({ blockHandleSignal: { get: vi.fn() } }));
 vi.mock('../primitives/create-agent-route-target', () => ({
   createAgentRouteTarget: () => () => mocks.target(),
@@ -162,6 +170,23 @@ beforeEach(() => {
     notificationsByEntity: () => ({}),
     isLoading: () => false,
   } as NotificationSource;
+});
+
+it('preserves an imperative agent target across Home route cleanup', () => {
+  const [target, setTarget] = createSignal<AgentMessageTarget | undefined>({
+    messageTurn: 0,
+    author: 'agent',
+  });
+  mocks.target = target;
+  const view = render(() => <BlockAgent />);
+  const output = () => view.container.querySelector('output')!.textContent;
+  mocks.navigate({ agent_message_turn: '2', agent_message_author: 'user' });
+  setTarget(undefined);
+  expect(JSON.parse(output()!)).toEqual({ messageTurn: 2, author: 'user' });
+  setTarget({ messageTurn: 3, author: 'agent' });
+  expect(JSON.parse(output()!)).toEqual({ messageTurn: 3, author: 'agent' });
+  setTarget(undefined);
+  expect(output()).toBe('');
 });
 
 afterEach(() => {
