@@ -23,13 +23,15 @@ pub(super) enum FieldSource<'a> {
     },
 }
 
+type FieldsByConcreteType<'a> = HashMap<String, Arc<[Field<'a>]>>;
+
 /// Read-local plans. Variables and resolver policy must stay fixed, and the
 /// borrowed selection trees must remain alive for this entire read.
 #[derive(Default)]
 pub(crate) struct ReadPlans<'a> {
     // The address identifies an immutable borrowed AST slice, not its content.
     // Length distinguishes subslices; empty slices share equivalent empty plans.
-    selections: HashMap<(usize, usize), HashMap<String, Arc<[Field<'a>]>>>,
+    selections: HashMap<(usize, usize), FieldsByConcreteType<'a>>,
 }
 
 impl<'a> ReadPlans<'a> {
