@@ -2552,6 +2552,26 @@ export const EditTagResponse = z.object({
   summary: z.string(),
 });
 
+export const GenerateImage = z.object({
+  prompt: z.string(),
+  fileName: z.string(),
+  aspectRatio: z
+    .union([
+      z.enum(['square', 'landscape', 'portrait', 'widescreen', 'tall']),
+      z.null(),
+    ])
+    .optional(),
+  projectId: z.union([z.string().uuid(), z.null()]).optional(),
+});
+
+export const GenerateImageResponse = z.object({
+  documentId: z.string(),
+  fileName: z.string(),
+  mimeType: z.string(),
+  sizeBytes: z.number().int().gte(0),
+  note: z.union([z.string(), z.null()]).optional(),
+});
+
 export const GetBotWebhooks = z.object({ botId: z.string().uuid() });
 
 export const GetBotWebhooksResponse = z.object({

@@ -524,6 +524,12 @@ export type SpreadsheetOperation =
       columns: SpreadsheetColumnWidth[];
       type: 'resize_columns';
     };
+export type AspectRatio =
+  | 'square'
+  | 'landscape'
+  | 'portrait'
+  | 'widescreen'
+  | 'tall';
 /**
  * Entity types that can be returned by the list entities AI tool.
  */
@@ -3508,6 +3514,52 @@ export interface EditTagResponse {
    * Human-readable summary.
    */
   summary: string;
+}
+/**
+ * Generate an image from a text prompt with Google's Nano Banana image model and save it as an image document in Macro. Use when the user asks for a picture, illustration, diagram concept, logo idea, mockup, or any visual to be created; do not use to edit or fetch existing images. Describe the subject, style, composition, lighting, and any text to render in the prompt. Returns the new document ID, which you can cite so the user sees the image inline. Generation takes several seconds.
+ */
+export interface GenerateImage {
+  /**
+   * Detailed description of the image to generate: subject, style (photo, illustration, flat vector...), composition, colours, mood, and any text that must appear.
+   */
+  prompt: string;
+  /**
+   * Short descriptive name for the saved image, for example `sunset-lighthouse`. The file extension is added from the generated format. No directory path.
+   */
+  fileName: string;
+  /**
+   * Shape of the image. Omit for the model default (square). `widescreen` (16:9) suits banners and slides, `tall` (9:16) suits phone screens and stories.
+   */
+  aspectRatio?: AspectRatio | null;
+  /**
+   * Optional destination project (folder) ID. Requires edit access. Omit to save to the user's top-level files.
+   */
+  projectId?: string | null;
+}
+/**
+ * Where the generated image landed. Does not echo the image bytes.
+ */
+export interface GenerateImageResponse {
+  /**
+   * ID of the new image document.
+   */
+  documentId: string;
+  /**
+   * Saved filename, including its extension.
+   */
+  fileName: string;
+  /**
+   * IANA media type of the image, e.g. `image/png`.
+   */
+  mimeType: string;
+  /**
+   * Size of the image in bytes.
+   */
+  sizeBytes: number;
+  /**
+   * Commentary the model produced alongside the image, when any.
+   */
+  note?: string | null;
 }
 /**
  * Get the channel-specific webhook URLs for a bot the current user can manage. A bot has one URL per channel it can access. POST message content to a returned webhookUrl and authenticate with a token minted from the chat card or bot settings after IssueBotCredential or CreateBot; send it in the returned credentialHeader and send credentialScope in credentialScopeHeader. If no URLs are returned, add the bot to a channel with ManageBotChannelAccess or recreate it with CreateBot and channelId.
