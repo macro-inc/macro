@@ -680,7 +680,9 @@ the same query and retains its tab/facet restrictions. Channels searches
 conversation names. Clearing the
 input restores the current scope's unsearched list; **Close search** ends the
 session. Switching scopes keeps the input mounted and focused. The dock query is
-not saved into the view's desktop search or restored entry state.
+not saved into the view's desktop search or restored entry state. Home and
+top-level Tasks use this same overlay; embedded project task lists retain their
+own search while the dock is open.
 
 Agent-session results use the robot icon and show a highlighted transcript snippet.
 `Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.
@@ -1587,7 +1589,3 @@ action is unavailable.
 focus to its trigger. Busy overlapping events are labeled, while cancelled, declined,
 and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
 already-open invitation cards as well as the calendar view.
-
-Mobile dock search overlays Home and top-level Tasks search without persisting
-the dock query into view preferences. Closing search restores each saved query.
-Embedded project task lists retain their own search while the dock is open.

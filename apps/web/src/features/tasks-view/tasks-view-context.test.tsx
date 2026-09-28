@@ -18,8 +18,8 @@ const mocks = vi.hoisted(() => ({
   captors: new Map<string, () => unknown>(),
   projectsEnabled: (() => true) as () => boolean,
   touch: false,
-  dockOpen: () => false,
-  dockText: () => '',
+  dockOpen: (): boolean => false,
+  dockText: (): string => '',
 }));
 vi.mock('@app/lib/split-router', () => ({
   useNavigate: () => vi.fn(),

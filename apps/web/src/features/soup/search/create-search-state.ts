@@ -106,7 +106,8 @@ export function createSearchState(options: CreateSearchStateOptions) {
 
   const serviceSearchResults = createMemo<EntityData[]>(() => {
     if (
-      !queryEnabled() ||
+      isServiceDisabled() ||
+      !isServiceDebounceSettled() ||
       !searchQuery.isSuccess ||
       searchQuery.isPlaceholderData
     )
