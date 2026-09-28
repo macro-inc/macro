@@ -2,15 +2,6 @@ import * as aws from '@pulumi/aws';
 import * as datadog from '@pulumi/datadog';
 import * as pulumi from '@pulumi/pulumi';
 
-const ACCOUNT_ID = '569036502058';
-const REGION = 'us-east-1';
-const WEB_ACL_NAME = 'macro-cloud-storage-prod';
-const WEB_ACL_ID = '0f1059a5-1ee4-4b57-a429-88df830d5091';
-const WEB_ACL_ARN = `arn:aws:wafv2:${REGION}:${ACCOUNT_ID}:regional/webacl/${WEB_ACL_NAME}/${WEB_ACL_ID}`;
-const ALB_ARN = `arn:aws:elasticloadbalancing:${REGION}:${ACCOUNT_ID}:loadbalancer/app/cloud-storage-service-alb-prod/d451a7c4e101c61d`;
-const IP_SAFETY_RULE_GROUP_ARN = `arn:aws:wafv2:${REGION}:${ACCOUNT_ID}:regional/rulegroup/ip_safety/0a1bfeec-4d6c-4afe-bf35-b93e06c65f9b`;
-const WAF_LOG_GROUP_NAME = 'aws-waf-logs-macro-cloud-storage-prod';
-const DATADOG_FORWARDER_ARN = `arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:DatadogIntegration-ForwarderStack-BS3QDP-Forwarder-O0hyWQ9Yq4uQ`;
 const SENSITIVE_HEADERS = [
   'authorization',
   'cookie',
@@ -90,6 +81,18 @@ export class WafObservability extends pulumi.ComponentResource {
   ) {
     super('macro:cloud-storage:WafObservability', name, args, opts);
 
+    // Read WAF config only when instantiated; non-production stacks omit it.
+    const config = new pulumi.Config();
+    const accountId = config.require('waf_account_id');
+    const region = new pulumi.Config('aws').require('region');
+    const webAclName = config.require('waf_web_acl_name');
+    const webAclId = config.require('waf_web_acl_id');
+    const configuredAlbArn = config.require('waf_alb_arn');
+    const webAclArn = `arn:aws:wafv2:${region}:${accountId}:regional/webacl/${webAclName}/${webAclId}`;
+    const ipSafetyRuleGroupArn = config.require('waf_ip_safety_rule_group_arn');
+    const logGroupName = config.require('waf_log_group_name');
+    const datadogForwarderArn = config.require('waf_datadog_forwarder_arn');
+
     const childOptions = { parent: this, protect: true };
     const adoptedOptions = {
       parent: this,
@@ -115,7 +118,7 @@ export class WafObservability extends pulumi.ComponentResource {
     const webAcl = new aws.wafv2.WebAcl(
       `${name}-web-acl`,
       {
-        name: WEB_ACL_NAME,
+        name: webAclName,
         description: 'Cloud Storage WAF for production resources',
         scope: 'REGIONAL',
         defaultAction: { allow: {} },
@@ -207,41 +210,48 @@ export class WafObservability extends pulumi.ComponentResource {
             overrideAction: { none: {} },
             statement: {
               ruleGroupReferenceStatement: {
-                arn: IP_SAFETY_RULE_GROUP_ARN,
+                arn: ipSafetyRuleGroupArn,
               },
             },
             visibilityConfig: visibilityConfig('ip_safety'),
           },
         ],
-        visibilityConfig: visibilityConfig(WEB_ACL_NAME),
+        visibilityConfig: visibilityConfig(webAclName),
       },
       {
         ...adoptedOptions,
-        import: `${WEB_ACL_ID}/${WEB_ACL_NAME}/REGIONAL`,
+        import: `${webAclId}/${webAclName}/REGIONAL`,
       }
     );
 
     new aws.wafv2.WebAclAssociation(
       `${name}-web-acl-association`,
       {
-        resourceArn: args.albArn,
+        // Import IDs must be plain strings. Verify the configured import target
+        // matches the stack's ALB before registering the association.
+        resourceArn: pulumi.output(args.albArn).apply((albArn) => {
+          if (albArn !== configuredAlbArn) {
+            throw new Error('waf_alb_arn must match the stack-managed ALB ARN');
+          }
+          return albArn;
+        }),
         webAclArn: webAcl.arn,
       },
       {
         ...adoptedOptions,
-        import: `${WEB_ACL_ARN},${ALB_ARN}`,
+        import: `${webAclArn},${configuredAlbArn}`,
       }
     );
 
     const logGroup = new aws.cloudwatch.LogGroup(
       `${name}-log-group`,
       {
-        name: WAF_LOG_GROUP_NAME,
+        name: logGroupName,
         retentionInDays: 7,
       },
       {
         ...adoptedOptions,
-        import: WAF_LOG_GROUP_NAME,
+        import: logGroupName,
       }
     );
 
@@ -271,7 +281,7 @@ export class WafObservability extends pulumi.ComponentResource {
       },
       {
         ...adoptedOptions,
-        import: WEB_ACL_ARN,
+        import: webAclArn,
       }
     );
 
@@ -280,9 +290,9 @@ export class WafObservability extends pulumi.ComponentResource {
       {
         statementId: 'AllowCloudWatchLogsAwsWafProd',
         action: 'lambda:InvokeFunction',
-        function: DATADOG_FORWARDER_ARN,
-        principal: `logs.${REGION}.amazonaws.com`,
-        sourceAccount: ACCOUNT_ID,
+        function: datadogForwarderArn,
+        principal: `logs.${region}.amazonaws.com`,
+        sourceAccount: accountId,
         sourceArn: pulumi.interpolate`${logGroup.arn}:*`,
       },
       childOptions
@@ -292,7 +302,7 @@ export class WafObservability extends pulumi.ComponentResource {
       `${name}-forwarder-subscription`,
       {
         name: 'datadog-forwarder',
-        destinationArn: DATADOG_FORWARDER_ARN,
+        destinationArn: datadogForwarderArn,
         filterPattern: '{ ($.action = "BLOCK") || ($.action = "CHALLENGE") }',
         logGroup: logGroup.name,
       },
@@ -311,7 +321,7 @@ export class WafObservability extends pulumi.ComponentResource {
         isEnabled: true,
         filters: [
           {
-            query: '"macro-cloud-storage-prod"',
+            query: `"${webAclName}"`,
           },
         ],
         tags: ['env:prod', 'service:cloud-storage-service', 'source:waf'],
@@ -322,7 +332,16 @@ export class WafObservability extends pulumi.ComponentResource {
               isEnabled: true,
               source: 'message',
               samples: [
-                '{"timestamp":0,"webaclId":"arn:aws:wafv2:us-east-1:569036502058:regional/webacl/macro-cloud-storage-prod/0f1059a5-1ee4-4b57-a429-88df830d5091","action":"BLOCK","httpRequest":{"clientIp":"192.0.2.1","uri":"/","httpMethod":"GET"}}',
+                JSON.stringify({
+                  timestamp: 0,
+                  webaclId: webAclArn,
+                  action: 'BLOCK',
+                  httpRequest: {
+                    clientIp: '192.0.2.1',
+                    uri: '/',
+                    httpMethod: 'GET',
+                  },
+                }),
               ],
               grok: {
                 matchRules: 'waf_json %{data::json}',
