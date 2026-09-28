@@ -25,6 +25,20 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
 import { chooseSelectOption, selectOptions } from './tests/select-helpers';
 
+vi.mock('@core/constant/SettingsState', () => ({
+  useSettingsState: () => ({ openSettings: vi.fn() }),
+}));
+
+vi.mock('@queries/agent-repositories/repositories', () => ({
+  useAgentRepositoriesQuery: () => ({
+    isSuccess: true,
+    isLoading: false,
+    isError: false,
+    data: { repositories: [] },
+    refetch: vi.fn(),
+  }),
+}));
+
 // The real Lexical surface has its own Markdown round-trip suite.
 vi.mock('./components/instructions-editor', () => ({
   AgentInstructionsEditor: (props: {
