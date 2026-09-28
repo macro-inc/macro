@@ -44,17 +44,6 @@ query Initiative($initiativeId: ID!) {
   }
 }
 
-query InitiativeTasks($initiativeId: ID!, $input: InitiativeTasksInput) {
-  user {
-    id
-    initiativeTasks(initiativeId: $initiativeId, input: $input) {
-      taskIds
-      nextCursor
-      total
-    }
-  }
-}
-
 query TaskInitiativeReferences($taskIds: [ID!]!) {
   user {
     id

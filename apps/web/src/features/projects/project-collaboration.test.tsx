@@ -45,10 +45,9 @@ vi.mock('@queries/messages/timeline', () => ({
 vi.mock('@core/messages/MessageThread', () => ({
   MessageThread: (props: {
     data: MessageListItem;
-    allowResolve?: boolean;
     buildLink?: (message: MessageData) => string;
   }) => (
-    <article data-allow-resolve={props.allowResolve === true}>
+    <article>
       <a href={props.buildLink?.(props.data)}>{props.data.content}</a>
     </article>
   ),
@@ -130,9 +129,6 @@ describe('project discussion uses the task conversation', () => {
       'Old comment',
       'New comment',
     ]);
-    expect(
-      comments.every((comment) => comment.dataset.allowResolve === 'false')
-    ).toBe(true);
     const composer = view.getByRole('textbox');
     expect(composer.dataset.parentType).toBe('initiative');
     expect(composer.dataset.parentId).toBe(projectId);

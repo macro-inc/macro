@@ -8,11 +8,9 @@ import { createFocusRequest } from '@channel/Thread/focus-request';
 import { buildMessageLink } from '@channel/Thread/utils/message-actions';
 import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import Check from '@phosphor/check.svg';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
-  usePatchThreadMutation,
 } from '@queries/messages/mutations';
 import {
   useAddReactionMutation,
@@ -24,7 +22,6 @@ import type {
   MessageParent,
   MessageThread as ThreadData,
 } from '@service-storage/messages';
-import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { MessageData } from './types';
 
@@ -43,7 +40,6 @@ export function threadListItem(thread: ThreadData): MessageListItem {
 
 type ThreadOptions = {
   canWrite: boolean;
-  allowResolve?: boolean;
   buildLink?: (message: MessageData) => string;
   targetId?: string | null;
   /** Releases the highlight on `targetId`; called when the linked message is clicked. */
@@ -104,9 +100,6 @@ export function MessageThread(
         class="relative isolate"
       >
         <confirm.ConfirmationDialog />
-        <Show when={props.allowResolve}>
-          <ThreadResolution data={props.data} canWrite={props.canWrite} />
-        </Show>
         <ChannelThread
           data={() => props.data}
           parent={() => props.data.parent}
@@ -185,36 +178,5 @@ export function MessageThreadById(
         expanded={props.expanded ?? true}
       />
     </Show>
-  );
-}
-
-function ThreadResolution(props: { data: MessageListItem; canWrite: boolean }) {
-  const patchThread = usePatchThreadMutation();
-  return (
-    <div class="flex min-h-7 items-center justify-end gap-2 px-3 text-xs text-ink-muted">
-      <Show when={props.data.state.resolved}>
-        <span class="inline-flex items-center gap-1">
-          <Check class="size-3" />
-          Resolved
-        </span>
-      </Show>
-      <Show when={props.canWrite}>
-        <Button
-          size="xs"
-          disabled={patchThread.isPending}
-          onClick={() =>
-            patchThread.mutate({
-              parent: props.data.parent,
-              rootId: props.data.id,
-              patch: { resolved: !props.data.state.resolved },
-            })
-          }
-        >
-          {props.data.state.resolved
-            ? 'Reopen discussion'
-            : 'Resolve discussion'}
-        </Button>
-      </Show>
-    </div>
   );
 }

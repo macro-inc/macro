@@ -15,7 +15,6 @@ import {
   type InitiativeDetailFieldsFragment,
   InitiativeDocument,
   type InitiativeLinkShare,
-  InitiativeTasksDocument,
   TaskInitiativeReferencesDocument,
   UpdateInitiativeDocument,
   type UpdateInitiativeInput,
@@ -194,21 +193,6 @@ export function createInitiativeClient(client: () => Client) {
           (await query(InitiativeDocument, { initiativeId: id }, signal)).user
             .initiative
         )
-      ),
-    tasks: (
-      id: string,
-      params: { cursor?: string; limit?: number },
-      signal?: AbortSignal
-    ) =>
-      catchToResult(
-        async () =>
-          (
-            await query(
-              InitiativeTasksDocument,
-              { initiativeId: id, input: params },
-              signal
-            )
-          ).user.initiativeTasks
       ),
     taskReferences: (taskIds: string[], signal?: AbortSignal) =>
       catchToResult(async () => ({

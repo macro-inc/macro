@@ -1,8 +1,8 @@
 import type { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
-import type { TaskEntityWithProperties } from '@entity';
 import type { Property, PropertyApiValues } from '@property/types';
 import type { Accessor, ParentProps } from 'solid-js';
 import { createContext, useContext } from 'solid-js';
+import type { ProjectAssignmentResult } from '../core/assignment';
 import type {
   Project,
   ProjectDetail,
@@ -33,23 +33,10 @@ export type ProjectSource = {
   refresh(): Promise<void>;
 };
 
-export type ProjectTasksSource = {
-  tasks: Accessor<readonly TaskEntityWithProperties[]>;
-  loading: Accessor<boolean>;
-  error: Accessor<Error | undefined>;
-  hasMore: Accessor<boolean>;
-  loadingMore: Accessor<boolean>;
-  loadMore(): Promise<void>;
-};
-
 export type ProjectPropertyDraft = {
   property: Property;
   value: PropertyApiValues;
 };
-
-export type { ProjectAssignmentResult } from '../core/assignment';
-
-import type { ProjectAssignmentResult } from '../core/assignment';
 
 /** Capabilities supplied by the production entry point or by a test. */
 export type ProjectsContext = {
@@ -64,7 +51,6 @@ export type ProjectsContext = {
     loading: Accessor<boolean>;
     error: Accessor<Error | undefined>;
   };
-  createTasksSource(id: Accessor<string>): ProjectTasksSource;
   createReferencesSource(ids: Accessor<readonly string[]>): {
     references: Accessor<ReadonlyMap<string, TaskProjectReference>>;
     loading: Accessor<boolean>;

@@ -69,33 +69,6 @@ function clientWith(
 }
 
 describe('initiative GraphQL transport', () => {
-  it('pages project membership through GraphQL before task hydration', async () => {
-    const { client, requests } = clientWith(() => ({
-      data: {
-        user: {
-          initiativeTasks: {
-            taskIds: ['task-2'],
-            nextCursor: 'next',
-            total: 3,
-          },
-        },
-      },
-    }));
-    const result = await client.tasks('project-1', {
-      limit: 1,
-      cursor: 'previous',
-    });
-    expect(requests[0].variables).toEqual({
-      initiativeId: 'project-1',
-      input: { limit: 1, cursor: 'previous' },
-    });
-    expect(result.isOk() && result.value).toEqual({
-      taskIds: ['task-2'],
-      nextCursor: 'next',
-      total: 3,
-    });
-  });
-
   it('preserves project identity and sharing levels on detail reads', async () => {
     const { client, requests } = clientWith(() => ({
       data: { user: { initiative: project } },

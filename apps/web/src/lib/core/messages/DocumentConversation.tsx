@@ -56,7 +56,6 @@ export function DocumentConversationComposer(props: {
 export function DocumentConversation(props: {
   parent: MessageParent;
   canWrite: boolean;
-  allowResolve?: boolean;
   targetId?: string | null;
   /** The linked view stays around `targetId`, but its message is no longer highlighted. */
   targetCleared?: boolean;
@@ -145,7 +144,6 @@ export function DocumentConversation(props: {
                 <MessageThread
                   data={messagesById().get(id)!}
                   canWrite={props.canWrite}
-                  allowResolve={props.allowResolve}
                   targetId={
                     target.rootId() === id && !props.targetCleared
                       ? target.messageId()

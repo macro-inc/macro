@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   soup: vi.fn(),
   graphql: undefined as Client | undefined,
   get: vi.fn(),
-  tasks: vi.fn(),
   taskReferences: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -56,7 +55,7 @@ vi.mock('@queries/client', async () => {
 vi.mock('./queries/create-project-task', () => ({
   createProjectTaskMutation: () => vi.fn(),
 }));
-// These independent property/hydration adapters are not used by this fixture.
+// These independent property adapters are not used by this fixture.
 vi.mock('@entity', () => ({ isTaskEntity: () => false }));
 vi.mock('@entity/extractors-property/property-helpers', () => ({
   soupPropertyToProperty: vi.fn(),
@@ -145,7 +144,6 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
     exchanges: [exchange],
   });
   mocks.get.mockResolvedValue(ok(project));
-  mocks.tasks.mockResolvedValue(ok({ taskIds: [], nextCursor: 'next' }));
   mocks.taskReferences.mockResolvedValue(
     ok({
       references: [{ taskId: 'task', state: 'visible', initiative: project }],
@@ -173,12 +171,11 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
     return {
       collection: retainedContext.createCollectionSource(),
       detail: retainedContext.createProjectSource(() => 'launch'),
-      tasks: retainedContext.createTasksSource(() => 'launch'),
       references: retainedContext.createReferencesSource(() => ['task']),
     };
   });
   await vi.advanceTimersByTimeAsync(60_000);
-  for (const request of [mocks.get, mocks.tasks, mocks.taskReferences])
+  for (const request of [mocks.get, mocks.taskReferences])
     expect(request).not.toHaveBeenCalled();
 
   setEnabled(true);
@@ -187,26 +184,23 @@ it('keeps retained query sources gated after their view owner is disposed', asyn
   expect(mocks.page).not.toHaveBeenCalled();
   expect(mocks.soup).toHaveBeenCalledTimes(1);
   expect(sources.references.references().size).toBe(1);
-  expect(sources.tasks.hasMore()).toBe(true);
   await vi.advanceTimersByTimeAsync(30_000);
-  for (const request of [mocks.get, mocks.tasks, mocks.taskReferences])
+  for (const request of [mocks.get, mocks.taskReferences])
     expect(request).toHaveBeenCalledTimes(2);
 
   setEnabled(false);
   const soupRequests = mocks.soup.mock.calls.length;
   expect(sources.collection.rows()).toBeUndefined();
   expect(sources.detail.project()).toBeUndefined();
-  expect(sources.tasks.hasMore()).toBe(false);
   expect(sources.references.references().size).toBe(0);
   await Promise.all([
     sources.collection.loadMore(),
     sources.collection.refresh(),
     sources.detail.refresh(),
-    sources.tasks.loadMore(),
     queryClient.invalidateQueries(),
   ]);
   await vi.advanceTimersByTimeAsync(60_000);
-  for (const request of [mocks.get, mocks.tasks, mocks.taskReferences])
+  for (const request of [mocks.get, mocks.taskReferences])
     expect(request).toHaveBeenCalledTimes(2);
 
   expect(mocks.soup).toHaveBeenCalledTimes(soupRequests);
@@ -228,41 +222,9 @@ it('keeps standalone source adapters enabled when no rollout gate is injected', 
     return createProjectSources(
       initiativeClient,
       cache,
-      () => 'viewer',
-      () => {},
-      async () => []
+      () => 'viewer'
     ).createProjectSource(() => 'launch');
   });
   await vi.waitFor(() => expect(source.project()?.name).toBe('Launch'));
-  cache.clear();
-});
-
-it('hydrates task membership through the injected transport capability', async () => {
-  const cache = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  const { initiativeClient } = await import('@service-storage/initiative');
-  mocks.tasks.mockResolvedValue(
-    ok({ taskIds: ['task-a', 'task-b'], nextCursor: null })
-  );
-  const hydrateTasks = vi.fn(async () => []);
-  const source = createRoot((dispose) => {
-    disposeSource = dispose;
-    return createProjectSources(
-      initiativeClient,
-      cache,
-      () => 'viewer',
-      () => {},
-      hydrateTasks
-    ).createTasksSource(() => 'launch');
-  });
-  await vi.waitFor(() =>
-    expect(hydrateTasks).toHaveBeenCalledWith(
-      ['task-a', 'task-b'],
-      expect.any(AbortSignal)
-    )
-  );
-  expect(source.error()).toBeUndefined();
-  expect(mocks.soup).not.toHaveBeenCalled();
   cache.clear();
 });

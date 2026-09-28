@@ -1,5 +1,4 @@
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
-import type { TaskEntityWithProperties } from '@entity';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import { withProjectStatusOptions } from '@property/utils/select-options';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
@@ -14,7 +13,6 @@ import type { SoupProperty } from '@service-storage/generated/schemas/soupProper
 import type { initiativeClient } from '@service-storage/initiative';
 import {
   type QueryClient,
-  useInfiniteQuery,
   useIsMutating,
   useMutation,
   useQuery,
@@ -31,7 +29,6 @@ import {
   projectDefinitionProperties,
 } from './project-properties';
 import { createProjectSoupSource } from './project-soup';
-import type { ProjectTaskRefreshSource } from './project-task-revalidation';
 
 const projectProperties = (properties: SoupProperty[]) =>
   properties
@@ -54,11 +51,6 @@ export function createProjectSources(
   client: typeof initiativeClient,
   cache: QueryClient,
   userId: Accessor<string | undefined>,
-  observeTaskChanges: (source: ProjectTaskRefreshSource) => void,
-  hydrateTasks: (
-    taskIds: string[],
-    signal: AbortSignal
-  ) => Promise<TaskEntityWithProperties[]>,
   createReadGate: () => Accessor<boolean> = () => () => true
 ): ProjectsContext {
   const refresh = async () => {
@@ -133,60 +125,6 @@ export function createProjectSources(
         refresh: async () => {
           if (!readEnabled()) return;
           await refresh();
-        },
-      };
-    },
-    createTasksSource(id) {
-      const readEnabled = createReadGate();
-      const query = useInfiniteQuery(
-        () => {
-          const projectId = id();
-          return {
-            queryKey: projectKeys.tasks(userId(), projectId).queryKey,
-            enabled: readEnabled() && Boolean(userId() && projectId),
-            initialPageParam: undefined as string | undefined,
-            queryFn: async ({ signal, pageParam }) => {
-              const page = await throwOnErr(() =>
-                client.tasks(
-                  projectId,
-                  { cursor: pageParam, limit: 50 },
-                  signal
-                )
-              );
-              return {
-                tasks: await hydrateTasks(page.taskIds, signal),
-                nextCursor: page.nextCursor,
-              };
-            },
-            getNextPageParam: (page) => page.nextCursor ?? undefined,
-            staleTime: 30_000,
-            refetchInterval: 30_000,
-            refetchOnWindowFocus: true,
-          };
-        },
-        () => cache
-      );
-      const tasks = () =>
-        !readEnabled() || query.isPending || accessLost(query.error)
-          ? []
-          : (query.data?.pages.flatMap((page) => page.tasks) ?? []);
-      observeTaskChanges({
-        projectId: id,
-        taskIds: () => tasks().map((task) => task.id),
-        refresh: async () => {
-          if (!readEnabled()) return;
-          await query.refetch({ cancelRefetch: false });
-        },
-      });
-      return {
-        tasks,
-        loading: () => readEnabled() && query.isPending,
-        error: () => (readEnabled() ? (query.error ?? undefined) : undefined),
-        hasMore: () => readEnabled() && query.hasNextPage,
-        loadingMore: () => readEnabled() && query.isFetchingNextPage,
-        loadMore: async () => {
-          if (!readEnabled()) return;
-          await query.fetchNextPage();
         },
       };
     },
