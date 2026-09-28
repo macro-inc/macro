@@ -11,6 +11,7 @@ import {
   calendarTargetSearch,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import {
   defineRoute,
@@ -302,10 +303,26 @@ export function resolveContentLocation(
     }
   }
   route ??= resolve(splitLocationFromContent(routes, content).route);
+  const savedSearch = parseSearchState(metadataLocation?.search);
+  // In-app message opens carry block params, not external URL query keys.
+  // Preserve the target before middleware upgrades the block to Chat, where
+  // the legacy block (and its imperative navigation handle) is replaced.
+  const channelParams = content.type === 'channel' ? content.params : undefined;
+  const messageId = channelParams?.[CHANNEL_URL_PARAMS.message];
+  const threadId = channelParams?.[CHANNEL_URL_PARAMS.thread];
+  const channelSearch =
+    typeof messageId === 'string'
+      ? {
+          [channelsSearch.namespace]: {
+            messageId: [messageId],
+            ...(typeof threadId === 'string' ? { threadId: [threadId] } : {}),
+          },
+        }
+      : undefined;
   const search = filterRouteSearch(
     routes,
     route,
-    parseSearchState(metadataLocation?.search)
+    channelSearch ? { ...channelSearch, ...savedSearch } : savedSearch
   );
   const location: SplitLocation = { route };
   if (search) location.search = search;

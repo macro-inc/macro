@@ -862,6 +862,43 @@ describe('layoutManager', () => {
       });
     }
 
+    it.each([undefined, 'thread-1'])(
+      'preserves an in-app channel message target through the Chat redirect (thread %s)',
+      async (threadId) => {
+        const { manager, location, router, dispose } = ingressRouter('/search');
+        await router.settled();
+
+        manager.openWithSplit(
+          {
+            type: 'channel',
+            id: 'channel-1',
+            params: {
+              channel_message_id: 'message-1',
+              ...(threadId ? { channel_thread_id: threadId } : {}),
+            },
+          },
+          { activate: true }
+        );
+        await router.settled();
+
+        expect(location.read().pathname).toBe('/channels/channel-1');
+        const search = new URLSearchParams(location.read().search);
+        expect(search.get('s0.channels.messageId')).toBe('message-1');
+        expect(search.get('s0.channels.threadId')).toBe(threadId ?? null);
+        expect(manager.splits()[0]?.content.entryMetadata).toMatchObject({
+          search: {
+            channels: {
+              messageId: ['message-1'],
+              ...(threadId ? { threadId: [threadId] } : {}),
+            },
+          },
+        });
+
+        router.dispose();
+        dispose();
+      }
+    );
+
     it.each([
       ['md', 'md'],
       ['pdf', 'pdf'],

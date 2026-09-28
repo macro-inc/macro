@@ -684,6 +684,12 @@ not saved into the view's desktop search or restored entry state. Home and
 top-level Tasks use this same overlay; embedded project task lists retain their
 own search while the dock is open.
 
+Clicking a channel-message result opens Chat at that exact message. A reply result
+opens its thread and targets the reply. Verify with an older result whose message
+is off screen at the bottom of the conversation, including when the channel has
+not been opened yet; the route keeps the message and thread target through the
+transition into Chat.
+
 Agent-session results use the robot icon and show a highlighted transcript snippet.
 `Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.
 Click a snippet to open `/app/agent/<uuid>` at that folded message; a plain row click
