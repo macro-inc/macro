@@ -5,6 +5,7 @@
 //! credentials and urql operation context are deliberately excluded: replay
 //! reconstructs an operation using the current client configuration.
 
+use crate::identity::IdentityBinding;
 use crate::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use crate::normalize::RecordUpdates;
 use crate::value::canonical_json;
@@ -75,6 +76,9 @@ const OPTIMISTIC_SOURCE_ENVELOPE_PREFIX: &str = "@macro-cache/optimistic-source:
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OptimisticSource {
+    /// Explicit bindings for resolving locally created entities at settlement.
+    #[serde(default)]
+    pub identity_bindings: Vec<IdentityBinding>,
     /// Optimistic GraphQL mutation response.
     pub mutation_data: Json,
     /// Ordered constrained relation recipes.
@@ -91,6 +95,8 @@ pub struct OptimisticSource {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OptimisticSourceEnvelope {
+    #[serde(default)]
+    identity_bindings: Vec<IdentityBinding>,
     version: u8,
     mutation_data: Json,
     #[serde(default)]
@@ -115,6 +121,7 @@ struct OptimisticSourceEnvelopeV2 {
 pub fn encode_optimistic_source(source: &OptimisticSource) -> String {
     let envelope = canonical_json(
         &serde_json::to_value(OptimisticSourceEnvelope {
+            identity_bindings: source.identity_bindings.clone(),
             version: OPTIMISTIC_SOURCE_VERSION,
             mutation_data: source.mutation_data.clone(),
             link_patches: source.link_patches.clone(),
@@ -131,6 +138,7 @@ pub fn encode_optimistic_source(source: &OptimisticSource) -> String {
 pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String> {
     let Some(envelope) = value.strip_prefix(OPTIMISTIC_SOURCE_ENVELOPE_PREFIX) else {
         return Ok(OptimisticSource {
+            identity_bindings: Vec::new(),
             mutation_data: serde_json::from_str(value).map_err(|error| error.to_string())?,
             link_patches: Vec::new(),
             revalidations: Vec::new(),
@@ -148,6 +156,7 @@ pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String>
                 serde_json::from_value(value).map_err(|error| error.to_string())?;
             debug_assert_eq!(envelope.version, 2);
             Ok(OptimisticSource {
+                identity_bindings: Vec::new(),
                 mutation_data: envelope.mutation_data,
                 link_patches: envelope.link_patches,
                 revalidations: envelope.revalidations,
@@ -158,6 +167,7 @@ pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String>
             let envelope: OptimisticSourceEnvelope =
                 serde_json::from_value(value).map_err(|error| error.to_string())?;
             Ok(OptimisticSource {
+                identity_bindings: envelope.identity_bindings,
                 mutation_data: envelope.mutation_data,
                 link_patches: envelope.link_patches,
                 revalidations: envelope.revalidations,
@@ -290,4 +300,28 @@ pub struct MutationClaimToken {
     pub owner: String,
     /// Lease generation returned by the successful claim.
     pub generation: u64,
+}
+
+/// Once attempted, an entity-creating write must establish its server identity
+/// before a newer edit/discard can replace it. A transport error is uncertain.
+fn source_requires_confirmation(source: &str) -> bool {
+    decode_optimistic_source(source).is_ok_and(|source| {
+        source
+            .identity_bindings
+            .iter()
+            .any(|binding| !binding.response_path.is_empty())
+    })
+}
+
+/// Whether a queued mutation sharing a new entry's UUID must stay ahead of it,
+/// rather than being replaced: it is leased, or it was attempted and must
+/// confirm the identity it creates.
+pub fn collision_stays_active(
+    lease_expires_at_ms: Option<i64>,
+    now_ms: i64,
+    attempted: bool,
+    optimistic_data_json: &str,
+) -> bool {
+    lease_expires_at_ms.is_some_and(|expiry| expiry > now_ms)
+        || (attempted && source_requires_confirmation(optimistic_data_json))
 }

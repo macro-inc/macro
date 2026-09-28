@@ -1,5 +1,6 @@
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
+import type { EmailMessage } from '../../email-message/core/email-message';
 import type { EmailDraft } from '../core/email-draft';
 import type { EmailRecipient } from '../core/email-recipient';
 
@@ -96,6 +97,19 @@ export interface EmailAttachmentChange {
 }
 
 export interface EmailDraftStorage {
+  /** Resolve durable local drafts before mounting an editor. */
+  readDraft?(draftId: string): Promise<
+    | {
+        draft: EmailMessage;
+        persistence: 'committed' | 'queued';
+        mutationUuid?: string;
+      }
+    | undefined
+  >;
+  /** Notify mounted composers to refresh identity, without reseeding their content. */
+  watchDrafts?(
+    changed: (settlement?: { mutationUuid?: string; failed: boolean }) => void
+  ): () => void;
   saveDraft(input: SaveEmailDraft): Promise<DraftSaveResult>;
   deleteDraft(input: DeleteEmailDraft): Promise<void>;
   restoreDraft(input: {

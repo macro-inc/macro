@@ -1035,6 +1035,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         data: args.data,
         linkPatches: args.linkPatches,
         revalidations: args.revalidations,
+        identityBindings: args.identityBindings,
         createdAtMs: claim.nowMs,
         owner: claim.owner,
         nowMs: claim.nowMs,

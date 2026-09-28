@@ -20,10 +20,30 @@ export function useMailAccountsQuery() {
         id: link.id,
         email_address: link.emailAddress,
         photo_url: link.photoUrl,
+        macro_id: link.macroId,
+        is_primary: link.isPrimary,
+        needs_reauth: link.needsReauth,
+        draft_is_signal: link.draftIsSignal,
+        settings: {
+          signature: link.settings.signature,
+          signature_on_replies_forwards:
+            link.settings.signatureOnRepliesForwards,
+        },
       })),
     }),
   }));
   return {
+    get isPending() {
+      return graphqlCacheEnabled()
+        ? cached.isLoading && !rest.isSuccess
+        : rest.isPending;
+    },
+    get isError() {
+      return !cached.isLoading && !cached.data && rest.isError;
+    },
+    get isSuccess() {
+      return (!cached.isLoading && !!cached.data) || rest.isSuccess;
+    },
     get data() {
       return (
         (!cached.isLoading ? cached.data : undefined) ??

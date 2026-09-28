@@ -33,6 +33,32 @@ async fn canonical_tab_previews_and_share_facts(pool: Pool<Postgres>) -> anyhow:
         metadata.previews.sent.as_ref().unwrap().subject.as_deref(),
         Some("Older sent")
     );
+    let state = metadata
+        .draft_state
+        .as_ref()
+        .expect("complete draft metadata");
+    assert!(state.baseline.message_count > 0);
+    assert_eq!(
+        state.baseline.preview.as_ref().unwrap().id,
+        metadata.previews.all.as_ref().unwrap().id
+    );
+    assert!(state.drafts.iter().any(|entry| {
+        entry
+            .facts
+            .preview
+            .as_ref()
+            .map(|preview| preview.subject.as_deref())
+            == Some(Some("Older draft"))
+    }));
+    assert!(
+        get(left)
+            .draft_state
+            .as_ref()
+            .unwrap()
+            .drafts
+            .iter()
+            .all(|entry| entry.facts.preview.is_none())
+    );
     assert!(metadata.cache_facts.has_calendar_attachment);
     assert!(
         !metadata.cache_facts.has_thread_share,

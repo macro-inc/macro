@@ -260,6 +260,7 @@ fn optimistic_records_explicitly_overlay_the_durable_search_catalog() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
             )
             .await

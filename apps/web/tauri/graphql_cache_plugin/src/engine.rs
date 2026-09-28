@@ -68,6 +68,9 @@ pub struct WriteResultWire {
     pub reset: bool,
     /// Queries to fetch after successful optimistic settlement.
     pub revalidations: Vec<QueryRevalidation>,
+    /// Stable caller identity on settlement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mutation_uuid: Option<String>,
 }
 
 /// Internal hydration result used to fan out changes before returning only
@@ -371,6 +374,7 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         affected_ops: ops.names(result.affected_ops),
         reset: result.reset,
         revalidations: result.revalidations,
+        mutation_uuid: result.mutation_uuid,
     }
 }
 
@@ -638,6 +642,7 @@ impl EngineHandle {
         data: serde_json::Value,
         link_patches: Vec<OptimisticLinkPatch>,
         revalidations: Vec<QueryRevalidation>,
+        identity_bindings: Vec<cache_core::identity::IdentityBinding>,
         created_at_ms: i64,
         lease_owner: String,
         now_ms: i64,
@@ -667,6 +672,7 @@ impl EngineHandle {
                     link_patches: &link_patches,
                     revalidations: &revalidations,
                     created_at_ms,
+                    identity_bindings: &identity_bindings,
                 },
                 MutationClaimRequest {
                     owner: lease_owner,

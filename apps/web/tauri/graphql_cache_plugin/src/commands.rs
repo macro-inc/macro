@@ -272,6 +272,7 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
     data: serde_json::Value,
     link_patches: Option<Vec<OptimisticLinkPatch>>,
     revalidations: Option<Vec<QueryRevalidation>>,
+    identity_bindings: Option<Vec<cache_core::identity::IdentityBinding>>,
     created_at_ms: i64,
     owner: String,
     now_ms: i64,
@@ -280,13 +281,14 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
     let result = engine_handle(&state)?
         .enqueue_optimistic_mutation(
             origin_op_id,
-            uuid,
+            uuid.clone(),
             query,
             operation_name,
             variables.unwrap_or_default(),
             data,
             link_patches.unwrap_or_default(),
             revalidations.unwrap_or_default(),
+            identity_bindings.unwrap_or_default(),
             created_at_ms,
             owner,
             now_ms,
@@ -304,6 +306,7 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
         emit_mutation_settled(
             &app,
             removed_transaction_id.clone(),
+            Some(uuid.clone()),
             "superseded",
             None,
             Some(result.transaction_id.clone()),
@@ -401,6 +404,7 @@ pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
         emit_mutation_settled(
             &app,
             settlement_transaction_id,
+            write_result.mutation_uuid.clone(),
             "superseded",
             None,
             Some(replacement_transaction_id.clone()),
@@ -448,6 +452,7 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
     emit_mutation_settled(
         &app,
         settlement_transaction_id,
+        write_result.mutation_uuid.clone(),
         if replacement_transaction_id.is_some() {
             "superseded"
         } else {
@@ -484,6 +489,7 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
             emit_mutation_settled(
                 &app,
                 settlement_transaction_id,
+                write_result.mutation_uuid.clone(),
                 "permanently-failed",
                 Some(error),
                 None,
@@ -500,6 +506,7 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
             emit_mutation_settled(
                 &app,
                 settlement_transaction_id,
+                write_result.mutation_uuid.clone(),
                 "superseded",
                 None,
                 Some(replacement_transaction_id.clone()),

@@ -252,6 +252,7 @@ describe('CacheWorkerCore', () => {
       settlement: {
         transactionId: '0',
         status: 'superseded',
+        mutationUuid: '00000000-0000-4000-8000-000000000007',
         replacementTransactionId: '1',
       },
     });

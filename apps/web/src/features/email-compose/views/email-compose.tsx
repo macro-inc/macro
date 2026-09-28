@@ -9,7 +9,7 @@ import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 
 import { ComposerSurface } from '@ui';
 
-import { createSignal, Show } from 'solid-js';
+import { createResource, createSignal, Show } from 'solid-js';
 import { SignaturePreview } from '../components/signature-preview';
 import type { EmailComposeContext } from '../context/compose-capabilities';
 import { ComposeProvider } from '../context/compose-context';
@@ -17,6 +17,7 @@ import type { ComposeContextValue } from '../primitives/compose-view-state';
 import {
   createEmailComposer,
   type EmailComposerOptions,
+  hasComposeUndo,
 } from '../primitives/email-composer';
 import { ComposeLayout } from '../views/compose-layout';
 import { EmailComposeToolbar } from '../views/compose-toolbar';
@@ -30,6 +31,44 @@ export type EmailComposeViewProps = Pick<
   | 'initialTo'
 > & { context: EmailComposeContext };
 export function EmailComposeView(props: EmailComposeViewProps) {
+  const initialDraftId = props.draft?.db_id ?? props.draftId;
+  const [saved, { refetch }] = createResource(
+    () => props.context.drafts.readDraft && initialDraftId,
+    async (id) => {
+      const result = await props.context.drafts.readDraft!(id);
+      if (!result && !props.draft && !hasComposeUndo(id)) {
+        throw new Error('This draft is not available on this device.');
+      }
+      return result;
+    }
+  );
+  return (
+    <Show
+      when={!saved.loading}
+      fallback={<div role="status">Loading draft…</div>}
+    >
+      <Show
+        when={!saved.error}
+        fallback={
+          <div role="alert">
+            Unable to load this draft.{' '}
+            <button onClick={() => void refetch()}>Retry</button>
+          </div>
+        }
+      >
+        <LoadedEmailComposeView
+          {...props}
+          draft={saved()?.draft ?? props.draft}
+          draftPersistence={saved()?.persistence}
+        />
+      </Show>
+    </Show>
+  );
+}
+
+function LoadedEmailComposeView(
+  props: EmailComposeViewProps & { draftPersistence?: 'committed' | 'queued' }
+) {
   const composeContext = props.context;
   const state = createEmailComposer({
     drafts: composeContext.drafts,
@@ -45,6 +84,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
     host: props.host,
     draft: props.draft,
     draftId: props.draftId,
+    draftPersistence: props.draftPersistence,
     recipientOptions: props.recipientOptions,
     onRecipientsChange: props.onRecipientsChange,
     initialTo: props.initialTo,

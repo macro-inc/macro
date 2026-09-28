@@ -1212,7 +1212,7 @@ export const SoupViewContextProvider: FlowComponent<
       const groups = itemsSource.data()?.groups;
       const items = itemsSource.data()?.itemsById;
       if (!groups || !items) return;
-      return { groups, items };
+      return { groups, items, cachedMail: itemsSource.data()?.cachedMail };
     }),
     groupByField: serverGroupByField,
     soupParams,

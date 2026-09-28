@@ -1,15 +1,24 @@
+import { stringifyDocument } from '@urql/core';
+import { createDraftThread } from '../../../queries/email/graphql/optimistic-thread';
 import {
   type CachedMailView,
   materializeMailView,
 } from '../../../queries/soup/graphql/mail-view';
-import type { MailItemFieldsFragment } from '../../../service-clients/service-storage/graphql/generated/graphql';
+import {
+  type MailItemFieldsFragment,
+  SaveEmailDraftDocument,
+  type SaveEmailDraftMutation,
+} from '../../../service-clients/service-storage/graphql/generated/graphql';
 import { createWorkerCacheHost } from '../../host/worker-host';
 import { mailProjectionCapsules } from './mail-projection-capsules';
 
-const host = createWorkerCacheHost({
-  scope: `offline-mail-${crypto.randomUUID()}`,
-  requestTimeoutMs: 30_000,
-});
+const scope = `offline-mail-${crypto.randomUUID()}`;
+const createHost = () =>
+  createWorkerCacheHost({
+    scope,
+    requestTimeoutMs: 30_000,
+  });
+const host = createHost();
 const result = document.querySelector<HTMLParagraphElement>('#result')!;
 const rows = document.querySelector<HTMLOListElement>('#rows')!;
 const more = document.querySelector<HTMLButtonElement>('#more')!;
@@ -118,6 +127,104 @@ for (const control of document.querySelectorAll('select'))
   });
 more.addEventListener('click', () => {
   void refresh(true);
+});
+
+const draftStatus =
+  document.querySelector<HTMLParagraphElement>('#draft-status')!;
+document.querySelector('#create-draft')!.addEventListener('click', async () => {
+  try {
+    const now = new Date().toISOString();
+    const draft: SaveEmailDraftMutation['saveEmailDraft']['draft'] = {
+      __typename: 'GraphqlSoupEmailMessage',
+      id: id(8001),
+      threadId: id(8002),
+      providerId: null,
+      replyingToId: null,
+      linkId: id(1000),
+      subject: 'Offline standalone',
+      snippet: 'Saved on this device',
+      internalDateTs: null,
+      sentAt: null,
+      isRead: true,
+      isStarred: false,
+      isSent: false,
+      isDraft: true,
+      hasAttachments: false,
+      scheduledSendTime: null,
+      from: { email: 'sender@example.com', name: null, photoUrl: null },
+      to: [{ email: 'recipient@example.com', name: null, photoUrl: null }],
+      cc: [],
+      bcc: [],
+      labels: [],
+      attachments: [],
+      attachmentsDraft: [],
+      attachmentsForwarded: [],
+      bodyText: 'Saved on this device',
+      bodyHtmlSanitized: '<p>Saved on this device</p>',
+      bodyMacro: null,
+      bodyReplyless: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await host.enqueueOptimisticMutation(
+      {
+        uuid: id(8001),
+        query: stringifyDocument(SaveEmailDraftDocument),
+        operationName: 'SaveEmailDraft',
+        variables: {
+          input: {
+            draftId: id(8001),
+            threadDbId: id(8002),
+            subject: draft.subject,
+          },
+        },
+        data: {
+          saveEmailDraft: {
+            draftId: id(8001),
+            draft,
+            thread: createDraftThread(draft, 'offline-mail-viewer', true),
+          },
+        },
+        identityBindings: [
+          {
+            localKey: `GraphqlSoupEmailMessage:${id(8001)}`,
+            responsePath: ['saveEmailDraft', 'draft'],
+          },
+          {
+            localKey: `GraphqlSoupEmailThread:${id(8002)}`,
+            responsePath: ['saveEmailDraft', 'thread'],
+            referenceFields: ['GraphqlSoupEmailMessage.threadId'],
+          },
+        ],
+      },
+      {
+        owner: 'offline-draft-test',
+        nowMs: Date.now(),
+        leaseExpiresAtMs: Date.now() + 1000,
+      }
+    );
+    draftStatus.textContent = 'Draft queued';
+    await refresh();
+  } catch (error) {
+    draftStatus.textContent = String(error);
+  }
+});
+document.querySelector('#reopen-draft')!.addEventListener('click', async () => {
+  try {
+    const reader = createHost();
+    const result = await reader.readRecordsByKeys({
+      document:
+        'fragment SavedDraft on GraphqlSoupEmailMessage { id threadId subject bodyHtmlSanitized to { email } linkId }',
+      fragmentName: 'SavedDraft',
+      keys: [`GraphqlSoupEmailMessage:${id(8001)}`],
+    });
+    reader.dispose();
+    const draft = result.records[0];
+    draftStatus.textContent = JSON.stringify(draft);
+    await refresh();
+  } catch (error) {
+    draftStatus.textContent = String(error);
+  }
 });
 await host.writeQuery({
   query,

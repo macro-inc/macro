@@ -16,6 +16,8 @@ use crate::domain::{
 };
 
 use super::super::EmailServiceImpl;
+use super::draft_sender_is_signal;
+use crate::domain::models::EmailFilter;
 
 #[derive(Clone, Default)]
 struct FakeUserRepo {
@@ -27,6 +29,12 @@ struct FakeUserRepo {
 }
 
 impl EmailUserRepo for FakeUserRepo {
+    async fn user_sender_filters(
+        &self,
+        _link_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::EmailFilter>, crate::domain::models::EmailErr> {
+        Ok(vec![])
+    }
     async fn user_accessible_inboxes(
         &self,
         macro_id: MacroUserIdStr<'static>,
@@ -167,4 +175,33 @@ async fn links_are_scoped_to_the_user_and_enriched_by_domain_policy() {
         links[0].settings.signature.as_deref(),
         Some("<p>Regards</p>")
     );
+}
+
+#[test]
+fn own_address_and_domain_overrides_apply_to_offline_drafts() {
+    let filter = |address: Option<&str>, domain: Option<&str>, important| EmailFilter {
+        id: uuid::Uuid::nil(),
+        link_id: uuid::Uuid::nil(),
+        created_at: chrono::Utc::now(),
+        email_address: address.map(str::to_owned),
+        email_domain: domain.map(str::to_owned),
+        is_important: important,
+    };
+    assert!(draft_sender_is_signal("sender@example.com", &[]));
+    let noise = filter(None, Some("EXAMPLE.COM"), false);
+    assert!(!draft_sender_is_signal(
+        "sender@example.com",
+        &[noise.clone()]
+    ));
+    assert!(draft_sender_is_signal(
+        "sender@example.com",
+        &[noise, filter(Some("Sender@Example.com"), None, true)]
+    ));
+    assert!(!draft_sender_is_signal(
+        "sender@example.com",
+        &[
+            filter(None, Some("example.com"), true),
+            filter(Some("sender@example.com"), None, false)
+        ]
+    ));
 }

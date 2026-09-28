@@ -520,6 +520,7 @@ export class CacheWorkerCore {
             request.data,
             request.linkPatches,
             request.revalidations,
+            request.identityBindings,
             request.createdAtMs,
             request.owner,
             request.nowMs,
@@ -532,6 +533,7 @@ export class CacheWorkerCore {
             kind: 'mutation-settled',
             settlement: {
               transactionId: result.upsertKind.removedTransactionId,
+              mutationUuid: request.uuid,
               status: 'superseded',
               replacementTransactionId: result.transactionId,
             },
@@ -578,6 +580,7 @@ export class CacheWorkerCore {
             kind: 'mutation-settled',
             settlement: {
               transactionId: request.transactionId,
+              mutationUuid: result.mutationUuid,
               status: 'superseded',
               replacementTransactionId: result.replacementTransactionId,
             },
@@ -605,11 +608,13 @@ export class CacheWorkerCore {
             result.kind === 'committed-superseded'
               ? {
                   transactionId: request.transactionId,
+                  mutationUuid: result.mutationUuid,
                   status: 'superseded',
                   replacementTransactionId: result.replacementTransactionId,
                 }
               : {
                   transactionId: request.transactionId,
+                  mutationUuid: result.mutationUuid,
                   status: 'committed',
                 },
         });
@@ -630,11 +635,13 @@ export class CacheWorkerCore {
             result.kind === 'discarded-superseded'
               ? {
                   transactionId: request.transactionId,
+                  mutationUuid: result.mutationUuid,
                   status: 'superseded',
                   replacementTransactionId: result.replacementTransactionId,
                 }
               : {
                   transactionId: request.transactionId,
+                  mutationUuid: result.mutationUuid,
                   status: 'permanently-failed',
                   error: request.error,
                 },

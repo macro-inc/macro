@@ -953,6 +953,7 @@ export function normalizedCacheExchange(
           data: optimistic.optimisticResponse,
           linkPatches: optimistic.linkPatches,
           revalidations: optimistic.revalidations,
+          identityBindings: optimistic.identityBindings,
         };
         const now = Date.now();
         const claim = {

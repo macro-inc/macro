@@ -46,6 +46,7 @@ import {
   refuseAttachmentsOffline,
 } from './attachment-persistence';
 import { createDraftAutosave } from './draft-autosave';
+import { observeDraftIdentity } from './draft-identity';
 import {
   createDraftPersistence,
   deleteDraftForDiscard,
@@ -72,6 +73,11 @@ type UndoComposeSnapshot = {
 
 const composeUndo = createEmailUndoStore<UndoComposeSnapshot>();
 
+/** Undo content is the only valid in-memory fallback for reopening by ID. */
+export function hasComposeUndo(draftId: string): boolean {
+  return composeUndo.peek(draftId) !== undefined;
+}
+
 export type EmailComposerOptions = {
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
@@ -87,6 +93,7 @@ export type EmailComposerOptions = {
   draft?: EmailMessage;
   /** Identity for a composer reopened from a local undo snapshot. */
   draftId?: string;
+  draftPersistence?: 'committed' | 'queued';
   recipientOptions?: Accessor<EmailRecipient[]>;
   onRecipientsChange?: (recipients: EmailRecipient[]) => void;
   /** Prefill for the To field (e.g. from an intercepted mailto: link). Ignored when editing an existing draft. */
@@ -151,11 +158,16 @@ export function createEmailComposer(props: EmailComposerOptions) {
   // the save.
   const session = createDraftSession(
     initialDraftId
-      ? { draftId: initialDraftId, threadId: props.draft?.thread_db_id }
+      ? {
+          draftId: initialDraftId,
+          threadId: props.draft?.thread_db_id,
+          persistence: props.draftPersistence,
+        }
       : undefined
   );
   const currentDraftId = session.draftId;
   const currentThreadId = session.threadId;
+  observeDraftIdentity(props.drafts, session, props.notices.reportError);
 
   const attachmentPersistence = createAttachmentPersistence({
     services: props.attachmentStorage,
@@ -277,6 +289,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
   const persistencePaused = () => submitting() || discarding() || completed;
 
   const autosave = createDraftAutosave({
+    onError: (error) => {
+      props.notices.reportError(error);
+      props.notices.feedback.failure('Unable to save draft on this device');
+    },
     capture: () => ({ draft: collectDraft(), inboxId: activeInboxId() }),
     persist: ({ draft, inboxId }) => persistDraft(draft, inboxId),
     paused: persistencePaused,

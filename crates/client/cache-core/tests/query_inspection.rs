@@ -505,6 +505,7 @@ mutation SetEntityProperty($input: SetEntityPropertyInput!) {
                     link_patches: &[patch],
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await

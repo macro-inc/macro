@@ -4,7 +4,12 @@
  * rows and group membership without a TanStack invalidation round-trip.
  */
 
+import {
+  type CacheRevision,
+  normalizedCacheResultMetadata,
+} from '@app/lib/graphql-cache';
 import { createUrqlQuery } from '@app/lib/urql-solid';
+import { createBrowserOfflineSignal } from '@core/util/connectivity';
 import { Telemetry } from '@macro-inc/observability';
 import {
   makeGroupComparator,
@@ -26,14 +31,19 @@ import {
   type Accessor,
   createComputed,
   createMemo,
+  createSignal,
   on,
   onCleanup,
 } from 'solid-js';
+import { groupCachedMailByDate } from '../grouped/mail-date-groups';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { mapSoupPageToEntityList } from '../transform-utils';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { makeGraphqlGroupedSoupInput } from './ast';
-import type { GraphqlSoupAstItemsQuery } from './items';
+import {
+  createGraphqlSoupAstItemsQuery,
+  type GraphqlSoupAstItemsQuery,
+} from './items';
 import {
   usePendingGraphqlSoupDeleteIds,
   withoutPendingGraphqlSoupDeletes,
@@ -95,6 +105,23 @@ export function createGraphqlGroupedSoupAstItemsQuery(
 ): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
+  const [now, setNow] = createSignal(new Date());
+  const dateTimer = setInterval(() => setNow(new Date()), 60_000);
+  onCleanup(() => clearInterval(dateTimer));
+  const [networkRevision, setNetworkRevision] = createSignal<CacheRevision>();
+  const [networkInput, setNetworkInput] = createSignal<unknown>();
+  const offline = createBrowserOfflineSignal();
+  const local = createGraphqlSoupAstItemsQuery(
+    () => ({ params: args().params, body: args().body }),
+    () => ({
+      ...options(),
+      localOnly: true,
+      enabled:
+        options().enabled &&
+        args().groupBy?.type === 'date' &&
+        args().body.emailView !== undefined,
+    })
+  );
   const input = createMemo(() => {
     const { params, body, groupBy } = args();
     if (!groupBy) return;
@@ -121,6 +148,18 @@ export function createGraphqlGroupedSoupAstItemsQuery(
       client: getGraphqlSoupClient(),
       requestPolicy: 'cache-and-network' as const,
       keepPreviousData: false,
+      onResult: (
+        result: import('@urql/core').OperationResult<
+          GroupSoupQuery,
+          GroupSoupQueryVariables
+        >
+      ) => {
+        const metadata = normalizedCacheResultMetadata(result);
+        if (metadata?.source === 'live-network' && metadata.revision) {
+          setNetworkRevision(metadata.revision);
+          setNetworkInput(queryInput);
+        }
+      },
       select: (data: GroupSoupQuery) =>
         mapGraphqlGroupedSoupData(data, groupBy!, {
           instructionsIdQuery,
@@ -150,6 +189,22 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   );
 
   const error = (): CombinedError | undefined => query.error ?? undefined;
+  const cachedMail = createMemo(() => {
+    const data = local.data();
+    if (
+      !options().enabled ||
+      args().groupBy?.type !== 'date' ||
+      !data?.cachedMail
+    )
+      return;
+    if (
+      !offline() &&
+      networkInput() === input() &&
+      networkRevision() === local.localRevision?.()
+    )
+      return;
+    return groupCachedMailByDate(data, now());
+  });
   createComputed(
     on(error, (queryError) => {
       if (queryError) {
@@ -160,16 +215,21 @@ export function createGraphqlGroupedSoupAstItemsQuery(
 
   return {
     data: () =>
-      withoutPendingGraphqlSoupDeletes(query.data, pendingDeleteIds()),
+      withoutPendingGraphqlSoupDeletes(
+        cachedMail() ?? query.data,
+        pendingDeleteIds()
+      ),
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
-    isLoading: () => query.isLoading,
+    isLoading: () => !cachedMail() && query.isLoading,
     isFetching: () => query.isFetching,
-    isFetchingNextPage: () => false,
+    isFetchingNextPage: () => !!cachedMail() && local.isFetchingNextPage(),
     isPlaceholderData: () => false,
-    hasNextPage: () => false,
-    fetchNextPage: async () => undefined,
+    hasNextPage: () => !!cachedMail() && local.hasNextPage(),
+    fetchNextPage: async () => {
+      if (cachedMail()) await local.fetchNextPage();
+    },
     resetToInitialPage: () => undefined,
     refresh: async () => {
       if (input() === undefined) return;

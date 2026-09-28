@@ -44,6 +44,7 @@ import {
   refuseAttachmentsOffline,
 } from './attachment-persistence';
 import { createDraftAutosave } from './draft-autosave';
+import { observeDraftIdentity } from './draft-identity';
 import {
   createDraftPersistence,
   deleteDraftForDiscard,
@@ -237,11 +238,16 @@ export function createReplyComposer(
           threadId: restoredSnapshot.threadId,
         }
       : draftSeed?.db_id
-        ? { draftId: draftSeed.db_id, threadId: draftSeed.thread_db_id }
+        ? {
+            draftId: draftSeed.db_id,
+            threadId: draftSeed.thread_db_id,
+            persistence: props.drafts.readDraft ? 'queued' : undefined,
+          }
         : undefined
   );
   const savedDraftId = session.draftId;
   const savedDraftThreadId = session.threadId;
+  observeDraftIdentity(props.drafts, session, props.notices.reportError);
 
   // Consume the undo-send snapshot so a later composer mount doesn't restore
   // it again. Use bodyHtml as initialHtml for the editor, restore attachments
@@ -508,6 +514,10 @@ export function createReplyComposer(
   }
 
   const autosave = createDraftAutosave({
+    onError: (error) => {
+      props.notices.reportError(error);
+      props.notices.feedback.failure('Unable to save draft on this device');
+    },
     capture: captureSave,
     persist: persistDraft,
     paused: () => submitting() || pendingDeletion(),

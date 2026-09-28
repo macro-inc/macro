@@ -4,9 +4,15 @@ import { createClient, type Operation } from '@urql/core';
 import { describe, expect, it } from 'vitest';
 import { map, pipe } from 'wonka';
 import {
+  executeGraphqlDeleteEmailDraft,
   executeGraphqlSaveEmailDraft,
   type GraphqlSaveEmailDraftArgs,
 } from './draft';
+import {
+  draftThreadIsEmpty,
+  removeDraftFromThread,
+  updateDraftThread,
+} from './optimistic-thread';
 
 const args: GraphqlSaveEmailDraftArgs = {
   draftId: '01991e2a-3111-7000-8000-000000000001',
@@ -96,4 +102,126 @@ describe('optimistic draft saves', () => {
       },
     });
   });
+});
+
+async function standalone() {
+  const { client, operations } = queuedClient();
+  await executeGraphqlSaveEmailDraft(client, {
+    ...args,
+    newThreadOwnerId: 'macro|owner@example.com',
+    senderIsSignal: false,
+  });
+  const response = optimisticContextOf(operations[0])!
+    .optimisticResponse as SaveEmailDraftMutation;
+  return { ...response.saveEmailDraft, client, operations };
+}
+
+it('creates a complete standalone thread with the account classification and stable identity bindings', async () => {
+  const { draft, thread, operations } = await standalone();
+  expect(thread).toMatchObject({
+    ownerId: 'macro|owner@example.com',
+    isSignal: false,
+    isRead: true,
+    inboxVisible: true,
+    mailAllPreview: { id: args.draftId },
+    mailDraftPreview: { id: args.draftId },
+    mailSentPreview: null,
+    messages: [draft],
+    properties: [],
+    notifications: [],
+    viewerPermission: { accessLevel: 'OWNER' },
+    cacheProjection: null,
+  });
+  expect(thread.mailDraftState?.baseline.messageCount).toBe(0);
+  expect(optimisticContextOf(operations[0])?.identityBindings).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        localKey: `GraphqlSoupEmailThread:${args.threadDbId}`,
+        revalidationVariables: ['threadId'],
+      }),
+      expect.objectContaining({
+        localKey: `GraphqlSoupEmailMessage:${args.draftId}`,
+        referenceFields: expect.arrayContaining([
+          'GraphqlMailPreviewMessage.id',
+          'GraphqlMailDraftEntry.id',
+        ]),
+      }),
+    ])
+  );
+});
+
+it('editing an older draft keeps the later received preview and discarding restores the full baseline', async () => {
+  const { draft, thread } = await standalone();
+  const received = {
+    ...thread.mailAllPreview!,
+    id: 'received',
+    isDraft: false,
+    subject: 'Incoming',
+  };
+  const state = thread.mailDraftState!;
+  const older = {
+    ...draft,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-09-22T12:00:00Z',
+  };
+  state.drafts[0].facts.previewTs = older.createdAt;
+  state.baseline = {
+    ...state.baseline,
+    messageCount: 24,
+    isRead: false,
+    isSignal: false,
+    hasCalendarAttachment: true,
+    preview: received,
+    previewTs: '2026-02-01T00:00:00Z',
+    latestNonSpamMessageTs: '2026-02-01T00:00:00Z',
+    latestOutboundMessageTs: '2026-01-31T00:00:00Z',
+  };
+  const sent = { ...received, id: 'sent', subject: 'Sent' };
+  const edited = updateDraftThread(
+    { ...thread, mailSentPreview: sent },
+    older,
+    true
+  );
+  expect(edited.mailAllPreview).toEqual(received);
+  expect(edited.mailDraftPreview?.id).toBe(draft.id);
+  expect(edited.mailSentPreview).toEqual(sent);
+  expect(edited.isRead).toBe(false);
+  expect(edited.isSignal).toBe(true);
+  const removed = removeDraftFromThread(edited, draft.id)!;
+  expect(removed).toMatchObject({
+    inboxVisible: false,
+    isSignal: false,
+    isRead: false,
+    mailDraftPreview: null,
+    mailAllPreview: received,
+    mailSentPreview: sent,
+    latestInboundMessageTs: null,
+    sortTs: '2026-02-01T00:00:00Z',
+    messages: [],
+  });
+  expect(removed.mailDraftState?.baseline.hasCalendarAttachment).toBe(true);
+  expect(draftThreadIsEmpty(removed)).toBe(false);
+});
+
+it('discards a standalone draft with the original coalescing key and bindings for an in-flight save', async () => {
+  const { client, operations, thread } = await standalone();
+  await executeGraphqlDeleteEmailDraft(client, {
+    draftId: String(args.draftId),
+    threadDbId: args.threadDbId,
+    existingThread: thread,
+    mutationUuid: '01991e2a-3111-7000-8000-000000000099',
+  });
+  const context = optimisticContextOf(operations[1]);
+  expect(context?.uuid).toBe('01991e2a-3111-7000-8000-000000000099');
+  expect(context?.optimisticResponse).toMatchObject({
+    deleteEmailDraft: {
+      threadDeleted: true,
+      thread: { mailAllPreview: null, mailDraftPreview: null, messages: [] },
+    },
+  });
+  expect(
+    context?.identityBindings?.every(
+      (binding) => binding.responsePath.length === 0
+    )
+  ).toBe(true);
 });

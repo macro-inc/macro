@@ -211,6 +211,7 @@ async fn resolved(promise: js_sys::Promise) -> JsValue {
 
 fn empty_js_write_result() -> JsWriteResult {
     JsWriteResult {
+        mutation_uuid: None,
         revision: "0".to_string(),
         revision_advanced: false,
         changed: Vec::new(),

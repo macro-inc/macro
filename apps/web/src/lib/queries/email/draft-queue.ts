@@ -8,7 +8,10 @@ import {
   selectRecords,
 } from '@graphql-cache/exchange/record-selection';
 import { Telemetry } from '@macro-inc/observability';
-import { EmailThreadMessageFieldsFragmentDoc } from '@service-storage/graphql/generated/graphql';
+import {
+  EmailDraftThreadFieldsFragmentDoc,
+  EmailThreadMessageFieldsFragmentDoc,
+} from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
@@ -27,8 +30,47 @@ import {
   type GraphqlSaveEmailDraftArgs,
   type SaveEmailDraftFailureCode,
 } from './graphql/draft';
+import { mapGraphqlEmailMessage } from './graphql/mapper';
 import { emailKeys } from './keys';
 import { fetchAndCacheThread, type ThreadQueryTransport } from './thread';
+
+/** Read content and persistence state together, including resolved local handles. */
+export async function readEmailDraft(draftId: string) {
+  const host = getGraphqlCacheHost();
+  if (!host) return;
+  const result = await readRecordsByKeys(
+    host,
+    selectRecords(EmailThreadMessageFieldsFragmentDoc),
+    [`GraphqlSoupEmailMessage:${draftId}`]
+  );
+  const selected = result.records[0];
+  if (!selected?.record.isDraft) return;
+  return {
+    draft: mapGraphqlEmailMessage(selected.record),
+    persistence: selected.identity?.pending
+      ? ('queued' as const)
+      : ('committed' as const),
+    mutationUuid: selected.identity?.mutationUuid ?? undefined,
+  };
+}
+
+/** Subscribers read durable state; missing a notification is harmless on remount. */
+export function watchEmailDrafts(
+  changed: (settlement?: { mutationUuid?: string; failed: boolean }) => void
+): () => void {
+  const host = getGraphqlCacheHost();
+  const cache = host?.onCacheChanged(() => changed());
+  const settlement = host?.onMutationSettled((result) =>
+    changed({
+      mutationUuid: result.mutationUuid,
+      failed: result.status === 'permanently-failed',
+    })
+  );
+  return () => {
+    cache?.();
+    settlement?.();
+  };
+}
 
 /**
  * Whether a surface's draft writes ride the durable GraphQL mutation queue,
@@ -94,24 +136,49 @@ function rejection(
   return code;
 }
 
+/** The draft and thread records a queued write rebases onto, when cached. */
+async function readCachedDraftAndThread(
+  draftId: string,
+  threadId: string
+): Promise<
+  Pick<
+    GraphqlSaveEmailDraftArgs,
+    'existingDraft' | 'existingThread' | 'mutationUuid'
+  >
+> {
+  const host = getGraphqlCacheHost();
+  if (!host) return {};
+  const draft = await readRecordsByKeys(
+    host,
+    selectRecords(EmailThreadMessageFieldsFragmentDoc),
+    [`GraphqlSoupEmailMessage:${draftId}`]
+  );
+  const thread = await readRecordsByKeys(
+    host,
+    selectRecords(EmailDraftThreadFieldsFragmentDoc),
+    [`GraphqlSoupEmailThread:${threadId}`]
+  );
+  return {
+    existingDraft: draft.records[0]?.record,
+    existingThread: thread.records[0]?.record,
+    mutationUuid: draft.records[0]?.identity?.mutationUuid ?? undefined,
+  };
+}
+
 /** Saves over the queue; a commit mirrors useSaveDraftMutation's cache effects. */
 export async function saveEmailDraftQueued(input: {
   args: GraphqlSaveEmailDraftArgs;
   completingThread?: boolean;
   previousThreadId?: string;
 }): Promise<QueuedDraftSave> {
-  const client = getGraphqlSoupClient();
-  const host = getGraphqlCacheHost();
-  const cached = host
-    ? await readRecordsByKeys(
-        host,
-        selectRecords(EmailThreadMessageFieldsFragmentDoc),
-        [`GraphqlSoupEmailMessage:${input.args.draftId}`]
-      )
-    : undefined;
-  const outcome = await executeGraphqlSaveEmailDraft(client, {
+  const cached = await readCachedDraftAndThread(
+    String(input.args.draftId),
+    input.args.threadDbId
+  );
+  const outcome = await executeGraphqlSaveEmailDraft(getGraphqlSoupClient(), {
     ...input.args,
-    existingDraft: cached?.records[0]?.record,
+    ...cached,
+    mutationUuid: cached.mutationUuid ?? input.args.mutationUuid,
   });
   if (outcome.kind === 'failed') {
     return {
@@ -158,7 +225,10 @@ export async function deleteEmailDraftQueued(input: {
   threadId: string;
   completingThread?: boolean;
 }): Promise<QueuedDraftDelete> {
+  const cached = await readCachedDraftAndThread(input.draftId, input.threadId);
   const outcome = await executeGraphqlDeleteEmailDraft(getGraphqlSoupClient(), {
+    existingThread: cached.existingThread,
+    mutationUuid: cached.mutationUuid,
     draftId: input.draftId,
     threadDbId: input.threadId,
   });

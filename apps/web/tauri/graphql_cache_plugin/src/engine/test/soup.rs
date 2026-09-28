@@ -262,6 +262,7 @@ fn enqueue_archive(handle: &EngineHandle, n: u16) -> (String, String) {
         patch(VIEWER, n, false),
         vec![],
         vec![],
+        vec![],
         0,
         "native-runner".into(),
         10,

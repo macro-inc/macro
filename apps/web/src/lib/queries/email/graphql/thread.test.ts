@@ -3,11 +3,13 @@ import { CombinedError } from '@urql/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const queryMock = vi.hoisted(() => vi.fn());
+const hostMock = vi.hoisted(() => vi.fn(() => undefined as unknown));
 const cacheEnabledMock = vi.hoisted(() => vi.fn(() => true));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({ query: queryMock }),
   graphqlCacheEnabled: cacheEnabledMock,
+  getGraphqlCacheHost: hostMock,
 }));
 
 import { EmailThreadPageDocument } from '@service-storage/graphql/generated/graphql';
@@ -18,6 +20,31 @@ const cachedPage: EmailThreadPageQuery = {
     id: 'user-1',
     emailThread: {
       __typename: 'GraphqlSoupEmailThread',
+      ownerId: 'user-1',
+      entityType: 'EMAIL_THREAD',
+      cacheProjection: null,
+      displayName: null,
+      emailName: null,
+      snippet: null,
+      senderEmail: null,
+      senderName: null,
+      senderPhotoUrl: null,
+      isDraft: false,
+      isSignal: false,
+      isImportant: false,
+      isFavorited: false,
+      sortTs: '2026-08-06T12:00:00Z',
+      viewedAt: null,
+      frecencyScore: null,
+      mailAllPreview: null,
+      mailDraftPreview: null,
+      mailSentPreview: null,
+      mailDraftState: null,
+      participants: [],
+      attachments: [],
+      properties: [],
+      notifications: [],
+
       id: 'thread-1',
       providerId: 'provider-thread-1',
       linkId: 'link-1',
@@ -40,9 +67,40 @@ const cachedPage: EmailThreadPageQuery = {
 describe('fetchGraphqlEmailThread', () => {
   beforeEach(() => {
     queryMock.mockReset();
+    hostMock.mockReturnValue(undefined);
     cacheEnabledMock.mockReset();
     cacheEnabledMock.mockReturnValue(true);
   });
+
+  it.each([false, true])(
+    'resolves the durable local route before querying (queued=%s)',
+    async (pending) => {
+      hostMock.mockReturnValue({
+        readRecordsByKeys: vi.fn(async () => ({
+          revision: '1',
+          records: [
+            {
+              recordKey: 'GraphqlSoupEmailThread:local-thread',
+              record: { id: 'thread-1' },
+              identity: { pending, mutationUuid: 'draft' },
+            },
+          ],
+        })),
+      });
+      queryMock.mockReturnValue({
+        toPromise: async () => ({ data: cachedPage }),
+      });
+      await expect(
+        fetchGraphqlEmailThread('local-thread')
+      ).resolves.toMatchObject({ db_id: 'thread-1' });
+      expect(queryMock).toHaveBeenCalledWith(
+        EmailThreadPageDocument,
+        { threadId: 'thread-1', offset: 0, limit: 20 },
+        { requestPolicy: pending ? 'cache-only' : 'cache-and-network' }
+      );
+      expect(queryMock).toHaveBeenCalledOnce();
+    }
+  );
 
   it('falls back to the persisted operation after a network failure', async () => {
     queryMock

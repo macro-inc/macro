@@ -152,6 +152,8 @@ struct JsWriteResult {
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -163,6 +165,8 @@ struct JsHydrationWriteResult {
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
     data: Option<serde_json::Value>,
 }
 
@@ -182,6 +186,8 @@ struct JsEnqueueOptimisticMutationResult {
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
     initial_claim: JsInitialMutationClaim,
 }
 
@@ -420,6 +426,7 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
         affected_ops: ops.names(result.affected_ops),
         reset: result.reset,
         revalidations: result.revalidations,
+        mutation_uuid: result.mutation_uuid,
     }
 }
 
@@ -1324,6 +1331,7 @@ impl CacheEngine {
                 affected_ops: ops.borrow().names(result.write_result.affected_ops),
                 reset: result.write_result.reset,
                 revalidations: result.write_result.revalidations,
+                mutation_uuid: result.write_result.mutation_uuid,
                 data: result.data,
             })
         })
@@ -1344,6 +1352,7 @@ impl CacheEngine {
         data: JsValue,
         link_patches: JsValue,
         revalidations: JsValue,
+        identity_bindings: JsValue,
         created_at_ms: f64,
         lease_owner: String,
         now_ms: f64,
@@ -1358,6 +1367,8 @@ impl CacheEngine {
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
             let link_patches: Vec<OptimisticLinkPatch> = parse_vec(link_patches)?;
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
+            let identity_bindings: Vec<cache_core::identity::IdentityBinding> =
+                parse_vec(identity_bindings)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
             let mut projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
             projection_mutations.extend(
@@ -1385,6 +1396,17 @@ impl CacheEngine {
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             ));
+            projection_mutations.extend(
+                soup_filter_cache_adapter::mail::draft_optimistic_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
             let projection_mutations = soup_filter_cache_adapter::properties::augment_optimistic(
                 state.engine_mut()?.storage(),
                 &query,
@@ -1417,6 +1439,7 @@ impl CacheEngine {
                         link_patches: &link_patches,
                         revalidations: &revalidations,
                         created_at_ms,
+                        identity_bindings: &identity_bindings,
                     },
                     claim,
                     projection_mutations,
@@ -1449,6 +1472,7 @@ impl CacheEngine {
                 affected_ops: ops.borrow().names(result.write_result.affected_ops),
                 reset: result.write_result.reset,
                 revalidations: result.write_result.revalidations,
+                mutation_uuid: result.write_result.mutation_uuid,
                 initial_claim,
             })
         })

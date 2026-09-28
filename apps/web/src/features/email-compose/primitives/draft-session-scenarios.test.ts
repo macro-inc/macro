@@ -219,7 +219,13 @@ describe('draft session: compose composer', () => {
             }),
           })
         );
-        expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+        if (firstSave === 'autosave') {
+          expect(context.notices.feedback.failure).toHaveBeenCalledWith(
+            'Unable to save draft on this device'
+          );
+        } else {
+          expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+        }
       } finally {
         root.dispose();
       }

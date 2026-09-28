@@ -72,6 +72,7 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
 
 fn empty_write_result() -> WriteResultWire {
     WriteResultWire {
+        mutation_uuid: None,
         revision: "0".to_string(),
         revision_advanced: false,
         changed: Vec::new(),
@@ -451,6 +452,7 @@ fn optimistic_layer_commits_durably() {
         soup_data(true),
         vec![],
         vec![],
+        vec![],
         0,
         "runner".to_string(),
         10,
@@ -511,6 +513,7 @@ fn rollback_drops_optimistic_contribution() {
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        vec![],
         vec![],
         vec![],
         0,

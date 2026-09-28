@@ -60,6 +60,11 @@ impl EmailPgRepo {
 }
 
 impl EmailUserRepo for EmailPgRepo {
+    async fn user_sender_filters(&self, link_id: Uuid) -> Result<Vec<EmailFilter>, EmailErr> {
+        email_filter::list_email_filters(&self.pool, link_id)
+            .await
+            .map_err(|error| EmailErr::RepoErr(error.into()))
+    }
     async fn user_accessible_inboxes(
         &self,
         macro_id: MacroUserIdStr<'static>,

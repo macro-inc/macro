@@ -479,10 +479,12 @@ impl Storage for InMemoryStorage {
             .map(|(id, queued)| {
                 (
                     *id,
-                    queued
-                        .mutation
-                        .lease_expires_at_ms
-                        .is_some_and(|expiry| expiry > now_ms),
+                    crate::queue::collision_stays_active(
+                        queued.mutation.lease_expires_at_ms,
+                        now_ms,
+                        queued.mutation.attempt_count > 0,
+                        &queued.optimistic.optimistic_data_json,
+                    ),
                 )
             });
         let kind = match collision {

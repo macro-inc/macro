@@ -64,6 +64,8 @@ impl RecordSelection {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SelectedRecord {
+    /// Queue state belongs to the cache, not to the GraphQL entity schema.
+    pub identity: crate::identity::IdentityStatus,
     /// Canonical normalized-cache entity key.
     pub record_key: EntityKey<'static>,
     /// Complete fragment projection for that entity.

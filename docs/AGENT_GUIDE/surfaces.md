@@ -416,6 +416,24 @@ Test this with a previously saved draft as well as a new one: a queued edit must
 block Send and scheduling until a save commits. Reopening a cached draft while
 offline must retain its uploaded attachments and confirmed scheduled time.
 
+
+With the persistent GraphQL Email cache enabled, a new standalone draft saved
+offline appears immediately in Drafts and the other matching Mail tabs, including
+date-grouped lists. A draft changes a conversation's preview, read state, and sort
+time according to that tab; discarding it restores the remaining conversation's
+metadata. `Showing cached mail` still means only synchronized and locally created
+items are available.
+
+Verify the durable lifecycle: create a standalone draft offline, enter recipients,
+subject and body, close the composer, then restart while still offline. Open it
+from Drafts and confirm its content and sending inbox; edit it again. Reconnect
+and check that exactly one draft remains and the open editor keeps any new text.
+Repeat with discard before reconnect, including a save that was already attempted
+before connectivity dropped. The discarded draft must stay absent after restart
+and reconnect. Opening through an older local thread link must reach the same
+server thread after synchronization. Repeat with an existing reply and confirm
+that other messages, attachments, and the Sent preview remain intact.
+
 While a schedule change is pending, immediate send and further schedule changes
 are disabled. Reply recipients cannot be edited or dragged during scheduling,
 sending, or discarding. A failed schedule or unschedule keeps the last confirmed time.

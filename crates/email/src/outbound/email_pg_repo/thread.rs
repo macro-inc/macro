@@ -1,6 +1,6 @@
 use crate::domain::models::{
-    EmailPreview, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
-    EmailThreadMetadata, MessageRow, ThreadRow,
+    EmailPreview, EmailThreadDraftState, EmailThreadMailCacheFacts, EmailThreadMailPreviews,
+    EmailThreadMailProjection, EmailThreadMetadata, MessageRow, ThreadRow,
 };
 use chrono::Utc;
 use sqlx::{PgPool, types::Json};
@@ -67,7 +67,14 @@ pub(super) async fn thread_mail_projections_by_ids(
         return Ok(Vec::new());
     }
     // Called only for receipt-authorized IDs. Each lateral is an indexed,
-    // per-thread top-one probe; bodies and whole message histories are not read.
+    // per-thread top-one probe. The draft baseline aggregates message metadata
+    // for the requested threads; it never loads message bodies.
+    //
+    // `is_signal` restates the importance heuristic of `sync_thread_signal_flag`
+    // (below) and `resync_signal_flags_for_sender` (email_filter.rs) over the
+    // pre-aggregated `rules` lateral; `draft_sender_is_signal` (domain
+    // service/user.rs) mirrors its sender-override precedence. Change all four
+    // together.
     let rows = sqlx::query!(
         r#"
         WITH user_source_ids AS (
@@ -75,8 +82,79 @@ pub(super) async fn thread_mail_projections_by_ids(
             WHERE cp.user_id = $2 AND cp.left_at IS NULL
             UNION ALL SELECT team_id::text FROM team_user WHERE user_id = $2
             UNION ALL SELECT $2::text
+        ), message_facts AS (
+            SELECT m.id, m.thread_id, m.is_draft, m.is_read,
+                m.is_draft AND m.provider_id IS NULL AS macro_draft,
+                (('INBOX' = ANY(labels.provider_names) AND NOT 'SENT' = ANY(labels.provider_names))
+                    OR (m.is_draft AND m.provider_id IS NULL)) AS inbox_visible,
+                NOT 'TRASH' = ANY(labels.names) AND (
+                    rules.address_true OR (rules.domain_true AND NOT rules.address_false)
+                    OR (NOT (rules.address_false OR (rules.domain_false AND NOT rules.address_true))
+                        AND (m.is_draft OR labels.names && ARRAY['CATEGORY_PERSONAL','SENT','DRAFT']
+                            OR NOT labels.names && ARRAY['CATEGORY_UPDATES','CATEGORY_PROMOTIONS','CATEGORY_SOCIAL','CATEGORY_FORUMS']))
+                ) AS is_signal,
+                EXISTS (SELECT 1 FROM email_attachments a WHERE a.message_id = m.id
+                    AND (a.filename ILIKE '%.ics' OR a.mime_type IN ('text/calendar','application/ics'))
+                ) AS has_calendar_attachment,
+                GREATEST(
+                    CASE WHEN 'INBOX' = ANY(labels.provider_names) AND (
+                        NOT (m.is_draft OR m.is_sent) OR EXISTS (
+                            SELECT 1 FROM email_message_recipients r
+                            WHERE r.message_id = m.id AND r.contact_id = m.from_contact_id
+                        )) THEN m.internal_date_ts END,
+                    CASE WHEN m.is_draft AND m.provider_id IS NULL THEN m.updated_at END
+                ) AS inbound_ts,
+                GREATEST(
+                    CASE WHEN NOT labels.provider_names && ARRAY['SPAM','TRASH'] THEN m.internal_date_ts END,
+                    CASE WHEN m.is_draft AND m.provider_id IS NULL THEN m.updated_at END
+                ) AS all_ts,
+                CASE WHEN m.is_sent AND NOT 'TRASH' = ANY(labels.provider_names) THEN m.internal_date_ts END AS sent_ts,
+                CASE WHEN NOT 'TRASH' = ANY(labels.names) THEN COALESCE(m.internal_date_ts, m.created_at) END AS preview_ts,
+                CASE WHEN NOT 'TRASH' = ANY(labels.names) THEN jsonb_build_object(
+                    'id', m.id, 'subject', m.subject, 'snippet', m.snippet, 'is_draft', m.is_draft,
+                    'sender_email', c.email_address, 'sender_name', c.name, 'sender_photo_url', c.sfs_photo_url
+                ) END AS preview
+            FROM email_messages m
+            LEFT JOIN email_contacts c ON c.id = m.from_contact_id
+            CROSS JOIN LATERAL (
+                SELECT COALESCE(array_agg(l.name::text), ARRAY[]::text[]) AS names,
+                       COALESCE(array_agg(l.provider_label_id::text), ARRAY[]::text[]) AS provider_names
+                FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
+                WHERE ml.message_id = m.id
+            ) labels
+            CROSS JOIN LATERAL (
+                SELECT COALESCE(bool_or(f.is_important) FILTER (WHERE LOWER(f.email_address) = LOWER(c.email_address)), false) AS address_true,
+                    COALESCE(bool_or(NOT f.is_important) FILTER (WHERE LOWER(f.email_address) = LOWER(c.email_address)), false) AS address_false,
+                    COALESCE(bool_or(f.is_important) FILTER (WHERE LOWER(f.email_domain) = LOWER(SPLIT_PART(c.email_address, '@', 2))), false) AS domain_true,
+                    COALESCE(bool_or(NOT f.is_important) FILTER (WHERE LOWER(f.email_domain) = LOWER(SPLIT_PART(c.email_address, '@', 2))), false) AS domain_false
+                FROM email_filters f WHERE f.link_id = m.link_id
+            ) rules
+            WHERE m.thread_id = ANY($1)
+        ), draft_states AS (
+            SELECT thread_id, jsonb_build_object(
+                'baseline', jsonb_build_object(
+                    'message_count', count(*) FILTER (WHERE NOT is_draft),
+                    'inbox_visible', COALESCE(bool_or(inbox_visible) FILTER (WHERE NOT is_draft), false),
+                    'is_read', COALESCE(bool_and(is_read) FILTER (WHERE NOT is_draft), true),
+                    'is_signal', COALESCE(bool_or(is_signal) FILTER (WHERE NOT is_draft), false),
+                    'has_calendar_attachment', COALESCE(bool_or(has_calendar_attachment) FILTER (WHERE NOT is_draft), false),
+                    'latest_inbound_message_ts', max(inbound_ts) FILTER (WHERE NOT is_draft),
+                    'latest_non_spam_message_ts', max(all_ts) FILTER (WHERE NOT is_draft),
+                    'latest_outbound_message_ts', max(sent_ts) FILTER (WHERE NOT is_draft),
+                    'preview', (array_agg(preview ORDER BY preview_ts DESC, id DESC) FILTER (WHERE NOT is_draft AND preview IS NOT NULL))[1],
+                    'preview_ts', max(preview_ts) FILTER (WHERE NOT is_draft)
+                ),
+                'drafts', COALESCE(jsonb_agg(jsonb_build_object(
+                    'id', id, 'macro_draft', macro_draft, 'facts', jsonb_build_object(
+                        'message_count', 1, 'inbox_visible', inbox_visible, 'is_read', is_read,
+                        'is_signal', is_signal, 'has_calendar_attachment', has_calendar_attachment,
+                        'latest_inbound_message_ts', inbound_ts, 'latest_non_spam_message_ts', all_ts,
+                        'latest_outbound_message_ts', sent_ts, 'preview', preview, 'preview_ts', preview_ts
+                    )
+                ) ORDER BY id) FILTER (WHERE is_draft), '[]'::jsonb)
+            ) AS state FROM message_facts GROUP BY thread_id
         )
-        SELECT t.id AS "thread_id!",
+        SELECT t.id AS "thread_id!", ds.state AS "draft_state?: Json<EmailThreadDraftState>",
             t.latest_non_spam_message_ts, t.latest_outbound_message_ts,
             t.has_calendar_attachment,
             EXISTS (SELECT 1 FROM entity_access ea
@@ -96,6 +174,7 @@ pub(super) async fn thread_mail_projections_by_ids(
                 'sender_email', sc.email_address, 'sender_name', sc.name, 'sender_photo_url', sc.sfs_photo_url
             ) END AS "sent_preview?: Json<EmailPreview>"
         FROM email_threads t
+        LEFT JOIN draft_states ds ON ds.thread_id = t.id
         LEFT JOIN LATERAL (
             SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id
             FROM email_messages m WHERE m.thread_id = t.id AND NOT EXISTS (
@@ -128,6 +207,7 @@ pub(super) async fn thread_mail_projections_by_ids(
         .into_iter()
         .map(|row| EmailThreadMailProjection {
             thread_id: row.thread_id,
+            draft_state: row.draft_state.map(|Json(state)| state),
             cache_facts: EmailThreadMailCacheFacts {
                 latest_non_spam_message_ts: row.latest_non_spam_message_ts,
                 latest_outbound_message_ts: row.latest_outbound_message_ts,
@@ -541,7 +621,8 @@ pub(super) async fn update_thread_metadata(
 /// Recomputes the denormalized `email_threads.is_signal` flag: true iff the
 /// thread has a non-TRASH message matching the importance heuristic. Exact
 /// copy of `email_db_client::threads::update::sync_thread_signal_flag`,
-/// mirroring the Importance(true) predicate in the dynamic query builder.
+/// mirroring the Importance(true) predicate in the dynamic query builder and
+/// the `message_facts.is_signal` column of `thread_mail_projections_by_ids`.
 pub(super) async fn sync_thread_signal_flag(
     tx: &mut sqlx::PgConnection,
     thread_db_id: Uuid,

@@ -222,6 +222,7 @@ fn independent_property_optimism_survives_rollback_and_commits() {
                         link_patches: &[],
                         revalidations: &[],
                         created_at_ms: 0,
+                        identity_bindings: &[],
                     },
                     MutationClaimRequest {
                         owner: "runner".into(),

@@ -62,12 +62,12 @@ function mapMessageLabel(
   };
 }
 
-function mapMessage(
+export function mapGraphqlEmailMessage(
   message: EmailThreadMessageFieldsFragment,
   labelsByProviderId: ReadonlyMap<
     string,
     EmailThreadPageFieldsFragment['labels'][number]
-  >
+  > = new Map()
 ): ApiMessage {
   return {
     attachments: message.attachments.map((attachment) => ({
@@ -145,7 +145,7 @@ export function mapGraphqlEmailThreadPage(
     latest_inbound_message_ts: thread.latestInboundMessageTs,
     link_id: thread.linkId,
     messages: thread.messages.map((message) =>
-      mapMessage(message, labelsByProviderId)
+      mapGraphqlEmailMessage(message, labelsByProviderId)
     ),
     project_id: optional(thread.projectId),
     provider_id: optional(thread.providerId),

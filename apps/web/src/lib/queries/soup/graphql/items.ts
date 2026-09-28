@@ -15,8 +15,10 @@ import {
   createUrqlInfiniteQuery,
   type UrqlInfiniteData,
 } from '@app/lib/urql-solid';
+import { createBrowserOfflineSignal } from '@core/util/connectivity';
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import type { SoupApiItem } from '@service-storage/generated/schemas';
 import {
   type MailItemFieldsFragment,
   MailItemFieldsFragmentDoc,
@@ -75,10 +77,13 @@ export type GraphqlSoupAstItemsQueryArgs = {
 
 export type GraphqlSoupAstItemsQueryOptions = {
   enabled: boolean;
+  /** Reuse local Mail evaluation beneath a separately subscribed grouped query. */
+  localOnly?: boolean;
   showSupportedForeignEntities?: boolean;
 };
 
 export type GraphqlSoupAstItemsQuery = {
+  localRevision?: Accessor<CacheRevision | undefined>;
   data: Accessor<SoupAstItemsData | undefined>;
   /** Latest GraphQL transport or application error. */
   error: Accessor<CombinedError | undefined>;
@@ -97,6 +102,11 @@ export type GraphqlSoupAstItemsQuery = {
   refresh: () => Promise<void>;
 };
 
+const itemsById = (items: readonly SoupApiItem[]) =>
+  Object.fromEntries(
+    items.map((item) => [mapApiSoupItemToEntity(item).id, item])
+  );
+
 /** Creates the live urql query for a flat Soup AST request. */
 export function createGraphqlSoupAstItemsQuery(
   args: Accessor<GraphqlSoupAstItemsQueryArgs>,
@@ -104,18 +114,7 @@ export function createGraphqlSoupAstItemsQuery(
 ): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
-  const [offline, setOffline] = createSignal(
-    typeof navigator !== 'undefined' && !navigator.onLine
-  );
-  const updateConnectivity = () => setOffline(!navigator.onLine);
-  if (typeof window !== 'undefined') {
-    window.addEventListener('online', updateConnectivity);
-    window.addEventListener('offline', updateConnectivity);
-    onCleanup(() => {
-      window.removeEventListener('online', updateConnectivity);
-      window.removeEventListener('offline', updateConnectivity);
-    });
-  }
+  const offline = createBrowserOfflineSignal();
   const [fetchingMailPage, setFetchingMailPage] = createSignal(false);
 
   const inputForCursor = (
@@ -411,6 +410,7 @@ export function createGraphqlSoupAstItemsQuery(
               : {}),
             data: {
               cachedMail: result.kind === 'mail-page',
+              itemsById: itemsById(items),
               entities: mapSoupPageToEntityList(
                 { items, next_cursor: undefined },
                 {
@@ -514,7 +514,10 @@ export function createGraphqlSoupAstItemsQuery(
       },
       getNextPageParam: (lastPage) =>
         lastPage.user.soup.nextCursor ?? undefined,
-      enabled: queryOptions.enabled && firstInput !== undefined,
+      enabled:
+        queryOptions.enabled &&
+        !queryOptions.localOnly &&
+        firstInput !== undefined,
       requestPolicy: 'cache-and-network',
       keepPreviousData: false,
       onResult: (result, page) => {
@@ -640,6 +643,7 @@ export function createGraphqlSoupAstItemsQuery(
   );
 
   return {
+    localRevision: () => displayLocalProjection()?.mail?.revision,
     data: createMemo(() => {
       const data = displayData();
       return withoutPendingGraphqlSoupDeletes(
@@ -739,6 +743,7 @@ export function createGraphqlSoupAstItemsQuery(
           },
           data: {
             cachedMail: true,
+            itemsById: itemsById(items),
             entities: mapSoupPageToEntityList(
               { items, next_cursor: undefined },
               {

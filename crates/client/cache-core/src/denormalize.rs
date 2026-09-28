@@ -168,15 +168,34 @@ impl<'a, S: RecordSource> Walk<'a, S> {
         type_name: &str,
         selections: &[Selection],
     ) -> Result<Option<Json>, DenormalizeError> {
-        self.deps.insert(key.clone());
-        let Some(record) = self.source.get(key) else {
-            self.missing_records.insert(key.clone());
-            return Ok(None);
+        let mut key = key.clone();
+        let mut visited = BTreeSet::new();
+        let record = loop {
+            self.deps.insert(key.clone());
+            if !visited.insert(key.clone())
+                || visited.len() > crate::identity::MAX_ALIAS_CHAIN_DEPTH
+            {
+                self.mark_miss(&key, "cyclic cache identity".into());
+                return Ok(None);
+            }
+            let Some(record) = self.source.get(&key) else {
+                self.missing_records.insert(key);
+                return Ok(None);
+            };
+            if let Some(target) = crate::identity::alias_target(record) {
+                key = target.clone();
+                continue;
+            }
+            if record.fields.get(crate::identity::DELETED_FIELD) == Some(&CacheValue::Bool(true)) {
+                self.mark_miss(&key, "deleted cache identity".into());
+                return Ok(None);
+            }
+            break record;
         };
         // Clone is cheap relative to the walk; keeps borrows simple.
         let record = record.clone();
         let concrete = record.typename().unwrap_or(type_name).to_string();
-        self.read_fields(key, &record.fields, &concrete, selections)
+        self.read_fields(&key, &record.fields, &concrete, selections)
     }
 
     /// Reads selected fields out of a record's or embedded object's map.

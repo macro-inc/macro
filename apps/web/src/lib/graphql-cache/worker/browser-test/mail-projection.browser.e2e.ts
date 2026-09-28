@@ -1,5 +1,41 @@
 import { expect, test } from '@playwright/test';
 
+test('a new offline draft reaches Drafts and reopens through another cache client', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/mail-projection.html');
+  await expect(page.locator('#result')).toHaveAttribute(
+    'data-status',
+    'ready',
+    { timeout: 60_000 }
+  );
+  await context.setOffline(true);
+  try {
+    await page
+      .getByRole('combobox', { name: 'View', exact: true })
+      .selectOption('DRAFTS');
+    await page.getByRole('button', { name: 'Create offline draft' }).click();
+    await expect(page.locator('#draft-status')).toHaveText('Draft queued');
+    await expect(page.locator('#rows li').first()).toHaveText(
+      'Offline standalone — Not Done'
+    );
+    await page.getByRole('button', { name: 'Reopen cached draft' }).click();
+    await expect(page.locator('#draft-status')).toContainText(
+      'Saved on this device'
+    );
+    await expect(page.locator('#draft-status')).toContainText(
+      'recipient@example.com'
+    );
+    await expect(page.locator('#draft-status')).toContainText('"pending":true');
+    await expect(page.locator('#rows li').first()).toHaveText(
+      'Offline standalone — Not Done'
+    );
+  } finally {
+    await context.setOffline(false);
+  }
+});
+
 test('new Mail filter combinations and pagination work offline without bodies or server baselines', async ({
   page,
   context,

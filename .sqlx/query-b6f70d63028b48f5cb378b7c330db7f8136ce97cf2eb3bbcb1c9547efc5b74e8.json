@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_source_ids AS (\n            SELECT cp.channel_id::text AS source_id FROM comms_channel_participants cp\n            WHERE cp.user_id = $2 AND cp.left_at IS NULL\n            UNION ALL SELECT team_id::text FROM team_user WHERE user_id = $2\n            UNION ALL SELECT $2::text\n        ), message_facts AS (\n            SELECT m.id, m.thread_id, m.is_draft, m.is_read,\n                m.is_draft AND m.provider_id IS NULL AS macro_draft,\n                (('INBOX' = ANY(labels.provider_names) AND NOT 'SENT' = ANY(labels.provider_names))\n                    OR (m.is_draft AND m.provider_id IS NULL)) AS inbox_visible,\n                NOT 'TRASH' = ANY(labels.names) AND (\n                    rules.address_true OR (rules.domain_true AND NOT rules.address_false)\n                    OR (NOT (rules.address_false OR (rules.domain_false AND NOT rules.address_true))\n                        AND (m.is_draft OR labels.names && ARRAY['CATEGORY_PERSONAL','SENT','DRAFT']\n                            OR NOT labels.names && ARRAY['CATEGORY_UPDATES','CATEGORY_PROMOTIONS','CATEGORY_SOCIAL','CATEGORY_FORUMS']))\n                ) AS is_signal,\n                EXISTS (SELECT 1 FROM email_attachments a WHERE a.message_id = m.id\n                    AND (a.filename ILIKE '%.ics' OR a.mime_type IN ('text/calendar','application/ics'))\n                ) AS has_calendar_attachment,\n                GREATEST(\n                    CASE WHEN 'INBOX' = ANY(labels.provider_names) AND (\n                        NOT (m.is_draft OR m.is_sent) OR EXISTS (\n                            SELECT 1 FROM email_message_recipients r\n                            WHERE r.message_id = m.id AND r.contact_id = m.from_contact_id\n                        )) THEN m.internal_date_ts END,\n                    CASE WHEN m.is_draft AND m.provider_id IS NULL THEN m.updated_at END\n                ) AS inbound_ts,\n                GREATEST(\n                    CASE WHEN NOT labels.provider_names && ARRAY['SPAM','TRASH'] THEN m.internal_date_ts END,\n                    CASE WHEN m.is_draft AND m.provider_id IS NULL THEN m.updated_at END\n                ) AS all_ts,\n                CASE WHEN m.is_sent AND NOT 'TRASH' = ANY(labels.provider_names) THEN m.internal_date_ts END AS sent_ts,\n                CASE WHEN NOT 'TRASH' = ANY(labels.names) THEN COALESCE(m.internal_date_ts, m.created_at) END AS preview_ts,\n                CASE WHEN NOT 'TRASH' = ANY(labels.names) THEN jsonb_build_object(\n                    'id', m.id, 'subject', m.subject, 'snippet', m.snippet, 'is_draft', m.is_draft,\n                    'sender_email', c.email_address, 'sender_name', c.name, 'sender_photo_url', c.sfs_photo_url\n                ) END AS preview\n            FROM email_messages m\n            LEFT JOIN email_contacts c ON c.id = m.from_contact_id\n            CROSS JOIN LATERAL (\n                SELECT COALESCE(array_agg(l.name::text), ARRAY[]::text[]) AS names,\n                       COALESCE(array_agg(l.provider_label_id::text), ARRAY[]::text[]) AS provider_names\n                FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id\n                WHERE ml.message_id = m.id\n            ) labels\n            CROSS JOIN LATERAL (\n                SELECT COALESCE(bool_or(f.is_important) FILTER (WHERE LOWER(f.email_address) = LOWER(c.email_address)), false) AS address_true,\n                    COALESCE(bool_or(NOT f.is_important) FILTER (WHERE LOWER(f.email_address) = LOWER(c.email_address)), false) AS address_false,\n                    COALESCE(bool_or(f.is_important) FILTER (WHERE LOWER(f.email_domain) = LOWER(SPLIT_PART(c.email_address, '@', 2))), false) AS domain_true,\n                    COALESCE(bool_or(NOT f.is_important) FILTER (WHERE LOWER(f.email_domain) = LOWER(SPLIT_PART(c.email_address, '@', 2))), false) AS domain_false\n                FROM email_filters f WHERE f.link_id = m.link_id\n            ) rules\n            WHERE m.thread_id = ANY($1)\n        ), draft_states AS (\n            SELECT thread_id, jsonb_build_object(\n                'baseline', jsonb_build_object(\n                    'message_count', count(*) FILTER (WHERE NOT is_draft),\n                    'inbox_visible', COALESCE(bool_or(inbox_visible) FILTER (WHERE NOT is_draft), false),\n                    'is_read', COALESCE(bool_and(is_read) FILTER (WHERE NOT is_draft), true),\n                    'is_signal', COALESCE(bool_or(is_signal) FILTER (WHERE NOT is_draft), false),\n                    'has_calendar_attachment', COALESCE(bool_or(has_calendar_attachment) FILTER (WHERE NOT is_draft), false),\n                    'latest_inbound_message_ts', max(inbound_ts) FILTER (WHERE NOT is_draft),\n                    'latest_non_spam_message_ts', max(all_ts) FILTER (WHERE NOT is_draft),\n                    'latest_outbound_message_ts', max(sent_ts) FILTER (WHERE NOT is_draft),\n                    'preview', (array_agg(preview ORDER BY preview_ts DESC, id DESC) FILTER (WHERE NOT is_draft AND preview IS NOT NULL))[1],\n                    'preview_ts', max(preview_ts) FILTER (WHERE NOT is_draft)\n                ),\n                'drafts', COALESCE(jsonb_agg(jsonb_build_object(\n                    'id', id, 'macro_draft', macro_draft, 'facts', jsonb_build_object(\n                        'message_count', 1, 'inbox_visible', inbox_visible, 'is_read', is_read,\n                        'is_signal', is_signal, 'has_calendar_attachment', has_calendar_attachment,\n                        'latest_inbound_message_ts', inbound_ts, 'latest_non_spam_message_ts', all_ts,\n                        'latest_outbound_message_ts', sent_ts, 'preview', preview, 'preview_ts', preview_ts\n                    )\n                ) ORDER BY id) FILTER (WHERE is_draft), '[]'::jsonb)\n            ) AS state FROM message_facts GROUP BY thread_id\n        )\n        SELECT t.id AS \"thread_id!\", ds.state AS \"draft_state?: Json<EmailThreadDraftState>\",\n            t.latest_non_spam_message_ts, t.latest_outbound_message_ts,\n            t.has_calendar_attachment,\n            EXISTS (SELECT 1 FROM entity_access ea\n                WHERE ea.entity_id = t.id AND ea.entity_type = 'email_thread'\n                  AND ea.source_id = ANY(SELECT source_id FROM user_source_ids)\n            ) AS \"has_thread_share!\",\n            CASE WHEN am.id IS NOT NULL THEN jsonb_build_object(\n                'id', am.id, 'subject', am.subject, 'snippet', am.snippet, 'is_draft', am.is_draft,\n                'sender_email', ac.email_address, 'sender_name', ac.name, 'sender_photo_url', ac.sfs_photo_url\n            ) END AS \"all_preview?: Json<EmailPreview>\",\n            CASE WHEN dm.id IS NOT NULL THEN jsonb_build_object(\n                'id', dm.id, 'subject', dm.subject, 'snippet', dm.snippet, 'is_draft', dm.is_draft,\n                'sender_email', dc.email_address, 'sender_name', dc.name, 'sender_photo_url', dc.sfs_photo_url\n            ) END AS \"draft_preview?: Json<EmailPreview>\",\n            CASE WHEN sm.id IS NOT NULL THEN jsonb_build_object(\n                'id', sm.id, 'subject', sm.subject, 'snippet', sm.snippet, 'is_draft', sm.is_draft,\n                'sender_email', sc.email_address, 'sender_name', sc.name, 'sender_photo_url', sc.sfs_photo_url\n            ) END AS \"sent_preview?: Json<EmailPreview>\"\n        FROM email_threads t\n        LEFT JOIN draft_states ds ON ds.thread_id = t.id\n        LEFT JOIN LATERAL (\n            SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id\n            FROM email_messages m WHERE m.thread_id = t.id AND NOT EXISTS (\n                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id\n                WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'\n            ) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1\n        ) am ON TRUE\n        LEFT JOIN email_contacts ac ON ac.id = am.from_contact_id\n        LEFT JOIN LATERAL (\n            SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id\n            FROM email_messages m WHERE m.thread_id = t.id AND m.is_draft AND NOT EXISTS (\n                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id\n                WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'\n            ) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1\n        ) dm ON TRUE\n        LEFT JOIN email_contacts dc ON dc.id = dm.from_contact_id\n        LEFT JOIN LATERAL (\n            SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id\n            FROM email_messages m WHERE m.thread_id = t.id AND m.is_sent AND NOT EXISTS (\n                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id\n                WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'\n            ) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1\n        ) sm ON TRUE\n        LEFT JOIN email_contacts sc ON sc.id = sm.from_contact_id\n        WHERE t.id = ANY($1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "draft_state?: Json<EmailThreadDraftState>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "latest_non_spam_message_ts",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "latest_outbound_message_ts",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "has_calendar_attachment",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "has_thread_share!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "all_preview?: Json<EmailPreview>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "draft_preview?: Json<EmailPreview>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "sent_preview?: Json<EmailPreview>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true,
+      true,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "b6f70d63028b48f5cb378b7c330db7f8136ce97cf2eb3bbcb1c9547efc5b74e8"
+}

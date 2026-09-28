@@ -1,3 +1,12 @@
+/** Explicit local entities resolved atomically from a committed mutation response. */
+export type IdentityBindingWire = {
+  deleteRecord?: boolean;
+  localKey: string;
+  responsePath: string[];
+  referenceFields?: string[];
+  revalidationVariables?: string[];
+};
+
 import type { EntityResolverWire } from './exchange/entity-resolvers';
 
 /**
@@ -130,6 +139,7 @@ export type ReadRecordsByKeysArgs = {
 };
 
 export type SelectedRecordByKeyWire = {
+  identity?: { mutationUuid: string | null; pending: boolean };
   recordKey: string;
   record: unknown;
 };
@@ -328,6 +338,7 @@ export type HydrationResult =
   | { kind: 'void'; revision: CacheRevision };
 
 export type WriteResult = {
+  mutationUuid?: string;
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
   /** Whether this write advanced `revision`. */
@@ -419,7 +430,7 @@ export type RollbackOptimisticWriteResult =
     });
 
 /** Final settlement of a previously queued optimistic mutation. */
-export type MutationSettlement =
+export type MutationSettlement = { mutationUuid?: string } & (
   | { transactionId: string; status: 'committed' }
   | {
       transactionId: string;
@@ -430,7 +441,8 @@ export type MutationSettlement =
       transactionId: string;
       status: 'permanently-failed';
       error: string;
-    };
+    }
+);
 
 export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
@@ -484,6 +496,7 @@ export type CacheRequest = { id: number } & (
       data: unknown;
       linkPatches?: OptimisticLinkPatchWire[];
       revalidations?: QueryRevalidationWire[];
+      identityBindings?: IdentityBindingWire[];
       createdAtMs: number;
       owner: string;
       nowMs: number;
@@ -680,17 +693,24 @@ export function isCachePush(value: unknown): value is CachePush {
       if (
         !hasOnlyWireKeys(value, ['kind', 'settlement']) ||
         !isWireRecord(settlement) ||
-        typeof settlement.transactionId !== 'string'
+        typeof settlement.transactionId !== 'string' ||
+        (settlement.mutationUuid !== undefined &&
+          typeof settlement.mutationUuid !== 'string')
       ) {
         return false;
       }
       if (settlement.status === 'committed') {
-        return hasOnlyWireKeys(settlement, ['transactionId', 'status']);
+        return hasOnlyWireKeys(settlement, [
+          'transactionId',
+          'status',
+          'mutationUuid',
+        ]);
       }
       if (settlement.status === 'superseded') {
         return (
           hasOnlyWireKeys(settlement, [
             'transactionId',
+            'mutationUuid',
             'status',
             'replacementTransactionId',
           ]) && typeof settlement.replacementTransactionId === 'string'
@@ -698,7 +718,12 @@ export function isCachePush(value: unknown): value is CachePush {
       }
       return (
         settlement.status === 'permanently-failed' &&
-        hasOnlyWireKeys(settlement, ['transactionId', 'status', 'error']) &&
+        hasOnlyWireKeys(settlement, [
+          'transactionId',
+          'mutationUuid',
+          'status',
+          'error',
+        ]) &&
         typeof settlement.error === 'string'
       );
     }

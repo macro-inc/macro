@@ -12,7 +12,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { useEmail, useUserContext } from '@core/context/user';
+import { useEmail, useUserContext, useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { trackMention } from '@core/signal/mention';
@@ -38,7 +38,9 @@ import { markThreadDraftSaved } from '@queries/email/draft-cache';
 import {
   deleteEmailDraftQueued,
   draftQueueActive,
+  readEmailDraft,
   saveEmailDraftQueued,
+  watchEmailDrafts,
 } from '@queries/email/draft-queue';
 import {
   draftContactInput,
@@ -50,10 +52,10 @@ import {
 } from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
 import {
-  useEmailLinksQuery,
-  useNonPrimaryEmailLinkIdHeader,
-  usePrimaryEmailLinkId,
+  findPrimaryEmailLinkId,
+  nonPrimaryEmailLinkIdHeader,
 } from '@queries/email/link';
+import { useMailAccountsQuery } from '@queries/email/mail-accounts';
 import {
   fetchAndCacheThread,
   type ThreadQueryTransport,
@@ -89,15 +91,21 @@ export type EmailComposeContextOptions = {
 export function createEmailComposeContext(
   options: EmailComposeContextOptions = {}
 ): EmailComposeContext {
-  const accounts = useEmailLinksQuery();
-  const headerId = useNonPrimaryEmailLinkIdHeader();
-  const primaryId = usePrimaryEmailLinkId();
+  const accounts = useMailAccountsQuery();
+  const queueActive = () => draftQueueActive(options.threadTransport?.());
   // Attach handlers run as event handlers, which have no Solid owner of
   // their own; the dialog needs the surface's.
   const dialogOwner = getOwner();
   const user = useUserContext();
   const paywall = usePaywallState();
   const viewerEmail = useEmail();
+  const viewerId = useUserId();
+  const primaryId = () =>
+    accounts.isSuccess
+      ? findPrimaryEmailLinkId(accounts.data?.links ?? [], viewerId())
+      : undefined;
+  const headerId = (id: string | null | undefined) =>
+    nonPrimaryEmailLinkIdHeader(id, primaryId());
   const inboxSource = createEmailInboxSource(viewerEmail, accounts, (email) =>
     getDisplayName(tryMacroId(`macro|${email}`))
   );
@@ -129,7 +137,7 @@ export function createEmailComposeContext(
   }: SaveEmailDraft):
     | (DraftClientHandles & { threadId: string })
     | undefined => {
-    if (!draftQueueActive(options.threadTransport?.())) return undefined;
+    if (!queueActive()) return undefined;
     if (clientHandles?.threadId) {
       return { ...clientHandles, threadId: clientHandles.threadId };
     }
@@ -142,6 +150,16 @@ export function createEmailComposeContext(
     handles: DraftClientHandles & { threadId: string },
     senderLinkId: string
   ): GraphqlSaveEmailDraftArgs => ({
+    senderIsSignal: (() => {
+      const link = accounts.isSuccess
+        ? accounts.data?.links.find((link) => link.id === senderLinkId)
+        : undefined;
+      return link && 'draft_is_signal' in link
+        ? link.draft_is_signal
+        : undefined;
+    })(),
+    newThreadOwnerId:
+      !draft.thread_db_id && !draft.replying_to_id ? viewerId() : undefined,
     draftId: handles.draftId,
     threadDbId: handles.threadId,
     // Persist the selected inbox itself: the primary inbox can change before replay.
@@ -227,6 +245,8 @@ export function createEmailComposeContext(
       reportError,
     },
     drafts: {
+      readDraft: queueActive() ? readEmailDraft : undefined,
+      watchDrafts: queueActive() ? watchEmailDrafts : undefined,
       async saveDraft({
         completingThread,
         previousThreadId,
@@ -281,7 +301,7 @@ export function createEmailComposeContext(
         };
       },
       async deleteDraft({ completingThread, inboxId, ...input }) {
-        if (input.threadId && draftQueueActive(options.threadTransport?.())) {
+        if (input.threadId && queueActive()) {
           const outcome = await deleteEmailDraftQueued({
             draftId: input.draftId,
             threadId: input.threadId,

@@ -65,6 +65,8 @@ pub struct CacheChangedEvent {
 #[serde(rename_all = "camelCase")]
 struct MutationSettledEvent {
     transaction_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
     status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
@@ -123,6 +125,7 @@ fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>, revision: &str) {
 fn emit_mutation_settled<R: Runtime>(
     app: &AppHandle<R>,
     transaction_id: String,
+    mutation_uuid: Option<String>,
     status: &'static str,
     error: Option<String>,
     replacement_transaction_id: Option<String>,
@@ -131,6 +134,7 @@ fn emit_mutation_settled<R: Runtime>(
         MUTATION_SETTLED_EVENT,
         MutationSettledEvent {
             transaction_id,
+            mutation_uuid,
             status,
             error,
             replacement_transaction_id,

@@ -16,6 +16,7 @@ use serde_json::json;
 #[test]
 fn optimistic_source_supports_versioned_and_legacy_json() {
     let source = OptimisticSource {
+        identity_bindings: Vec::new(),
         mutation_data: json!({"rename": {"name": "next"}}),
         link_patches: Vec::new(),
         revalidations: Vec::new(),

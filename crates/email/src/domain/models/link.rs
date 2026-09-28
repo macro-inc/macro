@@ -119,6 +119,8 @@ pub struct EmailInboxDetails {
 /// which is an internal credential-linking detail rather than user-facing data.
 #[derive(Debug, Clone)]
 pub struct UserEmailLink {
+    /// Importance of a locally composed draft from this account's own address.
+    pub draft_is_signal: bool,
     /// Stable email link identifier.
     pub id: Uuid,
     /// Macro user that owns the inbox.
@@ -145,9 +147,12 @@ pub struct UserEmailLink {
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<EmailInboxDetails> for UserEmailLink {
-    fn from(details: EmailInboxDetails) -> Self {
+impl UserEmailLink {
+    /// `draft_is_signal` comes from the inbox's sender overrides, which the
+    /// details row does not carry.
+    pub fn from_details(details: EmailInboxDetails, draft_is_signal: bool) -> Self {
         Self {
+            draft_is_signal,
             id: details.id,
             macro_id: details.macro_id,
             email_address: details.email_address,
