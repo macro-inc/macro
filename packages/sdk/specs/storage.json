@@ -16886,6 +16886,9 @@
           "fef": {
             "description": "the filters that should be applied to foreign entity records"
           },
+          "ghprf": {
+            "description": "the filters that should be applied to GitHub pull request records, on top of `fef`"
+          },
           "pf": {
             "description": "the filters that should be applied to the project entity"
           },
