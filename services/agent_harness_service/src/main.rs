@@ -18,6 +18,7 @@ mod harness_bindings;
 mod internal_mcp;
 mod model_providers;
 mod permission_policy;
+mod routine_sessions;
 mod runtime_commands;
 mod trigger;
 
@@ -1031,6 +1032,14 @@ async fn run() -> anyhow::Result<()> {
         ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    let routine_sessions = routine_sessions::router(
+        (*bots_directory).clone(),
+        (*harness).clone(),
+        draining_sessions.clone(),
+        broker.clone(),
+        session_repo.clone(),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -1072,7 +1081,8 @@ async fn run() -> anyhow::Result<()> {
                 changes_state,
             )
             .with_claude_auth(claude_auth)
-            .with_sharing(sharing),
+            .with_sharing(sharing)
+            .with_routine_sessions(routine_sessions),
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),
