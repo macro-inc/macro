@@ -29,11 +29,11 @@ fn channel_reaction() -> ChannelMessageReactionMetadata {
 }
 
 #[test]
-fn channel_reaction_is_default_off_and_formats_push_copy() {
-    assert!(!ChannelMessageReactionMetadata::DEFAULT_ENABLED);
+fn channel_reaction_is_default_on_and_formats_push_copy() {
+    assert!(ChannelMessageReactionMetadata::DEFAULT_ENABLED);
     assert_eq!(
         NotifEvent::default_enabled_for_type_name(ChannelMessageReactionMetadata::TYPE_NAME),
-        Some(false)
+        Some(true)
     );
     let reaction = channel_reaction();
     assert_eq!(

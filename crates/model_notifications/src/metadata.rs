@@ -801,7 +801,6 @@ impl notification::domain::models::Notification for ChannelMessageSendMetadata {
 
 impl notification::domain::models::Notification for ChannelMessageReactionMetadata {
     const TYPE_NAME: &'static str = "channel_message_reaction";
-    const DEFAULT_ENABLED: bool = false;
 }
 
 impl notification::domain::models::Notification for ChannelMentionMetadata {
