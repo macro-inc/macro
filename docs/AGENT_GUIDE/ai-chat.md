@@ -33,6 +33,23 @@ bytes reached storage; previews, DOCX conversion, Markdown initialization, and
 indexing may finish asynchronously. Invalid contents, oversized files, and folder
 permission failures should display a failed tool call without a successful result.
 
+## Generating images with AI
+
+`GenerateImage` takes a text prompt and a short file name, renders the prompt with
+Google's Nano Banana image model, and saves the result as an image document. An
+optional aspect ratio (`square`, `landscape`, `portrait`, `widescreen`, `tall`) and
+an optional project ID (edit access required) shape and place the file. The file
+extension comes from the generated format, so `fileName: "lighthouse"` yields
+`lighthouse.png`.
+
+The tool row displays **Generate image** with the file name and, on success,
+**Generated**. The result opens expanded and shows the image itself once the
+upload is ready (a **Preparing preview** placeholder until then), the document
+chip that opens it, its media type and size, and any commentary the model added.
+Refused prompts, provider failures, and hosts without a Google Generative AI key
+display a failed tool call; the error tells the agent whether to rephrase, retry,
+or stop.
+
 ## Where chats live
 
 The Agents conversation list shows row skeletons after a short delay on first
