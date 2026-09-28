@@ -331,6 +331,19 @@ records `path` (`catch_up` or `full`) and `reason`
 (`watermark`, `list_ahead`, `no_cache`, `cache_not_at_latest`, `load_around`,
 `delta_overflow`, or `catch_up_error`).
 
+## Message reaction notifications
+
+Message reaction notifications are enabled by default. The message author can
+turn them off with **Message reactions** in notification settings. Adding a
+reaction from another account notifies the author; self-reactions and removing a
+reaction do not notify.
+
+In Home, reactions belong to the message's thread row: a top-level message uses
+its own row, and a reply uses its parent thread. Verify that an incoming reaction
+brings that row back into the inbox, displays the reaction and channel name, and
+opens the reacted-to message. Marking the row done should clear its reaction
+notifications along with the other notifications for that thread.
+
 ## Chat navigation rail
 
 Following a channel mention or browser notification for the conversation already

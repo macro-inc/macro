@@ -85,7 +85,8 @@ function createMentionNotification(
 function createReactionNotification(
   id: string,
   messageId: string,
-  createdAt: number
+  createdAt: number,
+  threadId?: string
 ): UnifiedNotification {
   return createBaseNotification(id, createdAt, {
     tag: 'channel_message_reaction',
@@ -93,6 +94,7 @@ function createReactionNotification(
       messageId,
       messageContent: `Message ${id}`,
       emoji: '👍',
+      threadId,
       channelType: 'private',
     },
   });
@@ -160,7 +162,8 @@ describe('channel notification scoping', () => {
         .filter(
           (stack) =>
             stack.type === 'channel_message_reply' ||
-            stack.type === 'channel_mention'
+            stack.type === 'channel_mention' ||
+            stack.type === 'channel_message_reaction'
         )
         .flatMap((stack) => stack.notifications.map((n) => n.id))
     );
@@ -184,6 +187,13 @@ describe('channel notification scoping', () => {
         'other'
       ),
       createDocCommentNotification('document-comment', '1', '2', 7000),
+      createReactionNotification('root-reaction', 'root', 9000),
+      createReactionNotification(
+        'reply-reaction',
+        'reply-message',
+        10000,
+        'root'
+      ),
     ];
     for (let mask = 0; mask < 2 ** candidates.length; mask++) {
       const notifications = candidates.filter((_, i) => mask & (1 << i));
@@ -248,6 +258,40 @@ describe('channel notification scoping', () => {
         notifications
       )
     ).toBe(notifications);
+  });
+
+  it('scopes reactions on roots and replies to their thread row', () => {
+    const root = createReactionNotification('root-reaction', 'root', 1000);
+    const reply = createReactionNotification(
+      'reply-reaction',
+      'reply',
+      2000,
+      'root'
+    );
+    const other = createReactionNotification('other-reaction', 'other', 3000);
+    const notifications = [root, reply, other];
+
+    expect(
+      scopeChannelNotificationsForEntity({ type: 'channel' }, notifications)
+    ).toEqual([]);
+    expect(
+      scopeChannelNotificationsForEntity(
+        { type: 'channel_thread', messageId: 'root' },
+        notifications
+      )
+    ).toEqual([root, reply]);
+    expect(
+      scopeChannelNotificationsForEntity(
+        { type: 'channel_thread', messageId: 'other' },
+        notifications
+      )
+    ).toEqual([other]);
+    expect(
+      scopeChannelNotificationsForEntity(
+        { type: 'channel_thread', messageId: 'reply' },
+        notifications
+      )
+    ).toEqual([]);
   });
 
   it('recomputes membership when an existing notification array changes', () => {

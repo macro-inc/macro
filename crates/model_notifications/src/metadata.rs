@@ -909,9 +909,11 @@ impl NotificationTitle for ChannelMessageReactionMetadata {
             .chars()
             .take(CHANNEL_REACTION_EXCERPT_MAX_CHARS)
             .collect();
-        let suffix = (message.chars().count() > CHANNEL_REACTION_EXCERPT_MAX_CHARS)
-            .then_some("…")
-            .unwrap_or("");
+        let suffix = if message.chars().count() > CHANNEL_REACTION_EXCERPT_MAX_CHARS {
+            "…"
+        } else {
+            ""
+        };
         Ok(format!(
             "{sender} reacted with {} to “{excerpt}{suffix}”",
             self.emoji
