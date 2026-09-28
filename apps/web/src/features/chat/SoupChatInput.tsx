@@ -142,8 +142,10 @@ function SoupChatInputInner() {
 export function SoupChatInput() {
   const agents = useFeatureFlag(enableChatV3Agents);
   return (
-    <Show when={agents().enabled} fallback={<LegacySoupChatInput />}>
-      <MobileAgentComposer />
+    <Show when={!agents().loading}>
+      <Show when={agents().enabled} fallback={<LegacySoupChatInput />}>
+        <MobileAgentComposer />
+      </Show>
     </Show>
   );
 }
