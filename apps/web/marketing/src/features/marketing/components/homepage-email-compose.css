@@ -35,7 +35,7 @@
   .homepage-email-demo::after, .homepage-email-demo [data-document-mention] { animation: none; }
 }
 /* Frozen composer geometry and colors: changing the app cannot restyle the site. */
-.homepage-email-surface { position: relative; display: flex; flex-direction: column; min-height: var(--homepage-email-height, 560px); padding: 24px; border: 0; border-radius: 26.25px; background: oklch(0.17 0.002 250); color: #fff; box-shadow: 0 10px 40px -8px #0004; }
+.homepage-email-surface { position: relative; display: flex; flex-direction: column; min-height: var(--homepage-email-height, 560px); padding: 16px; border: 0; border-radius: 26.25px; background: oklch(0.17 0.002 250); color: #fff; box-shadow: 0 10px 40px -8px #0004; }
 .homepage-email-surface::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; border: 1px solid #ffffff08; background: linear-gradient(135deg, #ffffff18, transparent 45%) border-box; mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0); mask-composite: exclude; padding: 1px; }
 .homepage-email-fields { flex: none; padding-bottom: 4px; }
 .homepage-email-row { display: flex; align-items: center; gap: 8px; min-height: 48px; border-bottom: 1px solid #ffffff0d; }
@@ -66,6 +66,6 @@
 .homepage-email-sent button { text-decoration: underline; }
 .homepage-email-format { padding: 8px 0; }
 .homepage-email-format button { padding: 4px 8px; border-radius: 4px; background: #ffffff08; }
-@media (max-width: 639px) { .homepage-email-surface { padding: 16px; } .homepage-email-sender { max-width: calc(100% - 102px); font-size: 12px; } }
+@media (max-width: 639px) { .homepage-email-surface { padding: 12px; } .homepage-email-sender { max-width: calc(100% - 102px); font-size: 12px; } }
 
 .homepage-email-bcc { font-weight: 500; }

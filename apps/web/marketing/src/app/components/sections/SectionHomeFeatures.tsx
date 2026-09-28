@@ -1,5 +1,4 @@
 import { For, Show } from 'solid-js';
-import { AiFeatureSection } from '../../routes/RouteEmail';
 import { ChannelCohesionGraphic } from '../featureGraphics/ChannelsGraphics';
 import {
   HeroDocCollabWindow,
@@ -10,6 +9,7 @@ import {
   HeroAppWindow,
 } from '../featureGraphics/EmailGraphics';
 import { SsgDesktop, SsgMobile } from '../utils/SsgGate';
+import { AiFeatureSection } from './AiFeatureSection';
 import { EmailFeatureFigures } from './EmailFeatureFigures';
 import { HomeSectionRule } from './HomeSectionRule';
 import {

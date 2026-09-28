@@ -92,3 +92,31 @@ public paths to `<path>/index.html`. Preserve the existing authenticated
 app deployment does not automatically publish `dist-site`; the public artifact
 needs its own deployment step. Website development and builds do not require
 changes to application routes, components, or providers.
+
+## Feature-page pattern
+
+`/email` establishes the public feature-page pattern in
+`src/features/marketing/components/FeaturePage.tsx`: homepage slab headings and
+rules, Inter body copy, and the onboarding security section’s reading measure
+and FAQ disclosures. Website UI utilities and the frozen dark palette are
+scoped to `.feature-page`, preserving the surrounding public-page styles.
+
+The email page reuses `HomepageEmailCompose`. Its other local demos freeze the
+presentation of the application’s `EmailSidebar`, `SearchBar`, entity email row
+layouts, `MessageCard`, share form, channel composer, and linked email cards. They
+use website assets and local fixtures; they do not import those app modules.
+To verify the page: filter accounts, search and open an inbox thread, move an
+update to Noise and undo, share the example into the launch channel, and open
+its linked thread. The composer, sharing, and edits stay local. No demo sends
+mail or changes a workspace. Playback pauses offscreen and when the page is
+hidden; reduced-motion mode shows the completed share. Test pause/replay and
+opening a shared email, plus typing and sending a local channel message.
+
+The four feature links have inline SVG illustrations. Full app frames use a
+raised rim and a bottom mask into the page background; keep interactive controls
+above the faded tail. `HomepageEmailCompose` uses the frozen app composer chrome
+on the email page while retaining the existing homepage appearance.
+
+FAQ answers and the collapsed comparison are rendered in the initial HTML.
+The comparison uses a native `details` disclosure for both people and crawlers.
+Retain FAQ class markers so prerendering emits matching FAQPage structured data.

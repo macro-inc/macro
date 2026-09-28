@@ -7,14 +7,8 @@ import {
   on,
   onCleanup,
   onMount,
-  Show,
 } from 'solid-js';
-import { FeatureDock } from '../../features/marketing/components/FeatureDock';
 import { PageVignette } from '../../features/marketing/components/PageVignette';
-import {
-  FEATURE_PAGES,
-  journeyHref,
-} from '../../features/marketing/core/navigation';
 import {
   applyTheme,
   systemThemeEffect,
@@ -216,18 +210,6 @@ const RootLayout: ParentComponent = (props) => {
         <UtilWrap>{props.children}</UtilWrap>
       </div>
       <PageVignette />
-      <Show
-        when={FEATURE_PAGES.some((page) => page.href === location.pathname)}
-      >
-        <FeatureDock
-          features={FEATURE_PAGES}
-          active={FEATURE_PAGES.findIndex(
-            (page) => page.href === location.pathname
-          )}
-          continueHref={journeyHref()}
-          continueLabel="Get started"
-        />
-      </Show>
       <DialogTheme />
     </>
   );

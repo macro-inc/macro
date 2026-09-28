@@ -1,8 +1,9 @@
 import ArrowUp from '@phosphor/arrow-up.svg';
 import Paperclip from '@phosphor/paperclip.svg';
 import TextAa from '@phosphor/text-aa.svg';
+import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
-import { render } from 'solid-js/web';
+import { Dynamic, render } from 'solid-js/web';
 import { homepagePeople } from '../core/homepage-demo-people';
 import {
   createEmailDemoGeneration,
@@ -12,7 +13,9 @@ import { HomepageMention } from './HomepageMention';
 import './homepage-email-compose.css';
 
 /** A frozen website composer. Addresses, attachments, edits, and sends stay local. */
-export default function HomepageEmailCompose() {
+export default function HomepageEmailCompose(
+  props: { appChrome?: boolean } = {}
+) {
   const [subject, setSubject] = createSignal(
     'Great meeting you — demo follow-up'
   );
@@ -105,7 +108,15 @@ export default function HomepageEmailCompose() {
         }
       }}
     >
-      <div class="homepage-email-surface">
+      <Dynamic
+        component={props.appChrome ? ComposerSurface : 'div'}
+        as={props.appChrome ? 'div' : undefined}
+        class={
+          props.appChrome
+            ? 'homepage-email-app-surface'
+            : 'homepage-email-surface'
+        }
+      >
         <div class="homepage-email-fields">
           <div class="homepage-email-row">
             <span class="homepage-email-label">From</span>
@@ -230,7 +241,13 @@ export default function HomepageEmailCompose() {
             </For>
           </div>
         </Show>
-        <div class="homepage-email-toolbar">
+        <div
+          class={
+            props.appChrome
+              ? 'homepage-email-app-toolbar'
+              : 'homepage-email-toolbar'
+          }
+        >
           <input
             ref={fileInput}
             type="file"
@@ -242,37 +259,73 @@ export default function HomepageEmailCompose() {
               event.currentTarget.value = '';
             }}
           />
-          <button
-            type="button"
-            aria-label="Attach"
-            title="Attach"
-            disabled={generating()}
-            onClick={() => fileInput?.click()}
+          <Show
+            when={props.appChrome}
+            fallback={
+              <>
+                <button
+                  type="button"
+                  aria-label="Attach"
+                  title="Attach"
+                  disabled={generating()}
+                  onClick={() => fileInput?.click()}
+                >
+                  <Paperclip />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Format"
+                  title="Format"
+                  aria-pressed={showFormat()}
+                  disabled={generating()}
+                  onClick={() => setShowFormat(!showFormat())}
+                >
+                  <TextAa />
+                </button>
+                <button
+                  type="button"
+                  class="homepage-email-send"
+                  aria-label="Send email"
+                  title="Send email"
+                  disabled={generating()}
+                  onClick={() => setSent(true)}
+                >
+                  <ArrowUp />
+                </button>
+              </>
+            }
           >
-            <Paperclip />
-          </button>
-          <button
-            type="button"
-            aria-label="Format"
-            title="Format"
-            aria-pressed={showFormat()}
-            disabled={generating()}
-            onClick={() => setShowFormat(!showFormat())}
-          >
-            <TextAa />
-          </button>
-          <button
-            type="button"
-            class="homepage-email-send"
-            aria-label="Send email"
-            title="Send email"
-            disabled={generating()}
-            onClick={() => setSent(true)}
-          >
-            <ArrowUp />
-          </button>
+            <Button
+              variant="ghost"
+              size="icon-composer"
+              class="rounded-full"
+              aria-label="Attach"
+              disabled={generating()}
+              onClick={() => fileInput?.click()}
+            >
+              <Paperclip />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-composer"
+              class="rounded-full"
+              aria-label="Format"
+              aria-pressed={showFormat()}
+              disabled={generating()}
+              onClick={() => setShowFormat(!showFormat())}
+            >
+              <TextAa />
+            </Button>
+            <SendButton
+              data-input-action="send"
+              appearance="composer"
+              aria-label="Send email"
+              disabled={generating()}
+              onClick={() => setSent(true)}
+            />
+          </Show>
         </div>
-      </div>
+      </Dynamic>
     </div>
   );
 }
