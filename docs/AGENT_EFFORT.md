@@ -24,3 +24,30 @@ variant. Only effort values with identical remaining parameters are shown.
 Changing effort preserves those parameters and selects an actual catalog variant.
 Automatic selection, missing reasoning parameters, or fewer than two compatible
 values produce no effort control. No static provider effort list is used.
+
+## In-memory
+
+The engine's model catalog controls model availability. Native effort profiles
+are defined in `crates/agent/src/model/reasoning_effort.rs`; adding a model to the
+catalog does not guess its effort support from its name. Update the profile and
+provider serialization tests when adding support.
+
+| Routed model | Explicit effort values |
+| --- | --- |
+| anthropic/claude-sonnet-5, anthropic/claude-opus-5 | low, medium, high, xhigh, max |
+| openai/gpt-5.5 | none, low, medium, high, xhigh |
+| openai/gpt-5-mini | minimal, low, medium, high |
+| Haiku and unknown models | No effort control |
+
+Every supported profile also offers **Default**, meaning no session override.
+It preserves Macro's existing adapter defaults (including low for GPT-5 mini).
+It is distinct from OpenAI's explicit `none` and is never sent as a provider
+value. Anthropic receives `output_config.effort`; OpenAI Responses receives
+`reasoning.effort`. A compatible Chat Completions endpoint does not inherit
+native OpenAI capabilities merely because its model name resembles GPT.
+Thinking token budgets are not exposed as effort levels.
+
+Sources checked September 21, 2026:
+[Anthropic effort](https://platform.claude.com/docs/en/build-with-claude/effort),
+[GPT-5.5](https://developers.openai.com/api/docs/models/gpt-5.5), and
+[OpenAI reasoning](https://developers.openai.com/api/docs/guides/reasoning).
