@@ -23,19 +23,10 @@ turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid"] }
 turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid"] }
 
 [dev-dependencies]
-apollo-compiler = { workspace = true }
-apollo-parser = { workspace = true }
-clap = { workspace = true, features = ["derive"] }
 pollster = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
-[[bench]]
-name = "graphql_queries"
-harness = false
-
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-soup-filter-projection = { path = "../../soup_filter_projection", default-features = false }
 tempfile = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]

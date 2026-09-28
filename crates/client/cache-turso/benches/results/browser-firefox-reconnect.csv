@@ -1,3 +1,0 @@
-operation,size,scenario,before_p50_us,after_p50_us,before_p95_us,after_p95_us,speedup
-AgentSessionMentions,1,concurrent-8-total,3460.0000000000364,3120.0000000000045,3519.999999999982,4920.000000000073,1.108974358974369
-AgentSessionMentions,1,reopen-first-read,60265800,239399.99999999997,60282820,243240,251.73684210526318
