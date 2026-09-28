@@ -41,12 +41,13 @@ type Options = {
   authKey: string | undefined;
 };
 
-function parseArguments(argv: string[]): Options {
+export function parseArguments(argv: string[]): Options {
   let documentId: string | undefined;
   let targetEnv = 'prd';
   let outRoot = './do-dump';
   let baseUrl: string | undefined;
   let authKey = process.env.SYNC_SERVICE_AUTH_KEY;
+  let explicitKey = false;
 
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index];
@@ -67,6 +68,7 @@ function parseArguments(argv: string[]): Options {
         break;
       case '--key':
         authKey = next();
+        explicitKey = authKey.length > 0;
         break;
       case '-h':
       case '--help':
@@ -90,7 +92,35 @@ function parseArguments(argv: string[]): Options {
       `unknown env: ${targetEnv} (use ${Object.keys(WORKER_URLS).join(', ')}, or pass --url)`
     );
   }
-  return { documentId, targetEnv, outRoot, baseUrl: resolvedUrl, authKey };
+  const url = new URL(resolvedUrl);
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
+    throw new Error(
+      'sync-service URL requires HTTPS (HTTP is allowed only on loopback)'
+    );
+  }
+  if (
+    url.username ||
+    url.password ||
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error(
+      'sync-service URL must be an origin without credentials, path, query, or fragment'
+    );
+  }
+  if (baseUrl !== undefined && !explicitKey) {
+    throw new Error(
+      '--url requires an explicit --key; environment credentials are not sent to custom origins'
+    );
+  }
+  if (targetEnv === 'playground' && !explicitKey) {
+    throw new Error(
+      '--env playground requires an explicit --key for SYNC_SERVICE_KEY_PLAYGROUND'
+    );
+  }
+  return { documentId, targetEnv, outRoot, baseUrl: url.origin, authKey };
 }
 
 async function run(command: string, args: string[]): Promise<string> {
@@ -137,7 +167,7 @@ async function resolveAuthKey(targetEnv: string): Promise<string> {
   ]);
 }
 
-class SyncServiceAdmin {
+export class SyncServiceAdmin {
   constructor(
     private readonly baseUrl: string,
     private readonly documentId: string,
@@ -147,12 +177,16 @@ class SyncServiceAdmin {
   private async request(method: string, path: string): Promise<Response> {
     return fetch(`${this.baseUrl}/document/${this.documentId}${path}`, {
       method,
+      redirect: 'error',
       headers: { 'x-internal-auth-key': this.authKey },
     });
   }
 
   async exists(): Promise<boolean> {
-    return (await this.request('GET', '/exists')).status === 200;
+    const response = await this.request('GET', '/exists');
+    if (response.status === 200) return true;
+    if (response.status === 404) return false;
+    throw new Error(`/exists returned ${response.status}`);
   }
 
   /** Full `ExportMode::Snapshot` bytes: the document's own oplog plus state. */
@@ -248,7 +282,9 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}

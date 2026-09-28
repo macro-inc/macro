@@ -304,6 +304,13 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
 
+AI text edits addressed to a table cell preserve its content block wrapper.
+When a cell has several blocks, the cell ID targets the first text-bearing block;
+use a specific paragraph ID to target another block. Invalid table/list structures
+are rejected before syncing. Opening a document with stray inline text directly
+inside a cell wraps that text in paragraphs and logs the repair with the document
+ID. Unsupported nested table structures are still removed.
+
 `@` opens the mention menu wherever the caret starts a word, including directly
 in front of existing text — the menu opens empty there instead of searching for
 the word ahead of the caret. Typed inside a word (`he@llo`) it stays literal text.

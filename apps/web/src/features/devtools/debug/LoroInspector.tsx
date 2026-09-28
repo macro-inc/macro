@@ -17,7 +17,7 @@ type BlobReport = {
   endVersion: Record<string, number>;
   /** Peers whose ops this blob actually contributed to the doc. */
   appliedPeers: string[];
-  /** Peers whose ops could not be applied yet — deps not in the doc. */
+  /** Peers pending at import time; later blobs may supply their dependencies. */
   pendingPeers: string[];
   error?: string;
 };
@@ -70,15 +70,15 @@ function stringify(value: unknown): string {
 function parseBlobs(input: string): Uint8Array[] {
   return input
     .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith('#'))
-    .map((line, index) => {
+    .map((line, index) => ({ line: line.trim(), lineNumber: index + 1 }))
+    .filter(({ line }) => line.length > 0 && !line.startsWith('#'))
+    .map(({ line, lineNumber }) => {
       try {
         return Uint8Array.from(atob(line), (character) =>
           character.charCodeAt(0)
         );
       } catch {
-        throw new Error(`line ${index + 1} is not valid base64`);
+        throw new Error(`line ${lineNumber} is not valid base64`);
       }
     });
 }
@@ -189,7 +189,8 @@ type Tab = 'state' | 'ops' | 'blobs';
  * durable object's whole retained op log a blob at a time.
  *
  * Blobs are imported in the order pasted, into one fresh doc. An op whose
- * dependencies are missing shows as pending rather than applied, and an op
+ * dependencies are missing shows as pending when imported; later blobs may
+ * supply those dependencies. An op
  * already covered by an earlier blob shows as neither — which is how you tell
  * a genuinely missing op from one the snapshot already contains.
  */
@@ -276,7 +277,7 @@ export default function LoroInspector() {
         <main class="flex min-h-0 flex-col overflow-hidden">
           <Switch>
             <Match when={report().error}>
-              <div class="p-4 text-red text-sm">{report().error}</div>
+              <div class="p-4 text-failure text-sm">{report().error}</div>
             </Match>
             <Match when={!submitted()}>
               <div class="p-4 text-ink-muted text-sm">
@@ -371,15 +372,15 @@ function BlobTable(props: { blobs: BlobReport[] }) {
                 <td class="py-1 pr-3">
                   <Switch>
                     <Match when={blob.error}>
-                      <span class="text-red">{blob.error}</span>
+                      <span class="text-failure">{blob.error}</span>
                     </Match>
                     <Match when={blob.pendingPeers.length > 0}>
-                      <span class="text-orange">
-                        pending {blob.pendingPeers.join(' ')}
+                      <span class="text-warning">
+                        pending when imported {blob.pendingPeers.join(' ')}
                       </span>
                     </Match>
                     <Match when={blob.appliedPeers.length > 0}>
-                      <span class="text-green">
+                      <span class="text-success">
                         applied {blob.appliedPeers.join(' ')}
                       </span>
                     </Match>
