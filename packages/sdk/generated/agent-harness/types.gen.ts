@@ -44,6 +44,71 @@ export type AgentAction = (AgentPromptAction & {
 export type AgentActionId = string;
 
 /**
+ * Type-specific state for one agent session setting.
+ */
+export type AgentConfigKindDto = {
+    /**
+     * Current opaque value.
+     */
+    currentValue: string;
+    /**
+     * Ordered values supplied by the agent.
+     */
+    options: Array<AgentConfigSelectOptionDto>;
+    type: 'select';
+} | {
+    /**
+     * Current value.
+     */
+    currentValue: boolean;
+    type: 'boolean';
+};
+
+/**
+ * One agent-advertised ACP session setting.
+ */
+export type AgentConfigOptionDto = AgentConfigKindDto & {
+    /**
+     * ACP semantic category, such as `model` or `thought_level`.
+     */
+    category?: string | null;
+    /**
+     * Optional explanatory copy.
+     */
+    description?: string | null;
+    /**
+     * Opaque id used to change this setting.
+     */
+    id: string;
+    /**
+     * Display label supplied by the agent.
+     */
+    name: string;
+};
+
+/**
+ * One value in an agent-advertised select.
+ */
+export type AgentConfigSelectOptionDto = {
+    /**
+     * Optional provider description of this value.
+     */
+    description?: string | null;
+    /**
+     * Optional group heading supplied by the provider.
+     */
+    group?: string | null;
+    /**
+     * Display label.
+     */
+    name: string;
+    /**
+     * Opaque value returned to the agent when selected.
+     */
+    value: string;
+};
+
+/**
  * One model picker option.
  */
 export type AgentModelDto = {
@@ -434,6 +499,11 @@ export type AgentSetModelAction = {
 export type BotId = string;
 
 /**
+ * Harness names accepted by the capability-discovery endpoint.
+ */
+export type CapabilityHarnessDto = 'in-memory' | 'cursor' | 'macrod';
+
+/**
  * The latest capture attempt.
  *
  * Clients deserialize this, so both derives are used.
@@ -745,6 +815,34 @@ export type CreateSessionThread = {
      * is how a top-level mention roots its own thread.
      */
     threadId?: string | null;
+};
+
+/**
+ * HTTP request selecting one provider to probe.
+ */
+export type DiscoverAgentCapabilitiesRequest = {
+    /**
+     * Provider to probe.
+     */
+    harness: CapabilityHarnessDto;
+    /**
+     * Required for macrod and forbidden for other targets.
+     */
+    harnessId?: string | null;
+    /**
+     * Model whose session settings should be inspected.
+     */
+    model?: string | null;
+};
+
+/**
+ * Successful capability-discovery response.
+ */
+export type DiscoverAgentCapabilitiesResponse = {
+    /**
+     * Complete ordered ACP session configuration advertised by the agent.
+     */
+    configOptions: Array<AgentConfigOptionDto>;
 };
 
 /**
@@ -1223,6 +1321,49 @@ export type WithAgentSessionId = {
      */
     id: string;
 };
+
+export type DiscoverAgentCapabilitiesHandlerData = {
+    body: DiscoverAgentCapabilitiesRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-capabilities/discover';
+};
+
+export type DiscoverAgentCapabilitiesHandlerErrors = {
+    /**
+     * Invalid target
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * Harness is not visible to caller
+     */
+    403: unknown;
+    /**
+     * Macrod runtime is disconnected
+     */
+    409: unknown;
+    /**
+     * Provider probe failed
+     */
+    502: unknown;
+    /**
+     * Macrod probe timed out
+     */
+    504: unknown;
+};
+
+export type DiscoverAgentCapabilitiesHandlerResponses = {
+    /**
+     * Fresh provider session capabilities
+     */
+    200: DiscoverAgentCapabilitiesResponse;
+};
+
+export type DiscoverAgentCapabilitiesHandlerResponse = DiscoverAgentCapabilitiesHandlerResponses[keyof DiscoverAgentCapabilitiesHandlerResponses];
 
 export type LoadAgentModelsHandlerData = {
     body: LoadAgentModelsRequest;
