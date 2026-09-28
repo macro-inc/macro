@@ -34,9 +34,14 @@ export function withAuth<P extends object>(View: Component<P>): Component<P> {
   };
 }
 
-export function RedirectSplit(props: { to: SplitContent }) {
+export function RedirectSplit(props: {
+  to: SplitContent;
+  mergeHistory?: boolean;
+}) {
   const panel = useSplitPanelOrThrow();
-  onMount(() => panel.handle.replace({ next: props.to }));
+  onMount(() =>
+    panel.handle.replace({ next: props.to, mergeHistory: props.mergeHistory })
+  );
   return null;
 }
 

@@ -104,6 +104,7 @@ export const AgentsRouteView = withAuth(() => {
         >
           {(current) => (
             <RedirectSplit
+              mergeHistory
               to={{
                 type:
                   current().conversation.type === 'agent_session'
