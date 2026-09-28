@@ -89,22 +89,21 @@ pub(super) fn apply(
     let typename = inserted.as_ref().split_once(':').map(|(name, _)| name);
     let mut retained = Vec::with_capacity(links.len() + 1);
     for link in links.iter() {
-        if let CacheValue::Ref(key) = link {
-            if key.as_ref().split_once(':').map(|(name, _)| name) == typename {
-                let record = effective
-                    .get(key)
-                    .ok_or_else(|| LinkPatchError::MissingParent(key.clone()))?;
-                let value =
-                    record
-                        .fields
-                        .get(field)
-                        .ok_or_else(|| LinkPatchError::MissingField {
-                            parent: key.to_string(),
-                            field: field.to_string(),
-                        })?;
-                if cache_scalar_equals(value, equals) {
-                    continue;
-                }
+        if let CacheValue::Ref(key) = link
+            && key.as_ref().split_once(':').map(|(name, _)| name) == typename
+        {
+            let record = effective
+                .get(key)
+                .ok_or_else(|| LinkPatchError::MissingParent(key.clone()))?;
+            let value = record
+                .fields
+                .get(field)
+                .ok_or_else(|| LinkPatchError::MissingField {
+                    parent: key.to_string(),
+                    field: field.to_string(),
+                })?;
+            if cache_scalar_equals(value, equals) {
+                continue;
             }
         }
         retained.push(link.clone());
