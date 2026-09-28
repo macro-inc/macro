@@ -49,7 +49,12 @@ describe('localDevServer', () => {
       ).toBe(false);
     }
     for (const options of Object.values(config.proxy ?? {})) {
-      expect(options).toEqual({ target, ws: true, xfwd: true });
+      expect(options).toEqual({
+        target,
+        ws: true,
+        xfwd: true,
+        changeOrigin: true,
+      });
     }
     expect(config.hmr).toBeUndefined();
   });

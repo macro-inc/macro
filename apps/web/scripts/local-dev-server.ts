@@ -28,7 +28,9 @@ export function localDevServer(
       routes.map((route) => [
         // Include bare WebSocket paths, but not /authentic or /sync-other.
         `^${route}(?:/|\\?|$)`,
-        { target, ws: true, xfwd: true },
+        // Use the backend hostname for TLS SNI/certificate verification;
+        // xfwd still records the browser's original host.
+        { target, ws: true, xfwd: true, changeOrigin: true },
       ])
     ),
   };

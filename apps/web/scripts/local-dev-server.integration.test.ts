@@ -15,6 +15,8 @@ it('proxies real HTTP and WebSocket requests through Vite without rewriting path
         url: req.url,
         method: req.method,
         cookie: req.headers.cookie,
+        host: req.headers.host,
+        forwardedHost: req.headers['x-forwarded-host'],
       })
     );
   });
@@ -64,6 +66,8 @@ it('proxies real HTTP and WebSocket requests through Vite without rewriting path
       url: '/auth/health?check=1',
       method: 'GET',
       cookie: 'session=test',
+      host: new URL(target).host,
+      forwardedHost: new URL(origin).host,
     });
     expect(response.headers.get('set-cookie')).toContain('proxy-test=ok');
     const telemetry = await fetch(`${origin}/i/otlp/v1/traces`, {
