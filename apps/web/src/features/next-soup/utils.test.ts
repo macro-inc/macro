@@ -1023,7 +1023,7 @@ describe('getChannelEntityTarget', () => {
 
   it('marks attached channel notifications through the shared split-open path', async () => {
     const notification = sendNotification('shared-open', 'message');
-    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    const openWithSplit = vi.fn(() => ({ status: 'opened' }));
     setGlobalSplitManager({
       activeSplit: vi.fn(),
       getOrchestrator: vi.fn(() => ({
@@ -1052,13 +1052,24 @@ describe('getChannelEntityTarget', () => {
     expect(bulkMarkAsRead).toHaveBeenCalledWith([notification]);
   });
 
-  it.each([false, true])(
-    'marks the whole GraphQL channel from Chat (new split=%s)',
-    async (openInNewSplit) => {
+  it.each(
+    [false, true].flatMap((openInNewSplit) =>
+      ['opened', 'reused', 'unavailable'].map((status) => ({
+        openInNewSplit,
+        status,
+      }))
+    )
+  )(
+    'only marks the whole GraphQL channel after a successful Chat open (new split=$openInNewSplit, status=$status)',
+    async ({ openInNewSplit, status }) => {
       const unread = sendNotification('mobile-unread', 'message');
       const read = asRead(sendNotification('mobile-read', 'read-message'));
       const reply = replyNotification('mobile-reply', 'reply', 'thread-root');
-      const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+      const bulkMarkAsRead = vi.fn(async () => {});
+      const openWithSplit = vi.fn(() => {
+        expect(bulkMarkAsRead).not.toHaveBeenCalled();
+        return { status };
+      });
       setGlobalSplitManager({
         activeSplit: vi.fn(),
         getOrchestrator: vi.fn(() => ({
@@ -1068,7 +1079,6 @@ describe('getChannelEntityTarget', () => {
         openWithSplit,
       } as unknown as SplitManager);
 
-      const bulkMarkAsRead = vi.fn(async () => {});
       const channel = { ...channelRow(), notifications: [unread, read, reply] };
       await openEntityInSplitFromUnifiedList(channel, {
         referredFrom: 'channels',
@@ -1085,13 +1095,17 @@ describe('getChannelEntityTarget', () => {
           preferNewSplit: openInNewSplit,
         })
       );
-      expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread, reply]);
+      if (status === 'unavailable') {
+        expect(bulkMarkAsRead).not.toHaveBeenCalled();
+      } else {
+        expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([unread, reply]);
+      }
     }
   );
 
   it('chooses the unread reply target before marking a Chat conversation read', async () => {
     const reply = replyNotification('reply-target', 'reply-message', 'root');
-    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    const openWithSplit = vi.fn(() => ({ status: 'opened' }));
     setGlobalSplitManager({
       activeSplit: vi.fn(),
       getOrchestrator: vi.fn(() => ({
@@ -1181,7 +1195,7 @@ describe('getChannelEntityTarget', () => {
       })),
       getSplitByContent: vi.fn(),
       findOpenView: vi.fn(),
-      openWithSplit: vi.fn(() => ({ status: 'unavailable' })),
+      openWithSplit: vi.fn(() => ({ status: 'opened' })),
     } as unknown as SplitManager);
 
     const bulkMarkAsRead = vi.fn(async () => {});

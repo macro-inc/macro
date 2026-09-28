@@ -772,12 +772,6 @@ export const openEntityInSplitFromUnifiedList = async (
     channelTarget?.kind === 'message' ? channelTarget : undefined;
   const openChannelAtLatest = channelTarget?.kind === 'latest';
 
-  if (options.notificationSource) {
-    markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
-      scopeChannelThreads: options.scopeChannelThreads,
-    });
-  }
-
   let params: Record<string, string> | undefined;
   if (entity.type === 'agent_session' && location?.type === 'agent') {
     params = agentMessageParams(location);
@@ -853,6 +847,12 @@ export const openEntityInSplitFromUnifiedList = async (
   });
   if (result.status === 'reused' && result.owner !== result.sourceOwner) {
     toast.alert('Content already open');
+  }
+
+  if (result.status !== 'unavailable' && options.notificationSource) {
+    markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
+      scopeChannelThreads: options.scopeChannelThreads,
+    });
   }
 
   // Routed calls have no block handle. Update a reused split's route search

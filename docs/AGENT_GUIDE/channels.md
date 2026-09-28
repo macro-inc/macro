@@ -526,9 +526,14 @@ are not retained as click targets: once a channel has no unread
 notifications, clicking it opens the latest message. Explicit search hits still
 open their matched message. Each accepted click marks the complete loaded channel
 edge read, even when the same conversation is already selected. Shift-clicks use
-the same channel-wide read behavior. Verify repeated clicks after read-state
-updates, a failed read, and a new notification; previously read targets must not
-loop around. A rejected selection must not mark the conversation read.
+the same channel-wide read behavior, but mark notifications only after the split
+opens or reuses an existing conversation. Route opens, reloads, and uncached
+favorites also target the newest unread notification across the channel,
+including thread replies; an explicit message target still wins. Verify repeated
+clicks after read-state updates, a failed read, and a new notification; previously
+read targets must not loop around. A rejected selection or unavailable split must
+not mark the conversation read. Hydrating an unread non-participant row must
+preserve its membership status and must not mark its notifications read.
 
 With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
 channel IDs and at most one unread notification ID/state per channel, with a
