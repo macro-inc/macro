@@ -379,7 +379,7 @@ interface OpenEntityOptions {
    * opening a channel row. Callers that can open channels must provide it.
    */
   notificationSource?: NotificationSource;
-  /** False for Chat conversations; Inbox rows keep their thread-scoped reads. */
+  /** False to target unread replies in Chat; read marking stays thread-scoped. */
   scopeChannelThreads?: boolean;
 }
 
@@ -762,9 +762,7 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const markNotificationsSeen = () => {
     if (options.notificationSource) {
-      markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
-        scopeChannelThreads: options.scopeChannelThreads,
-      });
+      markChannelNotificationsSeenOnOpen(entity, options.notificationSource);
     }
   };
   const result = splitManager.openWithSplit(splitContent, {
@@ -808,13 +806,11 @@ export const openEntityInSplitFromUnifiedList = async (
  * array (mobile Channels) or a list accessor. Only rows without an edge fall
  * back to the separately paginated global source. Passing these notifications
  * through the source keeps its REST cache and durable seen overrides in sync
- * while the configured mutation updates GraphQL edges. Chat opens the whole
- * conversation (scopeChannelThreads: false); Inbox opens only the row's stack.
+ * while the configured mutation updates GraphQL edges.
  */
 export function markChannelNotificationsSeenOnOpen(
   entity: EntityWithRawNotifications<EntityData>,
-  notificationSource: NotificationSource,
-  options: { scopeChannelThreads?: boolean } = {}
+  notificationSource: NotificationSource
 ) {
   if (
     entity.type !== 'channel' &&
@@ -825,7 +821,7 @@ export function markChannelNotificationsSeenOnOpen(
   }
 
   const notifications = getEntityNotifications(entity, notificationSource, {
-    scopeChannelThreads: options.scopeChannelThreads !== false,
+    scopeChannelThreads: true,
   }).filter((notification) => !notificationIsRead(notification));
   if (notifications.length === 0) return;
 

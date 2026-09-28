@@ -371,7 +371,13 @@ optional `Favorites` section and the
 independently paginated `Channels` and `DMs` sections. Favorites appears when
 the user has channel favorites and only lists channels. Channel favorites open
 in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
-conversation in a new split instead.
+conversation in a new split instead. For loaded rows, shift-click refreshes the
+notification selection and carries the most recent unread message or reply target
+into the split. A read conversation opens at latest. Split opens mark only the
+row's thread-scoped notifications, and only after the split is opened or reused.
+Deferred navigation waits until the destination is applied; an unavailable split
+must leave unread state unchanged. Join-only channels remain
+blocked after hydration, including on mobile.
 
 ### Channel labels
 
@@ -559,25 +565,19 @@ request must not show a load-error message over valid search hits or replace
 **No results**, including during debounce and short local-only queries. Search
 failures still show their own error; clearing search restores the browse error.
 With `enable-graphql-soup` enabled, open an unread conversation from each tab
-and return to the list: all its message notifications should be read, including
-mentions, replies, and ones older than the global notification feed's loaded page.
-Chat opens the whole conversation; opening a parent channel row in Inbox still
-leaves separate thread-stack notifications unread.
+and return to the list: its top-level notifications should be read, including
+ones older than the global notification feed's loaded page. Notifications for
+separate thread stacks remain unread until that thread is opened. From each mobile
+tab, also tap a conversation whose only unread notification is a reply: it should
+open that reply, not latest. Navigation uses the full hydrated edge while read
+marking remains thread-scoped, matching desktop rail and shift-click opens.
 
 On desktop, each click on a conversation in the Chat rail opens its most recent
 currently unread notification, including replies in threads. Read notifications
 are not retained as click targets: once a channel has no unread
 notifications, clicking it opens the latest message. Explicit search hits still
-open their matched message. Each accepted click marks the complete loaded channel
-edge read, even when the same conversation is already selected. Shift-clicks use
-the same channel-wide read behavior, but mark notifications only after the split
-opens or reuses an existing conversation. Route opens, reloads, and uncached
-favorites also target the newest unread notification across the channel,
-including thread replies; an explicit message target still wins. Verify repeated
-clicks after read-state updates, a failed read, and a new notification; previously
-read targets must not loop around. A rejected selection or unavailable split must
-not mark the conversation read. Hydrating an unread non-participant row must
-preserve its membership status and must not mark its notifications read.
+open their matched message. Verify repeated clicks after read-state updates and
+after a new notification arrives; previously read targets must not loop around.
 
 With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
 channel IDs and at most one unread notification ID/state per channel, with a
@@ -599,8 +599,7 @@ per channel through an aliased, filtered `notifications` edge. An empty edge mea
 no unread messages; invites and call notifications do not light the dot. Recent
 cards still use the latest-message preview. Full notification edges load only for
 an opened unread conversation, so mark-read and message targeting retain their
-complete channel-wide inputs in Chat and thread-scoped inputs in Inbox. Reopening
-a conversation must refresh that full
+complete thread-scoped inputs. Reopening a conversation must refresh that full
 edge even within 30 seconds; mark-read waits for the refresh rather than using
 older cached notifications. Failed lookups and successful lookups with no matching
 channel show **Conversation unavailable** with **Retry**, never permanent loading.

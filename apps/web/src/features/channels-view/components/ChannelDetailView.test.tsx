@@ -59,12 +59,10 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Chat detail navigation', () => {
-  it('requests a channel-wide target for unstamped route and favorite selections', () => {
+  it('requests a thread-scoped target for unstamped route and favorite selections', () => {
     render(() => <ChannelDetailView channel={channel} />);
 
-    expect(mocks.getTarget).toHaveBeenCalledExactlyOnceWith(channel, {
-      scopeChannelThreads: false,
-    });
+    expect(mocks.getTarget).toHaveBeenCalledExactlyOnceWith(channel);
     expect(screen.getByTestId('target').textContent).toBe(
       JSON.stringify(replyTarget)
     );
@@ -93,8 +91,7 @@ describe('Chat detail navigation', () => {
     setSelected({ ...channel, target: explicit });
 
     expect(mocks.getTarget).toHaveBeenLastCalledWith(
-      expect.objectContaining({ target: explicit }),
-      { scopeChannelThreads: false }
+      expect.objectContaining({ target: explicit })
     );
     expect(screen.getByTestId('target').textContent).toBe(
       JSON.stringify(target)

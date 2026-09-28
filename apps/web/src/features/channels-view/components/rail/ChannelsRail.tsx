@@ -12,7 +12,6 @@ import {
   type ChannelPreviewSelection,
   channelPreviewSelection,
   getChannelEntityTarget,
-  markChannelNotificationsSeenOnOpen,
   navigateChannelEntityToTarget,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
@@ -178,13 +177,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
       });
       const previous = selectedChannel();
       if (!setSelectedChannel(selection)) return;
-      // Mark on every accepted activation, including re-clicks of the same
-      // route. The detail's ready-id effect only handles initial/route opens.
-      if (channel.isParticipant !== false) {
-        markChannelNotificationsSeenOnOpen(entity, notificationSource, {
-          scopeChannelThreads: false,
-        });
-      }
       // Repeated clicks must navigate even when the route stays the same.
       if (
         previous?.id === selection.id &&
