@@ -278,6 +278,7 @@ export const TOKENS = {
     canvasNewSplit: 'create.canvasNewSplit',
     spreadsheet: 'create.spreadsheet',
     spreadsheetNewSplit: 'create.spreadsheetNewSplit',
+    game: 'create.game',
     project: 'create.project',
     projectNewSplit: 'create.projectNewSplit',
     code: 'create.code',

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO game_round_result (id, document_id, round, game_kind, winner_user_id)\n            SELECT $1::uuid, $2::text, $3::int4, $4::text::game_kind, $5::text\n            WHERE (\n                SELECT COUNT(*)\n                FROM game_round_report\n                WHERE document_id = $2\n                  AND round = $3\n                  AND game_kind = $4::text::game_kind\n                  AND winner_user_id IS NOT DISTINCT FROM $5\n            ) >= 2\n            ON CONFLICT (document_id, round) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int4",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d75d1af4a0711c78da9f35f112ca908099ba7749eef4823989a4b37d8a48d82f"
+}

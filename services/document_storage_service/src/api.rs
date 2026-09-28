@@ -246,6 +246,10 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/games",
+            games::inbound::axum_router::games_router(state.games_state.clone()),
+        )
+        .nest(
             "/user-api-keys",
             user_api_key::inbound::axum_router::user_api_key_router(
                 state.user_api_key_state.clone(),

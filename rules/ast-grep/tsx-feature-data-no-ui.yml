@@ -35,7 +35,9 @@ files:
   - apps/web/src/features/email-compose/queries/**
   - apps/web/src/features/email-compose/primitives/**
   - apps/web/src/features/agent-changes/queries/**
+  - apps/web/src/features/block-game/queries/**
   - apps/web/src/features/agent-changes/primitives/**
+  - apps/web/src/features/block-game/primitives/**
 rule:
   kind: string
   regex: ^['"](solid-js/web|@ui|@components/|(\.\./)+(components|views|ui|component)(/|['"]))

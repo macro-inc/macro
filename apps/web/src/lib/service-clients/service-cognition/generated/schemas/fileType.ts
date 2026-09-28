@@ -29,6 +29,7 @@ export const FileType = {
   pdf: 'pdf',
   md: 'md',
   spreadsheet: 'spreadsheet',
+  game: 'game',
   canvas: 'canvas',
   coffee: 'coffee',
   cson: 'cson',

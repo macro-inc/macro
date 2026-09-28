@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO game_best_score (user_id, game_kind, score)\n                    VALUES ($1, $2::text::game_kind, $3)\n                    ON CONFLICT (user_id, game_kind) DO UPDATE\n                    SET score = EXCLUDED.score, achieved_at = now()\n                    WHERE game_best_score.score > EXCLUDED.score\n                    RETURNING score, achieved_at\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "score",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "achieved_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "64f4f44b445ba1b02d1ccf9b8a4a064d32c5ddd6f7d722c16fc6e0d0f0db4f0e"
+}

@@ -13,6 +13,15 @@ pub fn spreadsheet_attachment_context(document: &model::document::DocumentBasic)
     ))
 }
 
+/// Tool guidance for game rooms, whose state lives in collaborative storage
+/// and has no text representation.
+pub fn game_attachment_context(document: &model::document::DocumentBasic) -> Option<String> {
+    (document.file_type.as_deref() == Some("game")).then(|| format!(
+        "Macro game room. Document ID: {}. This is a playable mini game shared like a document; its moves and scores live in the collaborative room and are not readable as text. Team leaderboards are shown inside the game.",
+        document.document_id
+    ))
+}
+
 /// API-visible content lifecycle state derived from current document metadata.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -111,7 +120,7 @@ impl DocumentContent {
             // Historical markdown documents may be in sync-service, S3, or both.
             // A backfill can replace this legacy ambiguity with SyncService.
             Some(FileType::Md) => DocumentContentLocation::Unknown,
-            Some(FileType::Spreadsheet) => DocumentContentLocation::SyncService,
+            Some(FileType::Spreadsheet | FileType::Game) => DocumentContentLocation::SyncService,
             _ => DocumentContentLocation::ObjectStorage,
         };
 

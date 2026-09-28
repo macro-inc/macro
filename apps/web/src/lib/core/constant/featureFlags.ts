@@ -717,6 +717,14 @@ export const enableSpreadsheets = defineFlag({
   env: 'ENABLE_SPREADSHEETS',
 });
 
+// Mini games: game rooms, the Games hub, and team leaderboards. On in dev;
+// production follows PostHog. Override with VITE_ENABLE_GAMES.
+export const enableGames = defineFlag({
+  key: 'enable-games',
+  env: 'ENABLE_GAMES',
+  default: onInDev,
+});
+
 /**
  * Speech-to-text in the channel, agent, and AI chat composers. Recordings go
  * to OpenAI Whisper through DSS and are billed per audio minute, so this

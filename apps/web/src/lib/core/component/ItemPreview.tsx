@@ -1,3 +1,4 @@
+import { GameRoomPreviewStatus } from '@app/features/block-game/room-status-badge';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -26,6 +27,7 @@ import {
   type ComponentProps,
   createEffect,
   Match,
+  Show,
   Suspense,
   Switch,
 } from 'solid-js';
@@ -238,8 +240,14 @@ export function ItemPreview(props: ItemPreviewProps) {
 }
 
 function ItemPreviewInner(props: ItemPreviewProps) {
-  const { item, name, onPreviewClick, targetType, ItemEntityIcon } =
-    useItemPreviewData(() => props);
+  const {
+    item,
+    name,
+    onPreviewClick,
+    targetType,
+    ItemEntityIcon,
+    documentProperties,
+  } = useItemPreviewData(() => props);
 
   const maxLength = () => props.maxLength ?? 80;
   const iconSize = () => props.iconSize ?? 'fill';
@@ -296,6 +304,12 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                         <div class={textClass()}>
                           {truncateString(name(), maxLength())}
                         </div>
+                        <Show when={accessibleItem().fileType === 'game'}>
+                          <GameRoomPreviewStatus
+                            documentId={accessibleItem().id}
+                            previewProperties={documentProperties()}
+                          />
+                        </Show>
                       </button>
                     }
                     content={

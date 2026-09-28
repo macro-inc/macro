@@ -265,6 +265,7 @@ generate_file_types!(
         "application/x-macro-spreadsheet",
         Document
     ),
+    (Game, "game", "application/x-macro-game", Document),
     (Canvas, "canvas", "application/x-macro-canvas", Canvas),
     // Code block: generated from VS Code extensions {
     (Coffee, "coffee", "text/plain", Code),

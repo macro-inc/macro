@@ -1,6 +1,7 @@
 import { ActivityRouteView } from '@app/features/activity/route';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { AgentsRouteView } from '@app/features/agents-view/route';
+import { GamesRouteView } from '@app/features/block-game/route';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
@@ -260,6 +261,7 @@ registerComponent(
   () => composableLayout(true)
 );
 registerComponent('reviews', () => <ReviewsRouteView />);
+registerComponent('games', () => <GamesRouteView />);
 registerComponent(
   'tasks',
   () => <TasksRouteView />,

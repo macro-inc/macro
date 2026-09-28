@@ -108,24 +108,30 @@ pub struct DocumentServiceImpl<
     pub macro_event_broker: B,
 }
 
-/// Blank native spreadsheets have no object upload; importing workbook bytes is
-/// a separate operation and must never silently discard an uploaded workbook.
-fn validate_spreadsheet_creation(
+/// Blank native spreadsheets and game rooms have no object upload; importing
+/// bytes is a separate operation and must never silently discard an upload.
+fn validate_native_document_creation(
     file_type: Option<FileType>,
     sha: &str,
 ) -> Result<(), DocumentError> {
     const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-    if file_type == Some(FileType::Spreadsheet) && sha != EMPTY_SHA256 {
-        return Err(DocumentError::BadRequest(
-            "Native spreadsheet file imports are not supported; create a blank spreadsheet and paste cells instead".to_string(),
-        ));
+    if sha == EMPTY_SHA256 {
+        return Ok(());
     }
-    Ok(())
+    match file_type {
+        Some(FileType::Spreadsheet) => Err(DocumentError::BadRequest(
+            "Native spreadsheet file imports are not supported; create a blank spreadsheet and paste cells instead".to_string(),
+        )),
+        Some(FileType::Game) => Err(DocumentError::BadRequest(
+            "Game rooms cannot be created from uploaded content".to_string(),
+        )),
+        _ => Ok(()),
+    }
 }
 
 fn ready_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
     match file_type {
-        Some(FileType::Md | FileType::Spreadsheet) => {
+        Some(FileType::Md | FileType::Spreadsheet | FileType::Game) => {
             DocumentContent::ready(DocumentContentLocation::SyncService)
         }
         Some(FileType::Docx) => DocumentContent::ready(DocumentContentLocation::ConvertedPdf),
@@ -159,7 +165,7 @@ fn presigned_location_content(
 
 fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
     match file_type {
-        Some(FileType::Spreadsheet) => {
+        Some(FileType::Spreadsheet | FileType::Game) => {
             DocumentContent::pending_at(DocumentContentLocation::SyncService)
         }
         Some(FileType::Docx) => DocumentContent::pending_at(DocumentContentLocation::ConvertedPdf),
@@ -709,12 +715,15 @@ impl<
         let mime_type = content_type.mime_type().to_string();
 
         let presigned_url = match file_type {
-            Some(FileType::Spreadsheet) => {
-                if let Err(error) = self
-                    .sync_service_client
-                    .initialize_spreadsheet(&document_id)
-                    .await
-                {
+            Some(native @ (FileType::Spreadsheet | FileType::Game)) => {
+                let initialized = if native == FileType::Game {
+                    self.sync_service_client.initialize_game(&document_id).await
+                } else {
+                    self.sync_service_client
+                        .initialize_spreadsheet(&document_id)
+                        .await
+                };
+                if let Err(error) = initialized {
                     self.cleanup_document(&document_id).await;
                     return Err(DocumentError::Internal(error));
                 }
@@ -996,14 +1005,12 @@ impl<
         let document_id = entity_access_receipt.entity().entity_id.clone();
         let content = self.content_for_document(&document_id, file_type).await?;
 
-        if matches!(file_type, Some(FileType::Md | FileType::Spreadsheet))
-            && let Some(response) = self
-                .resolve_markdown_sync_service_location(
-                    document_context,
-                    &document_id,
-                    content.clone(),
-                )
-                .await?
+        if matches!(
+            file_type,
+            Some(FileType::Md | FileType::Spreadsheet | FileType::Game)
+        ) && let Some(response) = self
+            .resolve_markdown_sync_service_location(document_context, &document_id, content.clone())
+            .await?
         {
             return Ok(response);
         }
@@ -1283,7 +1290,7 @@ impl<
         mut document: NewDocument,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        validate_spreadsheet_creation(document.file_type, &document.sha)?;
+        validate_native_document_creation(document.file_type, &document.sha)?;
         if document.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
             return Err(DocumentError::NameTooLong {
                 max: MAX_DOCUMENT_NAME_GRAPHEMES,
@@ -1349,7 +1356,7 @@ impl<
         &self,
         args: ImportEmailAttachmentRepoArgs,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        validate_spreadsheet_creation(args.document.file_type, &args.document.sha)?;
+        validate_native_document_creation(args.document.file_type, &args.document.sha)?;
         if args.document.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
             return Err(DocumentError::NameTooLong {
                 max: MAX_DOCUMENT_NAME_GRAPHEMES,
@@ -1686,7 +1693,7 @@ impl<
                     .copy_object(&source_key, &dest_key)
                     .await
             }
-            Some(FileType::Md | FileType::Spreadsheet) => {
+            Some(FileType::Md | FileType::Spreadsheet | FileType::Game) => {
                 // Copy via sync service
                 if let Err(e) = self
                     .sync_service_client
@@ -1703,7 +1710,8 @@ impl<
                 }
 
                 // Legacy markdown has a best-effort S3 representation. Native
-                // spreadsheets are entirely stored in the collaborative room.
+                // spreadsheets and game rooms live entirely in the collaborative
+                // room.
                 if file_type == Some(FileType::Md) {
                     let source_version_id = self
                         .repo

@@ -38,6 +38,7 @@ import FileVideo from '@phosphor/file-video.svg';
 import Files from '@phosphor/files.svg';
 import Folder from '@phosphor/folder-simple.svg';
 import FolderUser from '@phosphor/folder-simple-user.svg';
+import GameController from '@phosphor/game-controller.svg';
 import GitMerge from '@phosphor/git-merge.svg';
 import GitPullRequest from '@phosphor/git-pull-request.svg';
 import GlobeIcon from '@phosphor/globe.svg';
@@ -72,6 +73,7 @@ import FileVideoBold from '@phosphor-icons/core/bold/file-video-bold.svg';
 import FilesBold from '@phosphor-icons/core/bold/files-bold.svg';
 import FolderBold from '@phosphor-icons/core/bold/folder-simple-bold.svg';
 import FolderUserBold from '@phosphor-icons/core/bold/folder-simple-user-bold.svg';
+import GameControllerBold from '@phosphor-icons/core/bold/game-controller-bold.svg';
 import GitMergeBold from '@phosphor-icons/core/bold/git-merge-bold.svg';
 import GitPullRequestBold from '@phosphor-icons/core/bold/git-pull-request-bold.svg';
 import GlobeIconBold from '@phosphor-icons/core/bold/globe-bold.svg';
@@ -163,6 +165,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-success',
     background: 'bg-success/20',
     prettyName: 'Spreadsheet',
+  },
+  game: {
+    icon: GameController,
+    boldIcon: GameControllerBold,
+    foreground: 'text-violet',
+    background: 'bg-violet/20',
+    prettyName: 'Game',
   },
   html: {
     icon: FileHtml,

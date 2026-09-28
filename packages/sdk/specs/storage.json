@@ -10552,6 +10552,183 @@
         }
       }
     },
+    "/games/leaderboards": {
+      "get": {
+        "tags": ["games"],
+        "summary": "Every game's leaderboard for the caller's team, or the caller alone.",
+        "operationId": "get_game_leaderboards",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameLeaderboards"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/games/rounds": {
+      "post": {
+        "tags": ["games"],
+        "summary": "Report a finished round of a game room the caller can edit and played in.\nThe round counts on leaderboards once two of its players report the same\nresult.",
+        "operationId": "report_game_round",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportRoundRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoundRecorded"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/games/scores": {
+      "post": {
+        "tags": ["games"],
+        "summary": "Record a finished run; the caller's best score only ever improves.",
+        "operationId": "submit_game_score",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitScoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoreSubmission"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/github/install-sync": {
       "get": {
         "tags": ["github::inbound::github_sync_router"],
@@ -23974,6 +24151,7 @@
           "pdf",
           "md",
           "spreadsheet",
+          "game",
           "canvas",
           "coffee",
           "cson",
@@ -24533,6 +24711,86 @@
             "description": "Filter by the notification state of the foreign entity (e.g. whether the requesting user's\nGitHub PR notification is done/seen)."
           }
         }
+      },
+      "GameKind": {
+        "type": "string",
+        "description": "Every game offered in Macro. Spellings match the web catalog and the\n`game_kind` Postgres enum.",
+        "enum": [
+          "pong",
+          "brick_breaker",
+          "snake",
+          "falling_blocks",
+          "invaders",
+          "flappy",
+          "twenty_forty_eight",
+          "minesweeper",
+          "tic_tac_toe",
+          "connect_four",
+          "dots_and_boxes",
+          "typing_race"
+        ]
+      },
+      "GameLeaderboard": {
+        "type": "object",
+        "description": "The ranking of one game.",
+        "required": ["kind", "scoring", "entries"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LeaderboardEntry"
+            },
+            "description": "The best players, at most [`LEADERBOARD_SIZE`]."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GameKind",
+            "description": "The game."
+          },
+          "scoring": {
+            "$ref": "#/components/schemas/GameScoring",
+            "description": "How `value` ranks."
+          },
+          "viewer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LeaderboardEntry",
+                "description": "The viewer's own row, including when it falls outside `entries`."
+              }
+            ]
+          }
+        }
+      },
+      "GameLeaderboards": {
+        "type": "object",
+        "description": "Every game's leaderboard for the viewer's team, or for the viewer alone.",
+        "required": ["games"],
+        "properties": {
+          "games": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameLeaderboard"
+            },
+            "description": "One leaderboard per game, in catalog order."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The ranked team; `None` when the viewer has no team."
+          }
+        }
+      },
+      "GameRoomEntityType": {
+        "type": "string",
+        "description": "The only kind of entity a round is reported for.",
+        "enum": ["document"]
+      },
+      "GameScoring": {
+        "type": "string",
+        "description": "How a game ranks its players.",
+        "enum": ["high_score", "low_score", "wins"]
       },
       "GenericErrorResponse": {
         "type": "object",
@@ -25979,6 +26237,33 @@
                 "description": "Latest top-level non-thread message."
               }
             ]
+          }
+        }
+      },
+      "LeaderboardEntry": {
+        "type": "object",
+        "description": "One ranked leaderboard row.",
+        "required": ["userId", "rank", "value", "at"],
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the score was set, or the latest win."
+          },
+          "rank": {
+            "type": "integer",
+            "format": "int32",
+            "description": "1-based position; ties share the earlier player's position order.",
+            "minimum": 0
+          },
+          "userId": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The player."
+          },
+          "value": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Best score, or number of wins for win-ranked games."
           }
         }
       },
@@ -28805,6 +29090,54 @@
           }
         }
       },
+      "ReportRoundRequest": {
+        "type": "object",
+        "description": "Request body for a finished round of a game room.",
+        "required": [
+          "entityType",
+          "entityId",
+          "kind",
+          "round",
+          "playerUserIds"
+        ],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "The game room's document id."
+          },
+          "entityType": {
+            "$ref": "#/components/schemas/GameRoomEntityType",
+            "description": "Rounds are played in game room documents."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GameKind",
+            "description": "The game played in the room."
+          },
+          "playerUserIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "Everyone seated for the round, including the reporter."
+          },
+          "round": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Zero-based round index within the room."
+          },
+          "winnerUserId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The outright winner; omitted for a draw or a shared win."
+              }
+            ]
+          }
+        }
+      },
       "RequestedHarnessScope": {
         "type": "string",
         "description": "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership.",
@@ -28823,6 +29156,17 @@
           "status": {
             "$ref": "#/components/schemas/RingStatus",
             "description": "The ring status for the authenticated user."
+          }
+        }
+      },
+      "RoundRecorded": {
+        "type": "object",
+        "description": "Outcome of reporting a finished round.",
+        "required": ["recorded"],
+        "properties": {
+          "recorded": {
+            "type": "boolean",
+            "description": "Whether this report made the round count. A round counts once two of\nits players report the same result, so the first report returns false."
           }
         }
       },
@@ -28896,6 +29240,27 @@
           "presignedUrl": {
             "type": ["string", "null"],
             "description": "If the document is an editable file, we provide a presigned url to save the updated file to."
+          }
+        }
+      },
+      "ScoreSubmission": {
+        "type": "object",
+        "description": "Outcome of submitting a finished run.",
+        "required": ["best", "achievedAt", "improved"],
+        "properties": {
+          "achievedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When `best` was set."
+          },
+          "best": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The player's best score after this run."
+          },
+          "improved": {
+            "type": "boolean",
+            "description": "Whether this run set a new personal best."
           }
         }
       },
@@ -31434,6 +31799,22 @@
       },
       "String": {
         "type": "string"
+      },
+      "SubmitScoreRequest": {
+        "type": "object",
+        "description": "Request body for a finished run.",
+        "required": ["kind", "score"],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/GameKind",
+            "description": "The high-score game that was played."
+          },
+          "score": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Points, words per minute, or clear time in milliseconds."
+          }
+        }
       },
       "SuccessResponse": {
         "type": "object",

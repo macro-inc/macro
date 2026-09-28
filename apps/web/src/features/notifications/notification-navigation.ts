@@ -8,6 +8,7 @@ import type {
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
+import { splitContentRef } from '@components/app/split-layout/split-content-ref';
 import type { BlockAlias, BlockName } from '@core/block';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
 import {
@@ -69,15 +70,12 @@ function openSplitIfNotOpen(
   if (existing) {
     existing.activate();
   } else {
-    layoutManager.openWithSplit(
-      { type, id },
-      {
-        activate: true,
-        referredFrom: null,
-        preferNewSplit: options.newSplit,
-        handle: options.sourceHandle,
-      }
-    );
+    layoutManager.openWithSplit(splitContentRef(type, id), {
+      activate: true,
+      referredFrom: null,
+      preferNewSplit: options.newSplit,
+      handle: options.sourceHandle,
+    });
   }
   if (options.params && type !== 'component') {
     goToLocationInSplit(layoutManager, type, id, options.params);

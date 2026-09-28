@@ -7810,6 +7810,7 @@ export const editDocumentBody = zod
                     'pdf',
                     'md',
                     'spreadsheet',
+                    'game',
                     'canvas',
                     'coffee',
                     'cson',
@@ -9807,6 +9808,188 @@ export const getForeignEntityResponse = zod
       .describe('Timestamp when the record was last updated.'),
   })
   .describe('A persisted mapping to an entity owned by an external system.');
+
+/**
+ * @summary Every game's leaderboard for the caller's team, or the caller alone.
+ */
+export const getGameLeaderboardsResponseGamesItemEntriesItemRankMin = 0;
+
+export const getGameLeaderboardsResponseGamesItemViewerRankMin = 0;
+
+export const getGameLeaderboardsResponse = zod
+  .object({
+    games: zod
+      .array(
+        zod
+          .object({
+            entries: zod
+              .array(
+                zod
+                  .object({
+                    at: zod.iso
+                      .datetime({})
+                      .describe('When the score was set, or the latest win.'),
+                    rank: zod
+                      .number()
+                      .min(
+                        getGameLeaderboardsResponseGamesItemEntriesItemRankMin
+                      )
+                      .describe(
+                        "1-based position; ties share the earlier player's position order."
+                      ),
+                    userId: zod.string(),
+                    value: zod
+                      .number()
+                      .describe(
+                        'Best score, or number of wins for win-ranked games.'
+                      ),
+                  })
+                  .describe('One ranked leaderboard row.')
+              )
+              .describe('The best players, at most [`LEADERBOARD_SIZE`].'),
+            kind: zod
+              .enum([
+                'pong',
+                'brick_breaker',
+                'snake',
+                'falling_blocks',
+                'invaders',
+                'flappy',
+                'twenty_forty_eight',
+                'minesweeper',
+                'tic_tac_toe',
+                'connect_four',
+                'dots_and_boxes',
+                'typing_race',
+              ])
+              .describe(
+                'Every game offered in Macro. Spellings match the web catalog and the\n`game_kind` Postgres enum.'
+              ),
+            scoring: zod
+              .enum(['high_score', 'low_score', 'wins'])
+              .describe('How a game ranks its players.'),
+            viewer: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    at: zod.iso
+                      .datetime({})
+                      .describe('When the score was set, or the latest win.'),
+                    rank: zod
+                      .number()
+                      .min(getGameLeaderboardsResponseGamesItemViewerRankMin)
+                      .describe(
+                        "1-based position; ties share the earlier player's position order."
+                      ),
+                    userId: zod.string(),
+                    value: zod
+                      .number()
+                      .describe(
+                        'Best score, or number of wins for win-ranked games.'
+                      ),
+                  })
+                  .describe('One ranked leaderboard row.'),
+              ])
+              .optional(),
+          })
+          .describe('The ranking of one game.')
+      )
+      .describe('One leaderboard per game, in catalog order.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('The ranked team; `None` when the viewer has no team.'),
+  })
+  .describe(
+    "Every game's leaderboard for the viewer's team, or for the viewer alone."
+  );
+
+/**
+ * @summary Report a finished round of a game room the caller can edit and played in.
+The round counts on leaderboards once two of its players report the same
+result.
+ */
+export const reportGameRoundBody = zod
+  .object({
+    entityId: zod.string().describe("The game room's document id."),
+    entityType: zod
+      .enum(['document'])
+      .describe('The only kind of entity a round is reported for.'),
+    kind: zod
+      .enum([
+        'pong',
+        'brick_breaker',
+        'snake',
+        'falling_blocks',
+        'invaders',
+        'flappy',
+        'twenty_forty_eight',
+        'minesweeper',
+        'tic_tac_toe',
+        'connect_four',
+        'dots_and_boxes',
+        'typing_race',
+      ])
+      .describe(
+        'Every game offered in Macro. Spellings match the web catalog and the\n`game_kind` Postgres enum.'
+      ),
+    playerUserIds: zod
+      .array(zod.string())
+      .describe('Everyone seated for the round, including the reporter.'),
+    round: zod.number().describe('Zero-based round index within the room.'),
+    winnerUserId: zod.union([zod.null(), zod.string()]).optional(),
+  })
+  .describe('Request body for a finished round of a game room.');
+
+export const reportGameRoundResponse = zod
+  .object({
+    recorded: zod
+      .boolean()
+      .describe(
+        'Whether this report made the round count. A round counts once two of\nits players report the same result, so the first report returns false.'
+      ),
+  })
+  .describe('Outcome of reporting a finished round.');
+
+/**
+ * @summary Record a finished run; the caller's best score only ever improves.
+ */
+export const submitGameScoreBody = zod
+  .object({
+    kind: zod
+      .enum([
+        'pong',
+        'brick_breaker',
+        'snake',
+        'falling_blocks',
+        'invaders',
+        'flappy',
+        'twenty_forty_eight',
+        'minesweeper',
+        'tic_tac_toe',
+        'connect_four',
+        'dots_and_boxes',
+        'typing_race',
+      ])
+      .describe(
+        'Every game offered in Macro. Spellings match the web catalog and the\n`game_kind` Postgres enum.'
+      ),
+    score: zod
+      .number()
+      .describe('Points, words per minute, or clear time in milliseconds.'),
+  })
+  .describe('Request body for a finished run.');
+
+export const submitGameScoreResponse = zod
+  .object({
+    achievedAt: zod.iso.datetime({}).describe('When `best` was set.'),
+    best: zod.number().describe("The player's best score after this run."),
+    improved: zod
+      .boolean()
+      .describe('Whether this run set a new personal best.'),
+  })
+  .describe('Outcome of submitting a finished run.');
 
 /**
  * Unauthenticated by design: the daemon has no credential yet - obtaining one
@@ -33352,6 +33535,7 @@ export const uploadFolderHandlerBody = zod.object({
                 'pdf',
                 'md',
                 'spreadsheet',
+                'game',
                 'canvas',
                 'coffee',
                 'cson',
@@ -33847,6 +34031,7 @@ export const uploadFolderHandlerResponse = zod.object({
                     'pdf',
                     'md',
                     'spreadsheet',
+                    'game',
                     'canvas',
                     'coffee',
                     'cson',

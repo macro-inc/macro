@@ -260,7 +260,9 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       : contextBlockBaseName;
   const [submitAccessLevel, setSubmitAccessLevel] =
     createSignal<AccessLevel | null>(
-      props.initialAccessLevel ?? (blockBaseName === 'md' ? 'edit' : 'view')
+      props.initialAccessLevel ??
+        // Channel members need edit access to play in a game room.
+        (blockBaseName === 'md' || blockBaseName === 'game' ? 'edit' : 'view')
     );
   createEffect(() => {
     const channelPermissions_ = channelPermissions();

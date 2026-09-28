@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn notifications_resolve_the_stored_type_and_preserve_attribution() {
-    for file_type in ["md", "spreadsheet"] {
+    for file_type in ["md", "spreadsheet", "game"] {
         let mut repo = make_mock_repo();
         repo.expect_get_basic_document()
             .withf(|id| id == "doc-1")

@@ -3118,14 +3118,105 @@ async fn native_spreadsheet_location_uses_sync_without_an_object_url() {
 #[test]
 fn spreadsheet_uploads_are_rejected_instead_of_discarding_their_bytes() {
     assert!(
-        validate_spreadsheet_creation(Some(FileType::Spreadsheet), "uploaded-workbook-sha")
+        validate_native_document_creation(Some(FileType::Spreadsheet), "uploaded-workbook-sha")
             .is_err()
     );
     assert!(
-        validate_spreadsheet_creation(Some(FileType::Spreadsheet), &spreadsheet_document().sha)
+        validate_native_document_creation(Some(FileType::Spreadsheet), &spreadsheet_document().sha)
             .is_ok()
     );
-    assert!(validate_spreadsheet_creation(Some(FileType::Csv), "uploaded-csv-sha").is_ok());
+    assert!(validate_native_document_creation(Some(FileType::Csv), "uploaded-csv-sha").is_ok());
+}
+
+#[test]
+fn game_rooms_are_created_blank() {
+    assert!(validate_native_document_creation(Some(FileType::Game), "uploaded-sha").is_err());
+    assert!(validate_native_document_creation(Some(FileType::Game), &game_document().sha).is_ok());
+}
+
+fn game_document() -> NewDocument {
+    let mut document = new_document(FileType::Game);
+    document.sha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string();
+    document
+}
+
+#[tokio::test]
+async fn game_creation_seeds_the_room_before_it_is_ready() {
+    let mut repo = make_mock_repo();
+    let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+    let mut sequence = mockall::Sequence::new();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_create_document().returning(|_, _| {
+        let mut metadata = make_test_metadata();
+        metadata.file_type = Some("game".to_string());
+        Box::pin(std::future::ready(Ok(metadata)))
+    });
+    repo.expect_set_document_content()
+        .withf(|_, content| {
+            *content == DocumentContent::pending_at(DocumentContentLocation::SyncService)
+        })
+        .times(1)
+        .in_sequence(&mut sequence)
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    sync.expect_initialize_game()
+        .withf(|id| id == "doc-1")
+        .times(1)
+        .in_sequence(&mut sequence)
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_set_document_content()
+        .withf(|_, content| {
+            *content == DocumentContent::ready(DocumentContentLocation::SyncService)
+        })
+        .times(1)
+        .in_sequence(&mut sequence)
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    let service = spreadsheet_test_service(repo, sync);
+    let result = DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        game_document(),
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(result.document_response.presigned_url.is_none());
+    assert_eq!(
+        result.document_response.document_metadata.content,
+        DocumentContent::ready(DocumentContentLocation::SyncService)
+    );
+}
+
+#[tokio::test]
+async fn game_location_uses_sync_without_an_object_url() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_persisted_document_content().returning(|_| {
+        Box::pin(std::future::ready(Ok(Some(DocumentContent::ready(
+            DocumentContentLocation::SyncService,
+        )))))
+    });
+    let sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+    let service = spreadsheet_test_service(repo, sync);
+    let mut context = task_document_context("doc-1");
+    context.file_type = Some("game".to_string());
+    context.sub_type = None;
+    let result = service
+        .get_document_location(
+            &context,
+            authenticated_receipt("doc-1"),
+            LocationQueryParams {
+                document_version_id: None,
+                get_converted_docx_url: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        result,
+        LocationResponseV3::SyncServiceContent { .. }
+    ));
 }
 
 #[test]

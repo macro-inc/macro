@@ -7,6 +7,7 @@ import {
   codersRoute,
 } from '@app/features/agents-view/route';
 import { callDetailRoute } from '@app/features/block-call/route';
+import { gamesSplitRoute } from '@app/features/block-game/route';
 import { prDetailRoute } from '@app/features/block-pr/route';
 import { calendarSplitRoute } from '@app/features/calendar-view/route';
 import { channelsSplitRoute } from '@app/features/channels-view/route';
@@ -45,6 +46,7 @@ export const appSplitRoutes = defineRoutes({
     emailSplitRoute,
     tasksSplitRoute,
     reviewsSplitRoute,
+    gamesSplitRoute,
     calendarSplitRoute,
     channelsSplitRoute,
     callsRoute,

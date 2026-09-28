@@ -102,6 +102,7 @@ import type { ExportDocumentResponse } from './generated/schemas/exportDocumentR
 import type { Favorite } from './generated/schemas/favorite';
 import type { FavoritesList } from './generated/schemas/favoritesList';
 import type { ForeignEntity } from './generated/schemas/foreignEntity';
+import type { GameLeaderboards } from './generated/schemas/gameLeaderboards';
 import type { GetAttachmentReferencesResponse } from './generated/schemas/getAttachmentReferencesResponse';
 import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatchChannelPreviewRequest';
 import type { GetBatchChannelPreviewResponse } from './generated/schemas/getBatchChannelPreviewResponse';
@@ -147,7 +148,10 @@ import type { RenameChannelLabelRequest } from './generated/schemas/renameChanne
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
+import type { ReportRoundRequest } from './generated/schemas/reportRoundRequest';
+import type { RoundRecorded } from './generated/schemas/roundRecorded';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
+import type { ScoreSubmission } from './generated/schemas/scoreSubmission';
 import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabelRequest';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
@@ -155,6 +159,7 @@ import type { SetContactNameRequest } from './generated/schemas/setContactNameRe
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
+import type { SubmitScoreRequest } from './generated/schemas/submitScoreRequest';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
 import type { ThreadResponse } from './generated/schemas/threadResponse';
@@ -2367,6 +2372,51 @@ export const storageServiceClient = {
       return await dssFetch(`/saved_views/${params.savedViewId}`, {
         method: 'DELETE',
         body: JSON.stringify(params),
+      });
+    },
+  },
+
+  games: {
+    /**
+     * Create a blank game room; the backend seeds its sync-service content.
+     * An older backend without the `game` file type returns an upload URL
+     * instead, which is rejected rather than treated as a room.
+     */
+    async createRoom(request: {
+      documentName: string;
+      projectId?: string;
+      sha: string;
+    }) {
+      const result = await dssFetch<CreateDocumentResponse>('/documents', {
+        method: 'POST',
+        body: JSON.stringify({ ...request, fileType: 'game' }),
+      });
+      return result.andThen(({ data }) => {
+        if (data.presignedUrl) {
+          return err([
+            {
+              code: 'INVALID_RESPONSE' as const,
+              message: 'The server does not support game rooms yet.',
+            },
+          ]);
+        }
+        return ok({ metadata: data.documentMetadata });
+      });
+    },
+    /** Every game's leaderboard for the caller's team, or the caller alone. */
+    async leaderboards() {
+      return await dssFetch<GameLeaderboards>('/games/leaderboards');
+    },
+    async submitScore(request: SubmitScoreRequest) {
+      return await dssFetch<ScoreSubmission>('/games/scores', {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+    },
+    async reportRound(request: ReportRoundRequest) {
+      return await dssFetch<RoundRecorded>('/games/rounds', {
+        method: 'POST',
+        body: JSON.stringify(request),
       });
     },
   },

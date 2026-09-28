@@ -29,8 +29,9 @@ Switching tabs or navigating an in-app route is not a back/forward-cache restore
 | `/app/drive/<recent-or-shared>` | A Drive tab (`/app/drive/tab/<...>` remains a compatibility alias) |
 | `/app/drive/folder/<uuid>` | A Drive folder; breadcrumbs resolve from current accessible folder data |
 | `/app/drive/<document-type>/<uuid>` | An item opened inline in My Files |
-| `/app/drive/folder/<uuid>/<document-type>/<uuid>` | An item opened inline in its Drive folder; document types include `md`, `task`, `skill`, `snippet`, `canvas`, `pdf`, `code`, `csv`, `image`, `video`, `spreadsheet`, and `unknown` |
+| `/app/drive/folder/<uuid>/<document-type>/<uuid>` | An item opened inline in its Drive folder; document types include `md`, `task`, `skill`, `snippet`, `canvas`, `pdf`, `code`, `csv`, `image`, `video`, `spreadsheet`, `game`, and `unknown` |
 | `/app/tasks` | Tasks table |
+| `/app/games` | Games hub (`enable-games` flag): start a room for any game and see team records |
 | `/app/tasks/<uuid>` | Tasks with a task document opened inline |
 | `/app/agents` | AI chats / agents list |
 | `/app/tasks/projects` | Projects collection inside Tasks (requires the Projects flag) |
@@ -405,8 +406,10 @@ dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touc
 drops in favour of the card's DM action.
 
 `Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
-Document D, Task T, Project P, Reminder R, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
-Document navigates straight into a new doc; Task, Project, and Channel open dialogs.
+Document D, Task T, Project P, Reminder R, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O,
+and Game Y when games are enabled.
+Document navigates straight into a new doc; Task, Project, and Channel open dialogs; Game opens
+the Games hub at `/app/games` (see [documents.md](documents.md#games)).
 When calls are enabled, `C C` (Create → Call) opens `/app/meet/new`. The call is
 created only after `Start call`; Escape closes the Create menu.
 Project opens the native project composer; Folder remains the Files folder action.

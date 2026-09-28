@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT\n                        r.winner_user_id AS \"user_id!\",\n                        r.game_kind::text AS \"game_kind!\",\n                        COUNT(*) AS \"wins!\",\n                        MAX(r.finished_at) AS \"last_won_at!\"\n                    FROM game_round_result r\n                    JOIN team_user tu ON tu.user_id = r.winner_user_id\n                    WHERE tu.team_id = $1\n                    GROUP BY r.winner_user_id, r.game_kind\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "game_kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "wins!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_won_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "1b6ef4cddefe43d0d68b77120c10ed5dee066c8e9b828ff8894f52cb479d3d16"
+}

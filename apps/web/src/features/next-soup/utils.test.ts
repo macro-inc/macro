@@ -742,6 +742,7 @@ describe('Hosted details and Drive document routing', () => {
     'image',
     'video',
     'spreadsheet',
+    'game',
     'unknown',
   ] as const)(
     'opens %s documents as legacy blocks on touch',

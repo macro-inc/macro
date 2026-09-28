@@ -342,11 +342,18 @@ function InlinePreview(props: {
                       blockName={props.blockName}
                       blockParams={props.blockParams}
                     />
-                    <Show when={props.blockName === 'task'}>
+                    <Show
+                      when={
+                        props.blockName === 'task' || props.blockName === 'game'
+                      }
+                    >
                       <Suspense>
                         <InlineTaskProperties
                           taskId={accessibleItem().id}
                           previewProperties={documentProperties()}
+                          entityType={
+                            props.blockName === 'game' ? 'DOCUMENT' : 'TASK'
+                          }
                         />
                       </Suspense>
                     </Show>

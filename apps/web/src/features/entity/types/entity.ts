@@ -512,6 +512,13 @@ export const isTaskEntity = (entity: EntityData): entity is TaskEntity => {
   );
 };
 
+/** A game room: a native document whose status is published by play. */
+export const isGameEntity = (
+  entity: EntityData
+): entity is BaseDocumentEntity & { fileType: 'game' } => {
+  return entity.type === 'document' && entity.fileType === 'game';
+};
+
 export const isSnippetEntity = (
   entity: EntityData
 ): entity is SnippetEntity => {

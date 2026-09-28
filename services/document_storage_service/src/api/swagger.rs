@@ -87,6 +87,11 @@ use favorites::inbound::axum_router::{
     AddFavoriteRequest, FavoriteEntityRef, ReorderFavoritesRequest,
 };
 use foreign_entity::domain::models::ForeignEntity;
+use games::domain::models::{
+    GameKind, GameLeaderboard, GameLeaderboards, GameScoring, LeaderboardEntry, RoundRecorded,
+    ScoreSubmission,
+};
+use games::inbound::axum_router::{GameRoomEntityType, ReportRoundRequest, SubmitScoreRequest};
 use initiative::domain::models::{
     AssignTaskStatus, AssignTasksRequest, AssignTasksResponse, AssignTasksResult,
     CreateInitiativeRequest, InitiativeDetail, InitiativeId, InitiativeList, InitiativeSummary,
@@ -375,6 +380,10 @@ use utoipa::OpenApi;
         channel_labels::inbound::axum_router::rename_channel_label_handler,
         channel_labels::inbound::axum_router::delete_channel_label_handler,
         channel_labels::inbound::axum_router::set_channel_label_handler,
+        // games
+        games::inbound::axum_router::get_leaderboards_handler,
+        games::inbound::axum_router::submit_score_handler,
+        games::inbound::axum_router::report_round_handler,
 
         // user api keys
         user_api_key::inbound::axum_router::create_user_api_key_handler,
@@ -555,6 +564,16 @@ use utoipa::OpenApi;
             CreateChannelLabelRequest,
             RenameChannelLabelRequest,
             SetChannelLabelRequest,
+            GameKind,
+            GameScoring,
+            LeaderboardEntry,
+            GameLeaderboard,
+            GameLeaderboards,
+            ScoreSubmission,
+            RoundRecorded,
+            SubmitScoreRequest,
+            GameRoomEntityType,
+            ReportRoundRequest,
             Reminder,
             RemindersList,
             ReminderSchedule,

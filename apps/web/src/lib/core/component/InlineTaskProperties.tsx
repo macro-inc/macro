@@ -6,15 +6,24 @@ import type { Property } from '@property/types';
 import type { PreviewDocumentProperties } from '@queries/preview/types';
 import { type Accessor, createMemo, Show } from 'solid-js';
 
-/** Inline task badges use their preview's edges; only REST previews fetch separately. */
+/**
+ * Inline task badges use their preview's edges; only REST previews fetch
+ * separately. Game rooms publish the same Status on plain documents.
+ */
 export function InlineTaskProperties(props: {
   taskId: string;
   previewProperties?: PreviewDocumentProperties;
+  entityType?: 'TASK' | 'DOCUMENT';
 }) {
   return (
     <Show
       when={props.previewProperties}
-      fallback={<RestInlineTaskProperties taskId={props.taskId} />}
+      fallback={
+        <RestInlineTaskProperties
+          taskId={props.taskId}
+          entityType={props.entityType ?? 'TASK'}
+        />
+      }
     >
       {(metadata) => (
         <InlineTaskPropertyValues
@@ -25,10 +34,13 @@ export function InlineTaskProperties(props: {
   );
 }
 
-function RestInlineTaskProperties(props: { taskId: string }) {
+function RestInlineTaskProperties(props: {
+  taskId: string;
+  entityType: 'TASK' | 'DOCUMENT';
+}) {
   const { properties, isLoading } = useEntityProperties(
     props.taskId,
-    'TASK',
+    props.entityType,
     false
   );
   return (

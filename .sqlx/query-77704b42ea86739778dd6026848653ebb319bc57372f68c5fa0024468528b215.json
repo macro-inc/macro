@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT\n                        user_id,\n                        game_kind::text AS \"game_kind!\",\n                        score,\n                        achieved_at\n                    FROM game_best_score\n                    WHERE user_id = $1\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "game_kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "score",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "achieved_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "77704b42ea86739778dd6026848653ebb319bc57372f68c5fa0024468528b215"
+}

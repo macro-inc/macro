@@ -35,6 +35,7 @@ import {
   sameContentIdentity,
 } from './contentInstanceRegistry';
 import { createHistory, type History } from './history';
+import { splitContentRef } from './split-content-ref';
 import { DEFAULT_SPLIT_MIN_WIDTH } from './splitContentSizing';
 
 const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = false;
@@ -1396,7 +1397,9 @@ export function createSplitLayout(
     type: SplitContentType,
     id: string
   ): SplitHandle | undefined {
-    const instance = contentInstances.find(contentIdentity({ type, id }));
+    const instance = contentInstances.find(
+      contentIdentity(splitContentRef(type, id))
+    );
     const match = state.splits.find(
       (s) =>
         (s.id === instance?.owner ||

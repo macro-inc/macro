@@ -168,7 +168,11 @@ where
             .as_deref()
             .and_then(|file_type| FileType::from_str(file_type).ok());
 
-        let content: Content = if file_type == Some(FileType::Spreadsheet) {
+        let content: Content = if let Some(context) =
+            crate::domain::content::game_attachment_context(&document_context)
+        {
+            Content::Text(context)
+        } else if file_type == Some(FileType::Spreadsheet) {
             let result = service_context
                 .spreadsheet
                 .read(

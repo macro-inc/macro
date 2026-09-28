@@ -1,3 +1,4 @@
+import { GameRoomStatusBadge } from '@app/features/block-game/room-status-badge';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { Entity } from '../../entity';
@@ -5,10 +6,12 @@ import {
   isChannelEntity,
   isChannelMessageEntity,
   isEmailEntity,
+  isGameEntity,
   isGithubPrEntity,
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
+import { getTaskStatusOptionId } from '../../utils/task-properties';
 import {
   ChannelActiveCallBadge,
   ChannelJoinButton,
@@ -116,7 +119,16 @@ export function NarrowLayout(props: LayoutProps) {
                 />
               }
             >
-              <Entity.Timestamp entity={props.entity} />
+              <Show
+                when={isGameEntity(props.entity) && props.entity}
+                fallback={<Entity.Timestamp entity={props.entity} />}
+              >
+                {(entity) => (
+                  <GameRoomStatusBadge
+                    statusOptionId={getTaskStatusOptionId(entity())}
+                  />
+                )}
+              </Show>
             </Show>
           </RowEnd>
         </Entity.Slot>

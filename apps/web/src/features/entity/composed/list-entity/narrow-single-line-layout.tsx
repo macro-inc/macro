@@ -1,3 +1,4 @@
+import { GameRoomStatusBadge } from '@app/features/block-game/room-status-badge';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { Entity } from '../../entity';
@@ -5,9 +6,11 @@ import {
   isChannelEntity,
   isChannelMessageEntity,
   isEmailEntity,
+  isGameEntity,
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
+import { getTaskStatusOptionId } from '../../utils/task-properties';
 import { CalendarEventWhen } from './calendar';
 import {
   ChannelActiveCallBadge,
@@ -118,6 +121,13 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
                 maxUserStackUsers={0}
                 showCaret={false}
               />
+            </Match>
+            <Match when={isGameEntity(props.entity) && props.entity}>
+              {(entity) => (
+                <GameRoomStatusBadge
+                  statusOptionId={getTaskStatusOptionId(entity())}
+                />
+              )}
             </Match>
             <Match
               when={props.entity.type === 'calendar_event' && props.entity}

@@ -1,3 +1,4 @@
+import { GameRoomStatusBadge } from '@app/features/block-game/room-status-badge';
 import { formatCallDuration } from '@block-call/utils';
 import { EntityRowTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -21,6 +22,7 @@ import {
   isChatEntity,
   isDocumentEntity,
   isEmailEntity,
+  isGameEntity,
   isGithubPrEntity,
   isProjectContainedEntity,
   isProjectEntity,
@@ -28,6 +30,7 @@ import {
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
+import { getTaskStatusOptionId } from '../../utils/task-properties';
 import { AutomationWideContent } from './automation';
 import { CalendarStamp, CalendarWideContent } from './calendar';
 import { CallParticipants, CallWideContent } from './call';
@@ -283,6 +286,13 @@ export function WideLayout(props: LayoutProps) {
         </Show>
         <Show when={isTaskEntity(props.entity) && props.entity}>
           {(entity) => <Entity.Properties entity={entity()} />}
+        </Show>
+        <Show when={isGameEntity(props.entity) && props.entity}>
+          {(entity) => (
+            <GameRoomStatusBadge
+              statusOptionId={getTaskStatusOptionId(entity())}
+            />
+          )}
         </Show>
         <Show when={isProjectContainedEntity(props.entity) && props.entity}>
           {(entity) => (

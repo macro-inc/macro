@@ -9,9 +9,18 @@ use crate::domain::ports::sync::DocumentSyncPort;
 const SPREADSHEET_GOLDEN_SNAPSHOT: &[u8] =
     include_bytes!("../../../../static_assets/spreadsheet-golden.1.bin");
 
+/// A Loro snapshot containing only `gameMeta.formatVersion = 1`. The first
+/// editor to open the room records which game it hosts.
+const GAME_GOLDEN_SNAPSHOT: &[u8] = include_bytes!("../../../../static_assets/game-golden.1.bin");
+
 impl DocumentSyncPort for SyncServiceClient {
     async fn initialize_spreadsheet(&self, document_id: &str) -> anyhow::Result<()> {
         self.initialize_from_snapshot(document_id, SPREADSHEET_GOLDEN_SNAPSHOT)
+            .await
+    }
+
+    async fn initialize_game(&self, document_id: &str) -> anyhow::Result<()> {
+        self.initialize_from_snapshot(document_id, GAME_GOLDEN_SNAPSHOT)
             .await
     }
 

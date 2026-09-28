@@ -61,6 +61,10 @@ use favorites::{
     inbound::axum_router::FavoritesRouterState,
     outbound::pg_favorites_repo::PgFavoritesRepo,
 };
+use games::{
+    domain::service::GamesServiceImpl, inbound::axum_router::GamesRouterState,
+    outbound::pg_games_repo::PgGamesRepo,
+};
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use user_api_key::{
     domain::service::UserApiKeyServiceImpl, inbound::axum_router::UserApiKeyRouterState,
@@ -477,6 +481,13 @@ pub(crate) type ChannelLabelsServiceType = ChannelLabelsServiceImpl<PgChannelLab
 pub(crate) type DssChannelLabelsState =
     ChannelLabelsRouterState<ChannelLabelsServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the games service.
+pub(crate) type GamesServiceType = GamesServiceImpl<PgGamesRepo>;
+
+/// Type alias for the games router state.
+pub(crate) type DssGamesState =
+    GamesRouterState<GamesServiceType, EntityAccessService, AuthorizationService>;
+
 /// Type alias for the favorites router state.
 pub(crate) type DssFavoritesState =
     FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
@@ -596,6 +607,7 @@ pub(crate) struct ApiContext {
     pub favorites_service: Arc<FavoritesServiceType>,
     pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,
     pub channel_labels_state: DssChannelLabelsState,
+    pub games_state: DssGamesState,
     pub user_api_key_state: DssUserApiKeyState,
     pub reminders_state: DssRemindersState,
     pub initiative_state: DssInitiativeState,

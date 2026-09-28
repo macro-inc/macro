@@ -104,7 +104,7 @@ const fileOtherFilter = config({
   predicate: (e) => {
     if (e.type !== 'document') return false;
     const ft = e.fileType ?? '';
-    if (['md', 'canvas', 'spreadsheet', 'pdf', 'docx'].includes(ft))
+    if (['md', 'canvas', 'spreadsheet', 'game', 'pdf', 'docx'].includes(ft))
       return false;
     if ((codeFileExtensions as readonly string[]).includes(ft)) return false;
     if ((IMAGE_EXTENSIONS as readonly string[]).includes(ft)) return false;

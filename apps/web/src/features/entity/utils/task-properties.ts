@@ -1,5 +1,9 @@
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
-import type { TaskEntityWithProperties } from '../types/entity';
+import type {
+  EntityData,
+  EntityWithProperties,
+  TaskEntityWithProperties,
+} from '../types/entity';
 
 export const TASK_STATUS_OPTIONS = [
   { value: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED, label: 'Not Started' },
@@ -58,7 +62,7 @@ export const getPropertyOptionLabel = (
 };
 
 const getTaskPropertyByDefinitionId = (
-  entity: TaskEntityWithProperties,
+  entity: EntityWithProperties<EntityData>,
   definitionId: string
 ) => {
   return entity.properties?.find((property) => {
@@ -119,10 +123,11 @@ export const getTaskAssigneeIds = (
 };
 
 /**
- * Gets the status option id from task properties.
+ * Gets the status option id from task properties. Game rooms publish the same
+ * system Status, so any entity carrying properties is accepted.
  */
 export const getTaskStatusOptionId = (
-  entity: TaskEntityWithProperties
+  entity: EntityWithProperties<EntityData>
 ): string | undefined => {
   const statusProperty = getTaskPropertyByDefinitionId(
     entity,

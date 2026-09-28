@@ -100,6 +100,7 @@ fn expand_file_association(association: FileAssociation) -> impl Iterator<Item =
 /// not md,
 /// not canvas,
 /// not native spreadsheets,
+/// not game rooms,
 /// not code,
 /// not video
 /// yes this is kinda weird
@@ -108,7 +109,7 @@ fn other(s: &str) -> IResult<&str, impl Iterator<Item = FileType>> {
         .map(|_| {
             FileType::iter().filter(|ty| {
                 let association = ty.macro_app_path();
-                *ty != FileType::Spreadsheet
+                !matches!(ty, FileType::Spreadsheet | FileType::Game)
                     && !matches!(
                         association,
                         FileAssociation::Write(_)

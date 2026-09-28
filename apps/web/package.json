@@ -83,6 +83,7 @@
     "@lezer/highlight": "^1.2.3",
     "@livekit/krisp-noise-filter": "^0.4.1",
     "@livekit/track-processors": "^0.7.2",
+    "@loro-mirror/core": "workspace:*",
     "@lukemorales/query-key-factory": "^1.3.4",
     "@macro-inc/collaboration": "workspace:*",
     "@macro-inc/email-renderer": "workspace:*",

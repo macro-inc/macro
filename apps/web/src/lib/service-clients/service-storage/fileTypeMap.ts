@@ -15,6 +15,11 @@ export const FileTypeMap = {
     mime: 'application/x-macro-spreadsheet',
     app: 'document',
   },
+  game: {
+    extension: 'game',
+    mime: 'application/x-macro-game',
+    app: 'document',
+  },
   canvas: {
     extension: 'canvas',
     mime: 'application/x-macro-canvas',

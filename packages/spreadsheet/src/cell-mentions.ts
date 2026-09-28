@@ -33,6 +33,7 @@ const blocks = new Set([
   'pdf',
   'docx',
   'spreadsheet',
+  'game',
   'canvas',
   'channel',
   'chat',

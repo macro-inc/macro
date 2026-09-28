@@ -13,6 +13,10 @@ pub trait DocumentSyncPort: Send + Sync + 'static {
         document_id: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
+    /// Initialize a game room with its canonical empty room snapshot.
+    fn initialize_game(&self, document_id: &str)
+    -> impl Future<Output = anyhow::Result<()>> + Send;
+
     /// Whether durable collaborative content exists for a document.
     fn exists(&self, document_id: &str) -> impl Future<Output = anyhow::Result<bool>> + Send;
 

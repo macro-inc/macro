@@ -10,6 +10,7 @@ export const DRIVE_DOCUMENT_TYPES = [
   'image',
   'video',
   'spreadsheet',
+  'game',
   'unknown',
 ] as const;
 

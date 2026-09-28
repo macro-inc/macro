@@ -89,6 +89,10 @@ use foreign_entity::{
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
+use games::{
+    domain::service::GamesServiceImpl, inbound::axum_router::GamesRouterState,
+    outbound::pg_games_repo::PgGamesRepo,
+};
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
@@ -1608,6 +1612,11 @@ async fn run() -> anyhow::Result<()> {
             Arc::new(ChannelLabelsServiceImpl::new(PgChannelLabelsRepo::new(
                 db.clone(),
             ))),
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        games_state: GamesRouterState::new(
+            Arc::new(GamesServiceImpl::new(PgGamesRepo::new(db.clone()))),
             entity_access_service.clone(),
             authorization_state.clone(),
         ),

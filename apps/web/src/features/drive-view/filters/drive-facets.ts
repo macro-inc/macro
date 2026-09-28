@@ -133,7 +133,11 @@ const TYPE_OPTIONS: DriveFacetOption[] = [
 
       const fileType = entity.fileType ?? '';
 
-      if (['md', 'canvas', 'spreadsheet', 'pdf', 'docx'].includes(fileType)) {
+      if (
+        ['md', 'canvas', 'spreadsheet', 'game', 'pdf', 'docx'].includes(
+          fileType
+        )
+      ) {
         return false;
       }
       if ((codeFileExtensions as readonly string[]).includes(fileType)) {

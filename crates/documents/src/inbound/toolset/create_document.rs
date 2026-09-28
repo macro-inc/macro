@@ -99,6 +99,12 @@ where
                 description: format!("invalid file extension {}", self.file_extension),
                 internal_error: e.into(),
             })?;
+        if parsed_file_type == FileType::Game {
+            return Err(failed_to_create_document(DocumentError::BadRequest(
+                "Game rooms are started from the Games menu in Macro, not with CreateDocument"
+                    .to_string(),
+            )));
+        }
         let user_id: MacroUserIdStr<'static> = request_context.user_id.clone();
 
         // Mirrors the axum create route's project body extractor: creating
