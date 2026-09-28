@@ -6,6 +6,7 @@ mod test;
 
 use crate::domain::{
     BillingError, CreditCheckoutRequest, OverageChargeRequest, PaymentGateway, Result,
+    SubscriptionScope,
 };
 use chrono::Utc;
 use macro_uuid::Uuid;
@@ -32,6 +33,8 @@ pub const PURPOSE_AI_OVERAGE: &str = "ai_overage";
 pub const PAYER_METADATA_KEY: &str = "macro_user_id";
 /// Metadata key carrying the `ai_overage_charge` id on overage invoices.
 pub const CHARGE_METADATA_KEY: &str = "macro_charge_id";
+const BILLING_SCOPE_METADATA_KEY: &str = "macro_billing_scope";
+const PERSONAL_SCOPE_STAMP: &str = "personal";
 
 /// [`PaymentGateway`] backed by Stripe.
 #[derive(Clone)]
@@ -53,12 +56,16 @@ impl StripePaymentGateway {
             .with_strategy(RequestStrategy::Idempotent(key))
     }
 
-    async fn resolve_charge_method(&self, customer_id: &CustomerId) -> Result<ChargeMethod> {
+    async fn resolve_charge_method(
+        &self,
+        customer_id: &CustomerId,
+        scope: SubscriptionScope,
+    ) -> Result<ChargeMethod> {
         let customer = Customer::retrieve(&self.client, customer_id, &[])
             .await
             .map_err(payment)?;
         let subscriptions = self.non_canceled_subscriptions(customer_id).await?;
-        charge_method(customer_fallback(&customer), &subscriptions)
+        charge_method(customer_fallback(&customer), &subscriptions, scope)
     }
 
     /// Stripe omits `status` to mean every subscription that is not canceled.
@@ -136,7 +143,7 @@ fn customer_fallback(customer: &Customer) -> Option<PaymentMethodId> {
     customer
         .invoice_settings
         .as_ref()
-        .and_then(|settings| settings.default_payment_method.as_ref().map(Expandable::id))
+        .and_then(|settings| payment_method_id(&settings.default_payment_method))
 }
 
 fn payment_method_id(
@@ -145,9 +152,20 @@ fn payment_method_id(
     method.as_ref().map(Expandable::id)
 }
 
+fn in_scope(subscription: &Subscription, scope: SubscriptionScope) -> bool {
+    let team_id = subscription.metadata.get("team_id");
+    match scope {
+        SubscriptionScope::Personal => team_id.is_none(),
+        SubscriptionScope::Team { team_id: expected } => team_id
+            .and_then(|raw| macro_uuid::string_to_uuid(raw).ok())
+            .is_some_and(|parsed| parsed == expected),
+    }
+}
+
 fn charge_method(
     fallback: Option<PaymentMethodId>,
     subscriptions: &[Subscription],
+    scope: SubscriptionScope,
 ) -> Result<ChargeMethod> {
     let mut agreed = None;
     let mut explicit = None;
@@ -155,7 +173,8 @@ fn charge_method(
         if !matches!(
             subscription.status,
             SubscriptionStatus::Active | SubscriptionStatus::Trialing
-        ) {
+        ) || !in_scope(subscription, scope)
+        {
             continue;
         }
         let explicit_default = payment_method_id(&subscription.default_payment_method);
@@ -173,10 +192,35 @@ fn charge_method(
             explicit = explicit_default;
         }
     }
-    match (agreed, explicit) {
-        (None, _) => Ok(ChargeMethod::CustomerFallback(fallback)),
-        (_, Some(method)) => Ok(ChargeMethod::Subscription(method)),
-        (Some(effective), None) => Ok(ChargeMethod::CustomerFallback(effective)),
+    Ok(match explicit {
+        Some(method) => ChargeMethod::Subscription(method),
+        None => ChargeMethod::CustomerFallback(fallback),
+    })
+}
+
+fn scope_stamp(scope: SubscriptionScope) -> String {
+    match scope {
+        SubscriptionScope::Personal => PERSONAL_SCOPE_STAMP.to_string(),
+        SubscriptionScope::Team { team_id } => team_id.to_string(),
+    }
+}
+
+fn stamped_scope(invoice: &Invoice) -> Result<Option<SubscriptionScope>> {
+    let Some(raw) = invoice
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get(BILLING_SCOPE_METADATA_KEY))
+    else {
+        return Ok(None);
+    };
+    if raw == PERSONAL_SCOPE_STAMP {
+        return Ok(Some(SubscriptionScope::Personal));
+    }
+    match macro_uuid::string_to_uuid(raw) {
+        Ok(team_id) => Ok(Some(SubscriptionScope::Team { team_id })),
+        Err(_) => Err(BillingError::Payment(anyhow::anyhow!(
+            "overage invoice has a malformed billing scope"
+        ))),
     }
 }
 
@@ -246,7 +290,7 @@ impl PaymentGateway for StripePaymentGateway {
     #[tracing::instrument(skip(self, request), fields(charge = %request.charge_id, cents = request.amount_cents), err)]
     async fn open_overage_invoice(&self, request: OverageChargeRequest) -> Result<String> {
         let customer = parse_customer(&request.customer_id)?;
-        let resolved = self.resolve_charge_method(&customer).await?;
+        let resolved = self.resolve_charge_method(&customer, request.scope).await?;
         let key = format!("ai_overage:{}", request.charge_id);
         let metadata: HashMap<String, String> = HashMap::from([
             (
@@ -256,6 +300,10 @@ impl PaymentGateway for StripePaymentGateway {
             (
                 CHARGE_METADATA_KEY.to_string(),
                 request.charge_id.to_string(),
+            ),
+            (
+                BILLING_SCOPE_METADATA_KEY.to_string(),
+                scope_stamp(request.scope),
             ),
         ]);
 
@@ -314,7 +362,12 @@ impl PaymentGateway for StripePaymentGateway {
     }
 
     #[tracing::instrument(skip(self), fields(charge = %charge_id, invoice = %invoice_id), err)]
-    async fn pay_overage_invoice(&self, charge_id: Uuid, invoice_id: &str) -> Result<bool> {
+    async fn pay_overage_invoice(
+        &self,
+        charge_id: Uuid,
+        invoice_id: &str,
+        scope: SubscriptionScope,
+    ) -> Result<bool> {
         let invoice_id: InvoiceId = invoice_id.parse().map_err(|e| {
             BillingError::Payment(anyhow::anyhow!("invalid stripe invoice id: {e}"))
         })?;
@@ -324,6 +377,7 @@ impl PaymentGateway for StripePaymentGateway {
         if invoice.status == Some(InvoiceStatus::Paid) {
             return Ok(true);
         }
+        let scope = stamped_scope(&invoice)?.unwrap_or(scope);
         let customer_id = invoice
             .customer
             .as_ref()
@@ -331,7 +385,7 @@ impl PaymentGateway for StripePaymentGateway {
             .ok_or_else(|| {
                 BillingError::Payment(anyhow::anyhow!("overage invoice has no customer"))
             })?;
-        let resolved = self.resolve_charge_method(&customer_id).await?;
+        let resolved = self.resolve_charge_method(&customer_id, scope).await?;
         let method = resolved.payment_method().cloned();
         if invoice.status == Some(InvoiceStatus::Open)
             && let Some(method) = &method
@@ -413,7 +467,12 @@ impl PaymentGateway for NoOpPaymentGateway {
         )))
     }
 
-    async fn pay_overage_invoice(&self, _charge_id: Uuid, _invoice_id: &str) -> Result<bool> {
+    async fn pay_overage_invoice(
+        &self,
+        _charge_id: Uuid,
+        _invoice_id: &str,
+        _scope: SubscriptionScope,
+    ) -> Result<bool> {
         Err(BillingError::Payment(anyhow::anyhow!(
             "payments are not configured in this service"
         )))

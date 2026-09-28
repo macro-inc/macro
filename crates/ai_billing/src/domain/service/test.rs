@@ -470,7 +470,12 @@ impl PaymentGateway for FakePayments {
         self.opened.lock().unwrap().push(request);
         Ok(invoice)
     }
-    async fn pay_overage_invoice(&self, charge_id: Uuid, invoice_id: &str) -> Result<bool> {
+    async fn pay_overage_invoice(
+        &self,
+        charge_id: Uuid,
+        invoice_id: &str,
+        _scope: SubscriptionScope,
+    ) -> Result<bool> {
         self.payments
             .lock()
             .unwrap()
@@ -690,6 +695,7 @@ async fn overage_is_charged_in_chunks_and_respects_the_cap() {
     assert_eq!(opened.len(), 1);
     assert_eq!(opened[0].amount_cents, 1_200);
     assert_eq!(opened[0].customer_id, "cus_123");
+    assert_eq!(opened[0].scope, SubscriptionScope::Personal);
     let charges = repo.charges();
     let charge = &charges[0];
     assert_eq!(charge.status, OverageChargeStatus::Paid);
@@ -1257,6 +1263,7 @@ async fn previous_period_usage_uses_the_frozen_billed_users() {
     // The owner's unused allowance does not offset it. Member B's usage is
     // ignored because they were not a billed user in that period.
     assert_eq!(opened[0].amount_cents, 5_200);
+    assert_eq!(opened[0].scope, SubscriptionScope::Team { team_id });
 }
 
 #[tokio::test]
