@@ -13,7 +13,9 @@ pub fn hostname() -> Result<String> {
         .output()
         .context("running hostname")?;
     ensure!(output.status.success(), "hostname command failed");
-    let hostname = String::from_utf8(output.stdout)?.trim().to_owned();
+    let hostname = String::from_utf8(output.stdout)?
+        .trim()
+        .to_ascii_lowercase();
     ensure!(
         !hostname.is_empty()
             && hostname

@@ -121,8 +121,8 @@ impl Settings {
         let key: Vec<_> = self.host_key.split_whitespace().collect();
         let app = url::Url::parse(&self.app_origin).map_err(|_| PreviewError::Invalid)?;
         let app_host = app.host_str().ok_or(PreviewError::Invalid)?;
-        let local =
-            self.domain == "preview.localhost" && app.scheme() == "http" && app_host == "localhost";
+        let local = self.domain == "preview.localhost"
+            && (app.scheme() == "https" || (app.scheme() == "http" && app_host == "localhost"));
         if !host(&self.domain)
             || !host(&self.ssh_host)
             || self.ssh_port == 0
@@ -133,8 +133,8 @@ impl Settings {
             // Neither may sit under the other: every non-gateway cookie is
             // forwarded upstream, so a shared parent hands the app's cookies to
             // agent-controlled code. The local stack is the deliberate exception
-            // (`preview.localhost` under `localhost`), where the app origin is
-            // cleartext loopback and sets nothing worth stealing.
+            // (`preview.localhost` under `localhost`), including the development
+            // CA's HTTPS listener. Local stacks may also use a machine hostname.
             || app_host.ends_with(&format!(".{}", self.domain))
             || (!local && self.domain.ends_with(&format!(".{app_host}")))
             || (app.scheme() != "https" && !local)
