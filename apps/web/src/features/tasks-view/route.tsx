@@ -13,6 +13,7 @@ import {
   useParams,
   useRouteParams,
 } from '@app/lib/split-router';
+import { URL_PARAMS as MARKDOWN_URL_PARAMS } from '@block-md/constants';
 import { SidePanel } from '@components/app/side-panel';
 import {
   NewAppView,
@@ -91,6 +92,7 @@ export const taskDetailRoute = defineRoute({
     id: `md:${taskId}`,
   }),
   toReference: ({ taskId }) => uuidRouteReference(taskId, 'task'),
+  externalSearch: Object.values(MARKDOWN_URL_PARAMS),
 });
 
 export const projectDetailSearch = {
@@ -204,6 +206,8 @@ export const projectTaskRoute = defineRoute({
   component: ProjectTaskRouteView,
   remountKey: ({ taskId }) => taskId,
   claim: ({ taskId }) => ({ namespace: 'block', id: `md:${taskId}` }),
+  toReference: ({ taskId }) => uuidRouteReference(taskId, 'task'),
+  externalSearch: Object.values(MARKDOWN_URL_PARAMS),
 });
 
 export const projectDetailRoute = defineRoute({

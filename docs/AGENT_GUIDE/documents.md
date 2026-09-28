@@ -301,8 +301,10 @@ parameters are retained, except for referral codes.
 Pasting a routed entity link such as `/app/drive/md/<uuid>` in an app editor
 creates the same document mention as a legacy link. Routed links retain the
 entity identity and compatible block targets (for example `comment_id`), but
-not the workspace path or pane-local search state.
-Unsupported routes remain ordinary links.
+not the workspace path or pane-local search state. A copied multi-pane URL
+(`/app/.../~/...`) references its rightmost pane. If that pane has no supported
+entity, the URL remains an ordinary link. Project task comment targets, Home PRs,
+and agent chat links also convert to their respective entity mentions.
 
 1. `Create` → `Document D`. The app navigates to `/app/md/<uuid>` with the **title field
    focused**.

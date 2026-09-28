@@ -184,7 +184,9 @@ export const homePreviewRoute = defineRoute({
     id: `${homeBaseBlockType(blockType)}:${previewId}`,
   }),
   toReference: ({ previewId, blockType }) =>
-    uuidRouteReference(previewId, blockType),
+    blockType === 'pr'
+      ? { type: 'pr', id: previewId }
+      : uuidRouteReference(previewId, blockType),
 });
 
 export const homeSplitRoute = defineRoute({

@@ -6,6 +6,7 @@ import {
   decodeRoute,
   getExternalSearchKeys,
   parseRoutePathname,
+  SPLIT_PATH_SEPARATOR,
   type SplitReference,
   type SplitRoutesManifest,
   useOptionalSplitRouter,
@@ -55,7 +56,11 @@ export function createMacroMentionLinkResolver(
     if (!link) return;
 
     const segments = parseRoutePathname(routes, link.path);
-    const entry = segments && decodeRoute(routes, segments);
+    // A copied layout URL lists panes from left to right without an active-pane id.
+    const pane = segments?.slice(
+      segments.lastIndexOf(SPLIT_PATH_SEPARATOR) + 1
+    );
+    const entry = pane && decodeRoute(routes, pane);
     if (!entry) return;
 
     const leaf = entry.location.route.matches.at(-1);
