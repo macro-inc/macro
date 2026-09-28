@@ -49,6 +49,7 @@ function setup(initialText = '') {
     const [scope, setScope] =
       createSignal<ChannelsQueryScope>('direct_messages');
     const [rows, setRows] = createSignal<ChannelEntity[]>([julia, hutch]);
+    const [sourceFetching, setSourceFetching] = createSignal(false);
     const [state, setState] = createStore({
       isSuccess: false,
       isLoading: false,
@@ -103,7 +104,7 @@ function setup(initialText = '') {
     const source = {
       items: rows,
       isLoading: () => false,
-      isFetching: () => false,
+      isFetching: sourceFetching,
       isLoadingMore: () => false,
       hasMore: () => true,
       error: () => undefined,
@@ -121,6 +122,7 @@ function setup(initialText = '') {
       setText,
       setScope,
       setRows,
+      setSourceFetching,
       setState,
       fetchNextPage,
       refetch,
@@ -259,6 +261,49 @@ describe('mobile channel search', () => {
     expect(test.result.items()).toEqual([julia, hutch]);
     await test.result.loadMore();
     expect(test.source.loadMore).toHaveBeenCalledOnce();
+  });
+
+  it('keeps search pagination available during a browse refetch and restores browse fetching on clear', async () => {
+    const test = setup('Julia');
+    test.setState({ isSuccess: true, data: [julia], hasNextPage: true });
+    test.setSourceFetching(true);
+    expect(test.source.isFetching()).toBe(true);
+    expect(test.result.isFetching()).toBe(false);
+    expect(test.result.hasMore()).toBe(true);
+    await test.result.loadMore();
+    expect(test.fetchNextPage).toHaveBeenCalledOnce();
+    expect(test.source.loadMore).not.toHaveBeenCalled();
+
+    test.setState({ isFetching: true, isFetchingNextPage: true });
+    expect(test.result.isFetching()).toBe(true);
+    expect(test.result.isLoadingMore()).toBe(true);
+    await test.result.loadMore();
+    expect(test.fetchNextPage).toHaveBeenCalledOnce();
+    test.setState({ isFetching: false, isFetchingNextPage: false });
+    expect(test.result.isFetching()).toBe(false);
+
+    test.setText('');
+    expect(test.result.isFetching()).toBe(true);
+    test.setSourceFetching(false);
+    expect(test.result.isFetching()).toBe(false);
+  });
+
+  it('reports search debounce and refetch activity but not browse activity for short queries', async () => {
+    const test = setup();
+    test.setText('Julia');
+    expect(test.result.isFetching()).toBe(true);
+    await vi.advanceTimersByTimeAsync(300);
+    test.setState({ isSuccess: true, data: [julia], isFetching: true });
+    expect(test.result.isFetching()).toBe(true);
+    test.setState('isFetching', false);
+    expect(test.result.isFetching()).toBe(false);
+
+    test.setSourceFetching(true);
+    test.setText('Ju');
+    expect(test.result.isFetching()).toBe(false);
+    expect(test.result.hasMore()).toBe(false);
+    test.setText('  ');
+    expect(test.result.isFetching()).toBe(true);
   });
 
   it('reports search failures without losing local hits and retries only valid searches', async () => {

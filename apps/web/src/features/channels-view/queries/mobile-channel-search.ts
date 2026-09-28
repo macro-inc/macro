@@ -84,10 +84,11 @@ export function useMobileChannelSearch(options: {
         ? items().length === 0 &&
           (options.source().isLoading() || serviceLoading())
         : options.source().isLoading(),
+    // Match the pagination source so browse refetches cannot block search pages.
     isFetching: () =>
-      options.source().isFetching() ||
-      (searching() &&
-        (serviceLoading() || (serviceEnabled() && query.isFetching))),
+      searching()
+        ? serviceLoading() || (serviceEnabled() && query.isFetching)
+        : options.source().isFetching(),
     error: () =>
       (serviceEnabled() ? query.error : undefined) ?? options.source().error(),
     hasMore: () =>

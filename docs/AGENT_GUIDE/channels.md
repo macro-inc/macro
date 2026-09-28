@@ -522,7 +522,10 @@ tabs keeps the query and changes its scope. Closing search restores the ordinary
 list. Verify `Channels` → `DMs` → type a person's name with GraphQL enabled:
 unrelated rows disappear, no matches shows **No results**, and switching to
 Channels never keeps DM search hits. Changing the query resets list scroll
-without blurring the dock input.
+without blurring the dock input. While a background browse-list refresh is still
+pending, scroll near the end of search results: the next search page should load
+without waiting for that refresh or requiring another scroll. Clearing search
+restores the browse list's own pagination and fetching state.
 With `enable-graphql-soup` enabled, open an unread conversation from each tab
 and return to the list: its top-level notifications should be read, including
 ones older than the global notification feed's loaded page. Notifications for
