@@ -1,3 +1,4 @@
+import type { CacheHost } from '@graphql-cache/host/types';
 import {
   inspect,
   type OptimisticUpdate,
@@ -5,7 +6,6 @@ import {
   selectAll,
   upsertByField,
 } from '@graphql-cache/index';
-import type { CacheHost } from '@graphql-cache/host/types';
 import {
   EntityPropertiesDocument,
   GroupEntityPropertiesDocument,
@@ -37,12 +37,17 @@ export async function buildPropertyAssignmentLinks(
     value?.items.some((item) => item.id === entityId)
   );
   if (page) {
-    return [upsertByField(
-      select(EntityPropertiesDocument, page.variables)
-        .field('user').field('soup').field('items')
-        .item('id', entityId).field('properties'),
-      identity
-    )];
+    return [
+      upsertByField(
+        select(EntityPropertiesDocument, page.variables)
+          .field('user')
+          .field('soup')
+          .field('items')
+          .item('id', entityId)
+          .field('properties'),
+        identity
+      ),
+    ];
   }
   const groupedPages = await inspect(
     host,
@@ -53,13 +58,19 @@ export async function buildPropertyAssignmentLinks(
       bin.items.some((item) => item.id === entityId)
     );
     if (!bin) continue;
-    return [upsertByField(
-      select(GroupEntityPropertiesDocument, variables)
-        .field('user').field('groupSoup').field('bins')
-        .item('key', bin.key).field('items')
-        .item('id', entityId).field('properties'),
-      identity
-    )];
+    return [
+      upsertByField(
+        select(GroupEntityPropertiesDocument, variables)
+          .field('user')
+          .field('groupSoup')
+          .field('bins')
+          .item('key', bin.key)
+          .field('items')
+          .item('id', entityId)
+          .field('properties'),
+        identity
+      ),
+    ];
   }
   return [];
 }

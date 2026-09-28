@@ -2733,16 +2733,21 @@ describe('normalizedCacheExchange', () => {
       const acknowledge = vi.fn();
       const enqueue = host.enqueueOptimisticMutation.bind(host);
       let release!: () => void;
-      const installation = new Promise<void>((resolve) => { release = resolve; });
+      const installation = new Promise<void>((resolve) => {
+        release = resolve;
+      });
       host.enqueueOptimisticMutation = vi.fn(async (args, claim) => {
         await installation;
         return enqueue(args, claim);
       });
       const { ops, forwarded, results, network } = controlledQueryHarness(host);
       const operation = makeMutationOp(1, optimistic);
-      ops.next(makeOperation('mutation', operation, {
-        ...operation.context, normalizedCacheOptimisticEnqueued: acknowledge,
-      }));
+      ops.next(
+        makeOperation('mutation', operation, {
+          ...operation.context,
+          normalizedCacheOptimisticEnqueued: acknowledge,
+        })
+      );
       await tick();
       expect(acknowledge).not.toHaveBeenCalled();
       expect(forwarded).toEqual([]);
@@ -2751,8 +2756,15 @@ describe('normalizedCacheExchange', () => {
       expect(acknowledge).toHaveBeenCalledOnce();
       expect(results).toEqual([]);
       expect(forwarded).toHaveLength(1);
-      expect(vi.mocked(host.enqueueOptimisticMutation).mock.calls[0][0]).not.toHaveProperty('onEnqueued');
-      network.next({ operation: forwarded[0], data: optimistic, stale: false, hasNext: false });
+      expect(
+        vi.mocked(host.enqueueOptimisticMutation).mock.calls[0][0]
+      ).not.toHaveProperty('onEnqueued');
+      network.next({
+        operation: forwarded[0],
+        data: optimistic,
+        stale: false,
+        hasNext: false,
+      });
       await tick();
       expect(results).toHaveLength(1);
       expect(acknowledge).toHaveBeenCalledOnce();

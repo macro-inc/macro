@@ -169,16 +169,37 @@ describe('buildOptimisticSetEntityProperty', () => {
   });
 
   it('scopes new assignments to their entity and preserves persisted assignment IDs', () => {
-    const value: PropertyApiValues = { valueType: 'SELECT_STRING', values: ['urgent'] };
+    const value: PropertyApiValues = {
+      valueType: 'SELECT_STRING',
+      values: ['urgent'],
+    };
     const target = { entityType: 'DOCUMENT', entityId: 'task-1' };
-    const first = buildOptimisticSetEntityProperty(definitionOnly, value, target)!;
-    const second = buildOptimisticSetEntityProperty(definitionOnly, value, { ...target, entityId: 'task-2' })!;
+    const first = buildOptimisticSetEntityProperty(
+      definitionOnly,
+      value,
+      target
+    )!;
+    const second = buildOptimisticSetEntityProperty(definitionOnly, value, {
+      ...target,
+      entityId: 'task-2',
+    })!;
     expect(first.id).not.toBe(second.id);
     expect(first.id).not.toBe(definitionOnly.id);
-    expect(first.value).toEqual({ __typename: 'GraphqlSelectOptionPropertyValue', optionIds: ['urgent'] });
-    expect(buildOptimisticSetEntityProperty(instantiated, value, target)?.id).toBe('prop-1');
+    expect(first.value).toEqual({
+      __typename: 'GraphqlSelectOptionPropertyValue',
+      optionIds: ['urgent'],
+    });
+    expect(
+      buildOptimisticSetEntityProperty(instantiated, value, target)?.id
+    ).toBe('prop-1');
     for (const propertyId of ['def-1', 'pending:def-1', first.id]) {
-      expect(buildOptimisticSetEntityProperty({ ...instantiated, propertyId }, value, target)?.id).toBe(first.id);
+      expect(
+        buildOptimisticSetEntityProperty(
+          { ...instantiated, propertyId },
+          value,
+          target
+        )?.id
+      ).toBe(first.id);
     }
   });
 

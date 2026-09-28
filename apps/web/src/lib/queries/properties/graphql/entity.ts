@@ -214,15 +214,23 @@ async function prepareMutationArgs(
     input.apiValues,
     { entityType, entityId: input.entityId }
   );
-  const optimisticCache: NonNullable<SetEntityPropertyArgs['optimisticCache']> = {
-    updates: [], revalidations: [],
-  };
+  const optimisticCache: NonNullable<SetEntityPropertyArgs['optimisticCache']> =
+    {
+      updates: [],
+      revalidations: [],
+    };
   const host = getGraphqlCacheHost();
   if (host) {
     try {
-      if (optimisticProperty && isTemporaryGraphqlProperty(optimisticProperty.id)) {
+      if (
+        optimisticProperty &&
+        isTemporaryGraphqlProperty(optimisticProperty.id)
+      ) {
         optimisticCache.updates = await buildPropertyAssignmentLinks(
-          host, input.entityId, optimisticProperty.id, propertyDefinitionId
+          host,
+          input.entityId,
+          optimisticProperty.id,
+          propertyDefinitionId
         );
       }
       const oldGroupKeys = groupedPropertyKeys(input.property);
@@ -233,7 +241,8 @@ async function prepareMutationArgs(
         propertyDefinitionId,
         oldGroupKeys: oldGroupKeys ?? [],
         newGroupKeys: newGroupKeys ?? [],
-        revalidateOnly: oldGroupKeys === undefined || newGroupKeys === undefined,
+        revalidateOnly:
+          oldGroupKeys === undefined || newGroupKeys === undefined,
       });
       // Link the assignment before moving its owning row between groups.
       optimisticCache.updates.push(...grouped.updates);
@@ -300,11 +309,13 @@ export function entityPropertyOptimisticMutationUuid(args: {
   );
 }
 
-type EntityPropertyExecution = Parameters<UrqlMutationExecutor<
-  SetEntityPropertyMutation,
-  SetEntityPropertyMutationVariables,
-  GraphqlEntityPropertyMutationInput
->>[0];
+type EntityPropertyExecution = Parameters<
+  UrqlMutationExecutor<
+    SetEntityPropertyMutation,
+    SetEntityPropertyMutationVariables,
+    GraphqlEntityPropertyMutationInput
+  >
+>[0];
 
 async function executeGraphqlEntityPropertyMutation(
   { client, mutation, input, context }: EntityPropertyExecution,
@@ -469,19 +480,30 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
       const pending = [];
       for (const item of input.properties) {
         let acknowledge!: () => void;
-        const enqueued = new Promise<void>((resolve) => { acknowledge = resolve; });
+        const enqueued = new Promise<void>((resolve) => {
+          acknowledge = resolve;
+        });
         async function submitSave() {
           try {
-            const result = await executeGraphqlEntityPropertyMutation({
-              client, mutation, input: { kind: 'save', ...item }, context,
-            }, acknowledge);
+            const result = await executeGraphqlEntityPropertyMutation(
+              {
+                client,
+                mutation,
+                input: { kind: 'save', ...item },
+                context,
+              },
+              acknowledge
+            );
             const disposition = mutationDisposition(result);
             if (disposition.kind === 'committed') {
               await options.onCommitted?.(item, disposition);
             }
             return { kind: 'result' as const, result };
           } catch (error) {
-            return { kind: 'error' as const, error: error instanceof Error ? error : new Error(String(error)) };
+            return {
+              kind: 'error' as const,
+              error: error instanceof Error ? error : new Error(String(error)),
+            };
           } finally {
             // Plain clients and failed preparation have no cache acknowledgement.
             acknowledge();

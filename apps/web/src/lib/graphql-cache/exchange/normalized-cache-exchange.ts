@@ -80,8 +80,8 @@ import {
 } from './entity-resolvers';
 import {
   normalizedEntityKey,
-  optimisticContextOf,
   notifyOptimisticMutationEnqueued,
+  optimisticContextOf,
   withOptimisticMutationDisposition,
 } from './optimistic';
 
