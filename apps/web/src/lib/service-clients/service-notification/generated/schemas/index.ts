@@ -146,6 +146,8 @@ export * from './newEmailMetadataSender';
 export * from './notifEvent';
 export * from './notifEventOneOf';
 export * from './notifEventOneOfFive';
+export * from './notifEventOneOfFivefive';
+export * from './notifEventOneOfFivefiveTag';
 export * from './notifEventOneOfFiveone';
 export * from './notifEventOneOfFiveoneTag';
 export * from './notifEventOneOfFiveTag';

@@ -12,10 +12,11 @@ use model_error_response::ErrorResponse;
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionSettledMetadata,
     AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
-    ChannelMentionMetadata, ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata,
-    CommentedOnDocumentMetadata, CrmDiscussionMetadata, DocumentMentionMetadata, GithubPrComment,
-    GithubPrMention, GithubPrReview, GithubPrStatusChanged, GithubReviewRequested,
-    InitiativeDiscussionMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
+    ChannelMentionMetadata, ChannelMessageReactionMetadata, ChannelMessageSendMetadata,
+    ChannelReplyMetadata, CommentedOnDocumentMetadata, CrmDiscussionMetadata,
+    DocumentMentionMetadata, GithubPrComment, GithubPrMention, GithubPrReview,
+    GithubPrStatusChanged, GithubReviewRequested, InitiativeDiscussionMetadata,
+    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
     RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
 use notification::{
