@@ -1,5 +1,4 @@
 import type { NavigationStackChangeReason } from '@app/components/navigation-stack/NavigationStack';
-import { toast } from '@core/component/Toast/Toast';
 import { createSignal, onCleanup, untrack, useContext } from 'solid-js';
 import {
   type PreviewBlockTarget,
@@ -50,10 +49,7 @@ export function createPreviewSelectionGuard(): PreviewSelectionGuard {
       const next = identity(selection);
       const existing = next && manager.findOpenView(next);
       if (existing && existing.owner !== owner) {
-        if (reason === 'navigate') {
-          existing.activate?.();
-          toast.alert('Content already open');
-        }
+        if (reason === 'navigate') existing.activate?.();
         return false;
       }
       return true;

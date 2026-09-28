@@ -15,7 +15,6 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ChatEmptyStateContext } from '@core/component/AI/component/message/EmptyChatState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -185,13 +184,10 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       setSelected({ conversation, activeConversationId: conversation.id });
       return;
     }
-    const result = layout.openWithSplit(next, {
+    layout.openWithSplit(next, {
       preferNewSplit: event?.shiftKey,
       referredFrom: 'agents',
     });
-    if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-      toast.alert('Content already open');
-    }
   };
   const startConversation = (start: StartConversation) => {
     const id = startPendingSession({
