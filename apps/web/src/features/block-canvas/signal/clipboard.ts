@@ -1,7 +1,8 @@
 import { sharedInstance } from '@block-canvas/util/sharedInstance';
 import { getTextNodeHeight } from '@block-canvas/util/style';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import { jsonToXML } from '@core/component/LexicalMarkdown/citationsUtils';
-import { parseMacroAppUrl } from '@core/component/LexicalMarkdown/plugins';
+import { resolvePastedMacroAppUrl } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { blockNameToFileExtensions } from '@core/constant/allBlocks';
 import { CANVAS_SVG_IMPORT } from '@core/constant/featureFlags';
 import { nanoid } from 'nanoid';
@@ -44,6 +45,7 @@ export const useClipboard = sharedInstance(() => {
   const { staticImageUpload, parseSVGStringToNodes } = useCanvasFileDrop();
   const boundingBox = useBoundingBox();
   const { activeTextEditor } = useToolManager();
+  const resolveAppLink = useMacroMentionLinkResolver();
 
   const cachedStyle = useCachedStyle();
   const style = cachedStyle.getStyle;
@@ -51,12 +53,8 @@ export const useClipboard = sharedInstance(() => {
   const { currentPosition, currentScale, viewBox } = useRenderState();
 
   const checkForMacroUrl = (text: string): string => {
-    const parsedMacroAppUrl = parseMacroAppUrl(text);
-    if (
-      !parsedMacroAppUrl.isValid ||
-      !parsedMacroAppUrl.id ||
-      !parsedMacroAppUrl.block
-    ) {
+    const parsedMacroAppUrl = resolvePastedMacroAppUrl(text, resolveAppLink);
+    if (!parsedMacroAppUrl?.id || !parsedMacroAppUrl.block) {
       return text;
     }
 

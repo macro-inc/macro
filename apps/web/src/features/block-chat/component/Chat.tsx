@@ -4,6 +4,7 @@ import type { ChatData } from '@block-chat/definition';
 import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId, useIsNestedBlock } from '@core/block';
@@ -163,11 +164,13 @@ function ChatInner(props: {
     input.attachments,
     getAttachmentFromMention
   );
-  const editor = buildChatEditor().withMentions({
-    ...attachmentMentionCallbacks,
-    block: 'chat',
-    showOpenTabs: true,
-  });
+  const editor = buildChatEditor()
+    .withAppLinkResolver(useMacroMentionLinkResolver())
+    .withMentions({
+      ...attachmentMentionCallbacks,
+      block: 'chat',
+      showOpenTabs: true,
+    });
 
   // Sync isGenerating from controller phase
   createEffect(() => {

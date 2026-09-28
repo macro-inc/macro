@@ -138,6 +138,12 @@ export type SplitRouteClaim = {
   id: string;
 };
 
+/** App-defined identity for a matched route, independent of its pane claim. */
+export type SplitReference = {
+  type: string;
+  id: string;
+};
+
 export type SplitRouteMatch = {
   id: string;
   params: SplitRouteParams;
@@ -187,6 +193,10 @@ export type SplitRouteDefinition<
   claim?: SplitRouteParamCallback<
     StandardSchemaV1.InferOutput<TParamsSchema>,
     SplitRouteClaim | undefined
+  >;
+  toReference?: SplitRouteParamCallback<
+    StandardSchemaV1.InferOutput<TParamsSchema>,
+    SplitReference | undefined
   >;
   search?: readonly string[] | '*';
   externalSearch?:

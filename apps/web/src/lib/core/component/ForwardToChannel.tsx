@@ -1,5 +1,6 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import { useIsAuthenticated } from '@core/auth';
 import {
   type BlockAlias,
@@ -211,6 +212,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   // cmd+enter through the hotkey system below.
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: 'forward-to-channel-markdown',
+    resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
     onChange: setMarkdown,
   });

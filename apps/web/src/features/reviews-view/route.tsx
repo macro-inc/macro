@@ -32,6 +32,7 @@ export const reviewsPrRoute = defineRoute({
     namespace: 'block',
     id: `pr:${foreignEntityId}`,
   }),
+  toReference: ({ foreignEntityId }) => ({ type: 'pr', id: foreignEntityId }),
 });
 
 export const reviewsSplitRoute = defineRoute({

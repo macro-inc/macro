@@ -1,3 +1,5 @@
+import type { MacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import { DocumentMention } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
 import { UserMention } from '@core/component/LexicalMarkdown/component/decorator/UserMention';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
@@ -10,18 +12,25 @@ import {
 } from '@macro-inc/spreadsheet/cell-mentions';
 import { For, Suspense } from 'solid-js';
 import { CellMentionEditor } from './components/CellMentionEditor';
-import type { SpreadsheetMentions } from './context/spreadsheet-mentions';
+import type {
+  CellTextEditorProps,
+  SpreadsheetMentions,
+} from './context/spreadsheet-mentions';
 import { SpreadsheetCellLinks } from './spreadsheet-cell-links';
 
-function linkMentions(value: string): string {
+export function linkMentions(
+  value: string,
+  resolveAppLink?: MacroMentionLinkResolver
+): string {
   if (value.startsWith('=')) return value;
   return cellTextParts(value)
     .map((part) =>
       part.mention
         ? part.text
         : part.text.replace(/https?:\/\/[^\s<>]+/g, (url) => {
-            const parsed = parseMacroAppUrl(url);
-            return parsed.isValid && parsed.id && parsed.block
+            const legacy = parseMacroAppUrl(url);
+            const parsed = legacy.isValid ? legacy : resolveAppLink?.(url);
+            return parsed?.id && parsed.block
               ? encodeCellMention({
                   type: 'document',
                   documentId: parsed.id,
@@ -51,8 +60,9 @@ function fromItem(item: MentionItem): string | undefined {
     });
 }
 function CellMentions(props: { value: string }) {
+  const resolveAppLink = useMacroMentionLinkResolver();
   return (
-    <For each={cellTextParts(linkMentions(props.value))}>
+    <For each={cellTextParts(linkMentions(props.value, resolveAppLink))}>
       {(part) => {
         const mention = part.mention;
         if (!mention) return <SpreadsheetCellLinks value={part.text} />;
@@ -83,12 +93,12 @@ function CellMentions(props: { value: string }) {
     </For>
   );
 }
-export const spreadsheetMentions: SpreadsheetMentions = {
-  renderText: (value) => <CellMentions value={value} />,
-  renderEditor: (props) => (
+function SpreadsheetMentionEditor(props: CellTextEditorProps) {
+  const resolveAppLink = useMacroMentionLinkResolver();
+  return (
     <CellMentionEditor
       {...props}
-      convertPaste={linkMentions}
+      convertPaste={(text) => linkMentions(text, resolveAppLink)}
       renderMenu={(menu, anchor, pick) => (
         <MentionsMenu
           menu={menu}
@@ -102,5 +112,10 @@ export const spreadsheetMentions: SpreadsheetMentions = {
         />
       )}
     />
-  ),
+  );
+}
+
+export const spreadsheetMentions: SpreadsheetMentions = {
+  renderText: (value) => <CellMentions value={value} />,
+  renderEditor: (props) => <SpreadsheetMentionEditor {...props} />,
 };

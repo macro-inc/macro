@@ -1,3 +1,4 @@
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 
@@ -6,6 +7,7 @@ export function AutomationPromptEditor(props: {
   onChange: (markdown: string) => void;
 }) {
   const editor = new EditorConfigBuilder()
+    .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('automation-prompt')
     .withHistory()
     .withLinks()

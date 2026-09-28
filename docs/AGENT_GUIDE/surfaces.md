@@ -26,6 +26,13 @@ outline; the text should be dark and visible. Also check the neutral swatch afte
 selecting another color. Neutral colors use an OKLCH `none` hue, which must render
 as gray rather than transparent.
 
+## Canvas link paste
+
+Pasting a supported routed Macro app link onto the canvas creates a text
+node with an entity mention, as legacy links do. Routed links retain compatible
+block targets, but not workspace paths or pane-local search state; unsupported
+links remain text.
+
 ## Live updates in flat Soup lists
 
 With browser or native Tauri GraphQL caching enabled, locally supported flat lists reconcile their

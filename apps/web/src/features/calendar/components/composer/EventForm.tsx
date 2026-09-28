@@ -1,3 +1,4 @@
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import type { CalendarUpdateScope } from '@service-email/client';
@@ -66,6 +67,7 @@ const RECURRING_EDIT_SCOPE_OPTIONS = [
 /** Create/edit event form laid out like the standalone task composer. */
 export function EventForm(props: EventFormProps) {
   const formId = createUniqueId();
+  const resolveAppLink = useMacroMentionLinkResolver();
 
   const dateRangeErrorId = `event-composer-date-range-error-${formId}`;
   const pastEventWarningId = `event-composer-past-event-warning-${formId}`;
@@ -197,6 +199,7 @@ export function EventForm(props: EventFormProps) {
             <Show when={!isOutOfOffice()}>
               <div class="h-12 overflow-y-auto">
                 <MarkdownTextarea
+                  resolveAppLink={resolveAppLink}
                   type="calendar"
                   initialHtml={calendarDescriptionToEditorHtml(
                     initialDescription

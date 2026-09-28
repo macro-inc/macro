@@ -7,6 +7,7 @@ import type {
   InferSplitRouteParams,
   InferSplitRoutePathParams,
   InferSplitRouteState,
+  SplitReference,
   SplitRouteClaim,
   SplitRouteDefinition,
   SplitRouteMatch,
@@ -31,6 +32,7 @@ type SplitRouteDefinitionConstraint = {
   state?: StandardSchemaV1;
   serializeParams?: unknown;
   claim?: unknown;
+  toReference?: unknown;
   search?: readonly string[] | '*';
   externalSearch?: SplitRouteDefinition['externalSearch'];
   remountKey?: unknown;
@@ -39,6 +41,7 @@ type SplitRouteDefinitionConstraint = {
 type RouteParamCallbacks<TParams> = {
   serializeParams?: (params: TParams) => SplitRouteRawParams;
   claim?: (params: TParams) => SplitRouteClaim | undefined;
+  toReference?: (params: TParams) => SplitReference | undefined;
   remountKey?: (params: TParams) => string | number | undefined;
 };
 

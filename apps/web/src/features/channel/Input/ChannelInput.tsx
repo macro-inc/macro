@@ -1,3 +1,4 @@
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
@@ -270,6 +271,7 @@ export function ChannelInput(props: ChannelInputProps) {
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     groupMentions: !props.parent || props.parent.type === 'channel',
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
+    resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
     users: mentionUsers,
     scrollContainer,

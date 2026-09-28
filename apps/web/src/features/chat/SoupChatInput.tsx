@@ -1,4 +1,5 @@
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
@@ -33,11 +34,13 @@ function SoupChatInputInner() {
     input.attachments,
     getAttachmentFromMention
   );
-  const editor = buildChatEditor().withMentions({
-    ...attachmentMentionCallbacks,
-    block: 'chat',
-    showOpenTabs: true,
-  });
+  const editor = buildChatEditor()
+    .withAppLinkResolver(useMacroMentionLinkResolver())
+    .withMentions({
+      ...attachmentMentionCallbacks,
+      block: 'chat',
+      showOpenTabs: true,
+    });
 
   // Persist the model the user picks in the new-chat composer so it survives
   // reload/navigation, matching how the existing-chat draft model is restored.

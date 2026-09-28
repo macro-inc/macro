@@ -24,6 +24,7 @@ import {
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazy, Show } from 'solid-js';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '../email-thread/core/location';
@@ -182,6 +183,8 @@ export const inboxPreviewRoute = defineRoute({
     namespace: 'block',
     id: `${inboxBaseBlockType(blockType)}:${previewId}`,
   }),
+  toReference: ({ previewId, blockType }) =>
+    uuidRouteReference(previewId, blockType),
 });
 
 export const inboxSplitRoute = defineRoute({

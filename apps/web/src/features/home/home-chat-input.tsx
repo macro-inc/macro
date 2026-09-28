@@ -1,5 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
@@ -53,11 +54,13 @@ export const LegacyHomeChatInput = (props: HomeChatInputProps) => {
     input.attachments,
     getAttachmentFromMention
   );
-  const editor = buildChatEditor().withMentions({
-    ...attachmentMentionCallbacks,
-    block: 'chat',
-    showOpenTabs: true,
-  });
+  const editor = buildChatEditor()
+    .withAppLinkResolver(useMacroMentionLinkResolver())
+    .withMentions({
+      ...attachmentMentionCallbacks,
+      block: 'chat',
+      showOpenTabs: true,
+    });
 
   const applyDraft = (text: string) => {
     replaceHomeComposerDraft(editor.controls, text);

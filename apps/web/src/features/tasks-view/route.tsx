@@ -4,6 +4,7 @@ import {
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { uuidRouteReference } from '@components/app/split-layout/split-router/mention-links';
 import { useUserContext } from '@core/context/user';
 import { lazy, Show } from 'solid-js';
 import { z } from 'zod';
@@ -66,6 +67,7 @@ export const taskDetailRoute = defineRoute({
     namespace: 'block',
     id: `md:${taskId}`,
   }),
+  toReference: ({ taskId }) => uuidRouteReference(taskId, 'task'),
 });
 
 export const tasksSplitRoute = defineRoute({

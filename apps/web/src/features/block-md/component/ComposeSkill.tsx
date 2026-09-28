@@ -1,5 +1,6 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
@@ -344,6 +345,7 @@ export function ComposeSkill(props: ComposeSkillProps) {
   });
 
   const editorConfig = buildConfig('markdown')
+    .withAppLinkResolver(useMacroMentionLinkResolver())
     .withMentions()
     .withEmojis()
     .withActions()

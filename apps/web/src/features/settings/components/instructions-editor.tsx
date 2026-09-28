@@ -1,3 +1,4 @@
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { createEffect, on, untrack } from 'solid-js';
@@ -17,6 +18,7 @@ export function AgentInstructionsEditor(props: {
   let renderedMarkdown = '';
   let editable: HTMLDivElement | undefined;
   const config = buildConfig('markdown')
+    .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agent-instructions')
     .withHistory()
     .withCode()

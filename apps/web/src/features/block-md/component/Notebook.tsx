@@ -1,6 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/use-mention-link-resolver';
 import {
   editorFocusSignal,
   getSaveState,
@@ -115,6 +116,7 @@ export function Notebook(props: {
   const scopeId = () => props.hotkeyScope;
   const history = useHistory();
   const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
+  const resolveAppLink = useMacroMentionLinkResolver();
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -377,6 +379,7 @@ export function Notebook(props: {
               leaving the title + properties above it untouched and aligned. */}
           <div class="relative">
             <MarkdownEditor
+              resolveAppLink={resolveAppLink}
               loroManager={props.loroManager}
               showLexicalStateDebugger={
                 canUseLexicalStateDebugger() && showLexicalStateDebugger()
@@ -436,6 +439,7 @@ export function InstructionsNotebook(props: {
   const setMd = state.editor.setMd;
   const scopeId = () => props.hotkeyScope;
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
+  const resolveAppLink = useMacroMentionLinkResolver();
 
   let notebookRef!: HTMLDivElement;
   let contentRef!: HTMLDivElement;
@@ -479,6 +483,7 @@ export function InstructionsNotebook(props: {
     >
       <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
         <InstructionsEditor
+          resolveAppLink={resolveAppLink}
           loroManager={props.loroManager}
           showLexicalStateDebugger={
             canUseLexicalStateDebugger() && showLexicalStateDebugger()

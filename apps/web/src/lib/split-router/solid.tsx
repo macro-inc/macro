@@ -69,6 +69,12 @@ export function useSplitRouter<TSplitId>(): SplitRouterController<TSplitId> {
     .router as unknown as SplitRouterController<TSplitId>;
 }
 
+export function useOptionalSplitRouter<TSplitId>() {
+  return useContext(SplitRouterContext)?.router as
+    | SplitRouterController<TSplitId>
+    | undefined;
+}
+
 export function useSplitRouterState<TSplitId>() {
   const context = useSplitRouterContext();
   const router = context.router as unknown as SplitRouterController<TSplitId>;
