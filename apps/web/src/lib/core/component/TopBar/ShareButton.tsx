@@ -124,7 +124,7 @@ const isLinkSharingDisabledForItem = (itemType: ShareItemType): boolean =>
   itemType === 'email' || itemType === 'project';
 
 /** Blocks, plus native entities that are shared without one. */
-export type ShareBlockType = BlockName | BlockAlias | 'initiative';
+type ShareBlockType = BlockName | BlockAlias | 'initiative';
 
 function shareUrl(type: ShareBlockType, id: string): string {
   if (type !== 'initiative') return buildSimpleEntityUrl({ type, id });
