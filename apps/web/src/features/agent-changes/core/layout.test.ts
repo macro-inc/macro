@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampChangesShare,
+  clampFileTreeWidth,
   DEFAULT_CHANGES_SHARE,
+  DEFAULT_FILE_TREE_WIDTH,
   ensureChangesVisible,
   isChangesVisible,
   isSessionVisible,
+  MAX_FILE_TREE_WIDTH,
+  MIN_FILE_TREE_WIDTH,
   toggleChanges,
   toggleSpotlight,
 } from './layout';
@@ -41,5 +45,14 @@ describe('clampChangesShare', () => {
     expect(clampChangesShare(90)).toBe(74);
     expect(clampChangesShare(50)).toBe(50);
     expect(clampChangesShare(Number.NaN)).toBe(DEFAULT_CHANGES_SHARE);
+  });
+});
+
+describe('clampFileTreeWidth', () => {
+  it('keeps the width inside the bounds and recovers from junk', () => {
+    expect(clampFileTreeWidth(40)).toBe(MIN_FILE_TREE_WIDTH);
+    expect(clampFileTreeWidth(4000)).toBe(MAX_FILE_TREE_WIDTH);
+    expect(clampFileTreeWidth(300.4)).toBe(300);
+    expect(clampFileTreeWidth(Number.NaN)).toBe(DEFAULT_FILE_TREE_WIDTH);
   });
 });

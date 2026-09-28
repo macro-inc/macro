@@ -1,16 +1,23 @@
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import { describeFileCount } from '../core/changeset';
 import type { FileTreeDir, FileTreeNode } from '../core/file-tree';
+import {
+  clampFileTreeWidth,
+  DEFAULT_FILE_TREE_WIDTH,
+  MAX_FILE_TREE_WIDTH,
+  MIN_FILE_TREE_WIDTH,
+} from '../core/layout';
 import { DiffCounts } from './DiffCounts';
 import { StatusLetter } from './StatusLetter';
 
 export type FileTreeProps = {
   nodes: FileTreeNode[];
-  fileCount: number;
   active: string | undefined;
   onSelect: (path: string) => void;
+  /** Width in pixels. */
+  width: number;
+  onResize: (width: number) => void;
 };
 
 function DirRow(props: {
@@ -86,21 +93,90 @@ function Rows(props: {
   );
 }
 
+const KEYBOARD_STEP_PX = 16;
+
+/**
+ * The divider on the tree's right edge. The width follows the pointer
+ * locally and is committed once, when the drag ends.
+ */
+function ResizeHandle(props: {
+  width: number;
+  onPreview: (width: number | undefined) => void;
+  onCommit: (width: number) => void;
+}) {
+  let drag: { startX: number; startWidth: number } | undefined;
+  const widthAt = (clientX: number) =>
+    clampFileTreeWidth(drag ? drag.startWidth + clientX - drag.startX : 0);
+  const end = (event: PointerEvent) => {
+    if (!drag) return;
+    const width = widthAt(event.clientX);
+    drag = undefined;
+    props.onPreview(undefined);
+    props.onCommit(width);
+  };
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the file tree"
+      aria-valuemin={MIN_FILE_TREE_WIDTH}
+      aria-valuemax={MAX_FILE_TREE_WIDTH}
+      aria-valuenow={props.width}
+      tabindex={0}
+      class="group absolute inset-y-0 -right-1 z-10 flex w-2 cursor-col-resize touch-none justify-center outline-none"
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        drag = { startX: event.clientX, startWidth: props.width };
+      }}
+      onPointerMove={(event) => {
+        if (drag) props.onPreview(widthAt(event.clientX));
+      }}
+      onPointerUp={end}
+      onPointerCancel={end}
+      onDblClick={() => props.onCommit(DEFAULT_FILE_TREE_WIDTH)}
+      onKeyDown={(event) => {
+        const step =
+          event.key === 'ArrowLeft'
+            ? -KEYBOARD_STEP_PX
+            : event.key === 'ArrowRight'
+              ? KEYBOARD_STEP_PX
+              : 0;
+        if (!step) return;
+        event.preventDefault();
+        props.onCommit(clampFileTreeWidth(props.width + step));
+      }}
+    >
+      <span class="w-px bg-transparent transition-colors group-hover:bg-edge group-focus-visible:bg-edge-focus group-active:bg-edge-focus" />
+    </div>
+  );
+}
+
 /** The changed files, grouped by compressed directory, in patch order. */
 export function FileTree(props: FileTreeProps) {
+  const [preview, setPreview] = createSignal<number>();
+  const width = () => preview() ?? props.width;
   return (
-    <nav
-      class="flex w-58 shrink-0 flex-col gap-px overflow-y-auto border-r border-edge-muted px-1.5 pt-2 pb-4 max-md:w-44"
-      aria-label="Changed files"
+    <div
+      class="relative flex max-w-[45%] shrink-0 border-r border-edge-muted"
+      style={{ width: `${width()}px` }}
     >
-      <div class="flex items-center gap-1.5 px-1.5 pt-0.5 pb-1.5 text-[10px] tracking-[0.07em] text-ink-placeholder uppercase">
-        <span class="flex-1">{describeFileCount(props.fileCount)}</span>
-      </div>
-      <Rows
-        nodes={props.nodes}
-        active={props.active}
-        onSelect={props.onSelect}
+      <nav
+        class="flex min-w-0 flex-1 flex-col gap-px overflow-y-auto px-1.5 pt-2 pb-4"
+        aria-label="Changed files"
+      >
+        <Rows
+          nodes={props.nodes}
+          active={props.active}
+          onSelect={props.onSelect}
+        />
+      </nav>
+      <ResizeHandle
+        width={width()}
+        onPreview={setPreview}
+        onCommit={props.onResize}
       />
-    </nav>
+    </div>
   );
 }

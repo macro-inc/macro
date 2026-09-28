@@ -236,6 +236,9 @@ export function ChangesPane() {
             }
           >
             <ReviewBar
+              fileCount={model.files().length}
+              fileTreeOpen={layout.fileTreeOpen()}
+              onToggleFileTree={layout.toggleFileTree}
               anyExpanded={review.anyExpanded()}
               onToggleCollapsed={review.toggleAllCollapsed}
             />
@@ -246,12 +249,15 @@ export function ChangesPane() {
               />
             </Show>
             <div class="flex min-h-0 flex-1">
-              <FileTree
-                nodes={model.tree()}
-                fileCount={model.files().length}
-                active={review.active()}
-                onSelect={review.activate}
-              />
+              <Show when={layout.fileTreeOpen()}>
+                <FileTree
+                  nodes={model.tree()}
+                  active={review.active()}
+                  onSelect={review.activate}
+                  width={layout.fileTreeWidth()}
+                  onResize={layout.setFileTreeWidth}
+                />
+              </Show>
               <Switch>
                 <Match when={model.patchStatus() === 'error'}>
                   <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">

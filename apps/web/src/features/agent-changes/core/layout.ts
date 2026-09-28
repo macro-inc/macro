@@ -41,3 +41,15 @@ export function clampChangesShare(share: number): number {
   if (!Number.isFinite(share)) return DEFAULT_CHANGES_SHARE;
   return Math.min(MAX_CHANGES_SHARE, Math.max(MIN_CHANGES_SHARE, share));
 }
+
+/** File tree width in pixels when the reviewer first opens it. */
+export const DEFAULT_FILE_TREE_WIDTH = 232;
+export const MIN_FILE_TREE_WIDTH = 160;
+export const MAX_FILE_TREE_WIDTH = 560;
+
+export function clampFileTreeWidth(width: number): number {
+  if (!Number.isFinite(width)) return DEFAULT_FILE_TREE_WIDTH;
+  return Math.round(
+    Math.min(MAX_FILE_TREE_WIDTH, Math.max(MIN_FILE_TREE_WIDTH, width))
+  );
+}
