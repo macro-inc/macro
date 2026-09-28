@@ -1,4 +1,5 @@
 import { type InferType, SyncDirection } from '@loro-mirror/core';
+import type { SnapshotStore } from '@macro-inc/browser-store/snapshot-store';
 import type { Attributes } from '@macro-inc/observability';
 import { Mutex } from 'async-mutex';
 import type { VersionVector } from 'loro-crdt';
@@ -21,7 +22,6 @@ import {
   type SyncEngineManager,
 } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
-import type { SnapshotStore } from './snapshot-store';
 import { peerCounterAttr, telemetrySpan } from './telemetry';
 
 // SnapshotStore in the engine is always Loro updates — RawUpdate.

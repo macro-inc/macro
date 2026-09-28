@@ -28,10 +28,7 @@ import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import { createSyncEngine } from '@macro-inc/collaboration/collab/engine';
 import { logSyncService } from '@macro-inc/collaboration/collab/logger';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
-import {
-  IDBSnapshotStore,
-  LORO_SNAPSHOT_DB_NAME,
-} from '@macro-inc/collaboration/collab/snapshot-store';
+import { createDocumentSnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import type { LiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import { createWALSyncSource } from '@macro-inc/collaboration/collab/wal';
 import {
@@ -158,10 +155,7 @@ export function CollabProvider(props: CollabProviderProps) {
         syncStateToLexical(state as unknown as SerializedEditorState),
     },
     readonly: readOnly,
-    snapshotStore: new IDBSnapshotStore(
-      LORO_SNAPSHOT_DB_NAME,
-      syncSource()!.documentId
-    ),
+    snapshotStore: createDocumentSnapshotStore(syncSource()!.documentId),
   });
 
   const { refreshRemoteCursors, RemoteCursorsOverlay } = useRemoteCursors({

@@ -1,3 +1,8 @@
+import {
+  hasExpired,
+  type WALEntry,
+  type WALStore,
+} from '@macro-inc/browser-store/wal-store';
 import { ok, okAsync, type Result } from 'neverthrow';
 import { vi } from 'vitest';
 import type { ResultError } from '../internal/result';
@@ -8,26 +13,9 @@ import type {
   SyncEngineManager,
 } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
-import type { SnapshotStore } from './snapshot-store';
 import type { SyncSourceEvent } from './source';
 import { type LiveSyncSource, SyncSourceStatus } from './source';
-import { hasExpired, type WALEntry, type WALStore, WALSyncer } from './wal';
-
-export class MockSnapshotStore<T> implements SnapshotStore<T> {
-  private snapshot: T | null = null;
-
-  public async save(snapshot: T): Promise<void> {
-    this.snapshot = snapshot;
-  }
-
-  public async load(): Promise<T | null> {
-    return this.snapshot;
-  }
-
-  public async delete(): Promise<void> {
-    this.snapshot = null;
-  }
-}
+import { WALSyncer } from './wal';
 
 export class MockWALStore<T> implements WALStore<T> {
   private entries: WALEntry<T>[] = [];

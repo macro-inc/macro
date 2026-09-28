@@ -5,11 +5,7 @@ import {
   ThrownResultError,
   throwOnErr,
 } from '@core/util/result';
-import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
-import {
-  IDBSnapshotStore,
-  LORO_SNAPSHOT_DB_NAME,
-} from '@macro-inc/collaboration/collab/snapshot-store';
+import { createDocumentSnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import { z } from 'zod';
 import { prefetchUserInfo } from '../../auth/user-info';
 import { queryClient } from '../../client';
@@ -89,10 +85,7 @@ const loader = createSyncDocumentContextLoader({
   async hasLocalSnapshot(documentId) {
     // Metadata alone must never bootstrap an editable empty document when the
     // cached body was evicted or never finished persisting.
-    const store = new IDBSnapshotStore<RawUpdate>(
-      LORO_SNAPSHOT_DB_NAME,
-      documentId
-    );
+    const store = createDocumentSnapshotStore(documentId);
     try {
       const snapshot = await store.load();
       return snapshot !== null && snapshot.byteLength > 0;

@@ -82,6 +82,7 @@ fn typescript() -> Job {
         .add_step(show_sccache_stats())
         .add_step(check_dynamic_ui_schema())
         .add_step(check_types())
+        .add_step(check_browser_store_types())
         .add_step(check_collaboration_types())
         .add_step(check_lexical_service_types())
         .add_step(test_lexical_service())
@@ -95,6 +96,7 @@ fn biome_check() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
+        .add_step(run_browser_store_biome())
         .add_step(run_collaboration_biome())
         .add_step(steps::teardown_nix())
 }
@@ -116,6 +118,7 @@ fn cycles() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(cycles_import_check())
+        .add_step(browser_store_cycles_import_check())
         .add_step(collaboration_cycles_import_check())
         .add_step(steps::teardown_nix())
 }
@@ -226,6 +229,12 @@ fn check_dynamic_ui_schema() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+fn check_browser_store_types() -> Step<Run> {
+    Step::new("Check Browser Store Package Types")
+        .run("bun run type-check")
+        .working_directory(xtask_paths::repo_dir!("packages/browser-store"))
+}
+
 fn check_collaboration_types() -> Step<Run> {
     Step::new("Check Collaboration Package Types")
         .run("bun run type-check")
@@ -250,6 +259,12 @@ fn run_biome() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }
 
+fn run_browser_store_biome() -> Step<Run> {
+    Step::new("Run Browser Store Package Biome")
+        .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
+        .working_directory(xtask_paths::repo_dir!("packages/browser-store"))
+}
+
 fn run_collaboration_biome() -> Step<Run> {
     Step::new("Run Collaboration Package Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
@@ -266,6 +281,12 @@ fn cycles_import_check() -> Step<Run> {
     Step::new("Cycles Import Check")
         .run("biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+fn browser_store_cycles_import_check() -> Step<Run> {
+    Step::new("Browser Store Package Cycles Import Check")
+        .run("biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles")
+        .working_directory(xtask_paths::repo_dir!("packages/browser-store"))
 }
 
 fn collaboration_cycles_import_check() -> Step<Run> {
