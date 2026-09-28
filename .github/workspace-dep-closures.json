@@ -3194,6 +3194,7 @@
       "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
+      "crates/initiative",
       "crates/invite_email",
       "crates/kafka_util",
       "crates/last_online_tracker",
@@ -3229,6 +3230,7 @@
       "crates/properties",
       "crates/rate_limit",
       "crates/remote_env_var",
+      "crates/share_permission_db_utils",
       "crates/system_properties",
       "crates/unfurl",
       "crates/workspace-hack"

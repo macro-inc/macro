@@ -1,7 +1,7 @@
-import { isEntityDiscussionEvent } from '@notifications/entity-discussion';
 import type { NotificationType } from '@core/types';
 import GithubIcon from '@icon/mcp-github.svg';
 import type { NotificationStack } from '@notifications';
+import { isEntityDiscussionEvent } from '@notifications/entity-discussion';
 import ArrowBendUpLeftIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
 import BellIcon from '@phosphor/bell-simple.svg';

@@ -30704,6 +30704,18 @@ export const messageTimelineResponse = zod
                   .describe(
                     'An initiative, presented as a project in the application.'
                   ),
+                zod
+                  .object({
+                    id: zod.uuid().describe('A CRM company.'),
+                    type: zod.enum(['crm_company']),
+                  })
+                  .describe('A CRM company.'),
+                zod
+                  .object({
+                    id: zod.uuid().describe('A CRM contact.'),
+                    type: zod.enum(['crm_contact']),
+                  })
+                  .describe('A CRM contact.'),
               ])
               .describe(
                 'The entity whose permissions and lifecycle govern a message.'
@@ -30967,6 +30979,18 @@ export const messageTimelineResponse = zod
                                 .describe(
                                   'An initiative, presented as a project in the application.'
                                 ),
+                              zod
+                                .object({
+                                  id: zod.uuid().describe('A CRM company.'),
+                                  type: zod.enum(['crm_company']),
+                                })
+                                .describe('A CRM company.'),
+                              zod
+                                .object({
+                                  id: zod.uuid().describe('A CRM contact.'),
+                                  type: zod.enum(['crm_contact']),
+                                })
+                                .describe('A CRM contact.'),
                             ])
                             .describe(
                               'The entity whose permissions and lifecycle govern a message.'
@@ -31270,6 +31294,18 @@ export const entityMessageCreateResponse = zod
           .describe(
             'An initiative, presented as a project in the application.'
           ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -31406,6 +31442,18 @@ export const entityMessageGetMessageResponse = zod
           .describe(
             'An initiative, presented as a project in the application.'
           ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -31546,6 +31594,18 @@ export const entityMessageDeleteMessageResponse = zod
           .describe(
             'An initiative, presented as a project in the application.'
           ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -31782,6 +31842,18 @@ export const entityMessageEditResponse = zod
           .describe(
             'An initiative, presented as a project in the application.'
           ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -31926,6 +31998,18 @@ export const entityMessageReactResponse = zod
           .describe(
             'An initiative, presented as a project in the application.'
           ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -32069,6 +32153,18 @@ export const entityMessageLegacyResponse = zod
           .describe(
             'An initiative, presented as a project in the application.'
           ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -32228,6 +32324,18 @@ export const entityMessageGetThreadResponse = zod
                   .describe(
                     'An initiative, presented as a project in the application.'
                   ),
+                zod
+                  .object({
+                    id: zod.uuid().describe('A CRM company.'),
+                    type: zod.enum(['crm_company']),
+                  })
+                  .describe('A CRM company.'),
+                zod
+                  .object({
+                    id: zod.uuid().describe('A CRM contact.'),
+                    type: zod.enum(['crm_contact']),
+                  })
+                  .describe('A CRM contact.'),
               ])
               .describe(
                 'The entity whose permissions and lifecycle govern a message.'
@@ -32369,6 +32477,18 @@ export const entityMessageGetThreadResponse = zod
               .describe(
                 'An initiative, presented as a project in the application.'
               ),
+            zod
+              .object({
+                id: zod.uuid().describe('A CRM company.'),
+                type: zod.enum(['crm_company']),
+              })
+              .describe('A CRM company.'),
+            zod
+              .object({
+                id: zod.uuid().describe('A CRM contact.'),
+                type: zod.enum(['crm_contact']),
+              })
+              .describe('A CRM contact.'),
           ])
           .describe(
             'The entity whose permissions and lifecycle govern a message.'

@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type MessageParentOneOfSevenType =
-  (typeof MessageParentOneOfSevenType)[keyof typeof MessageParentOneOfSevenType];
+export type MessageParentOneOfNineType =
+  (typeof MessageParentOneOfNineType)[keyof typeof MessageParentOneOfNineType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const MessageParentOneOfSevenType = {
-  crm_company: 'crm_company',
+export const MessageParentOneOfNineType = {
+  crm_contact: 'crm_contact',
 } as const;

@@ -10,5 +10,5 @@ export type MessageParentOneOfSevenType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const MessageParentOneOfSevenType = {
-  crm_contact: 'crm_contact',
+  crm_company: 'crm_company',
 } as const;

@@ -145,6 +145,8 @@ export * from './notifEventOneOfFive';
 export * from './notifEventOneOfFiveone';
 export * from './notifEventOneOfFiveoneTag';
 export * from './notifEventOneOfFiveTag';
+export * from './notifEventOneOfFivethree';
+export * from './notifEventOneOfFivethreeTag';
 export * from './notifEventOneOfFourfive';
 export * from './notifEventOneOfFourfiveTag';
 export * from './notifEventOneOfFournine';

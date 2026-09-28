@@ -7,10 +7,10 @@
 import type { MessageParentOneOfSevenType } from './messageParentOneOfSevenType';
 
 /**
- * A CRM contact.
+ * A CRM company.
  */
 export type MessageParentOneOfSeven = {
-  /** A CRM contact. */
+  /** A CRM company. */
   id: string;
   type: MessageParentOneOfSevenType;
 };
