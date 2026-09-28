@@ -7,6 +7,7 @@ query NativeMailBackfill {
         __typename
         id
         cacheProjection
+        isFavorited
         ... on GraphqlSoupEmailThread {
           name
           ownerId

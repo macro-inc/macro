@@ -1,8 +1,11 @@
 # GraphQL cache query benchmarks
 
+See the [optimization review](OPTIMIZATION_REVIEW.md) for the implementation,
+validation and original-baseline comparison.
+
 These release-mode suites discover every `query` in the web app's production
 GraphQL directory and every generated fragment passed to `selectRecords` under
-`src/lib/queries`. Currently that is **22 queries and 10 fragment selections**.
+`src/lib/queries`. Currently that is **23 queries and 10 fragment selections**.
 The native suites use the real Turso adapter and production Tauri `EngineHandle`,
 including its mutex, operation interner and fragment cache. The browser suite
 calls the production worker host, WASM engine and persistent Turso OPFS adapter.
@@ -10,9 +13,9 @@ calls the production worker host, WASM engine and persistent Turso OPFS adapter.
 Run from the repository root:
 
 ```sh
-# Fast correctness/coverage smoke: exercises all 12 Soup entity types.
+# Fast correctness/coverage smoke: exercises all 13 Soup entity types.
 nix develop --command cargo bench --locked -p cache-turso --bench graphql_queries -- \
-  --sizes 1,12 --variants 2 --samples 2 --warmup 1 --output /tmp/core-smoke.json
+  --sizes 1,13 --variants 2 --samples 2 --warmup 1 --output /tmp/core-smoke.json
 
 # Extensive engine and storage matrix.
 nix develop --command cargo bench --locked -p cache-turso --bench graphql_queries -- \

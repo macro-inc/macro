@@ -3,7 +3,7 @@ edition = "2024"
 name = "cache-wasm"
 publish = false
 # Rebuild the browser cache with initiative activity action schema support.
-version = "0.6.26"
+version = "0.6.27"
 
 [features]
 default = []

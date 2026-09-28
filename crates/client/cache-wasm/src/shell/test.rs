@@ -158,6 +158,7 @@ const SOUP_WITH_PROJECTION_QUERY: &str = r#"query SoupWithProjection($input: Sou
         soup(input: $input) {
             nextCursor
             items {
+                isFavorited
                 properties { id propertyDefinitionId value { __typename ... on GraphqlSelectOptionPropertyValue { optionIds } } }
                 __typename
                 id
@@ -183,6 +184,7 @@ const SOUP_BACKFILL_WITH_PROJECTION_QUERY: &str = r#"query SoupBackfill($input: 
         soup(input: $input) {
             nextCursor
             items {
+                isFavorited
                 properties { id propertyDefinitionId value { __typename ... on GraphqlSelectOptionPropertyValue { optionIds } } }
                 __typename
                 id
@@ -207,6 +209,7 @@ const SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION: &str = r#"subscription SoupUpda
         __typename
         ... on SoupUpdated {
             item {
+                isFavorited
                 properties { id propertyDefinitionId value { __typename ... on GraphqlSelectOptionPropertyValue { optionIds } } }
                 __typename
                 id
@@ -457,6 +460,7 @@ fn projected_document_item_with_facts(
         "__typename": "GraphqlSoupDocument",
         "id": document_id,
         "notifications": [],
+        "isFavorited": false,
         "properties": if status_option_ids.is_empty() { serde_json::json!([]) } else { serde_json::json!([{
             "id": format!("status:{document_id}"),
             "propertyDefinitionId": "00000001-0000-0000-0000-000000000002",
