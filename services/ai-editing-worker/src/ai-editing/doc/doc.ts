@@ -59,7 +59,6 @@ import {
   $setId,
   $updateAllNodeIds,
 } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
-import { $assertValidEditorTree } from '@macro-inc/lexical-core/utils/editor-tree';
 import {
   $createLineBreakNode,
   $createParagraphNode,
@@ -221,13 +220,7 @@ export class Doc implements DocReader, DocWriter {
   private tx(fn: () => void): void {
     const before = this.session.editor.getEditorState();
     try {
-      this.session.editor.update(
-        () => {
-          fn();
-          $assertValidEditorTree($getRoot());
-        },
-        { discrete: true }
-      );
+      this.session.editor.update(fn, { discrete: true });
     } catch (e) {
       this.session.editor.setEditorState(before);
       this.session.editor.update(() => $updateAllNodeIds(this.session.ids), {
@@ -242,6 +235,24 @@ export class Doc implements DocReader, DocWriter {
 
   private block(node: NodeRef): ElementNode {
     return locate.$blockById(this.session, node);
+  }
+
+  /** Text writers need a content block, not a table/list container. Reject
+   * ambiguous container ids instead of choosing one of their descendants. */
+  private textBlock(id: NodeRef): ElementNode {
+    const block = this.block(id);
+    if (
+      $isTableNode(block) ||
+      $isTableRowNode(block) ||
+      $isTableCellNode(block) ||
+      $isListNode(block) ||
+      block.getType() === 'root'
+    ) {
+      throw new EditError(
+        `id "${id}" is a ${block.getType()} container — target a paragraph or list item id; use setCell to replace a table cell.`
+      );
+    }
+    return block;
   }
 
   /** Resolve a table by id, rejecting non-table ids. `setCell`/cell resolution
@@ -300,7 +311,7 @@ export class Doc implements DocReader, DocWriter {
         const c = target.getTextContent();
         target.setTextContent(c.slice(0, at) + text + c.slice(at));
       } else {
-        insertTextAt(this.block(node), at, text);
+        insertTextAt(this.textBlock(node), at, text);
       }
     });
   }
@@ -339,16 +350,16 @@ export class Doc implements DocReader, DocWriter {
         else target.setTextContent(text);
         return;
       }
-      blocks.$setText(this.block(node), text);
+      blocks.$setText(this.textBlock(node), text);
     });
   }
 
   private appendText(node: NodeRef, text: string): void {
-    this.tx(() => inline.$appendText(this.block(node), text));
+    this.tx(() => inline.$appendText(this.textBlock(node), text));
   }
 
   private prependText(node: NodeRef, text: string): void {
-    this.tx(() => inline.$prependText(this.block(node), text));
+    this.tx(() => inline.$prependText(this.textBlock(node), text));
   }
 
   private insertTextAfterInline(
@@ -496,12 +507,13 @@ export class Doc implements DocReader, DocWriter {
         : block === 'code'
           ? { type: 'code', language: opts.language }
           : { type: block };
-    this.tx(() =>
+    this.tx(() => {
+      this.textBlock(node);
       modify.$modifyNode(this.session, node, {
         op: 'blockType',
         block: data,
-      })
-    );
+      });
+    });
   }
 
   private setListType(nodes: NodeRef[], list: ListKind): void {
@@ -593,7 +605,7 @@ export class Doc implements DocReader, DocWriter {
     spec: NodeSpec
   ): void {
     this.tx(() => {
-      const block = this.block(node);
+      const block = this.textBlock(node);
       const inline = buildNode(spec);
       insertInlineAt(block, at, inline);
       this.assignRef(ref, inline);

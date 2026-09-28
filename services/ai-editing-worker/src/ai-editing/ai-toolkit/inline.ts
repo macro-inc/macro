@@ -1,4 +1,3 @@
-import { $listTextTarget } from '@macro-inc/lexical-core/utils/editor-tree';
 import {
   $createTextNode,
   $findMatchingParent,
@@ -116,14 +115,6 @@ export function $replaceString(
 /** Append plain text to the end of a block. Extends the trailing plain text node
  *  in place (preserving its id) when possible, else adds a new node. */
 export function $appendText(block: ElementNode, text: string): void {
-  if (block.getType() === 'list') {
-    const item = $listTextTarget(block, 'last');
-    if (!item) {
-      throw new Error('list has no listitem to append text to');
-    }
-    $appendText(item, text);
-    return;
-  }
   const last = block.getLastChild();
   if ($isTextNode(last) && last.getFormat() === 0) {
     last.setTextContent(last.getTextContent() + text);
@@ -135,14 +126,6 @@ export function $appendText(block: ElementNode, text: string): void {
 /** Prepend plain text to the start of a block. Extends the leading plain text
  *  node in place (preserving its id) when possible, else adds a new node. */
 export function $prependText(block: ElementNode, text: string): void {
-  if (block.getType() === 'list') {
-    const item = $listTextTarget(block);
-    if (!item) {
-      throw new Error('list has no listitem to prepend text to');
-    }
-    $prependText(item, text);
-    return;
-  }
   const first = block.getFirstChild();
   if ($isTextNode(first) && first.getFormat() === 0) {
     first.setTextContent(text + first.getTextContent());
@@ -270,9 +253,7 @@ export function $wrapInBlock(
   return mutateMatches(block, needle, scope, (matchNode) => {
     if (existing) {
       const parent = matchNode.getParent();
-      const enclosing = parent
-        ? $findMatchingParent(parent, existing.is)
-        : null;
+      const enclosing = parent ? $findMatchingParent(parent, existing.is) : null;
       if (enclosing && $isElementNode(enclosing)) {
         existing.update(enclosing);
         return;

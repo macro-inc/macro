@@ -22,23 +22,6 @@ Expected shape today: a `web-app` CLIENT span (`http POST /dss/...`, attributes 
 Secondary key: the HTTP response header `x-request-id` equals the server span's `request.id`
 attribute.
 
-## Inspecting document sync state
-
-From `services/sync-service`, run `just dump <document_id> dev` (or `prd`)
-to write a snapshot and retained operation log under the gitignored `do-dump/`.
-The script resolves the environment's administrator key via Doppler and AWS.
-Custom `--url` origins and `--env playground` require an explicit `--key`;
-HTTP is accepted only for loopback origins. Authentication/server failures are
-reported separately from a missing document.
-
-In a development build, open `/app/component/loro-inspect`, paste
-`snapshot.loro.b64` or `ops-all.b64`, and click **Inspect**. **State** shows the
-reconstructed document, **Ops** its changes, and **Blobs** each import result.
-Blank lines and lines starting with `#` are ignored. A blob marked **pending when
-imported** may become applicable when a later blob supplies its dependencies;
-this label is not a final unresolved-operation count. The retained log is not
-necessarily the document's full history. **Clear** resets the inspector.
-
 ## Finding traces without a reqid (TraceQL)
 
 - Discover services: `tempo_get-attribute-values` on `resource.service.name`.

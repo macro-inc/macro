@@ -1,197 +1,113 @@
-/**
- * A `<td>` id handed to a text-level op corrupts the cell.
- *
- * `locate.$blockById` resolves an id with
- * `$findMatchingParent(node, n => $isElementNode(n) && !n.isInline())`, and
- * `$findMatchingParent` tests the starting node first. A `TableCellNode` is a
- * non-inline `ElementNode`, so a `<td>` id resolves to the cell ITSELF, and
- * every op routed through `Doc.block()` treats the cell as a text-bearing
- * block. `setCell` guards against this shape (`requireTable` rejects a `<td>`
- * id outright); the text ops do not.
- *
- * Two consequences, both observed in prod document
- * 019ff75a-e442-72e0-9f79-265d3d9d6ed6:
- *   - `setText` on a cell id drops the cell's paragraph and leaves the
- *     Lexical-invalid shape `tablecell -> text`.
- *   - `appendText`/`prependText` on a cell id add ANOTHER bare text node
- *     without removing the existing one, duplicating the cell's content.
- *
- * `$blockById` now treats table structure as non-content: a `<td>` id
- * resolves to the cell's paragraph, and `Doc.tx` refuses to commit a tree
- * the client would reject. These cases are the regression lock for that.
- */
-import { $createListItemNode, $createListNode } from '@lexical/list';
-import { $isTableCellNode, $isTableRowNode } from '@lexical/table';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
-import { validateEditorTree } from '@macro-inc/lexical-core/utils/editor-tree';
-import {
-  $createTextNode,
-  $getRoot,
-  $isElementNode,
-  type ElementNode,
-} from 'lexical';
-import { describe, expect, it } from 'vitest';
-import { edit, read, setup } from '../ai-toolkit/_test-helpers';
-import type { LexicalSession } from '../ai-toolkit/session';
+import { $getRoot, $isElementNode } from 'lexical';
+import { describe, expect, it, vi } from 'vitest';
+import { read, setup } from '../ai-toolkit/_test-helpers';
+import { type DocumentOp, EditError } from '../editor';
 import { Doc } from './doc';
 
-function makeTable(rows: string[][]) {
-  const { session, ids } = setup('intro');
-  const doc = new Doc(session);
+const textWrites: DocumentOp[] = [
+  { kind: 'setText', node: '', text: 'X' },
+  { kind: 'appendText', node: '', text: 'X' },
+  { kind: 'prependText', node: '', text: 'X' },
+  { kind: 'insertText', node: '', at: 0, text: 'X' },
+  {
+    kind: 'insertInline',
+    node: '',
+    at: 0,
+    ref: 'break',
+    spec: { inline: 'linebreak' },
+  },
+  { kind: 'setBlockType', node: '', block: 'heading', level: 2 },
+];
+
+function tableFixture(text = 'original') {
+  const { session, ids } = setup('intro\n\n- one\n- two');
+  const propagate = vi.fn();
+  const doc = new Doc(session, propagate);
   doc.apply({
     kind: 'insertNode',
-    ref: 't',
-    spec: { block: 'table', rows },
+    ref: 'table',
+    spec: { block: 'table', rows: [[text]] },
     at: { after: ids[0]! },
   });
-  return { session, doc };
-}
-
-/** The child types of cell [row, col], e.g. `['paragraph']` when healthy. */
-function cellChildTypes(
-  session: LexicalSession,
-  row: number,
-  col: number
-): string[] {
-  return read(session, () => {
+  const targets = read(session, () => {
     const table = $getRoot()
       .getChildren()
-      .find((n) => $isElementNode(n) && n.getType() === 'table') as ElementNode;
-    const cell = table
+      .find((n) => n.getType() === 'table');
+    if (!$isElementNode(table)) throw new Error('missing table');
+    const row = table.getFirstChild();
+    if (!$isElementNode(row)) throw new Error('missing row');
+    const cell = row.getFirstChild();
+    if (!$isElementNode(cell)) throw new Error('missing cell');
+    const paragraph = cell.getFirstChild()!;
+    const list = $getRoot()
       .getChildren()
-      .filter($isTableRowNode)
-      [row]!.getChildren()
-      .filter($isTableCellNode)[col]!;
-    return cell.getChildren().map((child) => child.getType());
+      .find((n) => n.getType() === 'list');
+    if (!$isElementNode(list)) throw new Error('missing list');
+    return {
+      table: 'table',
+      row: $getId(row)!,
+      cell: $getId(cell)!,
+      list: $getId(list)!,
+      paragraph: $getId(paragraph)!,
+      item: $getId(list.getFirstChild()!)!,
+    };
   });
+  propagate.mockClear();
+  return { session, doc, targets, propagate, intro: ids[0]! };
 }
 
-/** The id the XML serializer stamps onto `<td id="...">`. */
-function cellId(session: LexicalSession, row: number, col: number): string {
-  return read(session, () => {
-    const table = $getRoot()
-      .getChildren()
-      .find((n) => $isElementNode(n) && n.getType() === 'table') as ElementNode;
-    const cell = table
-      .getChildren()
-      .filter($isTableRowNode)
-      [row]!.getChildren()
-      .filter($isTableCellNode)[col]!;
-    return $getId(cell) as string;
-  });
-}
+describe('text writers reject container ids before changing content', () => {
+  for (const target of ['table', 'row', 'cell', 'list'] as const) {
+    for (const op of textWrites) {
+      it(`${op.kind} rejects a ${target} id, including when empty`, () => {
+        for (const text of ['original', '']) {
+          const { session, doc, targets, propagate } = tableFixture(text);
+          const before = session.editor.getEditorState().toJSON();
+          const apply = () =>
+            doc.apply({ ...op, node: targets[target] } as DocumentOp);
+          expect(apply).toThrow(EditError);
+          expect(apply).toThrow('target a paragraph or list item id');
+          expect(session.editor.getEditorState().toJSON()).toEqual(before);
+          expect(propagate).not.toHaveBeenCalled();
+        }
+      });
+    }
+  }
 
-describe('a <td> id given to a text-level op', () => {
-  it('setCell keeps the cell well-formed (the correct path)', () => {
-    const { session, doc } = makeTable([['H'], ['a']]);
-    doc.apply({ kind: 'setCell', table: 't', row: 1, col: 0, text: 'X' });
-    expect(cellChildTypes(session, 1, 0)).toEqual(['paragraph']);
-  });
+  for (const target of ['paragraph', 'item'] as const) {
+    for (const op of textWrites) {
+      it(`${op.kind} still accepts a ${target} id`, () => {
+        const { doc, targets, propagate } = tableFixture();
+        expect(() =>
+          doc.apply({ ...op, node: targets[target] } as DocumentOp)
+        ).not.toThrow();
+        expect(propagate).toHaveBeenCalledOnce();
+      });
+    }
+  }
 
-  it('setText on a cell id keeps the paragraph wrapper', () => {
-    const { session, doc } = makeTable([['H'], ['a']]);
-    const id = cellId(session, 1, 0);
-    doc.apply({ kind: 'setText', node: id, text: 'X' });
-    expect(cellChildTypes(session, 1, 0)).toEqual(['paragraph']);
-    expect(
-      read(session, () => {
-        const table = $getRoot()
-          .getChildren()
-          .find((n) => $isElementNode(n) && n.getType() === 'table');
-        return table?.getTextContent();
-      })
-    ).toContain('X');
-  });
-
-  it('appendText on a cell id does not add a sibling text node', () => {
-    const { session, doc } = makeTable([['H'], ['a']]);
-    const id = cellId(session, 1, 0);
-    doc.apply({ kind: 'appendText', node: id, text: 'X' });
-    expect(cellChildTypes(session, 1, 0)).toEqual(['paragraph']);
-  });
-
-  it('repeated writes to a cell id stay on one paragraph', () => {
-    const { session, doc } = makeTable([['H'], ['a']]);
-    const id = cellId(session, 1, 0);
-    doc.apply({ kind: 'setText', node: id, text: 'dup' });
-    doc.apply({ kind: 'prependText', node: id, text: 'dup' });
-    doc.apply({ kind: 'prependText', node: id, text: 'dup' });
-    expect(cellChildTypes(session, 1, 0)).toEqual(['paragraph']);
-  });
-
-  it('setText on a list-only cell id keeps the list, not list → text', () => {
-    const { session, doc } = makeTable([['H'], ['a']]);
-    edit(session, () => {
-      const table = $getRoot()
-        .getChildren()
-        .find((n) => $isElementNode(n) && n.getType() === 'table');
-      if (!table || !$isElementNode(table)) throw new Error('no table');
-      const cell = table
-        .getChildren()
-        .filter($isTableRowNode)[1]!
-        .getChildren()
-        .filter($isTableCellNode)[0]!;
-      const list = $createListNode('bullet');
-      const item = $createListItemNode();
-      item.append($createTextNode('item'));
-      list.append(item);
-      cell.clear();
-      cell.append(list);
+  it('keeps setCell, container search/replace, and table moves working', () => {
+    const { session, doc, targets, intro } = tableFixture();
+    doc.apply({
+      kind: 'setCell',
+      table: targets.table,
+      row: 0,
+      col: 0,
+      text: 'updated',
     });
-    const id = cellId(session, 1, 0);
-    doc.apply({ kind: 'setText', node: id, text: 'X' });
-    expect(cellChildTypes(session, 1, 0)).toEqual(['list']);
-    expect(
-      read(session, () => {
-        const table = $getRoot()
-          .getChildren()
-          .find((n) => $isElementNode(n) && n.getType() === 'table');
-        return table?.getTextContent();
-      })
-    ).toContain('X');
-  });
-
-  it('setText on a list id writes the first item and keeps the list', () => {
-    const { session } = setup('- one\n- two');
-    const doc = new Doc(session);
-    const listId = read(session, () => $getId($getRoot().getFirstChild()!));
-    doc.apply({ kind: 'setText', node: listId!, text: 'X' });
-    const list = read(session, () => {
-      const node = $getRoot().getFirstChild();
-      if (!node || !$isElementNode(node)) throw new Error('list was dropped');
-      return {
-        type: node.getType(),
-        children: node.getChildren().map((child) => child.getType()),
-        text: node.getTextContent(),
-      };
-    });
-    expect(list.type).toBe('list');
-    expect(list.children).toEqual(['listitem', 'listitem']);
-    expect(list.text).toContain('X');
-    expect(list.text).toContain('two');
-    expect(read(session, () => validateEditorTree($getRoot()))).toEqual([]);
-  });
-
-  it('replaceText and moveNode still accept the table id', () => {
-    const { session, doc } = makeTable([['H'], ['old']]);
+    expect(doc.locate(targets.cell, 'updated')).toHaveLength(1);
     doc.apply({
       kind: 'replaceText',
-      node: 't',
-      find: 'old',
-      to: 'new',
+      node: targets.table,
+      find: 'updated',
+      to: 'replaced',
       scope: { kind: 'all' },
     });
-    expect(read(session, () => $getRoot().getTextContent())).toContain('new');
-    const introId = read(session, () => {
-      const first = $getRoot().getFirstChild();
-      return first ? ($getId(first) as string) : '';
+    doc.apply({ kind: 'moveNode', node: targets.table, at: { before: intro } });
+    read(session, () => {
+      expect($getRoot().getFirstChild()?.getType()).toBe('table');
+      expect($getRoot().getTextContent()).toContain('replaced');
     });
-    doc.apply({ kind: 'moveNode', node: 't', at: { before: introId } });
-    const types = read(session, () =>
-      $getRoot()
-        .getChildren()
-        .map((child) => child.getType())
-    );
-    expect(types[0]).toBe('table');
   });
 });

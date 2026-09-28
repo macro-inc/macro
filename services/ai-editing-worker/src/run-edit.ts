@@ -160,7 +160,6 @@ export async function runEditSession(
     async (span) => {
       const workspace = new EditingWorkspace(manager, liveSource, wal, {
         pool: args.editor ? PeerPool.forEditor(args.editor.name) : undefined,
-        documentId: args.documentId,
       });
       const initialDocument = serializeWithXml(workspace.session);
       span.setAttr('document.chars', initialDocument.length);

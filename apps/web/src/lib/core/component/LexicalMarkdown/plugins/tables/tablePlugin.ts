@@ -6,12 +6,7 @@ import {
   TableCellNode,
 } from '@lexical/table';
 import { mergeRegister } from '@lexical/utils';
-import {
-  $salvageTableCellChildren,
-  TABLE_CELL_ALLOWED_CHILD_TYPES,
-} from '@macro-inc/lexical-core/utils/editor-tree';
-import { Telemetry } from '@macro-inc/observability';
-import type { LexicalEditor } from 'lexical';
+import { $createParagraphNode, type LexicalEditor } from 'lexical';
 import { registerTableListTab } from './tableListTab';
 import { registerTableSelectAll } from './tableSelectAll';
 import { registerTableTabInsertRow } from './tableTabInsertRow';
@@ -27,8 +22,6 @@ interface TablePluginProps {
   hasTabHandler?: boolean;
   // When `true` (default `false`), tables will be wrapped in a `<div>` to enable horizontal scrolling
   hasHorizontalScroll?: boolean;
-  /** Owning document id, used when normalization has to salvage stray cell children. */
-  documentId?: string;
 }
 
 function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
@@ -75,31 +68,33 @@ function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
     })(),
 
     // Restrict table cells to block content that renders sanely inside them
-    // (notably: no nested tables). Stray inlines/text are wrapped in a
-    // paragraph instead of dropped, and the salvage is logged with the
-    // document id so a silent wipe pages.
+    // (notably: no nested tables). Preserve stray text/inlines in a paragraph.
     (() => {
+      const allowedNodesInTableCellNode = [
+        'paragraph',
+        'heading',
+        'list',
+        'quote',
+        'code',
+        'custom-code',
+        'image',
+        'video',
+      ];
       return editor.registerNodeTransform(TableCellNode, (node) => {
         const children = node.getChildren();
-        const alreadyValid = children.every((child) =>
-          TABLE_CELL_ALLOWED_CHILD_TYPES.has(child.__type)
-        );
-        if (alreadyValid) return;
 
-        const result = $salvageTableCellChildren(node);
-        if (
-          result.salvagedTypes.length === 0 &&
-          result.removedTypes.length === 0
-        ) {
-          return;
+        for (let i = 0; i < children.length; i++) {
+          const child = children[i];
+          if (!allowedNodesInTableCellNode.includes(child.__type)) {
+            if (child.isInline()) {
+              const paragraph = $createParagraphNode();
+              child.replace(paragraph);
+              paragraph.append(child);
+            } else {
+              child.remove();
+            }
+          }
         }
-        Telemetry.error('table cell normalization salvaged stray children', {
-          document_id: props.documentId ?? 'unknown',
-          salvaged_types: result.salvagedTypes,
-          removed_types: result.removedTypes,
-          salvaged_count: result.salvagedTypes.length,
-          removed_count: result.removedTypes.length,
-        });
       });
     })()
   );

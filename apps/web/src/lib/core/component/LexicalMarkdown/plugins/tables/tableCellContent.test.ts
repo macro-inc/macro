@@ -1,3 +1,4 @@
+import { $createLinkNode } from '@lexical/link';
 import {
   $createTableNode,
   $createTableRowNode,
@@ -11,9 +12,8 @@ import {
   $createVideoNode,
   $isVideoNode,
 } from '@macro-inc/lexical-core/nodes/VideoNode';
-import { Telemetry } from '@macro-inc/observability';
-import { $createTextNode, type LexicalEditor } from 'lexical';
-import { describe, expect, it, vi } from 'vitest';
+import { $createTextNode, $isElementNode, type LexicalEditor } from 'lexical';
+import { describe, expect, it } from 'vitest';
 import {
   $createTextCell,
   $getCell,
@@ -27,6 +27,44 @@ function createTableEditor(): LexicalEditor {
 }
 
 describe('table cell allowed content', () => {
+  it('preserves stray text and inline links in paragraphs, in order', async () => {
+    const editor = createTableEditor();
+    await buildTable(editor, textGrid([['hello']]));
+    let textKey = '';
+    let linkKey = '';
+    editor.update(
+      () => {
+        const text = $createTextNode('stray text');
+        const link = $createLinkNode('https://example.com');
+        link.append($createTextNode('linked text'));
+        textKey = text.getKey();
+        linkKey = link.getKey();
+        $getCell(0, 0).append(text, link);
+      },
+      { discrete: true }
+    );
+
+    editor.read(() => {
+      const children = $getCell(0, 0).getChildren();
+      expect(children.map((child) => child.getType())).toEqual([
+        'paragraph',
+        'paragraph',
+        'paragraph',
+      ]);
+      expect(children.map((child) => child.getTextContent())).toEqual([
+        'hello',
+        'stray text',
+        'linked text',
+      ]);
+      expect(
+        $isElementNode(children[1]) && children[1].getFirstChild()?.getKey()
+      ).toBe(textKey);
+      expect(
+        $isElementNode(children[2]) && children[2].getFirstChild()?.getKey()
+      ).toBe(linkKey);
+    });
+  });
+
   it('keeps an image appended to a table cell', async () => {
     const editor = createTableEditor();
     await buildTable(editor, textGrid([['hello']]));
@@ -77,38 +115,6 @@ describe('table cell allowed content', () => {
       expect(video).toBeDefined();
       expect(video?.getUrl()).toBe('https://example.com/clip.mp4');
     });
-  });
-
-  it('wraps a stray text child in a paragraph and logs the document id', async () => {
-    const error = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
-    const editor = createTableTestEditor({ documentId: 'doc-019ff75a' });
-    await buildTable(editor, textGrid([['hello']]));
-
-    await new Promise<void>((resolve) => {
-      editor.update(
-        () => {
-          $getCell(0, 0).append($createTextNode('extra'));
-        },
-        { onUpdate: () => resolve() }
-      );
-    });
-
-    editor.read(() => {
-      const children = $getCell(0, 0).getChildren();
-      expect(children.map((child) => child.getType())).toEqual([
-        'paragraph',
-        'paragraph',
-      ]);
-      expect($getCell(0, 0).getTextContent()).toContain('extra');
-    });
-    expect(error).toHaveBeenCalledWith(
-      'table cell normalization salvaged stray children',
-      expect.objectContaining({
-        document_id: 'doc-019ff75a',
-        salvaged_types: ['text'],
-      })
-    );
-    error.mockRestore();
   });
 
   it('still strips nested tables from cells', async () => {

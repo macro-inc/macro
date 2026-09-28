@@ -599,7 +599,6 @@ export function MarkdownEditor(props: {
         hasCellBackgroundColor: true,
         hasTabHandler: true,
         hasHorizontalScroll: true,
-        documentId: blockId,
       })
     )
     .use(tableCellResizerPlugin())
