@@ -270,11 +270,14 @@ wipe, which could not remove open files anyway.
 The physical database name embeds the storage versions,
 `graphql-cache:{scope}:s{epoch}.v{format}.t{storage}`, so builds with different
 compatibility epochs, record formats, or storage schemas use separate files and
-owner locks instead of resetting each other's data. Once an owner is active and
-no other build has live tabs, the coordinator lets that page delete stale
-databases of its scope: the pre-versioning `graphql-cache:{scope}` and strictly
-older storage versions. A newer version is kept, because its build may come
-back after a rollback. The page lists OPFS and, only if a stale name exists,
+owner locks instead of resetting each other's data. Builds at the versions in
+use when names began to embed them (epoch 3, format 3, storage 11) keep the
+unversioned `graphql-cache:{scope}`, so that change moved no database and the
+next build still replays its queued mutations. Once an owner is active and no
+other build has live tabs, the coordinator lets that page delete stale
+databases of its scope: names for versions no newer than its own that it does
+not open, which includes the unversioned name once the versions move past it.
+A newer version is kept, because its build may come back after a rollback. The page lists OPFS and, only if a stale name exists,
 starts a disposable worker (a file Turso cannot read may poison its OPFS
 registry) that deletes each stale database whose owner lock is free and whose
 `mutation_queue` is empty. Databases still queueing mutations, or whose queue

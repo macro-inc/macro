@@ -233,6 +233,18 @@ describe('createWorkerCacheHost', () => {
     ).resolves.toEqual(EMPTY_WRITE);
   });
 
+  it("refuses a scope whose database would read as another scope's WAL file", () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const host = createWorkerCacheHost({ scope: 'scope-1-wal' });
+
+    expect(warn).toHaveBeenCalledWith(
+      '[graphql-cache] disabled: cache scope must not end with -wal'
+    );
+    expect(adapterFactory).not.toHaveBeenCalled();
+    expect(host.disabled).toBe(true);
+  });
+
   it('routes hydration through the payload-projecting RPC', async () => {
     const host = createWorkerCacheHost({ scope: 'scope-1' });
 

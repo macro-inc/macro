@@ -1298,45 +1298,90 @@ export const CACHE_STORAGE_VERSION = {
   storageSchemaVersion: 11,
 } as const;
 
-const LEGACY_DATABASE_PREFIX = 'graphql-cache:';
+/**
+ * Storage versions in use when database names began to embed versions; a
+ * build at exactly these keeps the unversioned name. Mirrors
+ * `UNVERSIONED_STORAGE_VERSIONS` in cache-core.
+ */
+export const UNVERSIONED_STORAGE_VERSION = {
+  schemaCompatibilityEpoch: 3,
+  formatVersion: 3,
+  storageSchemaVersion: 11,
+} as const;
+
+const DATABASE_PREFIX = 'graphql-cache:';
+
+type StorageVersionTuple = readonly [number, number, number];
+
+const versionTuple = (
+  version: typeof CACHE_STORAGE_VERSION | typeof UNVERSIONED_STORAGE_VERSION
+): StorageVersionTuple => [
+  version.schemaCompatibilityEpoch,
+  version.formatVersion,
+  version.storageSchemaVersion,
+];
+
+/** Compared as a tuple, like the WASM: the first version that differs decides. */
+const compareVersions = (
+  left: StorageVersionTuple,
+  right: StorageVersionTuple
+): number => {
+  const index = left.findIndex((version, at) => version !== right[at]);
+  return index < 0 ? 0 : (left[index] ?? 0) - (right[index] ?? 0);
+};
 
 /** Mirrors `cache_database_name`: the physical database this build opens. */
 export function cacheDatabaseIdentity(scope: string): string {
-  const { schemaCompatibilityEpoch, formatVersion, storageSchemaVersion } =
-    CACHE_STORAGE_VERSION;
-  return `${LEGACY_DATABASE_PREFIX}${scope}:s${schemaCompatibilityEpoch}.v${formatVersion}.t${storageSchemaVersion}`;
+  const unversioned = `${DATABASE_PREFIX}${scope}`;
+  const own = versionTuple(CACHE_STORAGE_VERSION);
+  if (compareVersions(own, versionTuple(UNVERSIONED_STORAGE_VERSION)) === 0) {
+    return unversioned;
+  }
+  return `${unversioned}:s${own[0]}.v${own[1]}.t${own[2]}`;
 }
 
 /**
- * Whether `identity` is one of this scope's databases that an older build
- * left behind: the name all versions shared before names embedded versions,
- * or a strictly older storage version. A newer version belongs to a build that
- * may come back, for example after a rollback. Mirrors the WASM's own check.
+ * Whether `identity` is one of this scope's databases that this build does
+ * not open and that no newer build could want: the unversioned name once this
+ * build's versions have moved past it, or another name for versions no newer
+ * than this build's. A newer version belongs to a build that may come back,
+ * for example after a rollback. Mirrors the WASM's own check.
  */
 export function isStaleCacheDatabaseIdentity(
   scope: string,
   identity: string
 ): boolean {
-  const legacy = `${LEGACY_DATABASE_PREFIX}${scope}`;
-  if (identity === legacy) return true;
-  const own = storageVersion(legacy, cacheDatabaseIdentity(scope));
-  const other = storageVersion(legacy, identity);
-  if (!own || !other) return false;
-  // Compared as a tuple, like the WASM: the first version that differs decides.
-  const index = own.findIndex((version, at) => version !== other[at]);
-  return index >= 0 && (other[index] ?? 0) < (own[index] ?? 0);
+  const unversioned = `${DATABASE_PREFIX}${scope}`;
+  const version =
+    identity === unversioned
+      ? versionTuple(UNVERSIONED_STORAGE_VERSION)
+      : storageVersion(unversioned, identity);
+  return (
+    identity !== cacheDatabaseIdentity(scope) &&
+    version !== undefined &&
+    compareVersions(version, versionTuple(CACHE_STORAGE_VERSION)) <= 0
+  );
 }
 
 /** The `[epoch, format, storage]` versions embedded in a database name. */
 function storageVersion(
-  legacy: string,
+  unversioned: string,
   identity: string
-): number[] | undefined {
-  if (!identity.startsWith(legacy)) return;
-  const match = /^:s(\d+)\.v(\d+)\.t(\d+)$/.exec(identity.slice(legacy.length));
+): StorageVersionTuple | undefined {
+  if (!identity.startsWith(unversioned)) return;
+  const match = /^:s(\d+)\.v(\d+)\.t(\d+)$/.exec(
+    identity.slice(unversioned.length)
+  );
   if (!match) return;
-  const parts = match.slice(1).map(Number);
-  return parts.every(Number.isSafeInteger) ? parts : undefined;
+  const [epoch, format, storage] = match.slice(1).map(Number);
+  if (
+    !Number.isSafeInteger(epoch) ||
+    !Number.isSafeInteger(format) ||
+    !Number.isSafeInteger(storage)
+  ) {
+    return;
+  }
+  return [epoch ?? 0, format ?? 0, storage ?? 0];
 }
 
 /** Mirrors turso-opfs's canonical lock derivation without exposing a new lock. */

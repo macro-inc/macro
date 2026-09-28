@@ -53,6 +53,7 @@ import {
   createCacheCoordinatorPageAdapter,
 } from '../worker/coordinator-page-adapter';
 import type { EngineOpenOutcome } from '../worker/coordinator-protocol';
+import { isUnambiguousCacheScope } from '../worker/stale-databases';
 import {
   CacheBootstrapExhaustedError,
   COORDINATOR_CONNECT_ATTEMPTS,
@@ -196,7 +197,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     options.telemetry ?? pageTelemetry?.recorder
   );
   const now = (): number => globalThis.performance?.now() ?? Date.now();
-  const unsupportedReason = unsupportedBrowserReason();
+  const unsupportedReason =
+    unsupportedBrowserReason() ??
+    (isUnambiguousCacheScope(options.scope)
+      ? undefined
+      : 'cache scope must not end with -wal');
   if (unsupportedReason) {
     telemetry?.record({
       name: 'graphql_cache.host_ready',

@@ -2416,14 +2416,23 @@ fn stale_identities_are_only_this_scopes_other_databases() {
         cache_database_name(scope, cache_turso::STORAGE_SCHEMA_VERSION)
     );
     assert!(!is_stale_identity(scope, &own));
-    assert!(is_stale_identity(scope, "graphql-cache:scope-a"));
-    assert!(is_stale_identity(scope, "graphql-cache:scope-a:s1.v2.t3"));
-    let newer = format!(
-        "graphql-cache:scope-a:s{}.v{}.t{}",
-        cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH,
-        cache_core::codec::CACHE_FORMAT_VERSION,
-        cache_turso::STORAGE_SCHEMA_VERSION + 1
+    // The unversioned name is stale only once this build's versions move on.
+    assert_eq!(
+        is_stale_identity(scope, "graphql-cache:scope-a"),
+        own != "graphql-cache:scope-a"
     );
+    assert!(is_stale_identity(scope, "graphql-cache:scope-a:s1.v2.t3"));
+    let versioned = |storage: u32| {
+        format!(
+            "graphql-cache:scope-a:s{}.v{}.t{storage}",
+            cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+            cache_core::codec::CACHE_FORMAT_VERSION,
+        )
+    };
+    let current = versioned(cache_turso::STORAGE_SCHEMA_VERSION);
+    // Another spelling of this build's own versions is never opened again.
+    assert_eq!(is_stale_identity(scope, &current), own != current);
+    let newer = versioned(cache_turso::STORAGE_SCHEMA_VERSION + 1);
     for other in [
         // A newer build may come back after a rollback, so it keeps its file.
         newer.as_str(),
@@ -2472,10 +2481,11 @@ async fn outcome_opens_can_decline_to_wait_for_a_held_owner_lock() {
 async fn stale_databases_are_removed_only_when_unused_and_empty() {
     const SCOPE: &str = "cache-wasm-stale-cleanup";
     let own = database_identity(SCOPE);
-    let legacy = legacy_cache_database_name(SCOPE);
-    let older = format!("{legacy}:s0.v0.t0");
-    let partial = format!("{legacy}:s0.v0.t1");
-    for identity in [&own, &legacy, &older, &partial] {
+    let unversioned = legacy_cache_database_name(SCOPE);
+    let queued = format!("{unversioned}:s0.v0.t0");
+    let older = format!("{unversioned}:s0.v0.t1");
+    let partial = format!("{unversioned}:s0.v0.t2");
+    for identity in [&own, &unversioned, &queued, &older, &partial] {
         remove_opfs_pair(identity).await;
     }
 
@@ -2483,17 +2493,17 @@ async fn stale_databases_are_removed_only_when_unused_and_empty() {
     let engine = fresh_engine(SCOPE).await;
     queue_one_mutation(&engine).await;
     resolved(engine.close()).await;
-    move_opfs_pair(&own, &legacy).await;
+    move_opfs_pair(&own, &queued).await;
     assert_eq!(
-        stale_cleanup(SCOPE, &legacy).await,
+        stale_cleanup(SCOPE, &queued).await,
         serde_json::json!({ "outcome": "queued-mutations", "queuedMutations": 1 })
     );
-    assert!(opfs_file_exists(&legacy).await);
+    assert!(opfs_file_exists(&queued).await);
 
     // A live engine of that build holds its lock, so nothing is opened.
-    hold_web_lock(&owner_lock_for(&legacy)).await;
+    hold_web_lock(&owner_lock_for(&queued)).await;
     assert_eq!(
-        stale_cleanup(SCOPE, &legacy).await,
+        stale_cleanup(SCOPE, &queued).await,
         serde_json::json!({ "outcome": "in-use" })
     );
     release_held_web_lock().await;
@@ -2522,5 +2532,6 @@ async fn stale_databases_are_removed_only_when_unused_and_empty() {
             .await
             .expect_err("not a stale database of this scope");
     }
-    remove_opfs_pair(&legacy).await;
+    remove_opfs_pair(&queued).await;
+    remove_opfs_pair(&own).await;
 }

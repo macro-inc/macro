@@ -329,8 +329,8 @@ describe('CacheCoordinatorPageAdapter', () => {
     const cleanupWorker = new FakeWorker();
     const createCleanupWorker = vi.fn(() => cleanupWorker);
     const listOpfsRootNames = vi.fn(async () => [
-      'graphql-cache:scope',
-      'graphql-cache:scope-wal',
+      'graphql-cache:scope:s1.v1.t1',
+      'graphql-cache:scope:s1.v1.t1-wal',
       cacheDatabaseIdentity('scope'),
       'unrelated.db',
     ]);

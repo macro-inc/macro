@@ -1,5 +1,8 @@
 use async_lock::Mutex;
-use cache_core::codec::{cache_database_name, legacy_cache_database_name};
+use cache_core::codec::{
+    CACHE_FORMAT_VERSION, CACHE_SCHEMA_COMPATIBILITY_EPOCH, UNVERSIONED_STORAGE_VERSIONS,
+    cache_database_name, legacy_cache_database_name,
+};
 use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
@@ -495,31 +498,33 @@ fn database_identity(scope: &str) -> String {
     cache_database_name(scope, cache_turso::STORAGE_SCHEMA_VERSION)
 }
 
-/// Whether `identity` names one of this scope's databases that an older build
-/// left behind: the pre-versioning name, or a strictly older storage version.
-/// A newer version belongs to a build that may come back, for example after a
-/// rollback, so it is never stale.
+/// Whether `identity` names one of this scope's databases that this build does
+/// not open and that no newer build could want: the unversioned name once this
+/// build's versions have moved past it, or another name for versions no newer
+/// than this build's. A newer version belongs to a build that may come back,
+/// for example after a rollback, so it is never stale.
 fn is_stale_identity(scope: &str, identity: &str) -> bool {
-    let legacy = legacy_cache_database_name(scope);
-    if identity == legacy {
-        return true;
-    }
-    match (
-        storage_version(&legacy, identity),
-        storage_version(&legacy, &database_identity(scope)),
-    ) {
-        (Some(other), Some(own)) => other < own,
-        _ => false,
-    }
+    let unversioned = legacy_cache_database_name(scope);
+    let version = if identity == unversioned {
+        Some(UNVERSIONED_STORAGE_VERSIONS)
+    } else {
+        storage_version(&unversioned, identity)
+    };
+    let own = (
+        CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+        CACHE_FORMAT_VERSION,
+        cache_turso::STORAGE_SCHEMA_VERSION,
+    );
+    identity != database_identity(scope) && version.is_some_and(|version| version <= own)
 }
 
 /// The `(epoch, format, storage)` versions embedded in a scope's database name.
-fn storage_version(legacy: &str, identity: &str) -> Option<(u64, u64, u64)> {
+fn storage_version(unversioned: &str, identity: &str) -> Option<(u32, u32, u32)> {
     let mut parts = identity
-        .strip_prefix(legacy)?
+        .strip_prefix(unversioned)?
         .strip_prefix(":s")?
         .split('.');
-    let number = |part: &str| -> Option<u64> {
+    let number = |part: &str| -> Option<u32> {
         if part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()) {
             return None;
         }

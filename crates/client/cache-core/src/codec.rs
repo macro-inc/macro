@@ -1,7 +1,8 @@
 //! Binary record codec shared by all persistent Turso backends (browser and
 //! native hosts). Records are stored as postcard bytes; the logical namespace
 //! embeds [`CACHE_FORMAT_VERSION`] and [`CACHE_SCHEMA_COMPATIBILITY_EPOCH`],
-//! and so does the browser's physical database name. A healthy, graceful
+//! and so does the browser's physical database name after
+//! [`UNVERSIONED_STORAGE_VERSIONS`]. A healthy, graceful
 //! browser reopen with matching versions preserves records, queued mutations,
 //! and optimistic layers. A compatibility/format mismatch or abrupt/uncertain
 //! browser owner loss physically resets the database and discards all three.
@@ -86,25 +87,40 @@ pub fn cache_namespace(scope: &str) -> String {
     format!("graphql-cache:{scope}:s{CACHE_SCHEMA_COMPATIBILITY_EPOCH}:v{CACHE_FORMAT_VERSION}")
 }
 
+/// Storage versions `(schema compatibility epoch, cache format, storage
+/// schema)` in use when database names began to embed versions. A build at
+/// exactly these versions keeps the unversioned name, so that change moved no
+/// database: the next build opens the same file, queued mutations included.
+pub const UNVERSIONED_STORAGE_VERSIONS: (u32, u32, u32) = (3, 3, 11);
+
 /// Physical database name for a cache scope at one storage version.
 ///
-/// It embeds the schema compatibility epoch, the cache format version, and the
-/// backend's `storage_schema_version`, so builds that cannot share records use
-/// separate files and owner locks instead of resetting each other's database
-/// while tabs of both stay open after a deploy. Builds with matching versions
-/// share one database: only a healthy, graceful close and reopen preserves its
-/// files. Metadata is still validated on open, and a mismatch or an
-/// abrupt/uncertain owner loss physically resets both files, discarding every
-/// row, including queued mutations and optimistic layers.
+/// After [`UNVERSIONED_STORAGE_VERSIONS`], it embeds the schema compatibility
+/// epoch, the cache format version, and the backend's
+/// `storage_schema_version`, so builds that cannot share records use separate
+/// files and owner locks instead of resetting each other's database while tabs
+/// of both stay open after a deploy. Builds with matching versions share one
+/// database: only a healthy, graceful close and reopen preserves its files.
+/// Metadata is still validated on open, and a mismatch or an abrupt/uncertain
+/// owner loss physically resets both files, discarding every row, including
+/// queued mutations and optimistic layers.
 pub fn cache_database_name(scope: &str, storage_schema_version: u32) -> String {
+    let unversioned = legacy_cache_database_name(scope);
+    if (
+        CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+        CACHE_FORMAT_VERSION,
+        storage_schema_version,
+    ) == UNVERSIONED_STORAGE_VERSIONS
+    {
+        return unversioned;
+    }
     format!(
-        "{}:s{CACHE_SCHEMA_COMPATIBILITY_EPOCH}.v{CACHE_FORMAT_VERSION}.t{storage_schema_version}",
-        legacy_cache_database_name(scope)
+        "{unversioned}:s{CACHE_SCHEMA_COMPATIBILITY_EPOCH}.v{CACHE_FORMAT_VERSION}.t{storage_schema_version}"
     )
 }
 
-/// Physical name every storage version shared before [`cache_database_name`]
-/// embedded versions; kept so stale files can be found and removed.
+/// Physical name every storage version shared before names embedded versions,
+/// and still the name at [`UNVERSIONED_STORAGE_VERSIONS`].
 pub fn legacy_cache_database_name(scope: &str) -> String {
     format!("graphql-cache:{scope}")
 }
@@ -159,13 +175,14 @@ mod tests {
 
     #[test]
     fn database_name_separates_storage_versions() {
+        // The versions of the last unversioned builds keep their file.
         assert_eq!(
             cache_database_name("client-token-1", 11),
-            "graphql-cache:client-token-1:s3.v3.t11"
+            "graphql-cache:client-token-1"
         );
-        assert_ne!(
+        assert_eq!(
             cache_database_name("client-token-1", 12),
-            cache_database_name("client-token-1", 11)
+            "graphql-cache:client-token-1:s3.v3.t12"
         );
         assert_eq!(
             legacy_cache_database_name("client-token-1"),

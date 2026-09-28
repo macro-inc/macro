@@ -2,6 +2,14 @@ import { isStaleCacheDatabaseIdentity } from './coordinator-protocol';
 
 const WAL_SUFFIX = '-wal';
 
+/**
+ * A database's WAL file is its name plus `-wal`, so the database of a scope
+ * ending in `-wal` would read as another scope's WAL file and could be
+ * removed with it. App scopes are UUIDs; a host refuses any other such scope.
+ */
+export const isUnambiguousCacheScope = (scope: string): boolean =>
+  !scope.endsWith(WAL_SUFFIX);
+
 /** This scope's databases this build does not open, from OPFS entry names. */
 export function staleCacheDatabaseIdentities(
   scope: string,

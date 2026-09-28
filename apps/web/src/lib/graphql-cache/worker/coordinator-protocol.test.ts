@@ -14,6 +14,7 @@ import {
   isStaleCacheDatabaseIdentity,
   tabIdFromLivenessLockName,
   tabLivenessLockName,
+  UNVERSIONED_STORAGE_VERSION,
   validateCleanupToPageEnvelope,
   validateCoordinatorToEngineEnvelope,
   validateCoordinatorToTabEnvelope,
@@ -677,25 +678,40 @@ describe('coordinator runtime protocol', () => {
   });
 
   it('derives the exact UTF-8 canonical turso-opfs lock name', () => {
+    // The current versions keep the unversioned name, and so the lock that
+    // builds before versioned names hold.
     expect(databaseOwnerLockName('scope')).toBe(
-      'macro:turso-opfs:v1:29:graphql-cache:scope:s3.v3.t11'
+      'macro:turso-opfs:v1:19:graphql-cache:scope'
     );
     expect(databaseOwnerLockName('é')).toBe(
-      'macro:turso-opfs:v1:26:graphql-cache:é:s3.v3.t11'
+      'macro:turso-opfs:v1:16:graphql-cache:é'
     );
   });
 
   it('mirrors the storage versions the Rust crates embed in database names', () => {
+    const repositoryRoot = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../..'
+    );
+    const rustSource = (path: string): string =>
+      readFileSync(resolve(repositoryRoot, path), 'utf8');
     const rustConstant = (path: string, name: string): number => {
-      const repositoryRoot = resolve(
-        dirname(fileURLToPath(import.meta.url)),
-        '../../../../../..'
+      const found = new RegExp(`pub const ${name}: u32 = (\\d+);`).exec(
+        rustSource(path)
       );
-      const source = readFileSync(resolve(repositoryRoot, path), 'utf8');
-      const found = new RegExp(`pub const ${name}: u32 = (\\d+);`).exec(source);
       if (!found?.[1]) throw new Error(`${name} not found in ${path}`);
       return Number(found[1]);
     };
+    const unversioned =
+      /pub const UNVERSIONED_STORAGE_VERSIONS: \(u32, u32, u32\) = \((\d+), (\d+), (\d+)\);/.exec(
+        rustSource('crates/client/cache-core/src/codec.rs')
+      );
+    if (!unversioned) throw new Error('UNVERSIONED_STORAGE_VERSIONS not found');
+    expect(UNVERSIONED_STORAGE_VERSION).toEqual({
+      schemaCompatibilityEpoch: Number(unversioned[1]),
+      formatVersion: Number(unversioned[2]),
+      storageSchemaVersion: Number(unversioned[3]),
+    });
     expect(CACHE_STORAGE_VERSION).toEqual({
       schemaCompatibilityEpoch: rustConstant(
         'crates/client/cache-core/src/codec.rs',
@@ -715,22 +731,25 @@ describe('coordinator runtime protocol', () => {
   it("recognizes only this scope's older databases as stale", () => {
     const { schemaCompatibilityEpoch, formatVersion, storageSchemaVersion } =
       CACHE_STORAGE_VERSION;
-    expect(isStaleCacheDatabaseIdentity('a', cacheDatabaseIdentity('a'))).toBe(
-      false
-    );
-    expect(isStaleCacheDatabaseIdentity('a', 'graphql-cache:a')).toBe(true);
+    const own = cacheDatabaseIdentity('a');
+    const versioned = (storage: number): string =>
+      `graphql-cache:a:s${schemaCompatibilityEpoch}.v${formatVersion}.t${storage}`;
+    // The current versions still open the unversioned name.
+    expect(own).toBe('graphql-cache:a');
+    expect(isStaleCacheDatabaseIdentity('a', own)).toBe(false);
+    // Another spelling of this build's own versions is never opened again.
+    expect(
+      isStaleCacheDatabaseIdentity('a', versioned(storageSchemaVersion))
+    ).toBe(true);
     expect(isStaleCacheDatabaseIdentity('a', 'graphql-cache:a:s1.v2.t3')).toBe(
       true
     );
     expect(
-      isStaleCacheDatabaseIdentity(
-        'a',
-        `graphql-cache:a:s${schemaCompatibilityEpoch}.v${formatVersion}.t${storageSchemaVersion - 1}`
-      )
+      isStaleCacheDatabaseIdentity('a', versioned(storageSchemaVersion - 1))
     ).toBe(true);
     for (const other of [
       // A newer build may come back after a rollback, so it keeps its file.
-      `graphql-cache:a:s${schemaCompatibilityEpoch}.v${formatVersion}.t${storageSchemaVersion + 1}`,
+      versioned(storageSchemaVersion + 1),
       'graphql-cache:a:s99.v0.t0',
       'graphql-cache:b:s1.v2.t3',
       'graphql-cache:ab',

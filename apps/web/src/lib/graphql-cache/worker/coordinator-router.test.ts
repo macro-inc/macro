@@ -871,6 +871,46 @@ describe('CoordinatorRouter', () => {
     ]);
   });
 
+  it('keeps waiting when the unknown lock was a tab of this build still registering', async () => {
+    vi.useFakeTimers();
+    const channel = fakeTakeoverChannel();
+    const router = new CoordinatorRouter({
+      takeoverReplyTimeoutMs: 100,
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+      // tab-late holds its liveness lock before it sends register-tab.
+      queryHeldLockNames: heldLocks(() => livenessLocks('tab-a', 'tab-late')),
+      openTakeoverChannel: channel.open,
+    });
+    const tab = new FakePort();
+    await register(router, tab, 'tab-a', 2_000);
+    const engine = new FakePort();
+    await attach(router, tab, 'tab-a', 1, engine);
+    engine.receive({
+      ...version,
+      kind: 'engine-assets-ready',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+    });
+    busy(engine);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(channel.posted).toHaveLength(1);
+
+    await register(router, new FakePort(), 'tab-late', 2_000);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([]);
+    expect(router.snapshot()?.state).toMatchObject({
+      kind: 'activating',
+      phase: 'awaiting-owner-lock',
+    });
+    // Later busy reports find only this build's tabs and ask nobody.
+    busy(engine);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(channel.posted).toHaveLength(1);
+    expect(messagesOfKind(tab, 'cache-unavailable')).toEqual([]);
+  });
+
   it('fails closed at once when the holding build keeps its database', async () => {
     vi.useFakeTimers();
     const { channel, tabA, tabB } = await askForAnotherBuildsDatabase();

@@ -430,7 +430,7 @@ describe('cache engine worker runtime', () => {
     const reply = new FakePort();
     const removeStaleCacheDatabase = vi.fn(
       async (_scope: string, identity: string) =>
-        identity === 'graphql-cache:scope'
+        identity === 'graphql-cache:scope:s0.v0.t1'
           ? { outcome: 'removed' as const }
           : { outcome: 'queued-mutations' as const, queuedMutations: 2 }
     );
@@ -439,10 +439,11 @@ describe('cache engine worker runtime', () => {
       loadWasm: async () =>
         ({ removeStaleCacheDatabase }) as unknown as CacheWasmModule,
       listOpfsRootNames: async () => [
-        'graphql-cache:scope',
-        'graphql-cache:scope-wal',
+        'graphql-cache:scope:s0.v0.t1',
+        'graphql-cache:scope:s0.v0.t1-wal',
         'graphql-cache:scope:s0.v0.t0',
         cacheDatabaseIdentity('scope'),
+        `${cacheDatabaseIdentity('scope')}-wal`,
       ],
     });
 
@@ -453,7 +454,7 @@ describe('cache engine worker runtime', () => {
 
     await vi.waitFor(() => expect(scope.closed).toBe(true));
     expect(removeStaleCacheDatabase.mock.calls).toEqual([
-      ['scope', 'graphql-cache:scope'],
+      ['scope', 'graphql-cache:scope:s0.v0.t1'],
       ['scope', 'graphql-cache:scope:s0.v0.t0'],
     ]);
     expect(reply.messages).toEqual([

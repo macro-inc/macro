@@ -1651,8 +1651,8 @@ export class CoordinatorRouter {
 
   /**
    * Asks the build that holds the database to hand it over. The engine keeps
-   * retrying the lock meanwhile; unless the holder agrees promptly, this
-   * activation fails closed as before handover existed.
+   * retrying the lock meanwhile. Unless the holder agrees promptly, or the
+   * unknown tabs turn out to be this build's, this activation fails closed.
    */
   private requestTakeover(route: EngineRoute): void {
     const core = this.coreValue;
@@ -1676,12 +1676,7 @@ export class CoordinatorRouter {
     };
     takeover.timer = this.setTimeoutFn(() => {
       takeover.timer = undefined;
-      if (this.takeover !== takeover || takeover.granted) return;
-      this.closeUnavailable(
-        takeover.tabId,
-        takeover.ownerEpoch,
-        'another build keeps the database'
-      );
+      void this.expireTakeover(takeover);
     }, this.takeoverReplyTimeoutMs);
     this.takeover = takeover;
     channel.post({
@@ -1691,6 +1686,26 @@ export class CoordinatorRouter {
       requestId,
       buildTime: this.buildTime,
     });
+  }
+
+  /**
+   * Nobody answered. The unknown liveness lock that prompted the request may
+   * belong to a tab of this build that had not registered yet, so look again:
+   * once every live tab is known, keep waiting for the engine's own retries.
+   */
+  private async expireTakeover(takeover: PendingTakeover): Promise<void> {
+    if (this.takeover !== takeover || takeover.granted) return;
+    const others = await this.otherBuildTabIds();
+    if (this.takeover !== takeover || takeover.granted) return;
+    if (others?.length === 0) {
+      this.clearTakeover();
+      return;
+    }
+    this.closeUnavailable(
+      takeover.tabId,
+      takeover.ownerEpoch,
+      'another build keeps the database'
+    );
   }
 
   private handleTakeoverMessage(message: CacheTakeoverMessage): void {
