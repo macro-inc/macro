@@ -53,7 +53,9 @@ function DiffStack(props: { entries: FileDiffEntry[] }) {
   );
 
   return (
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto scroll-smooth px-3.5 pt-3 pb-24 motion-reduce:scroll-auto">
+    // On full-frame mobile the composer and dock float over the bottom edge,
+    // so the last card scrolls clear of them.
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto scroll-smooth px-3.5 pt-3 pb-24 motion-reduce:scroll-auto touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1.5rem)]">
       <For each={props.entries}>
         {(entry) => {
           const path = () => entry.file.path;
@@ -100,7 +102,13 @@ function DiffStack(props: { entries: FileDiffEntry[] }) {
   );
 }
 
-export function ChangesPane() {
+export function ChangesPane(props: {
+  /**
+   * The pane covers the whole session frame (a phone): the header's back
+   * button closes it, and the file tree gives its width to the diffs.
+   */
+  takeover?: boolean;
+}) {
   const controller = useAgentChanges();
   const { layout, model, review, context, diffStyle, setDiffStyle } =
     controller;
@@ -127,6 +135,7 @@ export function ChangesPane() {
     >
       <ChangesHeader
         spotlit={layout.layout() === 'changes-only'}
+        takeover={props.takeover}
         range={range()}
         diffStyle={diffStyle()}
         onDiffStyle={setDiffStyle}
@@ -137,7 +146,8 @@ export function ChangesPane() {
         }}
         refreshing={model.refreshing() || state().kind === 'capturing'}
         onRefresh={() => void model.refresh()}
-        onBack={layout.backToSplit}
+        // There is no split to come back to on a phone: back means leaving.
+        onBack={props.takeover ? layout.close : layout.backToSplit}
         onSpotlight={layout.spotlight}
         onClose={layout.close}
       />
@@ -238,6 +248,7 @@ export function ChangesPane() {
             <ReviewBar
               anyExpanded={review.anyExpanded()}
               onToggleCollapsed={review.toggleAllCollapsed}
+              fileCount={props.takeover ? model.files().length : undefined}
             />
             <Show when={changeset()?.truncated}>
               <CaptureBanner
@@ -246,12 +257,16 @@ export function ChangesPane() {
               />
             </Show>
             <div class="flex min-h-0 flex-1">
-              <FileTree
-                nodes={model.tree()}
-                fileCount={model.files().length}
-                active={review.active()}
-                onSelect={review.activate}
-              />
+              {/* A phone-wide pane cannot fit the tree beside a diff; the
+                  file cards' own headers carry the paths there. */}
+              <Show when={!props.takeover}>
+                <FileTree
+                  nodes={model.tree()}
+                  fileCount={model.files().length}
+                  active={review.active()}
+                  onSelect={review.activate}
+                />
+              </Show>
               <Switch>
                 <Match when={model.patchStatus() === 'error'}>
                   <div class="flex flex-1 flex-col items-center justify-center gap-2 text-center">

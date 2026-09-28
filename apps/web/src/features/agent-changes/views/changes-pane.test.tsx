@@ -14,6 +14,7 @@ import {
   MOCK_PATCH,
   mockChangeset,
 } from '../tests/mock-context';
+import { AgentChangesSplit } from './AgentChangesSplit';
 import { ChangesPane } from './ChangesPane';
 import {
   ChangesHandoff,
@@ -27,6 +28,12 @@ vi.mock('../components/PierreFileDiff', () => ({
   PierreFileDiff: (props: { path: string }) => (
     <div data-testid="diff" data-path={props.path} />
   ),
+}));
+
+// The split picks its layout from the device; tests flip it directly.
+const device = vi.hoisted(() => ({ mobile: false }));
+vi.mock('@core/mobile/isMobile', () => ({
+  isMobile: () => device.mobile,
 }));
 
 // Module-load quarantine, not a dependency substitute: the connection-gateway
@@ -219,6 +226,76 @@ describe('ChangesPane', () => {
       screen.getByRole('button', { name: 'Close the changes pane' })
     );
     expect(controller().layout.layout()).toBe('agent-only');
+  });
+
+  it('takes over on a phone: back leaves, and the split controls stay off', async () => {
+    const context = readyContext();
+    context.setPullRequestUrl('https://github.com/macro-inc/macro/pull/1482');
+    const { controller } = mount(context, () => <ChangesPane takeover />);
+    controller().layout.open();
+    await waitFor(() => expect(screen.getAllByTestId('diff')).toHaveLength(2));
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'Expand changes to the full width',
+      })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Close the changes pane' })
+    ).toBeNull();
+    // The tree has no room beside a phone-wide diff; the bar keeps the count.
+    expect(
+      screen.queryByRole('navigation', { name: 'Changed files' })
+    ).toBeNull();
+    expect(screen.getByText('2 files')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'View pull request' }));
+    expect(context.opened).toEqual([
+      'https://github.com/macro-inc/macro/pull/1482',
+    ]);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Back to the session' })
+    );
+    expect(controller().layout.layout()).toBe('agent-only');
+  });
+});
+
+describe('AgentChangesSplit', () => {
+  it('covers the session on a phone instead of splitting the width', async () => {
+    device.mobile = true;
+    try {
+      const context = readyContext();
+      const { controller } = mount(context, () => (
+        <AgentChangesSplit>
+          <p data-testid="session">transcript</p>
+        </AgentChangesSplit>
+      ));
+      // Solid writes `inert` through the DOM property; a browser reflects
+      // it to the attribute, jsdom only keeps the property.
+      const session = () => screen.getByTestId('session').parentElement!;
+      expect(screen.queryByRole('region', { name: 'Changes' })).toBeNull();
+      expect(session().inert).toBeFalsy();
+
+      controller().layout.open();
+      await waitFor(() =>
+        expect(screen.getByRole('region', { name: 'Changes' })).toBeTruthy()
+      );
+      // The transcript stays mounted underneath, out of reach.
+      expect(screen.getByTestId('session')).toBeTruthy();
+      expect(session().inert).toBe(true);
+      expect(session().getAttribute('aria-hidden')).toBe('true');
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Back to the session' })
+      );
+      expect(controller().layout.layout()).toBe('agent-only');
+      expect(screen.queryByRole('region', { name: 'Changes' })).toBeNull();
+      expect(session().inert).toBe(false);
+      expect(session().getAttribute('aria-hidden')).toBeNull();
+    } finally {
+      device.mobile = false;
+    }
   });
 });
 
