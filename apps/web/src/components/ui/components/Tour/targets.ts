@@ -95,8 +95,8 @@ const isShown = (element: HTMLElement) => {
 };
 
 /**
- * The first registered element for `targets`, in order, that is shown and,
- * for view-scoped targets, inside `boundary`. Reruns in a tracked scope when
+ * The element for the first of `targets` that has one shown (inside
+ * `boundary` for view-scoped targets); the top-most when several share it. Reruns in a tracked scope when
  * a target registers, unregisters, or resizes.
  */
 export function resolveTourTarget(
@@ -105,12 +105,22 @@ export function resolveTourTarget(
 ): HTMLElement | undefined {
   version();
   for (const target of targets) {
+    // Several elements can share a target (every row of a list); point at
+    // the top-most one on screen so the choice is stable and predictable.
+    let best: { element: HTMLElement; rect: DOMRect } | undefined;
     for (const element of elements.get(target.id) ?? []) {
       if (!isShown(element)) continue;
       if (target.scope === 'view' && boundary && !boundary.contains(element))
         continue;
-      return element;
+      const rect = element.getBoundingClientRect();
+      if (
+        !best ||
+        rect.top < best.rect.top ||
+        (rect.top === best.rect.top && rect.left < best.rect.left)
+      )
+        best = { element, rect };
     }
+    if (best) return best.element;
   }
   return undefined;
 }

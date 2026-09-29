@@ -1,6 +1,7 @@
 export {
   Tour,
   type TourContextValue,
+  type TourHintProps,
   type TourPopoverProps,
   type TourRootProps,
   type TourStatus,

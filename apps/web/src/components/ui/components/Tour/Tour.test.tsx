@@ -13,7 +13,14 @@ import {
   tourTarget,
 } from '.';
 
-const T = defineTourTargets('test', ['first', 'second', 'entry', 'hidden']);
+const T = defineTourTargets('test', [
+  'first',
+  'second',
+  'entry',
+  'hidden',
+  'toggle',
+  'row',
+]);
 const APP = defineTourTargets('test-app', ['menu'], { scope: 'app' });
 
 // jsdom has no layout; give every element a box so it counts as shown.
@@ -192,6 +199,78 @@ describe('Tour', () => {
     setShown(false);
     await settle();
     expect(document.querySelector('[data-tour-beacon]')).toBeTruthy();
+  });
+
+  it('falls back through entries and says what to press', async () => {
+    const [expanded, setExpanded] = createSignal(false);
+    const onComplete = vi.fn();
+    render(() => (
+      <>
+        <button type="button" ref={tourTarget(T.toggle)}>
+          Show sidebar
+        </button>
+        <Show when={expanded()}>
+          <button type="button" ref={tourTarget(T.entry)}>
+            Settings
+          </button>
+        </Show>
+        <Tour.Root
+          steps={[
+            {
+              target: T.hidden,
+              entry: [T.entry, T.toggle],
+              entryLabel: 'Open settings to continue',
+              title: 'Hidden',
+              description: 'Behind two steps',
+            },
+          ]}
+          onComplete={onComplete}
+        >
+          <Tour.Beacon />
+          <Tour.Hint>
+            <span>Open settings to continue</span>
+            <Tour.Next>Skip</Tour.Next>
+          </Tour.Hint>
+        </Tour.Root>
+      </>
+    ));
+    await settle();
+    const hint = () => document.querySelector('[data-tour-hint]');
+    expect(hint()?.textContent).toContain('Open settings to continue');
+
+    // The sidebar opening swaps the beacon to the real entry.
+    setExpanded(true);
+    await settle();
+    expect(hint()).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(onComplete).toHaveBeenCalledOnce();
+  });
+
+  it('points at the top-most element when several share a target', () => {
+    const tops = new Map<string, number>([
+      ['low', 200],
+      ['high', 40],
+    ]);
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      function (this: HTMLElement) {
+        return new DOMRect(
+          0,
+          tops.get(this.dataset.testid ?? '') ?? 0,
+          100,
+          20
+        );
+      }
+    );
+    render(() => (
+      <>
+        <span data-testid="low" ref={tourTarget(T.row)} />
+        <span data-testid="high" ref={tourTarget(T.row)} />
+      </>
+    ));
+    expect(resolveTourTarget([T.row], undefined)).toBe(
+      screen.getByTestId('high')
+    );
   });
 
   it('renders the same parts inline with Tour.Panel', () => {

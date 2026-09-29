@@ -238,6 +238,10 @@ export type TourPopoverProps = ParentProps<{
 /**
  * The step content as a floating, non-modal card next to the target, kept
  * inside the boundary. Hidden while the step waits on its entry.
+ *
+ * `data-placed` appears once the card is positioned (animate its entrance
+ * from there) and `data-settled` a frame later (animate moves between steps
+ * only then).
  */
 function TourPopover(props: TourPopoverProps) {
   const tour = useTour();
@@ -250,6 +254,19 @@ function TourPopover(props: TourPopoverProps) {
     placed: false,
     hidden: false,
   });
+  // Position changes animate only once the card has appeared in place, so
+  // it rises where it belongs instead of gliding in from the corner.
+  const [settled, setSettled] = createSignal(false);
+  createEffect(
+    on(
+      () => position().placed,
+      (placed) => {
+        if (!placed) return;
+        const frame = requestAnimationFrame(() => setSettled(true));
+        onCleanup(() => cancelAnimationFrame(frame));
+      }
+    )
+  );
 
   createEffect(() => {
     const element = card();
@@ -311,6 +328,8 @@ function TourPopover(props: TourPopoverProps) {
           aria-labelledby={tour.titleId}
           data-tour-popover
           data-status={tour.status()}
+          data-placed={position().placed ? '' : undefined}
+          data-settled={settled() ? '' : undefined}
           class={cn('fixed left-0 top-0 z-[70]', props.class)}
           style={{
             transform: `translate3d(${position().x}px, ${position().y}px, 0)`,
@@ -432,8 +451,8 @@ function TourBeacon(props: { class?: string }) {
           class={cn('pointer-events-none fixed z-[70] size-2.5', props.class)}
           style={{
             visibility: rect() ? 'visible' : 'hidden',
-            left: `${(rect()?.right ?? 0) - 6}px`,
-            top: `${(rect()?.top ?? 0) - 4}px`,
+            left: `${(rect()?.right ?? 0) - 16}px`,
+            top: `${(rect()?.top ?? 0) + (rect()?.height ?? 0) / 2 - 5}px`,
           }}
         >
           <span class="absolute inset-0 animate-ping rounded-full bg-accent opacity-60" />
@@ -443,6 +462,56 @@ function TourBeacon(props: { class?: string }) {
           {tour.current().entryLabel ??
             `Tour continues: ${tour.current().title}`}
         </span>
+      </Portal>
+    </Show>
+  );
+}
+
+export type TourHintProps = ParentProps<{
+  class?: string;
+  placement?: Placement;
+}>;
+
+/**
+ * A small floating note beside the entry while the step waits, saying what
+ * to press. Unlike the card it doesn't cover the entry, so it can carry
+ * controls such as skip or dismiss.
+ */
+function TourHint(props: TourHintProps) {
+  const tour = useTour();
+  const [hint, setHint] = createSignal<HTMLElement>();
+  const [position, setPosition] = createSignal<{ x: number; y: number }>();
+  createEffect(() => {
+    const element = hint();
+    const entry = tour.entry();
+    if (!element || !entry) return;
+    follow(entry, element, () => {
+      void computePosition(entry, element, {
+        strategy: 'fixed',
+        placement: props.placement ?? 'right',
+        middleware: [
+          offset(12),
+          flip({ padding: EDGE, fallbackPlacements: ['bottom', 'top'] }),
+          shift({ padding: EDGE }),
+        ],
+      }).then(({ x, y }) => setPosition({ x, y }));
+    });
+  });
+  return (
+    <Show when={tour.status() === 'waiting'}>
+      <Portal>
+        <div
+          ref={setHint}
+          data-tour-hint
+          data-placed={position() ? '' : undefined}
+          class={cn('fixed left-0 top-0 z-[70]', props.class)}
+          style={{
+            transform: `translate3d(${position()?.x ?? 0}px, ${position()?.y ?? 0}px, 0)`,
+            opacity: position() ? undefined : 0,
+          }}
+        >
+          {props.children}
+        </div>
       </Portal>
     </Show>
   );
@@ -534,7 +603,7 @@ function TourClose(props: TourButtonProps) {
 /**
  * Composable product tours. `Root` owns the steps; pick a form for the
  * content (`Popover` floating by the target, or `Panel` inline) and add
- * `Highlight` and `Beacon` for the target and waiting entry.
+ * `Highlight` for the target, and `Beacon` and `Hint` for a waiting entry.
  *
  * @example
  * <Tour.Root steps={steps} onDismiss={dismiss}>
@@ -553,6 +622,7 @@ export const Tour = {
   Panel: TourPanel,
   Highlight: TourHighlight,
   Beacon: TourBeacon,
+  Hint: TourHint,
   Title: TourTitle,
   Description: TourDescription,
   Progress: TourProgress,
