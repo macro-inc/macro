@@ -5,9 +5,12 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+serde_json = { workspace = true }
+chrono = { workspace = true }
 anyhow = { workspace = true }
 async-graphql = { workspace = true, features = ["dataloader"] }
 axum = { workspace = true }
+agent_session = { path = "../agent_session", default-features = false }
 bots = { path = "../bots", default-features = false, features = ["ports"] }
 email = { path = "../email", default-features = false, features = [
   "axum",

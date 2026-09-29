@@ -4245,6 +4245,7 @@ name = "complete_graph"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_session",
  "anyhow",
  "apollo-compiler",
  "async-graphql",
@@ -4279,6 +4280,7 @@ dependencies = [
  "predicate-index",
  "rootcause",
  "serde",
+ "serde_json",
  "soup",
  "soup-filter-projection",
  "soup_realtime",

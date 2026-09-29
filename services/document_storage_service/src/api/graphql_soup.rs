@@ -1,4 +1,5 @@
 use crate::api::context::{ApiContext, AuthorizationService};
+use agent_session::outbound::postgres::PgAgentSessionRepo;
 use async_graphql::{
     Data,
     http::{ALL_WEBSOCKET_PROTOCOLS, GraphiQLSource},
@@ -187,6 +188,9 @@ fn insert_graphql_context_data(
     data.insert(complete_graph::agent_session_bot_loader(PgBotsRepo::new(
         state.readonly_db.0.clone(),
     )));
+    data.insert(complete_graph::agent_session_log_loader(
+        PgAgentSessionRepo::new(state.readonly_db.0.clone()),
+    ));
     data.insert(complete_graph::entity_properties_loader(
         macro_user_id.clone(),
         property_reader,
