@@ -40,7 +40,11 @@ export function rankCommandSearchItems(
   // Keep these additional matches reachable after the regular ranked results.
   const matchedIds = new Set(ranked.map((item) => item.id));
   const additional = items
-    .filter((item) => item.kind === 'entity' && !matchedIds.has(item.id))
+    .filter(
+      (item) =>
+        (item.kind === 'entity' || item.kind === 'initiative') &&
+        !matchedIds.has(item.id)
+    )
     .sort(compareRecency);
   return [...ranked, ...additional];
 }

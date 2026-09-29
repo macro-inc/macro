@@ -1,6 +1,6 @@
 use crate::domain::{
     dm::{DmPair, EnsureDms, EnsureDmsSummary},
-    events::ChannelEvent,
+    events::{ChannelEvent, ReactionNotificationContext},
     models::{
         Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
         BotSenderProfile, ChannelAttachmentType, ChannelContextMessage, ChannelJoinCodeResponse,
@@ -1026,11 +1026,14 @@ where
     ) -> Result<(), ChannelMutationErr> {
         let message_id = Uuid::parse_str(&req.message_id)
             .map_err(|err| ChannelMutationErr::BadRequest(err.to_string()))?;
-        self.repo
-            .get_message_owner(channel_id, message_id)
+        let reaction_message = self
+            .repo
+            .get_reaction_message_context(channel_id, message_id)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?
             .ok_or_else(|| ChannelMutationErr::NotFound("message not found".to_string()))?;
+        let added = req.action == ReactionAction::Add;
+        let emoji = req.emoji.clone();
         match req.action {
             ReactionAction::Add => {
                 self.repo
@@ -1056,11 +1059,39 @@ where
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
+        let message_sender_id = reaction_message.sender.as_user().cloned();
+        let notification = if added && let Some(message_sender_id) = message_sender_id {
+            match self
+                .repo
+                .get_channel_metadata(channel_id, message_sender_id)
+                .await
+            {
+                Ok(metadata) => Some(ReactionNotificationContext {
+                    emoji,
+                    message_sender: reaction_message.sender,
+                    thread_id: reaction_message.thread_id,
+                    message_content: reaction_message.content,
+                    metadata,
+                }),
+                Err(_) => {
+                    tracing::warn!(
+                        %channel_id,
+                        %message_id,
+                        "unable to build reaction notification context"
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         self.events.dispatch(ChannelEvent::ReactionChanged {
             channel_id,
             actor: actor.clone(),
             message_id,
             reactions,
+            notification,
             recipients: participant_ids(&participants),
             nonce: req.nonce,
         });

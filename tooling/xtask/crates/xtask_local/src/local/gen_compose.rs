@@ -60,6 +60,11 @@ pub fn caddyfile_path(instance: &Instance) -> PathBuf {
     instance.artifact_dir().join("proxy/Caddyfile")
 }
 
+/// Checked-in development CA and localhost fixtures.
+pub fn tls_certs_dir() -> PathBuf {
+    repo_root().join("infra/local/certs")
+}
+
 /// Build the override (typed model), apply the merge tags, and write it.
 /// `static_frontend` mounts the staged app bundle into the proxy (headless
 /// stacks serve the frontend from Caddy instead of a dev server).
@@ -70,6 +75,7 @@ pub fn generate(
     static_frontend: bool,
     gmail_forwarder: bool,
 ) -> Result<PathBuf> {
+    super::tls::issue(instance)?;
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
 
@@ -102,6 +108,12 @@ pub fn generate(
                 instance.port(Port::AgentHarnessEgress)
             ));
         }
+        if mode.spec().runs_local_infra && svc.compose_name == "preview_gateway" {
+            if instance.is_default() {
+                ports.push(format!("{}:8080", instance.port(Port::PreviewControl)));
+            }
+            ports.push(format!("{}:2222", instance.port(Port::PreviewSsh)));
+        }
         if !ports.is_empty() {
             s.ports = dct::Ports::Short(ports);
         }
@@ -111,7 +123,12 @@ pub fn generate(
     // The reverse proxy is the frontend's single origin in every mode, and
     // LocalStack runs in every mode (dev's `dev_personal` notification queue
     // lives there too).
-    add_proxy_service(&mut services, instance, static_frontend);
+    add_proxy_service(
+        &mut services,
+        instance,
+        static_frontend,
+        mode.spec().runs_local_infra,
+    );
     add_localstack_service(&mut services, instance);
     // The rest of the local infra (FusionAuth, Mailpit, per-instance Postgres/
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
@@ -273,24 +290,43 @@ fn add_proxy_service(
     services: &mut IndexMap<String, Option<dct::Service>>,
     instance: &Instance,
     static_frontend: bool,
+    previews: bool,
 ) {
     let proxy_port = instance.port(Port::Proxy);
-    let mut volumes = vec![dct::Volumes::Simple(format!(
-        "{}:/etc/caddy/Caddyfile:ro",
-        caddyfile_path(instance).display()
-    ))];
+    let mut volumes = vec![
+        dct::Volumes::Simple(format!(
+            "{}:/etc/caddy/Caddyfile:ro",
+            caddyfile_path(instance).display()
+        )),
+        dct::Volumes::Simple(format!(
+            "{}:/etc/caddy/certs:ro",
+            super::tls::certs_dir(instance).display()
+        )),
+    ];
     if static_frontend {
         volumes.push(dct::Volumes::Simple(format!(
             "{}:/srv/frontend:ro",
             super::frontend::static_dir(instance).display()
         )));
     }
+    let mut ports = vec![format!("{proxy_port}:{proxy_port}")];
+    if previews {
+        ports.push(format!("{}:8443", instance.port(Port::PreviewHttps)));
+        volumes.push(dct::Volumes::Simple(format!(
+            "{}:/data",
+            instance.artifact_dir().join("preview-caddy-data").display()
+        )));
+    }
     services.insert(
         "proxy".to_string(),
         Some(dct::Service {
             image: Some(CADDY_IMAGE.to_string()),
-            environment: kv(&[("PROXY_PORT", &proxy_port.to_string())]),
-            ports: dct::Ports::Short(vec![format!("{proxy_port}:{proxy_port}")]),
+            environment: kv(&[
+                ("PROXY_PORT", &proxy_port.to_string()),
+                ("VITE_PORT", &instance.port(Port::Frontend).to_string()),
+            ]),
+            extra_hosts: vec!["host.docker.internal:host-gateway".to_string()],
+            ports: dct::Ports::Short(ports),
             volumes,
             networks: dct::Networks::Simple(vec!["services".to_string(), "databases".to_string()]),
             ..Default::default()

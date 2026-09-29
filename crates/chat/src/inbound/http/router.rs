@@ -12,9 +12,8 @@ use axum::{
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
-use macro_authorization::{
-    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-};
+use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
+use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model::response::StringIDResponse;
 use models_permissions::share_permission::SharePermissionV2;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
@@ -23,17 +22,20 @@ use utoipa::ToSchema;
 
 use crate::domain::models::{CreateChatArgs, GetChatResponse, PatchChatArgs, Result};
 use crate::domain::ports::ChatService;
-use crate::inbound::http::extractors::{ChatModelAccess, UserPermissionsState};
+use crate::inbound::http::extractors::UserPermissionsState;
 
 /// Shared state for the chat router, wrapping a [`ChatService`] implementation,
 /// an [`EntityAccessService`] for entity authorization, a
-/// [`MacroAuthorizationService`] for caller authentication, and a
-/// [`UserRolesAndPermissionsService`] for model-entitlement lookups.
+/// [`MacroAuthorizationService`] for caller authentication, a
+/// [`UserRolesAndPermissionsService`] for model-entitlement lookups, and the
+/// [`NonUserOwners`] gate deciding whether a team bot with no acting user may
+/// own the chats it creates.
 pub struct ChatRouterState<S, Svc, Auth, P> {
     inner: Arc<S>,
     access_service: Arc<Svc>,
     authorization_state: MacroAuthorizationState<Auth>,
     permissions_state: UserPermissionsState<P>,
+    non_user_owners: NonUserOwners,
 }
 
 impl<S, Svc, Auth, P> Clone for ChatRouterState<S, Svc, Auth, P> {
@@ -43,6 +45,7 @@ impl<S, Svc, Auth, P> Clone for ChatRouterState<S, Svc, Auth, P> {
             access_service: Arc::clone(&self.access_service),
             authorization_state: self.authorization_state.clone(),
             permissions_state: self.permissions_state.clone(),
+            non_user_owners: self.non_user_owners,
         }
     }
 }
@@ -65,6 +68,12 @@ impl<S, Svc, Auth, P> FromRef<ChatRouterState<S, Svc, Auth, P>> for UserPermissi
     }
 }
 
+impl<S, Svc, Auth, P> FromRef<ChatRouterState<S, Svc, Auth, P>> for NonUserOwners {
+    fn from_ref(state: &ChatRouterState<S, Svc, Auth, P>) -> Self {
+        state.non_user_owners
+    }
+}
+
 impl<
     S: ChatService,
     Svc: EntityAccessService,
@@ -73,18 +82,21 @@ impl<
 > ChatRouterState<S, Svc, Auth, P>
 {
     /// Create a new [`ChatRouterState`] from a service, access service,
-    /// authorization state, and roles-and-permissions service.
+    /// authorization state, roles-and-permissions service, and the gate for
+    /// chats owned by a team bot.
     pub fn new(
         service: S,
         access_service: Svc,
         authorization_state: MacroAuthorizationState<Auth>,
         permissions_service: Arc<P>,
+        non_user_owners: NonUserOwners,
     ) -> Self {
         Self {
             inner: Arc::new(service),
             access_service: Arc::new(access_service),
             authorization_state,
             permissions_state: UserPermissionsState(permissions_service),
+            non_user_owners,
         }
     }
 }
@@ -201,15 +213,12 @@ pub struct CreateChatRequest {
     responses(
         (status = 200, body = StringIDResponse),
         (status = 401, body = String),
+        (status = 403, body = String),
         (status = 500, body = String),
     )
 )]
 /// Create a new chat.
-#[tracing::instrument(
-    skip(state, user, _access, req),
-    fields(actor = %user.acting_entity()),
-    err(Debug)
-)]
+#[tracing::instrument(skip(state, req), err(Debug))]
 pub async fn create_chat_handler<
     S: ChatService,
     Svc: EntityAccessService,
@@ -217,17 +226,13 @@ pub async fn create_chat_handler<
     P: UserRolesAndPermissionsService,
 >(
     State(state): State<ChatRouterState<S, Svc, Auth, P>>,
-    user: MacroAuthorizationExtractor<Auth, ActingUser>,
-    // 402 on no perms
-    _access: ChatModelAccess<Auth, P>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
     Json(req): Json<CreateChatRequest>,
 ) -> Result<Json<StringIDResponse>> {
-    let user = &user.authorization.user;
-
     let id = state
         .inner
         .create(
-            user.macro_user_id.clone(),
+            principal.owner(),
             CreateChatArgs {
                 name: req.name.unwrap_or_else(|| "New Chat".to_string()),
                 project_id: req.project_id,

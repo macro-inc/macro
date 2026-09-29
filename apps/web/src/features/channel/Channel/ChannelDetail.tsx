@@ -21,6 +21,7 @@ import {
 } from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
 import {
   useRegisterPriorityCollapseItem,
+  useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
 import type { PriorityCollapser } from '@components/app/split-layout/utils/createPriorityCollapser';
@@ -77,7 +78,7 @@ export type ChannelDetailProps = {
    */
   target?: ChannelTargetRequest;
   /** Re-aim the current target without remounting the channel. */
-  navigationRequest?: number;
+  navigationRequest?: number | string;
   /** Name shown until the channel loads. */
   fallbackName?: string;
   /** Whether the composer grabs focus on mount. Defaults to false. */
@@ -249,6 +250,7 @@ function ChannelDetailContent(props: ChannelDetailProps) {
   const orchestrator = useGlobalBlockOrchestrator();
   const channelId = props.channelId;
   const channelName = useChannelName(channelId, props.fallbackName);
+  useSplitDisplayName(() => channelName() ?? 'New Channel');
 
   const requestFromTarget = (
     target: ChannelTargetRequest | undefined

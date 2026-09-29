@@ -6,9 +6,7 @@ import { Stage } from './Shared';
 
 // Construct the redirect uri to use for passwordless login.
 // This will send us back to the application after clicking the magic link.
-// in "dev" (local) we use http otherwise https
-const protocol = import.meta.hot ? 'http' : 'https';
-const REDIRECT_URI = `${protocol}://${window.location.host}/app`;
+const REDIRECT_URI = `${window.location.origin}/app`;
 
 async function isPasswordLogin(email?: string | null) {
   if (!email) return false;

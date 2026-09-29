@@ -40,36 +40,16 @@ import {
   useContext,
 } from 'solid-js';
 import { createStore, type SetStoreFunction, type Store } from 'solid-js/store';
+import {
+  type BlockAliasRegistry,
+  BlockRegistry,
+} from '../constants/block-registry';
 import { ENABLE_PDF_MULTISPLIT } from './constant/featureFlags';
 import { blockDataSignal } from './internal/BlockLoader';
 import type { Source, SourcePreload } from './source';
 import type { ObjectLike, ResultError } from './util/result';
 
-/**
- * List of valid block types that can be used in the application.
- */
-export const BlockRegistry = [
-  'call',
-  'calendar',
-  'chat',
-  'write',
-  'pdf',
-  'md',
-  'code',
-  'image',
-  'canvas',
-  'spreadsheet',
-  'channel',
-  'project',
-  'unknown',
-  'video',
-  'email',
-  'contact',
-  'company',
-  'automation',
-  'pr',
-  'agent',
-] as const;
+export { BlockAliasRegistry, BlockRegistry } from '../constants/block-registry';
 
 /** Block names that resolve through another concrete block implementation. */
 export const VirtualBlockRegistry = ['write'] as const;
@@ -84,12 +64,6 @@ type BlockNameKeys = keyof typeof BlockRegistry & number;
  * Represents a block name which is one of the predefined block types in {@link BlockRegistry}.
  */
 export type BlockName = (typeof BlockRegistry)[BlockNameKeys];
-
-/**
- * List of strongly-typed, valid aliases that can be used as pseudo-differentiated
- * block types.
- */
-export const BlockAliasRegistry = ['csv', 'task', 'snippet', 'skill'] as const;
 
 type BlockAliasKeys = keyof typeof BlockAliasRegistry & number;
 

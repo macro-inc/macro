@@ -3470,7 +3470,7 @@ export type CreateCommentResponse = CommentThread & {
  */
 export type CreateCrmCommentRequest = {
     /**
-     * Arbitrary client metadata for the comment.
+     * Ignored: messages keep no client metadata.
      */
     metadata?: unknown;
     /**
@@ -3483,8 +3483,7 @@ export type CreateCrmCommentRequest = {
      */
     threadId?: string | null;
     /**
-     * Metadata to set on a newly created thread (ignored when replying
-     * without a value).
+     * Ignored: discussions keep no thread metadata.
      */
     threadMetadata?: unknown;
 };
@@ -4483,8 +4482,8 @@ export type DeleteCommentResponse = {
 };
 
 /**
- * Outcome of soft-deleting a CRM comment: reports whether the parent thread
- * was soft-deleted too (it is when the deleted comment was its last live one).
+ * Outcome of deleting a CRM comment: reports whether its discussion went with
+ * it (it does when the deleted comment was the discussion's first).
  */
 export type DeleteCrmCommentResult = {
     /**
@@ -4492,8 +4491,8 @@ export type DeleteCrmCommentResult = {
      */
     commentId: string;
     /**
-     * Whether the thread itself was soft-deleted because no live comments
-     * remained.
+     * Whether the whole discussion was deleted because the comment was its
+     * first.
      */
     threadDeleted: boolean;
     /**
@@ -7159,6 +7158,14 @@ export type MessageChange = {
     type: 'message_deleted';
 } | {
     /**
+     * Whether the reaction was added (`true`) or removed (`false`).
+     */
+    added: boolean;
+    /**
+     * Emoji whose membership changed.
+     */
+    emoji: string;
+    /**
      * Persisted message.
      */
     message: Message;
@@ -7269,6 +7276,18 @@ export type MessageParent = {
      */
     id: string;
     type: 'initiative';
+} | {
+    /**
+     * A CRM company.
+     */
+    id: string;
+    type: 'crm_company';
+} | {
+    /**
+     * A CRM contact.
+     */
+    id: string;
+    type: 'crm_contact';
 };
 
 /**
@@ -7459,6 +7478,20 @@ export type NewThreadAnchor = {
      * Vertical position as a fraction of the page height.
      */
     y_pct: number;
+} | {
+    /**
+     * A1 cell or range, such as B4 or B4:C9.
+     */
+    range: string;
+    /**
+     * Stable sheet identity within the workbook.
+     */
+    sheetId: string;
+    /**
+     * Sheet name when the discussion was created.
+     */
+    sheetName: string;
+    type: 'spreadsheet';
 };
 
 /**
@@ -10309,7 +10342,7 @@ export type Thread = {
 };
 
 /**
- * A thread's location within its document. Geometry remains annotation-owned.
+ * A thread's location within its document. PDF geometry remains annotation-owned.
  */
 export type ThreadAnchor = {
     /**
@@ -10343,6 +10376,20 @@ export type ThreadAnchor = {
      */
     anchor_id: string;
     type: 'pdf_placeable';
+} | {
+    /**
+     * A1 cell or range, such as B4 or B4:C9.
+     */
+    range: string;
+    /**
+     * Stable sheet identity within the workbook.
+     */
+    sheetId: string;
+    /**
+     * Sheet name when the discussion was created.
+     */
+    sheetName: string;
+    type: 'spreadsheet';
 };
 
 /**

@@ -19,12 +19,14 @@ import { blockHandleSignal } from '@core/signal/load';
 import type { NotificationSource } from '@notifications/notification-source';
 import { useSearchParams } from '@solidjs/router';
 import { EmptyStatePanel } from '@ui';
-import { createSignal, Show, useContext } from 'solid-js';
+import { createEffect, createSignal, on, Show, useContext } from 'solid-js';
 import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { forgetPendingSession } from '../context/pending-session';
 import { parseAgentMessageTarget } from '../core/search-location';
+import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
 import { AgentComposer } from './AgentComposer';
+import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { AgentSplitHeader } from './AgentSplitHeader';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
@@ -35,13 +37,30 @@ function AgentBlockContent(props: {
   notificationSource: NotificationSource;
 }) {
   const [params] = useSearchParams();
+  const routeTarget = createAgentRouteTarget();
   const [searchTarget, setSearchTarget] = createSignal(
-    parseAgentMessageTarget(params)
+    routeTarget() ?? parseAgentMessageTarget(params)
+  );
+  let routeOwnsTarget = Boolean(routeTarget());
+  createEffect(
+    on(
+      routeTarget,
+      (target) => {
+        if (target || routeOwnsTarget) {
+          routeOwnsTarget = Boolean(target);
+          setSearchTarget(target);
+        }
+      },
+      { defer: true }
+    )
   );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: (params: Record<string, unknown>) => {
       const target = parseAgentMessageTarget(params);
-      if (target) setSearchTarget(target);
+      if (target) {
+        routeOwnsTarget = false;
+        setSearchTarget(target);
+      }
     },
   });
   const {
@@ -119,6 +138,7 @@ function AgentBlockContent(props: {
               session={session()}
               title={metadata()?.title ?? undefined}
             />
+            <AgentPreviewBanner />
             {/* The Changes pane opens beside the transcript; closed, the
                 transcript keeps the whole width. */}
             <AgentChangesSplit>

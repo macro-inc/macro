@@ -12,6 +12,7 @@ import {
   eventEmailRecipients,
   guestEmails,
 } from '@app/features/calendar/utils/guest-emails';
+import { handleOpenEventOutsidePress } from '@app/features/calendar/utils/open-event-outside-press';
 import { EventRsvpSection } from '@app/features/calendar-view/components/EventRsvpSection';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { useOpenEventEmail } from '@app/features/calendar-view/components/use-open-event-email';
@@ -456,20 +457,7 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
         <Layer depth={3}>
           <Popover.Content
             class="portal-scope z-modal max-w-[calc(100vw-2rem)] outline-none"
-            onInteractOutside={(event) => {
-              // FullCalendar and external calendar target controls select on
-              // click (pointer release), so dismissing on pointer down would
-              // briefly close the popover before navigation finishes.
-              const target = event.detail.originalEvent.target;
-              if (
-                target instanceof Element &&
-                (target.closest('.fc-event') !== null ||
-                  target.closest('[data-calendar-event-target-navigation]') !==
-                    null)
-              ) {
-                event.preventDefault();
-              }
-            }}
+            onInteractOutside={handleOpenEventOutsidePress}
             onOpenAutoFocus={(event) => {
               // Aims can arrive while the keyboard is elsewhere — arrow-key
               // scanning in the inbox previews a calendar notification here,

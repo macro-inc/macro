@@ -3,6 +3,7 @@ import { CallOverlay } from '@channel/Call/CallOverlay';
 import { getMeetingUrl } from '@channel/Call/call-link';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useIsAuthenticated, useUserId } from '@core/context/user';
+import { readBackgroundImage } from '@core/media/read-background-image';
 import { idToDisplayName } from '@core/user/util';
 import { useCallRecordQuery } from '@queries/call/call';
 import {
@@ -16,6 +17,7 @@ import {
 import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 import { Show, Suspense } from 'solid-js';
+import { browserMeetingMedia } from './browser/meeting-media';
 import type { MeetingPageState } from './context/meeting-session';
 import { useMeetingSessionLifecycle } from './context/meeting-session-lifecycle';
 import { createNewMeeting } from './primitives/new-meeting';
@@ -82,10 +84,9 @@ function NewMeetingSetup(props: {
           showTooltip={false}
         />
       }
-      mediaAccess={{
-        request: (constraints) =>
-          navigator.mediaDevices.getUserMedia(constraints),
-      }}
+      mediaAccess={browserMeetingMedia}
+      initialBackground={call.backgroundEffect()}
+      readBackgroundImage={readBackgroundImage}
       startCall
       url={url()}
       onCopy={async () => {

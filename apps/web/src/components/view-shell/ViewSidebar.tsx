@@ -1,9 +1,9 @@
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { Button, type ButtonProps, cn } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import type { JSX } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { CollapseTransition } from './CollapseTransition';
 import { ViewSidebarCloseButton, ViewSidebarToggle } from './ViewShell';
 
 function Root(props: JSX.HTMLAttributes<HTMLElement>) {

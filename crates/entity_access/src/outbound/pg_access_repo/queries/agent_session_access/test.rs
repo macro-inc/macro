@@ -199,3 +199,64 @@ async fn session_allowlist_matches_grants_and_respects_requested_ids(pool: PgPoo
             .is_empty()
     );
 }
+
+/// Search's allowlist drops an inline session unless the caller names its id.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn hidden_sessions_leave_the_allowlist_unless_named(pool: PgPool) {
+    let session = uuid::Uuid::now_v7();
+    let viewer = "macro|agent-session-list-viewer@example.com";
+    let macro_user_id = uuid::Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)",
+        macro_user_id,
+        viewer,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "User" ("id", "email", "macro_user_id") VALUES ($1, $1, $2)"#,
+        viewer,
+        macro_user_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session (
+            id, owner_id, bot_id, model, harness, repo_url, workspace, list_hidden
+        )
+        VALUES ($1, $2, '00000000-0000-0000-0000-00000000a9e7', 'model', 'harness', NULL, '/workspace', TRUE)
+        "#,
+        session,
+        viewer,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'agent_session', $2, 'user', 'owner')
+        "#,
+        session,
+        viewer,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(
+        accessible_session_ids(&pool, &SourceIds(vec![viewer.into()]), &[])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        accessible_session_ids(&pool, &SourceIds(vec![viewer.into()]), &[session])
+            .await
+            .unwrap(),
+        vec![session]
+    );
+}

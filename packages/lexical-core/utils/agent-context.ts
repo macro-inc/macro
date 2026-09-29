@@ -45,7 +45,7 @@ export type AgentContextReplyTarget =
 
 /** The authorized conversation a prompt was posted in. */
 export type AgentContextParent = {
-  type: 'channel' | 'document';
+  type: 'channel' | 'document' | 'initiative' | 'crm_company' | 'crm_contact';
   id: string;
 };
 
@@ -79,11 +79,14 @@ export type PdfPinCommentAnchor = {
 export type AgentContextAnchor =
   | MarkdownCommentAnchor
   | PdfHighlightCommentAnchor
-  | PdfPinCommentAnchor;
+  | PdfPinCommentAnchor
+  | { type: 'spreadsheet'; sheetId: string; sheetName: string; range: string };
 
 /** Input used to compose an agent prompt with private conversation context. */
 export type AgentContextPrompt = {
   promptMarkdown: string;
+  /** Trusted session instructions supplied by the agent harness. */
+  instructions?: string;
   /** Supplied by the message service, never by the prompt's author. */
   parent?: AgentContextParent;
   anchor?: AgentContextAnchor;
@@ -159,6 +162,9 @@ function describeOrigin(parent: AgentContextParent): string {
   const surface = match(parent.type)
     .with('channel', () => 'a channel thread')
     .with('document', () => 'a document comment thread')
+    .with('initiative', () => 'a project comment thread')
+    .with('crm_company', () => 'a CRM company comment thread')
+    .with('crm_contact', () => 'a CRM contact comment thread')
     .exhaustive();
   return `This prompt was posted in ${surface}, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.`;
 }
@@ -246,6 +252,13 @@ function markChildren(mark: MarkdownCommentAnchor): FxpNode[] {
  */
 function anchorNode(anchor: AgentContextAnchor): FxpNode {
   return match(anchor)
+    .with({ type: 'spreadsheet' }, ({ sheetId, sheetName, range }) =>
+      el(
+        'anchor',
+        [note('Use ReadSpreadsheet to read the live cells in this range.')],
+        { type: 'spreadsheet', sheetId, sheetName, range }
+      )
+    )
     .with({ type: 'pdfPin' }, ({ anchorId }) =>
       el(
         'anchor',
@@ -351,6 +364,14 @@ function renderConversation(input: AgentContextPrompt): string | undefined {
   ]).trimStart();
 }
 
+function renderInstructions(
+  instructions: string | undefined
+): string | undefined {
+  const trimmed = instructions?.trim();
+  if (!trimmed) return undefined;
+  return buildXml([el('instructions', [text(trimmed)])]).trimStart();
+}
+
 function escapeAgentContextTags(markdown: string): string {
   // No user-authored entity may decode into reserved syntax during import.
   return markdown
@@ -380,12 +401,15 @@ export function composeAgentContextPrompt(input: AgentContextPrompt): string {
 
   editor.update(
     () => {
-      const conversation = renderConversation(input);
-      if (conversation === undefined) return;
+      const sections = [
+        renderInstructions(input.instructions),
+        renderConversation(input),
+      ].filter((section) => section !== undefined);
+      if (sections.length === 0) return;
 
       const context = $createAgentContextNode({
         version: 1,
-        text: conversation,
+        text: sections.join('\n'),
       });
       const firstChild = $getRoot().getFirstChild();
       if (firstChild) firstChild.insertBefore(context);

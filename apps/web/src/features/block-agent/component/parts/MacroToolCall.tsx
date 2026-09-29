@@ -77,7 +77,7 @@ export function MacroToolCall(props: {
     ) {
       return input.name;
     }
-    return props.common.server;
+    return undefined;
   };
   const error = () => props.detail.error ?? responseError(response());
   const failure = () => error() != null;

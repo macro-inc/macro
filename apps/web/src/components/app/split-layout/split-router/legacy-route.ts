@@ -11,6 +11,7 @@ import {
   calendarTargetSearch,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import { channelsSearch } from '@app/features/channels-view/channels-route';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
 import {
   defineRoute,
@@ -37,6 +38,7 @@ import {
   isBlockAlias,
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { z } from 'zod';
 import type { SplitContent } from '../layoutManager';
 
@@ -301,11 +303,31 @@ export function resolveContentLocation(
     }
   }
   route ??= resolve(splitLocationFromContent(routes, content).route);
-  const search = filterRouteSearch(
-    routes,
-    route,
-    parseSearchState(metadataLocation?.search)
-  );
+  const savedSearch = parseSearchState(metadataLocation?.search);
+  // In-app message opens carry block params, not external URL query keys.
+  // Preserve the target before middleware upgrades the block to Chat, where
+  // the legacy block (and its imperative navigation handle) is replaced.
+  const channelParams: Record<string, unknown> | undefined =
+    content.type === 'channel' && isRecord(content.params)
+      ? content.params
+      : undefined;
+  const messageId = channelParams?.[CHANNEL_URL_PARAMS.message];
+  const threadId = channelParams?.[CHANNEL_URL_PARAMS.thread];
+  let contentSearch = savedSearch;
+  if (typeof messageId === 'string') {
+    const channelSearch = { ...savedSearch?.[channelsSearch.namespace] };
+    // Message and thread identify one target; never combine two saved opens.
+    if (!Object.hasOwn(channelSearch, 'messageId')) {
+      channelSearch.messageId = [messageId];
+      if (typeof threadId === 'string') channelSearch.threadId = [threadId];
+      else delete channelSearch.threadId;
+    }
+    contentSearch = {
+      ...savedSearch,
+      [channelsSearch.namespace]: channelSearch,
+    };
+  }
+  const search = filterRouteSearch(routes, route, contentSearch);
   const location: SplitLocation = { route };
   if (search) location.search = search;
   return location;
@@ -368,11 +390,14 @@ export const legacySplitRoute = defineRoute({
     const { type } = routeParams(entry.location.route);
     if (type === 'email') return Object.values(EMAIL_URL_PARAMS);
     if (type === 'channel') return Object.values(CHANNEL_URL_PARAMS);
+    if (type === 'company' || type === 'contact') return [COMMENT_LINK_PARAM];
     return [];
   },
   claim: ({ type, id }) => {
     const content = decodeLegacyPair(type, id);
     if (!content) return;
+
+    if (content.type === 'agent') return { namespace: 'agent', id };
 
     if (content.type === 'component') {
       const [section, conversationId] = agentsRouteSegments(content.id) ?? [];

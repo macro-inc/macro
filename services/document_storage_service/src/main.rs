@@ -77,7 +77,7 @@ use email::{
     outbound::EmailPgRepo,
 };
 use embedding::embedding_provider::openai::TextEmbedding3Small;
-use entity_registry::{NonUserOwners, OwnerGrantPolicy};
+use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use favorites::{
     domain::{mutation_service::FavoritesMutationServiceImpl, service::FavoritesServiceImpl},
@@ -93,6 +93,7 @@ use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use graphql_scheduled_action::ScheduledActionGraphqlContext;
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use initiative::{
     domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
@@ -140,6 +141,8 @@ use reminders::{
         sqs_dispatch_queue::SqsDispatchQueue,
     },
 };
+use scheduled_action::domain::read_service::ScheduledActionReadServiceImpl;
+use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use secretsmanager_client::SecretManager;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
@@ -213,6 +216,7 @@ async fn run() -> anyhow::Result<()> {
         .resolve_remote_secrets(env, &secretsmanager_client)
         .await
         .context("expected to be able to resolve config secrets")?;
+    let non_user_owners = config.non_user_owners()?;
 
     tracing::trace!("initialized config");
 
@@ -512,7 +516,7 @@ async fn run() -> anyhow::Result<()> {
 
     let chat_mutation_service =
         Arc::new(chat::domain::service::ChatServiceImpl::new_without_tools(
-            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
             entity_access_management_service.clone(),
         ));
 
@@ -1056,7 +1060,8 @@ async fn run() -> anyhow::Result<()> {
                     initiative::outbound::PgInitiativeRepo::new(db.clone()),
                 ),
                 properties_service.clone(),
-            ),
+            )
+            .with_crm(crm::outbound::lookup::PgCrmParentReader::new(db.clone())),
         messages::outbound::entity_access_audience::EntityAccessMessageAudience(
             (*entity_access_service).clone(),
         ),
@@ -1077,7 +1082,8 @@ async fn run() -> anyhow::Result<()> {
             messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
                 .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
                     initiative::outbound::PgInitiativeRepo::new(db.clone()),
-                )),
+                ))
+                .with_crm(crm::outbound::lookup::PgCrmParentReader::new(db.clone())),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
                 channel_bots::outbound::conversation::LocalBotPublisher::new(bot_trigger_sender),
@@ -1583,6 +1589,13 @@ async fn run() -> anyhow::Result<()> {
             )),
         ));
 
+    // Routine writes still use the scheduled-action service. Read from the
+    // primary pool here so the GraphQL list cannot restore stale state after
+    // a REST write.
+    let scheduled_action_read_service = Arc::new(ScheduledActionReadServiceImpl::new(Arc::new(
+        PgScheduledActionRepo::new(db.clone()),
+    )));
+
     let api_context = ApiContext {
         dictation_state,
         contacts_ingress: contacts_ingress.clone(),
@@ -1624,6 +1637,9 @@ async fn run() -> anyhow::Result<()> {
         graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
             initiative_service.clone(),
             entity_access_service.clone(),
+        ),
+        graphql_scheduled_action_context: ScheduledActionGraphqlContext::new(
+            scheduled_action_read_service,
         ),
         initiative_state: InitiativeRouterState::new(
             initiative_service,
@@ -1679,6 +1695,7 @@ async fn run() -> anyhow::Result<()> {
             service: project_service,
             access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
+            non_user_owners,
         },
         documents_state: DocumentRouterState {
             service: document_service,
@@ -1689,11 +1706,7 @@ async fn run() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
-            non_user_owners: if config.enable_non_user_owners {
-                NonUserOwners::Enabled
-            } else {
-                NonUserOwners::Disabled
-            },
+            non_user_owners,
         },
         config: Arc::new(config),
         channel_service: channels_service.clone(),
@@ -1732,6 +1745,7 @@ async fn run() -> anyhow::Result<()> {
             )),
             entity_access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
+            messages: message_service.clone(),
         },
     };
 

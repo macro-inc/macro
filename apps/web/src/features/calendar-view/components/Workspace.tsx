@@ -7,7 +7,10 @@ import {
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitDisplayName,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -20,7 +23,6 @@ import {
   Match,
   on,
   onCleanup,
-  onMount,
   Show,
   Suspense,
   Switch,
@@ -126,9 +128,7 @@ function WorkspaceContent() {
   const calendarView = useCalendarView();
 
   // An inline preview keeps its host's name.
-  onMount(() => {
-    if (!panel.isInlinePreview) panel.handle.setDisplayName('Calendar');
-  });
+  useSplitDisplayName(() => (panel.isInlinePreview ? undefined : 'Calendar'));
 
   const eventDetails = () => (
     <SelectedEventDetails

@@ -59,11 +59,7 @@ impl ContextAuthorizer for Authorizer {
         Ok(EntityAccessReceipt::try_new_authenticated_user(
             actor.clone(),
             Entity {
-                entity_type: match parent {
-                    MessageParent::Document(_) => EntityType::Document,
-                    MessageParent::Initiative(_) => EntityType::Initiative,
-                    MessageParent::Channel(_) => EntityType::Channel,
-                },
+                entity_type: parent.access_entity_type(),
                 entity_id: parent.entity_id(),
             },
             EntityPermission::AccessLevel {
@@ -835,6 +831,28 @@ async fn a_pdf_pin_discussion_names_its_pin() {
         context.anchor,
         Some(CommentAnchor::PdfPin {
             anchor_id: anchor_id.to_string(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn spreadsheet_discussions_carry_the_range_without_resolving_a_mark() {
+    let context = context_from(
+        reader(Some(ThreadAnchor::Spreadsheet {
+            sheet_id: "sheet-1".into(),
+            sheet_name: "Budget".into(),
+            range: "B4:C9".into(),
+        })),
+        Lexical::mark(Err("never asked")),
+        &origin(),
+    )
+    .await;
+    assert_eq!(
+        context.anchor,
+        Some(CommentAnchor::Spreadsheet {
+            sheet_id: "sheet-1".into(),
+            sheet_name: "Budget".into(),
+            range: "B4:C9".into()
         })
     );
 }

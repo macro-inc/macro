@@ -123,6 +123,11 @@ export type SplitNavigateOptions<
   TStateInput = SplitRouterEntryState,
   TStateOutput = TStateInput,
 > = {
+  /** Host opening policy, invoked after middleware accepts a new destination.
+   * Existing claim owners are updated in place without invoking this callback. */
+  open?: SplitRouterLayout<TSplitId>['open'];
+  /** Runs after the destination is applied or an existing owner is activated. */
+  onApplied?: () => void;
   replace?: boolean;
   target?: 'current' | 'new-split' | TSplitId;
   search?: Record<string, SplitSearchUpdate>;
@@ -135,6 +140,12 @@ export type SplitNavigateOptions<
 
 export type SplitRouteClaim = {
   namespace: string;
+  id: string;
+};
+
+/** App-defined identity for a matched route, independent of its pane claim. */
+export type SplitReference = {
+  type: string;
   id: string;
 };
 
@@ -187,6 +198,10 @@ export type SplitRouteDefinition<
   claim?: SplitRouteParamCallback<
     StandardSchemaV1.InferOutput<TParamsSchema>,
     SplitRouteClaim | undefined
+  >;
+  toReference?: SplitRouteParamCallback<
+    StandardSchemaV1.InferOutput<TParamsSchema>,
+    SplitReference | undefined
   >;
   search?: readonly string[] | '*';
   externalSearch?:
@@ -341,9 +356,14 @@ type BranchParams<TParams> =
       }
     : TParams;
 
+/** Builds a typed route target without resolving the route against a router. */
+type RouteTo<TRoute, TParams> = {} extends TParams
+  ? (params?: TParams) => { route: TRoute; params: TParams }
+  : (params: TParams) => { route: TRoute; params: TParams };
+
 type DefinedRoute<TRoute, TParent, TParentNavigation, TParentStateSchema> =
   TRoute extends unknown
-    ? Omit<TRoute, 'children' | typeof branchParams> & {
+    ? Omit<TRoute, 'children' | 'to' | typeof branchParams> & {
         readonly [branchParams]: {
           read: MergeRouteParams<
             TParent,
@@ -355,6 +375,13 @@ type DefinedRoute<TRoute, TParent, TParentNavigation, TParentStateSchema> =
           >;
           state: EffectiveRouteStateSchema<TRoute, TParentStateSchema>;
         };
+        to: RouteTo<
+          DefinedRoute<TRoute, TParent, TParentNavigation, TParentStateSchema>,
+          MergeRouteParams<
+            {},
+            TParentNavigation & BranchParams<LocalNavigationParams<TRoute>>
+          >
+        >;
       } & (TRoute extends {
           children: infer TChildren extends readonly unknown[];
         }

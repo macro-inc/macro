@@ -7,6 +7,7 @@ import {
 } from '@app/features/agent-changes/agent-changes';
 import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
+import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { AgentSessionReadMarker } from '@app/features/block-agent/component/AgentSessionReadMarker';
 import {
@@ -20,6 +21,7 @@ import {
   forgetPendingSession,
   pendingSession,
 } from '@app/features/block-agent/context/pending-session';
+import { createAgentRouteTarget } from '@app/features/block-agent/primitives/create-agent-route-target';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
@@ -78,6 +80,7 @@ function SessionContent(props: {
     sessionId,
     startupError,
   } = useAgentSession();
+  const searchTarget = createAgentRouteTarget();
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
 
@@ -269,15 +272,16 @@ function SessionContent(props: {
                   </Show>
                 }
               >
+                <AgentPreviewBanner />
                 <div class="transcript-host">
-                  <Transcript />
+                  <Transcript searchTarget={searchTarget()} />
                 </div>
                 <div class="dock">
                   <div class="composer-anchor flex flex-col gap-2">
                     <ChangesHandoff />
                     <ReviewNotesDock />
                     <AgentComposer
-                      autofocus
+                      autofocus={!searchTarget()}
                       input={ChatSessionInput}
                       modelSelector={SessionModelSelector}
                     />

@@ -37,6 +37,7 @@ function getEntityType(entity: EntityData): EntityType {
     .when(isTaskEntity, () => EntityType.TASK)
     .with({ type: 'channel' }, () => EntityType.CHANNEL)
     .with({ type: 'chat' }, () => EntityType.CHAT)
+    .with({ type: 'initiative' }, () => EntityType.INITIATIVE)
     .with({ type: 'project' }, () => EntityType.PROJECT)
     .with({ type: 'email' }, () => EntityType.THREAD)
     .with({ type: 'document' }, () => EntityType.DOCUMENT)

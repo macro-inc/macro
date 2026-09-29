@@ -6,6 +6,8 @@ fn parent_identifiers_are_validated_and_round_trip() {
         ("channel", "0194e3b0-121a-7000-8000-000000000001"),
         ("document", "legacy-document-id"),
         ("initiative", "0194e3b0-121a-7000-8000-000000000003"),
+        ("crm_company", "0194e3b0-121a-7000-8000-000000000004"),
+        ("crm_contact", "0194e3b0-121a-7000-8000-000000000005"),
     ] {
         let parent = MessageParent::parse(kind, id).unwrap();
         assert_eq!(parent.entity_type(), kind);
@@ -21,6 +23,9 @@ fn parent_identifiers_are_validated_and_round_trip() {
         ("channel", "not-a-uuid"),
         ("initiative", "not-a-uuid"),
         ("project", "0194e3b0-121a-7000-8000-000000000003"),
+        ("crm_company", "not-a-uuid"),
+        ("crm_contact", "not-a-uuid"),
+        ("crm", "0194e3b0-121a-7000-8000-000000000004"),
         ("email_thread", "not-a-uuid"),
         ("document", ""),
         ("document", " leading-space"),
@@ -130,5 +135,20 @@ fn a_stored_anchor_without_a_snapshot_still_reads() {
             mark_id,
             marked_text: Some("marked".to_owned()),
         }
+    );
+}
+
+#[test]
+fn spreadsheet_anchor_round_trips_without_legacy_metadata() {
+    let value = serde_json::json!({"type": "spreadsheet", "sheetId": "sheet-1", "sheetName": "Budget", "range": "B4:C9"});
+    let input: NewThreadAnchor = serde_json::from_value(value.clone()).unwrap();
+    let stored: ThreadAnchor = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(input.reference(), stored);
+    assert_eq!(serde_json::to_value(stored).unwrap(), value);
+    assert!(
+        serde_json::from_value::<NewThreadAnchor>(
+            serde_json::json!({"type": "spreadsheet", "sheetId": "sheet-1", "range": "B4:C9"})
+        )
+        .is_err()
     );
 }

@@ -29,6 +29,7 @@ vi.mock(
       const builder = {
         buildHandle: () => ({ lexical: editor.lexical }),
         namespace: () => builder,
+        withAppLinkResolver: () => builder,
         withMentions: () => builder,
         withEmojis: () => builder,
         withLinks: () => builder,

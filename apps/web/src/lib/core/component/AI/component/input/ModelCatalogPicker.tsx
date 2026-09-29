@@ -4,7 +4,15 @@ import CaretRight from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import { cn, Dropdown } from '@ui';
-import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import { ModelIcon } from '../ProviderIcon';
 import {
   buildModelCatalog,
@@ -18,6 +26,8 @@ import {
 
 type ModelCatalogPickerProps = {
   value: string | null;
+  /** Model to feature first without marking it selected. */
+  recommendedId?: string | null;
   options: CatalogModelOption[];
   onSelect: (id: string) => void;
   disabled?: boolean;
@@ -36,6 +46,7 @@ type ModelCatalogPickerProps = {
 function ModelRow(props: {
   option: CatalogModelOption;
   selected: boolean;
+  disabled?: boolean;
   /** Trailing muted text, e.g. the family a search hit belongs to. */
   hint?: string;
   onSelect: () => void;
@@ -43,6 +54,7 @@ function ModelRow(props: {
   return (
     <Dropdown.Item
       closeOnSelect
+      disabled={props.disabled}
       class={cn('h-8 gap-2', props.selected && 'bg-ink/5 text-ink font-medium')}
       title={props.option.description ?? props.option.label}
       onSelect={props.onSelect}
@@ -63,6 +75,7 @@ function ModelRow(props: {
 function FamilyList(props: {
   families: ModelFamily[];
   value: string | null;
+  disabled?: boolean;
   onSelect: (id: string) => void;
 }) {
   return (
@@ -77,6 +90,7 @@ function FamilyList(props: {
               <ModelRow
                 option={option}
                 selected={option.id === props.value}
+                disabled={props.disabled}
                 onSelect={() => props.onSelect(option.id)}
               />
             )}
@@ -100,6 +114,31 @@ function focusSearchAfterMenuOpen(input: () => HTMLInputElement | undefined) {
       if (search?.isConnected) search.focus();
     });
   });
+}
+
+/**
+ * Hover-opened subs never move focus into the catalog, and two later races
+ * would steal the caret even after we do:
+ *   1. Focusing before the portaled DismissableLayer registers looks like
+ *      "focus outside" to the parent and closes the menu tree. The timeout
+ *      + rAF in `focusSearchAfterMenuOpen` waits past that onMount.
+ *   2. SubTrigger `onPointerMove` keeps calling `focusWithoutScrolling` on
+ *      the agent row, so any mouse move while hovering it yanks focus back.
+ *      Reclaim on blur; Escape / click-outside close the sub first, which
+ *      unregisters this listener before focus leaves the tree.
+ */
+function keepSearchFocused(input: () => HTMLInputElement | undefined) {
+  focusSearchAfterMenuOpen(input);
+  const onBlur = () => {
+    queueMicrotask(() => {
+      const search = input();
+      if (search?.isConnected && document.activeElement !== search) {
+        search.focus();
+      }
+    });
+  };
+  input()?.addEventListener('blur', onBlur);
+  onCleanup(() => input()?.removeEventListener('blur', onBlur));
 }
 
 export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
@@ -143,7 +182,9 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
       >
         <ModelCatalogMenu
           value={props.value}
+          recommendedId={props.recommendedId}
           options={props.options}
+          disabled={props.disabled || props.pending}
           onSelect={props.onSelect}
           emptyMessage={props.emptyMessage}
           searchPlaceholder={props.searchPlaceholder}
@@ -163,16 +204,27 @@ export function ModelCatalogMenu(
   props: Pick<
     ModelCatalogPickerProps,
     | 'value'
+    | 'recommendedId'
     | 'options'
     | 'onSelect'
+    | 'disabled'
     | 'emptyMessage'
     | 'searchPlaceholder'
     | 'children'
   > & {
     searchRef?: (element: HTMLInputElement) => void;
+    /**
+     * Focus search when this catalog mounts — used by hover-opened agent
+     * submenus, which never fire the root menu's `onOpenAutoFocus`.
+     */
+    autoFocusSearch?: boolean;
   }
 ) {
+  let searchEl: HTMLInputElement | undefined;
   const [query, setQuery] = createSignal('');
+  onMount(() => {
+    if (props.autoFocusSearch) keepSearchFocused(() => searchEl);
+  });
   // A submenu needs a second menu's width beside the first, which a phone
   // does not have: there, More models replaces the list in place instead.
   const [showingMore, setShowingMore] = createSignal(false);
@@ -187,7 +239,10 @@ export function ModelCatalogMenu(
   const catalog = createMemo(() =>
     props.options.length <= MAX_RECOMMENDED_MODELS
       ? { recommended: props.options, families: [] }
-      : buildModelCatalog(props.options, props.value ?? undefined)
+      : buildModelCatalog(
+          props.options,
+          props.value ?? props.recommendedId ?? undefined
+        )
   );
   const extraFamilies = createMemo(() => moreModelFamilies(catalog()));
   const extraCount = createMemo(() =>
@@ -203,7 +258,10 @@ export function ModelCatalogMenu(
             class="size-4 shrink-0 text-ink-extra-muted"
           />
           <input
-            ref={props.searchRef}
+            ref={(element) => {
+              searchEl = element;
+              props.searchRef?.(element);
+            }}
             aria-label={props.searchPlaceholder ?? 'Search models'}
             placeholder={props.searchPlaceholder ?? 'Search models'}
             value={query()}
@@ -247,6 +305,7 @@ export function ModelCatalogMenu(
                 <FamilyList
                   families={extraFamilies()}
                   value={props.value}
+                  disabled={props.disabled}
                   onSelect={props.onSelect}
                 />
               </Dropdown.Group>
@@ -261,6 +320,7 @@ export function ModelCatalogMenu(
                       option={option}
                       hint={modelFamilyHint(option)}
                       selected={option.id === props.value}
+                      disabled={props.disabled}
                       onSelect={() => props.onSelect(option.id)}
                     />
                   )}
@@ -307,6 +367,7 @@ export function ModelCatalogMenu(
                         <FamilyList
                           families={extraFamilies()}
                           value={props.value}
+                          disabled={props.disabled}
                           onSelect={props.onSelect}
                         />
                       </Dropdown.Group>
@@ -330,6 +391,7 @@ export function ModelCatalogMenu(
                 option={option}
                 hint={modelFamilyHint(option)}
                 selected={option.id === props.value}
+                disabled={props.disabled}
                 onSelect={() => props.onSelect(option.id)}
               />
             )}

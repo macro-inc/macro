@@ -84,9 +84,6 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
   },
 ];
 
-/** Flattened view of {@link SETTINGS_TAB_GROUPS} for direct tab lookups. */
-const SETTINGS_TAB_ITEMS = SETTINGS_TAB_GROUPS.flatMap((group) => group.items);
-
 /**
  * URL slugs for each settings tab, used to build the settings page path
  * (`/settings/<slug>`, and the `settings/<slug>` pair when docked in a split).
@@ -137,18 +134,6 @@ export const settingsSlugToTab = (
   slug: string | null | undefined
 ): SettingsTab | undefined =>
   slug ? SETTINGS_SLUG_TO_TAB.get(slug) : undefined;
-
-/**
- * Look up a single tab's presentation (label + icon). Lets consumers that
- * surface individual tabs (e.g. the sidebar's quick links) reuse the config's
- * label/icon instead of hardcoding their own.
- */
-export const getSettingsTabItem = (
-  tab: SettingsTab
-): SettingsTabItem | undefined =>
-  tab === 'Harness'
-    ? { tab: 'Harness', label: 'Agents', icon: AgentIcon }
-    : SETTINGS_TAB_ITEMS.find((item) => item.tab === tab);
 
 /**
  * Returns a predicate gating which settings tabs are available given feature

@@ -14,7 +14,7 @@ use crate::document::{Document, DocumentError, OperationKind};
 use crate::entity_resolver::{EntityResolver, EntityResolverError, EntityResolverLookup};
 use crate::link_patch::{
     LinkPatchError, OptimisticLinkPatch, QueryRevalidation, apply_link_patches,
-    deduplicate_patches, missing_patch_record,
+    deduplicate_patches, missing_patch_records,
 };
 use crate::normalize::{
     DependencyCompleteness, NormalizeError, RecordUpdates, normalize, normalize_with_dependencies,
@@ -509,7 +509,7 @@ impl<S: Storage> Engine<S> {
                     source
                         .link_patches
                         .iter()
-                        .map(OptimisticLinkPatch::revalidation),
+                        .filter_map(OptimisticLinkPatch::revalidation),
                 ),
             );
             layers.push(OptimisticLayer {
@@ -1097,6 +1097,18 @@ impl<S: Storage> Engine<S> {
         input: NetworkWrite<'_>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.write_network(origin_op, registration, input, projections, true)
+            .await
+    }
+
+    async fn write_network(
+        &mut self,
+        origin_op: Option<OpId>,
+        registration: Option<QueryRegistration<'_>>,
+        input: NetworkWrite<'_>,
+        projections: Vec<ProjectionMutation>,
+        retain_pages: bool,
+    ) -> Result<WriteResult, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         let NetworkWrite {
             query,
@@ -1120,7 +1132,10 @@ impl<S: Storage> Engine<S> {
             ));
         }
         let normalized = normalize_with_dependencies(op, variables, data, &entity_resolvers)?;
-        let updates = normalized.updates;
+        let mut updates = normalized.updates;
+        if !retain_pages {
+            crate::page_retention::omit_hydration_pages(&mut updates);
+        }
 
         let mut reset = false;
         if let Some(observed) = identity {
@@ -1211,7 +1226,8 @@ impl<S: Storage> Engine<S> {
     /// Stores a network response and returns only fields not marked
     /// `@cacheOnly`. Projection is taken directly from the validated network
     /// payload, so hydration never denormalizes the response back out of
-    /// storage.
+    /// storage. Soup page wrappers are transient; their normalized descendants
+    /// and projections are persisted without retaining cursor-qualified pages.
     pub async fn hydrate_query(
         &mut self,
         query: &str,
@@ -1255,7 +1271,7 @@ impl<S: Storage> Engine<S> {
             project_hydration_response(op, data)?
         };
         let write_result = self
-            .write_query_with_registration_and_projections(
+            .write_network(
                 None,
                 None,
                 NetworkWrite {
@@ -1266,6 +1282,7 @@ impl<S: Storage> Engine<S> {
                     identity,
                 },
                 projections,
+                false,
             )
             .await?;
         Ok(HydrationWriteResult {
@@ -1460,7 +1477,7 @@ impl<S: Storage> Engine<S> {
             revalidations
                 .iter()
                 .cloned()
-                .chain(patches.iter().map(OptimisticLinkPatch::revalidation)),
+                .chain(patches.iter().filter_map(OptimisticLinkPatch::revalidation)),
         );
         for mutation in &projection_mutations {
             mutation
@@ -2151,9 +2168,7 @@ impl<S: Storage> Engine<S> {
         ),
         EngineError<S::Error>,
     > {
-        if !patches.is_empty() {
-            candidates.insert(EntityKey::root());
-        }
+        candidates.extend(patches.iter().map(OptimisticLinkPatch::root_key));
         loop {
             let bases = self.load_bases(&candidates).await?;
             let composed = effective_records(&bases, layers, &candidates);
@@ -2166,7 +2181,7 @@ impl<S: Storage> Engine<S> {
             // loop from retrying it.
             let missing: BTreeSet<_> = patches
                 .iter()
-                .filter_map(|patch| missing_patch_record(&effective, patch))
+                .flat_map(|patch| missing_patch_records(&effective, patch))
                 .chain(patches.iter().filter_map(|patch| {
                     let inserted = patch.operation.inserted_entity_key()?;
                     (!effective.contains_key(inserted)).then(|| inserted.clone())

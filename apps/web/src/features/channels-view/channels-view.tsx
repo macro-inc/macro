@@ -1,4 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
+import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -25,11 +27,13 @@ import { ChannelDetailView } from './components/ChannelDetailView';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
 import {
+  type ChannelsSources,
   deduplicateChannels,
   resolveSelectedChannel,
   useChannelByIdQuery,
   useChannelsSources,
 } from './queries';
+import { createChannelSearchSource } from './queries/channel-search-source';
 
 const ChannelSourcesContext =
   createContext<ReturnType<typeof useChannelsSources>>();
@@ -41,9 +45,53 @@ export type ChannelsViewProps = {
   initialState?: ChannelsViewStateOptions;
 };
 
+// Mounted inside the mobile list's Suspense boundary.
+function MobileChannelsList(props: { sources: ChannelsSources }) {
+  const panel = useSplitPanelOrThrow();
+  const { state, setMobileTab } = useChannelsView();
+  const mobileSearchText = useMobileSearchText(() => '', panel.handle.isActive);
+  const mobileSearchSource = createChannelSearchSource({
+    text: mobileSearchText,
+    scope: () => state.mobileTab,
+    source: () => props.sources[state.mobileTab],
+  });
+  return (
+    <ChannelsMobileView
+      source={mobileSearchSource}
+      searchQuery={mobileSearchText()}
+      onClearSearch={() => SearchState.setQuery('')}
+      tab={state.mobileTab}
+      onTabChange={setMobileTab}
+    />
+  );
+}
+
+function DesktopChannelsRail(props: {
+  sources: ChannelsSources;
+  searchOpen: boolean;
+  onSearchOpenChange: (open: boolean) => void;
+}) {
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const searchSource = createChannelSearchSource({
+    text: searchQuery,
+    enabled: () => props.searchOpen,
+    scope: () => 'search',
+    source: () => props.sources.search,
+  });
+  return (
+    <ChannelsRail
+      sources={{ ...props.sources, search: searchSource }}
+      searchQuery={searchQuery()}
+      onSearchQueryChange={setSearchQuery}
+      searchOpen={props.searchOpen}
+      onSearchOpenChange={props.onSearchOpenChange}
+    />
+  );
+}
+
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, mobileLayout, selectedChannel, setAsideWidth, setMobileTab } =
+  const { state, mobileLayout, selectedChannel, setAsideWidth } =
     useChannelsView();
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
@@ -81,8 +129,16 @@ function ChannelsViewRoot() {
                     resizable
                   >
                     <ViewShell.Aside onWidthChangeEnd={setAsideWidth}>
-                      <DebugSuspense name="ChannelsView.rail">
-                        <ChannelsRail
+                      <DebugSuspense
+                        name="ChannelsView.rail"
+                        fallback={
+                          <SpinnerIcon
+                            aria-label="Loading channels"
+                            class="size-5 animate-spin"
+                          />
+                        }
+                      >
+                        <DesktopChannelsRail
                           sources={sources}
                           searchOpen={railSearchOpen()}
                           onSearchOpenChange={setRailSearchOpen}
@@ -133,11 +189,7 @@ function ChannelsViewRoot() {
                     </div>
                   }
                 >
-                  <ChannelsMobileView
-                    source={sources[state.mobileTab]}
-                    tab={state.mobileTab}
-                    onTabChange={setMobileTab}
-                  />
+                  <MobileChannelsList sources={sources} />
                 </DebugSuspense>
               </MaybeSoupEntityActionDrawerManager>
             </Show>
@@ -215,7 +267,9 @@ function ChannelDetailRouteContent() {
     on(readyId, () => {
       const channel = hydrated();
       if (channel && channel.isParticipant !== false)
-        markChannelNotificationsSeenOnOpen(channel, notificationSource);
+        markChannelNotificationsSeenOnOpen(channel, notificationSource, {
+          scopeChannelThreads: false,
+        });
     })
   );
 

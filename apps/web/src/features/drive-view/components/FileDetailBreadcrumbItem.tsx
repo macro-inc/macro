@@ -2,7 +2,10 @@ import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitDisplayName,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { getPermissions } from '@core/component/SharePermissions';
@@ -33,6 +36,7 @@ export function FileDetailBreadcrumbItem(props: {
   const documentId = () => props.documentMetadata.documentId;
   const documentName = () =>
     props.documentMetadata.documentName ?? props.fallbackName ?? 'Untitled';
+  useSplitDisplayName(documentName);
 
   useBlockEntityCommands({
     id: documentId(),

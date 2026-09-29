@@ -120,6 +120,8 @@ where
              downloadable URLs. Use a video-capable tool to inspect video URLs. \
              Use CreateDocument to create new documents. \
              Use EditDocument to edit existing documents. \
+             Use ListSkills to discover available skills, SearchSkills to find a skill by name, \
+             and ReadSkill to read its full instructions before following them for the current request. \
              Use ListEntities to browse recent items.\n\n{}",
             prompt::mcp_instructions(base_url),
         ));

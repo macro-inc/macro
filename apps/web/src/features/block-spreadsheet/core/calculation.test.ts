@@ -195,6 +195,42 @@ describe('spreadsheet calculation with IronCalc', () => {
     expect(result.A8.display).toBe('0.00');
   });
 
+  it('shows typed dates and date arithmetic as dates without an explicit format', () => {
+    const result = calculator.calculate({
+      A1: { value: '9/28/2026' },
+      A2: { value: '2026-09-28' },
+      A3: { value: '=A1+7' },
+      A4: { value: '=DATE(2026,1,1)' },
+      A5: { value: '=A3-A1' },
+      A6: { value: '=A1+7', format: 'number' },
+      A7: { value: '5/1/1985' },
+      A8: { value: '=DATE(1985,5,1)' },
+      A9: { value: '=A1+1' },
+      A10: { value: '=A9+1' },
+      A11: { value: '46293' },
+      A12: { value: 'Sep 28, 2026' },
+      A13: { value: '=YEAR(A1)' },
+      A14: { value: '=A1+7', numberFormat: '0.0' },
+    });
+    expect(result.A1).toEqual({ display: '9/28/2026', number: 46293 });
+    expect(result.A2).toEqual({ display: '9/28/2026', number: 46293 });
+    expect(result.A3).toEqual({ display: '10/5/2026', number: 46300 });
+    expect(result.A4).toEqual({ display: '1/1/2026', number: 46023 });
+    // The engine formats a difference of dates as a date; a day count is not.
+    expect(result.A5).toEqual({ display: '7', number: 7 });
+    expect(result.A6.display).toBe('46,300.00');
+    expect(result.A7).toEqual({ display: '5/1/1985', number: 31168 });
+    // Formula results before 2000 stay serial numbers; day counts are common there.
+    expect(result.A8).toEqual({ display: '31168', number: 31168 });
+    // Chained formulas are entered in grid order, so each inherits the format.
+    expect(result.A9).toEqual({ display: '9/29/2026', number: 46294 });
+    expect(result.A10).toEqual({ display: '9/30/2026', number: 46295 });
+    expect(result.A11).toEqual({ display: '46293', number: 46293 });
+    expect(result.A12).toEqual({ display: 'Sep 28, 2026' });
+    expect(result.A13).toEqual({ display: '2026', number: 2026 });
+    expect(result.A14.display).toBe('46300.0');
+  });
+
   it('keeps text-formatted values literal during calculation and copying', () => {
     const result = calculator.calculate({
       A1: { value: '=SUM(B1:B2)', format: 'text' },

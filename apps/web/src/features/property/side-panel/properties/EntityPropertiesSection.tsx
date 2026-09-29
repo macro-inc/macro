@@ -49,6 +49,7 @@ export interface EntityPropertiesSectionProps {
   entityId: string;
   entityType: EntityType;
   canEdit: boolean;
+  onPropertiesChanged?: () => void | Promise<void>;
   documentName?: string;
   includeMetadata?: boolean;
   propertyFilter?: (property: Property) => boolean;
@@ -56,6 +57,8 @@ export interface EntityPropertiesSectionProps {
   showAddProperty?: boolean;
   showTags?: boolean;
   defaultPinnedPropertyIds?: () => readonly string[];
+  /** Keep required fields attached without hiding other entity properties. */
+  requiredPropertyDefinitionIds?: readonly string[];
   pinnedPropertyIds?: () => string[];
   pinnedPropertyDefinitionOrder?: readonly string[];
   onPropertyPinned?: (propertyId: string) => void;
@@ -200,8 +203,21 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     filteredPinnedProperties().filter(isNonUserMultiEntityProperty)
   );
   const defaultPinnedDefinitionIds = createMemo(
-    () => new Set(props.defaultPinnedPropertyIds?.() ?? [])
+    () =>
+      new Set([
+        ...(props.defaultPinnedPropertyIds?.() ?? []),
+        ...(props.requiredPropertyDefinitionIds ?? []),
+      ])
   );
+
+  const addEntityProperty = async (definitionId: string) => {
+    await addProperty(definitionId);
+    await props.onPropertiesChanged?.();
+  };
+  const removeEntityProperty = async (propertyId: string) => {
+    await removeProperty(propertyId);
+    await props.onPropertiesChanged?.();
+  };
 
   const handlePropertyAdded = (addedDefinitionIds?: string[]) => {
     if (addedDefinitionIds && addedDefinitionIds.length > 0) {
@@ -253,8 +269,8 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   });
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
-  const saveOne = (property: Property, apiValues: PropertyApiValues) =>
-    saveMutation.mutateAsync({
+  const saveOne = async (property: Property, apiValues: PropertyApiValues) => {
+    await saveMutation.mutateAsync({
       properties: [
         {
           entityId: props.entityId,
@@ -264,6 +280,8 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
         },
       ],
     });
+    await props.onPropertiesChanged?.();
+  };
 
   const saveHandler: PropertySaveHandler = {
     saveProperty: (property, value) => saveOne(property, value),
@@ -292,8 +310,8 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           onPropertyPinned={props.onPropertyPinned}
           onPropertyUnpinned={props.onPropertyUnpinned}
           pinnedPropertyIds={props.pinnedPropertyIds}
-          addProperty={addProperty}
-          removeProperty={removeProperty}
+          addProperty={addEntityProperty}
+          removeProperty={removeEntityProperty}
           saveHandler={saveHandler}
         >
           <Show when={isLoading()}>

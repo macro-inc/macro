@@ -7,20 +7,38 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { batch, createSignal, type JSX, Show } from 'solid-js';
+import { batch, createSignal, For, type JSX, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { ChannelsDataSource } from './queries';
+import type { ChannelsQueryScope } from './types';
 
 type FullChannel = ChannelEntity & { notifications: Notification[] };
 const mocks = vi.hoisted(() => ({
   pass: (props: { children?: JSX.Element }) => props.children,
   selectedId: (): string | undefined => undefined,
   rows: (): ChannelEntity[] => [],
+  mobileLayout: (): boolean => false,
+  active: (): boolean => true,
+  searchOpen: (): boolean => false,
+  searchText: (): string => '',
+  mobileTab: (): ChannelsQueryScope => 'channels',
   selectedQuery: vi.fn(),
   markRead: vi.fn(),
   refresh: vi.fn(async () => {}),
 }));
 
+vi.mock('@app/features/command/mobile/mobileSearchState', () => ({
+  SearchState: {
+    isOpen: () => mocks.searchOpen(),
+    query: () => mocks.searchText(),
+  },
+}));
+vi.mock('@queries/soup/search', () => ({
+  useSearchSoupQuery: () => ({ isSuccess: false, isLoading: false }),
+  validateSearchServiceText: (text: string) => text.length >= 3,
+}));
 vi.mock('@app/lib/split-router', () => ({
   SplitRouter: {
     Outlet: (props: { fallback: () => JSX.Element }) => (
@@ -64,7 +82,9 @@ vi.mock('@components/app/PreviewPanel', () => ({
   ),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
-  useSplitPanelOrThrow: () => ({ handle: { setDisplayName: vi.fn() } }),
+  useSplitPanelOrThrow: () => ({
+    handle: { setDisplayName: vi.fn(), isActive: () => mocks.active() },
+  }),
 }));
 vi.mock('@components/app/split-panel', () => ({
   SplitPanel: { Root: mocks.pass, Body: mocks.pass },
@@ -73,7 +93,10 @@ vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({ StaticMarkdownContext: mocks.pass })
 );
-vi.mock('@entity', () => ({ ListEntityMetadataQueryProvider: mocks.pass }));
+vi.mock('@entity', async () => ({
+  ...(await import('@entity/types/entity')),
+  ListEntityMetadataQueryProvider: mocks.pass,
+}));
 vi.mock('./components/ChannelDetailView', () => ({
   ChannelDetailView: (props: { channel: ChannelEntity }) => (
     <div data-testid="channel-detail">
@@ -83,19 +106,36 @@ vi.mock('./components/ChannelDetailView', () => ({
   ),
 }));
 vi.mock('./components/ChannelsMobileView', () => ({
-  ChannelsMobileView: () => null,
+  ChannelsMobileView: (props: {
+    source: ChannelsDataSource;
+    searchQuery: string;
+  }) => (
+    <div data-testid="mobile-channels" data-query={props.searchQuery}>
+      <For each={props.source.items()}>
+        {(channel) => <div>{channel.name}</div>}
+      </For>
+    </div>
+  ),
 }));
 vi.mock('./components/rail/ChannelsRail', () => ({ ChannelsRail: () => null }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => mocks.mobileLayout(),
+}));
+vi.mock('@app/features/soup/search/context', () => ({
+  useOptionalSearchContext: () => undefined,
+}));
 vi.mock('./channels-view-context', () => ({
   ChannelsViewProvider: mocks.pass,
   useChannelsView: () => ({
     state: {
       asideWidth: 256,
       tab: 'browse',
-      mobileTab: 'channels',
+      get mobileTab() {
+        return mocks.mobileTab();
+      },
       sortBy: { channels: 'updated_at', direct_messages: 'updated_at' },
     },
-    mobileLayout: () => false,
+    mobileLayout: () => mocks.mobileLayout(),
     selectedChannel: () =>
       mocks.selectedId()
         ? { type: 'channel', id: mocks.selectedId() }
@@ -105,6 +145,8 @@ vi.mock('./channels-view-context', () => ({
   }),
 }));
 vi.mock('./queries', () => ({
+  filterChannelsForScope: (_scope: string, channels: ChannelEntity[]) =>
+    channels,
   deduplicateChannels: (collections: ChannelEntity[][]) => [
     ...new Map(
       collections.flat().map((channel) => [channel.id, channel])
@@ -118,7 +160,7 @@ vi.mock('./queries', () => ({
   useChannelByIdQuery: mocks.selectedQuery,
   useChannelsSources: () => ({
     channels: { items: () => mocks.rows() },
-    direct_messages: { items: () => [] },
+    direct_messages: { items: () => mocks.rows() },
     recents: { items: () => [] },
     search: { items: () => [] },
   }),
@@ -168,6 +210,11 @@ let setRows: ReturnType<typeof createSignal<ChannelEntity[]>>[1];
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.mobileLayout = () => false;
+  mocks.active = () => true;
+  mocks.searchOpen = () => false;
+  mocks.searchText = () => '';
+  mocks.mobileTab = () => 'channels';
   [mocks.selectedId, setSelectedId] = createSignal<string | undefined>('one');
   [mocks.rows, setRows] = createSignal([row('one', 'new'), row('two')]);
   const [query, update] = createStore<QueryState>({
@@ -198,6 +245,41 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+describe('mobile dock search wiring', () => {
+  it('filters DMs from the active dock session and restores rows on close or navigation', async () => {
+    mocks.mobileLayout = () => true;
+    mocks.mobileTab = () => 'direct_messages';
+    const [open, setOpen] = createSignal(true);
+    const [text, setText] = createSignal('');
+    const [active, setActive] = createSignal(true);
+    mocks.searchOpen = open;
+    mocks.searchText = text;
+    mocks.active = active;
+    setRows([
+      {
+        ...row('julia'),
+        name: 'Julia Westphal',
+        channelType: 'direct_message',
+      },
+      { ...row('hutch'), name: 'hutch', channelType: 'direct_message' },
+    ]);
+    render(() => <ChannelsView />);
+    expect(screen.getByText('hutch')).toBeTruthy();
+    setText('Julia');
+    await waitFor(() =>
+      expect(screen.getByText('Julia Westphal')).toBeTruthy()
+    );
+    await waitFor(() => expect(screen.queryByText('hutch')).toBeNull());
+    setActive(false);
+    expect(screen.getByText('hutch')).toBeTruthy();
+    setActive(true);
+    await waitFor(() => expect(screen.queryByText('hutch')).toBeNull());
+    setOpen(false);
+    expect(screen.getByText('hutch')).toBeTruthy();
+    expect(screen.getByTestId('mobile-channels').dataset.query).toBe('');
+  });
+});
+
 describe('channel selection loading and recovery', () => {
   it('offers recovery for a successful empty selection and retries normally', async () => {
     render(() => <ChannelsView />);
@@ -214,7 +296,11 @@ describe('channel selection loading and recovery', () => {
       setQuery('isFetching', false);
     });
     expect(screen.getByTestId('channel-detail').textContent).toBe('one');
-    expect(mocks.markRead).toHaveBeenCalledOnce();
+    expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ id: 'one' }),
+      expect.anything(),
+      { scopeChannelThreads: false }
+    );
   });
 
   it('never marks cached data while a reopened selection is refreshing', async () => {

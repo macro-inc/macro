@@ -1,19 +1,22 @@
 import NoteIcon from '@phosphor/note.svg';
 import XIcon from '@phosphor/x.svg';
 import { Button, cn } from '@ui';
-import { createSignal, For, onMount, Show } from 'solid-js';
-import type { NoteAnchor, ReviewNote } from '../core/review-notes';
+import { For, onMount, Show } from 'solid-js';
+import type { NoteAnchor, NoteDraft, ReviewNote } from '../core/review-notes';
 
-/** The editor for a new note on one line. */
+/**
+ * The editor for a new note. Its text lives with the draft, not in here, so
+ * it survives the diff view re-creating this element.
+ */
 function NoteEditor(props: {
-  anchor: NoteAnchor;
+  draft: NoteDraft;
+  onDraft: (text: string) => void;
   onAdd: (anchor: NoteAnchor, text: string) => void;
   onCancel: () => void;
 }) {
-  const [text, setText] = createSignal('');
   let textarea!: HTMLTextAreaElement;
   onMount(() => textarea.focus());
-  const add = () => props.onAdd(props.anchor, text());
+  const add = () => props.onAdd(props.draft.range, props.draft.text);
   return (
     <div class="flex flex-col gap-1.5">
       <textarea
@@ -21,8 +24,8 @@ function NoteEditor(props: {
         class="min-h-13 w-full resize-y rounded-md border border-edge bg-input px-2 py-1.5 font-sans text-xs text-ink outline-none placeholder:text-ink-placeholder focus:border-input-focus"
         placeholder="What should the agent change here?"
         aria-label="Review note"
-        value={text()}
-        onInput={(event) => setText(event.currentTarget.value)}
+        value={props.draft.text}
+        onInput={(event) => props.onDraft(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
             event.preventDefault();
@@ -41,7 +44,7 @@ function NoteEditor(props: {
           variant="cta"
           size="xs"
           class="h-6.5 px-2.5"
-          disabled={text().trim() === ''}
+          disabled={props.draft.text.trim() === ''}
           onClick={add}
         >
           Add note
@@ -69,7 +72,8 @@ function NoteEditor(props: {
  */
 export function NoteAnnotation(props: {
   notes: ReviewNote[];
-  composing: NoteAnchor | undefined;
+  draft: NoteDraft | undefined;
+  onDraft: (text: string) => void;
   onAdd: (anchor: NoteAnchor, text: string) => void;
   onCancel: () => void;
   onRemove: (id: string) => void;
@@ -106,10 +110,11 @@ export function NoteAnnotation(props: {
           </div>
         )}
       </For>
-      <Show when={props.composing}>
-        {(anchor) => (
+      <Show when={props.draft}>
+        {(draft) => (
           <NoteEditor
-            anchor={anchor()}
+            draft={draft()}
+            onDraft={props.onDraft}
             onAdd={props.onAdd}
             onCancel={props.onCancel}
           />

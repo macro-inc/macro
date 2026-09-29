@@ -79,6 +79,7 @@ export function ReactionChip(props: ReactionChipProps) {
             data-message-reaction-chip
             data-emoji={props.emoji}
             data-user-reacted={props.selected ? '' : undefined}
+            aria-pressed={!!props.selected}
             noTouchResize
             ref={(el) =>
               touchHandler(el, () => ({
@@ -92,10 +93,6 @@ export function ReactionChip(props: ReactionChipProps) {
             variant={props.selected ? 'accent' : 'outline'}
             class={cn(
               'flex flex-row items-center h-7 min-w-7 gap-1',
-              // Mix toward black, not ink. An ink wash lightens a dark theme, so
-              // it cannot show "you reacted" in both themes.
-              props.selected &&
-                'bg-[color-mix(in_oklch,oklch(0_0_0)_16%,var(--color-control))] dark-mode:bg-[color-mix(in_oklch,oklch(0_0_0)_34%,var(--color-control))]',
               !props.interactive && 'pointer-events-auto'
             )}
             disabled={!props.interactive}

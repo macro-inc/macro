@@ -45,8 +45,7 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
         "ReadTaskInitiatives",
         "ReadInitiativeActivity",
         "SetEntityProperty",
-        "ReplyToDocumentComment",
-        "CommentOnDocumentText",
+        "CommentOnDocument",
         "ResolveDocumentComment",
         "CreateProject",
         "ReadProject",
@@ -168,4 +167,26 @@ fn frontend_schemas_distinguish_user_tool_response_types() {
         output_for("SendEmail"),
         "UserToolResponseForSendEmailResponse"
     );
+}
+
+#[test]
+fn every_host_exposes_skill_discovery_and_reading() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        for name in ["ListSkills", "SearchSkills", "ReadSkill"] {
+            assert!(
+                tools.toolset.tools.contains_key(name),
+                "{host:?} missing {name}"
+            );
+        }
+        assert!(
+            tools.prompt.to_string().contains("ReadSkill"),
+            "{host:?} missing skill reading instructions"
+        );
+    }
 }

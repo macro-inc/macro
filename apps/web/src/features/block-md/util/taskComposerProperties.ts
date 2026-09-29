@@ -64,8 +64,14 @@ export async function createTaskWithProperties(
     string,
     PropertyDefinition | PropertyDefinitionDetailResponse
   >,
-  upsertToHistory: (params: { itemId: string; itemType: 'document' }) => void
+  upsertToHistory: (params: { itemId: string; itemType: 'document' }) => void,
+  options?: {
+    revalidateSoup?: boolean;
+    shareWithTeam?: boolean;
+    onMutate?: () => void;
+  }
 ) {
+  options?.onMutate?.();
   // Convert properties to API format (filter out null values)
   const propertyValues = properties.flatMap(([id, value]) => {
     const definition = definitions.get(id);
@@ -80,6 +86,8 @@ export async function createTaskWithProperties(
   });
 
   const createdTask = await createTaskWithInitialSnapshot({
+    revalidateSoup: options?.revalidateSoup,
+    shareWithTeam: options?.shareWithTeam,
     title: taskTitle,
     content: taskContent,
     propertyValues: propertyValues.length > 0 ? propertyValues : undefined,

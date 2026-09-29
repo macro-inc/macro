@@ -6270,7 +6270,7 @@
     "/crm/comment/{comment_id}": {
       "delete": {
         "tags": ["crm::inbound::axum_router::comments"],
-        "summary": "Soft-delete a CRM comment, scoped to the requesting user's team. When it\nwas the thread's last live comment, the thread is soft-deleted too\n(reported via `threadDeleted`).",
+        "summary": "Delete a CRM comment, scoped to the requesting user's team. Deleting a\nthread's first comment deletes the whole discussion, as on documents\n(reported via `threadDeleted`).",
         "operationId": "delete_crm_comment",
         "parameters": [
           {
@@ -20487,7 +20487,7 @@
         "required": ["text"],
         "properties": {
           "metadata": {
-            "description": "Arbitrary client metadata for the comment."
+            "description": "Ignored: messages keep no client metadata."
           },
           "text": {
             "type": "string",
@@ -20499,7 +20499,7 @@
             "description": "Existing thread to append to. Omit to start a new thread on the\naddressed entity."
           },
           "threadMetadata": {
-            "description": "Metadata to set on a newly created thread (ignored when replying\nwithout a value)."
+            "description": "Ignored: discussions keep no thread metadata."
           }
         }
       },
@@ -21795,7 +21795,7 @@
       },
       "DeleteCrmCommentResult": {
         "type": "object",
-        "description": "Outcome of soft-deleting a CRM comment: reports whether the parent thread\nwas soft-deleted too (it is when the deleted comment was its last live one).",
+        "description": "Outcome of deleting a CRM comment: reports whether its discussion went with\nit (it does when the deleted comment was the discussion's first).",
         "required": ["commentId", "threadId", "threadDeleted"],
         "properties": {
           "commentId": {
@@ -21805,7 +21805,7 @@
           },
           "threadDeleted": {
             "type": "boolean",
-            "description": "Whether the thread itself was soft-deleted because no live comments\nremained."
+            "description": "Whether the whole discussion was deleted because the comment was its\nfirst."
           },
           "threadId": {
             "type": "string",
@@ -26427,8 +26427,16 @@
           {
             "type": "object",
             "description": "The authenticated actor added or removed a reaction.",
-            "required": ["message", "type"],
+            "required": ["message", "emoji", "added", "type"],
             "properties": {
+              "added": {
+                "type": "boolean",
+                "description": "Whether the reaction was added (`true`) or removed (`false`)."
+              },
+              "emoji": {
+                "type": "string",
+                "description": "Emoji whose membership changed."
+              },
               "message": {
                 "$ref": "#/components/schemas/Message",
                 "description": "Persisted message."
@@ -26627,6 +26635,38 @@
               "type": {
                 "type": "string",
                 "enum": ["initiative"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A CRM company.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A CRM company."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["crm_company"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A CRM contact.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A CRM contact."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["crm_contact"]
               }
             }
           }
@@ -26896,6 +26936,29 @@
                 "type": "number",
                 "format": "double",
                 "description": "Vertical position as a fraction of the page height."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A cell or rectangular range in a native spreadsheet.",
+            "required": ["sheetId", "sheetName", "range", "type"],
+            "properties": {
+              "range": {
+                "type": "string",
+                "description": "A1 cell or range, such as B4 or B4:C9."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet identity within the workbook."
+              },
+              "sheetName": {
+                "type": "string",
+                "description": "Sheet name when the discussion was created."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["spreadsheet"]
               }
             }
           }
@@ -31604,9 +31667,32 @@
                 "enum": ["pdf_placeable"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A cell or rectangular range in a native spreadsheet.",
+            "required": ["sheetId", "sheetName", "range", "type"],
+            "properties": {
+              "range": {
+                "type": "string",
+                "description": "A1 cell or range, such as B4 or B4:C9."
+              },
+              "sheetId": {
+                "type": "string",
+                "description": "Stable sheet identity within the workbook."
+              },
+              "sheetName": {
+                "type": "string",
+                "description": "Sheet name when the discussion was created."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["spreadsheet"]
+              }
+            }
           }
         ],
-        "description": "A thread's location within its document. Geometry remains annotation-owned."
+        "description": "A thread's location within its document. PDF geometry remains annotation-owned."
       },
       "ThreadOrigin": {
         "type": "object",

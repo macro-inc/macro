@@ -28,9 +28,12 @@ import {
   type Present,
   type StringKey,
 } from './generated-selection';
+import { selectRecords } from './record-selection';
 
 /** Private operation-context field carrying serializable optimistic data. */
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
+// Page-local acknowledgement; deliberately excluded from durable queue data.
+const OPTIMISTIC_ENQUEUED_CONTEXT_KEY = 'normalizedCacheOptimisticEnqueued';
 /** Private result-extension field carrying the queue disposition. */
 const OPTIMISTIC_MUTATION_DISPOSITION_KEY =
   'normalizedCacheMutationDisposition';
@@ -54,6 +57,7 @@ type SelectionState = {
   readonly document: TypedDocumentNode<unknown, AnyVariables>;
   readonly variables: AnyVariables;
   readonly path: readonly EmbeddedLinkPathSegment[];
+  readonly recordRoot?: OptimisticLinkPatchWire['recordRoot'];
 };
 
 /** A type-generated path through one query result. */
@@ -111,6 +115,8 @@ export type QueryRevalidation = {
 export type OptimisticMutationOptions = {
   /** Required RFC UUID; reuse only when the newer intent safely replaces the older one. */
   uuid: string;
+  /** Runs after durable layer installation, independently of HTTP settlement. */
+  onEnqueued?: () => void;
   updates?: readonly OptimisticUpdate[];
   /** Relevant queries that cannot safely be updated still revalidate on success. */
   revalidations?: readonly QueryRevalidation[];
@@ -268,6 +274,29 @@ export function select<TData, TVariables extends AnyVariables>(
   });
 }
 
+/**
+ * Starts a fragment-typed relation update at one explicit normalized record.
+ * It requires no cached query path and never enumerates unrelated query variants.
+ */
+export function selectRecord<
+  TData extends NormalizedEntityIdentity,
+  TVariables,
+>(
+  document: TypedDocumentNode<TData, TVariables>,
+  entity: { __typename: TData['__typename']; id: string }
+): Selection<TData> {
+  const fragment = selectRecords(document);
+  return createSelection<TData>({
+    document: document as TypedDocumentNode<unknown, AnyVariables>,
+    variables: {},
+    path: [],
+    recordRoot: {
+      fragmentName: fragment.fragmentName,
+      entityKey: normalizedEntityKey(entity),
+    },
+  });
+}
+
 /** Construct the wire key for one normalized `id: ID!` GraphQL entity. */
 export function normalizedEntityKey(entity: NormalizedEntityIdentity): string {
   return `${entity.__typename}:${entity.id}`;
@@ -293,11 +322,40 @@ export function update<TItem extends object>(
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
     path: [...selection.path],
+    ...(selection.recordRoot ? { recordRoot: selection.recordRoot } : {}),
     operation: {
       kind: operation.kind,
       entityKey: normalizedEntityKey(operation.entity),
     },
   } as OptimisticUpdate;
+}
+
+/**
+ * Upserts a logical list member using its matching mutation-response record.
+ * Settlement resolves the server's ID rather than persisting a temporary ID.
+ */
+export function upsertByField<TItem extends object, K extends ScalarKey<TItem>>(
+  selection: ListSelection<TItem>,
+  args: {
+    entity: NormalizedEntityIdentity;
+    whereField: K;
+    equals: Extract<Present<TItem[K]>, JsonScalar>;
+  }
+): OptimisticUpdate {
+  const patch: OptimisticLinkPatchWire = {
+    query: stringifyDocument(selection.document),
+    operationName: documentOperationName(selection.document),
+    variablesJson: JSON.stringify(selection.variables ?? {}),
+    path: [...selection.path],
+    ...(selection.recordRoot ? { recordRoot: selection.recordRoot } : {}),
+    operation: {
+      kind: 'upsertByField',
+      entityKey: normalizedEntityKey(args.entity),
+      whereField: args.whereField,
+      equals: args.equals,
+    },
+  };
+  return patch as OptimisticUpdate;
 }
 
 /**
@@ -326,6 +384,7 @@ export function removeEmbeddedLink<
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
     path: [...selection.path],
+    ...(selection.recordRoot ? { recordRoot: selection.recordRoot } : {}),
     operation: {
       kind: 'removeEmbeddedLink',
       listItem: args.listItem,
@@ -368,6 +427,7 @@ export function upsertEmbeddedLink<
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
     path: [...selection.path],
+    ...(selection.recordRoot ? { recordRoot: selection.recordRoot } : {}),
     operation: {
       kind: 'upsertEmbeddedLink',
       listItem: args.listItem,
@@ -406,7 +466,21 @@ export function executeOptimisticMutation<
   };
   return client.mutation(document, variables, {
     [OPTIMISTIC_MUTATION_CONTEXT_KEY]: context,
+    ...(options.onEnqueued
+      ? { [OPTIMISTIC_ENQUEUED_CONTEXT_KEY]: options.onEnqueued }
+      : {}),
   });
+}
+
+/** Acknowledge installation without allowing caller code to interrupt queue routing. */
+export function notifyOptimisticMutationEnqueued(op: Operation): void {
+  const notify: unknown = op.context[OPTIMISTIC_ENQUEUED_CONTEXT_KEY];
+  if (typeof notify !== 'function') return;
+  try {
+    notify();
+  } catch (error) {
+    console.warn('Optimistic enqueue acknowledgement failed', error);
+  }
 }
 
 /** Reads and defensively validates the private context at the exchange edge. */

@@ -1407,6 +1407,40 @@
           }
         ]
       },
+      "ChannelMessageReactionMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata"
+          },
+          {
+            "type": "object",
+            "required": ["messageId", "messageContent", "emoji"],
+            "properties": {
+              "emoji": {
+                "type": "string",
+                "description": "The emoji added by the reactor."
+              },
+              "messageContent": {
+                "type": "string",
+                "description": "The reacted-to message content."
+              },
+              "messageId": {
+                "type": "string",
+                "description": "The reacted-to message id."
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"],
+                "description": "Optional reactor profile picture URL."
+              },
+              "threadId": {
+                "type": ["string", "null"],
+                "description": "The thread root id when the reacted-to message is a reply."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a reaction added to one of the recipient's channel messages."
+      },
       "ChannelMessageSendMetadata": {
         "allOf": [
           {
@@ -1588,6 +1622,48 @@
             }
           }
         ]
+      },
+      "CrmDiscussionMetadata": {
+        "type": "object",
+        "description": "CRM discussion metadata. The notification entity identifies the company or\ncontact; message and thread UUIDs select the discussion inside it.",
+        "required": ["recordName", "reason", "messageId", "threadId", "text"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical shared message UUID."
+          },
+          "reason": {
+            "$ref": "#/components/schemas/CrmDiscussionReason",
+            "description": "Semantic reason selected by the message delivery domain."
+          },
+          "recordName": {
+            "type": "string",
+            "description": "Company or contact display name."
+          },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public display name for a bot author."
+          },
+          "senderProfilePictureUrl": {
+            "type": ["string", "null"],
+            "description": "Optional avatar for push notification attachments."
+          },
+          "text": {
+            "type": "string",
+            "description": "Posted Markdown content."
+          },
+          "threadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical discussion root UUID."
+          }
+        }
+      },
+      "CrmDiscussionReason": {
+        "type": "string",
+        "description": "Why a CRM discussion notification was delivered.",
+        "enum": ["mention", "reply", "owner"]
       },
       "DeviceRequest": {
         "type": "object",
@@ -2355,6 +2431,21 @@
           },
           {
             "type": "object",
+            "description": "Someone commented, replied, or mentioned the recipient on a CRM company or contact.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/CrmDiscussionMetadata",
+                "description": "Someone commented, replied, or mentioned the recipient on a CRM company or contact."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["crm_discussion"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "The user was invited to a channel.",
             "required": ["content", "tag"],
             "properties": {
@@ -2650,6 +2741,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["agent_session_mentioned"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone reacted to one of the user's channel messages.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ChannelMessageReactionMetadata",
+                "description": "Someone reacted to one of the user's channel messages."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_message_reaction"]
               }
             }
           }

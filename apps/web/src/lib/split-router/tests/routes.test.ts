@@ -21,6 +21,7 @@ import type {
   InferSplitRouteParams,
   InferSplitRouteState,
   InferSplitRouteStateInput,
+  SplitNavigate,
   SplitRoutes,
 } from '../types';
 
@@ -80,6 +81,7 @@ describe('split route parameter schemas', () => {
     path: 'issue/:issueId',
     params: z.object({ issueId: z.coerce.number().int().positive() }),
     remountKey: ({ issueId }) => issueId.toFixed(0),
+    toReference: ({ issueId }) => ({ type: 'issue', id: issueId.toFixed(0) }),
   });
 
   it('coerces URL strings to typed runtime values', () => {
@@ -93,6 +95,15 @@ describe('split route parameter schemas', () => {
     expectTypeOf<InferSplitRouteParams<typeof issueRoute>>().toEqualTypeOf<{
       issueId: number;
     }>();
+  });
+
+  it('keeps the route reference callback on the matched definition', () => {
+    const manifest = createRoutesManifest({ definitions: [issueRoute] });
+    expect(manifest.byId.get(issueRoute.id)?.definition).toBe(issueRoute);
+    expect(issueRoute.toReference({ issueId: 42 })).toEqual({
+      type: 'issue',
+      id: '42',
+    });
   });
 
   it('rejects invalid values', () => {
@@ -160,8 +171,26 @@ function assertInvalidRouteDeclarations() {
       },
     ],
   });
+  // @ts-expect-error Route builders require every ancestor's destination params.
+  driveRoute.children[0].children[0].to({ documentId: 'document-1' });
+  defineRoute({
+    id: 'number',
+    path: ':id',
+    params: z.object({ id: z.coerce.number() }),
+  }).to({
+    // @ts-expect-error Route builders use the schema's output type.
+    id: '1',
+  });
 }
 
+function assertNestedRouteBuilderNavigation(navigate: SplitNavigate<string>) {
+  navigate(
+    driveRoute.children[0].children[0].to({
+      folderId: 'folder-1',
+      documentId: 'document-1',
+    })
+  );
+}
 describe('route entry state schemas', () => {
   it('parses inherited state and exposes it through the owning branch', () => {
     const entry = decodeRoute(routes, [
@@ -227,6 +256,7 @@ describe('route entry state schemas', () => {
 describe('typed route trees', () => {
   it('checks declaration contracts without widening node inference', () => {
     expectTypeOf(assertInvalidRouteDeclarations).toBeFunction();
+    expectTypeOf(assertNestedRouteBuilderNavigation).toBeFunction();
   });
   it('preserves declaration and schema identity while typing descendant ancestry', () => {
     const declarations = {
@@ -260,6 +290,24 @@ describe('typed route trees', () => {
     expectTypeOf<InferSplitRouteStateInput<typeof detail>>().toEqualTypeOf<{
       trail: string[];
     }>();
+  });
+
+  it('builds typed targets while preserving nested route references', () => {
+    const detail = driveRoute.children[0].children[0];
+    const params = { folderId: 'folder-1', documentId: 'document-1' };
+    expect(detail.to(params)).toEqual({ route: detail, params });
+    expect(detail.to(params).route).toBe(detail);
+    expect(Object.keys(detail)).not.toContain('to');
+    expect(driveRoute.to()).toEqual({ route: driveRoute, params: {} });
+
+    const tree = defineRoutes({
+      definitions: [{ id: 'plain', path: 'plain/:id' }],
+    });
+    const plain = tree.definitions[0];
+    expect(plain.to({ id: '1' })).toEqual({
+      route: plain,
+      params: { id: '1' },
+    });
   });
 
   it('types descendants directly from a named definition before assembly', () => {
@@ -304,6 +352,10 @@ describe('typed route trees', () => {
     expectTypeOf<InferSplitRouteNavigationParams<typeof root>>().toEqualTypeOf<{
       documentId: string;
     }>();
+    expect(root.to({ documentId: 'document-1' })).toEqual({
+      route: root,
+      params: { documentId: 'document-1' },
+    });
     const widened: SplitRoutes = tree;
     const redefined = defineRoutes(widened);
     expectTypeOf(redefined.definitions[0]?.children).toEqualTypeOf<

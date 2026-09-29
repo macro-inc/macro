@@ -10,13 +10,11 @@ import type {
   GroupHeaderProps,
   SoupRow,
 } from '@app/features/next-soup/create-soup-state';
-import { buildDocumentTypeQuery } from '@app/features/next-soup/filters/configs/document-type-query';
 import type { Query } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { DateGroupHeader } from '@app/features/next-soup/soup-view/date-group-header';
-import { registerDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
 import {
   EmptyState,
   shouldShowLoadError,
@@ -122,7 +120,6 @@ import {
   Match,
   on,
   onCleanup,
-  onMount,
   Show,
   Suspense,
   Switch,
@@ -415,34 +412,6 @@ export const SoupView = (props: SoupViewProps) => {
         );
       }
     });
-  });
-
-  onMount(() => {
-    if (contentId !== 'documents') return;
-
-    const markdownQuery = buildDocumentTypeQuery(['doc-markdown']);
-    if (!markdownQuery) return;
-
-    const dispose = registerDocumentsFilterSplit(panel.handle.id, {
-      toggleMarkdownFilter: () => {
-        if (soup.predicates.isActive('doc-markdown')) {
-          soupView.queryFilters.remove(markdownQuery);
-          soup.predicates.set(({ andIds, orIds }) => ({
-            and: andIds,
-            or: orIds.filter((id) => id !== 'doc-markdown'),
-          }));
-          return;
-        }
-
-        soupView.queryFilters.add(markdownQuery);
-        soup.predicates.set(({ andIds, orIds }) => ({
-          and: andIds,
-          or: [...new Set([...orIds, 'doc-markdown'])],
-        }));
-      },
-    });
-
-    onCleanup(dispose);
   });
 
   createEffect(() => {

@@ -2,10 +2,21 @@
 
 ## Surface
 
-`Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, and `Team tasks`.
+`Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, `Team tasks`, and `Projects`.
 The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, and `Filter`;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 and Tags submenus. Multi-select choices keep the menu open; Escape dismisses it.
+The top of the `Filter` menu is a `Filter with AI…` textbox, focused when the menu opens: type a plain-English
+description such as `urgent and high priority tasks that are not completed` and press
+Enter. It replaces the current selection with the matching Status, Priority, Assignee,
+Created by, and Tags options (exclusions on Status/Priority become the complementary
+options; subject matter such as `about billing` lands in the search box), then closes
+the menu. Requests that only partly map keep the menu open and show a muted note
+under the box; requests that map to nothing (excluding a tag, an unknown person,
+off-topic text) keep the typed text and show a red error there instead. The box keeps
+focus while you type even if the pointer drifts over the rows; ArrowDown moves into
+the rows and hovering a submenu hands focus to it as usual. The mobile drawer has no
+AI box.
 Task creation is available from the `New` button in the Tasks sidebar. Below the tabs the
 sidebar has a collapsible `Tags` section listing every personal and team tag, with a
 `New tag` button beside the heading. Clicking a tag narrows the current tab to tasks
@@ -57,8 +68,9 @@ global Favorites sidebar or command menu.
 
 Select a PR to open `/app/reviews/pr/<foreignEntityId>` in the Reviews shell.
 Its breadcrumb returns to the Reviews list. Old `/app/pr/<id>` links redirect
-to the Reviews detail. When the flag is off, the Reviews shortcut is hidden,
-but copied PR detail links still work.
+to the Reviews detail. When the flag is off, the Reviews shortcut is hidden and
+opening `/app/reviews` redirects to `/app/tasks` after flags load. Copied PR
+detail links still work; check both URLs with the flag off.
 
 Check all three tab URLs, author avatars and display names, row selection and
 context menu, favorites add/remove and collapse/empty visibility, filters, sort,
@@ -80,12 +92,116 @@ filter sheets. Desktop uses the centered composer dialog.
    `Add description...`, and property buttons: `Not Started` (status), `Priority`, assignee
    chip (defaults to you), `Due Date`, `Change or select tags`, `Attach image or video`,
    a `Create More` switch, and `Create Task Ctrl ↵`.
+   The `Shared with Team` row defaults to on and remembers your choice in local
+   storage across composer openings and page reloads. Its hint explains whether
+   the task will be visible to your whole team or only to you and the people you
+   share it with. The choice also applies to Create More, continuing in a split,
+   and tasks created from a project.
+   This row sits below the creation buttons, separated by an edge-to-edge divider.
+   A second divider separates it from Similar Tasks when matches are shown.
 3. `type_text` the title, then press **Ctrl+Enter** to create (the `Create Task` button
    enables once there is a title). Dialog also offers `Continue editing in split` to open the
    task as a full document.
 
 Tasks are documents under the hood (creation hits `POST /dss/documents/create_task`), so they
 also show up in Files/`All` and in AI-chat document listings.
+
+## Projects
+
+Projects are enabled by default in development. Production rollout is gated by
+PostHog `enable-projects`; `VITE_ENABLE_PROJECTS` overrides either environment.
+When off, Tasks hides
+the Projects tab, project column, and assignment actions. A saved Projects tab
+temporarily shows My Tasks without overwriting the saved selection.
+
+Choose the `Projects` tab in Tasks, or open `/app/component/tasks-projects`.
+Projects use the same list rows, property cells, selection, group headers, and
+keyboard navigation as Tasks. Search (`Cmd/Ctrl+F`), `Sort projects`,
+`Group projects`, and `Filter projects` sit above the list. Groups default to
+Status; choose None, Priority, or Assignee to change them. Click a group header
+or use the list's disclosure keys to collapse or expand it. Sort by Updated
+or Created. Filters include Status, Priority, and Assigned to me;
+`Filter due date` provides From and Through bounds and `Clear dates`.
+Search and filters apply before pagination. Scrolling or navigating near the
+end loads more projects; `Load more projects` also continues the list.
+Keyboard movement changes focus; Enter opens the focused project and
+Shift-selection opens it in a new split. Folders remain separate in Files.
+
+`New project` and the global Create menu's `Project` action (C, then P) open
+the same native composer host and layout as task creation,
+with a project name and the shared property pills for Status, Priority,
+Assignees, and Due date. Team sharing is enabled by default.
+Project Status offers `Not Started`, `In Progress`, and `Completed` in the
+composer, list, and detail/side-panel pickers. The Status filter uses the same
+three choices. Task statuses are unchanged. Existing project values from the
+previous status catalog remain visible until an editor changes them.
+
+Submit with
+`Create Project` or Cmd/Ctrl+Enter. `Continue editing in split` preserves the
+name, properties, and sharing choice; `Clear Draft` resets an uncreated draft.
+Leaving a property unset keeps its normal server default. If creation succeeds
+but a property write fails, `Retry saving properties` finishes the existing
+project, including after continuing in a split, without creating a duplicate.
+Closing the popover keeps the underlying view open. Creating from the popover
+opens the project in another split; creating from a full composer replaces that
+composer with the project.
+
+Opening a project keeps the Tasks workspace and its navigation. The top bar
+shows the Projects return breadcrumb and the project name, with the same Share
+and side-panel controls as task detail. Choose Overview or Tasks in
+that top bar. Opening an associated task extends the breadcrumb trail; choose
+the project breadcrumb to return, or Projects to restore the collection and its
+filters, groups, and scroll position. Project URLs retain identity and section:
+`/app/component/initiative-view~<project-id>~overview` (or `tasks`).
+Project properties live in the shared Details/Properties side panel and honor
+project access. Editors can rename the project; its owner can delete it.
+Deleting a project leaves its tasks in the workspace.
+
+Share (or Cmd+S) opens the same Share menu as tasks and documents: the
+`To: Email or group` field, optional message, access choice, and `Share`
+action. Only the owner can share; other members get Copy Link. Owners can open
+`Manage collaborators` from People. The usual team and link-access controls and
+Copy link action use the same menu as other entities; copied links open the
+project's Overview. Access changes also apply to the description. Sharing to a
+channel posts a native project chip, which opens the project in Tasks; channel
+attachments list it in their Projects section.
+
+Assigning a person to a project also adds them as a collaborator with edit access.
+Clearing the assignee leaves that access in place; the owner can remove it through
+Manage collaborators in Share. Removing a collaborator does not clear assignees.
+
+Overview's Description uses the shared collaborative Markdown editor and saves
+automatically to the existing backing document. Edit/owner access allows typing;
+view/comment access is read-only. The description is part of the native project
+view and does not open a separate document block. Discussion appears below the
+description, using the same discussion component as tasks.
+Backing descriptions remain available through direct reads, but are omitted from
+ordinary document search, history, and Soup lists.
+An unavailable connection shows `Retry description` without clearing saved content.
+
+The project's Tasks tab starts with the task search, controls, and unified list;
+the project title and property pills appear only on Overview. Use
+`New task` to create a task associated with the project. The normal task row is
+inserted into the query cache before the composer closes, including its selected
+properties and project chip. It stays in its group while saving and assigning,
+then uses the saved task ID. Failed creations or assignments roll back that row.
+Verify this with GraphQL Soup both enabled and disabled. The section tabs
+use the same control as Channels. Existing tasks can be assigned through their
+`Set project…` context menu; there is no bulk-add dialog in the project view.
+The regular Tasks list includes a Project column; clicking a project chip opens
+that project. Right-click a task and choose `Set project…` to choose or clear its
+project. On mobile the same action is in the long-press menu. Selecting several
+tasks exposes `Set project` in the selection toolbar, and a context action on a
+selected row applies to the selection. Partial assignment failures leave only
+failed tasks in the picker for retry.
+
+Discussion at the bottom of Overview uses the new discussions system. Comments
+appear from oldest to newest, with the comment input below them. The Discussion
+heading collapses the section, and `Load earlier comments` loads older comments
+at the top. Comments, replies, and reactions stay attached to the project identity.
+Notification links open Overview at the relevant discussion. Existing `activity`
+URLs also open Overview and preserve the target discussion. Project history is
+not included in this discussion section.
 
 ## Bulk delete
 
@@ -139,6 +255,30 @@ on a disposable task: the picker should close before the response, and reopening
 it during that delay should not let the earlier save close the new picker.
 A failed save uses the mutation's rollback/error handling; it must not reopen
 the picker or trigger a success refresh.
+
+In the task list, setting an **unset Priority to Urgent** also updates before the
+response, including when no priority assignment exists yet. Verify another task's
+unset priority stays unchanged. First assignments target the normalized entity
+through a fragment-rooted relation recipe: no flat/grouped Soup page discovery
+or pre-save network fetch is needed, even with more than 128 cached pages.
+Check a grouped-only row and an offline/reloaded queued edit as well.
+On success the temporary assignment is replaced
+by the server assignment without a blank cell or duplicate property; failure
+restores the unset cell. Bulk property edits install every optimistic layer before
+the first HTTP response, while network requests retain durable queue ordering.
+The bulk save remains pending until every queued item settles, including while
+offline; queue acceptance alone is not success. Delay the second response after
+the first succeeds: no success callback or refresh should run yet. Then reject
+the second request: the bulk save reports failure, the first task keeps its
+committed value, and only the second task rolls back. Repeat with both requests
+succeeding and with the first failing before the second succeeds.
+
+A self-contained browser regression uses the production list cell, mutation hooks,
+and worker/WASM cache with delayed fixture HTTP (no hosted task edits). From
+`apps/web`, run `just build-cache-wasm`, then
+`bunx playwright test -c src/features/tasks-view/browser-test/playwright.config.ts`.
+The harness defaults to port 3004; `TASK_PROPERTY_TEST_PORT` can select a verified
+same-worktree dev server.
 
 For multi-tab status checks, open the same task in several browser tabs
 and change status repeatedly in the visible tab. Hidden tabs defer cache-change

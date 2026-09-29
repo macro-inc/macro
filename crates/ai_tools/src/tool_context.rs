@@ -241,7 +241,8 @@ pub fn shared_message_service<E: messages::domain::ports::MessageEventPublisher>
         messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone())
             .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
                 initiative::outbound::PgInitiativeRepo::new(pool.clone()),
-            )),
+            ))
+            .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
         effects,
     )
     .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
@@ -362,7 +363,14 @@ fn message_service_with_side_effects(
                 realtime.clone(),
             ),
             messages::domain::delivery::DiscussionDelivery::new(
-                messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()),
+                messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
+                    .with_initiatives(
+                        initiative::domain::lookup::InitiativeLookup::new(
+                            initiative::outbound::PgInitiativeRepo::new(pool.clone()),
+                        ),
+                        build_properties_service(pool.clone(), Arc::new(access.clone())),
+                    )
+                    .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
                 messages::outbound::entity_access_audience::EntityAccessMessageAudience(access),
                 realtime,
                 messages::outbound::notification_sender::MessageNotificationSender(
@@ -464,22 +472,32 @@ pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
 pub type ToolSkillService = skills::domain::service::SkillServiceImpl<
     skills::outbound::search_service_searcher::SearchServiceSkillSearcher,
     skills::outbound::soup_skill_lister::SoupSkillLister<ToolSoupService>,
+    skills::outbound::document_skill_reader::DocumentSkillReader<
+        ToolDocumentService,
+        ToolEntityAccessService,
+    >,
 >;
 
 /// Type alias for the skill AI tool context.
 pub type ToolSkillToolContext = SkillToolContext<ToolSkillService>;
 
 /// Build the skill AI tool context from a search service client (skill
-/// search) and the soup service (skill listing).
+/// search), soup service (listing), and document services (reading).
 pub fn build_skill_tool_context(
     search_service_client: Arc<search_service_client::SearchServiceClient>,
     soup_service: Arc<ToolSoupService>,
+    documents: &ToolDocumentToolContext,
 ) -> ToolSkillToolContext {
     SkillToolContext::new(skills::domain::service::SkillServiceImpl::new(
         skills::outbound::search_service_searcher::SearchServiceSkillSearcher::new(
             search_service_client,
         ),
         skills::outbound::soup_skill_lister::SoupSkillLister::new(soup_service),
+        skills::outbound::document_skill_reader::DocumentSkillReader::new(
+            documents.service.clone(),
+            documents.entity_access_service.clone(),
+            documents.lexical_client.clone(),
+        ),
     ))
 }
 
@@ -1037,7 +1055,8 @@ pub fn build_reminders_tool_context(
 
 /// Type alias for the chat service implementation used by AI tools.
 /// Uses an empty toolset — the read-only tool never invokes tool execution.
-pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManagementService>;
+pub type ToolChatService =
+    ChatServiceImpl<PgChatRepo<PgBotsRepo>, (), ToolEntityAccessManagementService>;
 
 /// Type alias for the project service implementation used by AI tools.
 /// Upload, content-hash, and search-cleanup ports are unwired — project

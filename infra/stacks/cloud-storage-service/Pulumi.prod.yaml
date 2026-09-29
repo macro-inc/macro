@@ -1,6 +1,13 @@
 config:
   aws-native:region: us-east-1
   aws:region: us-east-1
+  datadog:apiUrl: https://api.us5.datadoghq.com/
+  cloud-storage-service:waf_account_id: "569036502058"
+  cloud-storage-service:waf_web_acl_name: macro-cloud-storage-prod
+  cloud-storage-service:waf_web_acl_id: 0f1059a5-1ee4-4b57-a429-88df830d5091
+  cloud-storage-service:waf_ip_safety_rule_group_arn: arn:aws:wafv2:us-east-1:569036502058:regional/rulegroup/ip_safety/0a1bfeec-4d6c-4afe-bf35-b93e06c65f9b
+  cloud-storage-service:waf_log_group_name: aws-waf-logs-macro-cloud-storage-prod
+  cloud-storage-service:waf_datadog_forwarder_arn: arn:aws:lambda:us-east-1:569036502058:function:DatadogIntegration-ForwarderStack-BS3QDP-Forwarder-O0hyWQ9Yq4uQ
   cloud-storage-service:macro_db_secret_key: macro-db-prod
   cloud-storage-service:macro_db_proxy_secret_key: macrodb-rds-proxy-prod
   cloud-storage-service:macro_db_readonly_secret_key: macro-db-readonly-prod

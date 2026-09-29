@@ -25,6 +25,9 @@
 
 pub mod domain;
 
+#[cfg(feature = "axum")]
+pub mod inbound;
+
 #[cfg(feature = "postgres")]
 pub mod outbound;
 
@@ -40,5 +43,7 @@ pub use shared_entity_registry::{
     RegisteredEntityType, UnregisteredEntityType, WriteOutcome,
 };
 
+#[cfg(feature = "axum")]
+pub use inbound::CreationPrincipalExtractor;
 #[cfg(feature = "postgres")]
 pub use outbound::pg_entity_registry_repo::PgEntityRegistryRepository;
