@@ -1,5 +1,5 @@
 import type { UnifiedNotification } from '@notifications/types';
-import { createRoot, createSignal } from 'solid-js';
+import { batch, createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type AlertNotificationSource,
@@ -101,21 +101,112 @@ describe('reminder alert feed', () => {
   it('retains a live burst while no foreground consumer reads alerts', () => {
     const h = mount();
     h.setStarted(false);
-    for (let i = 0; i < 4; i++) {
-      h.deliver({
-        ...notification,
-        id: `delivery-${i}`,
-        notification_metadata: {
-          tag: 'reminder',
-          content: {
-            reminderId: `reminder-${i}`,
-            description: `Follow up ${i}`,
-            scheduledFor: '2026-09-21T10:00:00Z',
+    batch(() => {
+      for (let i = 0; i < 4; i++)
+        h.deliver({
+          ...notification,
+          id: `delivery-${i}`,
+          notification_metadata: {
+            tag: 'reminder',
+            content: {
+              reminderId: `reminder-${i}`,
+              description: `Follow up ${i}`,
+              scheduledFor: '2026-09-21T10:00:00Z',
+            },
+          },
+        });
+    });
+    expect(h.alerts()).toHaveLength(4);
+    h.dispose();
+  });
+
+  it('retains loaded catch-up while transport restarts without starting its query', () => {
+    const h = mount();
+    h.setNotifications([notification]);
+    h.setLoading(false);
+    expect(h.alerts()).toHaveLength(1);
+    h.setStarted(false);
+    h.readLoading.mockClear();
+    h.readNotifications.mockClear();
+    h.setNotifications([]);
+    expect(h.alerts()).toHaveLength(1);
+    expect(h.readLoading).not.toHaveBeenCalled();
+    expect(h.readNotifications).not.toHaveBeenCalled();
+    h.setLoading(true);
+    h.setStarted(true);
+    expect(h.alerts()).toHaveLength(1);
+    h.setDone(true);
+    expect(h.alerts()).toEqual([]);
+    h.setDone(false);
+    expect(h.alerts()).toHaveLength(1);
+    h.setLoading(false);
+    expect(h.alerts()).toEqual([]);
+    h.dispose();
+  });
+
+  it('deduplicates a batched occurrence and discards the batch on account change', () => {
+    const h = mount();
+    h.setStarted(false);
+    batch(() => {
+      h.deliver(notification);
+      h.deliver({ ...notification, id: 'same-occurrence' });
+    });
+    expect(h.alerts()).toHaveLength(1);
+    batch(() => {
+      h.deliver({ ...notification, id: 'late-alice' });
+      h.setAccount('bob');
+    });
+    expect(h.alerts()).toEqual([]);
+    h.setAccount('alice');
+    expect(h.alerts()).toEqual([]);
+    h.dispose();
+  });
+
+  it('records batched synchronous subscription replay before the first consumer', () => {
+    const h = createRoot((dispose) => {
+      const alerts = createReminderAlertFeed(
+        {
+          notifications: () => [],
+          isLoading: () => false,
+          isStarted: () => false,
+          mutedEntities: () => [],
+          subscribe: (deliver) => {
+            batch(() => {
+              deliver(notification);
+              deliver({
+                ...notification,
+                id: 'delivery-2',
+                notification_metadata: {
+                  tag: 'reminder',
+                  content: {
+                    reminderId: 'reminder-2',
+                    description: 'Second reminder',
+                    scheduledFor: '2026-09-21T10:00:00Z',
+                  },
+                },
+              });
+            });
+            return () => {};
           },
         },
-      });
-    }
-    expect(h.alerts()).toHaveLength(4);
+        () => 'alice'
+      );
+      return { alerts, dispose };
+    });
+    expect(h.alerts()).toHaveLength(2);
+    h.dispose();
+  });
+
+  it('does not carry retained catch-up across accounts while a new transport is idle', () => {
+    const h = mount();
+    h.setNotifications([notification]);
+    h.setLoading(false);
+    expect(h.alerts()).toHaveLength(1);
+    h.setStarted(false);
+    h.setAccount('bob');
+    expect(h.alerts()).toEqual([]);
+    h.setAccount('alice');
+    expect(h.alerts()).toEqual([]);
     h.dispose();
   });
 

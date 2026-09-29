@@ -7,6 +7,7 @@ import {
   createMemo,
   createSignal,
   onCleanup,
+  untrack,
 } from 'solid-js';
 import {
   reminderAlertIdentity,
@@ -34,28 +35,22 @@ export function createReminderAlertFeed(
     account: string;
     notification: UnifiedNotification;
   }>();
-  createEffect(() => {
+  // Switching transports can return the full query to its idle state. Retain
+  // this account's last ready page until another ready page replaces it; an
+  // idle/loading query is not evidence that its notifications were removed.
+  const readySnapshot = createMemo<{
+    account: string | undefined;
+    notifications: UnifiedNotification[];
+  }>((previous) => {
     const owner = account();
-    if (!owner) return;
-    let subscribed = true;
-    const unsubscribe = source.subscribe((notification) => {
-      if (
-        subscribed &&
-        owner === account() &&
-        notification.notification_metadata.tag === 'reminder'
-      )
-        setLatest({ account: owner, notification });
-    });
-    onCleanup(() => {
-      subscribed = false;
-      unsubscribe();
-    });
+    if (!owner) return { account: owner, notifications: [] };
+    if (!source.isStarted() || source.isLoading())
+      return previous?.account === owner
+        ? previous
+        : { account: owner, notifications: [] };
+    return { account: owner, notifications: source.notifications() };
   });
-
-  const snapshot = () =>
-    !account() || !source.isStarted() || source.isLoading()
-      ? []
-      : source.notifications();
+  const snapshot = () => readySnapshot().notifications;
 
   const [clock, setClock] = createSignal(Date.now());
   const activeMutes = createMemo(() => {
@@ -138,21 +133,43 @@ export function createReminderAlertFeed(
     };
   });
 
+  createEffect(() => {
+    const owner = account();
+    if (!owner) return;
+    let subscribed = true;
+    const unsubscribe = source.subscribe((notification) => {
+      if (
+        subscribed &&
+        owner === account() &&
+        notification.notification_metadata.tag === 'reminder'
+      ) {
+        setLatest({ account: owner, notification });
+        // A producer may deliver several items inside one Solid batch. Read
+        // the reducer at each event boundary so every delivery is committed
+        // before `latest` can be replaced, even without a foreground consumer.
+        untrack(buffered);
+      }
+    });
+    onCleanup(() => {
+      subscribed = false;
+      unsubscribe();
+    });
+  });
+
   return createMemo(() =>
     reminderAlertsFromNotifications(
-      [
-        ...snapshot(),
-        ...[...buffered().pending.values()].map(
+      [...snapshot(), ...buffered().pending.values()]
+        .map(
           (notification) =>
             source.withLocalOverrides?.(notification) ?? notification
-        ),
-      ].filter(
-        (notification) =>
-          !isMutedItem(activeMutes(), {
-            item_id: notification.entity_id,
-            item_type: notification.entity_type,
-          })
-      )
+        )
+        .filter(
+          (notification) =>
+            !isMutedItem(activeMutes(), {
+              item_id: notification.entity_id,
+              item_type: notification.entity_type,
+            })
+        )
     ).filter((item) => !buffered().acknowledged.has(item.key))
   );
 }
