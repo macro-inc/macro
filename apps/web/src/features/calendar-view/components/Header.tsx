@@ -275,7 +275,10 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
               />
             </div>
             <Show when={showDesktopNavigation()}>
-              <div class="ml-auto flex shrink-0 items-center gap-1">
+              <div
+                ref={tourTarget(CALENDAR_TOUR.period)}
+                class="ml-auto flex shrink-0 items-center gap-1"
+              >
                 <Show when={showPeriodControls()}>
                   {todayButton(false)}
                   <PeriodSelector isNarrow={isNarrow()} />

@@ -70,9 +70,17 @@ export const reportsTour = defineViewTour({
 });
 ```
 
-- `target` may be a list; the first shown one wins.
+- `target` may be a list; the first shown one wins. Use this for features
+  that aren't always rendered (behind a flag, a connection, or data such as
+  "more than one calendar"): list the real control first and the nearest
+  always-present surface after it, and set `missingHint`. The hint shows
+  whenever the step falls back.
+- Before relying on a target, check every branch that renders it: touch
+  vs desktop headers, preview vs workspace, empty states. Register the same
+  target in each branch that shows the control.
 - A step without `target` floats in the split.
-- `missingHint` explains how to reach an unavailable feature when there's no entry.
+- `missingHint` explains how to reach or enable the feature when the step
+  floats or falls back.
 - `placement` (a floating-ui `Placement`) overrides the default `right-start`.
 
 ## 4. Never navigate for the user: use an entry
@@ -91,8 +99,8 @@ unopened item), don't open it from the tour. Give the step an `entry`:
 ```
 
 While the target is missing and the entry is shown, the card hides, a beacon
-marks the entry, and a small hint beside it shows `entryLabel` with Skip and
-×. Pressing the entry, or the target appearing any other way, resumes the
+marks the entry, and a small card beside it shows `entryLabel` with Skip
+(and Skip all, after one Skip, when more steps wait on the same entry). Pressing the entry, or the target appearing any other way, resumes the
 step. Register the entry control as a target like any other.
 
 - Keep `entryLabel` short and imperative: "Open a channel or DM to continue".
@@ -129,6 +137,10 @@ list):
 - Unit behavior of the primitive lives in `Tour/Tour.test.tsx` and app behavior
   in `features/tours/ViewTour.test.tsx`; add cases there when you change them.
 - The primitive's gallery page is `Tour/Tour.docs.tsx`.
+- Progress is saved per user in local storage under `macro:tour:<id>`
+  (`completed`, `dismissed`, or the active step). Changing a tour's steps
+  doesn't reset it for users who finished it; bump the `id` only if everyone
+  must see the new version.
 - Check it in a browser: on localhost the tour reopens on every mount. Walk
   every step, including one that waits on an entry, once with the sidebar
   open and once collapsed.

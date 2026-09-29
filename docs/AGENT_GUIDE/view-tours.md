@@ -13,16 +13,19 @@ and highlights.
   outside keeps it open.
 - The header shows the tour name, Back / `n / total` / Next, and ×. The footer
   button reads Next, then Got it on the last step.
-- A step with nothing to point at floats at the top right of the split, with a
-  short hint when the feature is unavailable (for example, no connected calendar).
+- A step with nothing to point at floats at the top right of the split. When a
+  feature isn't set up (for example, no connected calendar, or only one
+  calendar), the step points at the nearest real surface instead and adds a
+  short hint on how to enable it.
 - The card fades and rises in place when it first appears; it glides only
   when moving between steps.
 - **Beacons.** A tour never navigates or opens things for you. When a step's
   feature is behind something (a collapsed sidebar, another page, an unopened
   conversation), the card hides and a pulsing dot marks the control that
   reveals it: the sidebar toggle, the Agents nav item, New conversation, or the
-  top conversation row. A pill beside it says what to do ("Open a channel or
-  DM to continue") with Skip and ×. If that control is itself in a collapsed
+  top conversation row. A small card beside it says what to do ("Open a
+  channel or DM to continue"), with Skip below. After one Skip, Skip all
+  appears next to it when more steps wait on the same action. If that control is itself in a collapsed
   sidebar, the dot marks the sidebar toggle first, then moves once the
   sidebar opens. Pressing the marked control, or reaching the feature any
   other way, clears the dot and shows the step. Leaving again brings it back.
@@ -43,9 +46,12 @@ Connection suggestions open Email or Connected settings. Home, Email, Documents,
 Tasks, Channels, Customers, and Calls include a video from Macro's YouTube
 channel; no player loads until Watch is clicked, and dismissing removes it.
 
-## Dismissal
+## Progress
 
-×, Got it, or Escape while focus is inside the card dismisses the tour for that
-user and view on this browser; other views keep their own tours. On localhost,
-127.0.0.1, and IPv6 loopback in development, tours reopen on every mount and
-dismissal doesn't change saved preferences.
+Progress is saved per user and view in this browser's local storage, not on
+the server. Got it on the last step (or skipping past it) saves the tour as
+completed; ×, or Escape while focus is inside the card, saves it as dismissed.
+Either keeps it hidden. An unfinished tour resumes at the step last reached.
+Other views keep their own tours. On localhost, 127.0.0.1, and IPv6 loopback
+in development, tours start from the first step on every mount and saved
+progress is left alone.
