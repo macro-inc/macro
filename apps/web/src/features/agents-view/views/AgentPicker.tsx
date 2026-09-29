@@ -30,7 +30,13 @@ export function AgentPicker(props: {
   loading: boolean;
   effortLabel?: string;
   effortSelection?: EffortSelection;
-  onSelect: (agent: RosterAgent, model?: string, effort?: EffortChoice) => void;
+  onSelect: (agent: RosterAgent, model?: string) => void;
+  /** Supply only when the host can persist and apply effort selections. */
+  onSelectEffort?: (
+    agent: RosterAgent,
+    model: string,
+    effort: EffortChoice
+  ) => void;
   onConnect: (agent: RosterAgent) => void;
   onCreate: () => void;
 }) {
@@ -52,12 +58,16 @@ export function AgentPicker(props: {
     );
   const label = () =>
     [baseLabel(), props.effortLabel].filter(Boolean).join(' · ');
-  const choose = (
+  const choose = (agent: RosterAgent, model?: string) => {
+    props.onSelect(agent, model);
+    setOpen(false);
+  };
+  const chooseEffort = (
     agent: RosterAgent,
-    model?: string,
-    effort?: EffortChoice
+    model: string,
+    effort: EffortChoice
   ) => {
-    props.onSelect(agent, model, effort);
+    props.onSelectEffort?.(agent, model, effort);
     setOpen(false);
   };
   return (
@@ -121,18 +131,24 @@ export function AgentPicker(props: {
                     group: option.group ?? undefined,
                   }))}
                   onSelect={(id) => choose(agent(), id)}
-                  modelRow={(row) => (
-                    <AgentModelMenuItem
-                      {...row}
-                      harness={agent().harness}
-                      effortValue={
-                        row.selected ? props.effortSelection?.value : undefined
-                      }
-                      onSelectEffort={(effort) =>
-                        choose(agent(), row.option.id, effort)
-                      }
-                    />
-                  )}
+                  modelRow={
+                    props.onSelectEffort
+                      ? (row) => (
+                          <AgentModelMenuItem
+                            {...row}
+                            harness={agent().harness}
+                            effortValue={
+                              row.selected
+                                ? props.effortSelection?.value
+                                : undefined
+                            }
+                            onSelectEffort={(effort) =>
+                              chooseEffort(agent(), row.option.id, effort)
+                            }
+                          />
+                        )
+                      : undefined
+                  }
                   emptyMessage={macroCatalog.message()}
                 />
               )}
@@ -159,8 +175,12 @@ export function AgentPicker(props: {
                               ? props.effortSelection
                               : undefined
                           }
-                          onSelect={(model, effort) =>
-                            choose(agent, model, effort)
+                          onSelect={(model) => choose(agent, model)}
+                          onSelectEffort={
+                            props.onSelectEffort
+                              ? (model, effort) =>
+                                  chooseEffort(agent, model, effort)
+                              : undefined
                           }
                           onConnect={() => {
                             setOpen(false);
@@ -205,7 +225,8 @@ function AgentPickerRow(props: {
   selected: boolean;
   modelOverride?: string;
   effortSelection?: EffortSelection;
-  onSelect: (model?: string, effort?: EffortChoice) => void;
+  onSelect: (model?: string) => void;
+  onSelectEffort?: (model: string, effort: EffortChoice) => void;
   onConnect: () => void;
 }) {
   const [open, setOpen] = createSignal(false);
@@ -273,6 +294,7 @@ function AgentPickerRow(props: {
                 modelOverride={props.modelOverride}
                 effortSelection={props.effortSelection}
                 onSelect={props.onSelect}
+                onSelectEffort={props.onSelectEffort}
               />
             </Show>
           </Dropdown.SubContent>
@@ -286,7 +308,8 @@ function AgentModels(props: {
   agent: RosterAgent;
   modelOverride?: string;
   effortSelection?: EffortSelection;
-  onSelect: (model?: string, effort?: EffortChoice) => void;
+  onSelect: (model?: string) => void;
+  onSelectEffort?: (model: string, effort: EffortChoice) => void;
 }) {
   const catalog = createComposerModels(() => props.agent);
   const defaultModel = () => props.agent.defaultModel ?? catalog.currentModel();
@@ -301,14 +324,22 @@ function AgentModels(props: {
         group: option.group ?? undefined,
       }))}
       onSelect={props.onSelect}
-      modelRow={(row) => (
-        <AgentModelMenuItem
-          {...row}
-          harness={props.agent.harness}
-          effortValue={row.selected ? props.effortSelection?.value : undefined}
-          onSelectEffort={(effort) => props.onSelect(row.option.id, effort)}
-        />
-      )}
+      modelRow={
+        props.onSelectEffort
+          ? (row) => (
+              <AgentModelMenuItem
+                {...row}
+                harness={props.agent.harness}
+                effortValue={
+                  row.selected ? props.effortSelection?.value : undefined
+                }
+                onSelectEffort={(effort) =>
+                  props.onSelectEffort?.(row.option.id, effort)
+                }
+              />
+            )
+          : undefined
+      }
       emptyMessage={catalog.message()}
     />
   );

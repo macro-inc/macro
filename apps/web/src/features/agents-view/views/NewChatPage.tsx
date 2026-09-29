@@ -12,6 +12,7 @@ import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { createMemo, createSignal } from 'solid-js';
 import {
+  type EffortChoice,
   effortConfigOption,
   effortLabel,
 } from '../../block-agent/state/session-config';
@@ -216,6 +217,27 @@ export function NewChatPage(props: {
     setEffortSelection(undefined);
   };
 
+  const selectAgent = (
+    agent: RosterAgent,
+    model?: string,
+    selection?: EffortChoice
+  ) => {
+    setAgentId(agent.id);
+    if (agent.id === MACRO_PERSONA_ID) {
+      if (model) preferredInmem.remember(model);
+      // Still set the override so the trigger updates when Macro was
+      // already selected (agent id unchanged would otherwise skip a render).
+      setModelOverride(model);
+    } else {
+      setModelOverride(model);
+    }
+    setEffortSelection(
+      selection
+        ? { ...selection, target: JSON.stringify(capabilityTarget()) }
+        : undefined
+    );
+  };
+
   const agentSelector = () => (
     <AgentPicker
       agents={options()}
@@ -224,22 +246,8 @@ export function NewChatPage(props: {
       loading={props.rosterLoading}
       effortLabel={selectedEffort()?.name ?? effortLabel(effort())}
       effortSelection={effortOverride()}
-      onSelect={(agent, model, selection) => {
-        setAgentId(agent.id);
-        if (agent.id === MACRO_PERSONA_ID) {
-          if (model) preferredInmem.remember(model);
-          // Still set the override so the trigger updates when Macro was
-          // already selected (agent id unchanged would otherwise skip a render).
-          setModelOverride(model);
-        } else {
-          setModelOverride(model);
-        }
-        setEffortSelection(
-          selection
-            ? { ...selection, target: JSON.stringify(capabilityTarget()) }
-            : undefined
-        );
-      }}
+      onSelect={selectAgent}
+      onSelectEffort={selectAgent}
       onConnect={connect}
       onCreate={() => props.onOpenRoster(coding() ? 'coder' : 'agent')}
     />

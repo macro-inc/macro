@@ -633,6 +633,7 @@ describe('agent-led new conversation', () => {
         selected={macro}
         loading={false}
         onSelect={onSelect}
+        onSelectEffort={onSelect}
         onConnect={vi.fn()}
         onCreate={vi.fn()}
       />

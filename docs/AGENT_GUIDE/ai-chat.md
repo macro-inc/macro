@@ -987,6 +987,9 @@ first message. If startup reports a rejected setting or timeout, the first promp
 has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
 contracts and test coverage.
 
+Routine model/agent pickers retain model-only selection: they do not offer effort
+choices, because routine targets do not save an effort setting.
+
 ## Reading skills
 
 Agents in Macro and connected MCP harnesses can discover saved skill documents
