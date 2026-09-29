@@ -6,9 +6,10 @@ fn schema_is_valid_and_optional_fields_default() {
     let schema = generate_validated_input_schema::<GenerateImage>().unwrap();
     assert_eq!(schema.name, "GenerateImage");
     let tool: GenerateImage = serde_json::from_value(serde_json::json!({
-        "prompt": "a lighthouse at dusk", "fileName": "lighthouse"
+        "prompt": "a lighthouse at dusk"
     }))
     .unwrap();
+    assert!(tool.file_name.is_none());
     assert!(tool.aspect_ratio.is_none());
     assert!(tool.project_id.is_none());
 
@@ -16,6 +17,7 @@ fn schema_is_valid_and_optional_fields_default() {
         "prompt": "a lighthouse at dusk", "fileName": "lighthouse", "aspectRatio": "widescreen"
     }))
     .unwrap();
+    assert_eq!(tool.file_name.as_deref(), Some("lighthouse"));
     assert_eq!(
         tool.aspect_ratio.map(ImageAspectRatio::from),
         Some(ImageAspectRatio::Widescreen)

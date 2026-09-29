@@ -3516,7 +3516,7 @@ export interface EditTagResponse {
   summary: string;
 }
 /**
- * Generate an image from a text prompt with Google's Nano Banana image model and save it as an image document in Macro. Use when the user asks for a picture, illustration, diagram concept, logo idea, mockup, or any visual to be created; do not use to edit or fetch existing images. Describe the subject, style, composition, lighting, and any text to render in the prompt. Returns the new document ID, which you can cite so the user sees the image inline. Generation takes several seconds.
+ * Generate an image from a text prompt with Google's Nano Banana image model and save it as an image document in Macro. Use when the user asks for a picture, illustration, diagram concept, logo idea, mockup, or any visual to be created; do not use to edit or fetch existing images. Describe the subject, style, composition, lighting, and any text to render in the prompt; only the prompt is required. Returns the new document ID, which you can cite so the user sees the image inline. Generation takes several seconds.
  */
 export interface GenerateImage {
   /**
@@ -3524,9 +3524,9 @@ export interface GenerateImage {
    */
   prompt: string;
   /**
-   * Short descriptive name for the saved image, for example `sunset-lighthouse`. The file extension is added from the generated format. No directory path.
+   * Optional short descriptive name for the saved image, for example `sunset-lighthouse`. The file extension is added from the generated format. No directory path. Omit to name the image after the prompt.
    */
-  fileName: string;
+  fileName?: string | null;
   /**
    * Shape of the image. Omit for the model default (square). `widescreen` (16:9) suits banners and slides, `tall` (9:16) suits phone screens and stories.
    */

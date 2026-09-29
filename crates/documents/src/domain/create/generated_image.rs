@@ -28,8 +28,9 @@ pub struct NewGeneratedImage {
     /// Requested shape; the provider default when `None`.
     pub aspect_ratio: Option<ImageAspectRatio>,
     /// Document name; the extension is added from the generated format. A
-    /// name that already carries an image extension keeps it.
-    pub file_name: String,
+    /// name that already carries an image extension keeps it. `None` names
+    /// the document after the opening words of the prompt.
+    pub file_name: Option<String>,
     /// Edit capability for the destination project, minted for the creating
     /// principal; absent for top-level files.
     pub project: Option<EntityAccessReceipt<EditAccessLevel>>,
@@ -91,10 +92,10 @@ where
             ))
             .into());
         }
-        let file_name = file_name.trim();
-        if file_name.is_empty() {
-            return Err(DocumentError::BadRequest("fileName must not be empty".to_string()).into());
-        }
+        let file_name = match file_name.as_deref().map(str::trim) {
+            Some(name) if !name.is_empty() => name.to_string(),
+            _ => file_name_from_prompt(prompt),
+        };
 
         let generated = generator
             .generate_image(&ImageGenerationRequest {
@@ -108,7 +109,7 @@ where
                 generated.mime_type
             ))
         })?;
-        let file_name = with_extension(file_name, file_type);
+        let file_name = with_extension(&file_name, file_type);
         let size_bytes = generated.bytes.len();
 
         let document = self
@@ -129,6 +130,25 @@ where
             size_bytes,
             note: generated.note,
         })
+    }
+}
+
+/// Words of `prompt` used as the document name when the caller gave none.
+const FILE_NAME_WORDS: usize = 6;
+
+/// A document name from the opening words of `prompt`: letters, digits, and
+/// plain hyphens only, so the name needs no further filename validation.
+fn file_name_from_prompt(prompt: &str) -> String {
+    let name = prompt
+        .split(|c: char| !(c.is_alphanumeric() || c == '-'))
+        .filter(|word| !word.is_empty())
+        .take(FILE_NAME_WORDS)
+        .collect::<Vec<_>>()
+        .join(" ");
+    if name.is_empty() {
+        "Generated image".to_string()
+    } else {
+        name
     }
 }
 

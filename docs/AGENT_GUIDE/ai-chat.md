@@ -35,12 +35,12 @@ permission failures should display a failed tool call without a successful resul
 
 ## Generating images with AI
 
-`GenerateImage` takes a text prompt and a short file name, renders the prompt with
-Google's Nano Banana image model, and saves the result as an image document. An
-optional aspect ratio (`square`, `landscape`, `portrait`, `widescreen`, `tall`) and
-an optional project ID (edit access required) shape and place the file. The file
-extension comes from the generated format, so `fileName: "lighthouse"` yields
-`lighthouse.png`.
+`GenerateImage` takes a text prompt, renders it with Google's Nano Banana image
+model, and saves the result as an image document. Optional arguments: a short file
+name (otherwise the opening words of the prompt name the document), an aspect ratio
+(`square`, `landscape`, `portrait`, `widescreen`, `tall`), and a project ID (edit
+access required). The file extension comes from the generated format, so
+`fileName: "lighthouse"` yields `lighthouse.png`.
 
 The tool row displays **Generate image** with the file name and, on success,
 **Generated**. The result opens expanded and shows the image itself once the

@@ -148,7 +148,7 @@ fn request(prompt: &str, file_name: &str) -> NewGeneratedImage {
     NewGeneratedImage {
         prompt: prompt.to_string(),
         aspect_ratio: Some(ImageAspectRatio::Widescreen),
-        file_name: file_name.to_string(),
+        file_name: Some(file_name.to_string()),
         project: None,
     }
 }
@@ -220,6 +220,46 @@ async fn keeps_an_existing_image_extension_and_adds_the_generated_one_otherwise(
 }
 
 #[tokio::test]
+async fn names_the_document_after_the_prompt_when_no_name_is_given() {
+    for (prompt, file_name, expected) in [
+        (
+            "A red lighthouse on a rocky shore at dusk, flat vector",
+            None,
+            "A red lighthouse on a rocky.png",
+        ),
+        (
+            "Draw: \"Q3 revenue\" chart (bar)!",
+            Some("  "),
+            "Draw Q3 revenue chart bar.png",
+        ),
+        ("café-style sign", None, "café-style sign.png"),
+        ("!!! ???", None, "Generated image.png"),
+    ] {
+        let service = Arc::new(RecordingService::default());
+        let creator = DocumentCreator::new(
+            service.clone(),
+            (),
+            Arc::new(RecordingUploader::default()),
+            (),
+        );
+        let created = creator
+            .create_generated_image(
+                &principal(),
+                &FakeGenerator::returning(png()),
+                NewGeneratedImage {
+                    prompt: prompt.to_string(),
+                    aspect_ratio: None,
+                    file_name: file_name.map(str::to_string),
+                    project: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(created.file_name, expected, "{prompt:?}");
+    }
+}
+
+#[tokio::test]
 async fn rejects_bad_input_before_calling_the_provider() {
     let generator = FakeGenerator::returning(png());
     let service = Arc::new(RecordingService::default());
@@ -231,7 +271,6 @@ async fn rejects_bad_input_before_calling_the_provider() {
     );
     for image in [
         request("   ", "name"),
-        request("prompt", "  "),
         request(&"p".repeat(MAX_PROMPT_BYTES + 1), "name"),
     ] {
         assert!(matches!(

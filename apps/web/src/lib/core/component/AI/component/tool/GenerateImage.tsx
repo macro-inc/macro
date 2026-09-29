@@ -86,7 +86,11 @@ export const generateImageHandler = createToolRenderer({
         <div class="flex items-center justify-between gap-2">
           <span class="min-w-0 truncate">
             Generate image{' '}
-            <span class="text-ink">{ctx.tool.data.fileName}</span>
+            <span class="text-ink">
+              {ctx.response?.data.fileName ??
+                ctx.tool.data.fileName ??
+                ctx.tool.data.prompt}
+            </span>
             <Show when={ctx.tool.data.aspectRatio}>
               {(ratio) => (
                 <span class="text-ink-placeholder"> · {ratio()}</span>

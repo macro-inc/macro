@@ -2554,7 +2554,7 @@ export const EditTagResponse = z.object({
 
 export const GenerateImage = z.object({
   prompt: z.string(),
-  fileName: z.string(),
+  fileName: z.union([z.string(), z.null()]).optional(),
   aspectRatio: z
     .union([
       z.enum(['square', 'landscape', 'portrait', 'widescreen', 'tall']),
