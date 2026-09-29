@@ -1,9 +1,9 @@
 import PlayIcon from '@phosphor/play.svg';
 import { createSignal, Show } from 'solid-js';
-import type { ViewGuideVideo } from '../core/viewGuides';
+import type { ViewTourVideo as Video } from '../core/view-tour';
 
 /** Load the third-party player only after an explicit play action. */
-export function ViewGuideVideoPlayer(props: { video: ViewGuideVideo }) {
+export function ViewTourVideo(props: { video: Video }) {
   const [playing, setPlaying] = createSignal(false);
   return (
     <div class="mt-4 border-t border-edge-muted pt-3">

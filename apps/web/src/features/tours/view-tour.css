@@ -1,0 +1,15 @@
+/* One quiet edge and a diffuse shadow keep the card lifted without a lip. */
+.view-tour-card {
+  box-shadow: 0 18px 48px rgb(0 0 0 / 35%);
+  transition: transform 180ms cubic-bezier(.2,.8,.2,1);
+}
+html[data-theme-light='true'] .view-tour-card {
+  box-shadow: 0 12px 36px rgb(0 0 0 / 10%);
+}
+.view-tour-highlight {
+  border-color: color-mix(in srgb, var(--color-accent) 70%, var(--color-ink));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .view-tour-card { transition: none; }
+}
