@@ -212,6 +212,21 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("this adapter does not rotate credentials")
     }
 
+    async fn set_turn_prompter(
+        &self,
+        _id: AgentSessionId,
+        _prompter: &agent_session::domain::model::TurnPrompter,
+    ) -> SessionResult<()> {
+        unimplemented!("this adapter does not dispatch turns")
+    }
+
+    async fn turn_prompter(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<Option<agent_session::domain::model::TurnPrompter>> {
+        unimplemented!("this adapter does not dispatch turns")
+    }
+
     async fn set_repo_url(
         &self,
         _id: AgentSessionId,

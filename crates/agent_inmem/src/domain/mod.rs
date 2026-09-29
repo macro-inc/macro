@@ -10,4 +10,6 @@ pub mod model_options;
 pub mod models;
 pub mod replay;
 pub mod session;
+/// Whether one of Macro's own tools may run in this turn.
+pub mod tool_gate;
 pub mod user_input;

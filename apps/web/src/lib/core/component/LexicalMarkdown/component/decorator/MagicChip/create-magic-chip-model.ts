@@ -184,6 +184,15 @@ export function createMagicChipModel(props: MagicChipData): {
   const asking = (): MagicChipInteraction | undefined => {
     const request = pendingForTurn()[0];
     if (!request) return undefined;
+    // A held tool call is answered in the session, where its arguments are.
+    if (request.kind === 'tool_approval') {
+      return {
+        request,
+        canAnswer: false,
+        answering: false,
+        action: `${request.serverName} · ${request.toolName} needs the owner's approval`,
+      };
+    }
     const tool = messages()
       .find(
         (message) =>

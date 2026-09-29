@@ -39,6 +39,7 @@ use tokio::sync::mpsc;
 use tracing::Instrument as _;
 
 use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
+use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[cfg(test)]
@@ -54,14 +55,84 @@ const PART_BUFFER: usize = 256;
 pub struct RigTurnEngine {
     db: PgPool,
     tool_context: ToolServiceContext,
+    gate: Arc<dyn NativeToolGate>,
 }
 
 impl RigTurnEngine {
     /// An engine whose tools run against `tool_context` and whose user
-    /// memory comes from `db`.
+    /// memory comes from `db`. Every native tool runs ungated until
+    /// [`Self::with_gate`] says otherwise.
     #[must_use]
     pub fn new(db: PgPool, tool_context: ToolServiceContext) -> Self {
-        Self { db, tool_context }
+        Self {
+            db,
+            tool_context,
+            gate: Arc::new(UngatedNativeTools),
+        }
+    }
+
+    /// Ask `gate` before each of Macro's own tools runs.
+    #[must_use]
+    pub fn with_gate(mut self, gate: Arc<dyn NativeToolGate>) -> Self {
+        self.gate = gate;
+        self
+    }
+}
+
+/// Native tools never gated: asking the user something, and finding or
+/// loading a connected app's tools, spend nobody's access.
+const UNGATED_NATIVE_TOOLS: [&str; 3] = ["AskUser", "SearchTools", "LoadTools"];
+
+/// A turn's tools, each call to one of Macro's own asked of the gate first.
+/// Remote MCP tools are left to the egress proxy, which gates them already.
+struct GatedToolSet<Context> {
+    tools: Arc<dyn AiToolSet<Context> + Send + Sync>,
+    gate: Arc<dyn NativeToolGate>,
+    session: agent_session::domain::model::AgentSessionId,
+}
+
+impl<Context> AiToolSet<Context> for GatedToolSet<Context>
+where
+    Context: Send + Sync + 'static,
+{
+    fn dispatch_tool_call<'a>(
+        &'a self,
+        context: Context,
+        request_context: ai_toolset::RequestContext,
+        tool_name: &'a str,
+        json: &'a serde_json::Value,
+    ) -> ai_toolset::ToolCallFuture<'a> {
+        Box::pin(async move {
+            if !UNGATED_NATIVE_TOOLS.contains(&tool_name)
+                && !tool_name.starts_with(mcp_select::MANGLED_PREFIX)
+                && let NativeToolVerdict::Refuse(reason) =
+                    self.gate.check(self.session, tool_name, json).await
+            {
+                return Ok(Err(ai_toolset::ToolCallError {
+                    internal_error: anyhow::anyhow!("{tool_name} was not approved"),
+                    description: reason,
+                }));
+            }
+            self.tools
+                .dispatch_tool_call(context, request_context, tool_name, json)
+                .await
+        })
+    }
+
+    fn request_schemas(&self) -> Option<Vec<ai_toolset::RequestSchema>> {
+        self.tools.request_schemas()
+    }
+
+    fn searchable_catalog(&self) -> Vec<ai_toolset::SearchableTool> {
+        self.tools.searchable_catalog()
+    }
+
+    fn searchable_toolset_names(&self) -> Vec<String> {
+        self.tools.searchable_toolset_names()
+    }
+
+    fn routing_description<'a>(&'a self, tool_name: &'a str) -> Option<ai_toolset::ToolInfo> {
+        self.tools.routing_description(tool_name)
     }
 }
 
@@ -104,9 +175,10 @@ impl TurnEngine for RigTurnEngine {
         let (parts, receiver) = mpsc::channel(PART_BUFFER);
         let db = self.db.clone();
         let tool_context = self.tool_context.clone();
+        let gate = Arc::clone(&self.gate);
         tokio::spawn(
             async move {
-                if let Err(error) = drive_turn(db, tool_context, request, &parts).await {
+                if let Err(error) = drive_turn(db, tool_context, gate, request, &parts).await {
                     let _ = parts.send(Err(error)).await;
                 }
             }
@@ -119,10 +191,12 @@ impl TurnEngine for RigTurnEngine {
 async fn drive_turn(
     db: PgPool,
     base_context: ToolServiceContext,
+    gate: Arc<dyn NativeToolGate>,
     request: TurnRequest,
     parts: &mpsc::Sender<Result<StreamPart, AgentError>>,
 ) -> Result<(), AgentError> {
     let TurnRequest {
+        session_id,
         owner,
         model,
         identity,
@@ -201,12 +275,21 @@ async fn drive_turn(
             cancel.clone(),
         ));
     }
+    // Macro's own tools spend the owner's access in-process, so they ask the
+    // gate a turn somebody else prompted must pass - the one the egress
+    // proxy applies to every MCP server. Remote MCP tools already pass
+    // through that proxy and are not asked twice.
     // Keep remote MCP tools alongside the native and AskUser tools. The
     // finisher above reviews only Macro's native user tools.
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
         Some(mcp) => Arc::new(mcp_select::CombinedToolSet::new(toolset, mcp)),
         None => toolset,
     };
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(GatedToolSet {
+        tools: toolset,
+        gate,
+        session: session_id,
+    });
     let session = agent_loop
         .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
         .await;

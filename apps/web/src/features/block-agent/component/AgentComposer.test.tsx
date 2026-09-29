@@ -38,6 +38,7 @@ vi.mock('../context/AgentSessionContext', () => ({
     displayName: (id: string) => id,
     userId: () => 'viewer',
     interactions: { pending: () => [], canAnswer: () => false },
+    toolApprovals: { pending: () => [] },
     issue: mocks.issue,
     loadFailed: () => false,
     messages: () => [],

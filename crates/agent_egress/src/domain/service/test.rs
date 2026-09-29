@@ -52,6 +52,7 @@ impl StubSessions {
             owner: owner(),
             repo: Some(session_repo()),
             mcp_servers: servers,
+            prompter: None,
         }))
     }
 
@@ -681,6 +682,7 @@ async fn a_session_owned_outside_macro_gets_nothing() {
             owner: MacroUserIdStr::try_from_email("visitor@example.com").expect("a valid user id"),
             repo: Some(session_repo()),
             mcp_servers: Vec::new(),
+            prompter: None,
         })),
         SpyCredentials::knowing(),
         SpyGithubTokens::default(),
@@ -988,6 +990,7 @@ async fn a_session_without_a_repository_can_use_mcp_but_cannot_mint_git_credenti
             owner: owner(),
             repo: None,
             mcp_servers: Vec::new(),
+            prompter: None,
         })),
         SpyCredentials::knowing(),
         SpyGithubTokens::default(),
@@ -1061,6 +1064,7 @@ async fn non_staff_session_owners_can_share_previews_without_workspace_or_git_ac
             session: AgentSessionId::new(),
             owner: MacroUserIdStr::try_from_email("viewer@example.com").unwrap(),
             repo: None,
+            prompter: None,
             mcp_servers: Vec::new(),
         })),
         SpyCredentials::knowing(),
@@ -1102,4 +1106,239 @@ async fn non_staff_session_owners_can_share_previews_without_workspace_or_git_ac
     ));
     assert!(service.credentials.asked.lock().unwrap().is_empty());
     assert!(service.tokens.asked.lock().unwrap().is_empty());
+}
+
+fn asker() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email("asker@macro.com").expect("a valid user id")
+}
+
+/// A grant whose running turn `prompter` prompted.
+fn prompted_by(prompter: Option<MacroUserIdStr<'static>>) -> StubSessions {
+    let StubSessions(Ok(mut grant)) =
+        StubSessions::granting_with(selected(&[("datadog", "Datadog")]))
+    else {
+        unreachable!("granting grants");
+    };
+    grant.prompter = Some(crate::domain::model::TurnPrompter {
+        action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
+        user: prompter,
+    });
+    StubSessions(Ok(grant))
+}
+
+/// Records what it was asked to hold or withdraw, and answers a hold with a
+/// marker status so a test can tell the hold answered.
+#[derive(Default)]
+struct RecordingApprovals {
+    held: Mutex<
+        Vec<(
+            String,
+            String,
+            crate::domain::approval::ToolsCall,
+            http::request::Parts,
+        )>,
+    >,
+    withdrawn: Mutex<Vec<serde_json::Value>>,
+}
+
+impl OwnerApprovals for RecordingApprovals {
+    async fn hold(&self, call: HeldCall) -> Result<ProxyResponse, EgressError> {
+        let (parts, _body) = call.request.into_parts();
+        self.held
+            .lock()
+            .unwrap()
+            .push((call.server_slug, call.server_name, call.call, parts));
+        let mut response = http::Response::new(empty_body());
+        *response.status_mut() = StatusCode::IM_USED;
+        Ok(response)
+    }
+
+    async fn withdraw(
+        &self,
+        _session: AgentSessionId,
+        request_id: &serde_json::Value,
+    ) -> Result<(), EgressError> {
+        self.withdrawn.lock().unwrap().push(request_id.clone());
+        Ok(())
+    }
+}
+
+const TOOLS_CALL: &str = r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"search","arguments":{"q":"x"}}}"#;
+
+fn gated(
+    sessions: StubSessions,
+    credentials: SpyCredentials,
+) -> EgressServiceImpl<
+    StubSessions,
+    SpyCredentials,
+    SpyGithubTokens,
+    SpyForwarder,
+    RecordingApprovals,
+> {
+    EgressServiceImpl::new(
+        sessions,
+        credentials,
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    )
+    .with_owner_approvals(RecordingApprovals::default())
+}
+
+/// The owner's own turn spends their access without asking anyone.
+#[tokio::test]
+async fn a_tool_call_in_a_turn_the_owner_prompted_goes_straight_through() {
+    let service = gated(prompted_by(Some(owner())), SpyCredentials::knowing());
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(TOOLS_CALL),
+        )
+        .await
+        .expect("proxied");
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert!(service.forward.was_called());
+    assert!(service.approvals.held.lock().unwrap().is_empty());
+}
+
+/// Somebody else's turn holds the call, already addressed and stamped with
+/// the owner's credential, and nothing reaches the upstream yet.
+#[tokio::test]
+async fn a_tool_call_in_a_turn_somebody_else_prompted_is_held_for_the_owner() {
+    let service = gated(prompted_by(Some(asker())), SpyCredentials::knowing());
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(TOOLS_CALL),
+        )
+        .await
+        .expect("held");
+    assert_eq!(response.status(), StatusCode::IM_USED, "the hold answered");
+    assert!(!service.forward.was_called());
+
+    let held = service.approvals.held.lock().unwrap();
+    let [(slug, name, call, parts)] = held.as_slice() else {
+        panic!("one call was held");
+    };
+    assert_eq!((slug.as_str(), name.as_str()), ("datadog", "Datadog"));
+    assert_eq!(call.name, "search");
+    assert_eq!(call.id, serde_json::json!(9));
+    assert_eq!(parts.uri, "https://mcp.example.com/mcp");
+    assert!(
+        parts.headers.contains_key(AUTHORIZATION),
+        "stamped before holding, so approval only has to send it"
+    );
+}
+
+/// A bot acting on nobody's behalf is not the owner either.
+#[tokio::test]
+async fn a_tool_call_in_a_turn_a_bot_prompted_is_held_too() {
+    let service = gated(prompted_by(None), SpyCredentials::knowing());
+    service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(TOOLS_CALL),
+        )
+        .await
+        .expect("held");
+    assert_eq!(service.approvals.held.lock().unwrap().len(), 1);
+}
+
+/// Macro's own server is gated like any connected app, under its own name.
+#[tokio::test]
+async fn a_tool_call_to_macros_own_server_is_held_under_its_name() {
+    let service = gated(prompted_by(Some(asker())), SpyCredentials::knowing());
+    service
+        .proxy(
+            &SessionToken::new("token"),
+            EgressTarget::McpServer(McpDestination::Macro),
+            json_request(TOOLS_CALL),
+        )
+        .await
+        .expect("held");
+    let held = service.approvals.held.lock().unwrap();
+    assert_eq!((held[0].0.as_str(), held[0].1.as_str()), ("macro", "Macro"));
+}
+
+/// Only `tools/call` runs anything; the handshake and listing still flow so
+/// the agent sees its tools.
+#[tokio::test]
+async fn listing_tools_in_a_gated_turn_is_not_held() {
+    let service = gated(prompted_by(Some(asker())), SpyCredentials::knowing());
+    service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#),
+        )
+        .await
+        .expect("proxied");
+    assert!(service.forward.was_called());
+    assert!(service.approvals.held.lock().unwrap().is_empty());
+}
+
+/// The agent giving up on a held request reaches the hold, and the
+/// notification still goes upstream.
+#[tokio::test]
+async fn a_cancelled_request_is_withdrawn_from_the_hold_and_forwarded() {
+    let service = gated(prompted_by(Some(asker())), SpyCredentials::knowing());
+    service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(
+                r#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":9}}"#,
+            ),
+        )
+        .await
+        .expect("proxied");
+    assert_eq!(
+        *service.approvals.withdrawn.lock().unwrap(),
+        [serde_json::json!(9)]
+    );
+    assert!(service.forward.was_called());
+}
+
+/// Nothing would run for an app the owner has not connected, so nobody is
+/// asked: the not-connected answer comes back as before.
+#[tokio::test]
+async fn an_unconnected_app_in_a_gated_turn_is_answered_without_asking() {
+    let service = gated(prompted_by(Some(asker())), SpyCredentials::unconnected());
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(TOOLS_CALL),
+        )
+        .await
+        .expect("answered");
+    let body = body_json(response).await;
+    assert_eq!(body["result"]["isError"], true);
+    assert!(service.approvals.held.lock().unwrap().is_empty());
+    assert!(!service.forward.was_called());
+}
+
+/// A proxy built without approvals fails closed.
+#[tokio::test]
+async fn without_approvals_a_gated_tool_call_is_refused() {
+    let service = EgressServiceImpl::new(
+        prompted_by(Some(asker())),
+        SpyCredentials::knowing(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    );
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(TOOLS_CALL),
+        )
+        .await
+        .expect("answered");
+    let body = body_json(response).await;
+    assert_eq!(body["id"], 9);
+    assert_eq!(body["result"]["isError"], true);
+    assert!(!service.forward.was_called());
 }

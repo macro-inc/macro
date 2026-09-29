@@ -72,9 +72,16 @@ const replyTarget = z.discriminatedUnion('kind', [
   }),
 ]);
 
+const person = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+});
+
 const agentContextRequest = z.object({
   promptMarkdown: z.string(),
   instructions: z.string().optional(),
+  owner: person.optional(),
+  sender: person.optional(),
   parent: messageParent.optional(),
   anchor: commentAnchor.optional(),
   replyTarget: replyTarget.optional(),
@@ -91,7 +98,7 @@ export class AgentContextEndpoint extends OpenAPIRoute {
   schema = {
     summary: 'Compose an agent prompt with conversation context',
     description:
-      'Builds internal markdown containing trusted session instructions and the conversation the prompt was posted in - its thread, the channel around it, what it replies to, and the comment anchor it sits on - followed by the user prompt.',
+      'Builds internal markdown naming the session owner and the prompt sender, and containing trusted session instructions and the conversation the prompt was posted in - its thread, the channel around it, what it replies to, and the comment anchor it sits on - followed by the user prompt.',
     request: {
       body: {
         content: {

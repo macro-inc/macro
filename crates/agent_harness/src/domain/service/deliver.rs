@@ -165,16 +165,19 @@ where
         let AgentAction::Prompt(prompt) = action else {
             return Ok(());
         };
+        let session = self.sessions.get_session(session_id).await?;
+        // Every prompt names the owner and its sender, so the agent can tell
+        // a request from the person whose access it spends from anyone
+        // else's. A session owned by a bot or team has no person to name.
+        let people = session.owner_id.as_user().map(|owner| PromptPeople {
+            owner: owner.clone(),
+            sender: actor.cloned(),
+        });
         let raw_prompt = prompt.prompt.clone();
-        let session = if first_turn {
-            Some(self.sessions.get_session(session_id).await?)
-        } else {
-            None
-        };
-        let instructions = session
-            .as_ref()
+        let instructions = Some(&session)
             .filter(|session| {
-                AgentKind::for_session(session.bot_id, &session.harness).folds_instructions()
+                first_turn
+                    && AgentKind::for_session(session.bot_id, &session.harness).folds_instructions()
             })
             .and_then(|session| session.instructions.as_deref())
             .filter(|instructions| !instructions.trim().is_empty());
@@ -189,6 +192,7 @@ where
                 &raw_prompt,
                 instructions,
                 announce.map(|origin| &origin.parent),
+                people.as_ref(),
                 context.as_ref(),
             )
             .await?;

@@ -378,3 +378,45 @@ fn a_notify_becomes_a_realtime_and_push_request_with_its_own_id() {
     );
     assert_eq!(value["req"]["notification"]["tag"], "agent_session_settled");
 }
+
+#[test]
+fn a_held_tool_call_tells_only_the_owner() {
+    let approval = Uuid::from_u128(0xA99);
+    let PlannedNotification::WaitingForInput(notify) = plan_tool_approval(
+        &identity(),
+        approval,
+        Some(&user("alice@macro.com")),
+        "Macro",
+        "ListEmails",
+    ) else {
+        panic!("filed as waiting for input");
+    };
+    assert_eq!(notify.recipients, [owner()], "only the owner can answer");
+    assert_eq!(
+        notify.metadata.question,
+        "alice asked it to use Macro ListEmails with your access. Approve or decline it."
+    );
+    assert_eq!(
+        notify.notification_id,
+        tool_approval_notification_id(SESSION, approval)
+    );
+    assert_ne!(
+        notify.notification_id,
+        tool_approval_notification_id(SESSION, Uuid::from_u128(0xA98)),
+        "each held call is its own notification"
+    );
+}
+
+#[test]
+fn a_held_tool_call_a_bot_asked_for_says_so() {
+    let PlannedNotification::WaitingForInput(notify) = plan_tool_approval(
+        &identity(),
+        Uuid::from_u128(1),
+        None,
+        "Linear",
+        "create_issue",
+    ) else {
+        panic!("filed as waiting for input");
+    };
+    assert!(notify.metadata.question.starts_with("A bot asked it"));
+}

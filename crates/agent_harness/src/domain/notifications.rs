@@ -210,6 +210,39 @@ fn plan_waiting(waiting: &WaitingForInputMetadata, is_coding: bool) -> Vec<Plann
     })]
 }
 
+/// A tool call held for the owner's approval: only the owner hears, since
+/// only they can answer it. Filed as the waiting-for-input kind - the owner
+/// is being asked something, and every surface already opens the session
+/// from it - under an id of its own, so one held call is one notification
+/// however many turns ask.
+#[must_use]
+pub fn plan_tool_approval(
+    identity: &SessionIdentity,
+    approval_id: Uuid,
+    requested_by: Option<&MacroUserIdStr<'static>>,
+    server_name: &str,
+    tool_name: &str,
+) -> PlannedNotification {
+    let (entity, secondary_entity) = entities(identity);
+    let asker = requested_by.map_or_else(
+        || "A bot".to_owned(),
+        |user| macro_user_id::email::ReadEmailParts::local_part(&user.email_part()).to_owned(),
+    );
+    PlannedNotification::WaitingForInput(Notify {
+        notification_id: tool_approval_notification_id(identity.session_id.as_uuid(), approval_id),
+        entity,
+        secondary_entity,
+        recipients: vec![identity.owner_id.clone()],
+        metadata: AgentSessionWaitingForInputMetadata {
+            session: session_ref(identity, None),
+            turn: 0,
+            question: format!(
+                "{asker} asked it to use {server_name} {tool_name} with your access. Approve or decline it."
+            ),
+        },
+    })
+}
+
 fn plan_mentioned(mentioned: &SessionMentionedMetadata) -> Vec<PlannedNotification> {
     if mentioned.mentioned.is_empty() {
         return Vec::new();
@@ -314,4 +347,10 @@ pub fn mentioned_notification_id(session_id: Uuid, action_id: Uuid) -> Uuid {
         "{session_id}:{action_id}:{}",
         AgentSessionMentionedMetadata::TYPE_NAME
     ))
+}
+
+/// The id of the approval notification for one held tool call.
+#[must_use]
+pub fn tool_approval_notification_id(session_id: Uuid, approval_id: Uuid) -> Uuid {
+    derived_id(&format!("{session_id}:{approval_id}:tool_approval"))
 }

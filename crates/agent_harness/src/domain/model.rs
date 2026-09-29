@@ -460,6 +460,18 @@ pub struct MarkedPassage {
     pub surrounding_text: String,
 }
 
+/// Whose access a session runs with, and who sent the prompt being composed.
+///
+/// Named to the agent on every prompt so it can tell the session's owner
+/// from anyone else who may drive it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptPeople {
+    /// The session's owner.
+    pub owner: MacroUserIdStr<'static>,
+    /// The prompt's sender; absent when a bot sent it on nobody's behalf.
+    pub sender: Option<MacroUserIdStr<'static>>,
+}
+
 /// What the conversation an agent was summoned from contributes to its prompt.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ConversationContext {

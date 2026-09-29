@@ -263,6 +263,25 @@ fn render_part(part: &MessagePart) -> String {
                 outcome,
                 ..
             } => out.push_str(&render_permission(tool_call, options, outcome)),
+            MessagePart::ToolApproval {
+                server_name,
+                tool_name,
+                requested_by,
+                status,
+                resolved_by,
+                ..
+            } => {
+                let _ = writeln!(
+                    out,
+                    "[tool approval] {server_name} {tool_name} for {}: {}{}",
+                    requested_by.as_deref().unwrap_or("a bot"),
+                    status.as_str(),
+                    resolved_by
+                        .as_deref()
+                        .map(|by| format!(" by {by}"))
+                        .unwrap_or_default()
+                );
+            }
             MessagePart::Control { control, outcome } => {
                 let label = match control {
                     Control::SetModel { model } => format!("model changed to {model}"),

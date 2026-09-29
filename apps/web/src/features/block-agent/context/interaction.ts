@@ -7,8 +7,14 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import type { Accessor } from 'solid-js';
 
-export type InteractionIdentity = Pick<
+/** Requests the agent itself asked, answered through agent actions. */
+export type AgentInteraction = Exclude<
   PendingInteraction,
+  { kind: 'tool_approval' }
+>;
+
+export type InteractionIdentity = Pick<
+  AgentInteraction,
   'kind' | 'requestId' | 'turn'
 >;
 

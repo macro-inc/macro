@@ -687,6 +687,7 @@ async fn run_turn(
     let awaiting = Arc::new(AwaitingUser::default());
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
+        session_id: state.session_id,
         owner: state.owner.clone(),
         model,
         identity,

@@ -612,6 +612,27 @@ export type MessagePart =
       /**  How the request has resolved so far. */
       outcome: PermissionOutcome;
     }
+  /**
+   *  An MCP tool call the egress proxy is holding, or held, until the
+   *  session's owner approved it: made in a turn somebody else prompted.
+   */
+  | {
+      kind: 'tool_approval';
+      /**  The approval an answer names. */
+      approvalId: string;
+      /**  What a person calls the server the tool is on. */
+      serverName: string;
+      /**  The tool called. */
+      toolName: string;
+      /**  What it was called with. */
+      arguments: unknown;
+      /**  Who prompted the turn; absent for a bot on nobody's behalf. */
+      requestedBy: string | null;
+      /**  Where it stands. */
+      status: ToolApprovalStatus;
+      /**  Who resolved it, when a person did. */
+      resolvedBy: string | null;
+    }
   /**  A user-issued control operation on the session. */
   | {
       kind: 'control';
@@ -714,7 +735,14 @@ export type PendingInteraction =
   /**  A form, URL consent, or user tool review. */
   | ({
       kind: 'elicitation';
-    } & PendingElicitation);
+    } & PendingElicitation)
+  /**
+   *  An MCP tool call held until the session's owner approves it. Only
+   *  the owner may approve or decline; anyone with edit access may cancel.
+   */
+  | ({
+      kind: 'tool_approval';
+    } & PendingToolApproval);
 
 /**  A permission request the current connection can still answer. */
 export type PendingPermission = {
@@ -726,6 +754,20 @@ export type PendingPermission = {
   toolCall: ToolUseId;
   /**  The options the agent offered. */
   options: PermissionOption[];
+};
+
+/**  A held MCP tool call the owner can still answer. */
+export type PendingToolApproval = {
+  /**  The approval an answer names. */
+  approvalId: string;
+  /**  The turn the call was made in. */
+  turn: number;
+  /**  What a person calls the server the tool is on. */
+  serverName: string;
+  /**  The tool called. */
+  toolName: string;
+  /**  Who prompted the turn; absent for a bot on nobody's behalf. */
+  requestedBy: string | null;
 };
 
 /**  One choice offered for a permission request. */
@@ -948,6 +990,19 @@ export type SubagentResult = {
   /**  What kinds of tools the subagent called. */
   stats: ToolStats | null;
 };
+
+/**  Where a held call stands. */
+export type ToolApprovalStatus =
+  /**  Held until the owner answers. */
+  | 'pending'
+  /**  The owner approved it; the call went through. */
+  | 'approved'
+  /**  The owner refused it; the call did not run. */
+  | 'denied'
+  /**  Someone with edit access, the agent, or the session gave up on it. */
+  | 'cancelled'
+  /**  Nobody answered in time. */
+  | 'expired';
 
 /**
  *  What a tool call actually did.
@@ -1231,7 +1286,10 @@ export type TurnState =
   | 'running'
   /**  A stop was issued against the open turn and no stop reason has arrived. */
   | 'stopping'
-  /**  The open turn is waiting on a permission or elicitation response. */
+  /**
+   *  The open turn is waiting on a permission, elicitation, or tool
+   *  approval response.
+   */
   | 'blocked'
   /**  The runtime reported `disconnected`; whatever was open is not moving. */
   | 'disconnected';

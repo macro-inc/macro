@@ -55,7 +55,6 @@ use bots::domain::models::BotId;
 use super::connection::RuntimeAttachment;
 use super::error::{AgentSessionError, Result};
 use super::lifecycle::session_identity;
-use super::model::SessionBot;
 use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview, AgentSessionRenamed,
     AuthorKind, ClaimOutcome, CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS,
@@ -63,6 +62,7 @@ use super::model::{
     SessionManagement, SessionPreviewCandidate, StoredAgentSessionLog, StoredQueuedAction,
     ThreadSession, cursor_run_checkpoint,
 };
+use super::model::{SessionBot, TurnPrompter};
 use super::ports::{
     AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
     AgentSessionNameGenerator, AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
@@ -157,6 +157,23 @@ pub trait AgentSessionService: Send + Sync + 'static {
 
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Append a frame observed on the runtime's behalf by something other
+    /// than its session actor - the egress proxy's tool approvals - and push
+    /// it to the session's viewers. Any replica may call this; the frame is
+    /// ordered by when it is stored.
+    fn record_frame(
+        &self,
+        id: AgentSessionId,
+        message: ToServerMessage,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record who prompted the turn `id` is about to run, before it runs.
+    fn set_turn_prompter(
+        &self,
+        id: AgentSessionId,
+        prompter: &TurnPrompter,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// What `viewer` may see of each of `ids`, for rendering chips.
     ///
@@ -718,6 +735,10 @@ where
         self.repo.get(id).await
     }
 
+    async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
+        self.repo.set_turn_prompter(id, prompter).await
+    }
+
     async fn preview_sessions(
         &self,
         viewer: &MacroUserIdStr<'static>,
@@ -860,6 +881,29 @@ where
         .await
         .unwrap_or(Err(AgentSessionError::LogTimedOut(id)))
         .map(|_| ())
+    }
+
+    #[tracing::instrument(
+        name = "agent.session.record_frame",
+        err,
+        skip(self, message),
+        fields(agent.session.id = %id),
+    )]
+    async fn record_frame(&self, id: AgentSessionId, message: ToServerMessage) -> Result<()> {
+        let mut logs = LiveSessionLogWriter::new(self.repo.clone(), self.realtime.clone());
+        // Flushed at once: an unclaimed writer publishes to viewers only on
+        // flush, and nothing else will flush this one.
+        tokio::time::timeout(SESSION_PERSIST_TIMEOUT, async {
+            logs.append(AgentSessionLog {
+                agent_session_id: id,
+                user_id: None,
+                content: Message::ToServer(message),
+            })
+            .await?;
+            logs.flush().await
+        })
+        .await
+        .unwrap_or(Err(AgentSessionError::LogTimedOut(id)))
     }
 
     async fn attach_session<Connector>(
@@ -1567,6 +1611,14 @@ where
 
     async fn set_egress_token_hash(&self, id: AgentSessionId, hash: &str) -> Result<()> {
         self.repo.set_egress_token_hash(id, hash).await
+    }
+
+    async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
+        self.repo.set_turn_prompter(id, prompter).await
+    }
+
+    async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
+        self.repo.turn_prompter(id).await
     }
 
     async fn find_by_egress_token_hash(
