@@ -2,11 +2,12 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { platformFetch } from '@core/util/platformFetch';
 import { authServiceClient } from '@service-auth/client';
 import { action, useSubmission } from '@solidjs/router';
+import { passwordlessRedirectUri } from './passwordlessRedirectUri';
 import { Stage } from './Shared';
 
 // Construct the redirect uri to use for passwordless login.
 // This will send us back to the application after clicking the magic link.
-const REDIRECT_URI = `${window.location.origin}/app`;
+const REDIRECT_URI = passwordlessRedirectUri(window.location);
 
 async function isPasswordLogin(email?: string | null) {
   if (!email) return false;
