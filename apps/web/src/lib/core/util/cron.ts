@@ -247,6 +247,14 @@ export function parseCron(cron: string): CronParts {
 }
 
 /**
+ * Whether the pickers can say `cron`. Anything else parses to a fallback, so
+ * rewriting it from its parts would replace a schedule nobody chose.
+ */
+export function isRepresentableCron(cron: string): boolean {
+  return interpretCron(cron).representable;
+}
+
+/**
  * A parse, plus whether the expression was one the pickers can actually say.
  *
  * The distinction matters to anything comparing two expressions: every

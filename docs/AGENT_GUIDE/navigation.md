@@ -604,7 +604,15 @@ The New reminder dialog uses the same compact panel and fixed action footer.
 Its referenced item is a capped Badge; repeat options use bubble tabs (Does not
 repeat / Weekly / Monthly). Date, time, weekdays, and timezone retain their
 scheduling behavior. Creating a reminder dismisses the composer before saving,
-with success or failure reported by toast.
+with success or failure reported by toast. The same dialog opens as `Edit
+reminder` for an existing reminder (from a calendar reminder chip), seeded with
+its description and schedule, with a `Save` action that updates it the same way.
+Its footer also has a red `Delete` on the left, which opens a `Delete reminder?`
+confirmation; confirming closes the dialog and deletes the reminder, reporting
+`Reminder deleted` by toast. Deletion cannot be undone. Closing either dialog
+with unsaved changes (Cancel, Escape, or clicking outside) opens `You still have
+remaining changes` with `Discard` and `Keep editing`; neither dialog shows an
+unsaved-changes hint.
 
 Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, reminder creation, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 

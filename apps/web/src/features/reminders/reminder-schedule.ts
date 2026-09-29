@@ -4,13 +4,16 @@ import {
   type CronParts,
   describeCron,
   getDefaultTimezone,
+  isRepresentableCron,
   normalizeCron,
   parseCron,
   type ScheduleFrequency,
 } from '@core/util/cron';
+import { TZDate } from '@date-fns/tz';
 import type { EntityData } from '@entity';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import type { UpdateReminderRequest } from '@service-storage/generated/schemas/updateReminderRequest';
+import { differenceInCalendarDays } from 'date-fns';
 
 /**
  * The time of day a bare date resolves to.
@@ -145,6 +148,62 @@ export function repeatPartsFromSchedule(schedule: ReminderSchedule): CronParts {
   return isRecurring(schedule)
     ? parseCron(schedule.cron)
     : repeatPartsFromDate(new Date(schedule.remindAt));
+}
+
+/**
+ * Whether one of the schedule's firings can be moved. A one-shot always can; a
+ * series only when the pickers can express it, since moving it rebuilds the
+ * cron from its parts.
+ */
+export function canMoveReminderFiring(schedule: ReminderSchedule): boolean {
+  return !isRecurring(schedule) || isRepresentableCron(schedule.cron);
+}
+
+/** A cron day-of-week (1=Sunday) moved by `days`, wrapping around the week. */
+function shiftCronDayOfWeek(day: string, days: number): string {
+  const index = (((Number(day) - 1 + days) % 7) + 7) % 7;
+  return String(index + 1);
+}
+
+/**
+ * The schedule a reminder has once one of its firings moves from `from` to
+ * `to`.
+ *
+ * A one-shot fires at `to`. A series has no per-firing exceptions, so every
+ * firing moves the same way: to `to`'s time of day in the reminder's own zone,
+ * and by as many days. A weekly day list shifts as a whole, and a monthly
+ * series lands on `to`'s day of the month. `undefined` when the series cannot
+ * move; see {@link canMoveReminderFiring}.
+ */
+export function moveReminderFiring(
+  schedule: ReminderSchedule,
+  from: Date,
+  to: Date
+): ReminderSchedule | undefined {
+  if (!isRecurring(schedule)) return onceSchedule(to);
+  if (!isRepresentableCron(schedule.cron)) return undefined;
+
+  const fromLocal = new TZDate(from, schedule.timezone);
+  const toLocal = new TZDate(to, schedule.timezone);
+  const dayShift = differenceInCalendarDays(toLocal, fromLocal);
+  const parts = parseCron(schedule.cron);
+  const time = timeOfDay(toLocal);
+  const moved: CronParts =
+    parts.frequency === 'week'
+      ? {
+          ...parts,
+          time,
+          daysOfWeek: parts.daysOfWeek.map((day) =>
+            shiftCronDayOfWeek(day, dayShift)
+          ),
+        }
+      : { ...parts, time, dayOfMonth: String(toLocal.getDate()) };
+
+  return {
+    type: 'recurring',
+    cron: buildCron(moved),
+    timezone: schedule.timezone,
+  };
 }
 
 /**

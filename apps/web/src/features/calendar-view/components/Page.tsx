@@ -13,6 +13,7 @@ import {
   useCalendarOccurrenceData,
 } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/hooks/use-calendar-time-grid-hover-indicator';
+import { useReminderEvents } from '@app/features/calendar/hooks/use-reminder-occurrences';
 import { useTeamOooEvents } from '@app/features/calendar/hooks/use-team-ooo';
 import {
   type CalendarEvent,
@@ -30,6 +31,12 @@ import {
 } from '@app/features/calendar/utils/time-grid-scroller';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
+import { openReminderEditor } from '@app/features/reminders/reminder-composer';
+import { useReminderUpdate } from '@app/features/reminders/reminder-edit';
+import {
+  isRecurring,
+  moveReminderFiring,
+} from '@app/features/reminders/reminder-schedule';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
@@ -41,6 +48,7 @@ import {
   type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,
 } from '@queries/calendar/occurrences';
+import { shiftCachedReminderOccurrences } from '@queries/reminders/occurrences';
 import { Button } from '@ui';
 import {
   type Accessor,
@@ -253,16 +261,28 @@ export function Page(props: {
     isSourceVisible: isRenderedSourceVisible,
     refetchOnWindowFocus: isActive,
   });
+  const reminders = useReminderEvents({
+    range,
+    isSourceVisible: isRenderedSourceVisible,
+    refetchOnWindowFocus: isActive,
+  });
   const visibleEvents = createMemo(() => [
     ...data.visibleEvents(),
     ...teamOoo.visibleEvents(),
+    ...reminders.visibleEvents(),
   ]);
-  const eventsById = createMemo(() =>
-    teamOoo.eventsById().size === 0
-      ? data.eventsById()
-      : new Map([...data.eventsById(), ...teamOoo.eventsById()])
-  );
+  const eventsById = createMemo(() => {
+    const overlays = [teamOoo.eventsById(), reminders.eventsById()].filter(
+      (overlay) => overlay.size > 0
+    );
+    if (overlays.length === 0) return data.eventsById();
+    return new Map([
+      ...data.eventsById(),
+      ...overlays.flatMap((overlay) => [...overlay]),
+    ]);
+  });
   const updateEventTime = useUpdateCalendarEventMutation();
+  const moveReminder = useReminderUpdate();
   const handleSelect = (selection: DateSelectArg) => {
     if (!isActive()) return;
     const calendar = firstWritableCalendar();
@@ -298,10 +318,62 @@ export function Page(props: {
     setRange(nextRange);
   };
 
+  const handleReminderMove = (
+    change: CalendarEventTimeChange,
+    event: CalendarEvent
+  ) => {
+    const occurrence = reminders.occurrencesById().get(event.id);
+    const to = change.event.start;
+    if (!isActive() || moveReminder.isPending || !occurrence || !to) {
+      change.revert();
+      return;
+    }
+
+    const from = new Date(occurrence.scheduledFor);
+    const schedule = moveReminderFiring(occurrence.schedule, from, to);
+    if (!schedule) {
+      change.revert();
+      return;
+    }
+    const repeats = isRecurring(occurrence.schedule);
+    if (!repeats && to.getTime() <= Date.now()) {
+      change.revert();
+      toast.failure('Pick a time in the future');
+      return;
+    }
+
+    shiftCachedReminderOccurrences(
+      occurrence.reminderId,
+      to.getTime() - from.getTime()
+    );
+    moveReminder.mutate(
+      { id: occurrence.reminderId, patch: { schedule } },
+      {
+        onSuccess: () => {
+          if (repeats) {
+            toast.success('Reminder moved', {
+              subtext: 'Every repeat moves with it.',
+            });
+          }
+        },
+        onError: (error) => {
+          change.revert();
+          toast.failure('Failed to move reminder', {
+            subtext: error.message,
+          });
+        },
+      }
+    );
+  };
+
   const handleEventTimeChange = (
     change: CalendarEventTimeChange,
     event: CalendarEvent | undefined
   ) => {
+    if (event?.reminderId) {
+      handleReminderMove(change, event);
+      return;
+    }
     if (
       !isActive() ||
       updateEventTime.isPending ||
@@ -349,10 +421,18 @@ export function Page(props: {
         eventId: isActive() ? calendarView.selectedEvent()?.id : undefined,
         onDateSelect: isMobile() ? undefined : handleSelect,
         onEventSelect: (event, element) => {
-          if (isActive()) calendarView.selectEvent(event, element);
+          if (!isActive()) return;
+          if (event.reminderId) {
+            calendarView.closeEventDetails();
+            openReminderEditor(event.reminderId);
+            return;
+          }
+          calendarView.selectEvent(event, element);
         },
       }}
-      eventTimeChangePending={updateEventTime.isPending}
+      eventTimeChangePending={
+        updateEventTime.isPending || moveReminder.isPending
+      }
       onDatesSet={handleDatesSet}
       onEventTimeChange={handleEventTimeChange}
     >

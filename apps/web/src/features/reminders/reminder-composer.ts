@@ -17,6 +17,8 @@ interface ReminderComposerState {
    * reminder from nothing to compose.
    */
   standalone?: boolean;
+  /** An existing reminder to edit rather than a new one to create. */
+  editingId?: string;
 }
 
 /** What the surface that opened the composer does once the reminder exists. */
@@ -42,9 +44,14 @@ export function takeReminderCreatedHandler():
   return handler;
 }
 
-const [state, setState] = createStore<ReminderComposerState>({
+const EMPTY_STATE: ReminderComposerState = {
   entity: undefined,
   standalone: undefined,
+  editingId: undefined,
+};
+
+const [state, setState] = createStore<ReminderComposerState>({
+  ...EMPTY_STATE,
 });
 
 /**
@@ -61,7 +68,7 @@ export function openReminderComposer(
   // Batched so the modal's open-keyed effect sees this entity rather than the
   // previous one.
   batch(() => {
-    setState(reconcile({ entity, standalone: undefined }));
+    setState(reconcile({ ...EMPTY_STATE, entity }));
     setReminderComposerOpen(true);
   });
 }
@@ -77,7 +84,16 @@ export function openStandaloneReminderComposer(options?: {
 }) {
   createdHandler = options?.onCreated;
   batch(() => {
-    setState(reconcile({ entity: undefined, standalone: true }));
+    setState(reconcile({ ...EMPTY_STATE, standalone: true }));
+    setReminderComposerOpen(true);
+  });
+}
+
+/** Open the composer on an existing reminder, saving edits instead of creating. */
+export function openReminderEditor(reminderId: string) {
+  createdHandler = undefined;
+  batch(() => {
+    setState(reconcile({ ...EMPTY_STATE, editingId: reminderId }));
     setReminderComposerOpen(true);
   });
 }
@@ -86,7 +102,7 @@ export function closeReminderComposer() {
   createdHandler = undefined;
   batch(() => {
     setReminderComposerOpen(false);
-    setState(reconcile({ entity: undefined, standalone: undefined }));
+    setState(reconcile({ ...EMPTY_STATE }));
   });
 }
 

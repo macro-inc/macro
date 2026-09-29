@@ -411,6 +411,7 @@ body.tauri-ios {
   --color-comment-ink: var(--color-comment);
 
   --color-calendar:    var(--color-yellow);
+  --color-reminder:    var(--color-violet);
   --color-contact:     var(--color-yellow);
   --color-canvas:      var(--color-amber);
   --color-folder:      var(--color-blue);
@@ -608,6 +609,7 @@ body.tauri-ios {
   --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h); /* scuffed */
 
   --color-calendar:    var(--color-yellow);
+  --color-reminder:    var(--color-violet);
   --color-contact:     var(--color-yellow);
   --color-canvas:      var(--color-amber);
   --color-folder:      var(--color-blue);

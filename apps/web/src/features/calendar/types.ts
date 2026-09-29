@@ -119,6 +119,13 @@ export interface CalendarEvent {
   location?: string;
   /** Optional event description. */
   description?: string;
+  /**
+   * The reminder this chip is a firing of. Set only on reminder chips, which
+   * are not calendar events: they open the reminder editor rather than event
+   * details, and move but never resize, since a reminder fires at an instant.
+   * Unrelated to `reminders`, which is an event's own notification setting.
+   */
+  reminderId?: string;
 }
 
 /** Shared presentation source until calendar/account metadata is exposed. */
@@ -284,7 +291,8 @@ export function mapCalendarEventToFullCalendar(
     allDay: isRenderedAllDay,
     display: 'auto',
     startEditable: interactionEditable,
-    durationEditable: interactionEditable,
+    // A reminder fires at an instant, so there is no length to resize.
+    durationEditable: interactionEditable && event.reminderId === undefined,
     extendedProps: {
       calendarEventId: event.id,
     },

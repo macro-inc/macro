@@ -1,5 +1,6 @@
 import type { EventContentArg } from '@fullcalendar/core';
 import ExclamationIcon from '@phosphor/exclamation-mark.svg';
+import BellIcon from '@phosphor-fill/bell-simple-fill.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
@@ -38,17 +39,33 @@ export function hasEveryoneElseDeclined(
 export function EventContent(props: EventContentProps) {
   const isRenderedAllDay = () => props.renderProps.event.allDay;
   const isMonthView = () => props.renderProps.view.type === 'dayGridMonth';
-  const showsMonthDot = () => isMonthView() && !isRenderedAllDay();
+  const isReminder = () => props.event.reminderId !== undefined;
+  // A reminder's bell stands in for the dot.
+  const showsMonthDot = () =>
+    isMonthView() && !isRenderedAllDay() && !isReminder();
   const isCompact = () => isRenderedAllDay() || isMonthView();
   const showLocation = () =>
     !isRenderedAllDay() && props.renderProps.view.type === 'timeGridDay';
   const selfResponseStatus = () =>
     props.event.attendees.find((attendee) => attendee.isSelf)?.responseStatus;
   const everyoneElseDeclined = () => hasEveryoneElseDeclined(props.event);
+  // A drag or resize mirror shows where the chip would land, which the stored
+  // event does not hold until the change is saved.
+  const range = () => {
+    const { event, isMirror } = props.renderProps;
+    if (isMirror && event.start) {
+      return { start: event.start, end: event.end ?? event.start };
+    }
+    return {
+      start: new Date(props.event.start),
+      end: new Date(props.event.end),
+    };
+  };
   const usesSingleLineLayout = () => {
-    const duration =
-      new Date(props.event.end).getTime() -
-      new Date(props.event.start).getTime();
+    // A reminder is an instant; its chip's span is only room to render.
+    if (isReminder()) return true;
+    const { start, end } = range();
+    const duration = end.getTime() - start.getTime();
 
     return (
       !props.event.allDay &&
@@ -59,8 +76,7 @@ export function EventContent(props: EventContentProps) {
   const timeText = () => {
     if (props.isNarrow || props.event.allDay) return undefined;
 
-    const start = new Date(props.event.start);
-    const end = new Date(props.event.end);
+    const { start, end } = range();
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       return props.renderProps.timeText;
     }
@@ -93,6 +109,16 @@ export function EventContent(props: EventContentProps) {
           <span class="calendar-event-response-dot" aria-hidden="true" />
         </Show>
         <span class="calendar-event-title-row flex max-w-full min-w-0 shrink-0 items-center gap-0.5">
+          <Show when={isReminder()}>
+            <span
+              role="img"
+              aria-label="Reminder"
+              title="Reminder"
+              class="calendar-event-reminder-icon flex shrink-0 items-center justify-center"
+            >
+              <BellIcon aria-hidden="true" class="size-2.5" />
+            </span>
+          </Show>
           <Show when={everyoneElseDeclined()}>
             <span
               role="img"

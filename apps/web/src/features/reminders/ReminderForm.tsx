@@ -71,6 +71,8 @@ export interface ReminderFormProps {
   pending?: boolean;
   /** Dialog hosts provide their heading and use a padded body with a fixed footer. */
   header?: JSX.Element;
+  /** Actions at the start of the footer, away from Cancel and submit. */
+  footerStart?: JSX.Element;
   layout?: 'dialog' | 'inline';
   autofocus?: boolean;
   /**
@@ -553,7 +555,9 @@ export function ReminderForm(props: ReminderFormProps) {
             : 'mt-4 flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-edge-muted pt-3'
         }
       >
-        <Show when={isEdit && isDirty()}>
+        {props.footerStart}
+        {/* A dialog asks before discarding edits instead. */}
+        <Show when={props.layout !== 'dialog' && isEdit && isDirty()}>
           <span class="flex items-center gap-1.5 text-xs text-ink-muted">
             <span class="size-1.5 rounded-full bg-warning" />
             Unsaved changes

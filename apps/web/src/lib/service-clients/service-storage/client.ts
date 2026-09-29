@@ -121,6 +121,7 @@ import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
 import type { Item } from './generated/schemas/item';
 import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
+import type { ListReminderOccurrencesParams } from './generated/schemas/listReminderOccurrencesParams';
 import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
@@ -135,6 +136,7 @@ import type { PostSoupAstRequest } from './generated/schemas/postSoupAstRequest'
 import type { PostSoupRequest } from './generated/schemas/postSoupRequest';
 import type { Project } from './generated/schemas/project';
 import type { Reminder } from './generated/schemas/reminder';
+import type { ReminderOccurrencesList } from './generated/schemas/reminderOccurrencesList';
 import type { RemindersList } from './generated/schemas/remindersList';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { RenameChannelLabelRequest } from './generated/schemas/renameChannelLabelRequest';
@@ -2454,12 +2456,26 @@ export const storageServiceClient = {
       if (params?.includeCompleted !== undefined) {
         query.set('includeCompleted', String(params.includeCompleted));
       }
+      if (params?.attached !== undefined) {
+        query.set('attached', String(params.attached));
+      }
       if (params?.limit !== undefined) query.set('limit', String(params.limit));
       if (params?.cursor) query.set('cursor', params.cursor);
       const qs = query.toString();
       return await dssFetch<RemindersList>(`/reminders${qs ? `?${qs}` : ''}`, {
         method: 'GET',
       });
+    },
+    async listReminderOccurrences(
+      args: ListReminderOccurrencesParams & { signal?: AbortSignal }
+    ) {
+      const { attached, end, signal, start } = args;
+      const query = new URLSearchParams({ end, start });
+      if (attached !== undefined) query.set('attached', String(attached));
+      return await dssFetch<ReminderOccurrencesList>(
+        `/reminders/occurrences?${query.toString()}`,
+        { method: 'GET', signal }
+      );
     },
     async getReminder(id: string) {
       return await dssFetch<Reminder>(`/reminders/${id}`, { method: 'GET' });

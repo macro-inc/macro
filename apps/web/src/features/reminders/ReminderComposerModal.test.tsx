@@ -27,7 +27,15 @@ vi.mock('@queries/reminders/reminders', () => ({
       return mocks.pending;
     },
   }),
+  useReminderQuery: () => ({ isSuccess: false, isError: false }),
 }));
+vi.mock('./reminder-edit', () => ({
+  reminderFormPatch: vi.fn(),
+  reminderReferenceMention: vi.fn(),
+  useReminderDelete: () => vi.fn(),
+  useReminderUpdate: () => ({ mutateAsync: vi.fn() }),
+}));
+vi.mock('@core/component/ItemPreview', () => ({ ItemPreview: () => null }));
 vi.mock('@queries/soup/cache', () => ({ refetchSoupEntity: vi.fn() }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: vi.fn(), failure: mocks.failure },
@@ -38,6 +46,8 @@ vi.mock('@entity/components/EntitySelectionBadge', () => ({
 vi.mock('@ui', () => {
   const Slot = (props: ParentProps) => props.children;
   return {
+    Button: Slot,
+    confirmDialog: vi.fn(async () => true),
     Dialog: Object.assign(Slot, { Title: Slot, Description: Slot }),
     ActionDialogShell: Object.assign(Slot, {
       Header: Slot,

@@ -8,6 +8,7 @@ import { useCalendarPager } from '@app/features/calendar/components/CalendarPage
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
+import { REMINDERS_SOURCE_ID } from '@app/features/calendar/hooks/use-reminder-occurrences';
 import {
   TEAM_OOO_SOURCE_ID,
   type TeamOooWindow,
@@ -16,11 +17,15 @@ import {
 } from '@app/features/calendar/hooks/use-team-ooo';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
-import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
+import {
+  enableCalendarTeamOoo,
+  enableReminders,
+} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import CloseIcon from '@phosphor/x.svg';
+import BellIcon from '@phosphor-fill/bell-simple-fill.svg';
 import { cn, Calendar as MiniCalendar, ToggleSwitch } from '@ui';
 import { format } from 'date-fns';
 import {
@@ -127,6 +132,28 @@ function CalendarSourcesSection() {
         </CollapsibleSection.Content>
       </CollapsibleSection.Root>
     </Show>
+  );
+}
+
+function CalendarRemindersToggle() {
+  const calendarView = useCalendarView();
+
+  return (
+    <CollapsibleSection.Header>
+      <span class="flex min-w-0 flex-1 items-center gap-1.5 px-(--sidebar-item-inset) text-xs leading-5 font-medium text-ink-muted">
+        <BellIcon aria-hidden="true" class="size-3 shrink-0 text-reminder" />
+        <span class="min-w-0 truncate">Reminders</span>
+      </span>
+      <span title="Show on calendar">
+        <ToggleSwitch
+          checked={calendarView.isSourceVisible(REMINDERS_SOURCE_ID)}
+          onChange={(visible) =>
+            calendarView.setSourceVisibility(REMINDERS_SOURCE_ID, visible)
+          }
+          aria-label="Show reminders on the calendar"
+        />
+      </span>
+    </CollapsibleSection.Header>
   );
 }
 
@@ -317,6 +344,9 @@ export function CalendarSidebar() {
         <CalendarMiniCalendar />
         <UpcomingEventsSection />
         <CalendarSourcesSection />
+        <ShowFeatureFlag flag={enableReminders}>
+          <CalendarRemindersToggle />
+        </ShowFeatureFlag>
         <ShowFeatureFlag flag={enableCalendarTeamOoo}>
           <CalendarTeamOooSection />
         </ShowFeatureFlag>

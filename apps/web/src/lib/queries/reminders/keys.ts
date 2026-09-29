@@ -1,4 +1,5 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
+import type { ListReminderOccurrencesParams } from '@service-storage/generated/schemas/listReminderOccurrencesParams';
 import type { ListRemindersParams } from '@service-storage/generated/schemas/listRemindersParams';
 
 export const reminderKeys = createQueryKeys('reminders', {
@@ -9,4 +10,9 @@ export const reminderKeys = createQueryKeys('reminders', {
   list: (params: ListRemindersParams = {}) => [params],
   /** A single reminder by id. */
   detail: (id: string) => [id],
+  /**
+   * Every firing inside one window. Use `reminderKeys.occurrences._def` to
+   * invalidate every window.
+   */
+  occurrences: (params: ListReminderOccurrencesParams) => [params],
 });

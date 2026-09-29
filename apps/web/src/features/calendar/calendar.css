@@ -274,14 +274,16 @@
 
 .calendar-view .fc .fc-event-mirror,
 .calendar-view .fc .fc-highlight,
-.calendar-view .fc .calendar-multi-day-selection-preview-event {
+.calendar-view .fc .calendar-multi-day-selection-preview-event,
+.calendar-view .fc .calendar-timed-selection-preview-event {
 	border: 1px solid var(--calendar-selection-color, var(--color-accent));
 	border-radius: 0.375rem;
 	background: var(--calendar-selection-color, var(--color-accent));
 	box-shadow: none;
 }
 
-.calendar-view .fc .calendar-multi-day-selection-preview-event {
+.calendar-view .fc .calendar-multi-day-selection-preview-event,
+.calendar-view .fc .calendar-timed-selection-preview-event {
 	color: var(--calendar-selection-color, var(--color-accent));
 	pointer-events: none;
 }
@@ -310,7 +312,7 @@
 	display: none;
 }
 
-/* Timed selections already render an event mirror; hide its backing fill. */
+/* Timed selections already render as a preview event; hide the backing fill. */
 .calendar-view .fc .fc-timegrid-col-bg .fc-highlight {
 	inset: 0;
 	border: 0;
@@ -323,7 +325,8 @@
 }
 
 .calendar-view .fc .fc-event-mirror .fc-event-main,
-.calendar-view .fc .calendar-multi-day-selection-preview-event .fc-event-main {
+.calendar-view .fc .calendar-multi-day-selection-preview-event .fc-event-main,
+.calendar-view .fc .calendar-timed-selection-preview-event .fc-event-main {
 	color: inherit;
 }
 
@@ -336,6 +339,10 @@
 .calendar-view
 	.fc
 	.calendar-multi-day-selection-preview-event
+	.calendar-event-selection-preview,
+.calendar-view
+	.fc
+	.calendar-timed-selection-preview-event
 	.calendar-event-selection-preview {
 	filter: invert(1) grayscale(1) contrast(100);
 }
@@ -498,6 +505,47 @@
 	display: none;
 }
 
+/* Reminders are instants rather than blocks of time, so they draw as a tinted
+   chip instead of a calendar's filled block. */
+.calendar-view .fc .fc-event.calendar-event-reminder {
+	--fc-event-bg-color: color-mix(in oklch, var(--color-reminder) 16%, var(--color-panel));
+	--fc-event-border-color: color-mix(in oklch, var(--color-reminder) 45%, var(--color-panel));
+	--fc-event-text-color: var(--color-ink);
+}
+
+.calendar-view .fc .calendar-event-reminder .calendar-event-reminder-icon {
+	color: var(--color-reminder);
+}
+
+/* A dragged reminder keeps its own look, lifted off the grid, rather than the
+   selection fill an event's drag mirror takes. */
+.calendar-view .fc .fc-event-mirror.calendar-event-reminder {
+	--fc-event-bg-color: color-mix(in oklch, var(--color-reminder) 28%, var(--color-panel));
+	--fc-event-border-color: var(--color-reminder);
+	--fc-event-text-color: var(--color-ink);
+	border-color: var(--fc-event-border-color);
+	background: var(--fc-event-bg-color);
+	color: var(--fc-event-text-color);
+	box-shadow: var(--shadow-menu);
+}
+
+.calendar-view
+	.fc
+	.fc-event-mirror.calendar-event-reminder
+	.calendar-event-content {
+	color: var(--fc-event-text-color);
+}
+
+/* The month grid's dot treatment sets its colors directly, so the tint must
+   too. */
+.calendar-view
+	.fc
+	.fc-dayGridMonth-view
+	.fc-daygrid-dot-event.calendar-event-reminder {
+	background-color: var(--fc-event-bg-color);
+	color: var(--fc-event-text-color);
+}
+
 .calendar-view .fc .fc-event:hover {
 	z-index: 4;
 }
@@ -509,7 +557,7 @@
 }
 
 @media (hover: hover) {
-	.calendar-view .fc .fc-event:hover:not(.fc-event-mirror):not(.calendar-multi-day-selection-preview-event):not(:has(.calendar-event-content-selected)) {
+	.calendar-view .fc .fc-event:hover:not(.fc-event-mirror):not(.calendar-multi-day-selection-preview-event):not(.calendar-timed-selection-preview-event):not(:has(.calendar-event-content-selected)) {
 		filter: brightness(0.94);
 	}
 

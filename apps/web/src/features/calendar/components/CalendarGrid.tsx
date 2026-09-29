@@ -34,9 +34,9 @@ import {
   calendarEventRenderIds,
 } from '../utils/event-interaction';
 import {
-  isMultiDaySelectionPreview,
-  multiDaySelectionRenderingPlugin,
-} from '../utils/fullcalendar-multi-day-selection';
+  isSelectionPreview,
+  selectionPreviewRenderingPlugin,
+} from '../utils/fullcalendar-selection-preview';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
   formatCalendarTime,
@@ -163,6 +163,7 @@ export function CalendarGrid(props: CalendarGridProps) {
         ...(event.eventType === 'out_of_office'
           ? ['calendar-event-out-of-office']
           : []),
+        ...(event.reminderId ? ['calendar-event-reminder'] : []),
       ];
       return {
         ...mapped,
@@ -224,7 +225,7 @@ export function CalendarGrid(props: CalendarGridProps) {
         dayGridPlugin,
         interactionPlugin,
         timeGridPlugin,
-        multiDaySelectionRenderingPlugin,
+        selectionPreviewRenderingPlugin,
       ]}
       initialView={props.settings.initialView}
       initialDate={props.initialDate}
@@ -251,10 +252,20 @@ export function CalendarGrid(props: CalendarGridProps) {
       slotLabelFormat={CALENDAR_TIME_FORMAT_OPTIONS[props.settings.timeFormat]}
       eventTimeFormat={CALENDAR_TIME_FORMAT_OPTIONS[props.settings.timeFormat]}
       events={renderedEvents()}
-      eventAllow={() =>
-        props.onEventTimeChange !== undefined &&
-        props.eventTimeChangePending !== true
-      }
+      eventAllow={(dropInfo, draggedEvent) => {
+        if (
+          props.onEventTimeChange === undefined ||
+          props.eventTimeChangePending === true
+        ) {
+          return false;
+        }
+        // A reminder fires at a time of day, so it cannot land on the all-day
+        // row.
+        const dragged = draggedEvent
+          ? eventByRenderId(calendarEventRenderId(draggedEvent))
+          : undefined;
+        return !(dragged?.reminderId && dropInfo.allDay);
+      }}
       eventResizableFromStart
       eventDragStart={handleEventInteractionStart}
       eventDragStop={handleEventInteractionStop}
@@ -301,7 +312,7 @@ export function CalendarGrid(props: CalendarGridProps) {
             calendarEvent.calendar.color
           );
         }
-        if (isMirror || isMultiDaySelectionPreview(event)) return;
+        if (isMirror || isSelectionPreview(event)) return;
 
         const occurrenceIds = calendarEventRenderIds(event);
         for (const id of occurrenceIds) eventElements.set(id, el);
@@ -313,7 +324,7 @@ export function CalendarGrid(props: CalendarGridProps) {
         notifyChipMount();
       }}
       eventWillUnmount={({ el, event, isMirror }) => {
-        if (isMirror || isMultiDaySelectionPreview(event)) return;
+        if (isMirror || isSelectionPreview(event)) return;
 
         for (const id of calendarEventRenderIds(event)) {
           if (eventElements.get(id) === el) {
@@ -377,7 +388,7 @@ export function CalendarGrid(props: CalendarGridProps) {
           );
           if (
             !event &&
-            (isMultiDaySelectionPreview(renderProps.event) ||
+            (isSelectionPreview(renderProps.event) ||
               (renderProps.isMirror &&
                 !renderProps.isDragging &&
                 !renderProps.isResizing))

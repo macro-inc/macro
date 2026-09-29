@@ -121,6 +121,12 @@ export function invalidateRemindersById(
     queryKey: reminderKeys.list._def,
     refetchType,
   });
+  // The calendar reads occurrences behind a success gate rather than a
+  // Suspense boundary, so refetching them now cannot detach anything, and a
+  // completed one-shot should leave the grid without waiting for a remount.
+  void queryClient.invalidateQueries({
+    queryKey: reminderKeys.occurrences._def,
+  });
   for (const id of ids) {
     void queryClient.invalidateQueries({
       queryKey: reminderKeys.detail(id).queryKey,
@@ -129,9 +135,15 @@ export function invalidateRemindersById(
   }
 }
 
-/** Invalidate every reminder list, plus one detail when the id is known. */
+/**
+ * Invalidate every reminder list and occurrence window, plus one detail when
+ * the id is known.
+ */
 function invalidateReminders(id?: string) {
   void queryClient.invalidateQueries({ queryKey: reminderKeys.list._def });
+  void queryClient.invalidateQueries({
+    queryKey: reminderKeys.occurrences._def,
+  });
   if (id) {
     void queryClient.invalidateQueries({
       queryKey: reminderKeys.detail(id).queryKey,

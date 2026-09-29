@@ -5,6 +5,7 @@ import {
   enableCalendarSearchUi,
   enableCalendarTeamOoo,
   enableCalendarUi,
+  enableReminders,
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { Accessor } from 'solid-js';
@@ -45,5 +46,14 @@ export function useCalendarPromptAllowed(): Accessor<boolean> {
  */
 export function useCalendarTeamOooFlag(): Accessor<boolean> {
   const flag = useFeatureFlag(enableCalendarTeamOoo);
+  return () => flag().enabled;
+}
+
+/**
+ * Whether reminders appear on the calendar grid. Follows the reminders feature
+ * itself rather than a calendar flag of its own.
+ */
+export function useCalendarRemindersFlag(): Accessor<boolean> {
+  const flag = useFeatureFlag(enableReminders);
   return () => flag().enabled;
 }
