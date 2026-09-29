@@ -3921,6 +3921,66 @@ async fn a_mirror_that_held_frames_back_keeps_the_rest_of_the_run_for_the_reload
     assert_eq!(agent_texts(&loaded), ["answered over there"]);
 }
 
+/// A prompt sent while the mirror's last frames were on their way reaches the
+/// service only after the mirror let go of the gate, with those frames
+/// already inside its turn on the client. Arriving that soon after the
+/// mirror streamed, it asks for a reload; a prompt well after does not.
+#[tokio::test(start_paused = true)]
+async fn a_prompt_right_after_a_mirror_streamed_asks_for_a_reload() {
+    let (service, cursor, notifier) = service(None);
+    let id = service.new_session(Path::new(""), vec![]);
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).unwrap();
+    events.send(CursorEvent::Done).unwrap();
+    service.prompt(&id, "first").await.unwrap();
+
+    let mirror_one = |run: &'static str, previous: &'static str| {
+        cursor.script_run_listings(vec![
+            RunListing {
+                id: CursorRunId::new(run),
+                status: RunStatus::Finished,
+            },
+            RunListing {
+                id: CursorRunId::new(previous),
+                status: RunStatus::Finished,
+            },
+        ]);
+        let foreign = cursor.script_stream();
+        foreign
+            .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+                text: format!("{run} question"),
+            }))
+            .unwrap();
+        foreign
+            .send(CursorEvent::Assistant {
+                text: format!("{run} answer"),
+            })
+            .unwrap();
+        foreign.send(finished(run)).unwrap();
+        foreign.send(CursorEvent::Done).unwrap();
+    };
+    let own = |run: &'static str| {
+        let events = cursor.script_stream();
+        events.send(finished(run)).unwrap();
+        events.send(CursorEvent::Done).unwrap();
+    };
+
+    mirror_one("run-foreign-1", "run-fake-1");
+    service.sync_foreign_runs().await;
+    assert!(notifier.reloads().is_empty());
+    own("run-fake-2");
+    service.prompt(&id, "right after").await.unwrap();
+    assert_eq!(notifier.reloads(), vec![id.clone()]);
+    load(&service, &id, &notifier).await;
+
+    mirror_one("run-foreign-2", "run-fake-2");
+    service.sync_foreign_runs().await;
+    tokio::time::advance(MIRROR_PROMPT_OVERLAP * 2).await;
+    own("run-fake-3");
+    service.prompt(&id, "much later").await.unwrap();
+    assert_eq!(notifier.reloads().len(), 1, "no overlap, no reload");
+}
+
 /// A stop reaches the mirror itself, not only the prompt behind it.
 ///
 /// Cursor was observed to keep a run at `RUNNING` after a cancel, with a

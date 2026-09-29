@@ -163,6 +163,16 @@ const STREAM_RECONNECT_ATTEMPTS: usize = 5;
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
 const BUSY_ATTEMPTS: usize = 450;
 
+/// How soon after the mirror's last live frame a prompt is taken to have been
+/// sent while that frame was still on its way.
+///
+/// The client opens a prompt's turn when it sends the prompt; the request
+/// reaches this service a pipe hop later, in milliseconds. Mirror frames sent
+/// in between land inside that turn, and nothing here can tell which, so such
+/// a prompt asks for a reload that puts the mirrored run back in its place.
+/// Generous on purpose: a false positive costs one reload.
+const MIRROR_PROMPT_OVERLAP: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// How long a prompt waits for the turn gate while a background mirror is
 /// following a run started elsewhere, before giving up.
 ///
@@ -428,6 +438,9 @@ struct SessionState {
     /// run by streaming it: the client would be missing whatever came
     /// before, so the sweep captures silently and asks for a reload instead.
     unshown: bool,
+    /// When the mirror last published a frame live; see
+    /// [`MIRROR_PROMPT_OVERLAP`].
+    mirror_published_at: Option<tokio::time::Instant>,
     /// Set by cancel; read by the turn when its stream ends.
     ///
     /// The *verdict*, not the mechanism: a cancel that raced the stream's own
@@ -934,6 +947,18 @@ where
                 }
             }
         };
+        // A mirror that finished streaming just before this prompt arrived
+        // may have streamed its last frames into this prompt's turn.
+        let overlapped = session
+            .state
+            .lock()
+            .expect("session state poisoned")
+            .mirror_published_at
+            .is_some_and(|at| at.elapsed() < MIRROR_PROMPT_OVERLAP);
+        if overlapped {
+            tracing::info!("prompt arrived as a mirrored run finished streaming; reloading");
+            self.require_reload(session_id, &session).await?;
+        }
 
         if !session
             .state
@@ -2227,32 +2252,54 @@ where
                         .expect("session state poisoned")
                         .last_run = Some(run.clone());
                 }
-                return Ok(mirrored);
-            }
-            let notify = {
-                let mut state = session.state.lock().expect("session state poisoned");
-                if let Err(error) =
-                    history_projection(&state.journal_entries, HistoryGap::DeclinesReplacement)
+                // A prompt that parked while the checkpoint was on its way
+                // may hold the run's last frames in its turn.
+                if !session
+                    .state
+                    .lock()
+                    .expect("session state poisoned")
+                    .unshown
                 {
-                    tracing::warn!(error = ?error, %session_id, "captured recovery cannot replace history yet");
                     return Ok(mirrored);
                 }
-                !std::mem::replace(&mut state.reload_pending, true)
-            };
-            if notify {
-                self.notifier
-                    .require_reload(session_id)
-                    .await
-                    .inspect_err(|_| {
-                        session
-                            .state
-                            .lock()
-                            .expect("session state poisoned")
-                            .reload_pending = false;
-                    })?;
             }
+            self.require_reload(session_id, session).await?;
         }
         Ok(mirrored)
+    }
+
+    /// Ask the host to reload, once, so a load shows what was captured.
+    ///
+    /// Declined while the journal cannot yet replace the visible history:
+    /// a load then would show less than the client already has.
+    async fn require_reload(
+        &self,
+        session_id: &SessionId,
+        session: &Session,
+    ) -> Result<(), SessionError> {
+        let notify = {
+            let mut state = session.state.lock().expect("session state poisoned");
+            if let Err(error) =
+                history_projection(&state.journal_entries, HistoryGap::DeclinesReplacement)
+            {
+                tracing::warn!(error = ?error, %session_id, "captured recovery cannot replace history yet");
+                return Ok(());
+            }
+            !std::mem::replace(&mut state.reload_pending, true)
+        };
+        if notify {
+            self.notifier
+                .require_reload(session_id)
+                .await
+                .inspect_err(|_| {
+                    session
+                        .state
+                        .lock()
+                        .expect("session state poisoned")
+                        .reload_pending = false;
+                })?;
+        }
+        Ok(())
     }
 
     /// Re-host the walkthrough files this run produced and say so in the
@@ -2541,6 +2588,7 @@ where
             (updates, completion, pull_request, working_branches)
         };
         let emit = {
+            let emit_mode = emit;
             let mut state = session.state.lock().expect("session state poisoned");
             let emit = match emit {
                 Emit::Live => true,
@@ -2549,6 +2597,9 @@ where
                 // later frames make no sense to a client missing earlier ones.
                 Emit::Mirror => state.prompts_waiting == 0 && !state.unshown,
             };
+            if emit && emit_mode == Emit::Mirror {
+                state.mirror_published_at = Some(tokio::time::Instant::now());
+            }
             // A prompt's own blocks are on the client already: it sent them.
             let visible = !updates.is_empty()
                 || completion.is_some()
@@ -2925,6 +2976,7 @@ impl ReplayGuard {
         state.ready_for_sync = true;
         state.reload_pending = false;
         state.unshown = false;
+        state.mirror_published_at = None;
     }
 }
 
