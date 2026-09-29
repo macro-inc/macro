@@ -92,20 +92,29 @@ fn android_notification(
     if matches!(apns.attributes.push_type, PushType::Background) {
         return FCMMessage::clear(identifier, data, recipient_id);
     }
-    let (title, body) = match &apns.notif.aps.alert {
+    let (mut title, body) = match &apns.notif.aps.alert {
         Some(Alert::Simple(body)) => (String::new(), body.clone()),
         Some(Alert::Dictionary(alert)) => (
             [alert.title.as_deref(), alert.subtitle.as_deref()]
                 .into_iter()
                 .flatten()
+                .filter(|text| !text.trim().is_empty())
                 .collect::<Vec<_>>()
                 .join(" — "),
             alert.body.clone().unwrap_or_default(),
         ),
         None => (String::new(), String::new()),
     };
+    // Android rejects visible pushes without text. Keep silent clears above
+    // separate from alerts whose source payload omitted display content.
+    if title.trim().is_empty() && body.trim().is_empty() {
+        title = "New notification".to_owned();
+    }
     FCMMessage::notification(title, body, identifier, data, recipient_id)
 }
+
+#[cfg(test)]
+mod test;
 
 /// Service for delivering notifications (egress side).
 ///

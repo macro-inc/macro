@@ -79,6 +79,9 @@ user can retry; successful reconnection keeps it hidden. Verify cancel followed
 by retry, browser failure, and failure to start OAuth. Repeated taps while a flow
 is pending must start only one attempt. On the web, a successful OAuth kickoff
 navigates away and the prompt stays hidden during that navigation.
+Use browser Back to return from GitHub: when the page is restored from BFCache,
+it refreshes link status and restores the retry prompt only if reconnection is
+still needed.
 
 ## Mailpit (local email)
 
