@@ -235,7 +235,6 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       plugins.use(
         agentCommandsPlugin({
           menu: agentCommandsMenuOps,
-          commands: config.agentCommands.commands,
         })
       );
     }

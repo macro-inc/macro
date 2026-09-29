@@ -1,4 +1,4 @@
-//! Resolves who a public create request creates as.
+//! Axum adapter that resolves who a public create request creates as.
 
 use std::marker::PhantomData;
 
@@ -40,7 +40,7 @@ where
         let principal =
             resolve_creation_principal(&caller.authorization, NonUserOwners::from_ref(state))
                 .map_err(|error| {
-                    tracing::info!(%error, "caller cannot create");
+                    tracing::info!(%error, "caller cannot create entities");
                     MacroAuthorizationRejection {
                         status: StatusCode::FORBIDDEN,
                         message: "forbidden".into(),

@@ -12,8 +12,7 @@ use axum::{
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
-use entity_registry::NonUserOwners;
-use entity_registry::inbound::CreationPrincipalExtractor;
+use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model::response::StringIDResponse;
 use models_permissions::share_permission::SharePermissionV2;

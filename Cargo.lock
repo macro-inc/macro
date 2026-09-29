@@ -3300,7 +3300,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.29"
+version = "0.6.30"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -4266,6 +4266,7 @@ dependencies = [
  "graphql_notification",
  "graphql_permission",
  "graphql_properties",
+ "graphql_scheduled_action",
  "graphql_soup",
  "macro_authorization",
  "macro_user_id",
@@ -4279,6 +4280,7 @@ dependencies = [
  "notification",
  "predicate-index",
  "rootcause",
+ "scheduled_action",
  "serde",
  "soup",
  "soup-filter-projection",
@@ -5908,6 +5910,7 @@ dependencies = [
  "futures",
  "github",
  "graphql_initiative",
+ "graphql_scheduled_action",
  "graphql_soup",
  "harnesses",
  "hex",
@@ -5968,6 +5971,7 @@ dependencies = [
  "rootcause",
  "s3_key",
  "saved_views",
+ "scheduled_action",
  "schemars 1.2.1",
  "search_service",
  "secretsmanager_client",
@@ -8193,6 +8197,23 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_scheduled_action"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "macro_user_id",
+ "macro_uuid",
+ "model_owner",
+ "rootcause",
+ "scheduled_action",
+ "serde_json",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -20653,6 +20674,7 @@ dependencies = [
  "ahash",
  "aho-corasick",
  "anyhow",
+ "async-graphql",
  "async-openai",
  "aws-config",
  "aws-credential-types",

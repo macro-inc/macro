@@ -69,7 +69,7 @@ export function favoriteEntityType(
   }
 }
 
-export function favoriteEntityKey(
+function favoriteEntityKey(
   entityType: FavoriteEntityType,
   entityId: string
 ): string {

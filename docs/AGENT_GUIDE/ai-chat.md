@@ -449,6 +449,7 @@ After completion, each assistant message gets `Edit assistant response in Notes`
 The chat auto-titles itself after the first exchange (route stays stable, title changes).
 
 The agent has workspace tools (it can list your documents, read channels, create tasks,
+list, create, and update projects (initiatives in the API) and move tasks in or out of them,
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
 
@@ -465,6 +466,16 @@ and the passage is highlighted in the document with the comment floating beside 
 A passage that is missing, spans blocks, or repeats with no occurrence chosen is
 refused with no highlight left behind. The comment is posted as the agent with a
 **from <user>** pill, and needs the user's comment access to the document.
+
+Project rows include **Find projects**, **Read project**, **Create project <name>**,
+**Update project**, **Add N tasks to project**, and **Remove N tasks from project**.
+The assignment and removal rows show a task count; the caret expands each task id
+and its outcome, with the full response available under **Result data**. Assignment
+outcomes are **assigned**, **moved**, **not a task**, **not found**, or
+**skipped no permission**. Removal outcomes are **unassigned** or **not assigned**;
+a task in a different project is left unchanged. Both actions require edit access
+to the project and each task. Removal stops on access or service failures, so
+previous tasks in the same batch may already have been removed.
 
 ## Agent sessions asking a question
 
@@ -504,8 +515,14 @@ An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
 `Create` → `Agent`) leaves that composer focused — on mobile that is the same
 Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `/` to
-open slash commands the connected agent advertised (Claude, OpenCode, and
-Cursor). `/` stays ordinary text until that list arrives. Type `@` to insert the same mention chips
+open sections for **Skills**, **Pull requests**, and **Commands**. Skills are
+available even before the connected agent advertises commands. Select a skill
+to insert its mention, a pull request to reference it, or a harness command
+to insert `/name` as text. Search filters all sections; arrow keys move across
+sections and Enter selects the highlighted item. Saved skills have an **Edit**
+button that opens their document editor; skills you own also have **Delete**,
+which opens the usual deletion confirmation. Built-in skills have no edit or
+delete controls. **New skill** creates a skill and inserts its mention. Type `@` to insert the same mention chips
 used in chat and channels; they serialize as mention-chip tags in the prompt
 the agent sees (`<m-document-mention>` for docs/channels/chats/tasks/emails/calendar
 events/skills, `<m-date-mention>` for a day or time, `<m-agent-session-mention>`

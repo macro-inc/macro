@@ -264,6 +264,7 @@ export const scheduledActionBacklog = [
   'executeScheduledActionNow',
   'listScheduledActionHistory',
   'listScheduledActions',
+  'setScheduledActionEnabled',
   'updateScheduledAction',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 

@@ -44,6 +44,17 @@ pub trait CommentMarks: Send + Sync + 'static {
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum CommentAnchor {
+    /// A cell or rectangular range in a native spreadsheet.
+    #[serde(rename_all = "camelCase")]
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
+    },
+
     /// A Discussion comment on the document as a whole.
     Document,
     /// An inline comment on a passage of a markdown document.
@@ -107,7 +118,7 @@ pub struct DocumentComment {
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum CommentThreadKind {
-    /// An inline comment on a passage, PDF highlight or PDF pin.
+    /// An inline comment on a passage, PDF highlight, PDF pin or spreadsheet range.
     Inline,
     /// A comment in the document's Discussion panel.
     Discussion,
@@ -317,6 +328,15 @@ fn comment_anchor(
 ) -> CommentAnchor {
     match anchor {
         None => CommentAnchor::Document,
+        Some(ThreadAnchor::Spreadsheet {
+            sheet_id,
+            sheet_name,
+            range,
+        }) => CommentAnchor::Spreadsheet {
+            sheet_id,
+            sheet_name,
+            range,
+        },
         Some(ThreadAnchor::Markdown {
             mark_id,
             marked_text: snapshot,

@@ -483,6 +483,24 @@ describe('composeAgentContextPrompt', () => {
     );
   });
 
+  it('names spreadsheet ranges and directs the agent to live cells', () => {
+    const context = composedContext({
+      promptMarkdown: 'check these totals',
+      anchor: {
+        type: 'spreadsheet',
+        sheetId: 'sheet-1',
+        sheetName: 'Budget & Forecast',
+        range: 'B4:C9',
+      },
+    });
+    expect(context).toContain(
+      '<anchor type="spreadsheet" sheetId="sheet-1" sheetName="Budget &amp; Forecast" range="B4:C9">'
+    );
+    expect(context).toContain(
+      'Use ReadSpreadsheet to read the live cells in this range.'
+    );
+  });
+
   it('says a PDF pin covers no words', () => {
     expect(
       composedContext({

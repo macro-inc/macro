@@ -178,7 +178,7 @@ fn cold_parent_needs_no_query_root_or_cached_page_for_enqueue_and_replay() {
         let selection = RecordSelection::parse(FRAGMENT, "AssignmentParent").unwrap();
         let key = EntityKey("GraphqlSoupDocument:task-1".into());
         let records = engine
-            .read_records_by_keys(&selection, &[key.clone()])
+            .read_records_by_keys(&selection, std::slice::from_ref(&key))
             .await
             .unwrap();
         assert_eq!(
@@ -203,6 +203,77 @@ fn cold_parent_needs_no_query_root_or_cached_page_for_enqueue_and_replay() {
         );
         let records = engine
             .read_records_by_keys(&selection, &[key])
+            .await
+            .unwrap();
+        assert_eq!(records.value[0].record["properties"][0]["id"], "server-1");
+    });
+}
+
+#[test]
+fn pending_assignment_replays_after_its_original_page_is_evicted() {
+    block_on(async {
+        let mut engine = seeded().await;
+        let txn = enqueue(&mut engine, "urgent", 1).await;
+        let pending = engine.storage().load_mutation_queue().await.unwrap();
+        for n in 0..cache_core::page_retention::MAX_SOUP_PAGES + 1 {
+            engine
+                .write_query(
+                    None,
+                    QUERY,
+                    Some("Properties"),
+                    json!({"input":{"initial":{"limit":n}}})
+                        .as_object()
+                        .unwrap(),
+                    &json!({"user":{"id":"user-1","soup":{"items":[]}}}),
+                    None,
+                )
+                .await
+                .unwrap();
+        }
+        assert!(matches!(
+            engine
+                .read_query(None, QUERY, Some("Properties"), &variables())
+                .await
+                .unwrap(),
+            ReadResult::Miss
+        ));
+        assert_eq!(
+            engine.storage().load_mutation_queue().await.unwrap(),
+            pending
+        );
+        let mut engine = Engine::new(engine.into_storage());
+        let selection = RecordSelection::parse(FRAGMENT, "AssignmentParent").unwrap();
+        let keys = [EntityKey("GraphqlSoupDocument:task-1".into())];
+        let records = engine
+            .read_records_by_keys(&selection, &keys)
+            .await
+            .unwrap();
+        assert_eq!(
+            records.value[0].record["properties"][0]["id"],
+            "temporary-1"
+        );
+        let claim = claim(&mut engine, 2).await;
+        engine
+            .commit_optimistic_write(
+                txn,
+                claim,
+                MUTATION,
+                Some("Set"),
+                &variables(),
+                &response("server-1", "urgent"),
+            )
+            .await
+            .unwrap();
+        assert!(
+            engine
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let records = engine
+            .read_records_by_keys(&selection, &keys)
             .await
             .unwrap();
         assert_eq!(records.value[0].record["properties"][0]["id"], "server-1");

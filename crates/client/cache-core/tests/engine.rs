@@ -3,7 +3,8 @@
 
 use cache_core::engine::{Engine, NetworkWrite, QueryRegistration, ReadResult};
 use cache_core::revision::CacheRevision;
-use cache_core::store::InMemoryStorage;
+use cache_core::store::{InMemoryStorage, Storage};
+use cache_core::value::{CacheValue, EntityKey};
 use pollster::block_on;
 use serde_json::{Value as Json, json};
 
@@ -263,14 +264,33 @@ fn hydration_persists_cache_only_fields_and_returns_only_projection() {
             Some(json!({ "user": { "soup": { "nextCursor": "cursor-2" } } }))
         );
 
-        let ReadResult::Hit { data: cached } = engine
-            .read_query(None, HYDRATION_QUERY, Some("SoupBackfill"), &vars(10))
+        assert!(matches!(
+            engine
+                .read_query(None, HYDRATION_QUERY, Some("SoupBackfill"), &vars(10))
+                .await
+                .unwrap(),
+            ReadResult::Miss
+        ));
+        let records = engine
+            .storage()
+            .get_batch(&[
+                EntityKey("GraphqlUser:user-1".into()),
+                EntityKey("GraphqlSoupDocument:doc-1".into()),
+            ])
             .await
-            .unwrap()
-        else {
-            panic!("expected hydrated query hit");
-        };
-        assert_eq!(cached, data);
+            .unwrap();
+        assert!(
+            !records[0]
+                .as_ref()
+                .unwrap()
+                .fields
+                .keys()
+                .any(|key| key.starts_with("soup("))
+        );
+        assert_eq!(
+            records[1].as_ref().unwrap().fields["name"],
+            CacheValue::String("Design doc".into())
+        );
     });
 }
 

@@ -43,5 +43,7 @@ pub use shared_entity_registry::{
     RegisteredEntityType, UnregisteredEntityType, WriteOutcome,
 };
 
+#[cfg(feature = "axum")]
+pub use inbound::CreationPrincipalExtractor;
 #[cfg(feature = "postgres")]
 pub use outbound::pg_entity_registry_repo::PgEntityRegistryRepository;

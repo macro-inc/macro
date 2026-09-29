@@ -135,6 +135,100 @@ const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve));
 afterEach(() => vi.restoreAllMocks());
 
 describe('split router', () => {
+  it('runs the host opening policy only after acceptance and ignores superseded requests', async () => {
+    const gate = Promise.withResolvers<void>();
+    const layout = createLayout();
+    const router = createSplitRouter({
+      layout,
+      routes,
+      location: createMemorySplitRouterLocation('/drive'),
+      middleware: [
+        ({ cause, to }) =>
+          cause === 'navigate' &&
+          routeParams(to.location.route).folderId === 'slow'
+            ? gate.promise
+            : undefined,
+      ],
+    });
+    await router.settled();
+    const source = layout.snapshot().entries[0].splitId;
+    const open = vi.fn((request: Parameters<Layout['open']>[0]) =>
+      layout.open({ ...request, target: 'new-split' })
+    );
+    const cancelled = vi.fn();
+    const applied = vi.fn();
+    router.navigate(source, '/drive/folder/slow', {
+      open,
+      onApplied: cancelled,
+    });
+    await settle();
+    expect(open).not.toHaveBeenCalled();
+    expect(cancelled).not.toHaveBeenCalled();
+    router.navigate(source, '/drive/folder/accepted', {
+      open,
+      onApplied: applied,
+    });
+    await settle();
+    expect(open).toHaveBeenCalledOnce();
+    expect(layout.snapshot().entries).toHaveLength(2);
+    expect(routeParams(router.route('split-2')!).folderId).toBe('accepted');
+    gate.resolve();
+    await router.settled();
+    expect(open).toHaveBeenCalledOnce();
+    expect(applied).toHaveBeenCalledOnce();
+    expect(cancelled).not.toHaveBeenCalled();
+    router.dispose();
+  });
+
+  it('updates an existing claim owner without invoking the host opening policy', async () => {
+    const layout = createLayout();
+    const router = createSplitRouter({
+      layout,
+      routes,
+      location: createMemorySplitRouterLocation('/drive/~/drive/folder/owned'),
+    });
+    await router.settled();
+    const [source, owner] = layout.snapshot().entries;
+    const open = vi.fn(layout.open);
+    const onApplied = vi.fn();
+    router.navigate(source.splitId, '/drive/folder/owned', {
+      open,
+      onApplied,
+      search: { drive: { query: ['new target'] } },
+    });
+    await router.settled();
+    expect(open).not.toHaveBeenCalled();
+    expect(router.search(owner.splitId, 'drive')).toEqual({
+      query: ['new target'],
+    });
+    expect(router.route(source.splitId)?.matches).toHaveLength(1);
+    expect(onApplied).toHaveBeenCalledOnce();
+    router.dispose();
+  });
+
+  it('does not report navigation applied when the host cannot open a pane', async () => {
+    const layout = createLayout();
+    const router = createSplitRouter({
+      layout,
+      routes,
+      location: createMemorySplitRouterLocation('/drive'),
+    });
+    await router.settled();
+    const onApplied = vi.fn();
+    router.navigate(
+      layout.snapshot().entries[0].splitId,
+      '/drive/folder/missing',
+      {
+        open: () => ({ status: 'unavailable' }),
+        onApplied,
+      }
+    );
+    await router.settled();
+    expect(onApplied).not.toHaveBeenCalled();
+    expect(layout.snapshot().entries).toHaveLength(1);
+    router.dispose();
+  });
+
   it('becomes ready when a synchronous layout change supersedes async initialization', async () => {
     const layout = createLayout();
     let release!: () => void;
@@ -1950,15 +2044,18 @@ describe('split router', () => {
     await router.settled();
     const splitId = layout.snapshot().entries[0]!.splitId;
 
-    router.navigate(splitId, 'folder/two', { target: 'new-split' });
+    const onApplied = vi.fn();
+    router.navigate(splitId, 'folder/two', { target: 'new-split', onApplied });
 
     expect(layout.snapshot().entries).toHaveLength(1);
+    expect(onApplied).not.toHaveBeenCalled();
 
     release();
     await router.settled();
 
     expect(layout.snapshot().entries).toHaveLength(2);
     expect(location.read().pathname).toBe('/drive/~/drive/folder/two');
+    expect(onApplied).toHaveBeenCalledOnce();
   });
 
   it('retains declared global search and drops unowned keys', async () => {

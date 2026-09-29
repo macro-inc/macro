@@ -5,7 +5,7 @@ use std::str::FromStr;
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
-use entity_registry::inbound::CreationPrincipalExtractor;
+use entity_registry::CreationPrincipalExtractor;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal, UserOrInternalCaller,
 };

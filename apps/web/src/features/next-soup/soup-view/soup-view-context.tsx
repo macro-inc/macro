@@ -37,10 +37,7 @@ import {
   type TagFilter,
 } from '@app/features/next-soup/soup-view/filters-bar/tag-filter-state';
 import { dateBucket } from '@app/features/next-soup/soup-view/group-by-date';
-import {
-  INBOX_FILTER_ENTRY_KEY,
-  registerInboxFilterSplit,
-} from '@app/features/next-soup/soup-view/inbox-filter-controllers';
+import { INBOX_FILTER_ENTRY_KEY } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { SORT_CONFIGS } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupFilterPersistence } from '@app/features/next-soup/use-soup-filter-persistence';
 import { deduplicateEntities } from '@app/features/next-soup/utils';
@@ -527,23 +524,6 @@ export const SoupViewContextProvider: FlowComponent<
       name: soupViewPersistenceKey('soup-view-inbox-filter'),
     }
   );
-
-  // Expose the mail view's inbox filter to consumers outside the split tree
-  // (the sidebar's nested account rows read and set it by split id). The
-  // provider outlives content swaps within a split, so track the live content
-  // reactively and (un)register as the mail list becomes / stops being the
-  // shown view — registering also flushes any filter the sidebar queued while
-  // navigating here, so a sidebar inbox selection takes on the first click.
-  createEffect(() => {
-    const content = panel.handle.content();
-    if (content.type === 'component' && content.id === 'mail') {
-      const dispose = registerInboxFilterSplit(panel.handle.id, {
-        inboxFilter,
-        setInboxFilter,
-      });
-      onCleanup(dispose);
-    }
-  });
   const [activeTab, setActiveTab] = useEntryState<string | undefined>(
     'soup.tab',
     { default: initialTab }

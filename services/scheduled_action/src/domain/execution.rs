@@ -210,7 +210,9 @@ where
             let claim = bounded(
                 deadline,
                 executor.cancellation.cancelled(),
-                executor.repo.claim_action(&id),
+                executor
+                    .repo
+                    .claim_action(&id, action.configuration_revision),
             )
             .await;
             let token = match claim {

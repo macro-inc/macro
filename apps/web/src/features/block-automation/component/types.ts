@@ -13,5 +13,4 @@ export type ScheduleDraft = {
   /** 1-31 day-of-month when frequency === "month". */
   dayOfMonth: string;
   target: RoutineTarget;
-  enabled: boolean;
 };

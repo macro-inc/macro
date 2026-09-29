@@ -187,12 +187,43 @@ pub enum CreateScheduledAction {
     Legacy(LegacyActionConfiguration),
 }
 
+/// Canonical configuration replacement. Activation has its own endpoint, so
+/// omitting `enabled` keeps the stored value.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ActionConfigurationUpdate {
+    pub name: String,
+    pub trigger: ActionTrigger,
+    pub kind: ActionKind,
+    #[schema(value_type = Object)]
+    pub task: Value,
+    /// Still sent by clients deployed before the activation endpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(deprecated)]
+    pub enabled: Option<bool>,
+}
+
 /// Full replacement of client configuration, not of server-owned action state.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(untagged)]
 pub enum UpdateScheduledAction {
-    Canonical(ActionConfiguration),
+    Canonical(ActionConfigurationUpdate),
     Legacy(LegacyActionConfiguration),
+}
+
+impl UpdateScheduledAction {
+    pub fn into_configuration(self, stored_enabled: bool) -> ActionConfiguration {
+        match self {
+            Self::Canonical(input) => ActionConfiguration {
+                name: input.name,
+                trigger: input.trigger,
+                kind: input.kind,
+                task: input.task,
+                enabled: input.enabled.unwrap_or(stored_enabled),
+            },
+            Self::Legacy(input) => input.into(),
+        }
+    }
 }
 
 impl From<CreateScheduledAction> for ActionConfiguration {
@@ -200,15 +231,6 @@ impl From<CreateScheduledAction> for ActionConfiguration {
         match input {
             CreateScheduledAction::Canonical(input) => input,
             CreateScheduledAction::Legacy(input) => input.into(),
-        }
-    }
-}
-
-impl From<UpdateScheduledAction> for ActionConfiguration {
-    fn from(input: UpdateScheduledAction) -> Self {
-        match input {
-            UpdateScheduledAction::Canonical(input) => input,
-            UpdateScheduledAction::Legacy(input) => input.into(),
         }
     }
 }
@@ -267,6 +289,10 @@ impl ScheduledAction {
         self.owner.as_user().ok_or(OwnerNotUserError {
             owner_type: self.owner.owner_type(),
         })
+    }
+
+    pub fn claim_expires_at(&self) -> Option<DateTime<Utc>> {
+        self.claimed.map(|claimed| claimed + MAX_ACTION_TIME)
     }
 }
 
@@ -414,9 +440,9 @@ impl ScheduledActionUpdate {
 pub const SCHEDULED_ACTION_UPDATE_MESSAGE_TYPE: &str = "scheduled_action_update";
 
 /// Returned by the executor when a run cannot start because the action is
-/// already claimed by another in-flight execution. Callers at the HTTP
-/// boundary map this to 409 Conflict; the polling dispatcher treats it as a
-/// benign "another worker got there first" signal.
+/// already claimed by another in-flight execution, or its configuration changed
+/// after the caller read it. Callers at the HTTP boundary map this to 409
+/// Conflict; the polling dispatcher treats it as benign and polls again.
 #[derive(Debug)]
 pub struct AlreadyRunningError {
     pub action_id: Uuid,

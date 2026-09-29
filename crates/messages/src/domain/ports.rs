@@ -238,6 +238,11 @@ pub trait MessageRepository: Send + Sync + 'static {
         &self,
         parent: &MessageParent,
     ) -> impl Future<Output = Result<bool, MessageError>> + Send;
+    /// File type of a live document, for document-specific anchor validation.
+    fn document_file_type(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, MessageError>> + Send;
     /// Read a message belonging to the specified parent, including root tombstones.
     fn get(
         &self,

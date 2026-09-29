@@ -3,6 +3,44 @@
  */
 import { z } from 'zod/v3';
 
+export const AssignTasksToInitiative = z.object({
+  initiativeId: z.string().uuid(),
+  taskIds: z.array(z.string()),
+});
+
+export const AssignTasksToInitiativeResponse = z.object({
+  initiativeId: z.string().uuid(),
+  results: z.array(
+    z.object({
+      taskId: z.string(),
+      status: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('assigned'),
+          z.literal('moved'),
+          z.literal('not_a_task'),
+          z.literal('not_found'),
+          z.literal('skipped_no_permission'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+    })
+  ),
+});
+
 export const BashCodeExecution = z.object({ input: z.string() });
 
 export const BashCodeExecutionResponse = z.object({
@@ -4943,6 +4981,12 @@ export const ReadContentResponse = z.object({
       resolved: z.boolean(),
       anchor: z.any().superRefine((x, ctx) => {
         const schemas = [
+          z.object({
+            sheetId: z.string(),
+            sheetName: z.string(),
+            range: z.string(),
+            type: z.literal('spreadsheet'),
+          }),
           z.object({ type: z.literal('document') }),
           z.object({
             markId: z.string().uuid(),
@@ -5771,6 +5815,38 @@ export const TextEditorCodeExecutionResponse = z.object({
       });
     }
   }),
+});
+
+export const UnassignTasksFromInitiative = z.object({
+  initiativeId: z.string().uuid(),
+  taskIds: z.array(z.string()),
+});
+
+export const UnassignTasksFromInitiativeResponse = z.object({
+  initiativeId: z.string().uuid(),
+  results: z.array(
+    z.object({
+      taskId: z.string(),
+      status: z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('unassigned'), z.literal('not_assigned')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+    })
+  ),
 });
 
 export const UpdateCalendarEvent = z.object({

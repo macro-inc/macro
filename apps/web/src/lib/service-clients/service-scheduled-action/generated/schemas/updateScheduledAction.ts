@@ -5,12 +5,12 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { ActionConfiguration } from './actionConfiguration';
+import type { ActionConfigurationUpdate } from './actionConfigurationUpdate';
 import type { LegacyActionConfiguration } from './legacyActionConfiguration';
 
 /**
  * Full replacement of client configuration, not of server-owned action state.
  */
 export type UpdateScheduledAction =
-  | ActionConfiguration
+  | ActionConfigurationUpdate
   | LegacyActionConfiguration;

@@ -20,15 +20,14 @@ function ChannelsListNav(props: Omit<ListNavProps, 'activeCall'>) {
 }
 
 /**
- * The rebuilt app sidebar, behind `enable-new-app-views`: a single always-narrow
- * column of 40px icon buttons, labels in tooltips.
+ * The app sidebar: a single always-narrow column of 40px icon buttons, labels
+ * in tooltips.
  *
  * Always narrow by design — there is no slim mode or hover-peek overlay.
  * `cmd+.` toggles navigation in the active workspace. The `g`-prefixed
- * nav shortcuts are unaffected: `GoToHotkeys` is mounted from `Layout` and does
- * not depend on which sidebar renders. There is no room for the leader-key
- * hints the old sidebar paints on its rows, so each button's tooltip carries
- * its shortcut instead.
+ * nav shortcuts are registered by `GoToHotkeys`, which `Layout` mounts
+ * separately. There is no room for leader-key hints on the buttons, so each
+ * button's tooltip carries its shortcut instead.
  */
 export const SidebarRail = () => {
   const gates = useNavItemGates();
@@ -43,7 +42,6 @@ export const SidebarRail = () => {
     navigateToSidebarView({
       viewId: 'home',
       shiftKey: event.shiftKey,
-      activeSplit: globalSplitManager()?.activeSplit(),
       openWithSplit: layout.openWithSplit,
       referredFrom: 'sidebar',
     });
