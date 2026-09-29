@@ -7,11 +7,11 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
     OptionalMacroUserTeamExtractorV2, ProjectBodyAccessLevelExtractorV2,
 };
+use entity_registry::inbound::CreationPrincipalExtractor;
 use macro_authorization::MacroAuthorizationService;
 use models_permissions::share_permission::access_level::{AccessLevel, EditAccessLevel};
 
 use super::DocumentRouterState;
-use super::creation_principal::CreationPrincipalExtractor;
 use crate::domain::create::{MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument};
 use crate::domain::models::{CreateTaskRequest, CreateTaskResponse, DocumentError};
 use crate::domain::permission_token::encode_principal_permission_token;

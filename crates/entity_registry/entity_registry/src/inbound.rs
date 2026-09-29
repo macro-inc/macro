@@ -1,4 +1,4 @@
-//! Resolves who a public document create request creates as.
+//! Resolves who a public create request creates as.
 
 use std::marker::PhantomData;
 
@@ -6,12 +6,13 @@ use axum::{
     extract::{FromRef, FromRequestParts},
     http::{StatusCode, request::Parts},
 };
-use entity_registry::{NonUserOwners, resolve_creation_principal};
 use macro_authorization::{
     AnyPrincipal, MacroAuthorizationExtractor, MacroAuthorizationRejection,
     MacroAuthorizationService, MacroAuthorizationState,
 };
 use model_owner::CreationPrincipal;
+
+use crate::{NonUserOwners, resolve_creation_principal};
 
 /// The verified principal a public create request creates as.
 ///
@@ -39,7 +40,7 @@ where
         let principal =
             resolve_creation_principal(&caller.authorization, NonUserOwners::from_ref(state))
                 .map_err(|error| {
-                    tracing::info!(%error, "caller cannot create documents");
+                    tracing::info!(%error, "caller cannot create");
                     MacroAuthorizationRejection {
                         status: StatusCode::FORBIDDEN,
                         message: "forbidden".into(),

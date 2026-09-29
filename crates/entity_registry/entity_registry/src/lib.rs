@@ -25,6 +25,9 @@
 
 pub mod domain;
 
+#[cfg(feature = "axum")]
+pub mod inbound;
+
 #[cfg(feature = "postgres")]
 pub mod outbound;
 
