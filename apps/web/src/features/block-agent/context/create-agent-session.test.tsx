@@ -6,7 +6,7 @@
  * `<Suspense>` on its fallback forever.
  */
 
-import { err, ok, type Result } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { Show, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,13 +17,11 @@ const fold = vi.hoisted(() => ({
 }));
 const harness = vi.hoisted(() => ({
   get: vi.fn(),
-  getLog: vi.fn(),
   control: vi.fn(),
 }));
-const cache = vi.hoisted(() => ({
-  read: vi.fn(),
-  write: vi.fn(),
-  remove: vi.fn(),
+const logSource = vi.hoisted(() => ({
+  cached: vi.fn(),
+  fetched: vi.fn(),
 }));
 
 vi.mock('@core/agent-fold/client', () => fold);
@@ -33,8 +31,15 @@ vi.mock('@service-agent-harness/client', () => ({
 vi.mock('@queries/agent-session/queue-sync', () => ({
   subscribeSocketSessionStarted: () => () => {},
 }));
-vi.mock('@queries/agent-session/log-cache', () => ({
-  agentSessionLogCache: cache,
+vi.mock('@queries/agent-session/log-query', () => ({
+  AgentSessionLogUnavailable: class extends Error {},
+  watchAgentSessionLog: () => ({
+    cached: logSource.cached(),
+    fetched: logSource.fetched(),
+    stop: () => {},
+  }),
+  appendAgentSessionLogRows: vi.fn(async () => undefined),
+  forgetAgentSessionLog: vi.fn(async () => undefined),
 }));
 vi.mock('@queries/agent-session/session-metadata-sync', () => ({
   subscribeAgentSessionRenamed: () => () => {},
@@ -84,10 +89,8 @@ beforeEach(() => {
     metadata: { turn: 'idle' },
   });
   harness.get.mockResolvedValue(ok(session));
-  harness.getLog.mockResolvedValue(ok({ bot, entries: [] }));
-  cache.read.mockResolvedValue(undefined);
-  cache.write.mockResolvedValue(undefined);
-  cache.remove.mockResolvedValue(undefined);
+  logSource.cached.mockResolvedValue(undefined);
+  logSource.fetched.mockResolvedValue({ bot, rows: [] });
 });
 afterEach(cleanup);
 
@@ -108,37 +111,30 @@ describe('createAgentSession', () => {
   });
 
   it('leaves the fallback and reports a failed load', async () => {
-    harness.getLog.mockResolvedValue(err([{ code: 'SERVER_ERROR' }]));
+    logSource.fetched.mockRejectedValue(new Error('server error'));
     mount();
     expect(await screen.findByText('load failed')).toBeTruthy();
     expect(screen.queryByText('loading')).toBeNull();
     expect(screen.getByText('untitled')).toBeTruthy();
   });
 
-  it('shows the cached session before the fetch answers, then the fetched one', async () => {
-    cache.read.mockResolvedValue({
-      session: { ...session, name: 'As last seen' },
-      bot,
-      rows: [],
-    });
-    const log = deferred<Result<unknown, unknown>>();
-    harness.getLog.mockReturnValue(log.promise);
+  it('shows the session from the cached log before the fetch answers', async () => {
+    logSource.cached.mockResolvedValue({ bot, rows: [] });
+    const log = deferred<{ bot: typeof bot; rows: never[] }>();
+    logSource.fetched.mockReturnValue(log.promise);
 
     mount();
-    expect(await screen.findByText('As last seen')).toBeTruthy();
+    expect(await screen.findByText('A session')).toBeTruthy();
     expect(screen.queryByText('loading')).toBeNull();
+    expect(log.promise).toBeDefined();
 
-    log.resolve(ok({ bot, entries: [] }));
+    log.resolve({ bot, rows: [] });
     expect(await screen.findByText('A session')).toBeTruthy();
   });
 
   it('reports a fetch that fails after the cached session is on screen', async () => {
-    cache.read.mockResolvedValue({
-      session: { ...session, name: 'As last seen' },
-      bot,
-      rows: [],
-    });
-    harness.getLog.mockResolvedValue(err([{ code: 'SERVER_ERROR' }]));
+    logSource.cached.mockResolvedValue({ bot, rows: [] });
+    logSource.fetched.mockRejectedValue(new Error('server error'));
 
     mount();
     expect(await screen.findByText('load failed')).toBeTruthy();
