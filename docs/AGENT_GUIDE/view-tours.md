@@ -15,12 +15,17 @@ and highlights.
   button reads Next, then Got it on the last step.
 - A step with nothing to point at floats at the top right of the split, with a
   short hint when the feature is unavailable (for example, no connected calendar).
+- The card fades and rises in place when it first appears; it glides only
+  when moving between steps.
 - **Beacons.** A tour never navigates or opens things for you. When a step's
   feature is behind something (a collapsed sidebar, another page, an unopened
   conversation), the card hides and a pulsing dot marks the control that
   reveals it: the sidebar toggle, the Agents nav item, New conversation, or the
-  channel list. Pressing that control, or reaching the feature any other way,
-  clears the dot and shows the step. Leaving again brings the dot back.
+  top conversation row. A pill beside it says what to do ("Open a channel or
+  DM to continue") with Skip and ×. If that control is itself in a collapsed
+  sidebar, the dot marks the sidebar toggle first, then moves once the
+  sidebar opens. Pressing the marked control, or reaching the feature any
+  other way, clears the dot and shows the step. Leaving again brings it back.
 
 ## Per view
 

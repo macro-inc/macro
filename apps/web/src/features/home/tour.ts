@@ -15,12 +15,16 @@ export const homeTour = defineViewTour({
   steps: [
     {
       target: HOME_TOUR.list,
+      entry: VIEW_SHELL_TOUR.sidebarToggle,
+      entryLabel: 'Show your Home list to continue',
       title: 'See your work together',
       description:
         'Home brings docs, DMs, emails, tasks, files, agents, and group chats into one place.',
     },
     {
       target: HOME_TOUR.filter,
+      entry: VIEW_SHELL_TOUR.sidebarToggle,
+      entryLabel: 'Show your Home list to continue',
       title: 'Open the context',
       description:
         'Select an item to preview it beside your list. Use the filter to narrow what you see.',

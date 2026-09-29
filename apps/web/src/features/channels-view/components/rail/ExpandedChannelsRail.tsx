@@ -325,6 +325,7 @@ function ChannelOption(props: {
       >
         <ViewSidebar.Item
           as="div"
+          ref={tourTarget(CHANNELS_TOUR.conversation)}
           id={item().domId}
           role="treeitem"
           tabIndex={-1}

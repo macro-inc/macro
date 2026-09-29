@@ -24,6 +24,7 @@ export const companiesTour = defineViewTour({
     {
       target: COMPANIES_TOUR.layout,
       entry: VIEW_SHELL_TOUR.sidebarToggle,
+      entryLabel: 'Show the Customers sidebar to continue',
       title: 'Your pipeline, as a board or list',
       description:
         'Switch to Board to see companies by stage, or List to scan their details in rows. Both show the same customer relationships—choose the view that fits your work.',
@@ -37,6 +38,7 @@ export const companiesTour = defineViewTour({
     {
       target: COMPANIES_TOUR.views,
       entry: VIEW_SHELL_TOUR.sidebarToggle,
+      entryLabel: 'Show the Customers sidebar to continue',
       title: 'Make your pipeline useful',
       description:
         'Use filters and saved views to focus on the right companies. Switch to the board to see work by stage.',

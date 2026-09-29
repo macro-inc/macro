@@ -1,3 +1,4 @@
+import { VIEW_SHELL_TOUR } from '@app/components/view-shell';
 import { APP_TOUR } from '@app/features/command/sidebar/tour';
 import { defineViewTour } from '@app/features/tours/core/view-tour';
 import { defineTourTargets } from '@ui/components/Tour';
@@ -12,8 +13,8 @@ export const AGENTS_TOUR = defineTourTargets('agents', [
 ]);
 
 const openRoster = {
-  entry: AGENTS_TOUR.rosterNav,
-  entryLabel: 'Open Agents to continue the tour',
+  entry: [AGENTS_TOUR.rosterNav, VIEW_SHELL_TOUR.sidebarToggle],
+  entryLabel: 'Open Agents to continue',
 };
 
 export const agentsTour = defineViewTour({
@@ -22,8 +23,8 @@ export const agentsTour = defineViewTour({
   steps: [
     {
       target: AGENTS_TOUR.picker,
-      entry: AGENTS_TOUR.newChat,
-      entryLabel: 'Start a new conversation to continue the tour',
+      entry: [AGENTS_TOUR.newChat, VIEW_SHELL_TOUR.sidebarToggle],
+      entryLabel: 'Start a new conversation to continue',
       title: 'Choose your agent and model',
       description:
         'Open this picker to choose a chat or coding agent. Models are listed here too; each agent’s submenu lets you choose a model for that conversation.',

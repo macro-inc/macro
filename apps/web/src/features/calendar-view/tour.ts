@@ -17,7 +17,7 @@ export const calendarTour = defineViewTour({
     {
       target: CALENDAR_TOUR.sources,
       entry: CALENDAR_TOUR.sidebarToggle,
-      entryLabel: 'Open the calendar sidebar to continue the tour',
+      entryLabel: 'Show the calendar sidebar to continue',
       missingHint:
         'Connect your calendars, then open the calendar sidebar to choose which ones to show.',
       title: 'All your calendars, one schedule',
@@ -27,7 +27,7 @@ export const calendarTour = defineViewTour({
     {
       target: CALENDAR_TOUR.availability,
       entry: CALENDAR_TOUR.sidebarToggle,
-      entryLabel: 'Open the calendar sidebar to continue the tour',
+      entryLabel: 'Show the calendar sidebar to continue',
       missingHint: 'Connect a Google calendar to enable availability copying.',
       title: 'Copy your availability',
       description:

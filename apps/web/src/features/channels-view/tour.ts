@@ -1,12 +1,19 @@
+import { VIEW_SHELL_TOUR } from '@app/components/view-shell';
 import { CHANNEL_TOUR } from '@app/features/channel/tour';
 import { defineViewTour } from '@app/features/tours/core/view-tour';
 import { defineTourTargets } from '@ui/components/Tour';
 
-export const CHANNELS_TOUR = defineTourTargets('channels', ['list', 'create']);
+export const CHANNELS_TOUR = defineTourTargets('channels', [
+  'list',
+  'create',
+  'conversation',
+]);
 
+/** Steps inside a conversation wait on a row in the rail, or on the toggle
+ * that shows the rail when the sidebar is collapsed. */
 const openConversation = {
-  entry: CHANNELS_TOUR.list,
-  entryLabel: 'Open a channel or DM to continue the tour',
+  entry: [CHANNELS_TOUR.conversation, VIEW_SHELL_TOUR.sidebarToggle],
+  entryLabel: 'Open a channel or DM to continue',
   missingHint: 'Select a channel or DM to see this feature highlighted.',
 };
 
@@ -21,12 +28,16 @@ export const channelsTour = defineViewTour({
   steps: [
     {
       target: CHANNELS_TOUR.list,
+      entry: VIEW_SHELL_TOUR.sidebarToggle,
+      entryLabel: 'Show the channel list to continue',
       title: 'Channels and DMs, together',
       description:
         'Organize work in shared channels, and use DMs for smaller conversations. All and Recent help you return to the right discussion.',
     },
     {
       target: CHANNELS_TOUR.create,
+      entry: VIEW_SHELL_TOUR.sidebarToggle,
+      entryLabel: 'Show the channel list to continue',
       title: 'Bring your team into the room',
       description:
         'Use the + beside Channels to create a shared space, or the + beside DMs to start a direct message. Choose the people who need the context.',

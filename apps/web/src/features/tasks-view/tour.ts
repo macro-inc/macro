@@ -13,6 +13,7 @@ export const tasksTour = defineViewTour({
     {
       target: VIEW_SHELL_TOUR.aside,
       entry: VIEW_SHELL_TOUR.sidebarToggle,
+      entryLabel: 'Show the task sidebar to continue',
       title: 'Turn plans into progress',
       description:
         'Create a task with a clear next step, or connect Linear to bring your issues into Macro.',
@@ -26,7 +27,7 @@ export const tasksTour = defineViewTour({
     {
       target: TASKS_TOUR.tags,
       entry: VIEW_SHELL_TOUR.sidebarToggle,
-      entryLabel: 'Open the task sidebar to continue the tour',
+      entryLabel: 'Show the task sidebar to continue',
       title: 'Keep tasks organized with tags',
       description:
         'Tag tasks by project, team, or type of work. Create and manage tags here, then select a tag to narrow your task list to what matters now.',

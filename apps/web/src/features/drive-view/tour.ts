@@ -10,6 +10,7 @@ export const documentsTour = defineViewTour({
     {
       target: VIEW_SHELL_TOUR.aside,
       entry: VIEW_SHELL_TOUR.sidebarToggle,
+      entryLabel: 'Show the Documents sidebar to continue',
       title: 'A place for your ideas',
       description:
         'Create a document or bring your existing files into Macro. Search and filter to find them again.',

@@ -25,6 +25,7 @@ export const callsTour = defineViewTour({
     {
       target: VIEW_SHELL_TOUR.aside,
       entry: VIEW_SHELL_TOUR.sidebarToggle,
+      entryLabel: 'Show the sidebar to continue',
       title: 'Keep momentum',
       description:
         'Bring decisions back into your documents, tasks, and team conversations.',

@@ -1,3 +1,4 @@
+import { VIEW_SHELL_TOUR } from '@app/components/view-shell';
 import { defineViewTour } from '@app/features/tours/core/view-tour';
 import { defineTourTargets } from '@ui/components/Tour';
 
@@ -16,12 +17,16 @@ export const emailTour = defineViewTour({
   steps: [
     {
       target: EMAIL_TOUR.signalNoise,
+      entry: VIEW_SHELL_TOUR.sidebarToggle,
+      entryLabel: 'Show the email sidebar to continue',
       title: 'Find the signal in your inbox',
       description:
         'Signal keeps important conversations in focus. Noise gives lower-priority mail its own space, so you can catch up when it suits you.',
     },
     {
       target: EMAIL_TOUR.tags,
+      entry: VIEW_SHELL_TOUR.sidebarToggle,
+      entryLabel: 'Show the email sidebar to continue',
       title: 'Organize email your way',
       description:
         'Create tags for projects, customers, or anything you track. Apply them manually, ask an agent to tag matching email, or set up an automation to keep it organized. Choose a tag here to see its messages.',

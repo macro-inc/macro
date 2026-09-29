@@ -66,11 +66,30 @@ function DismissibleTour(props: ViewTourProps & { userId: string }) {
       >
         <Tour.Highlight class="view-tour-highlight" />
         <Tour.Beacon />
+        <Tour.Hint class="view-tour-hint flex max-w-64 items-center gap-1 rounded-full border border-edge bg-dialog py-1 pr-1 pl-3 text-xs text-ink">
+          <ViewTourHint tour={props.tour} />
+        </Tour.Hint>
         <Tour.Popover class="view-tour-card w-80 overflow-y-auto rounded-2xl border border-edge bg-dialog p-5 text-ink">
           <ViewTourCard tour={props.tour} actions={props.actions} />
         </Tour.Popover>
       </Tour.Root>
     </Show>
+  );
+}
+
+/** What to press to continue, shown beside the beacon while a step waits. */
+function ViewTourHint(props: { tour: ViewTourDefinition }) {
+  const tour = useTour<ViewTourStep>();
+  return (
+    <>
+      <span class="min-w-0 flex-1 truncate">
+        {tour.current().entryLabel ?? `Continue the ${props.tour.title} tour`}
+      </span>
+      <Tour.Next variant="ghost" size="xs" doneLabel="Done">
+        Skip
+      </Tour.Next>
+      <Tour.Close size="icon-xs" label={`Dismiss ${props.tour.title} tour`} />
+    </>
   );
 }
 

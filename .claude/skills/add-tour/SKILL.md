@@ -90,9 +90,22 @@ unopened item), don't open it from the tour. Give the step an `entry`:
 }
 ```
 
-While the target is missing and the entry is shown, the card hides and a
-beacon marks the entry. Pressing the entry, or the target appearing any other
-way, resumes the step. Register the entry control as a target like any other.
+While the target is missing and the entry is shown, the card hides, a beacon
+marks the entry, and a small hint beside it shows `entryLabel` with Skip and
+×. Pressing the entry, or the target appearing any other way, resumes the
+step. Register the entry control as a target like any other.
+
+- Keep `entryLabel` short and imperative: "Open a channel or DM to continue".
+- **Chain entries** when the entry itself can be hidden. The first shown one
+  wins, so list the real control first and the sidebar toggle last:
+  `entry: [CHANNELS_TOUR.conversation, VIEW_SHELL_TOUR.sidebarToggle]`. With
+  the sidebar collapsed the beacon marks the toggle; once it opens, the beacon
+  moves to the row.
+- Any step whose target or entry lives in the view's sidebar needs
+  `VIEW_SHELL_TOUR.sidebarToggle` as its last entry.
+- Point entries at a specific control, not a large container. When many
+  elements share a target (every conversation row), the top-most one on
+  screen is used.
 
 ## 5. Mount it
 
@@ -117,6 +130,7 @@ list):
   in `features/tours/ViewTour.test.tsx`; add cases there when you change them.
 - The primitive's gallery page is `Tour/Tour.docs.tsx`.
 - Check it in a browser: on localhost the tour reopens on every mount. Walk
-  every step, including one that waits on an entry.
+  every step, including one that waits on an entry, once with the sidebar
+  open and once collapsed.
 - Update `docs/AGENT_GUIDE/view-tours.md` when a view gains a tour or its steps
   change.
