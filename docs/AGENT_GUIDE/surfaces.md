@@ -698,6 +698,9 @@ same snippet again to verify it re-targets. Repeat with Shift-click and Cmd/Ctrl
 (new split and new browser tab), and check Back/Forward restores the earlier target.
 Channel checks should include an older offscreen message, a reply, and then a root
 message to ensure the previous thread target is cleared.
+For a PDF that is still loading, clear its route target before pages become visible:
+the old search hit must not apply afterward. A newer mention or preview target must
+survive that cleanup and still open when the viewer is ready.
 
 Agent-session results use the robot icon and show a highlighted transcript snippet.
 `Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.
