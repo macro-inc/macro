@@ -163,8 +163,8 @@ export function ComposeLayout(props: {
     scopeId: composeHotkeyScope,
     description: 'Send email',
     keyDownHandler: () => {
-      if (ctx.disabled()) return false;
-      if (ctx.sendTime()) return false;
+      // Pointer and keyboard submission always enter the same controller. It
+      // snapshots whether this is Send, Schedule send, or Update schedule.
       ctx.onSend();
       return true;
     },
@@ -218,7 +218,7 @@ export function ComposeLayout(props: {
                   </div>
                 }
               >
-                <Show when={ctx.fromAddress?.()}>
+                <Show when={ctx.fromInboxes?.().length}>
                   <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
                     <span class="w-14 shrink-0 text-sm text-ink-placeholder">
                       From
@@ -245,7 +245,6 @@ export function ComposeLayout(props: {
             <Show when={!isCcVisible()}>
               <Button
                 size="sm"
-                class="rounded-lg"
                 onClick={() => setShowCc(true)}
                 disabled={ctx.disabled()}
               >
@@ -255,7 +254,6 @@ export function ComposeLayout(props: {
             <Show when={!isBccVisible()}>
               <Button
                 size="sm"
-                class="rounded-lg"
                 onClick={() => setShowBcc(true)}
                 disabled={ctx.disabled()}
               >
@@ -264,6 +262,14 @@ export function ComposeLayout(props: {
             </Show>
           </div>
         </div>
+
+        <Show when={ctx.validationError('no_link')}>
+          {(error) => (
+            <div role="alert" class="text-failure-ink text-sm mt-1">
+              {error().message}
+            </div>
+          )}
+        </Show>
 
         <Show when={props.notice}>
           <div class="mb-4">{props.notice}</div>

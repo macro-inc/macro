@@ -89,16 +89,20 @@ where
                 })?;
         }
         let defaults = self.inner.defaults.for_bot(request.bot_id);
-        let (model, harness) = match request.profile {
-            Some(profile) => (profile.model, profile.harness),
-            None => (defaults.model.clone(), defaults.harness.clone()),
+        let (model, harness, profile_instructions) = match request.profile {
+            Some(profile) => (
+                profile.model,
+                profile.harness,
+                Some(profile.instructions).filter(|value| !value.trim().is_empty()),
+            ),
+            None => (defaults.model.clone(), defaults.harness.clone(), None),
         };
         let session = self
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
                 repo_branch: None,
-                id: AgentSessionId::new(),
+                id: request.id.unwrap_or_else(AgentSessionId::new),
                 owner_id: request.owner,
                 bot_id: request.bot_id,
                 thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
@@ -108,7 +112,7 @@ where
                 repo_url: request.repo_url,
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
-                instructions: request.instructions,
+                instructions: request.instructions.or(profile_instructions),
                 // No egress, so no MCP servers of ours to select from.
                 mcp_servers: AgentMcpServers::OwnerConnections,
                 // Mint the internal-tool credential when an authenticated
@@ -121,17 +125,22 @@ where
         self.inner.publish_opened(&session).await;
 
         if let Some(thread) = request.thread {
-            let announcement = SessionAnnouncement {
-                session_id: session.id,
-                bot_id: request.bot_id,
-                origin_parent: thread.parent,
-                origin_thread_id: thread.thread_id,
-                origin_message_id: thread.message_id,
-                prompted_message_id: MessageId::first(AuthorKind::User),
-                prompted_content: thread.content,
-                triggered_by: owner_user,
+            let announce = async {
+                let persona = self.inner.reply_persona(&session).await?;
+                let announcement = SessionAnnouncement {
+                    session_id: session.id,
+                    bot_id: request.bot_id,
+                    is_coding: persona.is_coding,
+                    origin_parent: thread.parent,
+                    origin_thread_id: thread.thread_id,
+                    origin_message_id: thread.message_id,
+                    prompted_message_id: MessageId::first(AuthorKind::User),
+                    prompted_content: thread.content,
+                    triggered_by: owner_user,
+                };
+                self.inner.announcer.announce(announcement).await
             };
-            if let Err(error) = self.inner.announcer.announce(announcement).await {
+            if let Err(error) = announce.await {
                 tracing::warn!(
                     error = ?error,
                     session = %session.id,
@@ -190,7 +199,11 @@ where
                 AgentMcpServers::OwnerConnections,
             ),
         };
+        // A caller's pick outranks the persona's: choosing a model on the way
+        // in is choosing what this session runs on, for its whole life.
+        let model = request.model.unwrap_or(model);
         let kind = AgentKind::for_session(bot_id, &harness);
+        let harness = kind.harness_slug().map_or(harness, str::to_owned);
         if kind == AgentKind::CodexCloud {
             mcp_servers = AgentMcpServers::Selected {
                 servers: Vec::new(),
@@ -250,7 +263,7 @@ where
         };
         let defaults = self.inner.defaults.for_bot(bot_id);
         let sandbox_size = self.inner.sessions.user_sandbox_size(&owner_user).await?;
-        let session_id = AgentSessionId::new();
+        let session_id = request.id.unwrap_or_else(AgentSessionId::new);
         // Same ordering as the trigger path's open: the token has to be minted
         // before the row, because the row is what carries the hash that makes
         // it mean anything.
@@ -477,6 +490,12 @@ where
 
         let defaults = self.defaults.for_bot(bot_id);
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
+        // The same profile the create menu snapshots: a mention states nothing
+        // about how the runtime should work, so the bot's configured
+        // instructions are what it opens with, exactly as a dedicated session
+        // would. Blank instructions are "none" stated clumsily.
+        let instructions =
+            Some(runtime.instructions.clone()).filter(|text| !text.trim().is_empty());
 
         // Provisioned before the session exists, because the row is what makes
         // the token mean anything: it carries the hash the proxy recognises.
@@ -498,7 +517,11 @@ where
                 thread_id: Some(origin.thread_id),
                 originating_message_id: Some(origin.message_id),
                 model: runtime.model.clone(),
-                harness: runtime.harness.clone(),
+                harness: runtime
+                    .kind
+                    .harness_slug()
+                    .unwrap_or(&runtime.harness)
+                    .to_owned(),
                 repo_url: defaults
                     .repo_url
                     .as_ref()
@@ -506,10 +529,7 @@ where
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
-                // A mention carries no instructions: the prompt is whatever
-                // was said in the channel, and nothing there states how the
-                // runtime should work.
-                instructions: None,
+                instructions,
                 // Snapshotted so the proxy enforces exactly what this attach
                 // advertised, for as long as the session lives.
                 mcp_servers: runtime.mcp_servers.clone(),

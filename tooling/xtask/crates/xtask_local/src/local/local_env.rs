@@ -16,19 +16,41 @@
 
 use std::collections::BTreeMap;
 
+use anyhow::Result;
+
 use super::instance::{Instance, Port};
-use super::{Mode, identity, resources};
+use super::{Mode, frontend, identity, proxy, resources};
+
+/// The public hostnames `--with-cf-tunnel` minted for this run.
+///
+/// Both exist for the same reason: an agent that is not on this machine — a
+/// `@cursor` session on cursor.com — can reach neither the compose network nor
+/// localhost, so anything it must dial needs a public name instead.
+#[derive(Clone, Copy, Default)]
+pub struct Tunnels<'a> {
+    /// Origin replacing the in-network egress address in the MCP servers the
+    /// harness hands that agent.
+    pub egress: Option<&'a str>,
+    /// Quick-tunnel hostname fronting the preview gateway's SSH listener, so a
+    /// shared dev server can be tunnelled in from off-machine.
+    pub preview_ssh: Option<&'a str>,
+}
 
 /// The full local environment for one instance.
 pub struct LocalEnv {
     environment: &'static str,
     project_name: String,
-    /// Where the browser-facing app lives: the proxy (static bundle at
-    /// `/app`) or the bun dev server. `default_redirect_url()` in
-    /// authentication_service sends post-login browsers to
-    /// `http://localhost:{FRONTEND_PORT}`, so this must track the serving
-    /// mode or every OAuth signup dead-ends on an unused port.
+    /// Legacy localhost fallback port. `FRONTEND_ORIGIN` is authoritative for
+    /// browser redirects and points at the HTTPS proxy in both serving modes.
     frontend_port: u16,
+    external_egress_url: String,
+    preview_ssh_proxy_host: Option<String>,
+    preview_ssh_port: u16,
+    preview_https_port: u16,
+    preview_control_hosts: String,
+    /// Browser-facing origin for post-login redirects and Pipedream CORS.
+    /// Both attached and headless frontends are exposed through HTTPS.
+    frontend_origin: String,
     /// Browser-facing route to document cognition's MCP OAuth callback.
     mcp_public_url: String,
     /// Browser-facing base the static file service stamps into permalinks.
@@ -52,40 +74,59 @@ impl LocalEnv {
     /// Build the local env for `instance` in `Local` mode (dev sources its env
     /// from Doppler, not here).
     ///
-    /// `egress_public_url` is the run's Cursor egress tunnel, when one opened:
-    /// it replaces the in-network egress address so the MCP servers the
-    /// harness hands a Cursor cloud agent are reachable from outside the
-    /// compose network. `None` (no tunnel) keeps the in-network address.
+    /// `tunnels` carries the run's public hostnames, when `--with-cf-tunnel`
+    /// opened them: the egress one replaces the in-network egress address so
+    /// the MCP servers the harness hands a Cursor cloud agent are reachable
+    /// from outside the compose network, and the preview one lets that same
+    /// agent reach this stack's SSH listener. Absent tunnels keep the
+    /// in-network address and leave previews reachable on this machine only.
     pub fn for_instance(
         mode: Mode,
         instance: &Instance,
         static_frontend: bool,
-        egress_public_url: Option<&str>,
-    ) -> Self {
+        tunnels: Tunnels<'_>,
+    ) -> Result<Self> {
         let name = instance.name();
-        LocalEnv {
+        let frontend_port = if static_frontend {
+            instance.port(Port::Proxy)
+        } else {
+            instance.port(Port::Frontend)
+        };
+        let frontend_origin = if static_frontend {
+            proxy::url(instance)
+        } else {
+            frontend::https_origin(instance)?
+        };
+        Ok(LocalEnv {
             // Both local flavors run against local infra (`local` env defaults).
             environment: mode.environment_var(),
             project_name: instance.project_name().to_string(),
-            frontend_port: if static_frontend {
-                instance.port(Port::Proxy)
-            } else {
-                instance.port(Port::Frontend)
-            },
-            mcp_public_url: format!("http://localhost:{}/cognition", instance.port(Port::Proxy)),
-            static_file_public_url: format!(
-                "http://localhost:{}/static-file",
-                instance.port(Port::Proxy)
+            frontend_port,
+            mcp_public_url: format!("{frontend_origin}/cognition"),
+            static_file_public_url: format!("{frontend_origin}/static-file"),
+            frontend_origin,
+            preview_control_hosts: format!(
+                "localhost,127.0.0.1,preview-gateway,{}",
+                super::tls::hostname()?
             ),
+            external_egress_url: tunnels.egress.map(str::to_owned).unwrap_or_else(|| {
+                format!(
+                    "http://localhost:{}",
+                    instance.port(Port::AgentHarnessEgress)
+                )
+            }),
+            preview_ssh_proxy_host: tunnels.preview_ssh.map(str::to_owned),
+            preview_ssh_port: instance.port(Port::PreviewSsh),
+            preview_https_port: instance.port(Port::PreviewHttps),
             infra: InfraEnv::local(instance),
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
-            agent_harness: AgentHarnessEnv::local(instance.project_name(), egress_public_url),
+            agent_harness: AgentHarnessEnv::local(instance.project_name(), tunnels.egress),
             service_auth: ServiceAuthEnv::for_instance(name),
             fusionauth: FusionAuthEnv::for_instance(instance),
             boot_stubs: BootStubEnv,
-        }
+        })
     }
 
     /// Flatten to the env map services receive. The single struct→env boundary.
@@ -95,6 +136,7 @@ impl LocalEnv {
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
+        env.insert("FRONTEND_ORIGIN".into(), self.frontend_origin.clone());
         env.insert("MCP_PUBLIC_URL".into(), self.mcp_public_url.clone());
         env.insert(
             "STATIC_FILE_SERVICE_URL".into(),
@@ -106,7 +148,7 @@ impl LocalEnv {
         // port, so connecting an app there would fail at the consent popup.
         env.insert(
             "PIPEDREAM_ALLOWED_ORIGINS".into(),
-            format!("http://localhost:{}", self.frontend_port),
+            self.frontend_origin.clone(),
         );
         // Calendar ingestion/sync ships dark (both flags default off in
         // deployed envs); local stacks keep it on for development.
@@ -115,6 +157,35 @@ impl LocalEnv {
         // Calendar search ships dark too: off in deployed envs until each has
         // its calendar index created and backfilled.
         env.insert("CALENDAR_SEARCH_ENABLED".into(), "true".into());
+        env.insert(
+            "OVERRIDE_PREVIEW_GATEWAY_URL".into(),
+            "http://preview-gateway:8080".into(),
+        );
+        env.insert(
+            "EXTERNAL_EGRESS_BASE_URL".into(),
+            self.external_egress_url.clone(),
+        );
+        env.insert("PREVIEW_DOMAIN".into(), "preview.localhost".into());
+        env.insert("PREVIEW_SSH_HOST".into(), "localhost".into());
+        // Empty rather than absent: the gateway treats both as "no public ingress",
+        // and a key that vanishes between runs would be read from a stale layer.
+        env.insert(
+            "PREVIEW_SSH_PROXY_HOST".into(),
+            self.preview_ssh_proxy_host.clone().unwrap_or_default(),
+        );
+        env.insert(
+            "PREVIEW_SSH_PUBLIC_PORT".into(),
+            self.preview_ssh_port.to_string(),
+        );
+        env.insert(
+            "PREVIEW_HTTPS_PORT".into(),
+            self.preview_https_port.to_string(),
+        );
+        env.insert("PREVIEW_APP_ORIGIN".into(), self.frontend_origin.clone());
+        env.insert(
+            "PREVIEW_CONTROL_HOSTS".into(),
+            self.preview_control_hosts.clone(),
+        );
         self.infra.write(&mut env);
         self.storage.write(&mut env);
         self.queues.write(&mut env);
@@ -195,6 +266,15 @@ impl InfraEnv {
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
         );
+        // Account deletion awaits both owning services from the auth container.
+        env.insert(
+            "OVERRIDE_AGENT_HARNESS_SERVICE_URL".into(),
+            "http://agent-harness-service:8101".into(),
+        );
+        env.insert(
+            "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL".into(),
+            "http://scheduled-action-service:8080".into(),
+        );
         // Lexical has the same host-vs-container split. The plain
         // `LEXICAL_SERVICE_URL` value does not affect `LexicalServiceUrl`,
         // which only reads the `OVERRIDE_` form.
@@ -216,6 +296,14 @@ impl InfraEnv {
             "OVERRIDE_EMAIL_SERVICE_URL".into(),
             "http://email-service:8080".into(),
         );
+        // Same host-vs-container split for calendar: `CalendarServiceUrl`'s
+        // Local default is http://localhost:8088, which inside a container is
+        // the caller itself. In-network callers (the agent calendar tools point
+        // at calendar_service) reach it through this override instead.
+        env.insert(
+            "OVERRIDE_CALENDAR_SERVICE_URL".into(),
+            "http://calendar-service:8080".into(),
+        );
         env.insert(
             "OVERRIDE_AUTH_SERVICE_URL".into(),
             "http://authentication-service:8080".into(),
@@ -227,6 +315,15 @@ impl InfraEnv {
         env.insert(
             "OVERRIDE_STATIC_FILE_SERVICE_URL".into(),
             "http://static-file-service:8080".into(),
+        );
+        // Same split for the AI editing worker: `AiEditingWorkerUrl`'s Local
+        // default is http://localhost:8933, the worker's host port. Every
+        // container hosting the document tools (document cognition, the agent
+        // harness's in-process agent, the MCP server) calls EditDocument
+        // through this, so without it an agent's edit dials the caller itself.
+        env.insert(
+            "OVERRIDE_AI_EDITING_WORKER_URL".into(),
+            "http://ai-editing-worker:8933".into(),
         );
         // The alias LocalStack provisions for the Cursor API key CMK. Named by
         // alias rather than key id because `CreateKey` mints a random id every
@@ -690,6 +787,14 @@ impl BootStubEnv {
         env.insert("LIVEKIT_API_KEY".into(), "local-livekit-key".into());
         env.insert("LIVEKIT_API_SECRET".into(), "local-livekit-secret".into());
         env.insert("OPENAI_API_KEY".into(), "local-openai-key".into());
+        // Required by the agent router. Present so it builds on a stack with no
+        // Doppler; real provider calls still fail on the dummy keys.
+        // Doppler's shared_ai name is singular: FIREWORK_API_KEY.
+        env.insert("FIREWORK_API_KEY".into(), "local-firework-key".into());
+        env.insert(
+            "GOOGLE_GENERATIVE_AI_API_KEY".into(),
+            "local-google-generative-ai-key".into(),
+        );
         env.insert("COHERE_API_KEY".into(), "local-cohere-key".into());
         env.insert(
             "CAL_WEBHOOK_SECRET_KEY".into(),

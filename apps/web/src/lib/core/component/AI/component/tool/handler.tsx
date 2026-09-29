@@ -33,6 +33,10 @@ import { createTagHandler } from './CreateTag';
 import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
 import { displayResultsHandler } from './DisplayResults';
+import {
+  commentOnDocumentHandler,
+  resolveDocumentCommentHandler,
+} from './DocumentComments';
 import { editDocumentHandler } from './EditDocument';
 import { editTagHandler } from './EditTag';
 import { getThreadHandler } from './GetThread';
@@ -42,6 +46,7 @@ import {
   importNotionPageHandler,
   listImportEntitiesHandler,
 } from './ImportTools';
+import { initiativeToolHandlers } from './Initiatives';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
@@ -70,6 +75,7 @@ import { readChatHandler } from './ReadChat';
 import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
 import { readProjectHandler } from './ReadProject';
+import { readSkillHandler } from './ReadSkill';
 import { readThreadHandler } from './ReadThread';
 import {
   createReminderHandler,
@@ -83,6 +89,7 @@ import { listSkillsHandler, searchSkillsHandler } from './SearchSkills';
 import { searchToolsHandler } from './SearchTools';
 import { selfKnowledgeHandler } from './SelfKnowledge';
 import { sendChannelMessageHandler } from './SendChannelMessage';
+import { sendConfirmedEmailHandler } from './SendConfirmedEmail';
 import { sendEmailHandler } from './SendEmail';
 import { setSenderPolicyHandler } from './SetSenderPolicy';
 import {
@@ -100,10 +107,12 @@ import {
   type ToolRenderContext,
 } from './ToolRenderer';
 import { updateThreadLabelsHandler } from './UpdateThreadLabels';
+import { uploadFileHandler } from './UploadFile';
 import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  ...initiativeToolHandlers,
   ReadSpreadsheet: readSpreadsheetHandler,
   CalculateSpreadsheet: calculateSpreadsheetHandler,
   EditSpreadsheet: editSpreadsheetHandler,
@@ -144,6 +153,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   DisplayResults: displayResultsHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
+  UploadFile: uploadFileHandler,
   CreateProject: createProjectHandler,
   CreateReminder: createReminderHandler,
   CreateTag: createTagHandler,
@@ -163,12 +173,16 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
   ReadProject: readProjectHandler,
+  ReadSkill: readSkillHandler,
   RenameChannel: renameChannelHandler,
   RenameDocument: renameDocumentHandler,
+  CommentOnDocument: commentOnDocumentHandler,
+  ResolveDocumentComment: resolveDocumentCommentHandler,
   SearchSkills: searchSkillsHandler,
   SearchTools: searchToolsHandler,
   SelfKnowledge: selfKnowledgeHandler,
   SendChannelMessage: sendChannelMessageHandler,
+  SendConfirmedEmail: sendConfirmedEmailHandler,
   SendEmail: sendEmailHandler,
   SetSenderPolicy: setSenderPolicyHandler,
   SetEntityProperty: setEntityPropertyHandler,
@@ -202,6 +216,11 @@ type TriggerToolArgs = Omit<
 > & {
   type: 'call' | 'response' | 'error';
 };
+
+/** Schema support alone does not guarantee that this surface has a renderer. */
+export function hasToolRenderer(name: string): boolean {
+  return Object.hasOwn(toolHandlers, name);
+}
 
 export function RenderTool(props: ToolProps) {
   const maybeTool = deserializeToolCall({

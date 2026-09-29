@@ -316,7 +316,6 @@ export function MarkdownPopup(props: {
       fallback={
         <Button
           size="icon-sm"
-          class="rounded-full"
           variant="strong"
           tooltip="Send"
           disabled={!aiEditInput().trim()}
@@ -328,7 +327,6 @@ export function MarkdownPopup(props: {
     >
       <Button
         size="icon-sm"
-        class="rounded-full"
         depth={3}
         variant="ghost"
         tooltip="Stop AI edit"
@@ -674,7 +672,6 @@ export function MarkdownPopup(props: {
           <Show when={activePrompt() === 'link'}>
             <Button
               size="icon-sm"
-              class="rounded-full"
               variant="strong"
               tooltip="Insert link"
               disabled={!linkInput().trim()}

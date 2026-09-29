@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   graphqlSetMutate: vi.fn(),
   graphqlSetMutateAsync: vi.fn(),
   getFavoritesRest: vi.fn(),
+  getSoupEntity: vi.fn(),
+  updateSoupEntity: vi.fn(),
   addFavoriteRest: vi.fn(),
   removeFavoriteRest: vi.fn(),
   reorderFavoritesRest: vi.fn(),
@@ -44,6 +46,11 @@ vi.mock('@service-storage/client', () => ({
   },
 }));
 
+vi.mock('../soup/cache', () => ({
+  getSoupEntityById: mocks.getSoupEntity,
+  optimisticUpdateSoupEntity: mocks.updateSoupEntity,
+}));
+
 vi.mock('./graphql', () => ({
   createGraphqlFavoritesQuery: mocks.createGraphqlFavoritesQuery,
   createGraphqlReorderFavoritesMutation: mocks.createGraphqlReorderMutation,
@@ -61,6 +68,7 @@ vi.mock('../client', () => ({
 import {
   type FavoritesFilter,
   favoriteEntityType,
+  invalidateFavorites,
   useAddFavoriteMutation,
   useFavoritesData,
   useRemoveFavoriteMutation,
@@ -100,8 +108,24 @@ function renderHook<T>(factory: () => T): T {
 }
 
 describe('favorites transport', () => {
+  it('refreshes only favorites-filtered REST Soup queries when favorites change', async () => {
+    mocks.graphqlSoupEnabled.mockReturnValue(false);
+    const favoritesKey = ['soup', 'astItems', {}, { favorites_only: true }];
+    const inboxKey = ['soup', 'astItems', {}, { emailView: 'inbox' }];
+    testQueryClient.setQueryData(favoritesKey, { items: [] });
+    testQueryClient.setQueryData(inboxKey, { items: [] });
+    await invalidateFavorites();
+    expect(testQueryClient.getQueryState(favoritesKey)?.isInvalidated).toBe(
+      true
+    );
+    expect(testQueryClient.getQueryState(inboxKey)?.isInvalidated).toBe(false);
+  });
+
   it('maps agent sessions to their canonical favorite entity type', () => {
     expect(favoriteEntityType('agent_session')).toBe('agent_session');
+  });
+  it('maps foreign entities to backend favorites', () => {
+    expect(favoriteEntityType('foreign')).toBe('foreign_entity');
   });
 
   beforeEach(() => {
@@ -293,6 +317,30 @@ describe('favorites transport', () => {
     expect(mocks.addFavoriteRest).not.toHaveBeenCalled();
     expect(mocks.removeFavoriteRest).not.toHaveBeenCalled();
     expect(testQueryClient.getMutationCache().getAll()).toEqual([]);
+  });
+
+  it('patches the REST Soup entity optimistically and rolls it back on failure', async () => {
+    mocks.graphqlSoupEnabled.mockReturnValue(false);
+    const rollback = vi.fn();
+    const item = {
+      tag: 'emailThread',
+      data: { id: 'thread-1' },
+      frecency_score: 0,
+      is_favorited: true,
+    };
+    mocks.getSoupEntity.mockReturnValue(item);
+    mocks.updateSoupEntity.mockReturnValue({ rollback });
+    mocks.removeFavoriteRest.mockRejectedValue(new Error('offline'));
+    const mutation = renderHook(() => useRemoveFavoriteMutation());
+    await expect(
+      mutation.mutateAsync({ entityType: 'email_thread', entityId: 'thread-1' })
+    ).rejects.toThrow('offline');
+    expect(mocks.updateSoupEntity).toHaveBeenCalledWith({
+      ...item,
+      is_favorited: false,
+    });
+    expect(rollback).toHaveBeenCalledOnce();
+    mocks.getSoupEntity.mockReset();
   });
 
   it('keeps REST reorder optimism while GraphQL Soup is disabled', async () => {

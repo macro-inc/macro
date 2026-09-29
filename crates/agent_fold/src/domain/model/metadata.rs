@@ -88,8 +88,9 @@ impl SessionMetadata {
 }
 
 /// Where the newest turn stands.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Type)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Type, strum::AsRefStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum TurnState {
     /// No turn is open.
     #[default]

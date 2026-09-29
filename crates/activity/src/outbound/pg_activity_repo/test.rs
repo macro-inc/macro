@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::models::{Action, Actor, CommonAction};
+use crate::domain::ports::EntityActivityReads;
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
@@ -12,6 +13,39 @@ fn user(id: &str) -> MacroUserIdStr<'static> {
 
 fn nz(limit: u32) -> NonZeroU32 {
     NonZeroU32::new(limit).expect("non-zero test limit")
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn entity_history_cursor_is_stable_and_scoped_to_one_entity(
+    pool: PgPool,
+) -> Result<(), sqlx::Error> {
+    let repo = PgActivityRepo::new(pool);
+    let rows = vec![
+        seed(1, CommonAction::Created, "one"),
+        seed(2, CommonAction::Edited, "one"),
+        seed(3, CommonAction::Edited, "one"),
+        seed(4, CommonAction::Created, "other"),
+    ];
+    repo.insert_activities(&rows).await?;
+    repo.insert_activities(&rows).await?;
+    let first = repo
+        .entity_feed(EntityType::Document, "one", None, nz(2))
+        .await?;
+    assert_eq!(first.records.len(), 2);
+    assert!(first.records.iter().all(|row| row.entity_id == "one"));
+    let next = first.next.expect("second page");
+    let second = repo
+        .entity_feed(EntityType::Document, "one", Some(next), nz(2))
+        .await?;
+    assert_eq!(second.records.len(), 1);
+    assert!(second.next.is_none());
+    assert!(
+        first
+            .records
+            .iter()
+            .all(|row| row.id != second.records[0].id)
+    );
+    Ok(())
 }
 
 fn seed(source_event: u128, action: CommonAction, entity_id: &str) -> Activity {

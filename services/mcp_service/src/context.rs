@@ -5,6 +5,7 @@ use ai_tools::{
     NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue, ToolServiceContext,
 };
 use anyhow::Context;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::{
     domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
 };
@@ -21,6 +22,8 @@ use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -29,8 +32,8 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_service_urls::{
-    AiEditingWorkerUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
-    LexicalServiceUrl, SyncServiceUrl,
+    AiEditingWorkerUrl, CalendarServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
+    EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
 };
 use mcp_auth_proxy::{
     domain::service::McpAuthProxyServiceImpl,
@@ -209,7 +212,9 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         config.document_storage_bucket.as_ref(),
         config.docx_document_upload_bucket.as_ref(),
     );
-    let document_repo = PgDocumentRepo::new(db.clone());
+    let owned_entity_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
+    let document_repo = PgDocumentRepo::new(db.clone(), owned_entity_registrar.clone());
     let cloudfront_private_key = LocalOrRemoteSecret::new_from_secret_manager(
         config
             .document_storage_service_cloudfront_signer_private_key_secret_name
@@ -237,17 +242,20 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         db.clone(),
     )));
-    let properties_service =
-        ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
-    let task_properties_service = ai_tools::build_task_properties_adapter(
-        db.clone(),
-        properties_service.clone(),
-        entity_access_service.clone(),
-    );
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
         event_task_tracker,
+    );
+    let properties_service = ai_tools::build_properties_service_with_broker(
+        db.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+    );
+    let task_properties_service = ai_tools::build_task_properties_adapter(
+        db.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
     );
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
@@ -263,6 +271,17 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
         macro_event_broker: macro_event_broker.clone(),
     };
+    // Messages sent through MCP tools dispatch the same side effects as the
+    // document-storage message API, so mentions, replies and document comments
+    // notify recipients and stream to connected clients.
+    let side_effect_clients = ai_tools::ChannelSideEffectClients {
+        connection_gateway: Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
+            config.internal_api_key.to_string(),
+            ConnectionGatewayUrl::new()?.to_string(),
+        )),
+        sqs: queue_aws_client,
+        macro_event_broker: macro_event_broker.clone(),
+    };
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,
@@ -271,6 +290,11 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         sync_service_client.clone(),
         ReqwestEditingWorkerClient::from_url(ai_editing_worker_url),
         config.document_permission_jwt.to_string(),
+        ai_tools::build_message_service_with_side_effects(
+            db.clone(),
+            lexical_client.clone(),
+            &side_effect_clients,
+        ),
     );
 
     let properties_tool_context = ai_tools::build_properties_tool_context(
@@ -330,7 +354,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
 
     let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
         chat::domain::service::ChatServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar),
             Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
@@ -340,20 +364,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone())),
     );
 
-    // Channel messages sent through MCP tools dispatch the same side effects
-    // as the document-storage channel API, so mentions and replies notify
-    // recipients and stream to connected clients.
     let channel_tool_context = ai_tools::build_channel_tool_context_with_side_effects(
         db.clone(),
         lexical_client.clone(),
-        ai_tools::ChannelSideEffectClients {
-            connection_gateway: Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
-                config.internal_api_key.to_string(),
-                ConnectionGatewayUrl::new()?.to_string(),
-            )),
-            sqs: queue_aws_client,
-            macro_event_broker: macro_event_broker.clone(),
-        },
+        &side_effect_clients,
     );
 
     let project_tool_context = ai_tools::build_project_tool_context(
@@ -366,8 +380,20 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
     );
 
     let search_service_client = Arc::new(search_service_client);
-    let skill_tool_context =
-        ai_tools::build_skill_tool_context(search_service_client.clone(), soup_service.clone());
+    let skill_tool_context = ai_tools::build_skill_tool_context(
+        search_service_client.clone(),
+        soup_service.clone(),
+        &document_tool_context,
+    );
+    let initiative_tool_context = ai_tools::build_initiative_tool_context(
+        db.clone(),
+        &document_tool_context,
+        properties_service.clone(),
+        entity_access_service.clone(),
+        side_effect_clients.sqs,
+        side_effect_clients.macro_event_broker,
+    );
+
     let tool_context = ToolServiceContext {
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
@@ -386,7 +412,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         call_tool_context,
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             db.clone(),
-            email_service_client.url().to_owned(),
+            CalendarServiceUrl::new()?,
             config.internal_api_key.to_string(),
         ),
         notification_tool_context,
@@ -404,6 +430,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             dss_url,
         ),
         project_tool_context,
+        initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
         skill_tool_context,

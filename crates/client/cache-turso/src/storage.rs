@@ -18,7 +18,10 @@ use cache_core::queue::{
     MutationRequest, MutationUpsertKind, MutationUpsertResult, NewQueuedMutation,
     PersistedOptimisticLayer, QueuedMutation, StoredMutation,
 };
-use cache_core::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
+use cache_core::search::{
+    QUICK_ACCESS_PROJECTION_VERSION, QUICK_ACCESS_TYPENAMES, SearchCursor, SearchDocument,
+    SearchProfile, project_search_documents,
+};
 use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
 use cache_core::value::{EntityKey, Record};
 use predicate_index::{
@@ -52,6 +55,13 @@ use turso_opfs::{
 
 /// Frozen storage schema version, independent of cache postcard versions.
 pub const STORAGE_SCHEMA_VERSION: u32 = 11;
+
+const QUICK_ACCESS_PROJECTION_VERSION_KEY: &str = "quick_access_projection_version";
+const SEARCH_REBUILD_BATCH_SIZE: i64 = 256;
+const SEARCH_REBUILD_RECORDS: &str =
+    "SELECT id, value FROM records WHERE __typename = ?1 ORDER BY id LIMIT ?2";
+const SEARCH_REBUILD_RECORDS_AFTER: &str =
+    "SELECT id, value FROM records WHERE __typename = ?1 AND id > ?2 ORDER BY id LIMIT ?3";
 
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -564,7 +574,8 @@ impl TursoFileDatabase {
         Ok(Self { path, turso_path })
     }
 
-    /// Opens and initializes or validates this database for `scope`.
+    /// Opens this database, validating compatibility and queued writes for `scope`.
+    /// Full-file integrity scans are explicit via [`TursoStorage::check_integrity`].
     pub fn open(&self, scope: &str) -> Result<TursoStorage, TursoStorageError> {
         let fresh = !self.path.exists();
         let io: Arc<dyn IO> = Arc::new(PlatformIO::new().map_err(TursoStorageError::turso)?);
@@ -1808,18 +1819,23 @@ fn write_projection_mutations(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
+    let previous = load_projection_states(connection, &keys)?;
     let mut states = keys
         .iter()
         .cloned()
-        .zip(load_projection_states(connection, &keys)?)
+        .zip(previous.iter().cloned())
         .filter_map(|(key, state)| state.map(|state| (key, state)))
         .collect::<HashMap<_, _>>();
 
     apply_authoritative_projection_mutations(&mut states, &mutations);
-    // A snapshot can include many child contributions to the same parent.
-    // Preserve mutation order in memory, but persist each final state only once.
-    for key in &keys {
-        write_projection_state(connection, key, states.get(key))?;
+    // Fold child contributions in order, then persist only changed final states.
+    // Refreshing unchanged authority must not delete/reinsert every index fact
+    // while the native engine lock blocks foreground reads and mutations.
+    for (key, previous) in keys.iter().zip(previous) {
+        let next = states.get(key);
+        if next != previous.as_ref() {
+            write_projection_state(connection, key, next)?;
+        }
     }
     if !keys.is_empty() {
         // Network snapshots and realtime writes must rebase pending member edits
@@ -2575,7 +2591,11 @@ fn compile_predicate_selection(
 // Keep every set-algebra CTE materialized. The pinned Turso planner otherwise
 // re-enters compound-query coroutines for joined rows, repeatedly evaluating
 // the same child sets (millions of VM steps even on a small local corpus).
-// This is generic query execution policy; application predicates remain in IR.
+// Probe optimistic facts by their document-leading primary keys: joining a
+// popular fact to the materialized optimistic set otherwise rescans that set
+// for every matching fact. Conjunctions keep one scoped positive seed and
+// point-probe residual facts instead of materializing every posting list.
+// Application predicates remain unchanged in the IR.
 struct SqlPredicateCompiler {
     ctes: Vec<String>,
     parameters: Vec<Value>,
@@ -2593,11 +2613,9 @@ impl SqlPredicateCompiler {
             )
         };
         Self {
-            ctes: vec![
-                "authoritative_documents(document_id, record_key, profile, partition) AS MATERIALIZED (SELECT d.id, d.record_key, d.profile, d.partition FROM index_documents AS d WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key))".to_owned(),
-                format!("optimistic_documents(document_id, record_key, profile, partition) AS MATERIALIZED (SELECT o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0{exclusion})"),
-                "effective_documents(source, document_id, record_key, profile, partition) AS MATERIALIZED (SELECT 0, document_id, record_key, profile, partition FROM authoritative_documents UNION ALL SELECT 1, document_id, record_key, profile, partition FROM optimistic_documents)".to_owned(),
-            ],
+            ctes: vec![format!(
+                "optimistic_documents(document_id, record_key, profile, partition) AS MATERIALIZED (SELECT o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0{exclusion})"
+            )],
             parameters: excluded_optimistic
                 .iter()
                 .copied()
@@ -2614,6 +2632,9 @@ impl SqlPredicateCompiler {
     }
 
     fn compile(&mut self, expr: &PredicateExpr, profile: &Profile, partition: &Token) -> String {
+        if let Some((seed, terms)) = conjunction::split(expr) {
+            return self.conjunction(seed, &terms, profile, partition);
+        }
         if matches!(expr, PredicateExpr::Or(_, _))
             && let Some((attribute, values)) = alternatives::exact_alternatives(expr)
         {
@@ -2624,7 +2645,7 @@ impl SqlPredicateCompiler {
             PredicateExpr::None => {
                 let name = self.next_name();
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM effective_documents WHERE 0)"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, 0 WHERE 0)"
                 ));
                 name
             }
@@ -2639,7 +2660,7 @@ impl SqlPredicateCompiler {
                     self.parameters.push(text(attribute.as_str()));
                 }
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN optimistic_documents AS d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?)"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?)"
                 ));
                 name
             }
@@ -2672,7 +2693,7 @@ impl SqlPredicateCompiler {
                     }
                 }
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM integer_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_integer_facts AS f JOIN optimistic_documents AS d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM integer_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_integer_facts AS f INDEXED BY sqlite_autoindex_optimistic_integer_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
                 ));
                 name
             }
@@ -2704,17 +2725,24 @@ impl SqlPredicateCompiler {
                         text(key.as_str()),
                     ]);
                 }
-                self.ctes.push(format!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM sort_facts f JOIN index_documents d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_sort_facts f JOIN optimistic_documents d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))"));
+                self.ctes.push(format!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM sort_facts f JOIN index_documents d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_documents d CROSS JOIN optimistic_sort_facts f INDEXED BY sqlite_autoindex_optimistic_sort_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))"));
                 name
             }
             PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
+                // Every child set is already confined to this scope. Therefore
+                // A ∩ (U − B) = A − B: do not enumerate U for negated conjuncts.
+                let (left, right, operator) = match (expr, left.as_ref(), right.as_ref()) {
+                    (PredicateExpr::And(_, _), left, PredicateExpr::Not(right)) => {
+                        (left, right.as_ref(), "EXCEPT")
+                    }
+                    (PredicateExpr::And(_, _), PredicateExpr::Not(left), right) => {
+                        (right, left.as_ref(), "EXCEPT")
+                    }
+                    (PredicateExpr::And(_, _), left, right) => (left, right, "INTERSECT"),
+                    (_, left, right) => (left, right, "UNION"),
+                };
                 let left = self.compile(left, profile, partition);
                 let right = self.compile(right, profile, partition);
-                let operator = if matches!(expr, PredicateExpr::And(_, _)) {
-                    "INTERSECT"
-                } else {
-                    "UNION"
-                };
                 let name = self.next_name();
                 self.ctes.push(format!(
                     "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM {left} {operator} SELECT source, document_id FROM {right})"
@@ -2731,6 +2759,38 @@ impl SqlPredicateCompiler {
                 name
             }
         }
+    }
+
+    fn conjunction(
+        &mut self,
+        seed: &PredicateExpr,
+        terms: &[&PredicateExpr],
+        profile: &Profile,
+        partition: &Token,
+    ) -> String {
+        let seed = self.compile(seed, profile, partition);
+        let mut branches = Vec::new();
+        for (source, table, facts) in [
+            (0, "index_documents", conjunction::FactSource::Authority),
+            (
+                1,
+                "optimistic_index_documents",
+                conjunction::FactSource::Optimistic,
+            ),
+        ] {
+            let condition = terms
+                .iter()
+                .map(|expr| conjunction::condition(expr, facts, &mut self.parameters))
+                .collect::<Vec<_>>()
+                .join(" AND ");
+            branches.push(format!("SELECT {source}, m.document_id FROM {seed} AS m CROSS JOIN {table} AS d ON d.id = m.document_id WHERE m.source = {source} AND ({condition})"));
+        }
+        let name = self.next_name();
+        self.ctes.push(format!(
+            "{name}(source, document_id) AS MATERIALIZED ({})",
+            branches.join(" UNION ALL ")
+        ));
+        name
     }
 
     fn exact(
@@ -2757,17 +2817,22 @@ impl SqlPredicateCompiler {
             );
         }
         self.ctes.push(format!(
-            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition} UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN optimistic_documents AS d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition})"
+            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition} UNION SELECT 1, f.document_id FROM optimistic_documents AS d CROSS JOIN optimistic_exact_facts AS f INDEXED BY sqlite_autoindex_optimistic_exact_facts_1 ON f.document_id = d.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition})"
         ));
         name
     }
 
     fn universe(&mut self, profile: &Profile, partition: &Token) -> String {
         let name = self.next_name();
-        self.parameters.push(text(profile.token().as_str()));
-        self.parameters.push(text(partition.as_str()));
+        for _ in 0..2 {
+            self.parameters.push(text(profile.token().as_str()));
+            self.parameters.push(text(partition.as_str()));
+        }
+        // Apply scope before materialization, using the validated scope index.
+        // Any shadow still suppresses authority, including a shadow that moved
+        // outside this scope or whose facts are excluded as uncertain.
         self.ctes.push(format!(
-            "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM effective_documents WHERE profile = ? AND partition = ?)"
+            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, d.id FROM index_documents AS d INDEXED BY index_documents_scope_idx WHERE d.profile = ? AND d.partition = ? AND d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) UNION ALL SELECT 1, d.document_id FROM optimistic_documents AS d WHERE d.profile = ? AND d.partition = ?)"
         ));
         name
     }
@@ -2808,6 +2873,8 @@ fn initialize(
                 "INSERT INTO meta (key, value) VALUES ('storage_schema_version', ?1)",
                 vec![text(&STORAGE_SCHEMA_VERSION.to_string())],
             )?;
+            save_search_projection_version(connection)?;
+            page_retention::save_version(connection)?;
             Ok(())
         })
         .map_err(TursoStorageError::initialization)?;
@@ -2816,7 +2883,8 @@ fn initialize(
         return Ok(());
     }
 
-    validate_quick_check(connection)?;
+    // Ordinary reopen only validates compatibility and pending writes. A changed
+    // derived projection performs one bounded rebuild before serving queries.
     validate_frozen_schema(connection)?;
     let metadata = driver::query(
         connection,
@@ -2878,7 +2946,86 @@ fn initialize(
         driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
     }
     validate_queue_consistency(connection)?;
-    validate_optimistic_shadow_consistency(connection)
+    validate_optimistic_shadow_consistency(connection)?;
+    page_retention::compact_legacy_pages(connection)?;
+    ensure_search_projection_version(connection)
+}
+
+fn save_search_projection_version(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+    driver::execute(
+        connection,
+        "INSERT INTO meta (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        vec![
+            text(QUICK_ACCESS_PROJECTION_VERSION_KEY),
+            text(&QUICK_ACCESS_PROJECTION_VERSION.to_string()),
+        ],
+    )?;
+    Ok(())
+}
+
+fn ensure_search_projection_version(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+    let versions = driver::query(
+        connection,
+        "SELECT value FROM meta WHERE key = ?1",
+        vec![text(QUICK_ACCESS_PROJECTION_VERSION_KEY)],
+    )?;
+    if let [row] = versions.as_slice()
+        && required_text(row, 0)? == QUICK_ACCESS_PROJECTION_VERSION.to_string()
+    {
+        return Ok(());
+    }
+
+    // Regenerate disposable search rows atomically without replacing normalized
+    // records, the data generation marker, or pending optimistic mutations.
+    driver::write_transaction(connection, || {
+        driver::execute(
+            connection,
+            "DELETE FROM search_documents WHERE profile = ?1",
+            vec![text(SearchProfile::QuickAccessV1.as_str())],
+        )?;
+        for typename in QUICK_ACCESS_TYPENAMES {
+            let mut last_id: Option<String> = None;
+            loop {
+                let (sql, parameters) = match last_id.as_ref() {
+                    Some(id) => (
+                        SEARCH_REBUILD_RECORDS_AFTER,
+                        vec![
+                            text(typename),
+                            text(id),
+                            Value::from_i64(SEARCH_REBUILD_BATCH_SIZE),
+                        ],
+                    ),
+                    None => (
+                        SEARCH_REBUILD_RECORDS,
+                        vec![text(typename), Value::from_i64(SEARCH_REBUILD_BATCH_SIZE)],
+                    ),
+                };
+                let rows = driver::query(connection, sql, parameters)?;
+                if rows.is_empty() {
+                    break;
+                }
+                let mut projected = Vec::new();
+                for row in rows {
+                    let key = RecordKey {
+                        typename: (*typename).to_owned(),
+                        id: required_text(&row, 0)?,
+                    };
+                    let record = decode_record(&required_blob(&row, 1)?)
+                        .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
+                    for document in project_search_documents(&key.clone().into_entity()?, &record) {
+                        projected.push((key.clone(), document));
+                    }
+                    last_id = Some(key.id);
+                }
+                let documents = projected
+                    .iter()
+                    .map(|(key, document)| (key, document))
+                    .collect::<Vec<_>>();
+                upsert_search_documents_batch(connection, &documents)?;
+            }
+        }
+        save_search_projection_version(connection)
+    })
 }
 
 fn enable_foreign_keys(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
@@ -4225,23 +4372,6 @@ fn compatibility() -> TursoStorageError {
     TursoStorageError::reset(PhysicalResetReason::Compatibility)
 }
 
-fn validate_quick_check(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
-    let rows = driver::query(connection, "PRAGMA quick_check", Vec::new())
-        .map_err(TursoStorageError::initialization)?;
-    validate_quick_check_rows(&rows)
-}
-
-fn validate_quick_check_rows(rows: &[Vec<Value>]) -> Result<(), TursoStorageError> {
-    if rows.len() == 1
-        && rows[0].len() == 1
-        && required_text(&rows[0], 0).ok().as_deref() == Some("ok")
-    {
-        Ok(())
-    } else {
-        Err(TursoStorageError::reset(PhysicalResetReason::Integrity))
-    }
-}
-
 fn validate_queue_consistency(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
     let queue = driver::query(connection, QUEUE_SELECT, Vec::new())
         .map_err(TursoStorageError::initialization)?;
@@ -4794,6 +4924,9 @@ impl TursoStorage {
 }
 
 mod alternatives;
+mod conjunction;
+mod integrity;
+mod page_retention;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

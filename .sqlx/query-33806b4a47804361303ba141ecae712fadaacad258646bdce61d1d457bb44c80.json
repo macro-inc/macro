@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_attachments (id, message_id, entity_type, entity_id)\n            VALUES ($1, $2, 'document', $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "33806b4a47804361303ba141ecae712fadaacad258646bdce61d1d457bb44c80"
+}

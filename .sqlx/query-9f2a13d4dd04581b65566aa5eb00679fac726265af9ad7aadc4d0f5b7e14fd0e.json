@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT source_type::text AS \"source_type!\", source_id,\n               access_level::text AS \"access_level!\"\n        FROM entity_access\n        WHERE entity_id = $1 AND granted_from_project_id IS NULL\n        ORDER BY source_type::text, source_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "access_level!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "9f2a13d4dd04581b65566aa5eb00679fac726265af9ad7aadc4d0f5b7e14fd0e"
+}

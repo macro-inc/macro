@@ -21,6 +21,10 @@ use call::{
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
     outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
 };
+use channel_labels::{
+    domain::service::ChannelLabelsServiceImpl, inbound::axum_router::ChannelLabelsRouterState,
+    outbound::pg_channel_labels_repo::PgChannelLabelsRepo,
+};
 use channels::{
     domain::{
         list_service::ChannelListServiceImpl,
@@ -225,8 +229,12 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
 >;
 
 /// GraphQL activity reader over the Postgres activity log (readonly pool).
-pub(crate) type DssActivityReader =
-    complete_graph::ActivityPortReader<activity::outbound::pg_activity_repo::PgActivityRepo>;
+pub(crate) type DssActivityReader = complete_graph::ActivityPortReader<
+    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+        activity::outbound::pg_activity_repo::PgActivityRepo,
+        EntityAccessService,
+    >,
+>;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -277,22 +285,16 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
 
     async fn set_entity_property(
         &self,
-        user_id: &str,
+        principal: &model_owner::CreationPrincipal,
         entity_id: &str,
         property_definition_id: uuid::Uuid,
         value: Option<models_properties::api::requests::SetPropertyValue>,
-        attribution: &activity::Attribution,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
-        let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
-        let entity_access_receipt = task_property_edit_receipt(
-            self.entity_access_service.as_ref(),
-            &user_id,
-            attribution,
-            entity_id,
-        )
-        .await?;
+        let entity_access_receipt =
+            task_property_edit_receipt(self.entity_access_service.as_ref(), principal, entity_id)
+                .await?;
         self.properties
             .set_entity_property(&entity_access_receipt, property_definition_id, value)
             .await
@@ -320,7 +322,7 @@ pub(crate) type EntityAccessManagementService =
     >;
 
 pub(crate) type DocumentService = DocumentServiceImpl<
-    PgDocumentRepo,
+    PgDocumentRepo<PgBotsRepo>,
     S3UploadUrlAdapter,
     TaskPropertiesAdapter,
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
@@ -339,7 +341,7 @@ pub(crate) type DocumentsState =
 
 /// Concrete project service wired into DSS.
 pub(crate) type ProjectService = ProjectServiceImpl<
-    PgProjectRepo,
+    PgProjectRepo<PgBotsRepo>,
     S3ProjectUploadAdapter,
     DynamoBulkUploadAdapter,
     ShaCountAdapter,
@@ -443,7 +445,7 @@ pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 
 /// Chat service used by the unified entity mutation adapter.
 pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
-    chat::outbound::postgres::PgChatRepo,
+    chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
     (),
     EntityAccessManagementService,
 >;
@@ -468,6 +470,13 @@ pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
 pub(crate) type FavoritesMutationServiceType =
     FavoritesMutationServiceImpl<FavoritesServiceType, EntityAccessService>;
 
+/// Type alias for the channel labels service.
+pub(crate) type ChannelLabelsServiceType = ChannelLabelsServiceImpl<PgChannelLabelsRepo>;
+
+/// Type alias for the channel labels router state.
+pub(crate) type DssChannelLabelsState =
+    ChannelLabelsRouterState<ChannelLabelsServiceType, EntityAccessService, AuthorizationService>;
+
 /// Type alias for the favorites router state.
 pub(crate) type DssFavoritesState =
     FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
@@ -487,12 +496,16 @@ pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
 
 pub(crate) type InitiativeDescriptionDocumentsType =
-    crate::outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter<
+    initiative_documents::InitiativeDescriptionDocumentsAdapter<
         Arc<DocumentService>,
         documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer,
         documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
         documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker,
-        DssEventBroker,
+        documents_hex::domain::purge::DocumentPurger<
+            documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository,
+            documents_hex::outbound::document_purge::SqsDocumentPurgeQueue,
+            DssEventBroker,
+        >,
     >;
 
 /// Type alias for the initiative service.
@@ -554,8 +567,19 @@ pub(crate) type DssSseStreamService =
 pub(crate) type DssSseStreamState =
     WebhookStreamRouterState<DssSseStreamService, AuthorizationService>;
 
+/// Type alias for the dictation router state; shares the webhook Redis limiter.
+pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRouterState<
+    dictation::domain::DictationServiceImpl<
+        dictation::outbound::WhisperTranscriber,
+        dictation::outbound::SymphoniaRecordingInspector,
+    >,
+    DssWebhookRateLimiter,
+    AuthorizationService,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub dictation_state: DssDictationState,
     pub db: PgPool,
     pub readonly_db: ReadOnlyPool,
     pub redis_client: Arc<Redis>,
@@ -571,9 +595,13 @@ pub(crate) struct ApiContext {
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,
+    pub channel_labels_state: DssChannelLabelsState,
     pub user_api_key_state: DssUserApiKeyState,
     pub reminders_state: DssRemindersState,
     pub initiative_state: DssInitiativeState,
+    pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
+    pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
+    pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,
@@ -607,6 +635,7 @@ pub(crate) struct ApiContext {
     pub channel_bot_webhook_state: DssChannelBotWebhookState,
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
+    pub call_public_rate_limiter: DssWebhookRateLimiter,
     pub webhook_state: DssWebhookState,
     pub sse_stream_state: DssSseStreamState,
     pub call_internal_state: DssCallInternalState,

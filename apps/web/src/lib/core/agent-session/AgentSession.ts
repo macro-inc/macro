@@ -65,6 +65,23 @@ export class AgentSessionReleased extends Error {
 }
 
 /**
+ * The harness answered 401/403: the viewer is not a participant of this
+ * session. Retrying cannot help, and the surface should say so rather than
+ * report a connectivity problem.
+ */
+export class AgentSessionAccessDenied extends Error {
+  constructor(readonly sessionId: string) {
+    super(`agent session is not accessible to this user: ${sessionId}`);
+    this.name = 'AgentSessionAccessDenied';
+  }
+}
+
+const accessDenied = (errors: { code: string }[]) =>
+  errors.some(
+    (error) => error.code === 'UNAUTHORIZED' || error.code === 'FORBIDDEN'
+  );
+
+/**
  * Whether this action takes the turn, rather than riding alongside one. ACP
  * runs a prompt at a time, so these are the ones the harness queues; mirrors
  * `AgentAction::occupies_turn` in `agent_runtime_protocol`.
@@ -262,6 +279,18 @@ export class AgentSession {
   }
 
   /**
+   * Where the turn stands as this class knows it right now: the fold's last
+   * report, or `starting` from the moment {@link issue} or {@link expect}
+   * folded a prompt - ahead of the fold's own answer by the worker round
+   * trip. What a caller reads to decide whether an action posted now would
+   * reach a turn the server has opened; the listener-fed metadata lags by
+   * that round trip, and two actions inside it would both read the old state.
+   */
+  currentTurn(): TurnState {
+    return this.turn;
+  }
+
+  /**
    * Whether this action reaches the runtime now, rather than waiting in the
    * server's queue.
    *
@@ -340,9 +369,13 @@ export class AgentSession {
       agentHarnessServiceClient.getLog(this.id),
     ]);
     if (session.isErr()) {
+      if (accessDenied(session.error)) {
+        throw new AgentSessionAccessDenied(this.id);
+      }
       throw new Error(`agent session could not be fetched: ${this.id}`);
     }
     if (log.isErr()) {
+      if (accessDenied(log.error)) throw new AgentSessionAccessDenied(this.id);
       throw new Error(`agent session log could not be fetched: ${this.id}`);
     }
     if (this.closed) throw new AgentSessionReleased(this.id);

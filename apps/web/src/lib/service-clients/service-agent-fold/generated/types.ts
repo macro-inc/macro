@@ -413,6 +413,43 @@ export type ElicitationSchema = {
   required: string[];
 };
 
+/**  An external page where the person can act on a [`FailureNotice`]. */
+export type FailureLink = {
+  /**  The link's text, e.g. `Manage Cursor usage`. */
+  label: string;
+  /**  The page, absolute. */
+  url: string;
+};
+
+/**
+ *  A turn failure the person who prompted can act on, in their terms.
+ *
+ *  A runtime attaches this to the `session/prompt` error as its `data`; the
+ *  fold reads it back onto the failed turn's stop reason. It exists so a
+ *  billing wall or a disconnected integration renders as an instruction with
+ *  somewhere to go, not as the runtime's error text - and so the runtime's
+ *  error text, which for a report includes source locations, never has to
+ *  double as the thing a person reads.
+ */
+export type FailureNotice = {
+  /**  Which class of failure, for readers that treat one specially. */
+  kind: FailureNoticeKind;
+  /**  One short line naming what happened. */
+  title: string;
+  /**  What it means and what to do, in plain language. */
+  body: string;
+  /**  Where acting on it happens, when that is somewhere else. */
+  link?: FailureLink | null;
+};
+
+/**  The classes of actionable failure a runtime can report. */
+export type FailureNoticeKind =
+  /**
+   *  The person's own account with the provider has no budget left for
+   *  this work; the fix is on the provider's billing page.
+   */
+  'provider_usage_limit';
+
 /**  A file modification a tool reported. */
 export type FileDiff = {
   /**  The file that changed. */
@@ -870,6 +907,12 @@ export type StopReason =
       kind: 'failed';
       /**  The runtime's error message, verbatim. */
       message: string;
+      /**
+       *  The failure in the person's terms, when the runtime classified it
+       *  as one they can act on. Absent for an opaque failure, which a
+       *  reader shows as `message` alone.
+       */
+      notice?: FailureNotice | null;
     };
 
 /**

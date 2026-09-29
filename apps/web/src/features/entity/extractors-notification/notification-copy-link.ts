@@ -1,10 +1,11 @@
-import { copyCalendarEventMentionTarget } from '@block-calendar/copy-event-mention';
+import { copyCalendarEventMentionTarget } from '@app/features/calendar-view/copy-event-mention';
 import { toast } from '@core/component/Toast/Toast';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import {
   getChannelNotificationParams,
   type UnifiedNotification,
 } from '@notifications';
+import { projectRouteId } from '../../projects/core/route';
 
 /**
  * Copy the link to whatever a notification points at.
@@ -28,7 +29,16 @@ export async function copyNotificationLink(notification: UnifiedNotification) {
   const { params } = getChannelNotificationParams(notification);
   await navigator.clipboard.writeText(
     buildSimpleEntityUrl(
-      { type: notification.entity_type, id: notification.entity_id },
+      metadata.tag === 'initiative_discussion'
+        ? {
+            type: 'component',
+            id: projectRouteId({
+              id: notification.entity_id,
+              section: 'overview',
+              discussionId: metadata.content.messageId,
+            }),
+          }
+        : { type: notification.entity_type, id: notification.entity_id },
       params
     )
   );

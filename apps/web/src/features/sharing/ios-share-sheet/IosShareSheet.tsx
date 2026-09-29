@@ -18,6 +18,7 @@ import { buildPostMessageRequest } from '@channel/Input/message-payload';
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { hasSendableInputContent } from '@channel/Input/utils/sendable-content';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
@@ -43,7 +44,10 @@ import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
-import { useSendMessageMutation } from '@queries/messages/mutations';
+import {
+  newMessageId,
+  useSendMessageMutation,
+} from '@queries/messages/mutations';
 import { staticFileClient } from '@service-static-files/client';
 import { isIOS } from '@solid-primitives/platform';
 import { Button } from '@ui';
@@ -316,7 +320,7 @@ function IosShareSheetComposer(props: {
       parent: { type: 'channel', id: channelId },
       message,
       senderId,
-      optimisticId: crypto.randomUUID(),
+      optimisticId: newMessageId(),
     });
 
     invalidateListChannels();
@@ -349,6 +353,7 @@ function IosShareSheetComposer(props: {
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: `ios-share-input-${composerId}`,
+    resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
     scrollContainer,
     onMentionCreate: (mention) => {

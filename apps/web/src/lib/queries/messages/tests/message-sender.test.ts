@@ -13,6 +13,7 @@ import {
   firstPartyBotName,
   getBotDisplayName,
   normalizeChannelMessageSender,
+  normalizeMessageThreadSenders,
   normalizeThreadReplySender,
   senderFromStorageId,
 } from '../../messages/message-sender';
@@ -135,5 +136,54 @@ describe('message sender normalization', () => {
     expect(getBotDisplayName('bot|00000000-0000-0000-0000-000000000002')).toBe(
       'Bot'
     );
+  });
+
+  it('derives agent senders for a fetched thread from its bot profiles', () => {
+    const {
+      state,
+      thread: _thread,
+      ...root
+    } = legacyMessage('bot|00000000-0000-0000-0000-000000000001');
+    const bot = {
+      ...root,
+      bot_profile: { name: 'Bingus', avatar_url: 'https://example.com/b.png' },
+      triggered_by: 'macro|eric@example.com',
+    };
+    const reply = {
+      ...root,
+      id: 'reply-1',
+      thread_id: root.id,
+      sender_id: 'bot|00000000-0000-0000-0000-000000000003',
+      bot_profile: { name: 'Deploy Bot', avatar_url: null },
+    };
+
+    const thread = normalizeMessageThreadSenders({
+      state,
+      root: bot,
+      replies: [
+        reply,
+        {
+          ...root,
+          id: 'reply-2',
+          sender_id: 'macro|reply@example.com',
+          bot_profile: null,
+        },
+      ],
+    });
+
+    expect(thread.root.sender).toEqual({
+      type: 'bot',
+      id: '00000000-0000-0000-0000-000000000001',
+      name: 'Bingus',
+      avatar_url: 'https://example.com/b.png',
+      triggered_by: 'macro|eric@example.com',
+    });
+    expect(getBotDisplayName(thread.root.sender_id, thread.root.sender)).toBe(
+      'Bingus'
+    );
+    expect(thread.replies.map((message) => message.sender)).toEqual([
+      expect.objectContaining({ type: 'bot', name: 'Deploy Bot' }),
+      expect.objectContaining({ type: 'user', id: 'macro|reply@example.com' }),
+    ]);
   });
 });

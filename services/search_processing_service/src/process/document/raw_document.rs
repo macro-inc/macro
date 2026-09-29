@@ -5,6 +5,7 @@ use chrono::Utc;
 use document_sub_type::DocumentSubType;
 use lexical_client::types::MarkdownParseResult;
 use model::document::{DocumentMetadata, FileType};
+use model_owner::Owner;
 use models_properties::EntityType;
 use models_search::unified::is_searchable_association;
 use opensearch_client::{
@@ -262,11 +263,10 @@ pub async fn update_search_with_raw_document(
             .as_str(),
     )?;
 
+    let key_owner = Owner::from_principal_str(&search_extractor_message.user_id)
+        .context("search extractor message user_id is not an owner principal")?;
     let key = if document_version_id == CONVERTED_DOCUMENT_FILE_NAME {
-        build_docx_to_pdf_converted_document_key(
-            &search_extractor_message.user_id,
-            &search_extractor_message.document_id,
-        )
+        build_docx_to_pdf_converted_document_key(&key_owner, &search_extractor_message.document_id)
     } else if let Some(msg_version_id) = search_extractor_message.document_version_id.as_ref()
         && msg_version_id != &document_version_id
     {
@@ -278,7 +278,7 @@ pub async fn update_search_with_raw_document(
         return Ok(());
     } else {
         build_cloud_storage_bucket_document_key(
-            &search_extractor_message.user_id,
+            &key_owner,
             &search_extractor_message.document_id,
             &document_version_id,
         )

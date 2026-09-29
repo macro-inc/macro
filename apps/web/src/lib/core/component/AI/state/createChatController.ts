@@ -62,6 +62,12 @@ export type ChatController = {
 export type ChatControllerOptions = {
   onShowPaywall?: () => void;
   /**
+   * The send was refused by the AI billing gate (allowance used up, usage
+   * billing cap reached, or a failed usage charge). `reason` is the backend
+   * code; hosts open the usage-limit dialog.
+   */
+  onShowUsageLimit?: (reason: string) => void;
+  /**
    * Switch the chat to a model from a different provider. When provided, a
    * provider-outage error toast offers a "Switch model" button that calls this.
    */
@@ -124,6 +130,9 @@ export function createChatController(
           }
         })
         .with({ type: 'show_paywall' }, () => options?.onShowPaywall?.())
+        .with({ type: 'show_usage_limit' }, (e) =>
+          options?.onShowUsageLimit?.(e.reason)
+        )
         .exhaustive();
     }
   }

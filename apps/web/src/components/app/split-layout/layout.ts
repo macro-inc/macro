@@ -1,8 +1,13 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import {
+  captureElementScrollAnchor,
+  holdScrollAnchor,
+} from '@core/util/scrollAnchor';
 import { useContext } from 'solid-js';
 import { SplitPanelContext } from './context';
 import type {
+  OpenSplitResult,
   OpenWithSplitOptions,
   PopoverSplitOptions,
   ReferredFrom,
@@ -15,13 +20,13 @@ export function useSplitLayout() {
   function openWithSplit(
     content: SplitContent,
     options?: OpenWithSplitOptions
-  ) {
+  ): OpenSplitResult {
     const splitManager = globalSplitManager();
     const preferNewSplit = isTouchDevice() ? false : options?.preferNewSplit;
 
     if (!splitManager) {
       console.error('No split manager found');
-      return;
+      return { status: 'unavailable' };
     }
 
     // Use the source panel for navigation. Popover handles cannot replace
@@ -29,11 +34,26 @@ export function useSplitLayout() {
     const requestedHandle = options?.handle ?? splitPanelContext?.handle;
     const handle = requestedHandle?.isPopover() ? undefined : requestedHandle;
 
-    return splitManager.openWithSplit(content, {
+    // A new split narrows this one and reflows its content under an unchanged
+    // scrollTop, which can push what was just clicked out of view.
+    const clickedAnchor = preferNewSplit
+      ? captureElementScrollAnchor(splitPanelContext?.pointerTarget?.())
+      : undefined;
+
+    const result = splitManager.openWithSplit(content, {
       ...options,
       preferNewSplit,
       handle,
     });
+
+    if (
+      clickedAnchor &&
+      result.status === 'opened' &&
+      result.split.id !== splitPanelContext?.handle.id
+    ) {
+      holdScrollAnchor(clickedAnchor.scroller, clickedAnchor.anchor);
+    }
+    return result;
   }
 
   function replaceOrInsertSplit(
@@ -44,7 +64,7 @@ export function useSplitLayout() {
       referredFrom,
       handle: splitPanelContext?.handle,
       activate: true,
-    });
+    }).split;
   }
 
   function replaceSplit(options: {
@@ -59,7 +79,7 @@ export function useSplitLayout() {
       referredFrom,
       handle: splitPanelContext?.handle,
       preferNewSplit: false,
-    });
+    }).split;
   }
 
   function insertSplit(
@@ -72,7 +92,7 @@ export function useSplitLayout() {
       referredFrom,
       preferNewSplit: true,
       ...options,
-    });
+    }).split;
   }
 
   function popoverSplit(

@@ -24,6 +24,7 @@ pub use S3Client as S3;
 use tokio::sync::Semaphore;
 
 use model::document::{ContentType, FileType};
+use model_owner::Owner;
 
 #[derive(Clone, Debug)]
 pub struct S3Client {
@@ -149,12 +150,12 @@ impl S3Client {
         .await
     }
 
-    /// Deletes all document instances stored under a user's document
-    pub async fn delete_document(&self, user_id: &str, document_id: &str) -> anyhow::Result<()> {
+    /// Deletes all document instances stored under an owner's document
+    pub async fn delete_document(&self, owner: &Owner, document_id: &str) -> anyhow::Result<()> {
         delete::delete_document(
             &self.inner,
             &self.document_storage_bucket,
-            user_id,
+            owner,
             document_id,
         )
         .await

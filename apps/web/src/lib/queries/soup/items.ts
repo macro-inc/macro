@@ -66,8 +66,14 @@ export type SoupAstItemsQueryArgs = {
 export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
 
 interface SoupItemsQueryOptions {
+  networkPaused?: boolean;
+  keepPreviousData?: boolean;
   enabled?: boolean;
   staleTime?: StaleTime;
+  /** Channel navigation reads bounded unread evidence, not notification history. */
+  graphqlProjection?: 'channel-list';
+  /** Seed mixed lists from indexed non-email members; keep the full server query. */
+  graphqlLocalReconciliation?: 'without-email';
   meta?: {
     groupBy?: GroupByField;
     groupKey?: string;
@@ -302,7 +308,7 @@ const useRestSoupAstItemsQuery = (
             pageTimestamps.length > 0 ? Math.min(...pageTimestamps) : undefined,
         };
       },
-      enabled: options?.().enabled,
+      enabled: options?.().enabled !== false && !options?.().networkPaused,
       // Do not spin through background retries while the explicit load-error
       // state is visible. NWPathMonitor lets TanStack pause an offline query
       // and resume it automatically when the path becomes available again.
@@ -380,6 +386,10 @@ export function useSoupAstItemsQuery(
     () => ({
       enabled:
         graphqlRequested() && queryEnabled() && args().groupBy === undefined,
+      networkPaused: options?.().networkPaused,
+      keepPreviousData: options?.().keepPreviousData,
+      projection: options?.().graphqlProjection,
+      localReconciliation: options?.().graphqlLocalReconciliation,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
     })
   );
@@ -392,6 +402,8 @@ export function useSoupAstItemsQuery(
     () => ({
       enabled:
         graphqlRequested() && queryEnabled() && args().groupBy !== undefined,
+      networkPaused: options?.().networkPaused,
+      keepPreviousData: options?.().keepPreviousData,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
     })
   );
@@ -411,7 +423,10 @@ export function useSoupAstItemsQuery(
 
   onCleanup(
     registerActiveGraphqlSoupQuery({
-      isEnabled: () => usesGraphql() && activeGraphqlQuery().isEnabled(),
+      isEnabled: () =>
+        usesGraphql() &&
+        activeGraphqlQuery().isEnabled() &&
+        !options?.().networkPaused,
       refresh: async () => {
         activeGraphqlQuery().resetToInitialPage();
         options?.().onBeforeGraphqlRefresh?.();

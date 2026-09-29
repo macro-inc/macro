@@ -1,17 +1,21 @@
 use utoipa::OpenApi;
 
-#[allow(
+#[expect(
     unused_imports,
     reason = "utoipa path macros require these generated symbols in scope"
 )]
 use crate::inbound::axum_router::{
     __path_create_action, __path_delete_action, __path_execute_action, __path_health,
-    __path_list_actions, __path_list_history, __path_update_action,
+    __path_list_actions, __path_list_history, __path_set_action_enabled, __path_update_action,
+    ScheduledActionResponse, SetScheduledActionEnabled,
 };
 
+use crate::domain::event_trigger::{ActionTrigger, EventFilter, EventFilters, EventName};
 use crate::domain::models::{
-    ActionExecutionRecord, ActionKind, AgentTask, CreateScheduledAction, InProgressExecution,
-    Schedule, ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
+    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, AgentTask,
+    AgentTaskAgent, CreateScheduledAction, ExecutionResource, ExecutionResourceType,
+    ExecutionResult, InProgressExecution, LegacyActionConfiguration, RoutineModelId, Schedule,
+    ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
 };
 use model::response::EmptyResponse;
 
@@ -27,6 +31,7 @@ use model::response::EmptyResponse;
         crate::inbound::axum_router::list_actions,
         crate::inbound::axum_router::create_action,
         crate::inbound::axum_router::update_action,
+        crate::inbound::axum_router::set_action_enabled,
         crate::inbound::axum_router::delete_action,
         crate::inbound::axum_router::execute_action,
         crate::inbound::axum_router::list_history,
@@ -34,11 +39,25 @@ use model::response::EmptyResponse;
     components(
         schemas(
             ScheduledAction,
+            ScheduledActionResponse,
+            ActionConfiguration,
+            ActionConfigurationUpdate,
+            LegacyActionConfiguration,
+            ActionTrigger,
+            EventFilter,
+            EventFilters,
+            EventName,
             CreateScheduledAction,
             UpdateScheduledAction,
+            SetScheduledActionEnabled,
             Schedule,
             ActionKind,
             AgentTask,
+            AgentTaskAgent,
+            RoutineModelId,
+            ExecutionResource,
+            ExecutionResourceType,
+            ExecutionResult,
             InProgressExecution,
             ActionExecutionRecord,
             ScheduledActionUpdate,

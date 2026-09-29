@@ -19,7 +19,32 @@ vi.mock('@service-storage/graphql-soup', () => ({
   mapGraphqlNotification: vi.fn((notification) => notification),
 }));
 
-import { updateNotificationsForEntities } from '../entity-mutations';
+import {
+  toNotificationEntityInput,
+  toNotificationEntityRef,
+  updateNotificationsForEntities,
+} from '../entity-mutations';
+
+describe('toNotificationEntityRef', () => {
+  it('targets agent sessions so their notifications can be marked done', () => {
+    const ref = toNotificationEntityRef({
+      type: 'agent_session',
+      id: 'session-1',
+    });
+
+    expect(ref).toEqual({ type: 'agent_session', id: 'session-1' });
+    expect(toNotificationEntityInput(ref!)).toEqual({
+      entityType: 'AGENT_SESSION',
+      entityId: 'session-1',
+    });
+  });
+
+  it('has no target for entity types the notification service does not file under', () => {
+    expect(
+      toNotificationEntityRef({ type: 'automation', id: 'automation-1' })
+    ).toBeUndefined();
+  });
+});
 
 describe('updateNotificationsForEntities', () => {
   beforeEach(() => {

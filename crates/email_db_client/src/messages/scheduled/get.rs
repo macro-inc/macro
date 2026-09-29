@@ -30,36 +30,41 @@ where
     Ok(record)
 }
 
-/// Retrieves a scheduled message by link_id and message_id, and sets processing to true
-/// Returns the message with the OLD processing value (before it was set to true)
-/// Returns None if the message doesn't exist
+/// Atomically claim a due, unsent, unclaimed message. The returned row is the
+/// owned claim (processing=true); None never grants permission to clear it.
 #[tracing::instrument(skip(db), err)]
 pub async fn get_and_start_processing_scheduled_message(
     db: &sqlx::PgPool,
     link_id: Uuid,
     message_id: Uuid,
 ) -> anyhow::Result<Option<service::message::ScheduledMessage>> {
+    let mut tx = db.begin().await?;
+    // Same message -> schedule lock order as schedule/cancel and finalization.
+    let message = sqlx::query!(
+        "SELECT is_sent FROM email_messages WHERE id = $1 AND link_id = $2 FOR UPDATE",
+        message_id,
+        link_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    if message.is_none_or(|message| message.is_sent) {
+        return Ok(None);
+    }
     let record = sqlx::query_as!(
         service::message::ScheduledMessage,
         r#"
-        WITH old AS (
-            SELECT link_id, message_id, send_time, sent, processing, actor_id
-            FROM email_scheduled_messages
-            WHERE link_id = $1 AND message_id = $2
-        ), updated AS (
-            UPDATE email_scheduled_messages
-            SET processing = true, updated_at = NOW()
-            WHERE link_id = $1 AND message_id = $2
-        )
-        SELECT link_id, message_id, send_time, sent, processing, actor_id
-        FROM old
+        UPDATE email_scheduled_messages
+        SET processing = true, updated_at = NOW()
+        WHERE link_id = $1 AND message_id = $2
+          AND NOT sent AND NOT processing AND send_time <= NOW()
+        RETURNING link_id, message_id, send_time, sent, processing, actor_id
         "#,
         link_id,
         message_id,
     )
-    .fetch_optional(db)
+    .fetch_optional(&mut *tx)
     .await?;
-
+    tx.commit().await?;
     Ok(record)
 }
 
@@ -172,7 +177,10 @@ pub async fn get_scheduled_db_messages_by_link_id(
             m.updated_at
         FROM email_messages m
         JOIN email_scheduled_messages sm ON m.id = sm.message_id
-        WHERE m.link_id = $1 AND sm.sent = false
+        WHERE m.link_id = $1
+          AND m.is_draft = true
+          AND m.is_sent = false
+          AND sm.sent = false
         ORDER BY m.created_at DESC
         LIMIT $2 OFFSET $3
         "#,

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id AS action_id, owner, enabled, configuration_revision,\n                   event_filters AS \"event_filters!\", event_activated_at AS \"event_activated_at!\"\n            FROM scheduled_action WHERE id = $1 AND trigger_type = 'events'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "action_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "configuration_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "event_filters!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "event_activated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "284c0e3e8f0f53e13fce4a7f67d6d9d7eaf77fac610f2275facf75c3a9f62cfe"
+}

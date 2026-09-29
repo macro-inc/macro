@@ -1,4 +1,5 @@
 use anyhow::Context;
+use entity_registry::NonUserOwners;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
@@ -30,6 +31,8 @@ env_vars!(
 
 maybe_env_vars!(
     pub struct DocumentBatchLimit;
+    /// Rollout gate for entities owned by bots or teams.
+    pub struct EnableNonUserOwners;
     /// OAuth client ID for the Pipedream API (Pipedream project settings).
     /// When unset (along with the other Pipedream credentials), the
     /// Pipedream MCP endpoints answer 501 and its toolsets come up empty.
@@ -130,6 +133,8 @@ pub struct Config {
     pub document_permission_jwt: DocumentPermissionJwt,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub kafka_brokers: KafkaBrokers,
+    /// Lets a team-scoped bot with no acting user own the chats it creates.
+    pub enable_non_user_owners: EnableNonUserOwners,
 }
 
 fn default_mcp_public_url(environment: Environment) -> &'static str {
@@ -144,6 +149,11 @@ impl Config {
     #[tracing::instrument(err, skip_all)]
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>().context("failed to load config")
+    }
+
+    pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
+        NonUserOwners::from_config_value(self.enable_non_user_owners.value())
+            .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")
     }
 
     #[cfg(test)]
@@ -197,6 +207,7 @@ impl Config {
             mcp_public_url: default_mcp_public_url(Environment::Local).to_string(),
             document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),
             kafka_brokers: KafkaBrokers::Comptime("localhost:9092"),
+            enable_non_user_owners: EnableNonUserOwners::Unset,
         }
     }
 }

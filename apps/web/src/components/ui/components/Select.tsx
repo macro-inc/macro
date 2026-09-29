@@ -29,7 +29,7 @@ function SelectTrigger(props: SelectTriggerProps) {
   return (
     <KobalteSelect.Trigger
       class={cn(
-        'flex w-full items-center justify-between gap-2 text-left data-expanded:bg-hover',
+        'flex h-8 w-full items-center justify-between gap-2 rounded-full border border-edge-frame bg-control px-2 text-left text-ink-muted outline-none data-expanded:overlay-active data-expanded:text-ink focus-visible:ring-2 focus-visible:ring-edge-muted aria-invalid:border-failure data-invalid:border-failure',
         local.class
       )}
       {...rest}
@@ -106,7 +106,7 @@ function SelectContent(props: SelectContentProps) {
         <Layer depth={local.depth ?? 3}>
           <KobalteSelect.Content
             class={cn(
-              'z-action-menu max-h-[var(--kb-popper-content-available-height)] min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu-glass p-1.5 glass menu-open-animation',
+              'menu-surface z-action-menu max-h-[var(--kb-popper-content-available-height)] min-w-[var(--kb-popper-anchor-width)] overflow-y-auto p-1.5 menu-open-animation',
               local.class
             )}
             {...rest}

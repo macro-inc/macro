@@ -1,6 +1,7 @@
 import { Collapsible, useCollapsibleContext } from '@kobalte/core/collapsible';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { cn } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {
   type ComponentProps,
   type JSX,
@@ -8,7 +9,6 @@ import {
   Suspense,
   splitProps,
 } from 'solid-js';
-import { CollapseTransition } from './CollapseTransition';
 import { ViewSidebar } from './ViewSidebar';
 
 export type CollapsibleSectionRootProps = Omit<

@@ -7,6 +7,7 @@
 
 use harness_id::HarnessId;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 #[cfg(test)]
@@ -159,6 +160,16 @@ pub struct Harness {
     /// Arguments, e.g. `["acp"]`.
     #[serde(default)]
     pub args: Vec<String>,
+    /// Environment added to the harness process and to every model probe, on
+    /// top of the daemon's own.
+    ///
+    /// ACP adapters distributed on npm bundle their own copy of the CLI they
+    /// wrap and run it unless told otherwise. A bundled CLI older than the
+    /// one the operator installed advertises a different model catalogue, so
+    /// the presets point the adapter at the installed CLI through the
+    /// variable it reads for that - `CODEX_PATH`, `CLAUDE_CODE_EXECUTABLE`.
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
 }
 
 /// The workspace every session runs against.

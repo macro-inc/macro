@@ -5,13 +5,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ThreadAnchorOneOf } from './threadAnchorOneOf';
-import type { ThreadAnchorOneOfFive } from './threadAnchorOneOfFive';
-import type { ThreadAnchorOneOfThree } from './threadAnchorOneOfThree';
+import type { ThreadAnchorOneOfFour } from './threadAnchorOneOfFour';
+import type { ThreadAnchorOneOfNine } from './threadAnchorOneOfNine';
+import type { ThreadAnchorOneOfSeven } from './threadAnchorOneOfSeven';
 
 /**
- * A thread's location within its document. Geometry remains annotation-owned.
+ * A thread's location within its document. PDF geometry remains annotation-owned.
  */
 export type ThreadAnchor =
   | ThreadAnchorOneOf
-  | ThreadAnchorOneOfThree
-  | ThreadAnchorOneOfFive;
+  | ThreadAnchorOneOfFour
+  | ThreadAnchorOneOfSeven
+  | ThreadAnchorOneOfNine;

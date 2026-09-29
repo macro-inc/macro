@@ -20,7 +20,7 @@ impl RequiredPermission for MessageView {
     }
 }
 
-/// Minimum posting permission: channel member or document commenter.
+/// Minimum posting permission: channel member or entity commenter.
 #[derive(Debug, Clone, Copy)]
 pub struct MessageWrite;
 
@@ -69,71 +69,6 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     pub fn with_mention_extractor(mut self, mentions: impl MessageMentionExtractor) -> Self {
         self.mentions = std::sync::Arc::new(mentions);
         self
-    }
-
-    /// Join accessible source discussions without copying or reparenting their messages.
-    #[tracing::instrument(err, skip(self, access))]
-    pub async fn referenced_threads(
-        &self,
-        access: EntityAccessReceipt<MessageView>,
-        mut cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<ReferencedThreadPage, MessageError> {
-        let document = parent_from_receipt(&access)?;
-        if !matches!(document, MessageParent::Document(_)) {
-            return Err(MessageError::Invalid(
-                "channel references require a document",
-            ));
-        }
-        self.ensure_parent(&document).await?;
-        let limit = usize::from(limit.clamp(1, 100));
-        let mut threads = Vec::new();
-        let mut visible_cursor = None;
-        loop {
-            let candidates = self
-                .repo
-                .referenced_threads(&document.entity_id(), cursor.clone(), 100)
-                .await?;
-            let exhausted = candidates.len() < 100;
-            for candidate in candidates {
-                cursor = Some(MessageCursor {
-                    created_at: candidate.created_at,
-                    id: candidate.root_id,
-                });
-                let parent = MessageParent::Channel(candidate.channel_id);
-                let id = parent.entity_id();
-                if !self
-                    .references
-                    .can_view(access.auth(), EntityType::Channel, &id)
-                    .await?
-                {
-                    continue;
-                }
-                if threads.len() == limit {
-                    return Ok(ReferencedThreadPage {
-                        threads,
-                        next_cursor: visible_cursor,
-                    });
-                }
-                let can_reply = self
-                    .references
-                    .can_write(access.auth(), EntityType::Channel, &id)
-                    .await?;
-                threads.push(ReferencedThread {
-                    parent,
-                    root_id: candidate.root_id,
-                    channel_name: candidate.channel_name,
-                    can_reply,
-                });
-                visible_cursor = cursor.clone();
-            }
-            if exhausted {
-                return Ok(ReferencedThreadPage {
-                    threads,
-                    next_cursor: None,
-                });
-            }
-        }
     }
 
     /// Read the same bounded message timeline for either parent.
@@ -256,6 +191,18 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             input.mentions = self.mentions.extract(&input.content).await?;
         }
         validate_post(&parent, &input)?;
+        if matches!(input.anchor, Some(NewThreadAnchor::Spreadsheet { .. }))
+            && self
+                .repo
+                .document_file_type(&parent.entity_id())
+                .await?
+                .as_deref()
+                != Some("spreadsheet")
+        {
+            return Err(MessageError::Invalid(
+                "spreadsheet anchors require a native spreadsheet",
+            ));
+        }
         self.validate_references(&access, &input.mentions, &input.attachments)
             .await?;
         if let Some(root) = input.thread_id {
@@ -381,7 +328,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         Ok(message)
     }
 
-    /// Delete one message. Root deletion does not delete its discussion.
+    /// Delete one message. On a discussion, deleting the root deletes the discussion.
     #[tracing::instrument(err, skip(self, access))]
     pub async fn delete(
         &self,
@@ -393,6 +340,19 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
         let current = self.active_message(&parent, id, false).await?;
+        // A comment's replies and its place in the document belong to the comment,
+        // not to its first message, so the root carries the whole discussion with
+        // it. Channel roots are one message in a conversation that continues
+        // without them, and keep the tombstone the channel timeline renders.
+        if parent.is_discussion() && current.thread_id.is_none() {
+            self.delete_discussion(&access, &parent, &actor, id, nonce)
+                .await?;
+            return self
+                .repo
+                .get(&parent, id)
+                .await?
+                .ok_or(MessageError::NotFound);
+        }
         let channel_bot =
             matches!(parent, MessageParent::Channel(_)) && current.sender_id.as_bot().is_some();
         if current.sender_id != actor && !can_moderate(access.entity_permission()) && !channel_bot {
@@ -428,16 +388,23 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
         }
-        let message = self
+        let ReactionResult { message, changed } = self
             .repo
             .react(&parent, id, actor.as_ref(), &emoji, add)
             .await?;
+        // Idempotent retries still return the current message to the caller,
+        // but must not publish another change or notify the author again.
+        if !changed {
+            return Ok(message);
+        }
         self.publish_message(
             actor,
             nonce,
             &message,
             MessageChange::ReactionChanged {
                 message: message.clone(),
+                emoji,
+                added: add,
             },
         )
         .await;
@@ -465,6 +432,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             return Err(MessageError::Invalid("thread update must change a field"));
         }
         if patch.detach_anchor {
+            if !matches!(parent, MessageParent::Document(_)) {
+                return Err(MessageError::Invalid(
+                    "only document discussions have anchors",
+                ));
+            }
             if !access.entity_permission().satisfies::<EditAccessLevel>() {
                 return Err(MessageError::Forbidden);
             }
@@ -504,13 +476,28 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             ));
         }
         self.ensure_parent(&parent).await?;
-        let thread = self.active_thread(&parent, root_id).await?;
+        self.delete_discussion(&access, &parent, &actor, root_id, nonce)
+            .await
+    }
+
+    /// The one teardown policy: whoever may delete a discussion outright is
+    /// whoever may delete it by deleting its root, since both take replies
+    /// written by other people with them.
+    async fn delete_discussion(
+        &self,
+        access: &EntityAccessReceipt<MessageWrite>,
+        parent: &MessageParent,
+        actor: &ChannelSender<'static>,
+        root_id: Uuid,
+        nonce: Option<String>,
+    ) -> Result<ThreadState, MessageError> {
+        let thread = self.active_thread(parent, root_id).await?;
         if thread.user_id != actor.as_ref() && !can_moderate(access.entity_permission()) {
             return Err(MessageError::Forbidden);
         }
-        let state = self.repo.delete_thread(&parent, root_id).await?;
+        let state = self.repo.delete_thread(parent, root_id).await?;
         self.publish(MessageEvent {
-            parent,
+            parent: parent.clone(),
             actor: actor.as_ref().to_owned(),
             nonce,
             change: MessageChange::ThreadUpdated {
@@ -519,6 +506,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         })
         .await;
         Ok(state)
+    }
+
+    /// The parent a live message belongs to, so an adapter addressed only by
+    /// message id can mint that parent's receipt. Grants nothing on its own.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
+        self.repo.parent_of(id).await
     }
 
     /// Resolve an old link through the sole message store under current parent access.
@@ -740,6 +734,9 @@ fn parent_from_receipt<P: RequiredPermission>(
     let kind = match entity.entity_type {
         EntityType::Channel => "channel",
         EntityType::Document => "document",
+        EntityType::Initiative => "initiative",
+        EntityType::CrmCompany => "crm_company",
+        EntityType::CrmContact => "crm_contact",
         _ => return Err(MessageError::Forbidden),
     };
     MessageParent::parse(kind, &entity.entity_id)
@@ -771,6 +768,13 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
             "only root document messages may have anchors",
         ));
     }
+    if let Some(NewThreadAnchor::Spreadsheet {
+        sheet_id, range, ..
+    }) = &input.anchor
+        && (sheet_id.trim().is_empty() || !valid_spreadsheet_range(range))
+    {
+        return Err(MessageError::Invalid("invalid spreadsheet comment range"));
+    }
     if let Some(NewThreadAnchor::PdfPlaceable {
         page,
         x_pct,
@@ -787,6 +791,54 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
             || height_pct <= 0.0)
     {
         return Err(MessageError::Invalid("invalid PDF comment geometry"));
+    }
+    if let Some(id) = input.id {
+        validate_client_id(id, chrono::Utc::now())?;
+    }
+    Ok(())
+}
+
+fn valid_spreadsheet_range(range: &str) -> bool {
+    let cells: Vec<_> = range.split(':').collect();
+    (1..=2).contains(&cells.len())
+        && cells.iter().all(|cell| {
+            let column_len = cell.bytes().take_while(u8::is_ascii_uppercase).count();
+            let (column, row) = cell.split_at(column_len);
+            !column.is_empty()
+                && !row.starts_with('0')
+                && row.bytes().all(|byte| byte.is_ascii_digit())
+                && row.parse::<u32>().is_ok_and(|value| value > 0)
+                && column
+                    .bytes()
+                    .try_fold(0_u32, |value, byte| {
+                        value
+                            .checked_mul(26)?
+                            .checked_add(u32::from(byte - b'A') + 1)
+                    })
+                    .is_some()
+        })
+}
+
+/// How far a client-minted id's timestamp may drift from the server clock.
+/// Ordering uses the server's `created_at`, so this only needs to catch forged
+/// ids; it is wide so a device with a wrong clock can still post.
+const CLIENT_ID_MAX_SKEW: chrono::TimeDelta = chrono::TimeDelta::days(1);
+
+/// A client-minted id must be a UUIDv7 stamped near now, so its embedded time
+/// stays roughly the message's creation time.
+fn validate_client_id(id: Uuid, now: chrono::DateTime<chrono::Utc>) -> Result<(), MessageError> {
+    let minted_at = id
+        .get_timestamp()
+        .filter(|_| id.get_version_num() == 7)
+        .and_then(|timestamp| {
+            let (seconds, nanos) = timestamp.to_unix();
+            chrono::DateTime::from_timestamp(i64::try_from(seconds).ok()?, nanos)
+        })
+        .ok_or(MessageError::Invalid("message id must be a UUIDv7"))?;
+    if (now - minted_at).abs() > CLIENT_ID_MAX_SKEW {
+        return Err(MessageError::Invalid(
+            "message id timestamp is too far from the server clock",
+        ));
     }
     Ok(())
 }

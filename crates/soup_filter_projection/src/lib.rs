@@ -367,7 +367,8 @@ pub fn project_soup_item<T>(
         | SoupItem::CrmCompany(_)
         | SoupItem::ForeignEntity(_)
         | SoupItem::Reminder(_)
-        | SoupItem::AgentSession(_) => Ok(None),
+        | SoupItem::AgentSession(_)
+        | SoupItem::Initiative(_) => Ok(None),
     }
 }
 
@@ -381,7 +382,7 @@ pub fn project_document<T>(
         record_key,
         kind: SoupFlatEntityKind::Document,
         id: document.id,
-        owner: document.owner_id.to_string(),
+        owner: document.owner_id.principal_id(),
         project_id: document.project_id,
         file_type: document.file_type.clone(),
         created_at: document.created_at,
@@ -399,7 +400,7 @@ pub fn project_project<T>(
         record_key,
         kind: SoupFlatEntityKind::Project,
         id: project.id,
-        owner: project.owner_id.to_string(),
+        owner: project.owner_id.principal_id(),
         project_id: project.parent_id,
         file_type: None,
         created_at: project.created_at,
@@ -417,7 +418,7 @@ pub fn project_chat<T>(
         record_key,
         kind: SoupFlatEntityKind::Chat,
         id: chat.id,
-        owner: chat.owner_id.to_string(),
+        owner: chat.owner_id.principal_id(),
         project_id: chat.project_id,
         file_type: None,
         created_at: chat.created_at,

@@ -78,7 +78,7 @@
 			"packages/spreadsheet"
 		],
 		"catalog": {
-			"loro-crdt": "1.13.7"
+			"loro-crdt": "1.16.3"
 		}
 	}
 }

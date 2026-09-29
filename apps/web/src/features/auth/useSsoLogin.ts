@@ -10,6 +10,7 @@ import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import { useLocation } from '@solidjs/router';
+import { DEVELOPMENT_PROXY_PREFIX } from '../../lib/core/constant/developmentProxy';
 
 export function useSsoLogin(opts?: { signupMode?: boolean }) {
   const analytics = useAnalytics();
@@ -34,8 +35,16 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
 
     if (referral_code) authUrl.searchParams.set('referral_code', referral_code);
 
-    if (isNativeMobilePlatform()) {
+    // The hosted OAuth callback sets cookies on macro.com. A proxied browser
+    // needs the existing session-code handoff to establish cookies locally.
+    if (
+      isNativeMobilePlatform() ||
+      authUrl.pathname.startsWith(`${DEVELOPMENT_PROXY_PREFIX}/`)
+    ) {
       authUrl.searchParams.set('is_mobile', 'true');
+    }
+
+    if (isNativeMobilePlatform()) {
       const session = createNativeAuthSession('login');
       authUrl.searchParams.set('original_url', session.callbackUrl);
       const result = await session.authenticate(authUrl.toString());

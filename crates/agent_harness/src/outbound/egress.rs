@@ -26,6 +26,7 @@ mod test;
 pub struct EgressProvisioner<Connections> {
     connections: Arc<Connections>,
     base_url: String,
+    external_base_url: Option<String>,
 }
 
 impl<Connections> EgressProvisioner<Connections>
@@ -38,7 +39,14 @@ where
         Self {
             connections,
             base_url: base_url.into().trim_end_matches('/').to_owned(),
+            external_base_url: None,
         }
+    }
+
+    /// Override only the address advertised to external runtimes, such as host macrod in a local stack.
+    pub fn with_external_base_url(mut self, url: Option<String>) -> Self {
+        self.external_base_url = url.map(|url| url.trim_end_matches('/').to_owned());
+        self
     }
 
     /// The slugs to advertise for one session, verbatim.
@@ -115,6 +123,20 @@ impl<Connections> SandboxEgressProvisioner for EgressProvisioner<Connections>
 where
     Connections: ConnectionStore,
 {
+    fn external_mcp_servers(
+        &self,
+        egress: &SandboxEgress,
+    ) -> Vec<agent_client_protocol::schema::v1::McpServer> {
+        let mut external = egress.clone();
+        if let Some(url) = &self.external_base_url {
+            external.base_url = url.clone();
+        }
+        vec![
+            external.internal_mcp_server(),
+            external.preview_mcp_server(),
+        ]
+    }
+
     #[tracing::instrument(err, skip(self), fields(%session, %owner))]
     async fn provision(
         &self,

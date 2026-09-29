@@ -20,6 +20,7 @@ const FULL_MESSAGE_FIELDS: &[&str] = &[
     "attachments",
     "attachmentsDraft",
     "attachmentsForwarded",
+    "calendarInvitations",
 ];
 
 /// Whether the selected message fields require fully hydrated email messages.
@@ -68,6 +69,12 @@ impl From<email::domain::models::EmailPreview> for GraphqlMailPreviewMessage {
 pub struct GraphqlSoupEmailMessage(EmailContentMessage);
 
 impl GraphqlSoupEmailMessage {
+    /// Wraps a message produced outside the DataLoader path (e.g. a
+    /// mutation payload's draft record).
+    pub(crate) fn from_content(message: EmailContentMessage) -> Self {
+        Self(message)
+    }
+
     fn parsed(&self) -> &ParsedMessage {
         self.0.parsed()
     }
@@ -82,6 +89,16 @@ impl GraphqlSoupEmailMessage {
 /// An adaptively hydrated email content projection for Soup queries.
 #[Object]
 impl GraphqlSoupEmailMessage {
+    /// Immutable scheduling snapshots; JSON keeps both transports identical.
+    async fn calendar_invitations(
+        &self,
+    ) -> async_graphql::Result<
+        async_graphql::Json<Vec<email::domain::models::calendar_invitation::CalendarInvitation>>,
+    > {
+        Ok(async_graphql::Json(
+            self.full()?.calendar_invitations.clone(),
+        ))
+    }
     /// The unique message identifier.
     async fn id(&self) -> ID {
         ID(self.parsed().db_id.to_string())

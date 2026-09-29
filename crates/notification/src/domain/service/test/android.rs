@@ -215,6 +215,10 @@ async fn seen_and_done_deliver_silent_clear_to_android_only_users() {
             .await
             .unwrap();
         let mut messages = queue.get_published();
+        if !cfg!(feature = "clear_ios_push") {
+            assert!(messages.is_empty());
+            continue;
+        }
         assert_eq!(messages.len(), 1);
         let egress = NotificationEgressService {
             queue: MockQueue::new(),

@@ -33,6 +33,9 @@ describe('thread state with an injected source', () => {
         expect(state.drafts.getDraftForMessage('parent')).toEqual(newer);
         setSnapshot(thread([message('parent')]));
         expect(state.drafts.getDraftForMessage('parent')).toEqual(newer);
+        const committed = { ...old, db_id: 'server-id' };
+        setSnapshot(thread([message('parent'), committed]));
+        expect(state.drafts.getDraftForMessage('parent')).toEqual(committed);
         state.drafts.deleteDraftForMessage('parent');
         setSnapshot(thread([message('parent'), newer]));
         expect(state.drafts.getDraftForMessage('parent')).toBeUndefined();

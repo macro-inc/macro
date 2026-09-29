@@ -1,6 +1,6 @@
 use crate::{map_soup_type, outbound::pg_soup_repo::type_err};
 use document_sub_type::DocumentSubType;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_soup::item::SoupItem;
 use sqlx::PgPool;

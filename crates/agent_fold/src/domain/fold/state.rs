@@ -305,7 +305,10 @@ impl FoldState {
                         TurnOutcome::Finished => crate::domain::model::StopReason::EndTurn,
                         TurnOutcome::Cancelled => crate::domain::model::StopReason::Cancelled,
                         TurnOutcome::Failed { message } => {
-                            crate::domain::model::StopReason::Failed { message }
+                            crate::domain::model::StopReason::Failed {
+                                message,
+                                notice: None,
+                            }
                         }
                     });
                     StepChange::message(stop.and_then(|stop| self.close_turn(Some(stop))))
@@ -367,7 +370,7 @@ impl FoldState {
                     if self.pending_config_requests.remove(id) || control.is_some() {
                         StepChange::message(control)
                     } else {
-                        StepChange::message(self.fail_turn(id, &error.message))
+                        StepChange::message(self.fail_turn(id, error))
                     }
                 }
                 RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => Vec::new(),

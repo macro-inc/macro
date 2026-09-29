@@ -1,4 +1,3 @@
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ThemeV3 } from '../types/themeTypes';
 
 export const macroLightTheme = {
@@ -46,10 +45,7 @@ export const macroLightTheme = {
     'link-hover': 'var(--color-accent)',
     'link-visited': 'var(--color-accent)',
     page: 'var(--color-surface-0)',
-    // Use pure white on mobile without reversing the surface ramp.
-    panel: isTouchDevice()
-      ? 'var(--color-surface-4)'
-      : 'var(--color-surface-1)',
+    panel: 'var(--color-surface-4)',
     dialog: 'var(--color-surface-3)',
     menu: 'var(--color-surface-3)',
     tooltip: 'var(--color-surface-2)',

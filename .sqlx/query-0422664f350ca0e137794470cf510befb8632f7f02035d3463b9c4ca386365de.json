@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (\n                EXISTS(SELECT 1 FROM ai_billing_period_allowance WHERE user_id = $1 AND period_start = $2 AND $3 = ANY(billed_users))\n                OR EXISTS(SELECT 1 FROM ai_overage_charge WHERE user_id = $1 AND period_start = $2 AND accounting_policy = 'legacy')\n                OR EXISTS(SELECT 1 FROM ai_credit_ledger WHERE user_id = $1 AND period_start = $2 AND kind = 'consumption' AND funding_invocation_id IS NULL)\n                ) AS \"used!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "used!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0422664f350ca0e137794470cf510befb8632f7f02035d3463b9c4ca386365de"
+}

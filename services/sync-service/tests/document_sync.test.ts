@@ -61,7 +61,8 @@ describe("document sync tests", () => {
 
     wsA.send(
       FromPeer.fromPeerUpdate({
-        update: update,
+        updates: [update],
+        id: crypto.randomUUID(),
       }).encode(),
     );
 
@@ -101,6 +102,8 @@ describe("document sync tests", () => {
     expect(userC.getState()).toBe("hello world goodbye world");
 
     userB.makeChange(" hello again world");
+    // Wait for the accepted update before racing a new connection against it.
+    userA.import(await userA.readSyncMessage());
     const userD = await createTestUser(mf, "1234");
 
     expect(userD.getState()).toBe(
@@ -139,7 +142,7 @@ describe("document sync tests", () => {
 
     const docB = new LoroDoc();
     const connectionB = await connectToDocumentForTesting(mf, "12347");
-    connectionB.waitForNextMessage();
+    await connectionB.waitForNextMessage();
 
     let tree = docA.getTree("tree");
 
@@ -151,7 +154,8 @@ describe("document sync tests", () => {
     docA.commit();
     connectionA.send(
       FromPeer.fromPeerUpdate({
-        update: docA.export({ mode: "update" }),
+        updates: [docA.export({ mode: "update" })],
+        id: crypto.randomUUID(),
       }).encode(),
     );
 

@@ -9,6 +9,7 @@ import {
   SoupUpdatesDocument,
 } from './graphql/generated/graphql';
 import { createActivityUpdatesHandler } from './graphql-activity-updates';
+import { createChannelListUpdatesHandler } from './graphql-channel-list-updates';
 
 const SOUP_GRAPHQL_WEBSOCKET_PATH = '/items/soup/graphql/ws';
 
@@ -122,7 +123,9 @@ const LIVE_UPDATE_SUBSCRIPTIONS: readonly {
 ] as const;
 
 /** Owns the realtime subscriptions served by the Soup GraphQL websocket. */
-export function createGraphqlSoupSubscriptionsLifecycle(): {
+export function createGraphqlSoupSubscriptionsLifecycle(
+  options: { suspendOnPagehide?: boolean } = {}
+): {
   replace(
     client?: Pick<Client, 'subscription' | 'query'>,
     host?: CacheHost
@@ -130,22 +133,48 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
   connected(): void;
   dispose(): void;
 } {
+  let currentClient: Pick<Client, 'subscription' | 'query'> | undefined;
+  let currentHost: CacheHost | undefined;
+  let suspended = false;
   let unsubscribes: Array<() => void> = [];
   let activity: ReturnType<typeof createActivityUpdatesHandler> | undefined;
+  let channels: ReturnType<typeof createChannelListUpdatesHandler> | undefined;
 
   const unsubscribeAll = () => {
     for (const unsubscribe of unsubscribes) unsubscribe();
     unsubscribes = [];
     activity?.dispose();
     activity = undefined;
+    channels?.dispose();
+    channels = undefined;
   };
 
-  return {
-    replace(client, host) {
+  const onPagehide = () => {
+    suspended = true;
+    // The graphql-ws client is lazy: removing all subscriptions closes the
+    // socket without permanently disposing it, so it can reconnect on restore.
+    unsubscribeAll();
+  };
+  const onPageshow = (event: PageTransitionEvent) => {
+    if (!event.persisted || !suspended) return;
+    suspended = false;
+    lifecycle.replace(currentClient, currentHost);
+  };
+  if (options.suspendOnPagehide) {
+    addEventListener('pagehide', onPagehide);
+    addEventListener('pageshow', onPageshow);
+  }
+
+  const lifecycle = {
+    replace(client?: Pick<Client, 'subscription' | 'query'>, host?: CacheHost) {
+      currentClient = client;
+      currentHost = host;
       unsubscribeAll();
-      if (!client) return;
+      if (!client || suspended) return;
       activity = createActivityUpdatesHandler(client);
+      channels = createChannelListUpdatesHandler(client, host);
       const activityHandler = activity;
+      const channelHandler = channels;
 
       const subscriptions =
         host && !host.disabled
@@ -167,10 +196,10 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
               document === NotificationUpdatesDocument &&
               result.data != null
             ) {
-              publishNotificationPatch(
-                (result.data as NotificationUpdatesSubscription)
-                  .notificationUpdates
-              );
+              const patch = (result.data as NotificationUpdatesSubscription)
+                .notificationUpdates;
+              publishNotificationPatch(patch);
+              void channelHandler.onPatch(patch);
             }
             if (result.error) {
               console.warn(errorMessage, result.error);
@@ -185,7 +214,19 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
         return () => subscription.unsubscribe();
       });
     },
-    connected: () => activity?.reconnect(),
-    dispose: unsubscribeAll,
+    connected: () => {
+      activity?.reconnect();
+      channels?.reconnect();
+    },
+    dispose() {
+      if (options.suspendOnPagehide) {
+        removeEventListener('pagehide', onPagehide);
+        removeEventListener('pageshow', onPageshow);
+      }
+      currentClient = undefined;
+      currentHost = undefined;
+      unsubscribeAll();
+    },
   };
+  return lifecycle;
 }

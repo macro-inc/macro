@@ -1,6 +1,6 @@
 {
   "name": "wide-table",
-  "description": "Fixed-width 836px table. At 360px the viewer should floor zoom at 0.7 and scroll. At 800px it should shrink slightly without hitting the floor.",
+  "description": "Fixed-width 836px table. At 360px and 800px the viewer should keep native type and scroll sideways.",
   "container_widths": [
     360,
     800

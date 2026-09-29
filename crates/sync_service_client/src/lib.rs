@@ -4,6 +4,7 @@ pub mod exists;
 pub mod get_raw;
 pub mod initialize;
 pub mod metadata;
+pub mod surface;
 pub mod wakeup;
 
 pub(crate) static INTERNAL_ACCESS_HEADER: &str = "x-internal-auth-key";
@@ -20,11 +21,26 @@ impl SyncServiceClient {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(INTERNAL_ACCESS_HEADER, internal_auth_key.parse().unwrap());
 
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .build()
-            .unwrap();
+        let client = {
+            let mut builder = reqwest::Client::builder().default_headers(headers);
+            if is_local_https(&url) {
+                let ca = reqwest::Certificate::from_pem(include_bytes!(
+                    "../../../infra/local/certs/ca.pem"
+                ))
+                .expect("checked-in local CA must be valid PEM");
+                builder = builder.add_root_certificate(ca);
+            }
+            builder.build().unwrap()
+        };
 
         Self { url, client }
     }
+}
+
+fn is_local_https(url: &str) -> bool {
+    url.starts_with("https://localhost:")
+        || url.starts_with("https://localhost/")
+        || url == "https://localhost"
+        || url.starts_with("https://127.0.0.1:")
+        || url.starts_with("https://127.0.0.1/")
 }

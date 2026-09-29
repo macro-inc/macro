@@ -13,10 +13,21 @@
    the user's inbox (locally: Mailpit).
 5. First login auto-creates the user, seeds onboarding content (a "Macro Support x <name>"
    channel, a "Macro how to guide" doc favorite, three sample tasks), and lands on
-   `/app/component/inbox`. The starter documents share a personal `docs` tag; the
+   `/app/home`. The starter documents share a personal `docs` tag; the
    guide's `#` example is an inline mention of that same tag. A tag attachment
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
+
+## Hosted-dev proxy SSO
+
+On an allowed OAuth origin such as `https://localhost:<port>`, Google/SSO
+sign-in navigates the browser to `/__macro_dev/gateway/auth/login/sso` with
+`is_mobile=true` to request the session-code handoff. The `original_url`
+remains the browser destination (including its query and hash). Returning
+from the provider redeems the session code to establish cookies locally.
+This browser flow must not open a native authentication session. Verify the
+redirect separately from provider completion; arbitrary development hostnames
+are not on the hosted OAuth redirect allowlist.
 
 ## Native iOS 27
 
@@ -69,7 +80,7 @@ and verified links still require end-to-end qualification.
 
 ## Known crash on first landing (local)
 
-Immediately after login the app navigates to `/app/component/inbox` and can throw a
+Immediately after login the app navigates to `/app/home` and can throw a
 full-screen error dialog: **"Something went terribly wrong — Cannot read properties of
 undefined (reading 'id')"**. Console shows `Failed to init email link on login` with a 404 on
 `GET /auth/link/github/status` and a 400 on `POST /email/email/init`. This is cosmetic-ish and

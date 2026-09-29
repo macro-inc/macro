@@ -26,17 +26,17 @@ describe('inbox link return layout', () => {
   it('round-trips the settings return layout alongside it', () => {
     rememberInboxLinkReturn(LINK_ID, {
       url: '/settings/connections',
-      settingsReturnTo: '/component/inbox/md/doc-1',
+      settingsReturnTo: '/home/md/doc-1',
     });
 
     expect(consumeInboxLinkReturn(LINK_ID)).toEqual({
       url: '/settings/connections',
-      settingsReturnTo: '/component/inbox/md/doc-1',
+      settingsReturnTo: '/home/md/doc-1',
     });
   });
 
   it('clears the stash so a second read finds nothing', () => {
-    rememberInboxLinkReturn(LINK_ID, { url: '/component/inbox' });
+    rememberInboxLinkReturn(LINK_ID, { url: '/home' });
 
     consumeInboxLinkReturn(LINK_ID);
 
@@ -44,13 +44,13 @@ describe('inbox link return layout', () => {
   });
 
   it('ignores a stash left behind by a different flow', () => {
-    rememberInboxLinkReturn('abandoned-link', { url: '/component/inbox' });
+    rememberInboxLinkReturn('abandoned-link', { url: '/home' });
 
     expect(consumeInboxLinkReturn(LINK_ID)).toBeUndefined();
   });
 
   it('drops a mismatched stash rather than leaving it to match later', () => {
-    rememberInboxLinkReturn('abandoned-link', { url: '/component/inbox' });
+    rememberInboxLinkReturn('abandoned-link', { url: '/home' });
 
     consumeInboxLinkReturn(LINK_ID);
 
@@ -69,7 +69,7 @@ describe('inbox link return layout', () => {
     });
 
     expect(() =>
-      rememberInboxLinkReturn(LINK_ID, { url: '/component/inbox' })
+      rememberInboxLinkReturn(LINK_ID, { url: '/home' })
     ).not.toThrow();
   });
 

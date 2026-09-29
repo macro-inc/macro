@@ -101,7 +101,7 @@ export function CreateCompanyModal() {
         class="rounded-xl touch:h-auto *:max-h-[75vh]"
       >
         <Panel.Body>
-          <form class="flex flex-col gap-4 p-4" onSubmit={handleSubmit}>
+          <form class="flex flex-col gap-4 p-5" onSubmit={handleSubmit}>
             <Dialog.CloseButton
               as={Button}
               size="icon-sm"
@@ -183,9 +183,8 @@ export function CreateCompanyModal() {
             <div class="flex shrink-0 items-end justify-end gap-2">
               <Button
                 type="submit"
-                variant={canSubmit() ? 'accent' : 'ghost'}
+                variant="strong"
                 depth={3}
-                class="rounded-lg border-0"
                 disabled={!canSubmit()}
               >
                 {createCompanyMutation.isPending

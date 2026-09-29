@@ -27,6 +27,9 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
+agent_changes = { path = "../../crates/agent_changes", default-features = false, features = ["outbound"] }
+dictation = { path = "../../crates/dictation", features = ["inbound", "outbound"] }
+initiative_documents = { path = "../../crates/initiative_documents" }
 agent_session = { path = "../../crates/agent_session", features = ["outbound"] }
 activity = { path = "../../crates/activity" }
 ai_tools = { path = "../../crates/ai_tools" }
@@ -84,9 +87,13 @@ connection = { path = "../../crates/connection", default-features = false, featu
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 contacts = { path = "../../crates/contacts" }
 cowlike = { path = "../../crates/cowlike" }
+channel_labels = { path = "../../crates/channel_labels", features = [
+  "inbound",
+  "postgres",
+] }
 crm = { path = "../../crates/crm" }
 document_sub_type = { path = "../../crates/document_sub_type" }
-documents_hex = { path = "../../crates/documents", package = "documents" }
+documents_hex = { path = "../../crates/documents", package = "documents", features = ["purge"] }
 doppler-config = { workspace = true }
 dynamodb_client = { path = "../../crates/dynamodb_client" }
 email = { path = "../../crates/email", features = ["outbound", "ports"] }
@@ -97,6 +104,8 @@ entity_access = { path = "../../crates/entity_access", features = [
 ] }
 entity_access_management = { path = "../../crates/entity_access_management" }
 entity_mutation = { path = "../../crates/entity_mutation" }
+entity_registry = { path = "../../crates/entity_registry/entity_registry" }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 favorites = { path = "../../crates/favorites", features = [
   "inbound",
   "postgres",
@@ -113,10 +122,12 @@ github = { path = "../../crates/github", default-features = false, features = [
   "sync",
 ] }
 graphql_soup = { path = "../../crates/graphql_soup" }
+graphql_initiative = { path = "../../crates/graphql_initiative" }
+graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }
 http-body-util = { workspace = true }
-initiative = { path = "../../crates/initiative", features = ["inbound", "postgres"] }
+initiative = { path = "../../crates/initiative", features = ["inbound", "postgres", "resources"] }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
 lazy_static = { workspace = true }
@@ -186,6 +197,7 @@ reqwest = { workspace = true }
 rootcause = { workspace = true }
 s3_key = { path = "../../crates/s3_key" }
 saved_views = { path = "../../crates/saved_views" }
+scheduled_action = { path = "../scheduled_action" }
 schemars = { workspace = true }
 search_service = { path = "../../crates/search_service" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }

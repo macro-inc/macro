@@ -151,7 +151,7 @@ fn user_id() -> MacroUserIdStr<'static> {
 fn started_event() -> CallTopicEvent {
     CallTopicEvent::Started(CallStartedMetadata {
         call_id: CALL_ID,
-        channel_id: CHANNEL_ID,
+        channel_id: Some(CHANNEL_ID),
         created_by: user_id(),
         created_at: Utc::now(),
         recording_enabled: true,
@@ -161,7 +161,7 @@ fn started_event() -> CallTopicEvent {
 fn archived_event() -> CallTopicEvent {
     CallTopicEvent::RecordArchived(CallRecordArchivedMetadata {
         call_id: CALL_ID,
-        channel_id: CHANNEL_ID,
+        channel_id: Some(CHANNEL_ID),
         created_by: user_id(),
         started_at: Utc::now(),
         ended_at: Utc::now(),
@@ -175,7 +175,7 @@ fn archived_event() -> CallTopicEvent {
 fn updated_event() -> CallTopicEvent {
     CallTopicEvent::RecordUpdated(CallRecordUpdatedMetadata {
         call_id: CALL_ID,
-        channel_id: CHANNEL_ID,
+        channel_id: Some(CHANNEL_ID),
         actor_user_id: Some(user_id()),
         custom_name: Some("Renamed call".to_string()),
         share_with_team: None,
@@ -185,7 +185,7 @@ fn updated_event() -> CallTopicEvent {
 fn deleted_event() -> CallTopicEvent {
     CallTopicEvent::RecordDeleted(CallRecordDeletedMetadata {
         call_id: CALL_ID,
-        channel_id: CHANNEL_ID,
+        channel_id: Some(CHANNEL_ID),
         actor_user_id: Some(user_id()),
     })
 }
@@ -193,7 +193,7 @@ fn deleted_event() -> CallTopicEvent {
 fn summarized_event() -> CallTopicEvent {
     CallTopicEvent::RecordSummarized(CallRecordSummarizedMetadata {
         call_id: CALL_ID,
-        channel_id: CHANNEL_ID,
+        channel_id: Some(CHANNEL_ID),
         ai_name_generated: true,
     })
 }
@@ -201,7 +201,7 @@ fn summarized_event() -> CallTopicEvent {
 fn recording_ready_event() -> CallTopicEvent {
     CallTopicEvent::RecordingReady(CallRecordingReadyMetadata {
         call_id: CALL_ID,
-        channel_id: CHANNEL_ID,
+        channel_id: Some(CHANNEL_ID),
     })
 }
 
@@ -552,7 +552,7 @@ fn chat_event_cases() -> Vec<(ChatTopicEvent, ChatEventDescription<'static>)> {
         (
             ChatTopicEvent::Created(ChatCreatedMetadata {
                 chat_id: CHAT_ID.to_string(),
-                owner: owner.clone(),
+                owner: Owner::User(owner.clone()),
                 name: "Chat".to_string(),
                 project_id: Some(PROJECT_ID.to_string()),
             }),
@@ -919,6 +919,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
         ),
         (
             DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+                editors: Vec::new(),
                 document_id: DOCUMENT_ID.to_string(),
                 file_type: FileType::Md,
                 document_version_id: None,
@@ -950,6 +951,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 source_document_id: SOURCE_DOCUMENT_ID.to_string(),
                 source_version_id: Some(7),
                 owner,
+                actor: None,
+                on_behalf_of: None,
                 document_name: "Copied document".to_string(),
                 file_type: Some(FileType::Pdf),
                 project_id: Some(PROJECT_ID.to_string()),
@@ -1315,7 +1318,7 @@ fn maps_all_call_lifecycle_events_to_index_actions() {
         CallEventDescription {
             action: CallIndexAction::Remove {
                 call_id: CALL_ID,
-                channel_id: CHANNEL_ID,
+                channel_id: Some(CHANNEL_ID),
             },
             call_id: CALL_ID,
             event_type: "call.record_deleted",
@@ -1423,6 +1426,7 @@ fn document_extraction_actions_preserve_optional_versions() {
 
     let sync_content_updated =
         DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+            editors: Vec::new(),
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: Some("snapshot-7".to_string()),
@@ -1458,6 +1462,47 @@ fn document_extractor_messages_disable_index_overrides_and_set_expected_users() 
     assert_eq!(sync.file_type, FileType::Md);
     assert_eq!(sync.document_version_id.as_deref(), Some("snapshot-7"));
     assert_eq!(sync.index_override, None);
+}
+
+#[test]
+fn bot_owned_document_event_preserves_the_principal_for_indexing() {
+    const BOT_PRINCIPAL: &str = "bot|00000000-0000-0000-0000-00000000a1a1";
+
+    let message = TestMessage {
+        topic: MacroDocumentsTopic::TOPIC_STR,
+        key: Some(DOCUMENT_ID.to_string()),
+        payload: Some(
+            br#"{
+                "event_id":"00000000-0000-0000-0000-000000000001",
+                "schema_version":1,
+                "event_type":"document.content_uploaded",
+                "metadata":{
+                    "document_id":"document-id",
+                    "owner":"bot|00000000-0000-0000-0000-00000000a1a1",
+                    "file_type":"pdf",
+                    "document_version_id":"convert"
+                }
+            }"#
+            .to_vec(),
+        ),
+    };
+
+    let decoded = DeclaredMacroEvent::decode(&message).expect("decodable document event");
+    let DeclaredMacroEvent::DocumentMacroEvent(event) = decoded else {
+        panic!("expected document event");
+    };
+    let DocumentIndexAction::ExtractText {
+        owner,
+        file_type,
+        document_version_id,
+    } = describe_document_event(&event.event().event).action
+    else {
+        panic!("expected document extraction");
+    };
+    let extractor_message =
+        stored_extractor_message(DOCUMENT_ID, owner, file_type, document_version_id);
+
+    assert_eq!(extractor_message.user_id, BOT_PRINCIPAL);
 }
 
 #[test]
@@ -1744,6 +1789,7 @@ fn exact_macro_documents_envelopes_decode_into_document_events() {
             Event::with_event_id(
                 Uuid::from_u128(2),
                 DocumentTopicEvent::SyncContentUpdated(DocumentSyncContentUpdatedMetadata {
+                    editors: Vec::new(),
                     document_id: DOCUMENT_ID.to_string(),
                     file_type: FileType::Md,
                     document_version_id: None,
@@ -2260,4 +2306,20 @@ async fn processing_is_dropped_after_exactly_three_failed_attempts() {
     .expect_err("persistent processing failure is dropped by the worker");
 
     assert_eq!(attempts.load(Ordering::SeqCst), MAX_PROCESSING_ATTEMPTS);
+}
+
+#[test]
+fn standalone_call_deletion_indexes_by_call_without_channel_context() {
+    let mut event = deleted_event();
+    let CallTopicEvent::RecordDeleted(metadata) = &mut event else {
+        panic!("deleted event fixture");
+    };
+    metadata.channel_id = None;
+    assert_eq!(
+        describe_call_event(&event).action,
+        CallIndexAction::Remove {
+            call_id: CALL_ID,
+            channel_id: None,
+        }
+    );
 }

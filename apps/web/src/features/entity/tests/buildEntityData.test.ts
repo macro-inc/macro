@@ -180,14 +180,17 @@ describe('buildEntityData', () => {
         ...base,
         type: 'automation',
         cron: '* * * * *',
-        enabled: true,
+        status: { kind: 'unscheduled' },
       });
     });
   });
 
   describe('call', () => {
-    it('returns undefined without channelId', () => {
-      expect(buildEntityData({ ...base, blockName: 'call' })).toBeUndefined();
+    it('builds a standalone call without a channel', () => {
+      expect(buildEntityData({ ...base, blockName: 'call' })).toMatchObject({
+        type: 'call',
+        isActive: false,
+      });
     });
 
     it('builds a call with defaults', () => {

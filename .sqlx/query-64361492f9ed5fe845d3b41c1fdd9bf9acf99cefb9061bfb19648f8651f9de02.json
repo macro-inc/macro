@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_billing_account\n            SET overage_suspended_at = NULL, updated_at = NOW()\n            WHERE user_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "64361492f9ed5fe845d3b41c1fdd9bf9acf99cefb9061bfb19648f8651f9de02"
+}

@@ -6,19 +6,23 @@
  * the bottom, immediately above the composer, so Up from the input lands on
  * "the one about to be sent" and further Up presses walk toward the newest.
  *
- * Each prompt row is a live Lexical surface, always editable in place —
- * edits debounce and autosave through `onEdit`, with a flush on blur; there
+ * Rows start as one-line previews. Opening a prompt reveals its scrollable
+ * Lexical editor; only one row is expanded at a time.
+ * Edits debounce and autosave through `onEdit`, with a flush on blur; there
  * are no save/cancel affordances. Non-prompt entries (compact) are
  * read-only text but keep their remove affordance, which is always visible.
  */
 
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import CaretUpIcon from '@phosphor-icons/core/regular/caret-up.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { Button, Surface } from '@ui';
 import {
   createEffect,
   createMemo,
+  createSignal,
+  createUniqueId,
   For,
   onCleanup,
   onMount,
@@ -41,6 +45,8 @@ export type QueuedPromptItem = {
 export interface QueuedPromptsProps {
   /** In dispatch order — oldest (next to send) first, as the server reports. */
   items: QueuedPromptItem[];
+  /** Keep queued text visible without allowing changes. */
+  disabled?: boolean;
   /** Autosave a queued prompt's replacement text. The rows debounce. */
   onEdit: (actionId: string, prompt: string) => void;
   /** Remove a queued action before it dispatches. */
@@ -59,6 +65,7 @@ export interface QueuedPromptsProps {
 const AUTOSAVE_DEBOUNCE_MS = 400;
 
 export function QueuedPrompts(props: QueuedPromptsProps) {
+  const [expandedId, setExpandedId] = createSignal<string>();
   // Reversed for render: newest at the top, next-to-dispatch at the bottom.
   // `For` keys on the id strings, so a snapshot that only re-orders or edits
   // never remounts a row (and never drops an editor mid-keystroke).
@@ -91,33 +98,50 @@ export function QueuedPrompts(props: QueuedPromptsProps) {
     onCleanup(() => props.registerFocusFromBelow?.(undefined));
   });
 
+  // A long queue scrolls within a capped height rather than pushing the
+  // transcript away. `flex-col-reverse` around the single list anchors the
+  // scroll at the bottom, so the next-to-dispatch row stays in view, without
+  // reordering the DOM (focus order still runs newest to next).
   return (
-    <div class="flex flex-col gap-1" data-testid="agent-queued-prompts">
-      <For each={orderedIds()}>
-        {(id) => (
-          <Show when={itemById(id)}>
-            {(item) => (
-              <QueuedRow
-                item={item()}
-                registerFocus={(focus) => {
-                  if (focus) focusFns.set(id, focus);
-                  else focusFns.delete(id);
-                }}
-                onMoveUp={() => moveFocus(id, -1)}
-                onMoveDown={() => moveFocus(id, 1)}
-                onEdit={(prompt) => props.onEdit(id, prompt)}
-                onRemove={() => props.onRemove(id)}
-              />
-            )}
-          </Show>
-        )}
-      </For>
+    <div class="flex max-h-[min(40vh,24rem)] flex-col-reverse overflow-y-auto overscroll-contain">
+      <div
+        class="flex shrink-0 flex-col gap-1"
+        data-testid="agent-queued-prompts"
+      >
+        <For each={orderedIds()}>
+          {(id) => (
+            <Show when={itemById(id)}>
+              {(item) => (
+                <QueuedRow
+                  item={item()}
+                  disabled={props.disabled}
+                  expanded={expandedId() === id}
+                  onExpandedChange={(expanded) =>
+                    setExpandedId(expanded ? id : undefined)
+                  }
+                  registerFocus={(focus) => {
+                    if (focus) focusFns.set(id, focus);
+                    else focusFns.delete(id);
+                  }}
+                  onMoveUp={() => moveFocus(id, -1)}
+                  onMoveDown={() => moveFocus(id, 1)}
+                  onEdit={(prompt) => props.onEdit(id, prompt)}
+                  onRemove={() => props.onRemove(id)}
+                />
+              )}
+            </Show>
+          )}
+        </For>
+      </div>
     </div>
   );
 }
 
 type QueuedRowProps = {
   item: QueuedPromptItem;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+  disabled?: boolean;
   /** Ref-style: how navigation focuses this row; `undefined` on unmount. */
   registerFocus: (focus: (() => void) | undefined) => void;
   onMoveUp: () => void;
@@ -127,47 +151,115 @@ type QueuedRowProps = {
 };
 
 function QueuedRow(props: QueuedRowProps) {
+  const editorId = createUniqueId();
+  const [draft, setDraft] = createSignal<string>();
+  let toggle: HTMLButtonElement | undefined;
+  let focusBody: (() => void) | undefined;
+  const preview = () =>
+    props.item.kind === 'prompt'
+      ? (draft() ?? props.item.prompt ?? '').trim() || 'Attached files'
+      : 'Compact the conversation';
+  const open = () => {
+    props.onExpandedChange(true);
+    focusBody?.();
+  };
+  const close = () => {
+    // Moving focus flushes the editor's pending autosave before hiding it.
+    toggle?.focus();
+    props.onExpandedChange(false);
+  };
+
   onMount(() => {
+    props.registerFocus(open);
     onCleanup(() => props.registerFocus(undefined));
   });
 
   return (
-    <Surface class="rounded-lg" depth={1} solid>
-      <div class="flex items-start gap-2 px-3 py-1.5">
-        <div class="min-w-0 flex-1">
-          <Show
-            when={props.item.kind === 'prompt'}
-            fallback={<CompactBody {...props} />}
+    <Surface class="h-auto shrink-0 rounded-lg" depth={1} solid>
+      <div
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !event.defaultPrevented) {
+            event.preventDefault();
+            event.stopPropagation();
+            close();
+          }
+        }}
+      >
+        <div class="flex items-center gap-2 px-3 py-1">
+          <button
+            ref={toggle}
+            type="button"
+            class="flex min-w-0 flex-1 items-center gap-2 rounded-xs py-1 text-left text-sm text-ink outline-none focus-visible:ring-1 focus-visible:ring-accent"
+            aria-expanded={props.expanded}
+            aria-controls={editorId}
+            title={
+              props.expanded
+                ? 'Collapse queued message'
+                : 'Expand queued message'
+            }
+            onClick={() => (props.expanded ? close() : open())}
           >
-            <PromptBody {...props} />
-          </Show>
-          <div class="text-xs text-ink-extra-muted">
+            <CaretUpIcon
+              class="size-3 shrink-0 text-ink-muted transition-transform"
+              classList={{ 'rotate-180': props.expanded }}
+            />
+            <span class="truncate">{preview()}</span>
+          </button>
+          <span class="shrink-0 text-xs text-ink-extra-muted">
             Queued
             <Show when={props.item.queuedBy}>
               {(name) => <> by {name()}</>}
             </Show>
-          </div>
+          </span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            label="Remove queued message"
+            disabled={props.disabled}
+            onClick={() => props.onRemove()}
+            class="shrink-0"
+          >
+            <XIcon class="size-3.5" />
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          label="Remove queued message"
-          onClick={() => props.onRemove()}
-          class="shrink-0"
+        <div
+          id={editorId}
+          class="max-h-[min(32vh,16rem)] overflow-y-auto overscroll-contain border-t border-edge-muted px-3 py-2"
+          hidden={!props.expanded}
         >
-          <XIcon class="size-3.5" />
-        </Button>
+          <Show
+            when={props.item.kind === 'prompt'}
+            fallback={
+              <CompactBody
+                {...props}
+                registerFocus={(focus) => (focusBody = focus)}
+              />
+            }
+          >
+            <PromptBody
+              {...props}
+              registerFocus={(focus) => (focusBody = focus)}
+              onDraftChange={setDraft}
+              onCollapse={close}
+            />
+          </Show>
+        </div>
       </div>
     </Surface>
   );
 }
 
 /**
- * The always-editable body of a prompt row: the same Lexical markdown
+ * The editable body of an expanded prompt row: the same Lexical markdown
  * surface as the composer's input, minus its send machinery. Edits debounce
  * into `onEdit` and flush when focus leaves the row.
  */
-function PromptBody(props: QueuedRowProps) {
+function PromptBody(
+  props: QueuedRowProps & {
+    onDraftChange: (text: string) => void;
+    onCollapse: () => void;
+  }
+) {
   // The last text this row and the server agree on: what was mounted,
   // applied from a server snapshot, or handed to `onEdit`. Both the autosave
   // and the anti-clobber check compare against it.
@@ -179,6 +271,7 @@ function PromptBody(props: QueuedRowProps) {
       clearTimeout(saveTimer);
       saveTimer = undefined;
     }
+    if (props.disabled) return;
     const text = editor.controls.getMarkdown();
     // An emptied row is not an edit to send — the server refuses empty
     // prompts and "delete the text" has the remove affordance for it.
@@ -188,6 +281,8 @@ function PromptBody(props: QueuedRowProps) {
   };
 
   const scheduleSave = (markdown: string) => {
+    if (props.disabled) return;
+    props.onDraftChange(markdown);
     if (markdown === synced) return;
     if (saveTimer !== undefined) clearTimeout(saveTimer);
     saveTimer = setTimeout(flush, AUTOSAVE_DEBOUNCE_MS);
@@ -197,6 +292,11 @@ function PromptBody(props: QueuedRowProps) {
     .namespace('agent-queued-prompt')
     .withHistory({ timeGap: 400 })
     .onChange(scheduleSave)
+    .onEscape(() => {
+      flush();
+      props.onCollapse();
+      return true;
+    })
     .onFocusLeave({
       onStart: (event) => {
         event.preventDefault();
@@ -230,12 +330,17 @@ function PromptBody(props: QueuedRowProps) {
       saveTimer !== undefined || editor.controls.getMarkdown() !== synced;
     if (focused || dirty) return;
     editor.controls.setMarkdown(server);
+    props.onDraftChange(server);
     synced = server;
   });
 
   return (
     <div class="text-sm text-ink" onFocusOut={flush}>
-      <MarkdownShell config={editor} initialValue={props.item.prompt} />
+      <MarkdownShell
+        config={editor}
+        initialValue={props.item.prompt}
+        disabled={props.disabled}
+      />
       {/* Attached files ride the prompt as-is: an edit rewrites the text and
           keeps them, so they are shown but not editable here. */}
       <Show when={props.item.attachments?.length}>

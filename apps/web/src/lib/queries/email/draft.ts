@@ -1,4 +1,3 @@
-import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
@@ -14,7 +13,6 @@ import { emailKeys } from './keys';
 
 type CreateDraftParams = {
   draft: ApiDraftInput;
-  sendTime?: Date | null;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
   /** Skip updating soup when the thread will immediately be marked done. */
@@ -31,20 +29,13 @@ export function useSaveDraftMutation(
     mutationFn: async (vars: CreateDraftParams) => {
       return await throwOnErr(
         async () =>
-          await emailClient.createDraft(
-            {
-              draft: vars.draft,
-              send_time: vars.sendTime?.toISOString() ?? null,
-            },
-            vars.linkId
-          )
+          await emailClient.createDraft({ draft: vars.draft }, vars.linkId)
       );
     },
     ...withCallbacks<CreateDraftResponse, Error, CreateDraftParams>(
       {
         onError(error) {
           console.error('Failed to save draft', error);
-          toast.failure('Failed to save draft');
         },
         onSuccess(data, vars) {
           try {
@@ -104,7 +95,6 @@ export function useDeleteDraftMutation(
       {
         onError(error) {
           console.error('Failed to delete draft', error);
-          toast.failure('Failed to delete draft');
         },
         onSuccess(_data, vars) {
           try {

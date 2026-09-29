@@ -203,6 +203,8 @@ async fn deletions_publish_and_reactions_typing_and_thread_state_stay_off_the_to
     for change in [
         MessageChange::ReactionChanged {
             message: reply(parent.clone(), vec![]),
+            emoji: "👍".to_string(),
+            added: true,
         },
         MessageChange::Typing {
             thread_id: Some(ROOT),

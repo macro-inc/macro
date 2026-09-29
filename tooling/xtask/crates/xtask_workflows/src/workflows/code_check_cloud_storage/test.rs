@@ -1,6 +1,14 @@
 use super::*;
 
 #[test]
+fn inventory_only_changes_run_live_config_validation() {
+    let filters = serde_json::to_string(&paths_filter().value.with).unwrap();
+    assert!(filters.contains(".github/services-config.json"));
+    let job = serde_json::to_value(check()).unwrap();
+    assert!(!job["if"].as_str().unwrap().contains("rust_packages"));
+}
+
+#[test]
 fn package_selection_does_not_pass_lib() {
     let script = include_str!("../scripts/run_tests.sh");
     assert!(

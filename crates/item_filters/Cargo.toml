@@ -17,6 +17,7 @@ either = { workspace = true }
 filter_ast = { path = "../filter_ast" }
 macro_user_id = { path = "../macro_user_id" }
 model_file_type = { path = "../model_file_type" }
+model_owner = { path = "../model_owner" }
 nom = { workspace = true }
 non_empty = { path = "../non_empty" }
 notification_state = { path = "../notification_state" }

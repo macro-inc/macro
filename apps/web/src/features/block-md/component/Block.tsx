@@ -9,7 +9,7 @@ import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsla
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
-import { useBlockAliasedName, useBlockId } from '@core/block';
+import { useBlockAliasedName, useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockDataSignal as blockLoaderDataSignal } from '@core/internal/BlockLoader';
@@ -30,8 +30,9 @@ import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { Show, Suspense } from 'solid-js';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
-import type { MarkdownBlockSpec, MarkdownData } from '../definition';
+import type { MarkdownData } from '../definition';
 import { OldOverlay } from '../history/OldOverlay';
+import { createMarkdownRouteNavigation } from '../primitives/create-markdown-route-navigation';
 import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
 import { FindAndReplace } from './FindAndReplace';
@@ -78,18 +79,13 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const isInstructions = () =>
     instructionsMdId.isSuccess && documentId === instructionsMdId.data;
   const markdownState = createMarkdownDocumentState();
-  const { setRevisions, setRewriting } = markdownState.rewrite;
+  if (!useIsNestedBlock())
+    createMarkdownRouteNavigation(
+      () => documentId,
+      markdownState.params.navigate
+    );
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: markdownState.params.navigate,
-    setPatches: ({
-      patches,
-    }: Parameters<MarkdownBlockSpec['setPatches']>[0]) => {
-      setRewriting(false);
-      setRevisions(patches);
-    },
-    setIsRewriting: () => {
-      setRewriting(true);
-    },
   });
   const notificationSource = useGlobalNotificationSource();
 

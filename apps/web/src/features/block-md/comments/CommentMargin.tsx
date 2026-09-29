@@ -1,6 +1,7 @@
 import {
   type CommentId,
   isDraftThreadId,
+  type Root,
   type ThreadId,
 } from '@core/comments/commentType';
 import { MinimizedThread } from '@core/comments/MinimizedThreads';
@@ -94,6 +95,8 @@ const useCommentsContext = (
     ...operations,
     inComment: true,
     highlightedCommentId: () => commentState.highlightedCommentId,
+    clearHighlightedComment: () =>
+      setCommentState('highlightedCommentId', null),
   };
   return commentsContext;
 };
@@ -130,6 +133,12 @@ export const CommentMargin = (props: { wideEnough: boolean }) => {
     }
   );
 
+  // A caret inside resolved text does not unfold its thread; only opening it
+  // from the margin or a link does.
+  const isThreadActive = (thread: Root) =>
+    isActiveSelector(thread.threadId) &&
+    (!thread.resolved || commentState.activeCommentThread === thread.threadId);
+
   const commentsContext = useCommentsContext(setThreadHeights);
 
   // Touch devices never expand floating thread cards; the active thread is
@@ -154,7 +163,7 @@ export const CommentMargin = (props: { wideEnough: boolean }) => {
                             <MinimizedThread
                               comment={thread()}
                               layout={layout()}
-                              isActive={isActiveSelector(thread().threadId)}
+                              isActive={isThreadActive(thread())}
                               maxHeight={maxHeight()}
                               expandable={!isTouchDevice()}
                             />
@@ -163,7 +172,7 @@ export const CommentMargin = (props: { wideEnough: boolean }) => {
                           <Thread
                             comment={thread()}
                             layout={layout()}
-                            isActive={isActiveSelector(thread().threadId)}
+                            isActive={isThreadActive(thread())}
                             maxHeight={maxHeight()}
                           />
                         </Show>

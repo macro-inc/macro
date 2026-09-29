@@ -1,5 +1,5 @@
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -19,7 +19,7 @@ pub enum ProjectLiteral {
     ProjectIdSelf(Uuid),
     /// the owner of the project
     #[serde(rename = "o")]
-    Owner(MacroUserIdStr<'static>),
+    Owner(Owner),
     /// this node value filters by project importance. false short-circuits to match nothing.
     #[serde(rename = "imp")]
     Importance(bool),
@@ -63,7 +63,7 @@ impl ExpandFrame<ProjectLiteral> for ProjectFilters {
 
         let owners = owners
             .iter()
-            .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
+            .map(|s| Owner::from_principal_str(s))
             .try_expand(|r| r.map(ProjectLiteral::Owner), Expr::or)?;
 
         let importance_node = importance.map(|imp| Expr::Literal(ProjectLiteral::Importance(imp)));

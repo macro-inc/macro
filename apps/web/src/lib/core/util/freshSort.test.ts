@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { applyDurationToDate } from './dateSearch/dateParser';
 import { createFreshSearch, normalizeFuzzyScore } from './freshSort';
 
@@ -33,6 +33,34 @@ function createSearch(opts: { useViewedAt?: boolean; channelBoost?: number }) {
 }
 
 describe('freshSort ordering', () => {
+  it('scores equal timestamps equally when time advances while scoring candidates', () => {
+    vi.useFakeTimers({ now: new Date('2026-09-26T12:00:00Z') });
+    try {
+      const viewedAt = new Date(Date.now() - 1000);
+      const items: MockItem[] = ['a', 'b', 'c'].map((id) => ({
+        id,
+        name: 'Planning',
+        type: 'item',
+        viewedAt,
+      }));
+      const search = createFreshSearch<MockItem>({
+        config: { useViewedAt: true },
+        getName: (item) => item.name,
+        getTimestamp: (item) => {
+          vi.advanceTimersByTime(1);
+          return { viewedAt: item.viewedAt };
+        },
+      });
+      const scores = search(items, 'Planning').map(
+        (result) => result.combinedScore
+      );
+
+      expect(new Set(scores).size).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('orders by viewedAt - most recent first', () => {
     const now = new Date();
     const items: MockItem[] = [

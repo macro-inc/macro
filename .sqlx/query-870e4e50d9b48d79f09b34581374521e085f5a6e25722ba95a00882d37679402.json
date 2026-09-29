@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_scheduled_messages WHERE link_id = $1 AND message_id = $2 AND NOT sent AND NOT processing",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "870e4e50d9b48d79f09b34581374521e085f5a6e25722ba95a00882d37679402"
+}

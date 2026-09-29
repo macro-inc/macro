@@ -34,6 +34,7 @@ vi.mock(
       const builder = {
         buildHandle: () => ({ lexical: editor.lexical }),
         namespace: () => builder,
+        withAppLinkResolver: () => builder,
         withMentions: () => builder,
         withEmojis: () => builder,
         withLinks: () => builder,
@@ -94,10 +95,26 @@ vi.mock('@core/util/upload', () => ({
   ) => callback(files.map((file) => ({ file }))),
 }));
 
+const resizeCallbacks: ResizeObserverCallback[] = [];
+
+/** Report a content resize the way the browser would for `target`. */
+function resize(target: HTMLElement, height: number) {
+  vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(0, 0, 400, height)
+  );
+  const entry = { target, contentRect: new DOMRect(0, 0, 400, height) };
+  for (const callback of resizeCallbacks)
+    callback([entry as unknown as ResizeObserverEntry], {} as ResizeObserver);
+}
+
 beforeEach(() => {
+  resizeCallbacks.length = 0;
   vi.stubGlobal(
     'ResizeObserver',
     class {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback);
+      }
       observe() {}
       unobserve() {}
       disconnect() {}
@@ -195,7 +212,7 @@ describe('Chat session input', () => {
     expect(screen.getByRole('button', { name: 'Agent' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Model' })).toBeNull();
   });
-  it('reveals the repository drawer without remounting the editor', () => {
+  it('expands coding mode with repository settings after the input without remounting the editor', () => {
     const [mode, setMode] = createSignal('chat');
     const { container } = render(() => (
       <ChatComposer
@@ -209,17 +226,53 @@ describe('Chat session input', () => {
     ));
     const input = screen.getByTestId('editor');
     const drawer = container.querySelector('.composer-drawer');
+    const layout = container.querySelector('[data-composer-compact]');
+    expect(layout?.getAttribute('data-composer-compact')).toBe('true');
+    expect(
+      (drawer?.compareDocumentPosition(input) ?? 0) &
+        Node.DOCUMENT_POSITION_PRECEDING
+    ).toBeTruthy();
     expect((drawer as HTMLElement).inert).toBe(true);
     expect(drawer?.getAttribute('aria-hidden')).toBe('true');
     setMode('code');
     expect(screen.getByTestId('editor')).toBe(input);
     expect((drawer as HTMLElement).inert).toBe(false);
     expect(drawer?.hasAttribute('data-open')).toBe(true);
+    expect(layout?.getAttribute('data-composer-compact')).toBe('false');
+    expect(editor.clear).not.toHaveBeenCalled();
     setMode('chat');
+    expect(layout?.getAttribute('data-composer-compact')).toBe('true');
+    expect(screen.getByTestId('editor')).toBe(input);
     expect((drawer as HTMLElement).inert).toBe(true);
     const settings = screen.getByRole('group', { name: 'Composer settings' });
     expect(settings.textContent).toBe('Agent');
   });
+  it('does not grow the surface from zero after mounting offscreen', () => {
+    render(() => (
+      <ChatComposer
+        draft=""
+        onDraftChange={vi.fn()}
+        onSend={vi.fn()}
+        selector={<button>Agent</button>}
+      />
+    ));
+    const surface = document.querySelector<HTMLElement>(
+      '[data-agent-composer="chat"]'
+    );
+    const content = document.querySelector<HTMLElement>(
+      '[data-composer-content]'
+    );
+    if (!surface || !content) throw new Error('composer did not render');
+    const parent = content.parentElement;
+    content.remove();
+    resize(content, 0);
+    expect(surface.style.height).toBe('');
+
+    parent?.append(content);
+    resize(content, 49);
+    expect(surface.style.height).toBe('49px');
+  });
+
   it('lets controls inside the composer receive pointer focus', () => {
     render(() => (
       <ChatComposer

@@ -45,6 +45,58 @@ describe('message grouping meta', () => {
     expect(shouldGroupWithPreviousMessage(current, previous)).toBe(true);
   });
 
+  it.each([
+    [null, undefined],
+    [undefined, null],
+  ] as const)(
+    'groups same-author messages when absent attribution is %s then %s',
+    (previousTriggeredBy, currentTriggeredBy) => {
+      const previous = createMessage('m1', '2026-02-20T09:00:00.000Z');
+      const current = createMessage('m2', '2026-02-20T09:01:00.000Z');
+      previous.sender = {
+        ...senderFromStorageId(previous.sender_id),
+        triggered_by: previousTriggeredBy,
+      };
+      current.sender = {
+        ...senderFromStorageId(current.sender_id),
+        triggered_by: currentTriggeredBy,
+      };
+
+      // Optimistic sends omit attribution; persisted messages can return null.
+      expect(shouldGroupWithPreviousMessage(current, previous)).toBe(true);
+      current.sender.triggered_by = null;
+      expect(shouldGroupWithPreviousMessage(current, previous)).toBe(true);
+    }
+  );
+
+  it.each([
+    ['user-1', 'user-1', true],
+    ['user-1', 'user-2', false],
+    ['user-1', null, false],
+    [undefined, 'user-1', false],
+  ] as const)(
+    'groups bot messages attributed to %s then %s: %s',
+    (previousTriggeredBy, currentTriggeredBy, expected) => {
+      const senderId = 'bot|00000000-0000-0000-0000-000000000001';
+      const previous = createMessage(
+        'm1',
+        '2026-02-20T09:00:00.000Z',
+        senderId
+      );
+      const current = createMessage('m2', '2026-02-20T09:01:00.000Z', senderId);
+      previous.sender = {
+        ...senderFromStorageId(senderId),
+        triggered_by: previousTriggeredBy,
+      };
+      current.sender = {
+        ...senderFromStorageId(senderId),
+        triggered_by: currentTriggeredBy,
+      };
+
+      expect(shouldGroupWithPreviousMessage(current, previous)).toBe(expected);
+    }
+  );
+
   it('does not group when author changes', () => {
     const previous = createMessage('m1', '2026-02-20T09:00:00.000Z');
     const current = createMessage('m2', '2026-02-20T09:01:00.000Z', 'user-2');

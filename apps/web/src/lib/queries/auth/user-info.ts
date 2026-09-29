@@ -4,8 +4,9 @@ import { hasLoginCookie } from '@core/util/cookies';
 import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import { useQuery } from '@tanstack/solid-query';
-import { queryClient } from '../client';
+import { queryClient, queryPersistence } from '../client';
 import { authKeys } from './keys';
+import { hasCachedUserIdentity } from './user-info-cache';
 
 export { authKeys } from './keys';
 
@@ -64,21 +65,32 @@ export function invalidateAllAfterLogin() {
   return invalidated;
 }
 
-/** Ensure user info is in the query cache. Fetches if not present. */
+/** Ensure signed-in identity is cached; signed-out markers require a fresh auth fetch. */
 export async function prefetchUserInfo() {
   // Skip prefetch if user doesn't appear to be authenticated.
   // This prevents unnecessary auth requests during unauthenticated flows.
   if (!hasLoginCookie()) return;
 
+  // IDB restoration is independent of an in-flight auth fetch. Await it first
+  // so an offline native launch can use restored identity without that fetch.
+  await queryPersistence.restoreQuery(authKeys.userInfo.queryKey);
+  if (!hasLoginCookie()) return;
+  if (
+    hasCachedUserIdentity(queryClient.getQueryData(authKeys.userInfo.queryKey))
+  )
+    return;
+
   await catchToResult(
     async () =>
-      await queryClient.ensureQueryData({
+      await queryClient.fetchQuery({
         queryKey: authKeys.userInfo.queryKey,
         queryFn: async () =>
           await throwOnErr(
             async () => await authServiceClient.getLegacyUserPermissions()
           ),
         networkMode: 'always',
+        // Even a fresh in-memory logout stub is not the new login's identity.
+        staleTime: 0,
       })
   );
 }

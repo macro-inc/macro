@@ -1,5 +1,6 @@
 import { batch, createSignal, onCleanup } from 'solid-js';
 import type {
+  OpenSplitResult,
   OpenWithSplitOptions,
   ReferredFrom,
   SplitContent,
@@ -60,23 +61,29 @@ export function createMobileSwipeLayout(
 
   let animatedTrigger: (() => void) | undefined;
   let forwardNavigationTrigger: (() => void) | undefined;
+  let pendingForwardApplied:
+    | { splitId: SplitId; notify: () => void }
+    | undefined;
 
   const fgSplitId = () => (fgIsSlotA() ? slotASplitId() : slotBSplitId());
   const bgSplitId = () => (fgIsSlotA() ? slotBSplitId() : slotASplitId());
-  const sameContent = (a: SplitContent, b: SplitContent) =>
-    a.type === b.type && a.id === b.id;
+  const contentKey = (content: SplitContent) => `${content.type}:${content.id}`;
 
   // The BG split is always exactly bgSplitId() — derive exclusion directly from
   // the slot signals rather than maintaining a separate set.
   splitManager.setExclusionFilter((split) => split.id === bgSplitId());
-  splitManager.setNavigationInterceptor((content, options) => {
-    if (options.mergeHistory) return { handled: false };
-    navigateForward(content, options);
-    return { handled: true };
+  splitManager.setSplitNavigationInterceptor((content, options) => {
+    if (
+      options.mergeHistory ||
+      splitManager.findOpenView(content)?.owner === fgSplitId()
+    )
+      return;
+    return navigateForward(content, options);
   });
   onCleanup(() => {
+    pendingForwardApplied = undefined;
     splitManager.setExclusionFilter(undefined);
-    splitManager.setNavigationInterceptor(undefined);
+    splitManager.setSplitNavigationInterceptor(undefined);
   });
 
   function canGoBack() {
@@ -86,8 +93,9 @@ export function createMobileSwipeLayout(
 
   function navigateForward(
     content: SplitContent,
-    options?: Pick<OpenWithSplitOptions, 'referredFrom'>
-  ) {
+    options?: Pick<OpenWithSplitOptions, 'referredFrom' | 'onApplied'>
+  ): OpenSplitResult {
+    pendingForwardApplied = undefined;
     const isFgA = fgIsSlotA();
     const currentFgId = fgSplitId();
     const currentBgId = bgSplitId();
@@ -105,25 +113,28 @@ export function createMobileSwipeLayout(
     fgHandle?.captureEntryState();
 
     // If the target is already mounted in BG, promote it instead of recreating it.
-    if (bgHandle && sameContent(bgHandle.content(), content)) {
+    if (
+      bgHandle &&
+      (contentKey(bgHandle.content()) === contentKey(content) ||
+        splitManager.findOpenView(content)?.owner === bgHandle.id)
+    ) {
       // Reopening from a list supplies a new source even for the same entity.
-      bgHandle.replace({ next: content, referredFrom, mergeHistory: true });
-      if (forwardNavigationTrigger) {
-        forwardNavigationTrigger();
-      } else {
-        completeNavigateForward();
-      }
-      return;
+      bgHandle.replace({
+        next:
+          contentKey(bgHandle.content()) === contentKey(content)
+            ? content
+            : bgHandle.content(),
+        referredFrom,
+        mergeHistory: true,
+      });
+      startForwardNavigation(bgHandle.id, options?.onApplied);
+      return { status: 'reused', owner: bgHandle.id, split: bgHandle };
     }
 
     const newFgInitialHistory = fgHandle?.history() ?? [];
 
     // Batch to ensure reactive dependencies never see intermediate state.
-    batch(() => {
-      if (currentBgId) {
-        splitManager.removeSplit(currentBgId);
-      }
-
+    const prepared = batch(() => {
       const newFgHandle = splitManager.createNewSplit({
         content,
         initialHistory: newFgInitialHistory,
@@ -131,10 +142,22 @@ export function createMobileSwipeLayout(
         referredFrom,
       });
 
-      setNewFgSlotId(newFgHandle?.id);
+      if (!newFgHandle || newFgHandle.id === currentFgId) return false;
+      if (currentBgId && currentBgId !== newFgHandle.id) {
+        splitManager.removeSplit(currentBgId);
+      }
+      setNewFgSlotId(newFgHandle.id);
+      return newFgHandle;
     });
+    if (!prepared) return { status: 'unavailable' };
 
+    startForwardNavigation(prepared.id, options?.onApplied);
+    return { status: 'opened', split: prepared };
+  }
+
+  function startForwardNavigation(splitId: SplitId, onApplied?: () => void) {
     if (forwardNavigationTrigger) {
+      if (onApplied) pendingForwardApplied = { splitId, notify: onApplied };
       forwardNavigationTrigger();
     } else {
       completeNavigateForward();
@@ -143,7 +166,9 @@ export function createMobileSwipeLayout(
 
   function completeNavigateForward() {
     const preparedFgId = bgSplitId();
-    if (!preparedFgId) return;
+    const pending = pendingForwardApplied;
+    pendingForwardApplied = undefined;
+    if (!preparedFgId || !splitManager.getSplit(preparedFgId)) return;
 
     batch(() => {
       // Flip roles before activating: activateSplit refuses excluded
@@ -152,6 +177,12 @@ export function createMobileSwipeLayout(
       toggleFgSlot();
       splitManager.activateSplit(preparedFgId);
     });
+    if (
+      pending?.splitId === preparedFgId &&
+      splitManager.activeSplitId() === preparedFgId
+    ) {
+      pending.notify();
+    }
   }
 
   function completeSwipeBack() {
@@ -166,24 +197,28 @@ export function createMobileSwipeLayout(
     const bgHandle = splitManager.getSplit(currentBgId);
     if (!bgHandle) return;
 
-    const newBgContent = bgHandle.previousContent();
-    // Current content gets appended to history, so we want to slice before the new bg content
-    const newBgInitialHistory = bgHandle.history().slice(0, -2);
-
     // Batch to ensure reactive dependencies never see intermediate state.
     batch(() => {
       if (currentFgId) {
         splitManager.removeSplit(currentFgId);
       }
 
-      const newBgHandle = newBgContent
-        ? splitManager.createNewSplit({
-            content: newBgContent,
-            initialHistory: newBgInitialHistory,
-            activate: false,
-            referredFrom: null,
-          })
-        : undefined;
+      // Skip entries still mounted elsewhere, including an earlier route for
+      // the conversation being promoted. Never assign both slots to one split.
+      const history = bgHandle.history().slice(0, -1);
+      const previousIndex = history.findLastIndex((content) => {
+        const existing = splitManager.findOpenView(content);
+        return !existing || existing.content.type === 'component';
+      });
+      const newBgHandle =
+        previousIndex >= 0
+          ? splitManager.createNewSplit({
+              content: history[previousIndex],
+              initialHistory: history.slice(0, previousIndex),
+              activate: false,
+              referredFrom: null,
+            })
+          : undefined;
 
       setNewBgSlotId(newBgHandle?.id);
       // Flip roles before activating: activateSplit refuses excluded

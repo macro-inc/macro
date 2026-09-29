@@ -1,3 +1,4 @@
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin';
 import XIcon from '@phosphor/x.svg';
@@ -17,7 +18,7 @@ function EditBottomRow(props: {
       <Button
         tooltip="Delete Draft"
         size="icon-sm"
-        class="size-7 rounded-full"
+        class="size-7"
         variant="ghost"
         on:click={props.handleCancel}
       >
@@ -59,6 +60,7 @@ export function EditInput(props: {
   const [isSending, setIsSending] = createSignal(false);
   const { setActiveThread } = useContext(CommentsContext);
   const { mentionsSignal } = useContext(ThreadContext);
+  const resolveAppLink = useMacroMentionLinkResolver();
   const [, setMentions] = mentionsSignal;
 
   createEffect(() => {
@@ -108,6 +110,7 @@ export function EditInput(props: {
       }}
     >
       <MarkdownTextarea
+        resolveAppLink={resolveAppLink}
         autoLinkMatchMode="common-tlds"
         class="text-base wrap-break-word text-ink"
         editable={() => true}

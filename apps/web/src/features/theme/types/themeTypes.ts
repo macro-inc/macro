@@ -108,6 +108,7 @@ export const semanticTokens = [
   'input',
   'input-focus',
   'message',
+  'inline-code',
   'hover',
   'active',
   'selected',

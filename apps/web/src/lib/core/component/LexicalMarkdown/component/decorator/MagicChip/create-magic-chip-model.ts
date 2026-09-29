@@ -2,6 +2,7 @@ import {
   harnessDisplayName,
   harnessTitle,
   modelDisplayName,
+  sessionHarnessSlug,
 } from '@app/features/block-agent/component/compose-agent-session-options';
 import {
   toolCallDetail,
@@ -47,27 +48,32 @@ type SessionIdentity = {
 };
 
 /**
- * The persona as the header names it: the runtime's product name followed
- * by "Agent" (`Macro Agent`, `Cursor Agent`), a titled slug for a runtime
- * the composer does not name.
+ * The persona as the header names it: the runtime's product name, with
+ * "Agent" appended when that name does not already end in it (`Macro Agent`,
+ * `Cursor Agent`). A titled slug for a runtime the composer does not name.
  */
-function agentName(harness: string | undefined): string | undefined {
+function agentName(session: {
+  harness?: string;
+  botId?: string;
+}): string | undefined {
+  const harness = sessionHarnessSlug(session);
   if (!harness) return undefined;
   const known = harnessDisplayName(harness);
-  return `${known === harness ? harnessTitle(harness) : known} Agent`;
+  const base = known === harness ? harnessTitle(harness) : known;
+  return base.endsWith(' Agent') ? base : `${base} Agent`;
 }
 
 /**
- * The model's display name from the fold, its id when the runtime lists no
- * name, or the slug the session was created with before the fold reports.
+ * The model's display name from the fold, or the one the session was created
+ * with before the fold reports.
  */
 function modelName(
   metadata: SessionMetadata | undefined,
   session: SessionIdentity | undefined
 ): string | undefined {
-  const model = metadata?.model;
-  if (!model) return session?.model || undefined;
-  return modelDisplayName(model, metadata.supportedModels);
+  const model = metadata?.model || session?.model;
+  if (!model) return undefined;
+  return modelDisplayName(model, metadata?.supportedModels ?? []);
 }
 
 /** Replace the message under the same turn and author, or append it. */
@@ -100,7 +106,9 @@ export function createMagicChipModel(props: MagicChipData): {
   presentation: Accessor<MagicChipPresentation>;
   header: Accessor<MagicChipHeader | undefined>;
   interactions: InteractionController;
+  loading: Accessor<boolean>;
 } {
+  const [loading, setLoading] = createSignal(true);
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
   const sessionQuery = useAgentSessionQuery(() => props.agentSessionId);
   // Guard pending data so a cold query cannot suspend the surrounding editor.
@@ -125,18 +133,31 @@ export function createMagicChipModel(props: MagicChipData): {
     }
   };
   const unsubscribe = live.subscribe(applyEvents);
-  void live
-    .load()
-    .then(() => live.snapshot())
-    .then((snapshot) => {
+  // A chip scrolled out of a virtualized list mid-load releases the session,
+  // which rejects the load or the snapshot. That is not a fault.
+  let released = false;
+  async function loadSession() {
+    try {
+      await live.load();
+      if (released) return;
+
+      const snapshot = await live.snapshot();
+      if (released) return;
+
       setMessages(snapshot.messages);
       setMetadata(snapshot.metadata);
-    })
-    .catch((error: unknown) => {
-      console.error('[magic-chip] session log could not be folded', error);
-    });
+    } catch (error: unknown) {
+      if (!released) {
+        console.error('[magic-chip] session log could not be folded', error);
+      }
+    } finally {
+      if (!released) setLoading(false);
+    }
+  }
+  void loadSession();
 
   onCleanup(() => {
+    released = true;
     unsubscribe();
     live.release();
   });
@@ -206,7 +227,8 @@ export function createMagicChipModel(props: MagicChipData): {
   });
 
   const header = createMemo((): MagicChipHeader | undefined => {
-    const agent = agentName(session()?.harness);
+    const current = session();
+    const agent = current ? agentName(current) : undefined;
     const model = modelName(metadata(), session());
     const pullRequestUrl = session()?.pullRequestUrl ?? undefined;
     return agent || model || pullRequestUrl
@@ -214,5 +236,5 @@ export function createMagicChipModel(props: MagicChipData): {
       : undefined;
   });
 
-  return { presentation, header, interactions };
+  return { presentation, header, interactions, loading };
 }

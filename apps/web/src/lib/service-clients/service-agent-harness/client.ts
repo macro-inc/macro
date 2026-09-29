@@ -3,6 +3,7 @@ import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ErrorResponseHandler } from '@core/util/safeFetch';
 import type {
   AgentRepositoriesResponse,
+  AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
@@ -17,6 +18,8 @@ import type {
   PreviewAgentSessionsResponse,
   SandboxSize,
   SandboxSizeBody,
+  SharePermissionV2,
+  UpdateSharePermissionRequestV2,
 } from './generated/schemas';
 
 export type { SandboxSize, SandboxSizeBody };
@@ -85,10 +88,45 @@ export const agentHarnessServiceClient = {
     );
   },
 
+  /**
+   * The branches on one GitHub repository the caller can start a coding
+   * session from. `repoUrl` is the canonical `https://github.com/owner/name`
+   * form `listRepositories` and create-session share.
+   */
+  listRepositoryBranches(repoUrl: string) {
+    const params = new URLSearchParams({ repoUrl });
+    return fetchWithToken<AgentRepositoryBranchesResponse>(
+      `${agentHarnessHost}/agent-repositories/branches?${params}`,
+      { method: 'GET' }
+    );
+  },
+
   get(sessionId: string) {
     return fetchWithToken<AgentSessionResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}`,
       { method: 'GET' }
+    );
+  },
+
+  getPermissions(sessionId: string) {
+    return fetchWithToken<SharePermissionV2>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/permissions`,
+      { method: 'GET' }
+    );
+  },
+
+  updatePermissions(
+    sessionId: string,
+    request: UpdateSharePermissionRequestV2
+  ) {
+    return fetchWithToken<SharePermissionV2>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/permissions`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        errorResponseHandler: sessionError,
+      }
     );
   },
 

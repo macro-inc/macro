@@ -75,6 +75,7 @@ type MockTrackPublication = {
 type ParticipantPublications = Record<string, MockTrackPublication | undefined>;
 
 type CallStateControls = {
+  setChannelId: Setter<string | null>;
   setAudioMuted: Setter<boolean>;
   setParticipants: Setter<Map<string, RemoteParticipant>>;
   setTrackVersion: Setter<number>;
@@ -86,10 +87,12 @@ function createTrack(sid: string): Track {
 
 function createRemoteParticipant(
   identity: string,
-  publications: ParticipantPublications
+  publications: ParticipantPublications,
+  name?: string
 ): RemoteParticipant {
   return {
     identity,
+    name,
     isAgent: false,
     getTrackPublication(source: string) {
       return publications[source];
@@ -101,6 +104,7 @@ function setUpCallState(
   initialParticipants: RemoteParticipant[] = []
 ): CallStateControls {
   const [audioMuted, setAudioMuted] = createSignal(false);
+  const [channelId, setChannelId] = createSignal<string | null>('channel-1');
   const [participants, setParticipants] = createSignal(
     new Map(
       initialParticipants.map((participant) => [
@@ -113,6 +117,7 @@ function setUpCallState(
   const localCameraTrack = createTrack('local-camera');
 
   mocks.callContext = {
+    activeChannelId: channelId,
     connectionState: () => 'connected',
     isAudioMuted: audioMuted,
     isConnecting: () => false,
@@ -131,7 +136,7 @@ function setUpCallState(
     trackVersion,
   } as unknown as CallState;
 
-  return { setAudioMuted, setParticipants, setTrackVersion };
+  return { setChannelId, setAudioMuted, setParticipants, setTrackVersion };
 }
 
 beforeEach(() => {
@@ -139,6 +144,36 @@ beforeEach(() => {
 });
 
 describe('CallOverlay muted microphone badges', () => {
+  it('excludes standalone calls from team sharing even when the caller enables the control', () => {
+    const controls = setUpCallState();
+    controls.setChannelId(null);
+    render(() => <CallOverlay onLeave={() => undefined} showTeamSharing />);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    controls.setChannelId('channel-1');
+    expect(
+      screen.getByRole('checkbox', { name: 'Share with team' })
+    ).toBeTruthy();
+    controls.setChannelId(null);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('uses the guest name from the media session and hides team sharing for guests', () => {
+    const guest = createRemoteParticipant(
+      'guest|opaque-id',
+      {},
+      'Taylor Guest'
+    );
+    setUpCallState([guest]);
+    render(() => (
+      <CallOverlay onLeave={() => undefined} showTeamSharing={false} />
+    ));
+    expect(screen.getByText('Taylor Guest')).toBeTruthy();
+    expect(
+      screen.getByRole('status', { name: 'Taylor Guest is muted' })
+    ).toBeTruthy();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
   it('shows local mute state on both the full tile and local PIP', () => {
     const controls = setUpCallState();
 
@@ -225,6 +260,7 @@ describe('CallOverlay muted microphone badges', () => {
     const tile = badge.parentElement;
 
     expect(tile?.classList).toContain('relative');
+    expect(tile?.querySelector('[data-testid="user-avatar"]')).not.toBeNull();
     expect(tile?.textContent).toContain('A');
     expect(tile?.querySelector('[data-testid="track-alex-camera"]')).toBeNull();
 

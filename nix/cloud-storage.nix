@@ -55,10 +55,13 @@
       # `.sh` is required so `include_str!` of
       # `crates/agent_harness/container/ensure_ready.sh` survives the prune.
       assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql|sh)$" path != null;
+      # Rust local HTTP clients embed only the public proxy CA, never its keys.
+      localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
       srcFilter =
         path: type:
         (sqlxFilter path type)
+        || (localCaFilter path type)
         || (pdfiumFilter path type)
         || (assetFilter path type)
         || (binFilter path type)
@@ -117,7 +120,11 @@
           let
             rel = pkgs.lib.removePrefix ((toString ../.) + "/") (toString path);
           in
-          (rel == ".sqlx")
+          (rel == "infra")
+          || (rel == "infra/local")
+          || (rel == "infra/local/certs")
+          || (localCaFilter path type)
+          || (rel == ".sqlx")
           || (pkgs.lib.hasPrefix ".sqlx/" rel)
           || (rel == "static_assets")
           || (pkgs.lib.hasPrefix "static_assets/" rel)
@@ -303,6 +310,7 @@
             "--bin connection_gateway_openapi"
             "--bin contacts_service_openapi"
             "--bin unfurl_service_openapi"
+            "--bin calendar_service_openapi"
             "--bin email_service_openapi"
             "--bin search_service_openapi"
             "--bin scheduled_action_openapi"
@@ -339,6 +347,11 @@
       );
 
       deployServiceBinaryDefinitions = [
+        {
+          serviceName = "preview-gateway";
+          packageName = "preview_gateway";
+          binaries = [ "preview_gateway" ];
+        }
         {
           serviceName = "agent-harness-service";
           packageName = "agent_harness_service";
@@ -521,8 +534,10 @@
       );
 
       localStackDeployServiceNames = [
+        "preview-gateway"
         "agent-harness-service"
         "agent-schedule-service"
+        "calendar-service"
         "connection-gateway"
         "contacts-service"
         "document-cognition-service"
@@ -951,6 +966,7 @@
               connection_gateway = "service-connection";
               contacts_service = "service-contacts";
               unfurl_service = "service-unfurl";
+              calendar_service = "service-calendar";
               email_service = "service-email";
               search_service = "service-search";
               scheduled_action = "service-scheduled-action";

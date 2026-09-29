@@ -109,6 +109,8 @@ pub struct SimpleMessage {
 /// A fully assembled message with all sub-types resolved.
 #[derive(Debug, Clone)]
 pub struct Message {
+    /// Immutable email-owned scheduling details.
+    pub calendar_invitations: Vec<super::calendar_invitation::CalendarInvitation>,
     /// Database ID of the message.
     pub db_id: uuid::Uuid,
     /// Provider message ID.

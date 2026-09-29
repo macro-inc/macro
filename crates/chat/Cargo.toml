@@ -13,13 +13,16 @@ attachment = [
 ]
 inbound = [
   "dep:axum",
+  "dep:entity_registry",
   "dep:macro_authorization",
   "dep:roles_and_permissions",
   "entity_access/inbound",
+  "entity_registry/axum",
   "ports",
 ]
 outbound = [
   "dep:entity_access_db_utils",
+  "dep:entity_registry",
   "dep:entity_registry_db_utils",
   "dep:macro_uuid",
   "dep:share_permission_db_utils",
@@ -34,10 +37,12 @@ activity = { path = "../activity", default-features = false }
 agent = { path = "../agent" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
+bot_id = { path = "../bot_id" }
 attachment = { path = "../attachment" }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_registry = { path = "../entity_registry/entity_registry", optional = true }
 entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
 entity_access_management = { path = "../entity_access_management", default-features = false, features = [
   "ports",
@@ -86,6 +91,7 @@ macro_uuid = { path = "../macro_uuid", optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../bot_id", features = ["test-utils"] }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }

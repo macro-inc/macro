@@ -15,14 +15,18 @@ import { useOptionalAgentChanges } from '../context/agent-changes-controller';
 export function ChangesToggle() {
   const controller = useOptionalAgentChanges();
   if (!controller) return null;
-  const { available, layout, model } = controller;
+  const { available, layout, model, context } = controller;
+  const counts = controller.changeCounts;
   return (
     <Show when={available()}>
       <ChangesToggleButton
         open={layout.changesVisible()}
-        additions={model.changeset()?.additions ?? 0}
-        deletions={model.changeset()?.deletions ?? 0}
-        capturing={model.state().kind === 'capturing'}
+        additions={counts()?.additions ?? 0}
+        deletions={counts()?.deletions ?? 0}
+        capturing={
+          !context.host.pullRequestChangeCounts &&
+          model.state().kind === 'capturing'
+        }
         onToggle={layout.toggle}
       />
     </Show>
@@ -43,8 +47,8 @@ export function ChangesHandoff() {
     <Show when={visible()}>
       <ChangesReadyCard
         fileCount={model.files().length}
-        additions={model.changeset()?.additions ?? 0}
-        deletions={model.changeset()?.deletions ?? 0}
+        additions={controller.changeCounts()?.additions ?? 0}
+        deletions={controller.changeCounts()?.deletions ?? 0}
         linkedUrl={context.host.pullRequestUrl()}
         onReview={() => {
           const first = model.files()[0];

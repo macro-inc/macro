@@ -63,7 +63,7 @@ pub async fn get_document_key_handler(
             .send(StatusCode::BAD_REQUEST);
     };
 
-    let owner = document_context.owner.principal_id();
+    let owner = &document_context.owner;
     let key = match file_type {
         FileType::Pdf => {
             let document_version_id =
@@ -80,9 +80,9 @@ pub async fn get_document_key_handler(
                     }
                 };
 
-            build_cloud_storage_bucket_document_key(&owner, &document_id, document_version_id)
+            build_cloud_storage_bucket_document_key(owner, &document_id, document_version_id)
         }
-        FileType::Docx => build_docx_to_pdf_converted_document_key(&owner, &document_id),
+        FileType::Docx => build_docx_to_pdf_converted_document_key(owner, &document_id),
         _ => {
             tracing::error!("invalid file type");
             return GenericResponse::builder()

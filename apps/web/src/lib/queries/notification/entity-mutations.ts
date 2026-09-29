@@ -12,6 +12,7 @@ import {
 } from '@service-storage/graphql-soup';
 
 type SimpleNotificationEntityType =
+  | 'agent_session'
   | 'calendar_event'
   | 'call'
   | 'channel'
@@ -49,6 +50,7 @@ export function toNotificationEntityRef(
   entity: FrontendNotificationEntity
 ): NotificationEntityRef | undefined {
   switch (entity.type) {
+    case 'agent_session':
     case 'calendar_event':
     case 'call':
     case 'channel':
@@ -79,6 +81,7 @@ export type NotificationEntityUpdateOperation = Exclude<
 >;
 
 const ENTITY_TYPE_TO_GRAPHQL = {
+  agent_session: 'AGENT_SESSION',
   calendar_event: 'CALENDAR_EVENT',
   call: 'CALL',
   channel: 'CHANNEL',
@@ -112,9 +115,10 @@ export function toNotificationEntityInput(
 
 /**
  * Mark all notifications associated with the supplied entities seen or done.
- * The authoritative response updates the normalized GraphQL cache directly;
- * it is deliberately not mirrored into the legacy TanStack notification cache.
- * Returned rows include the exact IDs needed by a later ID-scoped undo.
+ * The changed-row response updates the normalized GraphQL cache; the client
+ * also revalidates mounted readers to reconcile stale rows omitted by a no-op.
+ * It is deliberately not mirrored into the legacy TanStack notification cache.
+ * Returned rows include only the exact IDs needed by a later ID-scoped undo.
  */
 export async function updateNotificationsForEntities(args: {
   entities: NotificationEntityRef[];

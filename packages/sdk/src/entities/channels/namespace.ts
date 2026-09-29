@@ -5,9 +5,15 @@ import type { SearchOpts } from '../search';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
 import { Channel } from './channel';
+import { ChannelLabelsNamespace } from './labels';
 
 export class ChannelNamespace {
-  constructor(private readonly client: MacroClient) {}
+  /** Team-shared labels that group channels in the Chat sidebar. */
+  readonly labels: ChannelLabelsNamespace;
+
+  constructor(private readonly client: MacroClient) {
+    this.labels = new ChannelLabelsNamespace(client);
+  }
 
   byId(id: string): Channel {
     return Channel.byId(this.client, id);

@@ -11,6 +11,9 @@ use sqlx::{Pool, Postgres};
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod explain;
+mod latest;
+
 const USER_1: &str = "macro|user-1@test.com";
 const DOC_A: &str = "11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const CHAT_A: &str = "22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa";

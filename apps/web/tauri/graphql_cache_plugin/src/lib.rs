@@ -59,6 +59,9 @@ pub struct OpsAffectedEvent {
 pub struct CacheChangedEvent {
     /// Effective-view revision installed by the logical mutation.
     pub revision: String,
+    /// Present when the write cleared durable records and hydration must restart.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reset: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -109,11 +112,12 @@ fn emit_ops_affected<R: Runtime>(app: &AppHandle<R>, op_ids: &[String], keys: &[
     .ok();
 }
 
-fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>, revision: &str) {
+fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>, revision: &str, reset: bool) {
     app.emit(
         CACHE_CHANGED_EVENT,
         CacheChangedEvent {
             revision: revision.to_owned(),
+            reset: reset.then_some(true),
         },
     )
     .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache change event"))

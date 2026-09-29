@@ -15,9 +15,9 @@ use crate::domain::{
         CreateChannelRequest, CreateEntityMentionOptions, CreatedChannel, EntityMention,
         GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageAttachment,
         MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, RecentChannelMessage, ReferencedShareItemType,
-        ResolvedChannelMessage, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
-        TopLevelMessageRow, UserName, fallback_user_name,
+        ParticipantRole, PatchChannelRequest, ReactionMessageContext, RecentChannelMessage,
+        ReferencedShareItemType, ResolvedChannelMessage, ThreadData, ThreadInfo, ThreadReply,
+        ThreadReplyRow, TopLevelMessageRow, UserName, fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -278,6 +278,12 @@ struct SenderIdRow {
     sender_id: String,
 }
 
+struct ReactionMessageContextRow {
+    sender_id: String,
+    thread_id: Option<Uuid>,
+    content: String,
+}
+
 #[derive(Debug, sqlx::FromRow)]
 struct ChannelIdRow {
     id: Uuid,
@@ -478,6 +484,37 @@ async fn get_message_owner(
     .transpose()
 }
 
+async fn get_reaction_message_context(
+    pool: &PgPool,
+    channel_id: Uuid,
+    message_id: Uuid,
+) -> anyhow::Result<Option<ReactionMessageContext>> {
+    let row = sqlx::query_as!(
+        ReactionMessageContextRow,
+        r#"
+        SELECT sender_id, thread_id, content
+        FROM comms_messages
+        WHERE id = $1 AND channel_id = $2 AND deleted_at IS NULL
+        "#,
+        message_id,
+        channel_id,
+    )
+    .fetch_optional(pool)
+    .await
+    .context("unable to get reaction message context")?;
+
+    row.map(|row| {
+        Ok(ReactionMessageContext {
+            sender: ChannelSender::parse_from_str(&row.sender_id)
+                .map(CowLike::into_owned)
+                .with_context(|| format!("invalid message sender_id {}", row.sender_id))?,
+            thread_id: row.thread_id,
+            content: row.content,
+        })
+    })
+    .transpose()
+}
+
 async fn get_channel_participants_for_thread_id(
     pool: &PgPool,
     thread_id: Uuid,
@@ -490,7 +527,9 @@ async fn get_channel_participants_for_thread_id(
             FROM comms_messages m
             JOIN comms_channel_participants cp
               ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
-            WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
+            WHERE (m.id = $1 OR m.thread_id = $1)
+              AND m.deleted_at IS NULL
+              AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id
             FROM comms_entity_mentions em
@@ -498,6 +537,7 @@ async fn get_channel_participants_for_thread_id(
             JOIN comms_channel_participants cp
               ON cp.channel_id = m.channel_id AND cp.user_id = em.entity_id
             WHERE (m.id = $1 OR m.thread_id = $1)
+              AND m.deleted_at IS NULL
               AND em.source_entity_type = 'message'
               AND em.entity_type = 'user'
               AND cp.left_at IS NULL
@@ -3614,6 +3654,14 @@ impl ChannelRepo for PgChannelsRepo {
         message_id: Uuid,
     ) -> Result<Option<ChannelSender<'static>>, Self::Err> {
         get_message_owner(&self.pool, channel_id, message_id).await
+    }
+
+    async fn get_reaction_message_context(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<Option<ReactionMessageContext>, Self::Err> {
+        get_reaction_message_context(&self.pool, channel_id, message_id).await
     }
 
     async fn get_participants(

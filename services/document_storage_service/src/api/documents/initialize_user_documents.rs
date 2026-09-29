@@ -164,7 +164,7 @@ pub async fn handler(
             let s3_client = shared_s3_client.clone(); // Clone the client for parallel usage
             let markdown_template = shared_markdown_template.clone();
             let canvas_template = shared_canvas_template.clone();
-            let user_id = user_context.authorization.user.macro_user_id.clone();
+            let owner = Owner::User(user_context.authorization.user.macro_user_id.clone());
             async move {
                 let uri_document_name = urlencoding::encode(document.document_name.as_str());
                 let deref_file_type = document.file_type.as_deref();
@@ -175,7 +175,7 @@ pub async fn handler(
                 };
 
                 let target_key = build_cloud_storage_bucket_document_key(
-                    user_id.as_ref(),
+                    &owner,
                     &document.document_id,
                     document.document_version_id,
                 );

@@ -1,3 +1,4 @@
+# Also used as a typed entrypoint for optimistic property-list links.
 query EntityProperties($input: SoupInput!) {
   user {
     id
@@ -7,6 +8,24 @@ query EntityProperties($input: SoupInput!) {
         id
         properties {
           ...SoupPropertyFields
+        }
+      }
+    }
+  }
+}
+
+query GroupEntityProperties($input: GroupedSoupInput!) {
+  user {
+    id
+    groupSoup(input: $input) {
+      bins {
+        key
+        items {
+          __typename
+          id
+          properties {
+            ...SoupPropertyFields
+          }
         }
       }
     }

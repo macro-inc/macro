@@ -40,12 +40,18 @@ struct TestAgentSessionEdges {
 impl SoupEntityEdges for TestSoupEdges {
     type Property = String;
     type Notification = String;
+    type NotificationFilter = String;
     type ActivityEvent = String;
     type EmailThreadEdges = TestEmailEdges;
+    type InitiativeEdges = TestEmailEdges;
     type AgentSessionEdges = TestAgentSessionEdges;
 
     fn from_entity(_entity: Entity<'static>) -> Self {
         Self { available: true }
+    }
+
+    fn initiative_edges(_initiative_id: Uuid) -> Self::InitiativeEdges {
+        TestEmailEdges { available: true }
     }
 
     fn email_thread_edges(_email_thread_id: Uuid) -> Self::EmailThreadEdges {
@@ -74,6 +80,8 @@ impl SoupEntityEdges for TestSoupEdges {
     async fn resolve_notifications(
         &self,
         _ctx: &Context<'_>,
+        _filter: Option<String>,
+        _limit: Option<i32>,
     ) -> async_graphql::Result<Vec<Self::Notification>> {
         Ok(Vec::new())
     }

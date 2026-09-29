@@ -1,5 +1,9 @@
 # Documents
 
+The document header has separate Share, Copy Share Link, and Side Panel buttons.
+They are borderless with a soft rounded background on hover. Share opens the
+sharing dialog; copying a link is a separate action.
+
 ## Spreadsheets
 
 Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog
@@ -126,16 +130,25 @@ collaborative rows and columns have stable identities. Adding blank rows at the
 bottom remains available. Hidden cells are skipped by keyboard navigation.
 
 Cells support Macro mentions without Markdown formatting. Type `@` in a cell or
-the formula bar to search people, documents, channels and email, then choose an
+the formula bar to search people, documents, channels, email and dates, then choose an
 item with the pointer or keyboard. Pasting a Macro app link renders a document
-pill, preserving navigation parameters. Formulas still use the formula editor;
+pill. Legacy links retain navigation parameters. Routed links retain compatible
+block targets, but not workspace paths or pane-local search. Formulas still use
 `@` inside a formula or email address does not start mention search. Other Markdown
 is literal text. Mentions remain attached through copy/fill, undo and collaboration;
 Excel/CSV export uses their display text. Plain URLs and email addresses are clickable;
 web links use the same hover preview as channel messages. Click the surrounding cell
 or use the formula bar to edit link text. AI `set_cells` accepts Macro URLs or the
-same `<m-user-mention>` / `<m-document-mention>` encoding as docs. Formula references
-to mention cells use literal labels, never execute a label as a formula.
+same `<m-user-mention>` / `<m-document-mention>` / `<m-date-mention>` encoding as docs.
+Formula references to mention cells use literal labels, never execute a label as a formula.
+
+Dates: `@tomorrow`, `@next friday` or `@sep 28` offer a **Dates** bucket and insert
+the same clock chip as docs; hover it for the full date, and edit the cell to change
+it. A cell holding only a date chip is a date value: `=A1+7` produces a date, and
+Excel export writes a dated number rather than the label. Typed dates such as
+`9/28/2026` or `2026-09-28`, `=DATE(...)`, and arithmetic on date cells display as
+dates without choosing the Date number format. A difference of two dates stays a
+plain day count, and an explicit number format from the toolbar always wins.
 
 CSV imports a file up to 1 MB into the selection, adding rows if needed within the
 1,000 × 26 limit. Existing cells in that rectangle
@@ -242,9 +255,16 @@ open until dismissed so a reply is not lost when moving the pointer.
 
 **Comments** in the document header opens all workbook threads. Range labels
 navigate to the corresponding sheet and cells; deleted-sheet threads remain
-readable. These are the same document annotation comments used by docs/tasks:
-mentions and replies use the existing inbox notifications and comment links.
+readable. **Workbook discussion** contains comments about the whole workbook,
+with its own composer. The pinned composer at the bottom posts on the displayed
+range; **Use selection** changes that range. Both surfaces use the shared message
+controls for replies, edits, deletion, reactions, and attachments. Range threads
+also offer **Resolve** and **Reopen**. Mentions and replies use inbox notifications
+and message links. Older spreadsheet annotation comments are not displayed.
 Opening an inbox notification opens the sidebar and targets its comment/range.
+Range links leave Workbook discussion on its normal timeline; workbook links
+open that discussion at the linked message, clear the previous range highlight
+or navigation error, and preserve an open range draft's attachment.
 Comment-only access can post/reply; view-only access can read. Edit/delete applies
 to the author's own comments, and failures retain the input draft. Draft demos
 must be saved before persistent comments are available.
@@ -281,6 +301,18 @@ service; the frontend alone cannot test their hosted path.
 
 ## Create and type
 
+Pasting a Macro `/app/agents/<uuid>` session URL into a Markdown editor converts
+it to an agent mention, just like the legacy `/app/agent/<uuid>` URL. Link query
+parameters are retained, except for referral codes.
+
+Pasting a routed entity link such as `/app/drive/md/<uuid>` in an app editor
+creates the same document mention as a legacy link. Routed links retain the
+entity identity and compatible block targets (for example `comment_id`), but
+not the workspace path or pane-local search state. A copied multi-pane URL
+(`/app/.../~/...`) references its rightmost pane. If that pane has no supported
+entity, the URL remains an ordinary link. Project task comment targets, Home PRs,
+and agent chat links also convert to their respective entity mentions.
+
 1. `Create` → `Document D`. The app navigates to `/app/md/<uuid>` with the **title field
    focused**.
 2. `type_text` the title, then `submitKey: "Enter"` to drop into the body.
@@ -295,6 +327,15 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
+
+AI text-writing operations require a paragraph/list-item or text-run ID. A
+table, row, cell, or list-container ID is rejected with guidance to choose a
+content block or use `setCell`. Existing stray inline content directly inside
+table cells is preserved in paragraphs when the editor opens the document.
+
+`@` opens the mention menu wherever the caret starts a word, including directly
+in front of existing text — the menu opens empty there instead of searching for
+the word ahead of the caret. Typed inside a word (`he@llo`) it stays literal text.
 
 `Ctrl+F` / `Cmd+F` opens the in-document find bar. Matches include paragraph
 text and inline mention chips (tasks, docs, channels, skills, …) by the title
@@ -316,13 +357,57 @@ To verify nesting, give a list item a child and grandchild, then swipe the
 parent right and left: all three should shift one level together, preserving
 their relative depths and order.
 
+## CRM company mentions
+
+With CRM enabled, type `@` followed by a company name or domain in an editor or
+composer. Companies appear in their own mention bucket. With
+`ENABLE_GRAPHQL_SOUP` enabled, results include cached companies even if they are
+absent from the first 500 companies in the REST Quick Access feed; the REST feed
+remains a fallback. Cache search covers synchronized companies, not the entire CRM.
+
+To verify, search for a cached company absent from that REST page, select it, and
+check that the inserted company mention points to the correct company. Also check
+searching by domain and that an open picker updates when companies finish hydrating.
+Discard unsent test drafts rather than sending them.
+
+## Native offline reopening
+
+On native mobile, previously opened Markdown documents/tasks can reopen after an
+app restart using their cached body and last-known permissions. Warm the document
+online first, then restart with API traffic blocked: verify the existing body,
+make a disposable edit, and restart offline again to check local recovery.
+Restoring connectivity must reauthorize synchronization before queued edits reach
+the server; verify the server copy, not just the still-cached editor text.
+Also reconnect after the initial sync's 10-second timeout: a reconnect snapshot
+must release queued edits without requiring the document to reopen. A document
+content-readiness timeout is retryable and must not revoke its cached open
+context; explicit access denial still does.
+The body should not wait for unrelated CRM metadata, references, duplicate-task
+suggestions, closed sharing/tag menus, or disabled mention queries. With those
+requests pending, the cached editor remains visible; optional information can
+appear when its own request finishes.
+
+For a cold deep link or restored split, document loading waits for persisted
+user identity before capturing its offline session; a stalled auth request must
+not delay an identity already restored from IndexedDB. If no identity is cached,
+the normal auth query must succeed first. A previous logout marker is not a
+cached identity: after signing in again, it must trigger fresh authentication,
+not clear the new login cookie. Verify this restart/deep-link flow with a
+disposable account. Logout during the identity wait prevents the old load from
+opening under a subsequent login.
+
+Cached open context is scoped to the signed-in user and invalidated at logout;
+permission tokens are never persisted. A missing body snapshot still requires an
+online open—metadata alone must not produce an editable empty document. This path
+does not imply offline coverage for PDFs, attachments, or other binary files.
+
 ## Reference hover previews
 
 The `@` menu includes `Recent agent sessions` after Channels and before
 Companies. Search by session or persona name within the 500 most recently
 updated accessible sessions. Menu rows show the
 session title followed by a muted persona name, including `@Cursor` and
-`@macro(new)` for built-in personas. Names from the session API take precedence;
+`@Macro` for built-in personas. Names from the session API take precedence;
 older responses use the shared built-in name resolver or cached custom bots.
 Selecting one inserts an
 inline reference showing the shared agent icon and an underlined session title.
@@ -331,7 +416,11 @@ Enter) to open `/app/agent/<id>`.
 It references an existing session; it does not invoke the persona, attach its
 transcript to AI context, or grant access. Private/deleted sessions show an
 unavailable label. Mounted references refresh every 30 seconds while the tab is
-active to update titles and check access.
+active to update titles and check access. Expanded session references are block-level
+Magic Chips with the same filled background as document cards. Click the card body
+to select its editor node (border and selection ring); use **Open session** to navigate.
+The collapse action returns the card to an inline session mention. Text before and
+after an expanded reference remains in separate paragraphs.
 
 Hover a document reference chip to open its preview without navigating. With
 the preview open, the compact header shows a tinted icon, title, and author/time
@@ -385,8 +474,10 @@ access to the title and property controls.
 1. Click `Edit with AI` (button directly under the editor body).
 2. A focused prompt box appears (placeholder `Describe the edit…`). Type the instruction,
    press Enter (or click `Send`).
-3. While running, the button row shows an author chip (e.g. `Wolf (AI)`) and a `Stop` button
-   (a11y text `Stop AI edit`). Edits stream directly into the document — there is no
+3. While running, the button row shows a `Stop` button (a11y text `Stop AI edit`), and the
+   live cursor walking the text is labelled with the editor's name: `Macro (AI)` for an
+   inline edit, or the name of the agent or persona whose session asked for the edit
+   (e.g. `Grunk (AI)`). Edits stream directly into the document — there is no
    accept/reject step. The editor can insert the same `@` mention chips a person can:
    dates/times, people, documents, channels, agent sessions (including the expanded
    Magic Chip card), and the other chip types.
@@ -406,7 +497,10 @@ Touch keeps separate `Attach images` and
 composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
 above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
 user. Editing a discussion comment keeps the attachment and send controls, with no
-trash button. On mobile, the new-comment composer is docked above the navigation bar,
+trash button. Deleting a comment's first message deletes the whole discussion —
+the confirmation reads `Delete comment`, the replies under it go too, and an
+anchored comment's highlight clears from the document. Deleting a reply removes
+only that reply. On mobile, the new-comment composer is docked above the navigation bar,
 replacing Ask AI and New when commenting is available in documents and tasks.
 When the comment composer is unavailable, the default Ask AI row appears instead.
 Tap `Leave a comment...`
@@ -431,6 +525,19 @@ and edits use plain inputs on the card or drawer's background. The pinned reply
 keeps at least 16px of
 bottom clearance above the drawer's curve, including while the keyboard is open,
 and accounts for the home-indicator safe area when the keyboard is closed.
+
+An inline-comment notification or `/app/md/<id>?comment_id=<comment-id>` link
+should scroll to the anchor and open its thread on the first click, including
+when the document has not loaded yet. Verify both comments arriving before the
+editor and comments arriving after it. Once loaded, click elsewhere in the
+document, then click the same notification again: it should revisit the comment,
+while background comment refreshes should leave the user's position alone.
+
+When checking desktop margin placement, scroll a long document while an embed
+or image above the highlighted text changes height. Scroll anchoring may keep
+the text at the same screen position; its comment card should stay aligned
+through the resize, without briefly jumping upward or downward. Repeat with
+several rapid height changes, including while scrolling has paused.
 
 Also verify anchored comments in Drive's detail pane: open a document with
 existing text anchors, then click a numbered comment badge to expand it. The
@@ -459,8 +566,10 @@ and edits while updating the surrounding thread.
 Select text and choose the comment action to create an anchored comment. These
 threads appear beside their text in the margin (or in the active thread drawer
 on phones) and never in the bottom Discussion, including after live updates or
-reloads. Existing highlights locate threads by their stable mark IDs. Replies,
-attachments, reactions, and editing use the same message controls as channels.
+reloads. Links to these threads open the margin without changing the bottom
+Discussion's timeline or expanding it. Existing highlights locate threads by
+their stable mark IDs. Replies, attachments, reactions, and editing use the same
+message controls as channels.
 Removing the last marked text moves its retained conversation to Discussion,
 where it remains after reload. Removing only part of a marked range keeps the
 conversation anchored to the remaining text. On phones, the active Markdown
@@ -468,7 +577,8 @@ thread opens in a drawer with a pinned reply composer; long-press any message
 for edit, delete, copy-link, and reaction actions.
 
 A document thread carries no thread-level controls above it. Deleting the root
-message leaves a tombstone and retains its replies. `Copy link` targets the
+message deletes the whole discussion, replies included, and answers with the
+root's tombstone. `Copy link` targets the
 specific comment with `comment_id=<message id>`. Previously copied numeric links
 still resolve under current document permissions. Deleting an anchored Markdown
 discussion removes its mark while preserving the document text and any
@@ -477,10 +587,19 @@ editable view removes the retained mark when the document loads. Read-only
 viewers see plain text without a dead comment highlight; the stored document
 and overlapping live comments stay intact.
 
-Unified PDF discussions are deferred: PDFs keep the legacy comment subsystem
-regardless of the flag, so PDF comments (the side-panel `Comments` section,
-anchored margin threads, highlight comments, and placeable comments) behave as
-they do with the flag off. The message-backed PDF path is a follow-up.
+PDFs follow the same flag. With it on, PDF comment threads in the right margin
+use the channel composer (`Leave a comment...`, Enter sends) and the message
+thread controls. Highlight comments come from selecting text and choosing the
+comment button in the selection menu; placeable comments come from the toolbar
+`Comment` tool and a click on the page. Discussions read and post through
+`/dss/messages/document/<id>`; anchor geometry still loads from
+`/dss/annotations/anchors/document/<id>`, and `/dss/annotations/comments/...`
+is not called. Deleting a highlight's discussion keeps the highlight as a plain
+highlight; deleting a placeable's discussion removes the placeable. With the
+flag off, PDFs use the legacy composer (`Add a comment...`). A PDF anchor
+created by the other path is hidden rather than shown as a bare highlight, so a
+comment written on one path does not appear on the other until the comment
+importer runs.
 
 With the flag off, documents behave exactly as described above this section.
 
@@ -490,7 +609,14 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
 
 - `Actions` → `Ask Macro` (opens a doc-scoped AI chat, see ai-chat.md).
 - `Details` → Owner, Created, Last updated.
-- `Tags` → `Add tags` (dialog). `Properties` → `Add property`.
+- `Tags` → `Add tags` (dialog). Click a tag's label to toggle and save; Shift-click
+  keeps the picker open for multiple selections. Reopen it to remove a tag.
+  With GraphQL Soup enabled, applying the first tag refetches only that entity's
+  properties; later edits update the existing assignment optimistically. Verify
+  both the side panel and list-row chip, then reload to confirm persistence.
+  This must also work after background backfills populate more than 128 cached
+  Soup variants—tag saves must not scan all cached pages.
+  `Properties` → `Add property`.
 - Collapsed sections: `Stats`, `History` (version time-travel), `Activity`.
 - `Activity` lists the same glyph-rail lines as `/app/component/activity` (plain glyphs on a
   thin connector, one line each with long names truncated, compact `17h` / `8d` / `1mo`
@@ -498,6 +624,9 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   three newest, a `View all activities` toggle row (dotted connector, caret glyph), and the
   oldest fetched entry (usually `created this`) pinned last; the toggle flips to `Show less`
   once expanded.
+  Human content edits appear after the next sync flush. Continued editing creates
+  one Activity event until that editor has been inactive for five minutes; their
+  next edit then starts another event. Opening a document alone creates no edit.
 - Header: `Share`, `Copy Share Link`, overflow menu — use `Share` to inspect or change the
   doc's visibility/permissions. Documents, AI chats, and folders have a `Team access`
   control (None / View / Comment / Edit) for sharing directly with the owner's team.

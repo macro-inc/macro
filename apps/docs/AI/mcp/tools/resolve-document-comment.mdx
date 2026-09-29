@@ -1,0 +1,16 @@
+---
+title: ResolveDocumentComment
+description: "Resolve or reopen a comment thread on a document on behalf of the user. Only use this when explicitly asked to resolve or reopen a comment. Thread ids come from the comments ReadContent returns."
+---
+
+# ResolveDocumentComment
+
+Resolve or reopen a comment thread on a document on behalf of the user. Only use this when explicitly asked to resolve or reopen a comment. Thread ids come from the comments ReadContent returns.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `documentId` | string | Yes | The id of the document the comment is on. |
+| `threadId` | string | Yes | The id of the inline or Discussion thread, from ReadContent. |
+| `resolved` | boolean | No | True to resolve the thread, false to reopen a resolved thread. Defaults to true. |

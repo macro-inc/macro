@@ -5,6 +5,7 @@ use std::sync::Arc;
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
 use ai_tools::user_tool_review::UserToolReviewer;
+use bot_id::BotId;
 use mcp_toolset::RemoteMcpToolSet;
 use model_owner::Owner;
 use tokio::sync::mpsc;
@@ -12,9 +13,17 @@ use tokio_util::sync::CancellationToken;
 
 use super::user_input::SharedUserInputRequester;
 
-/// The agent's display name and `@` handle, for the turn's system prompt.
+/// Who the agent is: the bot a session belongs to, by id and by name.
+///
+/// The name and handle go into the turn's system prompt so the model knows
+/// who it is; the id and name also make the turn's tools act as that bot, so
+/// what the agent writes is attributed to it - and presented under its name
+/// wherever a reader sees the write happen, such as the cursor the editing
+/// worker draws - rather than to Macro.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentIdentity {
+    /// The bot the session belongs to.
+    pub bot: BotId,
     /// Display name, e.g. `Grunk`.
     pub name: String,
     /// Stable `@` handle without a leading `@`, e.g. `grunk`.

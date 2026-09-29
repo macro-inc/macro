@@ -237,6 +237,17 @@ pub struct CountedReaction {
     pub users: Vec<String>,
 }
 
+/// Message details needed to notify its author about a new reaction.
+#[derive(Debug, Clone)]
+pub struct ReactionMessageContext {
+    /// Message author.
+    pub sender: Sender,
+    /// Root thread id when this message is a reply.
+    pub thread_id: Option<Uuid>,
+    /// Macro Markdown message body.
+    pub content: String,
+}
+
 /// An attachment on a message.
 #[derive(Debug, Clone)]
 pub struct MessageAttachment {
@@ -794,6 +805,8 @@ pub enum ReferencedShareItemType {
     EmailThread,
     /// Call entity.
     Call,
+    /// Calendar event entity: one owner's projection of a meeting.
+    CalendarEvent,
 }
 
 impl ReferencedShareItemType {
@@ -806,6 +819,7 @@ impl ReferencedShareItemType {
             "project" => Some(Self::Project),
             "thread" | "email" | "email_thread" => Some(Self::EmailThread),
             "call" => Some(Self::Call),
+            "calendar_event" => Some(Self::CalendarEvent),
             _ => None,
         }
     }
@@ -819,6 +833,7 @@ impl ReferencedShareItemType {
             Self::Project => "project",
             Self::EmailThread => "thread",
             Self::Call => "call",
+            Self::CalendarEvent => "calendar_event",
         }
     }
 

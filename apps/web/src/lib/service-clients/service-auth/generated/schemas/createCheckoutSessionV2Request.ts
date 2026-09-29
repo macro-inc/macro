@@ -7,6 +7,7 @@
 
 import type { CheckoutSessionMetadata } from './checkoutSessionMetadata';
 import type { CreateCheckoutSessionV2RequestDiscount } from './createCheckoutSessionV2RequestDiscount';
+import type { CreateCheckoutSessionV2RequestPlan } from './createCheckoutSessionV2RequestPlan';
 
 /**
  * Request body for creating a Stripe checkout session
@@ -18,6 +19,7 @@ export interface CreateCheckoutSessionV2Request {
   discount?: CreateCheckoutSessionV2RequestDiscount;
   /** Tracking metadata for conversion attribution */
   metadata?: CheckoutSessionMetadata;
+  plan?: CreateCheckoutSessionV2RequestPlan;
   /** The URL to redirect to on successful checkout */
   successUrl: string;
 }

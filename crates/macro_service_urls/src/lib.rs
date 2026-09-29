@@ -561,6 +561,12 @@ service_url! {
             dev: "https://dev-gateway.macro.com/agent-harness",
             prod: "https://gateway.macro.com/agent-harness",
         },
+        /// Scheduled action service API URL.
+        pub ScheduledActionServiceUrl {
+            local: "http://localhost:8099",
+            dev: "https://dev-gateway.macro.com/scheduled-action",
+            prod: "https://gateway.macro.com/scheduled-action",
+        },
         /// Sandbox-facing agent harness egress proxy URL.
         /// Override the local default when sandbox clients need a Docker-network
         /// address or a public tunnel rather than the host's loopback address.
@@ -593,6 +599,14 @@ service_url! {
             dev: "https://dev-gateway.macro.com/email",
             prod: "https://gateway.macro.com/email",
         },
+        /// Calendar service API URL. The calendar write authority once
+        /// `calendar_service` owns provider mutations; its API is mounted at
+        /// the root and under the `/calendar` gateway prefix.
+        pub CalendarServiceUrl {
+            local: "http://localhost:8088",
+            dev: "https://dev-gateway.macro.com/calendar",
+            prod: "https://gateway.macro.com/calendar",
+        },
         /// Image proxy service API URL.
         pub ImageProxyServiceUrl {
             local: "http://localhost:8097",
@@ -617,5 +631,14 @@ service_url! {
             dev: "https://ai-editing-worker-dev.macroverse.workers.dev",
             prod: "https://ai-editing-worker.macroverse.workers.dev",
         },
+    }
+}
+
+service_url! {
+    /// Control and internal MCP surface of the live preview service.
+    pub struct PreviewGatewayUrl {
+        local: "http://localhost:8110",
+        dev: "https://dev-gateway.macro.com/preview",
+        prod: "https://gateway.macro.com/preview",
     }
 }

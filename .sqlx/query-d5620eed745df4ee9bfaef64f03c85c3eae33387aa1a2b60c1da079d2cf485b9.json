@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO channel_label_channel (scope_key, channel_id, label_id)\n               SELECT $1, channel_id, $2 FROM unnest($3::uuid[]) AS channel_id\n               ON CONFLICT (scope_key, channel_id) DO UPDATE SET label_id = EXCLUDED.label_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d5620eed745df4ee9bfaef64f03c85c3eae33387aa1a2b60c1da079d2cf485b9"
+}

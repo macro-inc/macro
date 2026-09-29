@@ -8,34 +8,71 @@ import {
   useViewControlHotkeys,
   useViewTabHotkeys,
 } from '@app/components/view-shell';
-import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import {
+  type ChannelPreviewSelection,
+  channelPreviewSelection,
+  getChannelEntityTarget,
+  markChannelNotificationsSeenOnOpen,
+  navigateChannelEntityToTarget,
+  openEntityInSplitFromUnifiedList,
+} from '@app/features/next-soup/utils';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { favoriteSplitContent } from '@app/util/favorites';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
+import { toast } from '@core/component/Toast/Toast';
+import { enableChannelTags } from '@core/constant/featureFlags';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { debouncedDependent } from '@core/util/debounce';
-import { type ChannelEntity, isChannelEntity, type WithSearch } from '@entity';
+import { thrownResultErrorHasCode } from '@core/util/result';
+import {
+  type ChannelEntity,
+  isChannelEntity,
+  type WithNotification,
+} from '@entity';
+import { notificationIsRead } from '@entity/utils/notification';
+import { ensureNotificationSourceLoaded } from '@notifications/notification-helpers';
+import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
+import {
+  useChannelLabelsQuery,
+  useCreateChannelLabelMutation,
+  useDeleteChannelLabelMutation,
+  useRenameChannelLabelMutation,
+  useSetChannelLabelMutation,
+} from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
-import { useSearchSoupQuery } from '@queries/soup/search';
-import type { EntityFilters } from '@service-search/generated/models';
-import type { Favorite } from '@service-storage/generated/schemas/favorite';
+import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { debounce } from '@solid-primitives/scheduled';
+import { useDragDropContext } from '@thisbeyond/solid-dnd';
+import { confirmDialog } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   createUniqueId,
+  getOwner,
   onCleanup,
+  startTransition,
 } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../../channels-view-context';
 import {
+  canLabelChannel,
+  filterChannelLabelMembers,
+} from '../../core/channel-label-eligibility';
+import { resolveChannelLabelMemberships } from '../../core/smart-tags';
+import {
   type ChannelsSourceScope,
   type ChannelsSources,
   deduplicateChannels,
+  useChannelsByIdsQuery,
 } from '../../queries';
 import type {
   ChannelsQueryScope,
@@ -43,6 +80,14 @@ import type {
   ChannelsTab,
 } from '../../types';
 import {
+  buildChannelRailRows,
+  buildChannelSectionRows,
+} from './build-channel-rail-rows';
+import { promptLabelName } from './ChannelLabelNameDialog';
+import {
+  type ChannelLabelDragData,
+  type ChannelLabelDropData,
+  type ChannelLabelDropTarget,
   type ChannelRailActivationMetadata,
   type ChannelRailRow,
   type ChannelsRailContext,
@@ -50,9 +95,14 @@ import {
   domIdForRow,
   rowKeyForChannel,
   rowKeyForFavorite,
+  rowKeyForLabel,
   rowKeyForSection,
 } from './ChannelsRailContext';
 import { ExpandedChannelsRail } from './ExpandedChannelsRail';
+import { promptSmartTag } from './SmartTagDialog';
+
+export { buildChannelRailRows } from './build-channel-rail-rows';
+
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
 
@@ -61,112 +111,133 @@ const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
   'channels',
   'direct_messages',
 ];
+const LABEL_KEY_PREFIX = 'label:';
 const BROWSE_QUERY_SCOPES = ['channels', 'direct_messages'] as const;
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
 const DM_LOADING_PREVIEW_OFFSET = 80;
-const CHANNEL_SEARCH_FILTERS = {
-  ...QUERY_FILTERS_BASE,
-  channel_filters: { is_participant: true },
-} satisfies EntityFilters;
 
 export type ChannelsRailProps = {
   sources: ChannelsSources;
   searchOpen: boolean;
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
   onSearchOpenChange: (open: boolean) => void;
 };
 
-type ChannelRailItemsByScope = Record<
-  ChannelsQueryScope,
-  readonly ChannelEntity[]
-> & {
-  favorites: readonly Favorite[];
-};
-
-export function buildChannelRailRows(
-  tab: ChannelsTab,
-  expandedGroups: Record<ChannelsRailSection, boolean>,
-  items: ChannelRailItemsByScope
-): ChannelRailRow[] {
-  if (tab === 'recents') {
-    return items.recents.map((channel, localIndex) => ({
-      kind: 'conversation',
-      id: `channel:${channel.id}`,
-      scope: 'recents',
-      localIndex,
-      channel,
-    }));
-  }
-
-  const rows: ChannelRailRow[] = [];
-  if (items.favorites.length > 0) {
-    rows.push({
-      kind: 'section',
-      id: 'section:favorites',
-      group: 'favorites',
-    });
-    if (expandedGroups.favorites) {
-      rows.push(
-        ...items.favorites.map(
-          (favorite): ChannelRailRow => ({
-            kind: 'favorite',
-            id: rowKeyForFavorite(favorite),
-            group: 'favorites',
-            favorite,
-          })
-        )
-      );
-    }
-  }
-
-  rows.push({
-    kind: 'section',
-    id: 'section:channels',
-    group: 'channels',
-  });
-  if (expandedGroups.channels) {
-    rows.push(
-      ...items.channels.map(
-        (channel, localIndex): ChannelRailRow => ({
-          kind: 'conversation',
-          id: `channel:${channel.id}`,
-          group: 'channels',
-          scope: 'channels',
-          localIndex,
-          channel,
-        })
-      )
-    );
-  }
-
-  rows.push({
-    kind: 'section',
-    id: 'section:direct_messages',
-    group: 'direct_messages',
-  });
-  if (expandedGroups.direct_messages) {
-    rows.push(
-      ...items.direct_messages.map(
-        (channel, localIndex): ChannelRailRow => ({
-          kind: 'conversation',
-          id: `channel:${channel.id}`,
-          group: 'direct_messages',
-          scope: 'direct_messages',
-          localIndex,
-          channel,
-        })
-      )
-    );
-  }
-
-  return rows;
-}
-
 export function ChannelsRail(props: ChannelsRailProps) {
-  const { state, setGroupOpen, setSelectedChannelId, setSortBy, setTab } =
-    useChannelsView();
+  const channelTagsFlag = useFeatureFlag(enableChannelTags);
+  const channelTagsEnabled = createMemo(() => channelTagsFlag().enabled);
+  // The dialog manager closes entries when their owner is disposed. Give
+  // label dialogs an owner that is cleaned up when the rollout turns off.
+  const labelDialogOwner = createMemo(() =>
+    channelTagsEnabled() ? getOwner() : undefined
+  );
+  const {
+    state,
+    setGroupOpen,
+    setLabelOpen,
+    selectedChannel,
+    setSelectedChannel,
+    setSortBy,
+    setTab,
+  } = useChannelsView();
 
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
+  const notificationSource = useGlobalNotificationSource();
+  const orchestrator = useGlobalBlockOrchestrator();
+  let activation = 0;
+  onCleanup(() => activation++);
+
+  const reportActivationError = (error: unknown) => {
+    console.error('Failed to open conversation', error);
+    toast.failure('Unable to open conversation. Please try again.');
+  };
+
+  const selectChannel = async (
+    channel: WithNotification<ChannelEntity>,
+    channelId: string,
+    openInNewSplit: boolean
+  ) => {
+    try {
+      const entity = withEntityNotifications(channel, notificationSource);
+      if (openInNewSplit) {
+        await openEntityInSplitFromUnifiedList(entity, {
+          openInNewSplit: true,
+          referredFrom: 'channels',
+          notificationSource,
+          scopeChannelThreads: false,
+        });
+        return;
+      }
+      const selection = channelPreviewSelection(channelId, {
+        target: getChannelEntityTarget(entity, {
+          scopeChannelThreads: false,
+        }),
+        notifications: entity.notifications,
+      });
+      const previous = selectedChannel();
+      if (!setSelectedChannel(selection)) return;
+      // Mark on every accepted activation, including re-clicks of the same
+      // route. The detail's ready-id effect only handles initial/route opens.
+      if (channel.isParticipant !== false) {
+        markChannelNotificationsSeenOnOpen(entity, notificationSource, {
+          scopeChannelThreads: false,
+        });
+      }
+      // Repeated clicks must navigate even when the route stays the same.
+      if (
+        previous?.id === selection.id &&
+        previous.target?.messageId === selection.target?.messageId &&
+        previous.target?.threadId === selection.target?.threadId
+      ) {
+        await navigateChannelEntityToTarget(selection, orchestrator);
+      }
+    } catch (error) {
+      reportActivationError(error);
+    }
+  };
+
+  const selectHydratedChannel = async (
+    pending: Promise<WithNotification<ChannelEntity>>,
+    request: number,
+    channelId: string,
+    openInNewSplit: boolean
+  ) => {
+    try {
+      const channel = await pending;
+      if (request !== activation) return;
+      // Only fetched selections need to join the browser router's transition.
+      await startTransition(() => {
+        if (request === activation)
+          void selectChannel(channel, channelId, openInNewSplit);
+      });
+    } catch (error) {
+      if (request === activation) reportActivationError(error);
+    }
+  };
+
+  const activateChannel = (channel: ChannelEntity, openInNewSplit: boolean) => {
+    const request = ++activation;
+    // Capture before hydrate/await — store proxies from the list can lose
+    // fields if the query refreshes while notifications are fetched.
+    const channelId = channel.id;
+    if (!channelId) {
+      reportActivationError(new Error('Missing channel id'));
+      return;
+    }
+    const selection = hydrateChannelNotificationSelection(
+      channel,
+      notificationSource.withLocalOverrides
+    );
+    // Telemetry installs ZoneAwarePromise; native async results are not
+    // instances of that constructor. Detect the pending edge structurally.
+    if ('then' in selection) {
+      void selectHydratedChannel(selection, request, channelId, openInNewSplit);
+    } else {
+      void selectChannel(selection, channelId, openInNewSplit);
+    }
+  };
 
   const favoritesData = useFavoritesData({ entityType: ['channel'] });
 
@@ -181,17 +252,17 @@ export function ChannelsRail(props: ChannelsRailProps) {
     Partial<Record<ChannelsSourceScope, VirtualizerHandle>>
   >({});
 
-  const [searchQuery, setSearchQuery] = createSignal('');
+  const searchQuery = () => props.searchQuery;
+  const setSearchQuery = (query: string) => props.onSearchQueryChange(query);
 
   const [restoreListScroll, setRestoreListScroll] = createSignal(false);
 
-  const normalizedSearchQuery = () => searchQuery().trim();
-
-  const serviceSearchQuery = debouncedDependent(normalizedSearchQuery, 300);
-
   let searchInput: HTMLInputElement | undefined;
 
-  const previewAfterNavigation = debounce(setSelectedChannelId, 150);
+  const previewAfterNavigation = debounce(
+    (channel: ChannelPreviewSelection) => setSelectedChannel(channel),
+    150
+  );
   onCleanup(() => previewAfterNavigation.clear());
 
   const closeSearch = () => {
@@ -222,77 +293,90 @@ export function ChannelsRail(props: ChannelsRailProps) {
     ])
   );
 
-  const channelSearchQuery = useSearchSoupQuery(
-    () => ({
-      params: { page_size: 100 },
-      body: {
-        query: serviceSearchQuery(),
-        match_type: 'partial',
-        search_on: 'name',
-        filters: CHANNEL_SEARCH_FILTERS,
-      },
-    }),
-    () => ({
-      enabled:
-        props.searchOpen && normalizedSearchQuery() === serviceSearchQuery(),
+  const searchResults = () => props.sources.search.items();
+  const searchLoading = () => props.sources.search.isFetching();
+  const searchError = () => props.sources.search.error();
+  const retrySearch = () => props.sources.search.refresh();
+
+  // Shared or private labels; channel membership is always viewer-relative.
+  const labelsQuery = useChannelLabelsQuery();
+  const labels = createMemo<readonly ChannelLabel[]>(() =>
+    resolveChannelLabelMemberships(
+      channelTagsEnabled() && labelsQuery.isSuccess
+        ? labelsQuery.data.labels
+        : [],
+      channels()
+    )
+  );
+  const labelsAvailable = () => channelTagsEnabled() && labelsQuery.isSuccess;
+  const labelsUnavailableReason = () => {
+    if (labelsQuery.isSuccess) return '';
+    if (labelsQuery.isPending) return 'Loading labels…';
+    const error = labelsQuery.error;
+    if (
+      thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
+      thrownResultErrorHasCode(error, 'FORBIDDEN')
+    ) {
+      return 'You do not have access to these labels.';
+    }
+    if (thrownResultErrorHasCode(error, 'NOT_FOUND')) {
+      return 'Channel labels are not available on this server yet.';
+    }
+    return 'Channel labels are unavailable right now.';
+  };
+
+  // A labelled channel renders under its label even before the paginated
+  // Channels source reaches it, so fetch the ones the sources have not loaded.
+  const labelledChannelIds = createMemo(() => [
+    ...new Set(labels().flatMap((label) => label.channelIds)),
+  ]);
+  const missingLabelledIds = createMemo(() => {
+    const loaded = new Set(channels().map((channel) => channel.id));
+    return labelledChannelIds().filter((id) => !loaded.has(id));
+  });
+  const labelledChannelsQuery = useChannelsByIdsQuery(missingLabelledIds);
+  const labelledChannels = createMemo<ChannelEntity[]>((previous) => {
+    if (!channelTagsEnabled()) return [];
+    if (!labelledChannelsQuery.isEnabled || labelledChannelsQuery.isLoading)
+      return previous;
+    return deduplicateChannels([
+      (labelledChannelsQuery.data?.entities ?? []).filter(isChannelEntity),
+      previous,
+    ]);
+  }, []);
+
+  const allChannels = createMemo(() =>
+    deduplicateChannels([channels(), labelledChannels()])
+  );
+  const channelsById = createMemo(
+    () => new Map(allChannels().map((channel) => [channel.id, channel]))
+  );
+
+  const channelActivity = useChannelRailActivity(allChannels, channelCalls);
+
+  const favorites = createMemo(() => favoritesData()?.favorites ?? []);
+
+  const isLabelOpen = (labelId: string) =>
+    !state.collapsedLabels.includes(labelId);
+
+  const channelSectionRows = createMemo(() =>
+    buildChannelSectionRows({
+      labels: labels(),
+      channels: deduplicateChannels([
+        props.sources.channels.items(),
+        labelledChannels(),
+      ]),
+      channelsById: channelsById(),
+      isLabelOpen,
     })
   );
 
-  const localSearchResults = createMemo(() => {
-    const query = normalizedSearchQuery().toLocaleLowerCase();
-    const items = props.sources.search.items();
-    if (!query) return items;
-
-    return items.filter((channel) =>
-      channel.name.toLocaleLowerCase().includes(query)
-    );
-  });
-
-  const serviceSearchResults = createMemo(() => {
-    if (
-      normalizedSearchQuery() !== serviceSearchQuery() ||
-      channelSearchQuery.isFetching ||
-      !channelSearchQuery.isSuccess
-    ) {
-      return [];
-    }
-
-    return channelSearchQuery.data.filter(
-      (entity): entity is WithSearch<ChannelEntity> => isChannelEntity(entity)
-    );
-  });
-
-  const searchResults = createMemo(() =>
-    deduplicateChannels([localSearchResults(), serviceSearchResults()])
-  );
-
-  const searchLoading = () =>
-    props.sources.search.isLoading() ||
-    (normalizedSearchQuery().length >= 3 &&
-      (normalizedSearchQuery() !== serviceSearchQuery() ||
-        channelSearchQuery.isFetching));
-
-  const searchError = () => {
-    if (
-      normalizedSearchQuery() === serviceSearchQuery() &&
-      channelSearchQuery.error instanceof Error
-    ) {
-      return channelSearchQuery.error;
-    }
-
-    return props.sources.search.error() ?? undefined;
+  const labelUnreadCount = (label: ChannelLabel) => {
+    const unread = channelActivity.unreadChannelIds();
+    return filterChannelLabelMembers(label.channelIds, channelsById()).filter(
+      (id) => unread.has(id)
+    ).length;
   };
-
-  const retrySearch = async () => {
-    await props.sources.search.refresh();
-    if (normalizedSearchQuery().length >= 3) {
-      await channelSearchQuery.refetch();
-    }
-  };
-
-  const channelActivity = useChannelRailActivity(channels, channelCalls);
-
-  const favorites = createMemo(() => favoritesData()?.favorites ?? []);
 
   const visibleRows = createMemo(() => {
     if (props.searchOpen) {
@@ -307,30 +391,43 @@ export function ChannelsRail(props: ChannelsRailProps) {
       );
     }
 
-    return buildChannelRailRows(state.tab, state.expandedGroups, {
-      favorites: favorites(),
-      channels: props.sources.channels.items(),
-      direct_messages: props.sources.direct_messages.items(),
-      recents: props.sources.recents.items(),
-    });
+    return buildChannelRailRows(
+      state.tab,
+      state.expandedGroups,
+      {
+        favorites: favorites(),
+        channels: props.sources.channels.items(),
+        direct_messages: props.sources.direct_messages.items(),
+        recents: props.sources.recents.items(),
+      },
+      channelSectionRows()
+    );
   });
 
+  const initialSelectedChannelId = selectedChannel()?.id;
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
     createListController<ChannelRailRow, ChannelRailActivationMetadata>({
       items: visibleRows,
       getKey: (row) => row.id,
       isSelectable: () => false,
-      initialFocusKey:
-        state.selectedChannelId === undefined
-          ? undefined
-          : rowKeyForChannel(state.selectedChannelId),
+      initialFocusKey: visibleRows().find(
+        (row) =>
+          row.kind === 'conversation' &&
+          row.channel.id === initialSelectedChannelId
+      )?.id,
       onActivate: ({ item, metadata }) => {
+        activation++;
         previewAfterNavigation.clear();
         const openInNewSplit =
           metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
         if (item.kind === 'section') {
           setGroupOpen(item.group, !state.expandedGroups[item.group]);
+          return;
+        }
+
+        if (item.kind === 'label') {
+          setLabelOpen(item.label.id, !isLabelOpen(item.label.id));
           return;
         }
 
@@ -348,15 +445,17 @@ export function ChannelsRail(props: ChannelsRailProps) {
         const channelId =
           item.kind === 'favorite' ? item.favorite.entityId : item.channel.id;
 
-        if (openInNewSplit) {
+        const channel =
+          item.kind === 'conversation'
+            ? item.channel
+            : channelsById().get(channelId);
+        if (channel) activateChannel(channel, openInNewSplit);
+        else if (openInNewSplit) {
           layout.openWithSplit(
             { type: 'channel', id: channelId },
             { preferNewSplit: true, referredFrom: 'channels' }
           );
-          return;
-        }
-
-        setSelectedChannelId(channelId);
+        } else setSelectedChannel({ type: 'channel', id: channelId });
       },
     })
   );
@@ -366,8 +465,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
       const row = list.items.at(index);
       if (!row) return;
 
-      if (row.kind === 'conversation') {
-        const virtualizer = virtualizers()[row.scope];
+      if (row.kind === 'conversation' || row.kind === 'label') {
+        const virtualizer =
+          virtualizers()[row.kind === 'label' ? 'channels' : row.scope];
         if (virtualizer) {
           virtualizer.scrollToIndex(row.localIndex, options);
           return;
@@ -397,16 +497,21 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const scrollScopeToSelectedOrStart = (scope: ChannelsQueryScope) => {
-    const items = props.sources[scope].items();
+    // The Channels section renders label headings between channels, so its
+    // indexes come from the rendered rows rather than the source.
+    const rendered =
+      scope === 'channels'
+        ? channelSectionRows().map((row) =>
+            row.kind === 'conversation' ? row.channel.id : undefined
+          )
+        : props.sources[scope].items().map((channel) => channel.id);
 
-    const selectedIndex = items.findIndex(
-      (channel) => channel.id === state.selectedChannelId
-    );
+    const selectedIndex = rendered.indexOf(selectedChannel()?.id ?? '');
 
     const targetIndex = selectedIndex >= 0 ? selectedIndex : 0;
     const virtualizer = virtualizers()[scope];
 
-    if (virtualizer && items.length > 0) {
+    if (virtualizer && rendered.length > 0) {
       virtualizer.scrollToIndex(targetIndex, {
         align: selectedIndex >= 0 ? 'nearest' : 'start',
       });
@@ -422,7 +527,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const items = searchResults();
 
     const selectedIndex = items.findIndex(
-      (channel) => channel.id === state.selectedChannelId
+      (channel) => channel.id === selectedChannel()?.id
     );
 
     const virtualizer = virtualizers().search;
@@ -441,8 +546,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
     const favorite = favorites().find(
       (item) =>
-        item.entityType === 'channel' &&
-        item.entityId === state.selectedChannelId
+        item.entityType === 'channel' && item.entityId === selectedChannel()?.id
     );
     if (!favorite) return;
 
@@ -516,6 +620,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       scopeId: panel.splitHotkeyScope,
       scrollHandle: () => scrollHandle,
       enabled: panel.isPanelActive,
+      conditions: {
+        open: () =>
+          !document.activeElement?.closest('[data-live-calls-sidebar]'),
+      },
       navigation: {
         onBeforeMove: ({ direction, current }) => {
           if (props.searchOpen) return true;
@@ -524,7 +632,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
           if (direction !== 1 || row?.kind !== 'conversation') return true;
 
           const source = props.sources[row.scope];
-          if (row.localIndex < source.items().length - 1) return true;
+          const renderedCount =
+            row.scope === 'channels'
+              ? channelSectionRows().length
+              : source.items().length;
+          if (row.localIndex < renderedCount - 1) return true;
 
           if (!source.isLoadingMore()) {
             if (!source.hasMore()) return true;
@@ -558,17 +670,21 @@ export function ChannelsRail(props: ChannelsRailProps) {
           return false;
         },
         onNavigate: (event) => {
+          activation++;
           listRoot()?.focus({ preventScroll: true });
           previewAfterNavigation.clear();
 
           const row = event.result?.item;
           if (row?.kind === 'conversation') {
-            previewAfterNavigation(row.channel.id);
+            previewAfterNavigation(row.channel);
           } else if (
             row?.kind === 'favorite' &&
             row.favorite.entityType === 'channel'
           ) {
-            previewAfterNavigation(row.favorite.entityId);
+            previewAfterNavigation({
+              type: 'channel',
+              id: row.favorite.entityId,
+            });
           }
         },
       },
@@ -576,13 +692,27 @@ export function ChannelsRail(props: ChannelsRailProps) {
         createMetadata: (intent) => ({ newSplit: intent === 'alternate' }),
         alternateDescription: 'Open in new split',
       },
+      // Labels disclose like sections: `h`/`l` on a label heading or one of
+      // its channels collapse or expand that label; anywhere else, the section.
       disclosure: {
-        getKey: (row) => row.group,
-        isExpanded: (group) =>
-          state.expandedGroups[group as ChannelsRailSection],
-        setExpanded: (group, expanded) =>
-          setGroupOpen(group as ChannelsRailSection, expanded),
-        getFocusKey: (group) => rowKeyForSection(group as ChannelsRailSection),
+        getKey: (row) =>
+          row.kind === 'label'
+            ? row.id
+            : row.kind === 'conversation' && row.labelId
+              ? rowKeyForLabel(row.labelId)
+              : row.group,
+        isExpanded: (key) =>
+          key.startsWith(LABEL_KEY_PREFIX)
+            ? isLabelOpen(key.slice(LABEL_KEY_PREFIX.length))
+            : state.expandedGroups[key as ChannelsRailSection],
+        setExpanded: (key, expanded) =>
+          key.startsWith(LABEL_KEY_PREFIX)
+            ? setLabelOpen(key.slice(LABEL_KEY_PREFIX.length), expanded)
+            : setGroupOpen(key as ChannelsRailSection, expanded),
+        getFocusKey: (key) =>
+          key.startsWith(LABEL_KEY_PREFIX)
+            ? rowKeyForLabel(key.slice(LABEL_KEY_PREFIX.length))
+            : rowKeyForSection(key as ChannelsRailSection),
       },
     })
   );
@@ -590,10 +720,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const jumpToSection = (offset: 1 | -1) => {
     const currentGroup = list.focus.item()?.group;
 
-    const sections =
-      favorites().length > 0
-        ? CHANNEL_RAIL_SECTIONS
-        : CHANNEL_RAIL_SECTIONS.filter((section) => section !== 'favorites');
+    const sections = CHANNEL_RAIL_SECTIONS.filter((section) =>
+      section === 'favorites' ? favorites().length > 0 : true
+    );
 
     const currentIndex = currentGroup ? sections.indexOf(currentGroup) : -1;
     const origin = currentIndex === -1 ? (offset === 1 ? -1 : 0) : currentIndex;
@@ -638,6 +767,307 @@ export function ChannelsRail(props: ChannelsRailProps) {
     });
   };
 
+  // Explain shared versus private scope before creating or changing labels.
+  const createLabelMutation = useCreateChannelLabelMutation();
+  const renameLabelMutation = useRenameChannelLabelMutation();
+  const deleteLabelMutation = useDeleteChannelLabelMutation();
+  const setChannelLabelMutation = useSetChannelLabelMutation();
+
+  const errorMessage = (error: unknown, fallback: string) => {
+    if (
+      thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
+      thrownResultErrorHasCode(error, 'FORBIDDEN')
+    ) {
+      return 'You do not have access to these labels.';
+    }
+    const message = error instanceof Error ? error.message : '';
+    return message || fallback;
+  };
+  const labelChannelById = (channelId: string) =>
+    channelsById().get(channelId) ??
+    searchResults().find((channel) => channel.id === channelId);
+  const channelName = (channelId: string) => {
+    const name = labelChannelById(channelId)?.name;
+    return name ? `#${name}` : 'the channel';
+  };
+  const canLabelChannelId = (channelId: string) =>
+    canLabelChannel(labelChannelById(channelId));
+
+  const sharedLabels = () =>
+    labelsQuery.isSuccess && Boolean(labelsQuery.data.teamId);
+  const labelScopeDescription = () =>
+    sharedLabels()
+      ? 'Labels are shared with everyone on your team.'
+      : 'Labels are private to your account.';
+
+  const createLabel = async (channelIds: string[]) => {
+    if (!channelTagsEnabled()) return;
+    if (!channelIds.every(canLabelChannelId)) return;
+    if (!labelsAvailable()) {
+      toast.failure(labelsUnavailableReason());
+      return;
+    }
+    const names = channelIds
+      .map((id) => labelChannelById(id)?.name)
+      .filter((name): name is string => Boolean(name))
+      .map((name) => `#${name}`);
+    const grouping =
+      names.length > 1
+        ? ` It will start with ${names.slice(0, -1).join(', ')} and ${names.at(-1)}.`
+        : names.length === 1
+          ? ` It will start with ${names[0]}.`
+          : '';
+    const name = await promptLabelName(
+      {
+        title: 'New label',
+        body: `${labelScopeDescription()}${grouping}`,
+        confirmLabel: 'Create label',
+        onConfirm: async (name) => {
+          if (!channelTagsEnabled())
+            throw new Error('Channel tags are disabled.');
+          if (!channelIds.every(canLabelChannelId))
+            throw new Error('Only team channels can be added to labels.');
+          const created = await createLabelMutation.mutateAsync({
+            name,
+            channelIds,
+          });
+          setGroupOpen('channels', true);
+          setLabelOpen(created.id, true);
+        },
+      },
+      { owner: labelDialogOwner() }
+    );
+    if (!name) return;
+    toast.success(
+      channelIds.length > 1
+        ? `Grouped ${channelIds.length} channels under “${name}”`
+        : `Created “${name}”`
+    );
+  };
+
+  const createSmartTag = async () => {
+    if (!channelTagsEnabled()) return;
+    if (!labelsAvailable()) {
+      toast.failure(labelsUnavailableReason());
+      return;
+    }
+    await promptSmartTag(
+      {
+        scopeDescription: labelScopeDescription(),
+        onConfirm: async (name, rule) => {
+          if (!channelTagsEnabled())
+            throw new Error('Channel tags are disabled.');
+          const created = await createLabelMutation.mutateAsync({
+            name,
+            rule,
+            channelIds: [],
+          });
+          setGroupOpen('channels', true);
+          setLabelOpen(created.id, true);
+          toast.success(`Created “${name}”`);
+        },
+      },
+      { owner: labelDialogOwner() }
+    );
+  };
+
+  const editSmartTag = async (label: ChannelLabel) => {
+    if (!channelTagsEnabled() || !label.rule) return;
+    await promptSmartTag(
+      {
+        scopeDescription: labelScopeDescription(),
+        initial: { name: label.name, rule: label.rule },
+        onConfirm: async (name, rule) => {
+          if (!channelTagsEnabled())
+            throw new Error('Channel tags are disabled.');
+          await renameLabelMutation.mutateAsync({
+            labelId: label.id,
+            name,
+            rule,
+          });
+          toast.success(`Updated “${name}”`);
+        },
+      },
+      { owner: labelDialogOwner() }
+    );
+  };
+
+  const renameLabel = async (label: ChannelLabel) => {
+    if (!channelTagsEnabled()) return;
+    const name = await promptLabelName(
+      {
+        title: 'Rename label',
+        body: labelScopeDescription(),
+        confirmLabel: 'Rename',
+        initialValue: label.name,
+        onConfirm: async (name) => {
+          if (!channelTagsEnabled())
+            throw new Error('Channel tags are disabled.');
+          await renameLabelMutation.mutateAsync({ labelId: label.id, name });
+        },
+      },
+      { owner: labelDialogOwner() }
+    );
+    if (!name || name === label.name) return;
+    toast.success(`Renamed to “${name}”`);
+  };
+
+  const deleteLabel = async (label: ChannelLabel) => {
+    if (!channelTagsEnabled()) return;
+    const channelsText = label.rule
+      ? 'Channels stop appearing in this smart label. Other labels are unchanged.'
+      : label.channelCount === 0
+        ? 'It has no channels in it.'
+        : label.channelCount === 1
+          ? 'Its 1 channel goes back to the main Channels list.'
+          : `Its ${label.channelCount} channels go back to the main Channels list.`;
+    const confirmed = await confirmDialog(
+      {
+        title: `Delete “${label.name}”?`,
+        body: `${labelScopeDescription()} ${channelsText} Nobody loses access to a channel.`,
+        confirmLabel: sharedLabels() ? 'Delete for everyone' : 'Delete label',
+        cancelLabel: 'Cancel',
+        tone: 'danger',
+      },
+      { owner: labelDialogOwner() }
+    );
+    if (!confirmed || !channelTagsEnabled()) return;
+    try {
+      await deleteLabelMutation.mutateAsync({ labelId: label.id });
+      toast.success(`Deleted “${label.name}”`);
+    } catch (error) {
+      toast.failure(errorMessage(error, 'Failed to delete label'));
+    }
+  };
+
+  const setChannelLabel = (channelId: string, labelId: string | undefined) => {
+    if (!channelTagsEnabled() || !canLabelChannelId(channelId)) return;
+    const from = labels().find(
+      (label) => !label.rule && label.channelIds.includes(channelId)
+    );
+    const to = labelId
+      ? labels().find((label) => label.id === labelId)
+      : undefined;
+    if (to?.rule || from?.id === labelId) return;
+    if (labelId) setLabelOpen(labelId, true);
+    setChannelLabelMutation.mutate(
+      { channelId, labelId },
+      {
+        onSuccess: () => {
+          if (to) {
+            toast.success(`Moved ${channelName(channelId)} to “${to.name}”`);
+          } else if (from) {
+            toast.success(
+              `Removed ${channelName(channelId)} from “${from.name}”`
+            );
+          }
+        },
+        onError: (error) =>
+          toast.failure(errorMessage(error, 'Failed to move channel')),
+      }
+    );
+  };
+
+  const markLabelRead = async (label: ChannelLabel) => {
+    if (!channelTagsEnabled()) return;
+    const channelIds = new Set(
+      filterChannelLabelMembers(label.channelIds, channelsById())
+    );
+    if (channelIds.size === 0) return;
+    try {
+      await ensureNotificationSourceLoaded(notificationSource);
+      const unread = notificationSource
+        .notifications()
+        .filter(
+          (notification) =>
+            notification.entity_type === 'channel' &&
+            channelIds.has(notification.entity_id) &&
+            !notificationIsRead(notification)
+        );
+      await notificationSource.bulkMarkAsRead(unread);
+    } catch (error) {
+      toast.failure(
+        errorMessage(error, 'Failed to mark channel label as read')
+      );
+    }
+  };
+
+  // Drops are resolved here rather than per row so a channel dragged from
+  // anywhere in the section lands the same way.
+  const [dndState, dndActions] = useDragDropContext() ?? [];
+  const canDropOnChannel = (sourceId: string, targetId: string) =>
+    sourceId !== targetId && canLabelChannelId(targetId);
+  // The highlight follows the whole target (a label with all its rows), not
+  // the row under the cursor, so rows read this instead of their own state.
+  const activeDropTarget = (): ChannelLabelDropTarget | undefined => {
+    if (!channelTagsEnabled()) return undefined;
+    const drag = dndState?.active.draggable?.data as
+      | ChannelLabelDragData
+      | undefined;
+    if (drag?.dragType !== 'channel-label' || drag.dndScope !== listDomId)
+      return undefined;
+    if (!canLabelChannelId(drag.channelId)) return undefined;
+    const drop = dndState?.active.droppable?.data as
+      | ChannelLabelDropData
+      | undefined;
+    if (
+      drop?.dragType !== 'channel-label-target' ||
+      drop.dndScope !== listDomId
+    )
+      return undefined;
+    if (drop.target.kind === 'smart-tag') return undefined;
+    if (
+      drop.target.kind === 'channel' &&
+      !canDropOnChannel(drag.channelId, drop.target.channelId)
+    )
+      return undefined;
+    if (drop.target.kind === 'label' && drop.target.labelId === drag.labelId)
+      return undefined;
+    if (drop.target.kind === 'unlabelled' && !drag.labelId) return undefined;
+    return drop.target;
+  };
+  dndActions?.onDragEnd(({ draggable, droppable }) => {
+    if (!channelTagsEnabled()) return;
+    const drag = draggable?.data as ChannelLabelDragData | undefined;
+    if (drag?.dragType !== 'channel-label' || drag.dndScope !== listDomId)
+      return;
+    if (!canLabelChannelId(drag.channelId)) return;
+    // With labels unavailable every target reports itself disabled, so the
+    // drag ends on nothing; say why rather than silently doing nothing.
+    if (!labelsAvailable()) {
+      toast.failure(labelsUnavailableReason());
+      return;
+    }
+    if (!droppable) return;
+    const drop = droppable.data as ChannelLabelDropData | undefined;
+    if (
+      drop?.dragType !== 'channel-label-target' ||
+      drop.dndScope !== listDomId
+    )
+      return;
+
+    const target = drop.target;
+    if (target.kind === 'smart-tag') return;
+    if (target.kind === 'label') {
+      if (drag.labelId !== target.labelId) {
+        setChannelLabel(drag.channelId, target.labelId);
+      }
+      return;
+    }
+    if (target.kind === 'unlabelled') {
+      if (drag.labelId) setChannelLabel(drag.channelId, undefined);
+      return;
+    }
+    if (!canDropOnChannel(drag.channelId, target.channelId)) return;
+    // Dragging a labelled channel onto the plain list takes it out of its
+    // label; dropping one plain channel on another starts a label with both.
+    if (drag.labelId) {
+      setChannelLabel(drag.channelId, undefined);
+      return;
+    }
+    void createLabel([drag.channelId, target.channelId]);
+  });
+
   const registerVirtualizer = (
     scope: ChannelsSourceScope,
     handle: VirtualizerHandle
@@ -662,9 +1092,25 @@ export function ChannelsRail(props: ChannelsRailProps) {
     selectTab,
     sources: props.sources,
     favorites,
-    selectedChannelId: () => state.selectedChannelId,
+    selectedChannel,
     isGroupOpen: (group) => state.expandedGroups[group],
     toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
+    channelTagsEnabled,
+    labels,
+    labelsAvailable,
+    labelsUnavailableReason,
+    isLabelOpen,
+    toggleLabel: (labelId) => setLabelOpen(labelId, !isLabelOpen(labelId)),
+    channelSectionRows,
+    labelUnreadCount,
+    createLabel,
+    createSmartTag,
+    editSmartTag,
+    renameLabel,
+    deleteLabel,
+    setChannelLabel,
+    activeDropTarget,
+    markLabelRead,
     sortBy: (group) => state.sortBy[group],
     setSortBy,
     registerRootRef: setListRoot,

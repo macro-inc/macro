@@ -16,6 +16,9 @@ pub enum MessageError {
     /// Invalid thread relation or anchor.
     #[error("{0}")]
     Invalid(&'static str),
+    /// A client-supplied message id is already taken.
+    #[error("message id already exists")]
+    Conflict,
     /// Persistence or delivery failed.
     #[error("message operation failed: {0}")]
     Repository(rootcause::Report),
@@ -82,43 +85,6 @@ pub struct MessagePage {
     pub next_cursor: Option<MessageCursor>,
     /// Continue to newer roots.
     pub previous_cursor: Option<MessageCursor>,
-}
-
-/// A source channel thread that mentions the requested document.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ReferencedThread {
-    /// Source parent used by the common message reader and mutations.
-    pub parent: MessageParent,
-    /// Source root identity; discovery does not copy its message content.
-    pub root_id: Uuid,
-    /// Source channel's current display name, returned only after access checks.
-    pub channel_name: Option<String>,
-    /// Whether this viewer currently has permission to reply in the source channel.
-    pub can_reply: bool,
-}
-
-/// Authorized source threads, deduplicated by root.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ReferencedThreadPage {
-    /// Accessible channel discussions mentioning the document.
-    pub threads: Vec<ReferencedThread>,
-    /// Last visible root; no private thread identifiers are exposed through cursors.
-    pub next_cursor: Option<MessageCursor>,
-}
-
-/// Repository fact used to authorize a source before loading its messages.
-#[derive(Debug, Clone)]
-pub struct ReferencedThreadCandidate {
-    /// Channel that owns the source discussion.
-    pub channel_id: Uuid,
-    /// Canonical thread root.
-    pub root_id: Uuid,
-    /// Source display name.
-    pub channel_name: Option<String>,
-    /// Root's stable ordering timestamp.
-    pub created_at: DateTime<Utc>,
 }
 
 /// Authenticated create command; attribution fields are never client controlled.
@@ -238,6 +204,10 @@ pub enum MessageChange {
     ReactionChanged {
         /// Persisted message.
         message: Message,
+        /// Emoji whose membership changed.
+        emoji: String,
+        /// Whether the reaction was added (`true`) or removed (`false`).
+        added: bool,
     },
     /// Thread resolution, placement, or deletion changed.
     ThreadUpdated {
@@ -253,20 +223,26 @@ pub enum MessageChange {
     },
 }
 
+/// Persisted reaction state and whether this operation changed membership.
+pub struct ReactionResult {
+    /// Current message, including its reactions.
+    pub message: Message,
+    /// False for an idempotent add or remove that changed no rows.
+    pub changed: bool,
+}
+
 /// Persistence boundary. Implementations enforce parent/thread integrity atomically.
 pub trait MessageRepository: Send + Sync + 'static {
-    /// Discover source identities without treating a mention as a grant of access.
-    fn referenced_threads(
-        &self,
-        document_id: &str,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> impl Future<Output = Result<Vec<ReferencedThreadCandidate>, MessageError>> + Send;
     /// Whether the parent still exists and permits messaging lifecycle-wise.
     fn parent_exists(
         &self,
         parent: &MessageParent,
     ) -> impl Future<Output = Result<bool, MessageError>> + Send;
+    /// File type of a live document, for document-specific anchor validation.
+    fn document_file_type(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, MessageError>> + Send;
     /// Read a message belonging to the specified parent, including root tombstones.
     fn get(
         &self,
@@ -285,7 +261,7 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         root_id: Uuid,
     ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
-    /// Live messages before a prompt, in chronological order. Document context
+    /// Live messages before a prompt, in chronological order. Discussion context
     /// stays within the prompt's thread; channel context includes the timeline.
     fn preceding(
         &self,
@@ -318,7 +294,7 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         id: Uuid,
     ) -> impl Future<Output = Result<Message, MessageError>> + Send;
-    /// Add or remove the caller's reaction and return the current message.
+    /// Add or remove the caller's reaction and report whether membership changed.
     fn react(
         &self,
         parent: &MessageParent,
@@ -326,7 +302,7 @@ pub trait MessageRepository: Send + Sync + 'static {
         user_id: &str,
         emoji: &str,
         add: bool,
-    ) -> impl Future<Output = Result<Message, MessageError>> + Send;
+    ) -> impl Future<Output = Result<ReactionResult, MessageError>> + Send;
     /// Apply authorized thread resolution or Markdown anchor detachment.
     fn patch_thread(
         &self,
@@ -347,6 +323,14 @@ pub trait MessageRepository: Send + Sync + 'static {
         id: i64,
         is_thread: bool,
     ) -> impl Future<Output = Result<Option<Uuid>, MessageError>> + Send;
+    /// The parent a live message belongs to; `None` once it is deleted. Grants
+    /// nothing: it only tells an id-addressed adapter which parent receipt to mint.
+    fn parent_of(
+        &self,
+        _id: Uuid,
+    ) -> impl Future<Output = Result<Option<MessageParent>, MessageError>> + Send {
+        async { Ok(None) }
+    }
 }
 
 /// Publish committed changes, deriving delivery policy from the persisted parent.
@@ -361,15 +345,6 @@ pub trait MessageEventPublisher: Send + Sync + 'static {
 /// Resolves access to referenced entities before a message transaction begins.
 /// Implementations must never grant access as a side effect of this check.
 pub trait MessageReferenceAccess: Send + Sync + 'static {
-    /// Whether this principal currently has write access to a referenced conversation.
-    fn can_write<'a>(
-        &'a self,
-        _auth: &'a entity_access::domain::models::EntityAccessAuth,
-        _entity_type: entity_access::domain::models::EntityType,
-        _entity_id: &'a str,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<bool, MessageError>> + Send + 'a>> {
-        Box::pin(async { Ok(false) })
-    }
     /// Whether this principal can view the referenced entity now.
     fn can_view<'a>(
         &'a self,
@@ -442,4 +417,33 @@ impl MessageGroupRecipients for NoMessageGroups {
             "channel group mentions are unavailable",
         ))
     }
+}
+
+/// Identity of a CRM company or contact that hosts a discussion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrmParentFacts {
+    /// The team that owns the record.
+    pub team_id: Uuid,
+    /// The company itself, or the contact's company.
+    pub company_id: Uuid,
+    /// Display name: a company's custom or directory name (else its primary
+    /// domain), a contact's name (else its email).
+    pub name: String,
+}
+
+/// Read-only CRM parent identity, implemented by the CRM domain. Returned facts
+/// grant nothing: callers verify capabilities before exposing them.
+pub trait CrmParentReader: Send + Sync + 'static {
+    /// The facts for a live CRM company or contact parent, or `None` once it has
+    /// been deleted or when the parent is not a CRM record.
+    fn read_crm_parent(
+        &self,
+        parent: &MessageParent,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<Option<CrmParentFacts>, rootcause::Report>>
+                + Send
+                + '_,
+        >,
+    >;
 }

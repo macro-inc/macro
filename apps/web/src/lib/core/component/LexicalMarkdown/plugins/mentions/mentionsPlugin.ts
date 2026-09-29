@@ -277,9 +277,10 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
   }
 }
 
-// Validators for the position of the @ trigger.
+// Validator for the position of the @ trigger. Only the text before the caret
+// constrains it, so `@` stays literal mid-word but opens the menu in front of a
+// word — the word itself is left out of the search.
 const beforeRegex = /[(['\"\`\s]$/;
-const afterRegex = /^[)\]'\"\`\s]/;
 
 /**
  * When mentions nodes are selected by using the arrow keys, we want to be able to delete them.
@@ -579,8 +580,13 @@ function registerMentionsPlugin(
           if (!$isAgentSessionMentionNode(node)) continue;
           if (mutation === 'created')
             onCreateMention?.($mentionItemFromNode(node));
-          if (mutation === 'destroyed')
+          if (mutation === 'destroyed') {
+            const mentionUuid = node.getMentionUuid();
+            if (mentionUuid && sourceDocumentId) {
+              untrackMention(sourceDocumentId, mentionUuid);
+            }
             onRemoveMention?.($mentionItemFromNode(node));
+          }
         }
         updateMentionsSignal();
       }
@@ -639,11 +645,7 @@ function registerMentionsPlugin(
     editor.registerCommand(
       TYPE_AT_SYMBOL_COMMAND,
       () => {
-        const shouldTrigger = validTriggerPosition(
-          editor,
-          beforeRegex,
-          afterRegex
-        );
+        const shouldTrigger = validTriggerPosition(editor, beforeRegex, null);
         if (shouldTrigger) {
           editor.update(() => {
             $insertNodes([$createInlineSearchNode('@')]);

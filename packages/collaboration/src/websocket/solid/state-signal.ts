@@ -29,7 +29,8 @@ export function createWebsocketStateSignal(
       setState(WebsocketConnectionState.Closed);
     },
     [WebsocketEvent.Error]: () => {
-      setState(WebsocketConnectionState.Closing);
+      // URL/authorization failures have no native socket to emit Close.
+      setState(ws.connectionState);
     },
     [WebsocketEvent.Reconnect]: () => {
       setState(WebsocketConnectionState.Reconnecting);

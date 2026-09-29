@@ -16,7 +16,7 @@ export function createDriveState(options: {
   state: Accessor<DriveState>;
   setState: Setter<DriveState>;
   folders: Accessor<DriveFolderMetadata[]>;
-  list: DriveListState;
+  list: Pick<DriveListState, 'reset'>;
   showList: () => void;
 }) {
   const { state, setState, list } = options;

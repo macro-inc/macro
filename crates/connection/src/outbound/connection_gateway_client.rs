@@ -51,7 +51,7 @@ impl ConnectionGateway for ConnectionGatewayImpl {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, message), err)]
     async fn batch_send_message<'a>(
         &self,
         users: &[MacroUserIdStr<'a>],

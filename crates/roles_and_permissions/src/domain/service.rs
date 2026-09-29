@@ -50,18 +50,24 @@ where
     ) -> Result<(), UserRolesAndPermissionsError> {
         let user_id = self.user_repository.get_user_id_by_email(&email).await?;
 
-        let sub_role = match product_tier {
-            ProductTier::Haiku => RoleId::SubHaiku,
-            ProductTier::Sonnet => RoleId::SubSonnet,
-            ProductTier::Opus => RoleId::SubOpus,
-        };
+        let sub_role = product_tier.role();
 
-        let roles = [RoleId::ProfessionalSubscriber, sub_role];
+        let roles = [RoleId::ProfessionalSubscriber, sub_role.clone()];
 
         match subscription_status {
             SubscriptionStatus::Active => {
                 self.user_roles_and_permissions_repository
                     .add_roles_to_user(&user_id, &roles)
+                    .await?;
+                // A plan change (Premium <-> Max) arrives as an activation of the
+                // new tier; drop the other tier roles so exactly one tier remains.
+                let other_tiers: Vec<RoleId> = ProductTier::ALL
+                    .iter()
+                    .map(ProductTier::role)
+                    .filter(|role| *role != sub_role)
+                    .collect();
+                self.user_roles_and_permissions_repository
+                    .remove_roles_from_user(&user_id, &other_tiers)
                     .await
             }
             SubscriptionStatus::Canceled

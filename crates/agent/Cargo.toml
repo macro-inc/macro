@@ -12,8 +12,11 @@ anyhow = { workspace = true }
 async-openai = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
 futures = { workspace = true }
 regex = { workspace = true }
+reqwest = { workspace = true }
 rig-core = "0.41.0"
 rig-agent = "0.41.0"
 schemars = { workspace = true }
@@ -35,6 +38,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tokio-util.workspace = true
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 model-entity = { path = "../model-entity" }
 non_empty = { path = "../non_empty" }
 opentelemetry = { workspace = true, features = ["trace"] }

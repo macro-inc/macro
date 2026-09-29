@@ -5,7 +5,6 @@ import BuildingsIcon from '@phosphor/buildings.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
-import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
@@ -17,6 +16,7 @@ import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
 import { useHasPermission } from '../context/user';
+import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
 import {
@@ -58,6 +58,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       { tab: 'Notifications', label: 'Notifications', icon: BellIcon },
       { tab: 'Billing', label: 'Billing', icon: CreditCardIcon },
       { tab: 'Appearance', label: 'Appearance', icon: SwatchesIcon },
+      { tab: 'Agents', label: 'Agents', icon: AgentIcon },
       { tab: 'Mobile App', label: 'Mobile App', icon: DeviceMobileIcon },
       { tab: 'Shortcuts', label: 'Shortcuts', icon: KeyboardIcon },
     ],
@@ -78,20 +79,10 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     ],
   },
   {
-    label: 'Agents',
-    items: [
-      { tab: 'Agents', label: 'Agents', icon: AgentIcon },
-      { tab: 'Harness', label: 'Harness', icon: HardDrivesIcon },
-    ],
-  },
-  {
     label: 'Admin',
     items: [{ tab: 'Admin', label: 'Debug', icon: BugIcon }],
   },
 ];
-
-/** Flattened view of {@link SETTINGS_TAB_GROUPS} for direct tab lookups. */
-const SETTINGS_TAB_ITEMS = SETTINGS_TAB_GROUPS.flatMap((group) => group.items);
 
 /**
  * URL slugs for each settings tab, used to build the settings page path
@@ -114,7 +105,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   'Mobile App': 'mobile-app',
   Agent: 'mcp-server',
   Agents: 'agents',
-  Harness: 'harness',
+  Harness: 'runtimes',
   Bots: 'bots',
   Team: 'team',
   Tags: 'tags',
@@ -131,6 +122,9 @@ const SETTINGS_SLUG_TO_TAB = new Map<string, SettingsTab>(
   )
 );
 
+// Preserve daemon pairing links and bookmarks from before the rename.
+SETTINGS_SLUG_TO_TAB.set('harness', 'Harness');
+
 /** The URL slug for a settings tab (e.g. `Connected` → `connections`). */
 export const settingsTabToSlug = (tab: SettingsTab): string =>
   SETTINGS_TAB_SLUGS[tab];
@@ -140,16 +134,6 @@ export const settingsSlugToTab = (
   slug: string | null | undefined
 ): SettingsTab | undefined =>
   slug ? SETTINGS_SLUG_TO_TAB.get(slug) : undefined;
-
-/**
- * Look up a single tab's presentation (label + icon). Lets consumers that
- * surface individual tabs (e.g. the sidebar's quick links) reuse the config's
- * label/icon instead of hardcoding their own.
- */
-export const getSettingsTabItem = (
-  tab: SettingsTab
-): SettingsTabItem | undefined =>
-  SETTINGS_TAB_ITEMS.find((item) => item.tab === tab);
 
 /**
  * Returns a predicate gating which settings tabs are available given feature
@@ -168,9 +152,12 @@ export const useSettingsTabAvailable = () => {
     switch (tab) {
       case 'Appearance':
       case 'Account':
-      case 'API Keys':
       case 'Billing':
         return true;
+      // Issuing and copying a key is desk work, and the mobile sheet has no
+      // good place for a one-time secret.
+      case 'API Keys':
+        return !isMobile();
       case 'Notifications':
         return notificationSettingsFlag().enabled;
       case 'Team':

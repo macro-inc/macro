@@ -11,6 +11,7 @@ import type {
   CreateScheduledAction,
   InProgressExecution,
   ScheduledAction,
+  SetScheduledActionEnabled,
   UpdateScheduledAction,
 } from './generated/schemas';
 
@@ -34,10 +35,15 @@ function scheduledActionFetch<T extends ObjectLike = never>(
 }
 
 export const scheduledActionClient = {
+  // Include backend-managed routines so direct routes can identify them.
+  // Cron-only entity lists filter these out before rendering.
   listSchedules: async () =>
-    scheduledActionFetch<ScheduledAction[]>('/scheduled-actions', {
-      method: 'GET',
-    }),
+    scheduledActionFetch<ScheduledAction[]>(
+      '/scheduled-actions?include_events=true',
+      {
+        method: 'GET',
+      }
+    ),
 
   createSchedule: async (body: CreateScheduledAction) =>
     scheduledActionFetch<ScheduledAction>('/scheduled-actions', {
@@ -54,6 +60,17 @@ export const scheduledActionClient = {
       {
         method: 'PUT',
         body: JSON.stringify(args.body),
+      }
+    ),
+
+  setEnabled: async (args: { scheduleId: string; enabled: boolean }) =>
+    scheduledActionFetch<ScheduledAction>(
+      `/scheduled-actions/${args.scheduleId}/enabled`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          enabled: args.enabled,
+        } satisfies SetScheduledActionEnabled),
       }
     ),
 

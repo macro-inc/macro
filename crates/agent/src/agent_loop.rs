@@ -2,6 +2,7 @@
 use crate::error::AgentError;
 use crate::hook::{BridgeInputs, RegisterFn, ToolRouter, UserToolFinisher};
 use crate::model::PredefinedModel;
+use crate::model::metering::MeteringContext;
 use crate::model::router::{ModelRouter, ProviderAgent};
 use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
@@ -47,8 +48,9 @@ impl AgentLoop {
     /// Create an `AgentLoop` with provider clients from `APP_SECRETS_JSON` or the environment and
     /// the default model (Opus 4.7).
     ///
-    /// `recorder` is the [`UsageRecorder`] every session created from this loop
-    /// logs token usage to — it is required so that no AI call goes unrecorded.
+    /// Sessions log legacy aggregates through `recorder`. When its separate
+    /// tracking capability is present, they also bind observational per-attempt
+    /// scopes; analytics injection alone is not proof of attempt coverage.
     ///
     /// `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are required.
     pub fn new(recorder: Arc<dyn UsageRecorder>) -> Self {
@@ -311,6 +313,7 @@ impl AgentLoop {
             telemetry.clone(),
         );
 
+        let financial_context = MeteringContext::for_operation(self.recorder.as_ref(), &usage_ctx);
         Session {
             agent,
             history: Vec::new(),
@@ -326,6 +329,7 @@ impl AgentLoop {
             model: self.model.clone(),
             request_context,
             telemetry,
+            financial_context,
         }
     }
 
@@ -372,6 +376,7 @@ pub struct Session {
     model: String,
     request_context: RequestContext,
     telemetry: GenAiContext,
+    financial_context: Option<MeteringContext>,
 }
 
 impl Session {
@@ -396,6 +401,9 @@ impl Session {
         &mut self,
         messages: Vec<Message>,
     ) -> Result<ChatCompletionStream<'_>, AgentError> {
+        // `agent.stream.*` are recorded by the stream driver as the run ends;
+        // see `StreamLiveness` in `crate::model::router`. Declared on both
+        // shapes of the span because either one can be the run's.
         let span = if self.telemetry.enabled() {
             tracing::info_span!(
                 "invoke_agent",
@@ -404,13 +412,37 @@ impl Session {
                 gen_ai.conversation.id = self.telemetry.conversation_id(),
                 gen_ai.provider.name = self.telemetry.provider_name(),
                 gen_ai.request.model = self.telemetry.model_name(),
+                agent.stream.items = tracing::field::Empty,
+                agent.stream.first_item_ms = tracing::field::Empty,
+                agent.stream.trailing_silence_ms = tracing::field::Empty,
             )
         } else {
-            tracing::info_span!("agent.turn", agent.name = %self.telemetry.agent_name())
+            tracing::info_span!(
+                "agent.turn",
+                agent.name = %self.telemetry.agent_name(),
+                agent.stream.items = tracing::field::Empty,
+                agent.stream.first_item_ms = tracing::field::Empty,
+                agent.stream.trailing_silence_ms = tracing::field::Empty,
+            )
         };
         let telemetry = self.telemetry.clone();
-        let result = self
-            .send_message_in(messages)
+        // A newly activated turn may replace the construction-time scope, but
+        // observational/legacy callers must never downgrade an activated session.
+        let current = MeteringContext::current();
+        let financial_context = if current.as_ref().is_some_and(MeteringContext::activated) {
+            current
+        } else if self
+            .financial_context
+            .as_ref()
+            .is_some_and(MeteringContext::activated)
+        {
+            self.financial_context.clone()
+        } else if current.is_some() {
+            MeteringContext::for_operation(self.recorder.as_ref(), &self.usage_ctx)
+        } else {
+            self.financial_context.clone()
+        };
+        let result = MeteringContext::carry(financial_context, self.send_message_in(messages))
             .instrument(span.clone())
             .await;
         if let Err(error) = &result {
@@ -429,6 +461,8 @@ impl Session {
         &mut self,
         messages: Vec<Message>,
     ) -> Result<ChatCompletionStream<'_>, AgentError> {
+        MeteringContext::require_usage(&self.usage_ctx)
+            .map_err(|error| AgentError::Other(error.into()))?;
         self.history = messages;
 
         let Some((prompt, history)) = self.history.split_last() else {

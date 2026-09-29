@@ -45,6 +45,12 @@ pub enum MessageParent {
     Channel(Uuid),
     /// A document, including tasks and PDFs.
     Document(DocumentId),
+    /// An initiative, presented as a project in the application.
+    Initiative(Uuid),
+    /// A CRM company.
+    CrmCompany(Uuid),
+    /// A CRM contact.
+    CrmContact(Uuid),
 }
 
 impl MessageParent {
@@ -53,6 +59,15 @@ impl MessageParent {
         match entity_type {
             "channel" => Ok(Self::Channel(entity_id.parse().map_err(|_| InvalidParent)?)),
             "document" => Ok(Self::Document(entity_id.to_owned().try_into()?)),
+            "initiative" => Ok(Self::Initiative(
+                entity_id.parse().map_err(|_| InvalidParent)?,
+            )),
+            "crm_company" => Ok(Self::CrmCompany(
+                entity_id.parse().map_err(|_| InvalidParent)?,
+            )),
+            "crm_contact" => Ok(Self::CrmContact(
+                entity_id.parse().map_err(|_| InvalidParent)?,
+            )),
             _ => Err(InvalidParent),
         }
     }
@@ -62,13 +77,19 @@ impl MessageParent {
         match self {
             Self::Channel(_) => "channel",
             Self::Document(_) => "document",
+            Self::Initiative(_) => "initiative",
+            Self::CrmCompany(_) => "crm_company",
+            Self::CrmContact(_) => "crm_contact",
         }
     }
 
     /// Canonical parent identifier.
     pub fn entity_id(&self) -> String {
         match self {
-            Self::Channel(id) => id.to_string(),
+            Self::Channel(id)
+            | Self::Initiative(id)
+            | Self::CrmCompany(id)
+            | Self::CrmContact(id) => id.to_string(),
             Self::Document(id) => id.0.clone(),
         }
     }
@@ -84,11 +105,14 @@ impl MessageParent {
         match self {
             Self::Channel(_) => entity_access::domain::models::EntityType::Channel,
             Self::Document(_) => entity_access::domain::models::EntityType::Document,
+            Self::Initiative(_) => entity_access::domain::models::EntityType::Initiative,
+            Self::CrmCompany(_) => entity_access::domain::models::EntityType::CrmCompany,
+            Self::CrmContact(_) => entity_access::domain::models::EntityType::CrmContact,
         }
     }
 }
 
-/// A thread's location within its document. Geometry remains annotation-owned.
+/// A thread's location within its document. PDF geometry remains annotation-owned.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -98,16 +122,39 @@ pub enum ThreadAnchor {
     Markdown {
         /// Mark UUID serialized in the document.
         mark_id: Uuid,
+        /// The marked text as it read when the discussion was created, already
+        /// trimmed and bounded. Absent on threads created or imported before
+        /// snapshots were captured: the text a mark covers cannot be recovered
+        /// from the mark id alone.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        marked_text: Option<String>,
     },
     /// An independently existing PDF highlight.
     PdfHighlight {
         /// Highlight annotation UUID.
         anchor_id: Uuid,
+        /// The text the highlight covers, trimmed and bounded like a markdown
+        /// snapshot. The highlight owns it and it can be edited there, so it is
+        /// read from the highlight whenever the thread is, never stored on the
+        /// thread. Absent when the highlight carries no text.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        marked_text: Option<String>,
     },
-    /// A comment-only placeable PDF annotation.
+    /// A comment-only placeable PDF annotation. It marks a point on a page,
+    /// not a span of text, so it has no marked text.
     PdfPlaceable {
         /// Placeable annotation UUID.
         anchor_id: Uuid,
+    },
+    /// A cell or rectangular range in a native spreadsheet.
+    #[serde(rename_all = "camelCase")]
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
     },
 }
 
@@ -121,6 +168,11 @@ pub enum NewThreadAnchor {
     Markdown {
         /// Serialized mark identifier.
         mark_id: Uuid,
+        /// The document text the mark covers, captured by the editor as the
+        /// comment is written. Trimmed and bounded before it is stored, so an
+        /// oversized or whitespace-only claim cannot reach the thread row.
+        #[serde(default)]
+        marked_text: Option<String>,
     },
     /// Attach an independently existing highlight on this document.
     PdfHighlight {
@@ -142,15 +194,66 @@ pub enum NewThreadAnchor {
         /// Height as a fraction of the page height.
         height_pct: f64,
     },
+    /// A cell or rectangular range in a native spreadsheet.
+    #[serde(rename_all = "camelCase")]
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
+    },
+}
+
+/// Longest marked-text snapshot kept with a discussion. A comment marks a
+/// phrase or a paragraph; a longer range is elided so that one highlight
+/// cannot crowd out the rest of an agent prompt.
+pub const MARKED_TEXT_LIMIT: usize = 1000;
+
+/// The storable form of text a mark covers: trimmed, elided at
+/// [`MARKED_TEXT_LIMIT`] characters, and absent when it carries nothing. The
+/// only way a snapshot enters a thread row, so no client claim is stored whole.
+pub fn marked_text_snapshot(text: &str) -> Option<String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let mut snapshot: String = text.chars().take(MARKED_TEXT_LIMIT).collect();
+    // The ellipsis is the whole truncation signal, on the wire and in the row.
+    if text.chars().nth(MARKED_TEXT_LIMIT).is_some() {
+        snapshot.push('\u{2026}');
+    }
+    Some(snapshot)
 }
 
 impl NewThreadAnchor {
     /// Thread-owned reference after annotation geometry has been persisted.
     pub fn reference(&self) -> ThreadAnchor {
-        match *self {
-            Self::Markdown { mark_id } => ThreadAnchor::Markdown { mark_id },
-            Self::PdfHighlight { anchor_id } => ThreadAnchor::PdfHighlight { anchor_id },
-            Self::PdfPlaceable { anchor_id, .. } => ThreadAnchor::PdfPlaceable { anchor_id },
+        match self {
+            Self::Spreadsheet {
+                sheet_id,
+                sheet_name,
+                range,
+            } => ThreadAnchor::Spreadsheet {
+                sheet_id: sheet_id.clone(),
+                sheet_name: sheet_name.clone(),
+                range: range.clone(),
+            },
+            Self::Markdown {
+                mark_id,
+                marked_text,
+            } => ThreadAnchor::Markdown {
+                mark_id: *mark_id,
+                marked_text: marked_text.as_deref().and_then(marked_text_snapshot),
+            },
+            Self::PdfHighlight { anchor_id } => ThreadAnchor::PdfHighlight {
+                anchor_id: *anchor_id,
+                marked_text: None,
+            },
+            Self::PdfPlaceable { anchor_id, .. } => ThreadAnchor::PdfPlaceable {
+                anchor_id: *anchor_id,
+            },
         }
     }
 }
@@ -177,7 +280,7 @@ pub struct ThreadState {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
-/// Partial changes to the lifecycle and placement of a document discussion.
+/// Partial changes to discussion lifecycle or document anchor placement.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
@@ -391,6 +494,10 @@ pub struct PostMessage {
     #[serde(skip)]
     #[cfg_attr(feature = "schema", schema(ignore))]
     pub notification_policy: PostMessageNotificationPolicy,
+    /// Client-minted UUIDv7 for the new message, so an optimistic message
+    /// already carries its final id; the server mints one when absent.
+    #[serde(default)]
+    pub id: Option<Uuid>,
     /// Macro Markdown body.
     pub content: String,
     /// Root to reply to, if this is a reply.
