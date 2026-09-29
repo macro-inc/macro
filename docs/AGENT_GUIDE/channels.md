@@ -304,6 +304,23 @@ A newer message navigation cancels a pending jump to latest. Scrolling manually
 or choosing another destination also cancels the initial target's delayed fallback.
 A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
 
+The **Unread notification** chip points to the most recent unread notification.
+There is only one chip: above the list for a target above the viewport, or below
+for a target below it. The number counts distinct parent-message threads across
+the channel, not individual notifications. Three replies and a mention in the
+same thread count as one; reactions do not count. Clicking jumps to the target
+and expands its thread. A collapsed unread reply in a visible thread is reachable
+with the bottom chip. A visible target has no chip. Notifications are marked seen
+when their message mounts, including virtualized overscan. Collapsed replies that
+are not rendered remain unread.
+The count and target update as notifications arrive or become seen. Check an old
+thread receiving a new reply while a newer thread is also unread: the chip must
+point upward to the old thread, still show two stacks, and preserve the scroll
+position until clicked. Check a target below the viewport, loading an unloaded
+parent, and switching channels while notifications are loading. Loading this
+channel's notification edge must not delay its messages or activate the global
+GraphQL notification feed.
+
 The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
 keyed by message ID; offscreen rows are normally absent from the DOM.
 
@@ -311,6 +328,10 @@ On a cold channel open, verify that delayed bot/agent mention requests leave the
 messages and composer visible. Expand a thread while its replies are still
 loading: existing preview replies should remain visible until the full list
 arrives. Repeat after reopening the channel to cover both cold and cached data.
+Scrolling a collapsed thread into view must keep its timeline preview unchanged,
+without fetching or revealing the full reply list. Cached replies from a previous
+expansion must not enlarge that preview either. Explicit expansion, replying,
+and message/unread-chip navigation may still open the thread.
 
 Channel messages, thread replies, reactions, edits, deletions, and typing go
 through the shared message API at `GET|POST /dss/messages/channel/<id>` and its
@@ -594,9 +615,10 @@ read policy. Selecting another channel while that request is pending must cancel
 the pending open; failed lookups must not open a split or mark anything seen.
 
 With GraphQL enabled, the app-shell Chat badge uses `ChannelUnreadPresence`: only
-channel IDs and at most one unread notification ID/state per channel, with a
+channel IDs and at most one unread top-level message/mention ID/state per channel, with a
 500-channel candidate bound and no history, message previews, or metadata. It
-shares the channel lists' refreshes after notification patches, mark-read, and
+excludes replies, thread mentions, and reactions, matching the channel-row badges
+in both GraphQL and REST modes. It shares the channel lists' refreshes after notification patches, mark-read, and
 reconnect. Merely rendering that badge, subscribing to realtime notifications,
 or applying local read/done overrides must not start the full `SoupNotifications`
 feed. Check this with document-mention notifications disabled too (the production

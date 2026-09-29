@@ -85,19 +85,9 @@ describe('MarkMessageNotifications', () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('reads the scoped edge only after visibility, including later live notifications', async () => {
-    let intersect: (entries: { isIntersecting: boolean }[]) => void = () => {};
-    const disconnect = vi.fn();
-    vi.stubGlobal(
-      'IntersectionObserver',
-      class {
-        constructor(callback: typeof intersect) {
-          intersect = callback;
-        }
-        observe() {}
-        disconnect = disconnect;
-      }
-    );
+  it('marks scoped notifications on mount and live updates without reading the global feed', async () => {
+    const observer = vi.fn();
+    vi.stubGlobal('IntersectionObserver', observer);
     const globalRead = vi.spyOn(
       mocks.notificationSource!,
       'notificationsByEntity'
@@ -116,19 +106,15 @@ describe('MarkMessageNotifications', () => {
       </MessageNotificationSourceContext.Provider>
     ));
     expect(globalRead).not.toHaveBeenCalled();
-    expect(bulkMarkAsRead).not.toHaveBeenCalled();
-    intersect([{ isIntersecting: true }]);
     await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
-    // The retry budget belongs to a batch, not the lifetime of an open channel.
-    for (let i = 0; i < 4; i++) {
-      setNotifications([documentMentionNotification(`live-${i}`)]);
-      await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(i + 2));
-    }
-    intersect([{ isIntersecting: false }]);
-    setNotifications([documentMentionNotification('offscreen')]);
-    expect(bulkMarkAsRead).toHaveBeenCalledTimes(5);
-    view.unmount();
-    expect(disconnect).toHaveBeenCalledOnce();
+    expect(bulkMarkAsRead).toHaveBeenCalledWith(matchingNotifications);
+    const liveNotifications = [documentMentionNotification('live')];
+    setNotifications(liveNotifications);
+    await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(2));
+    expect(bulkMarkAsRead).toHaveBeenLastCalledWith(liveNotifications);
+    expect(globalRead).not.toHaveBeenCalled();
+    expect(observer).not.toHaveBeenCalled();
+    expect(view.container.firstElementChild?.tagName).toBe('SPAN');
   });
 
   it('handles mark failures while preserving bounded retries', async () => {
