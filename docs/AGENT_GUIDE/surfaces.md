@@ -133,10 +133,12 @@ Multiple occurrences share one alert, with up to three descriptions and a count
 of the rest; normal save/copy toasts do not replace it.
 
 **Open reminder** opens the reminder details, including standalone reminders.
-For a group, **View reminders** opens the reminders list. Opening or closing this
-alert acknowledges it only in this browser account; it does not complete, delete,
-or snooze a reminder. Acknowledgements survive reloads and synchronize between
-tabs on the same origin. A later occurrence of a recurring reminder alerts again.
+For a group, **View reminders** opens the reminders list. Opening acknowledges
+the alert only after navigation applies; a rejected or superseded navigation
+leaves the card actionable. Opening or closing acknowledges it only in this
+browser account; it does not complete, delete, or snooze a reminder.
+Acknowledgements survive reloads and synchronize between tabs on the same origin.
+A later occurrence of a recurring reminder alerts again.
 Seeing or completing its notification elsewhere also removes it from the alert.
 
 Existing item-level notification mutes and snoozes also hide matching reminder

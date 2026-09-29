@@ -84,9 +84,52 @@ describe('reminder alert app wiring', () => {
     config.actions?.[0].onClick();
     expect(mocks.openReminder).toHaveBeenCalledWith('reminder-1', {
       manager: expect.objectContaining({ openWithSplit: mocks.open }),
+      onApplied: expect.any(Function),
     });
+    expect(mocks.dismiss).not.toHaveBeenCalled();
+    mocks.openReminder.mock.calls[0]?.[1].onApplied();
     expect(mocks.dismiss).toHaveBeenCalledWith(1);
     h.dispose();
+  });
+
+  it('acknowledges a reminder burst only after list navigation is applied', () => {
+    mocks.flag = () => ({ enabled: true });
+    const secondNotification: UnifiedNotification = {
+      ...notification,
+      id: 'delivery-2',
+      entity_id: 'reminder-2',
+      notification_metadata: {
+        tag: 'reminder',
+        content: {
+          reminderId: 'reminder-2',
+          description: 'Send notes',
+          scheduledFor: '2026-09-21T10:01:00Z',
+        },
+      },
+    };
+
+    const dispose = createRoot((dispose) => {
+      useReminderAlerts({
+        notifications: () => [notification, secondNotification],
+        isLoading: () => false,
+        _notificationsQuery: { isStarted: true },
+        mutedEntities: () => [],
+        subscribe: () => () => {},
+      });
+      return dispose;
+    });
+
+    const config = mocks.custom.mock.calls[0][0] as CustomToastConfig;
+    expect(config.actions?.[0].label).toBe('View reminders');
+    config.actions?.[0].onClick();
+    expect(mocks.open).toHaveBeenCalledWith(
+      { type: 'component', id: 'reminders' },
+      { onApplied: expect.any(Function) }
+    );
+    expect(mocks.dismiss).not.toHaveBeenCalled();
+    mocks.open.mock.calls[0]?.[1].onApplied();
+    expect(mocks.dismiss).toHaveBeenCalledWith(1);
+    dispose();
   });
 
   it('adopts notification state overrides when their transport flag hydrates', () => {

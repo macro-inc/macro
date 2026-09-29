@@ -8,7 +8,7 @@ import type { ReminderAlert } from '../core/reminder-alert';
 export function showReminderAlert(
   items: Accessor<readonly ReminderAlert[]>,
   acknowledge: () => void,
-  open: (reminderId?: string) => boolean
+  open: (reminderId: string | undefined, onApplied: () => void) => void
 ): () => void {
   const id = toast.custom(
     {
@@ -56,8 +56,10 @@ export function showReminderAlert(
             onClick: () => {
               const item = items()[0];
               if (!item) return;
-              if (open(items().length === 1 ? item.reminderId : undefined))
-                acknowledge();
+              open(
+                items().length === 1 ? item.reminderId : undefined,
+                acknowledge
+              );
             },
           },
         ];

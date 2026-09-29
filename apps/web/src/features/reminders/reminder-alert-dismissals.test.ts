@@ -42,7 +42,7 @@ describe('reminder alert acknowledgement storage', () => {
       new StorageEvent('storage', {
         key: 'macro:reminder-alerts:alice',
         newValue: JSON.stringify(['other', 'local', 'new']),
-        url: 'http://localhost/app/component/reminders',
+        url: 'http://localhost/app/reminders',
       })
     );
     expect(h.keys()).toEqual(['local', 'new', 'other']);

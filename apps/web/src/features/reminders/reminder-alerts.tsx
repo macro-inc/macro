@@ -49,12 +49,17 @@ export function useReminderAlerts(
     acknowledgedKeys: dismissals.keys,
     acknowledge: dismissals.acknowledge,
     show: (items, acknowledge) =>
-      showReminderAlert(items, acknowledge, (reminderId) => {
+      showReminderAlert(items, acknowledge, (reminderId, onApplied) => {
         const manager = globalSplitManager();
-        if (!manager) return false;
-        if (reminderId) openReminderDetail(reminderId, { manager });
-        else manager.openWithSplit({ type: 'component', id: 'reminders' });
-        return true;
+        if (!manager) return;
+        if (reminderId) {
+          openReminderDetail(reminderId, { manager, onApplied });
+          return;
+        }
+        manager.openWithSplit(
+          { type: 'component', id: 'reminders' },
+          { onApplied }
+        );
       }),
   });
 }
