@@ -956,6 +956,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             enabled: () =>
               projectedBuckets().length > 0 && options.enabled?.() !== false,
             existingItems: localItems,
+            filterPreviousItems: searchQuickAccessItems,
             materialize: async (documents) => {
               const idOf = (recordKey: string) =>
                 recordKey.slice(recordKey.indexOf(':') + 1);

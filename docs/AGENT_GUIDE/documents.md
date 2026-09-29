@@ -567,8 +567,10 @@ When verifying `@` mentions, compare the same person query in the document body
 and the Discussion composer: shared contacts use the same recent-interaction
 ranking. The desktop menu keeps up to three People results visible while other
 result categories load; use **View all** for the remaining matches. Check that a
-person stays clickable after document and email results arrive, and clear the
-unsent draft after testing.
+person stays clickable after document and email results arrive. Type and
+backspace through a query that keeps the same matches: existing rows should
+stay mounted and the menu should not collapse while cached results refresh.
+Clear the unsent draft after testing.
 
 Select text and choose the comment action to create an anchored comment. These
 threads appear beside their text in the margin (or in the active thread drawer
