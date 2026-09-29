@@ -47,7 +47,7 @@ function NoteEditor(props: {
           Add note
         </Button>
         <Button
-          variant="outline"
+          variant="ghost"
           size="xs"
           class="h-6.5 px-2.5"
           onClick={() => props.onCancel()}

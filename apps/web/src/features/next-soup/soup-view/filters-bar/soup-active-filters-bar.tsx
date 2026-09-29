@@ -23,7 +23,7 @@ const AddFilterButton = () => (
     variant="ghost"
     size="icon-sm"
     tooltip="Add filters"
-    class="p-1 rounded-full"
+    class="p-1"
   >
     <Plus class="size-3" />
   </Dropdown.Trigger>
@@ -54,7 +54,7 @@ export function SoupActiveFiltersBar(props: SoupActiveFiltersBarProps) {
                 onClick={() => props.onClearAll()}
                 variant="outline"
                 size="sm"
-                class="h-7 rounded-md"
+                class="h-7"
                 tooltip="Clear active filters"
               >
                 <XIcon />

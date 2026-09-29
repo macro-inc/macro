@@ -407,7 +407,7 @@ export function AgentInput(props: AgentInputProps) {
                             onClick={() => props.onStop?.()}
                             class={
                               isTouchDevice()
-                                ? 'rounded-full size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
+                                ? 'size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
                                 : undefined
                             }
                           >

@@ -999,12 +999,9 @@ export function ComposeTask(props: ComposeTaskProps) {
           <Button
             onClick={handleCreateTask}
             disabled={title().trim().length === 0 || isCreating()}
-            variant={title().trim().length === 0 ? 'ghost' : 'accent'}
+            variant="strong"
             depth={3}
-            class={cn(
-              'gap-3 rounded-lg border-0',
-              !isTouchDevice() && 'rounded-full h-[33.75px] px-[15px]'
-            )}
+            class={cn('gap-3 ', !isTouchDevice() && 'h-[33.75px] px-[15px]')}
           >
             Create Task
             <Hotkey shortcut="cmd+enter" theme="current" />

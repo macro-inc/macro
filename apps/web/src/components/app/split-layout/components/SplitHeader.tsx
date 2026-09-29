@@ -126,7 +126,7 @@ function SplitBackButton() {
     <Button
       square
       size="sm"
-      class="p-1 rounded-lg touch:active:bg-transparent"
+      class="p-1 touch:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
       disabled={!context.handle.canGoBack()}
@@ -160,7 +160,6 @@ function SidebarExpandButton() {
       aria-hidden={!visible()}
     >
       <Button
-        class="rounded-lg"
         square
         size="sm"
         label="Expand Sidebar"
@@ -182,7 +181,7 @@ function _SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 rounded-lg hidden"
+        class="p-1 hidden"
         label={
           context.handle.isSpotLight() ? 'Minimize Split' : 'Spotlight Split'
         }
@@ -220,7 +219,6 @@ function SplitCloseButton() {
       <Button
         square
         size="icon-sm"
-        class="rounded-lg"
         label={label()}
         hotkey={TOKENS.split.close}
         onClick={() => closeSplitOrReturnToList(layout.manager, context.handle)}

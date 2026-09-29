@@ -150,7 +150,7 @@ export function ChannelInviteModal(props: {
                 Cancel
               </Button>
               <Button
-                variant="accent"
+                variant="strong"
                 onClick={() => void addPeople()}
                 disabled={!canAdd()}
               >

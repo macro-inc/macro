@@ -144,6 +144,7 @@ export function ConnectionCard(props: ConnectionCardProps) {
                       {props.busy ? 'Connecting…' : 'Finish connecting'}
                     </Button>
                     <Button
+                      variant="ghost"
                       type="button"
                       size="sm"
                       disabled={props.busy}

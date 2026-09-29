@@ -328,7 +328,11 @@ export function MeetingPage(props: {
                       : 'Join call'}
               </Button>
               <Show when={session.joining()}>
-                <Button type="button" onClick={() => void session.leave()}>
+                <Button
+                  variant="ghost"
+                  type="button"
+                  onClick={() => void session.leave()}
+                >
                   Cancel
                 </Button>
               </Show>

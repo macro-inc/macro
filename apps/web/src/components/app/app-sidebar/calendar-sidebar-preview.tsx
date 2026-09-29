@@ -138,7 +138,6 @@ function EventSummary(props: {
         <Button
           variant="ghost"
           size="icon-sm"
-          class="rounded-lg"
           label="Close event details"
           onClick={props.onClose}
         >
@@ -146,9 +145,10 @@ function EventSummary(props: {
         </Button>
         <Button
           variant="outline"
+          glass={false}
           size="sm"
           depth={4}
-          class="rounded-lg bg-surface px-2"
+          class="bg-surface px-2"
           data-calendar-event-target-navigation
           onClick={props.onViewInCalendar}
         >
@@ -184,7 +184,7 @@ function EventSummary(props: {
               fullWidth
               variant="cta"
               size="sm"
-              class="h-8 rounded-lg"
+              class="h-8"
               onClick={() => openExternalUrl(url())}
             >
               <VideoCameraIcon class="size-4" />
@@ -307,10 +307,10 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
               aria-label="New event"
               label="New event"
               tooltipPlacement="top"
-              variant="outline"
+              variant="ghost"
               size="icon-md"
               depth={4}
-              class="rounded-lg bg-surface"
+              class="bg-surface"
               onClick={() => openEventComposer()}
             >
               <PlusIcon class="size-4" />
@@ -320,10 +320,10 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
                 aria-label="Calendar settings"
                 label="Calendar settings"
                 tooltipPlacement="top"
-                variant="outline"
+                variant="ghost"
                 size="icon-md"
                 depth={4}
-                class="rounded-lg bg-surface"
+                class="bg-surface"
               >
                 <GearIcon class="size-4" />
               </Dropdown.Trigger>

@@ -75,7 +75,7 @@ function NavigationToggle(props: {
               variant="ghost"
               size="icon-sm"
               depth={isTouchDevice() ? 3 : undefined}
-              class="touch:island touch:pointer-events-auto touch:size-10 touch:shrink-0 touch:rounded-full touch:bg-chrome"
+              class="touch:island touch:pointer-events-auto touch:size-10 touch:shrink-0 touch:bg-chrome"
               aria-label="Show CRM navigation"
             >
               <ListIcon class="size-4 touch:size-6" />

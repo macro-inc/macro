@@ -434,9 +434,9 @@ export function ComposeSkill(props: ComposeSkillProps) {
         <Button
           onClick={handleCreateSkill}
           disabled={title().trim().length === 0 || isCreating()}
-          variant={title().trim().length === 0 ? 'ghost' : 'accent'}
+          variant="strong"
           depth={3}
-          class="gap-3 rounded-lg border-0"
+          class="gap-3"
         >
           Create Skill
           <Hotkey shortcut="cmd+enter" theme="current" />

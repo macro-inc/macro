@@ -73,7 +73,7 @@ export function createDeleteMessageConfirmation(
                 );
               }}
               type="button"
-              variant="danger"
+              variant="strong"
               onClick={confirm}
             >
               Delete

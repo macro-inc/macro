@@ -2,9 +2,22 @@
 
 ## Top bars
 
-Right-aligned split-header actions (including Calendar's touch/preview New event
-and Channel's Call and Ask Macro) are borderless with a rounded-xl background on
-hover. Channel header tabs use fully rounded tracks and selected pills.
+Low-emphasis right-aligned split-header actions (including Calendar's touch/preview
+New event and Channel's idle Call and Ask Macro) are borderless with a rounded-xl
+background on hover. Emphasized variants retain their treatment, including an
+active call's green ink and outline frame. Channel header tabs use fully rounded tracks and
+selected pills. Button sizes do not change variant colors or framing; individual
+framed controls default to glass on touch and flat on desktop. Use `glass={true}`
+to enable glass on all devices, or `glass={false}` to disable it everywhere.
+Embedded and low-emphasis actions use `ghost`; inline calendar-invitation text
+actions remove the transparent border to keep their text alignment.
+
+## Dialog actions
+
+Cancel uses a ghost button. Confirm, save, and create actions use strong: the
+outline surface and border with semibold text, without inverted colors. Disabled
+and pending primary actions retain the strong variant. Mobile confirmation drawers
+use the same action hierarchy.
 
 ## User cards
 

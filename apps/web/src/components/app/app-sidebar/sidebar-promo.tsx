@@ -35,7 +35,7 @@ export const SidebarPromoCard = (props: SidebarPromoCardProps) => {
                 <Button
                   size="icon-xs"
                   variant="ghost"
-                  class="shrink-0 size-5 rounded-sm p-0 [&_svg]:size-3"
+                  class="shrink-0 size-5 p-0 [&_svg]:size-3"
                   label="Dismiss"
                   onClick={(e) => {
                     e.stopPropagation();

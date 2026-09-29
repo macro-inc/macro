@@ -82,7 +82,7 @@ export const BulkDeleteView = (props: {
         <Button variant="ghost" onClick={props.onCancel}>
           Cancel
         </Button>
-        <Button variant="danger" onClick={() => void handleDelete()}>
+        <Button variant="strong" onClick={() => void handleDelete()}>
           {multi() ? `Delete ${entities().length} items` : 'Delete item'}
         </Button>
       </ActionDialogShell.Footer>

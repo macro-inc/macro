@@ -61,18 +61,10 @@ export function EventRsvpScopeDialog(props: {
                 </For>
               </RadioGroup>
               <div class="flex justify-end gap-1 pt-2">
-                <Button
-                  variant="ghost"
-                  class="rounded-lg"
-                  onClick={props.onClose}
-                >
+                <Button variant="ghost" onClick={props.onClose}>
                   Cancel
                 </Button>
-                <Button
-                  variant="accent"
-                  class="rounded-lg"
-                  onClick={props.onConfirm}
-                >
+                <Button variant="strong" onClick={props.onConfirm}>
                   OK
                 </Button>
               </div>
@@ -148,14 +140,14 @@ export function EventRsvpScopeDialog(props: {
               <div class="flex gap-3 px-6 pt-5 pb-2">
                 <Button
                   variant="ghost"
-                  class="min-h-11 flex-1 rounded-full bg-ink/6"
+                  class="min-h-11 flex-1"
                   onClick={props.onClose}
                 >
                   Cancel
                 </Button>
                 <Button
-                  variant="cta"
-                  class="min-h-11 flex-1 rounded-full"
+                  variant="strong"
+                  class="min-h-11 flex-1"
                   onClick={props.onConfirm}
                 >
                   Save response

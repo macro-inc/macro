@@ -138,9 +138,7 @@ function InputGroupRoot(props: InputGroupProps) {
     return size && !size.startsWith('icon-') ? (size as InputSize) : undefined;
   };
   const size = (): InputSize => local.size ?? inheritedSize() ?? 'md';
-  const variant = (): InputVariant =>
-    local.variant ??
-    (buttonGroup?.variant === 'navigation' ? 'bare' : 'outline');
+  const variant = (): InputVariant => local.variant ?? 'outline';
   const grouped = () => buttonGroup !== undefined;
 
   const context: InputGroupContextValue = {

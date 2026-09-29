@@ -180,7 +180,7 @@ export function SidebarActiveCallWidget(props: {
                     >
                       <Button
                         aria-label={`${displayName(channel())} call`}
-                        class="relative flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3 justify-center size-8"
+                        class="relative flex items-center cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 justify-center size-8"
                         draggable={false}
                         variant="ghost"
                         size="sm"
@@ -281,7 +281,7 @@ export function SidebarActiveCallWidget(props: {
                         <Tooltip label={dismissLabel()} placement="right">
                           <Button
                             aria-label={dismissLabel()}
-                            class="shrink-0 size-5 p-0 flex items-center justify-center rounded-md bg-ink-muted/10 text-ink-muted/80 not-disabled:hover:bg-failure/10 not-disabled:hover:text-failure"
+                            class="shrink-0 size-5 p-0 flex items-center justify-center bg-ink-muted/10 text-ink-muted/80 not-disabled:hover:bg-failure/10 not-disabled:hover:text-failure"
                             draggable={false}
                             variant="ghost"
                             size="sm"

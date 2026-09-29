@@ -91,7 +91,7 @@ export function ReactionChip(props: ReactionChipProps) {
             size="sm"
             variant={props.selected ? 'accent' : 'outline'}
             class={cn(
-              'flex flex-row items-center h-7 min-w-7 gap-1 rounded-full',
+              'flex flex-row items-center h-7 min-w-7 gap-1',
               // Mix toward black, not ink. An ink wash lightens a dark theme, so
               // it cannot show "you reacted" in both themes.
               props.selected &&

@@ -526,7 +526,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="rounded-md text-ink-extra-muted hover:text-ink-muted hover:bg-active"
+                class="text-ink-extra-muted hover:text-ink-muted hover:bg-active"
                 tooltip="Show quoted text"
                 onclick={(e: MouseEvent) => {
                   e.stopPropagation();

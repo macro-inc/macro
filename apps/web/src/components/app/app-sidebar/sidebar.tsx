@@ -571,7 +571,7 @@ const SidebarSectionMenu = (props: {
     <Dropdown.Trigger
       size="icon-xs"
       variant="ghost"
-      class="opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100 transition-opacity rounded-md size-5 min-h-0 p-0 bg-transparent hover:bg-ink/6 [&_svg]:size-3.5"
+      class="opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100 transition-opacity size-5 min-h-0 p-0 bg-transparent hover:bg-ink/6 [&_svg]:size-3.5"
       label={`Customize ${props.label}`}
       onMouseDown={(e: MouseEvent) => {
         if (e.button !== 0) return;
@@ -642,7 +642,7 @@ const TryCard = (props: {
           <Button
             size="icon-xs"
             variant="ghost"
-            class="shrink-0 size-5 rounded-sm p-0 [&_svg]:size-3"
+            class="shrink-0 size-5 p-0 [&_svg]:size-3"
             label="Dismiss Quick Start"
             onClick={(e) => {
               e.stopPropagation();
@@ -866,9 +866,9 @@ export const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
       onOpenChange={props.onMenuOpenChange}
     >
       <Dropdown.Trigger
-        variant="plain"
+        variant="ghost"
         class={cn(
-          'flex items-center rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
+          'flex items-center cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
           props.compact
             ? 'justify-center gap-0 p-0'
             : 'justify-start gap-3 px-1.5 py-1'

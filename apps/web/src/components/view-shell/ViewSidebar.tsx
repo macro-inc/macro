@@ -93,10 +93,7 @@ function Control(props: ButtonProps) {
       variant="ghost"
       size="icon-sm"
       {...rest}
-      class={cn(
-        'size-(--sidebar-control-size) shrink-0 rounded-lg',
-        local.class
-      )}
+      class={cn('size-(--sidebar-control-size) shrink-0', local.class)}
       data-view-sidebar-control=""
     />
   );

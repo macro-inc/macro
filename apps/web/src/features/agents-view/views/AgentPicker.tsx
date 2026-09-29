@@ -52,7 +52,7 @@ export function AgentPicker(props: {
   return (
     <Dropdown open={open()} onOpenChange={setOpen} placement="top-end">
       <Dropdown.Trigger
-        variant="plain"
+        variant="ghost"
         aria-label="Agent"
         title={
           rawModel()

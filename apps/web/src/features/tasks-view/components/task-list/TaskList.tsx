@@ -411,7 +411,6 @@ export function TaskList(props: TaskListProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    class="rounded-lg"
                     onClick={() => void source.refresh()}
                   >
                     Try again
@@ -426,7 +425,6 @@ export function TaskList(props: TaskListProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      class="rounded-lg"
                       disabled={source.isLoadingMore()}
                       onClick={() => void source.loadMore()}
                     >
