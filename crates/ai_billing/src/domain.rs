@@ -15,8 +15,8 @@ pub use models::{
     CREDIT_PACKS_CENTS, DenyReason, Entitlement, MIN_STRIPE_CHARGE_CENTS,
     OVERAGE_CHARGE_THRESHOLD_CENTS, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS,
     OpenPeriodStart, OverageChargeStatus, PayerScope, PeriodAllowance, PeriodLedger, PlanTier,
-    Result, SeatAllowance, SeatGeneration, SeatUsage, TARGET_GROSS_MARGIN_BPS, UsagePolicy,
-    UsageSnapshot, list_rate_cents,
+    Result, SeatAllowance, SeatGeneration, SeatUsage, SubscriptionScope, TARGET_GROSS_MARGIN_BPS,
+    UsagePolicy, UsageSnapshot, list_rate_cents,
 };
 pub use ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeRequest,

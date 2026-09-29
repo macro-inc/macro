@@ -149,6 +149,7 @@ fn group_page_without_destination() -> Json {
 
 fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
     OptimisticLinkPatch {
+        record_root: None,
         query: GROUP_MEMBERSHIP_QUERY.into(),
         operation_name: Some("GroupSoupMembership".into()),
         variables_json: serde_json::to_string(&query_variables()).unwrap(),
@@ -178,6 +179,7 @@ fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
 
 fn remove_bin_patch(bin: &str) -> OptimisticLinkPatch {
     OptimisticLinkPatch {
+        record_root: None,
         query: GROUP_MEMBERSHIP_QUERY.into(),
         operation_name: Some("GroupSoupMembership".into()),
         variables_json: serde_json::to_string(&query_variables()).unwrap(),
@@ -206,6 +208,7 @@ fn remove_bin_patch(bin: &str) -> OptimisticLinkPatch {
 
 fn upsert_bin_patch(bin: &str) -> OptimisticLinkPatch {
     OptimisticLinkPatch {
+        record_root: None,
         query: GROUP_MEMBERSHIP_QUERY.into(),
         operation_name: Some("GroupSoupMembership".into()),
         variables_json: serde_json::to_string(&query_variables()).unwrap(),

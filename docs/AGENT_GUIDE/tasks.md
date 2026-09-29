@@ -247,7 +247,11 @@ the picker or trigger a success refresh.
 
 In the task list, setting an **unset Priority to Urgent** also updates before the
 response, including when no priority assignment exists yet. Verify another task's
-unset priority stays unchanged. On success the temporary assignment is replaced
+unset priority stays unchanged. First assignments target the normalized entity
+through a fragment-rooted relation recipe: no flat/grouped Soup page discovery
+or pre-save network fetch is needed, even with more than 128 cached pages.
+Check a grouped-only row and an offline/reloaded queued edit as well.
+On success the temporary assignment is replaced
 by the server assignment without a blank cell or duplicate property; failure
 restores the unset cell. Bulk property edits install every optimistic layer before
 the first HTTP response, while network requests retain durable queue ordering.

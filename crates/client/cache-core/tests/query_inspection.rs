@@ -456,6 +456,7 @@ fn inspection_reads_the_effective_optimistic_view() {
         write_group(&mut engine, GROUP_QUERY, &variables, &data).await;
 
         let patch = OptimisticLinkPatch {
+            record_root: None,
             query: GROUP_QUERY.to_string(),
             operation_name: Some("GroupViews".to_string()),
             variables_json: serde_json::to_string(&variables).unwrap(),

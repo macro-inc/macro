@@ -6,6 +6,8 @@ use crate::domain::models::{
     InProgressExecution, OwnerNotUserError, Schedule, ScheduledAction, UpdateScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
+use crate::domain::target_validation::TargetValidationError;
+use agent_session::domain::routines::RoutineSessionError;
 use axum::extract::{FromRef, Path, Query, State, rejection::JsonRejection};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -359,6 +361,39 @@ impl IntoResponse for ScheduledActionApiError {
                 }
             };
             return (status, policy.to_string()).into_response();
+        }
+        if let Some(validation) = error.downcast_ref::<TargetValidationError>() {
+            let status = match validation {
+                TargetValidationError::InvalidTask | TargetValidationError::AgentsDisabled => {
+                    StatusCode::BAD_REQUEST
+                }
+                TargetValidationError::ExplicitAgentRequired => StatusCode::CONFLICT,
+            };
+            return (status, validation.to_string()).into_response();
+        }
+        if let Some(session) = error.downcast_ref::<RoutineSessionError>() {
+            let (status, message) = match session {
+                RoutineSessionError::InvalidCommand | RoutineSessionError::ModelMismatch => {
+                    (StatusCode::BAD_REQUEST, session.to_string())
+                }
+                RoutineSessionError::PersonaUnavailable => {
+                    (StatusCode::NOT_FOUND, session.to_string())
+                }
+                RoutineSessionError::Forbidden => (StatusCode::FORBIDDEN, session.to_string()),
+                RoutineSessionError::Conflict => (StatusCode::CONFLICT, session.to_string()),
+                RoutineSessionError::RuntimeUnavailable | RoutineSessionError::OperationFailed => (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "agent service is unavailable".to_owned(),
+                ),
+                RoutineSessionError::PromptDeliveryUnknown => {
+                    (StatusCode::SERVICE_UNAVAILABLE, session.to_string())
+                }
+                RoutineSessionError::SessionMismatch => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal server error".to_owned(),
+                ),
+            };
+            return (status, message).into_response();
         }
         if let Some(already_running) = error.downcast_ref::<AlreadyRunningError>() {
             tracing::info!(error=%already_running, "scheduled action already running");

@@ -11,8 +11,9 @@ use crate::inbound::axum_router::{
 
 use crate::domain::event_trigger::{ActionTrigger, EventFilter, EventFilters, EventName};
 use crate::domain::models::{
-    ActionConfiguration, ActionExecutionRecord, ActionKind, AgentTask, CreateScheduledAction,
-    InProgressExecution, LegacyActionConfiguration, Schedule, ScheduledAction,
+    ActionConfiguration, ActionExecutionRecord, ActionKind, AgentTask, AgentTaskAgent,
+    CreateScheduledAction, ExecutionResource, ExecutionResourceType, ExecutionResult,
+    InProgressExecution, LegacyActionConfiguration, RoutineModelId, Schedule, ScheduledAction,
     ScheduledActionUpdate, UpdateScheduledAction,
 };
 use model::response::EmptyResponse;
@@ -48,6 +49,11 @@ use model::response::EmptyResponse;
             Schedule,
             ActionKind,
             AgentTask,
+            AgentTaskAgent,
+            RoutineModelId,
+            ExecutionResource,
+            ExecutionResourceType,
+            ExecutionResult,
             InProgressExecution,
             ActionExecutionRecord,
             ScheduledActionUpdate,

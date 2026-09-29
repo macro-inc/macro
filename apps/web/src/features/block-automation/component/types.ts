@@ -1,4 +1,4 @@
-import type { Model } from '@core/component/AI/types';
+import type { RoutineTarget } from '../core/routine-target';
 
 export type ScheduleFrequency = 'week' | 'month';
 
@@ -12,6 +12,6 @@ export type ScheduleDraft = {
   daysOfWeek: string[];
   /** 1-31 day-of-month when frequency === "month". */
   dayOfMonth: string;
-  model: Model;
+  target: RoutineTarget;
   enabled: boolean;
 };

@@ -953,6 +953,11 @@ name, per-calendar checkbox). Accounts start collapsed. Subscribed system calend
 warning icon whose tooltip shows the provider error; the account keeps syncing its other
 calendars and the badge clears on its own once that calendar syncs again.
 
+On desktop, clicking or dragging empty grid time opens the event composer.
+While an event's details are open, a press on empty grid time closes them and
+does not start a new event; the next press creates one. Clicking another event
+switches the open details.
+
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
 conferencing, and location pills and the description field (Google rejects them on this

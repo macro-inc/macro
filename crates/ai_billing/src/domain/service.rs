@@ -9,7 +9,7 @@ use super::models::{
     AllowanceDecision, AllowanceStore, BillingError, BillingPeriod, BillingSettings,
     CREDIT_PACKS_CENTS, Entitlement, OVERAGE_CHARGE_THRESHOLD_CENTS, OVERAGE_LIMIT_MAX_CENTS,
     OVERAGE_LIMIT_MIN_CENTS, OverageChargeStatus, PayerScope, PeriodAllowance, PlanTier, Result,
-    SeatAllowance, SeatUsage, UsageSnapshot,
+    SeatAllowance, SeatUsage, SubscriptionScope, UsageSnapshot,
 };
 use super::period::{PeriodSync, SubscriptionPeriod};
 use super::ports::{
@@ -325,6 +325,7 @@ where
         charge: PendingCharge,
     ) -> Result<()> {
         let payer = &entitlement.payer;
+        let scope = SubscriptionScope::from(&entitlement.scope);
         let customer_id = match self.entitlements.stripe_customer_id(payer).await {
             Ok(Some(customer_id)) => customer_id,
             Ok(None) => {
@@ -355,6 +356,7 @@ where
                         charge_id: charge.id,
                         amount_cents: charge.amount_cents,
                         description,
+                        scope,
                     })
                     .await
                 {
@@ -379,7 +381,7 @@ where
 
         match self
             .payments
-            .pay_overage_invoice(charge.id, &invoice_id)
+            .pay_overage_invoice(charge.id, &invoice_id, scope)
             .await
         {
             Ok(true) => {

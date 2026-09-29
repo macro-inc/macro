@@ -1108,11 +1108,15 @@ export function normalizedCacheExchange(
                 linkPatches: [],
                 revalidations: [
                   ...args.revalidations,
-                  ...args.linkPatches.map((patch) => ({
-                    query: patch.query,
-                    operationName: patch.operationName,
-                    variablesJson: patch.variablesJson,
-                  })),
+                  // Fragment recipes are not executable queries. Their callers
+                  // provide targeted recovery queries in args.revalidations.
+                  ...args.linkPatches
+                    .filter((patch) => !patch.recordRoot)
+                    .map((patch) => ({
+                      query: patch.query,
+                      operationName: patch.operationName,
+                      variablesJson: patch.variablesJson,
+                    })),
                 ],
               },
               claim

@@ -6,7 +6,7 @@ use super::ledger::SettlementPolicy;
 use super::models::{
     AllowanceDecision, AllowanceStore, BillingPeriod, BillingSettings, Entitlement,
     OpenPeriodStart, OverageChargeStatus, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
-    SeatGeneration, SeatUsage, UsageSnapshot,
+    SeatGeneration, SeatUsage, SubscriptionScope, UsageSnapshot,
 };
 use super::policy::UsageAllocation;
 use ai_usage::domain::financial::{
@@ -290,6 +290,8 @@ pub struct OverageChargeRequest {
     pub amount_cents: i64,
     /// Line description shown on the invoice.
     pub description: String,
+    /// Which subscription pays this charge.
+    pub scope: SubscriptionScope,
 }
 
 /// The payment provider.
@@ -301,21 +303,35 @@ pub trait PaymentGateway: Send + Sync + 'static {
     ) -> impl Future<Output = Result<String>> + Send;
 
     /// Open a finalized invoice for exactly this overage chunk (and nothing
-    /// else pending on the customer). Returns the invoice id. Idempotent on
-    /// `charge_id`.
+    /// else pending on the customer). [`OverageChargeRequest::scope`] selects
+    /// the active or trialing subscription. Another scope is ignored. No
+    /// matching subscription fails unless an idempotent retry finds an invoice
+    /// that already stores its payment method. Distinct effective methods in
+    /// the selected scope fail with
+    /// [`BillingError::Payment`](super::BillingError::Payment).
+    /// Returns the invoice id. Idempotent on `charge_id`.
     fn open_overage_invoice(
         &self,
         request: OverageChargeRequest,
     ) -> impl Future<Output = Result<String>> + Send;
 
-    /// Attempt to collect an open overage invoice now. `Ok(true)` when it is
-    /// paid, `Ok(false)` when the card was declined and the invoice stays
-    /// open for Stripe's own retries (the webhook reports the outcome), `Err`
-    /// when the provider could not be reached or rejected the request.
+    /// Attempt to collect an open overage invoice now. `scope` is the payer's
+    /// current subscription scope. A scope stamped on the invoice overrides
+    /// it. Invoices without that stamp use `scope`. Distinct effective methods
+    /// in the chosen scope fail with
+    /// [`BillingError::Payment`](super::BillingError::Payment).
+    /// If no active or trialing subscription matches, an invoice-stored
+    /// payment method may still collect the existing debt.
+    ///
+    /// `Ok(true)` when it is paid, `Ok(false)` when the card was declined and
+    /// the invoice stays open for the provider's own retries (the webhook
+    /// reports the outcome), `Err` when the provider could not be reached or
+    /// rejected the request.
     fn pay_overage_invoice(
         &self,
         charge_id: Uuid,
         invoice_id: &str,
+        scope: SubscriptionScope,
     ) -> impl Future<Output = Result<bool>> + Send;
 }
 

@@ -12,7 +12,6 @@ import { useBlockId } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
-import { whenSettled } from '@core/util/whenSettled';
 import { formatDateAndTime } from '@entity';
 import CopyIcon from '@phosphor/copy.svg';
 import RenameIcon from '@phosphor/pencil-line.svg';
@@ -27,18 +26,24 @@ import {
   useUpdateScheduleMutation,
 } from '@queries/agent-schedule/schedules';
 import { getCronTrigger } from '@queries/agent-schedule/triggers';
+import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { useChatQuery } from '@queries/chat';
-import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
 import {
+  type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   For,
   Match,
+  on,
   onMount,
   Show,
   Switch,
 } from 'solid-js';
+import { createRoutineAutosave } from '../primitives/routine-autosave';
+import { RoutineExecutionPicker } from '../routine-execution-picker';
+import { type HistoryMetadata, RoutineHistory } from '../views/routine-history';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
 import { AutomationRenameModal } from './AutomationRenameModal';
 import { AutomationTimePicker } from './AutomationTimePicker';
@@ -56,96 +61,42 @@ import {
 } from './automationUtils';
 import type { ScheduleDraft } from './types';
 
-type HistoryRecord = {
-  id?: string | null;
-  resource_id?: string | null;
-  start_time?: string | null;
-  is_success?: boolean | null;
-};
+type SaveIntent =
+  | { type: 'edit'; draft: ScheduleDraft }
+  | { type: 'pause'; draft: ScheduleDraft };
 
-function HistoryRow(props: { record: HistoryRecord }) {
-  const { openWithSplit } = useSplitLayout();
-  const chatId = () => props.record.resource_id ?? undefined;
-  const chatQuery = useChatQuery(chatId);
-  const name = () =>
-    chatQuery.data?.chat?.name?.trim() ||
-    (chatQuery.isLoading ? '' : 'Untitled run');
-
-  const clickable = () => Boolean(chatId());
-  // Synthetic pending rows (no id) are inserted by the websocket sync on
-  // `started` and replaced on `stopped`. Treat them as neutral rather than
-  // failures — the panel header already surfaces running state.
-  const isPending = () => !props.record.id;
-
-  return (
-    <div
-      class={cn(
-        'flex items-center gap-2 border-b border-edge-muted px-3 py-2 text-sm',
-        clickable() ? 'cursor-default hover:bg-hover' : 'cursor-default'
-      )}
-      onClick={(event) => {
-        const id = chatId();
-        if (id)
-          openWithSplit(
-            { type: 'chat', id },
-            { activate: true, preferNewSplit: event.shiftKey }
-          );
-      }}
-    >
-      <div class="size-4 shrink-0">
-        <EntityIcon targetType="chat" size="xs" />
-      </div>
-      <span class="min-w-0 flex-1 truncate">{name()}</span>
-      <span
-        class={cn(
-          'ml-auto shrink-0 text-xs font-mono uppercase font-light',
-          isPending() || props.record.is_success
-            ? 'text-ink-extra-muted'
-            : 'text-failure'
-        )}
-      >
-        {formatDateAndTime(props.record.start_time ?? new Date())}
-      </span>
-    </div>
-  );
+function createChatHistoryMetadata(id: string): Accessor<HistoryMetadata> {
+  const query = useChatQuery(() => id);
+  return () => {
+    if (query.isPending) return { status: 'pending' };
+    if (!query.isSuccess) return { status: 'unavailable' };
+    const chat = query.data?.chat;
+    return chat
+      ? { status: 'ready', name: chat.name }
+      : { status: 'unavailable' };
+  };
 }
 
-function HistoryList(props: { records: HistoryRecord[]; isPending: boolean }) {
-  return (
-    <Show
-      when={props.records.length > 0}
-      fallback={
-        <Show
-          when={!props.isPending}
-          fallback={
-            <div class="px-3 py-8 text-center text-xs text-ink-muted">
-              Loading…
-            </div>
-          }
-        >
-          <div class="px-3 py-8 text-center text-xs text-ink-muted">
-            No runs yet.
-          </div>
-        </Show>
-      }
-    >
-      <div class="min-h-0 h-full overflow-y-scroll">
-        <For each={props.records.slice(0, 50)}>
-          {(record) => <HistoryRow record={record} />}
-        </For>
-      </div>
-    </Show>
-  );
+function createAgentHistoryMetadata(id: string): Accessor<HistoryMetadata> {
+  const query = useAgentSessionQuery(() => id);
+  return () => {
+    if (query.isPending) return { status: 'pending' };
+    if (!query.isSuccess) return { status: 'unavailable' };
+    const session = query.data;
+    return session
+      ? { status: 'ready', name: session.name }
+      : { status: 'unavailable' };
+  };
 }
 
 export function Automation() {
   const scheduleId = useBlockId();
   const panel = useSplitPanelOrThrow();
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit, replaceOrInsertSplit } = useSplitLayout();
 
   const schedulesQuery = useSchedulesQuery(() => true);
   const schedule = createMemo(() =>
-    !schedulesQuery.isPending
+    schedulesQuery.isSuccess || schedulesQuery.isError
       ? schedulesQuery.data?.find((item) => item.id === scheduleId)
       : undefined
   );
@@ -183,35 +134,69 @@ export function Automation() {
     return null;
   });
 
-  const updateMutation = useUpdateScheduleMutation({
-    onError: (error) =>
-      toast.alert('Failed to update automation', {
-        subtext: getErrorMessage(error),
-      }),
+  const updateMutation = useUpdateScheduleMutation();
+  const autosave = createRoutineAutosave<SaveIntent>(async (intent) => {
+    const previous = schedule();
+    if (!previous || !getCronTrigger(previous)) {
+      throw new Error('This routine is no longer editable.');
+    }
+    const body =
+      intent.type === 'pause'
+        ? {
+            name: previous.name,
+            trigger: previous.trigger,
+            kind: previous.kind,
+            task: previous.task,
+            enabled: false,
+          }
+        : draftToUpdateBody(intent.draft, previous);
+    if (!body) throw new Error('Choose a valid execution target.');
+    if (intent.type === 'pause' && state() === intent.draft) {
+      // A preceding write may have changed the saved configuration while queued.
+      setRawState(draftFromSchedule({ ...previous, enabled: false }));
+    }
+    await updateMutation.mutateAsync({ scheduleId, body });
   });
 
-  const save = () => {
-    if (formError()) return;
-    const d = state();
-    const previous = schedule();
-    if (!d || !previous) return;
-    const body = draftToUpdateBody(d, previous);
-    if (!body) return;
-    updateMutation.mutate({ scheduleId, body });
-  };
-
-  const debouncedSave = debounce(save, 300);
-
-  const setState = (update: (prev: ScheduleDraft) => ScheduleDraft) => {
+  function setState(update: (prev: ScheduleDraft) => ScheduleDraft): void {
     const current = state();
-    if (!current || !cronTrigger()) return;
+    if (!current || !cronTrigger() || isRunning()) return;
     const next = update(current);
     setRawState(next);
     if (next.name !== current.name) {
       panel.handle.setDisplayName(next.name);
     }
-    debouncedSave();
-  };
+    autosave.queue(formError() ? undefined : { type: 'edit', draft: next });
+  }
+
+  function toggleEnabled(): void {
+    const previous = schedule();
+    if (!previous || !cronTrigger()) return;
+    if (!isRunning()) {
+      setState((current) => ({ ...current, enabled: !current.enabled }));
+      return;
+    }
+    // A running action only accepts disabling with its exact saved configuration.
+    const saved = draftFromSchedule(previous);
+    if (!saved || !previous.enabled) return;
+    const paused = { ...saved, enabled: false };
+    setRawState(paused);
+    autosave.queue({ type: 'pause', draft: paused });
+  }
+
+  function runNow(): void {
+    if (
+      !cronTrigger() ||
+      !state() ||
+      formError() ||
+      autosave.dirty() ||
+      autosave.saving() ||
+      runNowMutation.isPending ||
+      isRunning()
+    )
+      return;
+    runNowMutation.mutate({ scheduleId });
+  }
 
   function initializeDraft(): void {
     const current = schedule();
@@ -220,7 +205,15 @@ export function Automation() {
     panel.handle.setDisplayName(current.name);
   }
 
-  whenSettled(schedulesQuery, initializeDraft, initializeDraft);
+  // Only entering/leaving cron editing resets the draft, never save responses.
+  const cronEditable = createMemo(() => Boolean(cronTrigger()));
+  createEffect(
+    on(cronEditable, (editable) => {
+      autosave.cancel();
+      if (editable) initializeDraft();
+      else setRawState(undefined);
+    })
+  );
 
   const historyQuery = useScheduleHistoryQuery(
     () => scheduleId,
@@ -389,8 +382,14 @@ export function Automation() {
                   variant="accent"
                   size="sm"
                   class="cursor-default"
-                  disabled={runNowMutation.isPending || isRunning()}
-                  onClick={() => runNowMutation.mutate({ scheduleId })}
+                  disabled={
+                    runNowMutation.isPending ||
+                    isRunning() ||
+                    autosave.dirty() ||
+                    autosave.saving() ||
+                    Boolean(formError())
+                  }
+                  onClick={runNow}
                 >
                   Run Now
                 </Button>
@@ -398,12 +397,8 @@ export function Automation() {
                   variant="outline"
                   size="sm"
                   class="cursor-default"
-                  onClick={() =>
-                    setState((current) => ({
-                      ...current,
-                      enabled: !current.enabled,
-                    }))
-                  }
+                  disabled={isRunning() && !d().enabled}
+                  onClick={toggleEnabled}
                 >
                   {d().enabled ? 'Pause' : 'Resume'}
                 </Button>
@@ -429,6 +424,21 @@ export function Automation() {
                     </span>
                   </Show>
                 </div>
+              </div>
+
+              <div class="grid gap-1.5">
+                <h1 class="text-sm font-semibold">Execution target</h1>
+                <RoutineExecutionPicker
+                  target={d().target}
+                  onChange={(target) =>
+                    setState((current) => ({ ...current, target }))
+                  }
+                />
+                <Show when={isRunning()}>
+                  <p class="text-xs text-ink-muted">
+                    Configuration cannot be changed while running.
+                  </p>
+                </Show>
               </div>
 
               <div class="grid gap-1.5">
@@ -553,6 +563,19 @@ export function Automation() {
                 />
               </div>
 
+              <Show when={autosave.error()}>
+                <div role="alert" class="text-xs text-failure">
+                  Changes not saved. {getErrorMessage(autosave.error())}
+                  <button
+                    type="button"
+                    class="ml-2 underline"
+                    onClick={autosave.retry}
+                  >
+                    Retry save
+                  </button>
+                </div>
+              </Show>
+
               <Show when={formError()}>
                 {(message) => (
                   <div class="border border-failure/20 bg-failure/5 rounded-sm px-2 py-1.5 text-xs text-failure">
@@ -566,9 +589,17 @@ export function Automation() {
               <div class="border-b border-edge-muted px-3 py-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
                 History
               </div>
-              <HistoryList
+              <RoutineHistory
                 records={history()}
                 isPending={historyQuery.isPending}
+                createChatMetadata={createChatHistoryMetadata}
+                createAgentMetadata={createAgentHistoryMetadata}
+                onOpen={(resource, newSplit) =>
+                  openWithSplit(resource, {
+                    activate: true,
+                    preferNewSplit: newSplit,
+                  })
+                }
               />
             </div>
           </div>
