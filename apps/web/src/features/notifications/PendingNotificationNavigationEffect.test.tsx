@@ -31,22 +31,20 @@ import { usePendingNotificationNavigationEffect } from './PendingNotificationNav
 
 function routerHarness(initiallyReady = false) {
   let ready = initiallyReady;
-  let resolveSettled: VoidFunction | undefined;
-  const settled = initiallyReady
-    ? Promise.resolve()
-    : new Promise<void>((resolve) => {
-        resolveSettled = resolve;
-      });
+  const listeners = new Set<VoidFunction>();
   const router = {
     isReady: () => ready,
     entry: () => (ready ? {} : undefined),
-    settled: () => settled,
+    subscribe: (listener: VoidFunction) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
   } as unknown as SplitRouter<SplitId>;
   return {
     router,
     markReady: () => {
       ready = true;
-      resolveSettled?.();
+      for (const listener of listeners) listener();
     },
   };
 }
@@ -99,13 +97,13 @@ describe('usePendingNotificationNavigationEffect', () => {
     expect(mocks.openNotificationFromId).not.toHaveBeenCalled();
     expect(pendingNotificationNavigationId()).toBe('notification-1');
 
-    setActiveSplitId('source' as SplitId);
+    router.markReady();
     await Promise.resolve();
 
     expect(mocks.openNotificationFromId).not.toHaveBeenCalled();
     expect(pendingNotificationNavigationId()).toBe('notification-1');
 
-    router.markReady();
+    setActiveSplitId('source' as SplitId);
     await Promise.resolve();
 
     expect(mocks.openNotificationFromId).toHaveBeenCalledExactlyOnceWith(
@@ -115,6 +113,10 @@ describe('usePendingNotificationNavigationEffect', () => {
       { canOpen: expect.any(Function) }
     );
     expect(pendingNotificationNavigationId()).toBe('notification-1');
+
+    setActiveSplitId('new-source' as SplitId);
+    await Promise.resolve();
+    expect(mocks.openNotificationFromId).toHaveBeenCalledTimes(1);
 
     completeOpen?.();
     expect(pendingNotificationNavigationId()).toBeUndefined();
@@ -149,6 +151,47 @@ describe('usePendingNotificationNavigationEffect', () => {
     completions[0]?.();
     expect(pendingNotificationNavigationId()).toBe('notification-1');
 
+    setGlobalSplitRouter(secondRouter);
+    await Promise.resolve();
+    expect(completions).toHaveLength(2);
+    completions[1]?.();
+    expect(pendingNotificationNavigationId()).toBeUndefined();
+  });
+
+  it('keeps an in-flight intent across account teardown', async () => {
+    const sourceId = 'source' as SplitId;
+    const firstManager = {
+      activeSplitId: () => sourceId,
+    } as unknown as SplitManager;
+    const secondManager = {
+      activeSplitId: () => sourceId,
+    } as unknown as SplitManager;
+    const firstRouter = routerHarness(true).router;
+    const secondRouter = routerHarness(true).router;
+    const source = {} as NotificationSource;
+    const completions: VoidFunction[] = [];
+    mocks.openNotificationFromId.mockImplementation(() => ({
+      match: (onSuccess: VoidFunction) => {
+        completions.push(onSuccess);
+      },
+    }));
+    dispose = createRoot((rootDispose) => {
+      usePendingNotificationNavigationEffect(source);
+      return rootDispose;
+    });
+
+    setGlobalSplitManager(firstManager);
+    setGlobalSplitRouter(firstRouter);
+    setPendingNotificationNavigationId('notification-1');
+    await Promise.resolve();
+    expect(completions).toHaveLength(1);
+
+    setGlobalSplitManager(undefined);
+    setGlobalSplitRouter(undefined);
+    completions[0]?.();
+    expect(pendingNotificationNavigationId()).toBe('notification-1');
+
+    setGlobalSplitManager(secondManager);
     setGlobalSplitRouter(secondRouter);
     await Promise.resolve();
     expect(completions).toHaveLength(2);
