@@ -3,9 +3,11 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   onCleanup,
+  untrack,
   useContext,
 } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';
@@ -65,6 +67,46 @@ export function withSplitPanelOwner<T>(name: string, factory: () => T): T {
  */
 export function useSplitPanel() {
   return useContext(SplitPanelContext);
+}
+
+/**
+ * Own the split's display name while `name` is defined, then restore the name
+ * that was visible before this owner became active.
+ *
+ * Routed detail views remain mounted inside their list shell, so writing the
+ * name without restoring it leaves the browser tab titled after the departed
+ * detail.
+ */
+export function useSplitDisplayName(name: Accessor<string | undefined>) {
+  const handle = useSplitPanelOrThrow().handle;
+  let owned = false;
+  let previous = '';
+  let displayed: string | undefined;
+
+  const release = () => {
+    if (!owned) return;
+    if (handle.displayName() === displayed) {
+      handle.setDisplayName(previous);
+    }
+    owned = false;
+    displayed = undefined;
+  };
+
+  createEffect(() => {
+    const next = name();
+    if (next === undefined) {
+      release();
+      return;
+    }
+    if (!owned) {
+      previous = untrack(handle.displayName);
+      owned = true;
+    }
+    displayed = next;
+    handle.setDisplayName(next);
+  });
+
+  onCleanup(release);
 }
 
 /** Whether closing this split leaves another split visible. */

@@ -526,6 +526,12 @@ editor and comments arriving after it. Once loaded, click elsewhere in the
 document, then click the same notification again: it should revisit the comment,
 while background comment refreshes should leave the user's position alone.
 
+When checking desktop margin placement, scroll a long document while an embed
+or image above the highlighted text changes height. Scroll anchoring may keep
+the text at the same screen position; its comment card should stay aligned
+through the resize, without briefly jumping upward or downward. Repeat with
+several rapid height changes, including while scrolling has paused.
+
 Also verify anchored comments in Drive's detail pane: open a document with
 existing text anchors, then click a numbered comment badge to expand it. The
 document should stay visible and the thread should open; loading the document
