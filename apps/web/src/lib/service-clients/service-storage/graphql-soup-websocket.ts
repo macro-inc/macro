@@ -1,4 +1,3 @@
-import { toast } from '@core/component/Toast/Toast';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { Client, OperationResult } from '@urql/core';
 import {
@@ -182,7 +181,6 @@ export function createGraphqlSoupSubscriptionsLifecycle(
           : LIVE_UPDATE_SUBSCRIPTIONS.filter(
               ({ document }) => document !== SoupUpdatesDocument
             );
-      let signaledFailure = false;
       unsubscribes = subscriptions.map(({ document, errorMessage }) => {
         const subscription = client
           .subscription(document, {})
@@ -201,15 +199,10 @@ export function createGraphqlSoupSubscriptionsLifecycle(
               publishNotificationPatch(patch);
               void channelHandler.onPatch(patch);
             }
-            if (result.error) {
-              console.warn(errorMessage, result.error);
-              if (!signaledFailure) {
-                signaledFailure = true;
-                toast.failure('Live updates disconnected', {
-                  subtext: 'Refresh to reconnect.',
-                });
-              }
-            }
+            // A terminal subscription error is logged, not surfaced: a
+            // "live updates disconnected" banner is meaningless to users and
+            // recurring reconnect churn on mobile made it fire constantly.
+            if (result.error) console.warn(errorMessage, result.error);
           });
         return () => subscription.unsubscribe();
       });
