@@ -263,7 +263,8 @@ also offer **Resolve** and **Reopen**. Mentions and replies use inbox notificati
 and message links. Older spreadsheet annotation comments are not displayed.
 Opening an inbox notification opens the sidebar and targets its comment/range.
 Range links leave Workbook discussion on its normal timeline; workbook links
-open that discussion at the linked message.
+open that discussion at the linked message, clear the previous range highlight
+or navigation error, and preserve an open range draft's attachment.
 Comment-only access can post/reply; view-only access can read. Edit/delete applies
 to the author's own comments, and failures retain the input draft. Draft demos
 must be saved before persistent comments are available.

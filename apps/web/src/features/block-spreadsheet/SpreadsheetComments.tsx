@@ -307,8 +307,10 @@ export function SpreadsheetComments(props: {
         if (openedRequest !== value) {
           openedRequest = value;
           closeCard();
+          setLocation(undefined);
+          setError('');
+          if (!open()) setAnchor(ready ? currentAnchor() : undefined);
           setOpen(true);
-          setAnchor(ready ? currentAnchor() : undefined);
         }
         if (!ready) return;
         if (!anchor()) setAnchor(currentAnchor());
@@ -319,8 +321,10 @@ export function SpreadsheetComments(props: {
         if (!thread) return;
         navigatedRequest = value;
         const linked = spreadsheetCommentAnchor(thread.state.anchor);
-        setAnchor(linked ?? currentAnchor());
-        if (linked) navigate(linked);
+        if (linked) {
+          setAnchor(linked);
+          navigate(linked);
+        }
       }
     )
   );

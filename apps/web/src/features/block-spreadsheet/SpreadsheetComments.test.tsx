@@ -361,6 +361,70 @@ it.each(['root-id', 'reply-id'])(
   }
 );
 
+it('clears a previous range highlight for a workbook link and preserves the draft range', async () => {
+  mocks.data.push({
+    ...mocks.data[0],
+    id: 'workbook-root',
+    state: { ...mocks.data[0].state, root_id: 'workbook-root', anchor: null },
+  });
+  mocks.target = 'reply-id';
+  mount();
+  const input = screen.getByRole('textbox') as HTMLInputElement;
+  fireEvent.input(input, { target: { value: 'Range draft' } });
+  selection = { anchor: 'D9', focus: 'D9' };
+
+  mocks.target = 'workbook-reply';
+  mocks.rootId = 'workbook-root';
+  navigateAgain();
+
+  expect(screen.getByRole('status').textContent).toBe('');
+  expect(mocks.discussion).toHaveBeenCalledWith(
+    expect.objectContaining({ targetId: 'workbook-reply' })
+  );
+  expect(screen.getByRole('textbox')).toBe(input);
+  expect(input.value).toBe('Range draft');
+  fireEvent.click(screen.getByRole('button', { name: 'Post' }));
+  await waitFor(() =>
+    expect(mocks.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({
+          content: 'Range draft',
+          anchor: { type: 'spreadsheet', ...anchor },
+        }),
+      })
+    )
+  );
+});
+
+it('clears a previous range navigation error when opening a workbook link', () => {
+  mocks.data.push({
+    ...mocks.data[0],
+    id: 'workbook-root',
+    state: { ...mocks.data[0].state, root_id: 'workbook-root', anchor: null },
+  });
+  mocks.data[0].state.anchor = {
+    type: 'spreadsheet',
+    ...anchor,
+    sheetId: 'deleted',
+  };
+  mocks.target = 'reply-id';
+  mount();
+  expect(
+    screen.getByText('This comment refers to a sheet that has been deleted.')
+  ).toBeTruthy();
+
+  mocks.target = 'workbook-reply';
+  mocks.rootId = 'workbook-root';
+  navigateAgain();
+
+  expect(
+    screen.queryByText('This comment refers to a sheet that has been deleted.')
+  ).toBeNull();
+  expect(mocks.discussion).toHaveBeenCalledWith(
+    expect.objectContaining({ targetId: 'workbook-reply' })
+  );
+});
+
 it('leaves the workbook discussion untargeted until the root anchor is known', () => {
   mocks.target = 'reply-id';
   mocks.data[0].state.anchor = undefined;
