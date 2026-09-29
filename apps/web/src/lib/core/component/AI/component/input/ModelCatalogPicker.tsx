@@ -154,7 +154,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
         variant="ghost"
         size="sm"
         class={cn(
-          'h-9 justify-between rounded-lg border border-edge-muted bg-transparent px-3 text-left text-sm text-ink hover:bg-ink/3',
+          'h-9 justify-between border border-edge-muted bg-transparent px-3 text-left text-sm text-ink hover:bg-ink/3',
           props.triggerClass
         )}
         aria-label={props.ariaLabel}

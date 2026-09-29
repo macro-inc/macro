@@ -269,7 +269,6 @@ export function FloatingFormatMenu(props: {
       label={buttonProps.item.label}
       shortcut={buttonProps.item.shortcut}
       size="icon-sm"
-      class="rounded-md"
       depth={3}
       variant={selection()?.[buttonProps.item.format] ? 'accent' : 'ghost'}
       onPointerDown={(e: PointerEvent) => e.preventDefault()}
@@ -291,7 +290,6 @@ export function FloatingFormatMenu(props: {
         <Dropdown.Trigger
           variant="ghost"
           size="icon-sm"
-          class="rounded-md"
           depth={3}
           tooltip="More formatting"
           tabIndex={-1}
@@ -326,7 +324,7 @@ export function FloatingFormatMenu(props: {
         <Dropdown.Trigger
           variant="ghost"
           size="sm"
-          class="gap-1 rounded-md"
+          class="gap-1"
           depth={3}
           tooltip="Text style"
           tabIndex={-1}
@@ -386,7 +384,6 @@ export function FloatingFormatMenu(props: {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="rounded-md"
                 depth={3}
                 onPointerDown={(e: PointerEvent) => e.preventDefault()}
                 onClick={handleLink}

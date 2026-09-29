@@ -1289,3 +1289,68 @@ async fn parent_of_names_only_a_live_message_parent(pool: PgPool) {
     assert_eq!(repo.parent_of(reply.id).await.unwrap(), None);
     assert_eq!(repo.parent_of(Uuid::now_v7()).await.unwrap(), None);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn spreadsheet_threads_round_trip_resolve_and_delete(pool: PgPool) {
+    setup(&pool).await;
+    sqlx::query!(r#"UPDATE "Document" SET "fileType" = 'spreadsheet' WHERE id = 'message-doc-a'"#)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repo = PgMessageRepository::new(pool);
+    assert_eq!(
+        repo.document_file_type("message-doc-a")
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("spreadsheet")
+    );
+    let mut create = command("message-doc-a", None, "Check the budget");
+    create.input.anchor = Some(NewThreadAnchor::Spreadsheet {
+        sheet_id: "sheet-1".into(),
+        sheet_name: "Budget".into(),
+        range: "B4:C9".into(),
+    });
+    let expected = create.input.anchor.as_ref().unwrap().reference();
+    let root = repo.create(create).await.unwrap();
+    let state = repo.thread(&root.parent, root.id).await.unwrap().unwrap();
+    assert_eq!(state.anchor, Some(expected.clone()));
+    repo.create(command("message-doc-a", Some(root.id), "Looks good"))
+        .await
+        .unwrap();
+    let page = repo
+        .timeline(
+            &root.parent,
+            MessageTimelineQuery {
+                anchored: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].state.anchor, Some(expected.clone()));
+    assert_eq!(page.items[0].thread.reply_count, 1);
+    let state = repo
+        .patch_thread(
+            &root.parent,
+            root.id,
+            ThreadPatch {
+                resolved: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(state.resolved);
+    assert_eq!(state.anchor, Some(expected));
+    let state = repo.delete_thread(&root.parent, root.id).await.unwrap();
+    assert!(state.deleted_at.is_some());
+    assert!(
+        repo.timeline(&root.parent, MessageTimelineQuery::default())
+            .await
+            .unwrap()
+            .items
+            .is_empty()
+    );
+}

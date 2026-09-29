@@ -2,9 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for durable hydration generations, viewed-first search projections,
-# and one canonical initiative GraphQL entity.
-version = "0.6.28"
+# Rebuild for entity-only Soup hydration and bounded page retention.
+version = "0.6.30"
 
 [features]
 default = []

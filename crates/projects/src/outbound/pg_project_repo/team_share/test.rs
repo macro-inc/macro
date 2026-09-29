@@ -1,5 +1,10 @@
+use bot_id::BotId;
+use entity_access_management::domain::ports::EntityAccessManagementRepository;
+use entity_access_management::outbound::PgRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts, TeamShareLevel, TeamShareRequest,
@@ -13,14 +18,19 @@ use uuid::Uuid;
 
 use crate::domain::models::{CreateProjectArgs, EditProjectArgs, ProjectError};
 use crate::domain::ports::ProjectRepo;
-use crate::outbound::pg_project_repo::tests::{TestRepo, test_repo};
+use crate::outbound::pg_project_repo::tests::{SponsoredBy, TestRepo, test_repo, test_repo_with};
 
 const OWNER: &str = "macro|test@example.com";
 const TEAM_ID: Uuid = Uuid::from_u128(0xb2222222_2222_2222_2222_222222222222);
+const BOT: &str = "bot|00000000-0000-0000-0000-00000000b07a";
+
+fn owner() -> Owner {
+    Owner::User(MacroUserIdStr::try_from(OWNER).unwrap())
+}
 
 async fn create_project(repo: &TestRepo, name: &str) -> String {
     repo.create_project(CreateProjectArgs {
-        user_id: OWNER.to_owned(),
+        owner: owner(),
         name: name.to_string(),
         parent_id: None,
         share_permission: SharePermissionV2::new_project_share_permission(None),
@@ -156,6 +166,81 @@ fn unshared() -> StoredTeamShare {
         level: None,
         team_id: None,
         revision: 0,
+    }
+}
+
+type Grant = (String, String, String, Option<String>);
+
+fn grant(source_type: &str, source_id: &str, level: &str, granted_from: Option<&str>) -> Grant {
+    (
+        source_type.to_string(),
+        source_id.to_string(),
+        level.to_string(),
+        granted_from.map(str::to_string),
+    )
+}
+
+async fn project_grants(pool: &Pool<Postgres>, project_id: &str) -> Vec<Grant> {
+    sqlx::query!(
+        r#"
+        SELECT source_type::text AS "source_type!", source_id,
+            access_level::text AS "access_level!", granted_from_project_id
+        FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'project'
+        ORDER BY source_type::text, source_id, granted_from_project_id NULLS FIRST
+        "#,
+        Uuid::parse_str(project_id).unwrap(),
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| {
+        (
+            row.source_type,
+            row.source_id,
+            row.access_level,
+            row.granted_from_project_id,
+        )
+    })
+    .collect()
+}
+
+#[derive(Debug, PartialEq)]
+struct OwnershipRecords {
+    owner: Owner,
+    registered_owner: (String, String),
+    grants: Vec<Grant>,
+    user_history_rows: i64,
+}
+
+async fn ownership_records(
+    repo: &TestRepo,
+    pool: &Pool<Postgres>,
+    project_id: &str,
+) -> OwnershipRecords {
+    let registration = sqlx::query!(
+        r#"
+        SELECT owner_type::text AS "owner_type!", owner_id,
+            (SELECT COUNT(*) FROM "UserHistory" WHERE "itemId" = $1) AS "user_history_rows!"
+        FROM entity
+        WHERE id::text = $1
+        "#,
+        project_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    OwnershipRecords {
+        owner: repo
+            .get_project_by_id(project_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .user_id,
+        registered_owner: (registration.owner_type, registration.owner_id),
+        grants: project_grants(pool, project_id).await,
+        user_history_rows: registration.user_history_rows,
     }
 }
 
@@ -493,5 +578,58 @@ async fn get_project_share_permission_reads_team_share_access_level(pool: PgPool
             .unwrap()
             .team_share_access_level,
         Some(AccessLevel::Comment)
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("users", "team"))
+)]
+async fn bot_owned_child_under_team_shared_parent_inherits_and_keeps_its_own_grants(pool: PgPool) {
+    let repo = test_repo(pool.clone());
+    let parent_id = create_project(&repo, "Parent").await;
+    edit_team_share(&repo, &parent_id, Some(AccessLevel::Comment))
+        .await
+        .unwrap();
+
+    let child = test_repo_with(pool.clone(), SponsoredBy(owner()))
+        .create_project(CreateProjectArgs {
+            owner: Owner::Bot(BotId::TEST_A),
+            name: "Bot child".to_string(),
+            parent_id: Some(parent_id.clone()),
+            share_permission: SharePermissionV2::new_project_share_permission(None),
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        ownership_records(&repo, &pool, &child.id).await,
+        OwnershipRecords {
+            owner: Owner::Bot(BotId::TEST_A),
+            registered_owner: ("bot".to_string(), BOT.to_string()),
+            grants: vec![
+                grant("bot", BOT, "owner", None),
+                grant("user", OWNER, "owner", None),
+            ],
+            user_history_rows: 0,
+        }
+    );
+
+    PgRepository::new(pool.clone())
+        .add_entity_to_project(
+            &Uuid::parse_str(&child.id).unwrap(),
+            EntityType::Project,
+            &Uuid::parse_str(&parent_id).unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        project_grants(&pool, &child.id).await,
+        [
+            grant("bot", BOT, "owner", None),
+            grant("team", &TEAM_ID.to_string(), "comment", Some(&parent_id)),
+            grant("user", OWNER, "owner", None),
+            grant("user", OWNER, "owner", Some(&parent_id)),
+        ]
     );
 }

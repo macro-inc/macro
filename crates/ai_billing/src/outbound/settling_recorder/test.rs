@@ -94,6 +94,7 @@ impl BillingService for FakeBilling {
         _payer: &MacroUserIdStr<'_>,
         _start: DateTime<Utc>,
         _end: DateTime<Utc>,
+        _verified: Option<crate::domain::period::SubscriptionPeriod>,
     ) -> Result<()> {
         unreachable!()
     }

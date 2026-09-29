@@ -135,7 +135,7 @@ export function CrmListDialog(props: {
               </Button>
               <Button
                 type="submit"
-                variant="accent"
+                variant="strong"
                 disabled={pending() || !name().trim()}
               >
                 {pending() ? 'Saving…' : 'Save list'}

@@ -440,8 +440,17 @@ reads the selected indexed range. Generic server and browser folds stage load
 updates separately and replace visible history only on success. Failed or
 incomplete loads preserve the committed conversation; resume does not replace it.
 
-Live recovery uses this same load path. Cursor captures foreign or interrupted
-runs into its native journal without publishing replacement conversation frames.
+A run started on cursor.com while the session is idle is not recovery: the
+background mirror journals it and publishes its frames as they arrive, exactly
+as a Macro turn does, then checkpoints it. The fold opens a turn for the
+cursor.com prompt and closes it on `_session/turn_complete`. Streaming is only
+whole when the client already has everything journaled before the run, so the
+mirror falls back to recovery while a prompt waits behind it (that prompt's
+turn is already open on the client) or while anything journaled since the last
+load was never sent.
+
+Recovery uses this same load path. Cursor captures foreign or interrupted runs
+into its native journal without publishing replacement conversation frames.
 Its notifier enqueues a typed, host-local reload requirement; the pipe adapter
 delivers that requirement before a queued prompt response. The session domain
 waits for the current prompt response, queues subsequent commands, and initiates

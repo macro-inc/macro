@@ -39,7 +39,10 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
-import { searchQuickAccessItems } from './entity-search';
+import {
+  filterQuickAccessItems,
+  searchQuickAccessItems,
+} from './entity-search';
 import { createProjectedList } from './projected-list';
 import type {
   Bucket,
@@ -956,6 +959,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             enabled: () =>
               projectedBuckets().length > 0 && options.enabled?.() !== false,
             existingItems: localItems,
+            filterPreviousItems: filterQuickAccessItems,
             materialize: async (documents) => {
               const idOf = (recordKey: string) =>
                 recordKey.slice(recordKey.indexOf(':') + 1);

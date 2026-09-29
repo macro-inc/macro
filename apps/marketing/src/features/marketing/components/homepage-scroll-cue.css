@@ -1,0 +1,23 @@
+.homepage-scroll-cue { position: absolute; bottom: max(48px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 8px; width: max-content; height: 44px; padding: 12px; border: 0; border-radius: 12px; background: none; color: var(--color-ink-muted); font: inherit; font-size: 12px; line-height: 20px; }
+.site-nav-start.homepage-hero-cta { font-family: 'Inter Variable', Inter, sans-serif; }
+.homepage-hero-cta:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 4px; }
+.ob-welcome:has(.homepage-hero-cta) > [data-welcome-copy] > .homepage-hero-action { margin-top: 12px; padding-bottom: 8px; }
+.homepage-scroll-cue:hover { color: var(--color-ink); }
+.homepage-scroll-cue:focus-visible { outline: 1px solid var(--color-ink-muted); outline-offset: 4px; }
+.homepage-scroll-cue { transition: opacity 240ms ease, visibility 0s 240ms; }
+.homepage-scroll-cue[data-dismissed=true] { opacity: 0; visibility: hidden; pointer-events: none; }
+.homepage-scroll-cue svg { width: 20px; height: 20px; animation: homepage-scroll-nudge 2.4s ease-in-out infinite; }
+.homepage-scroll-cue:not([data-visible=true]) svg,
+.homepage-scroll-cue[data-dismissed=true] svg { animation-play-state: paused; }
+@keyframes homepage-scroll-nudge { 0%, 25%, 100% { transform: translateY(0); } 55% { transform: translateY(5px); } 75% { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .homepage-scroll-cue { transition: none; } .homepage-scroll-cue svg { animation: none; } }
+/* Keep the invitation above the fold on shorter laptop screens. */
+@media (min-width: 768px) and (max-height: 900px) {
+  .ob-welcome:has(.homepage-hero-cta) { --welcome-scale: 1; gap: 24px; }
+  .ob-welcome:has(.homepage-hero-cta) [data-context-scene] { height: clamp(190px, calc(100svh - 540px), 300px); }
+  .ob-welcome:has(.homepage-hero-cta) h1 { font-size: 48px; }
+}
+@media (max-width: 767px) and (max-height: 800px) {
+  .ob-welcome:has(.homepage-hero-cta) { gap: 24px; }
+  .ob-welcome:has(.homepage-hero-cta) [data-context-scene] { height: clamp(160px, calc(100svh - 540px), 256px); }
+}

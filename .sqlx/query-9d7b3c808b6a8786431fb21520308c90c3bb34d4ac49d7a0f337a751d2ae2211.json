@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id, payer_id, subscription_id, period_start, period_end, policy FROM ai_billing_usage_period\n         WHERE user_id = $1 AND period_start <= $2 AND period_end > $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "payer_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "subscription_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "period_start",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "period_end",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "policy",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9d7b3c808b6a8786431fb21520308c90c3bb34d4ac49d7a0f337a751d2ae2211"
+}

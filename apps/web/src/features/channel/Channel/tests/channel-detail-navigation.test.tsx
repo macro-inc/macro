@@ -84,6 +84,7 @@ vi.mock(
 );
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useRegisterPriorityCollapseItem: () => () => false,
+  useSplitDisplayName: () => {},
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));
 vi.mock('@core/component/TabsInset', () => ({ TabsInset: () => null }));

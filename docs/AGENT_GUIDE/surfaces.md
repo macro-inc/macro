@@ -9,9 +9,22 @@ keeps loaded items visible. Wait for real rows before navigating or selecting.
 
 ## Top bars
 
-Right-aligned split-header actions (including Calendar's touch/preview New event
-and Channel's Call and Ask Macro) are borderless with a rounded-xl background on
-hover. Channel header tabs use fully rounded tracks and selected pills.
+Low-emphasis right-aligned split-header actions (including Calendar's touch/preview
+New event and Channel's idle Call and Ask Macro) are borderless with a rounded-xl
+background on hover. Emphasized variants retain their treatment, including an
+active call's green ink and outline frame. Channel header tabs use fully rounded tracks and
+selected pills. Button sizes do not change variant colors or framing; individual
+framed controls default to glass on touch and flat on desktop. Use `glass={true}`
+to enable glass on all devices, or `glass={false}` to disable it everywhere.
+Embedded and low-emphasis actions use `ghost`; inline calendar-invitation text
+actions remove the transparent border to keep their text alignment.
+
+## Dialog actions
+
+Cancel uses a ghost button. Confirm, save, and create actions use strong: the
+outline surface and border with semibold text, without inverted colors. Disabled
+and pending primary actions retain the strong variant. Mobile confirmation drawers
+use the same action hierarchy.
 
 ## User cards
 
@@ -41,6 +54,15 @@ block targets, but not workspace paths or pane-local search state; unsupported
 links remain text.
 
 ## Live updates in flat Soup lists
+
+The normalized cache retains at most 64 flat/grouped Soup page snapshots per
+viewer, with a combined 512 KiB encoded budget. Older pages can require a network
+refetch when revisited; normalized entities and queued offline edits are not
+removed. Backfills hydrate entities/indexes without retaining their pagination
+wrappers. Existing oversized viewer records compact once on a compatible open,
+without resetting storage generation or pending mutations. To verify, load many
+pages, revisit an evicted page online, and confirm an offline property edit still
+replays after reopening the app.
 
 With browser or native Tauri GraphQL caching enabled, locally supported flat lists reconcile their
 loaded server pages with matching cached entities. Complete matching updates can
@@ -101,11 +123,9 @@ it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove r
 
 ## Home (desktop) / Notifications (mobile) — `/app/home`
 
-Every form factor waits for new-app-views flag readiness before choosing the
-new view or its legacy fallback. With the flag enabled, touch devices render
-the new Inbox as **Notifications**: a floating Signal/Noise pill strip with a
-leading filter drawer (Status and Type), pull-to-refresh, and swipe-left to
-mark done. On touch, Signal is a pure notification feed — the viewer's own
+Touch devices render the Inbox as **Notifications**: a floating Signal/Noise
+pill strip with a leading filter drawer (Status and Type), pull-to-refresh,
+and swipe-left to mark done. On touch, Signal is a pure notification feed — the viewer's own
 touched-by-me recents are not merged in; that merge is desktop Home's Signal
 only, so sent mail and AI chats without notifications appear only on desktop.
 
@@ -262,13 +282,10 @@ an older reminder stays in its older section after the event's metadata syncs;
 opening its details should show the expected occurrence. A newer reminder or your
 own later activity can move the row forward, but a calendar sync alone should not.
 
-On mobile, this route always renders the original Notifications soup view,
-regardless of the new-app-views flag. The dock and search scope use the bell icon
-and **Notifications** label; Home is desktop-only. Notifications uses the existing
-Inbox presets, Signal/Noise tabs, notification cards, read/type filters, swipe
-actions, and pull-to-refresh, without Home's merged own-activity feed or chat
-starting pane. Opening a row navigates to its entity. On iOS, rows fade underneath
-the filters and status bar using the shared top edge gradient.
+On mobile, the dock and search scope use the bell icon and **Notifications**
+label; Home is desktop-only. Notifications has no merged own-activity feed or
+chat starting pane. Opening a row navigates to its entity. On iOS, rows fade
+underneath the filters and status bar using the shared top edge gradient.
 
 Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
 unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`
@@ -669,7 +686,7 @@ without resetting its selections.
 
 ## Search
 
-Sidebar `Search` button → `/app/.../component/search` with a focused query box. Results
+Sidebar `Search` button → `/app/search` with a focused query box. Results
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
@@ -683,6 +700,25 @@ session. Switching scopes keeps the input mounted and focused. The dock query is
 not saved into the view's desktop search or restored entry state. Home and
 top-level Tasks use this same overlay; embedded project task lists retain their
 own search while the dock is open.
+
+Search snippets carry their target in the destination pane's route search. Channel
+messages open Chat at the message (replies open their parent thread); email snippets
+open the matching message, Markdown snippets the matching node, PDFs the matching
+page and highlighted text, agent snippets the matching turn/author, and call
+snippets the matching transcript segment. Plain rows keep their existing behavior:
+email rows open normally, while agent and call content results use their first hit.
+
+Verify both a cold open and a result whose entity is already open in another pane,
+including a Home or Drive detail: reuse keeps that pane's workspace and filters,
+leaves the search pane intact, and scrolls to the target. Scroll away and click the
+same snippet again to verify it re-targets. Repeat with Shift-click and Cmd/Ctrl-click
+(new split and new browser tab), and check Back/Forward restores the earlier target.
+Channel checks should include an older offscreen message, a reply, and then a root
+message to ensure the previous thread target is cleared.
+For a PDF that is still loading, clear its route target before pages become visible.
+The old search hit must not apply afterward, and its normal initial position should
+still restore if no target has been applied. A newer mention or preview target must
+survive that cleanup and still open when the viewer is ready.
 
 Agent-session results use the robot icon and show a highlighted transcript snippet.
 `Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.
@@ -704,8 +740,8 @@ just client-side row filtering. Cached inserts enforce the same rule before a
 refetch, including expanded groups and inactive cached Shared queries. Until
 viewer identity is available, document inserts into Shared are rejected.
 
-With `enable-new-app-views` enabled, Files opens **Drive** using the
-same shell as Tasks, on desktop and touch devices alike.
+Files opens **Drive** using the same shell as Tasks, on desktop and touch
+devices alike.
 
 On touch devices (phones and tablets), the Drive header is a scrollable pill
 strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
@@ -953,6 +989,11 @@ name, per-calendar checkbox). Accounts start collapsed. Subscribed system calend
 warning icon whose tooltip shows the provider error; the account keeps syncing its other
 calendars and the badge clears on its own once that calendar syncs again.
 
+On desktop, clicking or dragging empty grid time opens the event composer.
+While an event's details are open, a press on empty grid time closes them and
+does not start a new event; the next press creates one. Clicking another event
+switches the open details.
+
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
 conferencing, and location pills and the description field (Google rejects them on this
@@ -1070,8 +1111,9 @@ Opening or reloading an in-call URL returns to setup and requires a deliberate
 join; existing shared links continue to work.
 
 Guests enter `Your name`, choose their microphone and camera preferences, and
-press `Join call`. Setup requests device
-permissions and previews video locally; sharing starts only after joining.
+press `Join call`. Setup requests microphone permission and waits until that
+prompt finishes before requesting the camera, then previews video locally;
+sharing starts only after joining.
 Permission denial leaves the affected device off and still allows joining.
 The preview and full-width join button retain their size while joining.
 Copying the meeting URL is available after joining, in the in-call header.
@@ -1116,7 +1158,8 @@ Join-preview and in-call controls use the standard Macro icon buttons. Pause
 over the microphone, camera, or background group to reveal an animated settings popover
 above the call toolbar; click its caret to keep it open. Brief pointer passes
 do not open settings, and moving into the popover keeps it open. Settings
-respect reduced-motion preferences.
+respect reduced-motion preferences. The toolbar and settings panels use Macro's
+shared glass surface in both light and dark themes.
 Audio settings include microphone, speaker, and noise suppression. Camera
 settings include the camera selector. Clicking the background icon toggles the
 selected effect off/on, restoring the last blur strength or image (Strong blur
@@ -1126,6 +1169,11 @@ and touch access. Click outside or press Escape to close the settings.
 The controls also work by keyboard and touch.
 
 ### Sharing a call
+
+With quick calls enabled, channel calls use the same **Copy Meeting Url** button
+as instant and scheduled calls. Clicking it creates the share link and copies it;
+opening the call tab alone does not create a link. If loading fails, click again
+to retry. If clipboard access fails, a selectable URL appears below the button.
 
 A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
 team share. Its side panel has a `Sharing` section with one `Share with team` checkbox, and the

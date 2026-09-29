@@ -143,6 +143,8 @@ dependencies = [
  "async-stream",
  "async-trait",
  "attachment",
+ "bytes",
+ "chrono",
  "futures",
  "genai_telemetry",
  "macro_env_var",
@@ -153,6 +155,7 @@ dependencies = [
  "opentelemetry_sdk",
  "prompt",
  "regex",
+ "reqwest 0.13.4",
  "rig-agent",
  "rig-core",
  "schemars 1.2.1",
@@ -748,6 +751,7 @@ dependencies = [
  "tokio",
  "tracing",
  "utoipa",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -1085,6 +1089,7 @@ name = "anthropic"
 version = "0.2.0"
 dependencies = [
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "async-openai",
  "async-stream",
@@ -3299,7 +3304,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.28"
+version = "0.6.30"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -3837,6 +3842,7 @@ dependencies = [
  "entity_access_db_utils",
  "entity_access_management",
  "entity_mutation",
+ "entity_registry",
  "entity_registry_db_utils",
  "futures",
  "http-body-util",
@@ -4264,6 +4270,7 @@ dependencies = [
  "graphql_notification",
  "graphql_permission",
  "graphql_properties",
+ "graphql_scheduled_action",
  "graphql_soup",
  "macro_authorization",
  "macro_user_id",
@@ -4277,6 +4284,7 @@ dependencies = [
  "notification",
  "predicate-index",
  "rootcause",
+ "scheduled_action",
  "serde",
  "soup",
  "soup-filter-projection",
@@ -5906,6 +5914,7 @@ dependencies = [
  "futures",
  "github",
  "graphql_initiative",
+ "graphql_scheduled_action",
  "graphql_soup",
  "harnesses",
  "hex",
@@ -5966,6 +5975,7 @@ dependencies = [
  "rootcause",
  "s3_key",
  "saved_views",
+ "scheduled_action",
  "schemars 1.2.1",
  "search_service",
  "secretsmanager_client",
@@ -6995,6 +7005,7 @@ dependencies = [
 name = "entity_registry"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "bot_id",
  "chrono",
  "harness_id",
@@ -8190,6 +8201,23 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_scheduled_action"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "macro_user_id",
+ "macro_uuid",
+ "model_owner",
+ "rootcause",
+ "scheduled_action",
+ "serde_json",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -15754,6 +15782,8 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "agent_runtime_protocol",
+ "agent_session",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
@@ -15761,6 +15791,8 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "bot_id",
+ "bots",
  "channel_sender",
  "channels",
  "chat",
@@ -15772,6 +15804,7 @@ dependencies = [
  "documents",
  "doppler-config",
  "entity_access",
+ "entity_registry",
  "entity_registry_db_utils",
  "futures",
  "kafka_util",
@@ -15799,6 +15832,7 @@ dependencies = [
  "models_permissions",
  "notification",
  "rdkafka",
+ "reqwest 0.13.4",
  "rootcause",
  "secretsmanager_client",
  "serde",
@@ -20644,6 +20678,7 @@ dependencies = [
  "ahash",
  "aho-corasick",
  "anyhow",
+ "async-graphql",
  "async-openai",
  "aws-config",
  "aws-credential-types",

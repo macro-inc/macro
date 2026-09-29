@@ -1,0 +1,65 @@
+.aie-post {
+  color: var(--c4);
+  font-family: 'cyberreader', system-ui, sans-serif;
+}
+
+.aie-post,
+.aie-post * {
+  box-sizing: border-box;
+}
+
+.aie-post a {
+  color: var(--a0);
+  text-decoration: none;
+}
+
+.aie-post a:hover {
+  color: var(--c1);
+}
+
+.aie-lede {
+  color: var(--c2);
+  font-size: 20px;
+  line-height: 1.6;
+}
+
+/* Pointer to the author's own writeup, which is the full version of this post */
+.aie-post p.aie-crosslink {
+  background: color-mix(in srgb, var(--b1) 72%, var(--b0));
+  border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
+  border-radius: 10px;
+  line-height: 1.7;
+  margin: 30px 0;
+  padding: 18px 20px;
+}
+
+/* Screenshot in a framed panel */
+.aie-shot {
+  margin: 28px 0 12px;
+}
+
+.aie-shot-frame {
+  background: color-mix(in srgb, var(--b1) 72%, var(--b0));
+  border: 1px solid color-mix(in srgb, var(--b4) 22%, transparent);
+  border-radius: 14px;
+  overflow: hidden;
+  padding: clamp(16px, 3vw, 28px);
+}
+
+.aie-shot-frame img {
+  border-radius: 6px;
+  display: block;
+}
+
+.aie-figcaption {
+  color: var(--c4);
+  font-size: 14px;
+  margin: 14px auto 44px;
+  text-align: center;
+}
+
+.aie-post code {
+  color: var(--c1);
+  font-family: 'rajdhani', body, system-ui, sans-serif;
+  font-size: 0.95em;
+}

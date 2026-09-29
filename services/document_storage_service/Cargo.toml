@@ -123,6 +123,7 @@ github = { path = "../../crates/github", default-features = false, features = [
 ] }
 graphql_soup = { path = "../../crates/graphql_soup" }
 graphql_initiative = { path = "../../crates/graphql_initiative" }
+graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }
 http-body-util = { workspace = true }
@@ -196,6 +197,7 @@ reqwest = { workspace = true }
 rootcause = { workspace = true }
 s3_key = { path = "../../crates/s3_key" }
 saved_views = { path = "../../crates/saved_views" }
+scheduled_action = { path = "../scheduled_action" }
 schemars = { workspace = true }
 search_service = { path = "../../crates/search_service" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }

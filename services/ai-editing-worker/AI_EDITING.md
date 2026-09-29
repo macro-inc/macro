@@ -160,5 +160,5 @@ wraps that exact span in a committed `CommentNode`, and pushes it like any other
 edit. Text that is missing, crosses from one block into another, or appears
 more than once with no occurrence chosen is refused with a 422 and the
 document is left untouched, so a mark is never guessed into place. The
-backend `CommentOnDocumentText` tool places the mark first and then posts the
+backend `CommentOnDocument` tool with `quote` places the mark first and then posts the
 thread anchored to it, removing the mark again if the post fails.

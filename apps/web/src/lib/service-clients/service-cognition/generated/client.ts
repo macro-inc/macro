@@ -496,6 +496,11 @@ export type createChatResponse401 = {
   status: 401;
 };
 
+export type createChatResponse403 = {
+  data: string;
+  status: 403;
+};
+
 export type createChatResponse500 = {
   data: string;
   status: 500;
@@ -506,6 +511,7 @@ export type createChatResponseSuccess = createChatResponse200 & {
 };
 export type createChatResponseError = (
   | createChatResponse401
+  | createChatResponse403
   | createChatResponse500
 ) & {
   headers: Headers;

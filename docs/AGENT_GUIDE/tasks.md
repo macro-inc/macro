@@ -6,6 +6,17 @@
 The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, and `Filter`;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 and Tags submenus. Multi-select choices keep the menu open; Escape dismisses it.
+The top of the `Filter` menu is a `Filter with AI…` textbox, focused when the menu opens: type a plain-English
+description such as `urgent and high priority tasks that are not completed` and press
+Enter. It replaces the current selection with the matching Status, Priority, Assignee,
+Created by, and Tags options (exclusions on Status/Priority become the complementary
+options; subject matter such as `about billing` lands in the search box), then closes
+the menu. Requests that only partly map keep the menu open and show a muted note
+under the box; requests that map to nothing (excluding a tag, an unknown person,
+off-topic text) keep the typed text and show a red error there instead. The box keeps
+focus while you type even if the pointer drifts over the rows; ArrowDown moves into
+the rows and hovering a submenu hands focus to it as usual. The mobile drawer has no
+AI box.
 Task creation is available from the `New` button in the Tasks sidebar. Below the tabs the
 sidebar has a collapsible `Tags` section listing every personal and team tag, with a
 `New tag` button beside the heading. Clicking a tag narrows the current tab to tasks
@@ -247,7 +258,18 @@ the picker or trigger a success refresh.
 
 In the task list, setting an **unset Priority to Urgent** also updates before the
 response, including when no priority assignment exists yet. Verify another task's
-unset priority stays unchanged. On success the temporary assignment is replaced
+unset priority stays unchanged. First assignments target the normalized entity
+through a fragment-rooted relation recipe: no flat/grouped Soup page discovery
+or pre-save network fetch is needed, even with more than 128 cached pages.
+Check a grouped-only row and an offline/reloaded queued edit as well.
+Property-group moves read only mounted, enabled grouped queries and their loaded
+continuations, never all historical cache variants. Verify that a move still works
+with more than 128 cached grouped pages, that duplicate split views do not multiply
+membership reads, and that closing/disabling a view stops its revalidation. Bulk
+moves share membership reads for distinct entities; repeat edits to one entity
+reread its installed optimism. Each durable mutation retains its own recovery
+queries so partial failures and offline replay still reconcile correctly.
+On success the temporary assignment is replaced
 by the server assignment without a blank cell or duplicate property; failure
 restores the unset cell. Bulk property edits install every optimistic layer before
 the first HTTP response, while network requests retain durable queue ordering.

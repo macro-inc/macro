@@ -463,7 +463,15 @@ describe('thread resolution', () => {
 });
 
 describe('sending', () => {
-  it('posts the optimistic id as the message id, so it never changes', async () => {
+  it.each([
+    undefined,
+    {
+      type: 'spreadsheet' as const,
+      sheetId: 'sheet-1',
+      sheetName: 'Budget',
+      range: 'B4:C9',
+    },
+  ])('keeps root identity and anchor across posting (%j)', async (anchor) => {
     const parent: MessageParent = { type: 'document', id: 'doc' };
     const timelineKey = getMessageTimelineQueryKey(parent);
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
@@ -496,7 +504,7 @@ describe('sending', () => {
     expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7/);
     const pending = mutation.mutateAsync({
       parent,
-      message: { content: '2+2=?' },
+      message: { content: '2+2=?', anchor },
       senderId: 'macro|a@example.com',
       optimisticId: id,
     });
@@ -508,6 +516,10 @@ describe('sending', () => {
     respond();
     await pending;
     expect(rootIds()).toEqual([[id, id]]);
+    expect(
+      testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
+        .items[0].state.anchor
+    ).toEqual(anchor ?? null);
   });
 
   it('adopts the server id when the server ignores the client id', async () => {
