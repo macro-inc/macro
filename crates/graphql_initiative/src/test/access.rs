@@ -67,6 +67,22 @@ impl InitiativeService for ReceiptService {
     ) -> Result<InitiativeDetail, InitiativeError> {
         unreachable!("unexpected domain call")
     }
+    async fn ensure_description_surface(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<DescriptionSurfaceId, InitiativeError> {
+        self.receipts.lock().unwrap().push((
+            receipt.entity().entity_id.clone(),
+            receipt.get_authenticated_user().unwrap().to_string(),
+        ));
+        Ok(DescriptionSurfaceId::from_uuid(Uuid::from_u128(2)))
+    }
+    async fn read_description(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, InitiativeError> {
+        unreachable!("unexpected domain call")
+    }
     async fn list(&self, user_id: &MacroUserIdStr<'_>) -> Result<InitiativeList, InitiativeError> {
         unreachable!("unexpected domain call")
     }
@@ -320,4 +336,69 @@ async fn task_assignment_validates_batch_and_destination_before_authorizing_task
     );
     assert_eq!(access.calls.lock().unwrap().len(), 1);
     assert!(service.assignments.lock().unwrap().is_empty());
+}
+
+/// Grants project view access only, recording what was asked for.
+#[derive(Default)]
+struct ProjectViewAccess {
+    calls: Mutex<Vec<(String, EntityType, AccessLevel)>>,
+}
+
+impl InitiativeAuthorizer for ProjectViewAccess {
+    async fn authorize<T: RequiredPermission>(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: &str,
+        entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push((id.to_string(), entity_type, AccessLevel::View));
+        EntityAccessReceipt::try_new(
+            EntityAccessAuth::Authenticated(user.clone()),
+            entity_access::domain::models::Entity {
+                entity_id: id.to_string(),
+                entity_type,
+            },
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::View,
+            },
+        )
+    }
+}
+
+#[tokio::test]
+async fn viewers_ensure_the_description_surface_with_a_project_view_receipt() {
+    let service = Arc::new(ReceiptService::default());
+    let access = Arc::new(ProjectViewAccess::default());
+    let context = InitiativeGraphqlContext::new(service.clone(), access.clone());
+    let schema = Schema::build(
+        Query,
+        InitiativeMutationRoot::<TestSoupEdges>::default(),
+        EmptySubscription,
+    )
+    .data(context)
+    .finish();
+    let response = schema
+        .execute(
+            Request::new(format!(
+                "mutation {{ ensureInitiativeDescriptionSurface(initiativeId: \"{PROJECT_ID}\") }}"
+            ))
+            .data(user()),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        *service.receipts.lock().unwrap(),
+        [(PROJECT_ID.to_string(), "macro|viewer@example.com".into())]
+    );
+    assert_eq!(
+        *access.calls.lock().unwrap(),
+        [(
+            PROJECT_ID.to_string(),
+            EntityType::Initiative,
+            AccessLevel::View
+        )]
+    );
 }

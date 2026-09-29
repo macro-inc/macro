@@ -1,4 +1,5 @@
-//! Owner-only sharing updates, mirrored by the domain onto the description document.
+//! Owner-only sharing updates. The description follows project access; the domain mirrors
+//! them onto a legacy description document when one exists.
 
 use super::*;
 use crate::domain::models::UpdateInitiativeRequest;
@@ -68,7 +69,7 @@ pub struct ProjectChannelSharing {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "UpdateInitiativeSharing",
-    description = "Change a project's team, link or channel sharing. Only the actual project owner may change sharing. Each omitted field remains unchanged; off disables that share. Project and description document permissions change together. Collaboration member changes use UpdateInitiative."
+    description = "Change a project's team, link or channel sharing. Only the actual project owner may change sharing. Each omitted field remains unchanged; off disables that share. The project description follows project access. Collaboration member changes use UpdateInitiative."
 )]
 pub struct UpdateInitiativeSharing {
     /// Project identifier.

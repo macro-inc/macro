@@ -193,7 +193,8 @@ fn detail() -> InitiativeDetail {
     InitiativeDetail {
         id: InitiativeId::from_uuid(Uuid::parse_str(PROJECT_ID).unwrap()),
         name: "Launch".into(),
-        description_document_id: DescriptionDocumentId::from_uuid(Uuid::from_u128(2)),
+        description_surface_id: DescriptionSurfaceId::from_uuid(Uuid::from_u128(2)),
+        description_document_id: None,
         owner_id: user(),
         member_ids: vec![],
         task_ids: vec![],
@@ -210,6 +211,7 @@ fn row() -> InitiativePageRow {
         initiative: InitiativeSummary {
             id: detail.id,
             name: detail.name,
+            description_surface_id: detail.description_surface_id,
             description_document_id: detail.description_document_id,
             updated_at: detail.updated_at,
         },
@@ -268,6 +270,16 @@ impl InitiativeApi for RecordingApi {
             let mut detail = self.current_detail();
             detail.id = InitiativeId::from_uuid(id);
             Ok(detail)
+        })
+    }
+    fn ensure_description_surface(
+        &self,
+        user: MacroUserIdStr<'static>,
+        _id: Uuid,
+    ) -> ApiFuture<'_, DescriptionSurfaceId> {
+        Box::pin(async move {
+            self.record(&user, "ensure_description_surface")?;
+            Ok(detail().description_surface_id)
         })
     }
     fn summary(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativePageRow> {
@@ -425,6 +437,36 @@ async fn anonymous_queries_and_mutations_never_call_domain() {
         assert_eq!(response.errors[0].message, "authentication required");
     }
     assert!(api.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn ensure_description_surface_returns_the_surface_id() {
+    let api = Arc::new(RecordingApi::default());
+    let response = schema(api.clone())
+        .execute(
+            Request::new(format!(
+                "mutation {{ ensureInitiativeDescriptionSurface(initiativeId: \"{PROJECT_ID}\") }}"
+            ))
+            .data(user()),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["ensureInitiativeDescriptionSurface"],
+        Uuid::from_u128(2).to_string()
+    );
+    assert_eq!(
+        *api.calls.lock().unwrap(),
+        vec!["ensure_description_surface".to_string()]
+    );
+
+    let anonymous = schema(api.clone())
+        .execute(format!(
+            "mutation {{ ensureInitiativeDescriptionSurface(initiativeId: \"{PROJECT_ID}\") }}"
+        ))
+        .await;
+    assert_eq!(anonymous.errors[0].message, "authentication required");
+    assert_eq!(api.calls.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]

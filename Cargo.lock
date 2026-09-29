@@ -838,6 +838,7 @@ dependencies = [
  "channels",
  "chat",
  "chrono",
+ "collab_surface",
  "connection",
  "connection_gateway_client",
  "contacts",
@@ -9600,11 +9601,18 @@ dependencies = [
 name = "initiative_documents"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "collab_surface",
  "documents",
+ "entity_access",
  "initiative",
- "model_owner",
+ "macro_sync_service_jwt",
+ "macro_user_id",
+ "model-entity",
  "rootcause",
+ "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 

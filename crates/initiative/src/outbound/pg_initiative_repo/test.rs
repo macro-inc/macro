@@ -21,8 +21,9 @@ use uuid::Uuid;
 
 use super::PgInitiativeRepo;
 use crate::domain::models::{
-    AssignTaskStatus, CreateInitiativeRepoArgs, DescriptionDocumentId, InitiativeError,
-    InitiativeId, LockstepTeamShare, UpdateInitiativeRepoArgs,
+    AssignTaskStatus, CreateInitiativeRepoArgs, DescriptionDocumentId, DescriptionLocation,
+    DescriptionSurfaceId, InitiativeDetail, InitiativeError, InitiativeId, LockstepTeamShare,
+    UpdateInitiativeRepoArgs,
 };
 use crate::domain::ports::InitiativeRepo;
 
@@ -141,8 +142,9 @@ async fn seed_description_document(
     Ok(DescriptionDocumentId::from_uuid(id))
 }
 
+/// Args for a new initiative, whose description lives in a surface.
 async fn create_args(
-    pool: &PgPool,
+    _pool: &PgPool,
     owner: &str,
     name: &str,
     members: &[&str],
@@ -151,9 +153,44 @@ async fn create_args(
         id: InitiativeId::generate(),
         owner_id: user(owner),
         name: name.to_string(),
-        description_document_id: seed_description_document(pool, owner).await?,
+        description_surface_id: DescriptionSurfaceId::generate(),
         member_ids: members.iter().copied().map(user).collect(),
     })
+}
+
+/// An initiative shaped like one created before description surfaces: args plus the
+/// seeded legacy description document it links.
+struct LegacyArgs {
+    args: CreateInitiativeRepoArgs,
+    document: DescriptionDocumentId,
+}
+
+async fn legacy_args(
+    pool: &PgPool,
+    owner: &str,
+    name: &str,
+    members: &[&str],
+) -> anyhow::Result<LegacyArgs> {
+    Ok(LegacyArgs {
+        args: create_args(pool, owner, name, members).await?,
+        document: seed_description_document(pool, owner).await?,
+    })
+}
+
+async fn create_legacy(
+    pool: &PgPool,
+    legacy: LegacyArgs,
+    share_permission: SharePermissionV2,
+    team_share: TeamShareCreation,
+) -> Result<InitiativeDetail, InitiativeError> {
+    super::create::create_legacy(
+        pool,
+        legacy.args,
+        legacy.document,
+        share_permission,
+        team_share,
+    )
+    .await
 }
 
 async fn insert_user(pool: &PgPool, user_id: &str) -> anyhow::Result<()> {
@@ -360,7 +397,7 @@ async fn lockstep_team_share(
     };
     Ok(LockstepTeamShare {
         initiative: authorize(&facts.initiative)?,
-        description: authorize(&facts.description)?,
+        description: facts.description.as_ref().map(authorize).transpose()?,
     })
 }
 
@@ -372,7 +409,7 @@ fn ids(list: &crate::domain::models::InitiativeList) -> Vec<Uuid> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_links_description_document_and_mirrors_member_and_team_grants_as_tracked(
+async fn create_records_the_description_surface_without_any_document(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     let team_id = seed_owner_with_team(&pool).await?;
@@ -382,13 +419,72 @@ async fn create_links_description_document_and_mirrors_member_and_team_grants_as
     let repo = repo(pool.clone());
     let args = create_args(&pool, OWNER, "Launch", &[MEMBER]).await?;
     let id = args.id;
-    let document_id = args.description_document_id;
+    let surface_id = args.description_surface_id;
     let detail = repo
         .create(args, share_off(), TeamShareCreation::Initiative)
         .await?;
 
+    assert_eq!(detail.description_surface_id, surface_id);
+    assert_eq!(detail.description_document_id, None);
+    assert_eq!(
+        access_level(&pool, id.as_uuid(), INITIATIVE, MEMBER).await?,
+        Some("edit".to_string())
+    );
+    // The surface derives access from the initiative; nothing is granted on its id.
+    let surface_grants = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM entity_access WHERE entity_id = $1"#,
+        surface_id.as_uuid(),
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(surface_grants, 0);
+
+    let facts = repo.get_team_share_facts(id).await?;
+    assert_eq!(
+        facts.initiative.current,
+        Some(TeamShareGrant {
+            team_id,
+            level: TeamShareLevel::Edit,
+        })
+    );
+    assert_eq!(facts.description, None);
+
+    let listed = repo.list_accessible(&user(MEMBER)).await?;
+    assert_eq!(
+        listed
+            .initiatives
+            .iter()
+            .map(|summary| (
+                summary.description_surface_id,
+                summary.description_document_id
+            ))
+            .collect::<Vec<_>>(),
+        vec![(surface_id, None)]
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn legacy_create_links_description_document_and_mirrors_member_and_team_grants_as_tracked(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = seed_owner_with_team(&pool).await?;
+    insert_user(&pool, MEMBER).await?;
+    add_team_user(&pool, team_id, MEMBER, "member").await?;
+
+    let repo = repo(pool.clone());
+    let legacy = legacy_args(&pool, OWNER, "Launch", &[MEMBER]).await?;
+    let id = legacy.args.id;
+    let document_id = legacy.document;
+    let detail = create_legacy(&pool, legacy, share_off(), TeamShareCreation::Initiative).await?;
+
     assert_eq!(detail.name, "Launch");
-    assert_eq!(detail.description_document_id, document_id);
+    assert_eq!(detail.description_document_id, Some(document_id));
+    // The surface adopted the document's session: same id.
+    assert_eq!(
+        detail.description_surface_id,
+        document_id.adopting_surface()
+    );
     assert_eq!(detail.owner_id.as_ref(), OWNER);
     assert_eq!(
         detail
@@ -424,11 +520,12 @@ async fn create_links_description_document_and_mirrors_member_and_team_grants_as
         level: TeamShareLevel::Edit,
     });
     let facts = repo.get_team_share_facts(id).await?;
+    let description = facts.description.expect("legacy document facts");
     assert_eq!(facts.initiative.current, grant);
     assert_eq!(facts.initiative.revision, 1);
-    assert_eq!(facts.description.current, grant);
-    assert_eq!(facts.description.revision, 1);
-    assert_eq!(facts.description.owner.principal_id(), OWNER);
+    assert_eq!(description.current, grant);
+    assert_eq!(description.revision, 1);
+    assert_eq!(description.owner.principal_id(), OWNER);
 
     let basic = repo.get_basic(id).await?.expect("created initiative");
     assert_eq!(basic.name, "Launch");
@@ -439,8 +536,41 @@ async fn create_links_description_document_and_mirrors_member_and_team_grants_as
             .iter()
             .map(|summary| summary.description_document_id)
             .collect::<Vec<_>>(),
-        vec![document_id]
+        vec![Some(document_id)]
     );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rows_from_the_previous_release_read_their_surface_through_the_document(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER).await?;
+    let repo = repo(pool.clone());
+    let legacy = legacy_args(&pool, OWNER, "Old", &[]).await?;
+    let id = legacy.args.id;
+    let document_id = legacy.document;
+    create_legacy(&pool, legacy, share_off(), TeamShareCreation::Unshared).await?;
+    // Services still on the previous release insert rows without the surface column.
+    sqlx::query!(
+        "UPDATE initiative SET description_surface_id = NULL WHERE id = $1",
+        id.as_uuid(),
+    )
+    .execute(&pool)
+    .await?;
+
+    let location = DescriptionLocation {
+        surface_id: document_id.adopting_surface(),
+        legacy_document_id: Some(document_id),
+    };
+    let detail = repo.get_detail(id).await?.expect("readable");
+    assert_eq!(detail.description_surface_id, location.surface_id);
+    let listed = repo.list_accessible(&user(OWNER)).await?;
+    assert_eq!(
+        listed.initiatives[0].description_surface_id,
+        location.surface_id
+    );
+    assert_eq!(repo.delete(id).await?.description, location);
     Ok(())
 }
 
@@ -450,38 +580,54 @@ async fn create_with_unshared_team_leaves_the_document_untracked_and_unshared(
 ) -> anyhow::Result<()> {
     seed_owner_with_team(&pool).await?;
     let repo = repo(pool.clone());
-    let args = create_args(&pool, OWNER, "Private", &[]).await?;
-    let id = args.id;
-    repo.create(args, share_off(), TeamShareCreation::Unshared)
-        .await?;
+    let legacy = legacy_args(&pool, OWNER, "Private", &[]).await?;
+    let id = legacy.args.id;
+    create_legacy(&pool, legacy, share_off(), TeamShareCreation::Unshared).await?;
 
     let facts = repo.get_team_share_facts(id).await?;
+    let description = facts.description.expect("legacy document facts");
     assert_eq!(facts.initiative.current, None);
-    assert_eq!(facts.description.current, None);
-    assert_eq!(facts.description.revision, 0);
+    assert_eq!(description.current, None);
+    assert_eq!(description.revision, 0);
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_rejects_second_initiative_for_same_document(pool: PgPool) -> anyhow::Result<()> {
+async fn create_rejects_second_initiative_for_same_description(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
     let repo = repo(pool.clone());
     let first = create_args(&pool, OWNER, "First", &[]).await?;
-    let document_id = first.description_document_id;
+    let surface_id = first.description_surface_id;
     repo.create(first, share_off(), TeamShareCreation::Unshared)
         .await?;
 
     let second = CreateInitiativeRepoArgs {
-        description_document_id: document_id,
+        description_surface_id: surface_id,
         ..create_args(&pool, OWNER, "Second", &[]).await?
     };
     let second_id = second.id;
     let error = repo
         .create(second, share_off(), TeamShareCreation::Unshared)
         .await
-        .expect_err("one document belongs to one initiative");
+        .expect_err("one surface belongs to one initiative");
     assert!(matches!(error, InitiativeError::Internal(_)), "{error:?}");
     assert!(repo.get_basic(second_id).await?.is_none());
+
+    let legacy = legacy_args(&pool, OWNER, "Legacy", &[]).await?;
+    let document = legacy.document;
+    create_legacy(&pool, legacy, share_off(), TeamShareCreation::Unshared).await?;
+    let error = create_legacy(
+        &pool,
+        LegacyArgs {
+            args: create_args(&pool, OWNER, "Legacy again", &[]).await?,
+            document,
+        },
+        share_off(),
+        TeamShareCreation::Unshared,
+    )
+    .await
+    .expect_err("one document belongs to one initiative");
+    assert!(matches!(error, InitiativeError::Internal(_)), "{error:?}");
     Ok(())
 }
 
@@ -540,8 +686,7 @@ async fn create_share_with_team_without_owner_team_succeeds_unshared(
     let facts = repo.get_team_share_facts(created.id).await?;
     assert_eq!(facts.initiative.current, None);
     assert_eq!(facts.initiative.revision, 0);
-    assert_eq!(facts.description.current, None);
-    assert_eq!(facts.description.revision, 0);
+    assert_eq!(facts.description, None);
     Ok(())
 }
 
@@ -641,14 +786,9 @@ async fn update_member_diff_mirrors_document_grants(pool: PgPool) -> anyhow::Res
     insert_user(&pool, STRANGER).await?;
 
     let repo = repo(pool.clone());
-    let created = repo
-        .create(
-            create_args(&pool, OWNER, "Members", &[MEMBER, TEAMMATE]).await?,
-            share_off(),
-            TeamShareCreation::Unshared,
-        )
-        .await?;
-    let document_id = created.description_document_id;
+    let legacy = legacy_args(&pool, OWNER, "Members", &[MEMBER, TEAMMATE]).await?;
+    let document_id = legacy.document;
+    let created = create_legacy(&pool, legacy, share_off(), TeamShareCreation::Unshared).await?;
 
     let updated = repo
         .update(UpdateInitiativeRepoArgs {
@@ -660,7 +800,7 @@ async fn update_member_diff_mirrors_document_grants(pool: PgPool) -> anyhow::Res
         .await?;
 
     assert_eq!(updated.name, "Renamed");
-    assert_eq!(updated.description_document_id, document_id);
+    assert_eq!(updated.description_document_id, Some(document_id));
     let mut members: Vec<&str> = updated.member_ids.iter().map(|id| id.as_ref()).collect();
     members.sort_unstable();
     assert_eq!(members, vec![STRANGER, TEAMMATE]);
@@ -703,14 +843,9 @@ async fn update_share_patch_mirrors_link_columns_and_channel_grants_onto_documen
     insert_channel(&pool, channel_id, OWNER, CHANNEL_USER).await?;
 
     let repo = repo(pool.clone());
-    let created = repo
-        .create(
-            create_args(&pool, OWNER, "Shared", &[]).await?,
-            share_off(),
-            TeamShareCreation::Unshared,
-        )
-        .await?;
-    let document_id = created.description_document_id;
+    let legacy = legacy_args(&pool, OWNER, "Shared", &[]).await?;
+    let document_id = legacy.document;
+    let created = create_legacy(&pool, legacy, share_off(), TeamShareCreation::Unshared).await?;
 
     let updated = repo
         .update(UpdateInitiativeRepoArgs {
@@ -769,14 +904,9 @@ async fn update_team_share_applies_both_commands_and_a_second_apply_is_not_untra
 ) -> anyhow::Result<()> {
     let team_id = seed_owner_with_team(&pool).await?;
     let repo = repo(pool.clone());
-    let created = repo
-        .create(
-            create_args(&pool, OWNER, "Later shared", &[]).await?,
-            share_off(),
-            TeamShareCreation::Unshared,
-        )
-        .await?;
-    let document_id = created.description_document_id;
+    let legacy = legacy_args(&pool, OWNER, "Later shared", &[]).await?;
+    let document_id = legacy.document;
+    let created = create_legacy(&pool, legacy, share_off(), TeamShareCreation::Unshared).await?;
     let team = team_id.to_string();
 
     let updated = repo
@@ -800,9 +930,10 @@ async fn update_team_share_applies_both_commands_and_a_second_apply_is_not_untra
         team_id,
         level: TeamShareLevel::Edit,
     });
+    let description = facts.description.expect("legacy document facts");
     assert_eq!(facts.initiative.current, grant);
-    assert_eq!(facts.description.current, grant);
-    assert_eq!(facts.description.revision, 1);
+    assert_eq!(description.current, grant);
+    assert_eq!(description.revision, 1);
 
     repo.update(UpdateInitiativeRepoArgs {
         share_permission: Some(set_team_share(AccessLevel::View)),
@@ -815,15 +946,72 @@ async fn update_team_share_applies_both_commands_and_a_second_apply_is_not_untra
         mirrored_access(&pool, created.id, document_id, &team).await?,
         (view.clone(), view)
     );
-    let facts = repo.get_team_share_facts(created.id).await?;
+    let description = repo
+        .get_team_share_facts(created.id)
+        .await?
+        .description
+        .expect("legacy document facts");
     assert_eq!(
-        facts.description.current,
+        description.current,
         Some(TeamShareGrant {
             team_id,
             level: TeamShareLevel::View,
         })
     );
-    assert_eq!(facts.description.revision, 2);
+    assert_eq!(description.revision, 2);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn update_team_share_on_a_surface_initiative_applies_only_the_initiative_command(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = seed_owner_with_team(&pool).await?;
+    let repo = repo(pool.clone());
+    let created = repo
+        .create(
+            create_args(&pool, OWNER, "Surface shared", &[]).await?,
+            share_off(),
+            TeamShareCreation::Unshared,
+        )
+        .await?;
+    let lockstep = lockstep_team_share(&repo, created.id, AccessLevel::Edit).await?;
+    assert!(lockstep.description.is_none());
+
+    repo.update(UpdateInitiativeRepoArgs {
+        share_permission: Some(set_team_share(AccessLevel::Edit)),
+        team_share: Some(lockstep),
+        ..update_args(created.id)
+    })
+    .await?;
+    let facts = repo.get_team_share_facts(created.id).await?;
+    assert_eq!(
+        facts.initiative.current,
+        Some(TeamShareGrant {
+            team_id,
+            level: TeamShareLevel::Edit,
+        })
+    );
+    assert_eq!(facts.description, None);
+
+    // A document command for an initiative without a document never applies.
+    let legacy = legacy_args(&pool, OWNER, "Legacy", &[]).await?;
+    let legacy = create_legacy(&pool, legacy, share_off(), TeamShareCreation::Unshared).await?;
+    let mismatched = LockstepTeamShare {
+        description: lockstep_team_share(&repo, legacy.id, AccessLevel::View)
+            .await?
+            .description,
+        ..lockstep_team_share(&repo, created.id, AccessLevel::View).await?
+    };
+    let error = repo
+        .update(UpdateInitiativeRepoArgs {
+            share_permission: Some(set_team_share(AccessLevel::View)),
+            team_share: Some(mismatched),
+            ..update_args(created.id)
+        })
+        .await
+        .expect_err("commands must match the initiative's entities");
+    assert!(matches!(error, InitiativeError::BadRequest(_)), "{error:?}");
     Ok(())
 }
 
@@ -833,20 +1021,10 @@ async fn update_rejects_lockstep_commands_naming_another_initiative(
 ) -> anyhow::Result<()> {
     seed_owner_with_team(&pool).await?;
     let repo = repo(pool.clone());
-    let target = repo
-        .create(
-            create_args(&pool, OWNER, "Target", &[]).await?,
-            share_off(),
-            TeamShareCreation::Unshared,
-        )
-        .await?;
-    let other = repo
-        .create(
-            create_args(&pool, OWNER, "Other", &[]).await?,
-            share_off(),
-            TeamShareCreation::Unshared,
-        )
-        .await?;
+    let target = legacy_args(&pool, OWNER, "Target", &[]).await?;
+    let target = create_legacy(&pool, target, share_off(), TeamShareCreation::Unshared).await?;
+    let other = legacy_args(&pool, OWNER, "Other", &[]).await?;
+    let other = create_legacy(&pool, other, share_off(), TeamShareCreation::Unshared).await?;
 
     let error = repo
         .update(UpdateInitiativeRepoArgs {
@@ -859,35 +1037,57 @@ async fn update_rejects_lockstep_commands_naming_another_initiative(
     assert!(matches!(error, InitiativeError::BadRequest(_)), "{error:?}");
     let facts = repo.get_team_share_facts(target.id).await?;
     assert_eq!(facts.initiative.current, None);
-    assert_eq!(facts.description.current, None);
+    assert_eq!(
+        facts.description.expect("legacy document facts").current,
+        None
+    );
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn description_document_cannot_be_nulled_or_deleted_while_the_initiative_exists(
+async fn legacy_description_document_stays_adopted_while_the_initiative_exists(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
     let repo = repo(pool.clone());
-    let created = repo
-        .create(
-            create_args(&pool, OWNER, "Launch", &[]).await?,
-            share_off(),
-            TeamShareCreation::Unshared,
-        )
-        .await?;
-    let document_id = created.description_document_id.to_string();
+    let legacy = legacy_args(&pool, OWNER, "Launch", &[]).await?;
+    let document = legacy.document;
+    let created = create_legacy(&pool, legacy, share_off(), TeamShareCreation::Unshared).await?;
+    let document_id = document.to_string();
 
-    let null_error = sqlx::query!(
-        r#"UPDATE initiative SET description_document_id = NULL WHERE id = $1"#,
+    // A linked document's session is the surface; the surface cannot point elsewhere.
+    let adopt_error = sqlx::query!(
+        r#"UPDATE initiative SET description_surface_id = $2 WHERE id = $1"#,
+        created.id.as_uuid(),
+        Uuid::now_v7(),
+    )
+    .execute(&pool)
+    .await
+    .expect_err("surface must be the adopted document session");
+    let adopt_db = adopt_error.as_database_error().expect("database error");
+    assert_eq!(adopt_db.code().as_deref(), Some("23514"));
+    assert_eq!(
+        adopt_db.constraint(),
+        Some("initiative_description_surface_adopts_document")
+    );
+
+    // Some description must remain.
+    let empty_error = sqlx::query!(
+        r#"
+        UPDATE initiative
+        SET description_surface_id = NULL, description_document_id = NULL
+        WHERE id = $1
+        "#,
         created.id.as_uuid(),
     )
     .execute(&pool)
     .await
-    .expect_err("column is NOT NULL");
+    .expect_err("a description is required");
     assert_eq!(
-        null_error.as_database_error().unwrap().code().as_deref(),
-        Some("23502")
+        empty_error
+            .as_database_error()
+            .and_then(|db| db.constraint()),
+        Some("initiative_description_present")
     );
 
     let delete_error = sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id,)
@@ -903,18 +1103,10 @@ async fn description_document_cannot_be_nulled_or_deleted_while_the_initiative_e
     );
 
     let detail = repo.get_detail(created.id).await?.expect("still readable");
-    assert_eq!(detail.description_document_id.to_string(), document_id);
-    let listed = repo.list_accessible(&user(OWNER)).await?;
-    assert_eq!(
-        listed
-            .initiatives
-            .iter()
-            .map(|summary| summary.description_document_id.to_string())
-            .collect::<Vec<_>>(),
-        vec![document_id.clone()]
-    );
+    assert_eq!(detail.description_document_id, Some(document));
     let updated = repo.update(update_args(created.id)).await?;
-    assert_eq!(updated.description_document_id.to_string(), document_id);
+    assert_eq!(updated.description_document_id, Some(document));
+    assert_eq!(updated.description_surface_id, document.adopting_surface());
     Ok(())
 }
 
@@ -1033,7 +1225,7 @@ async fn unassign_task_ignores_links_owned_by_other_initiatives(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn delete_returns_the_document_id_and_leaves_no_initiative_rows(
+async fn delete_returns_the_description_and_leaves_no_initiative_rows(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
@@ -1044,13 +1236,9 @@ async fn delete_returns_the_document_id_and_leaves_no_initiative_rows(
     insert_document(&pool, &task_id, OWNER, true).await?;
 
     let repo = repo(pool.clone());
-    let created = repo
-        .create(
-            create_args(&pool, OWNER, "To delete", &[MEMBER]).await?,
-            share_off(),
-            TeamShareCreation::Unshared,
-        )
-        .await?;
+    let legacy = legacy_args(&pool, OWNER, "To delete", &[MEMBER]).await?;
+    let document_id = legacy.document;
+    let created = create_legacy(&pool, legacy, share_off(), TeamShareCreation::Unshared).await?;
     repo.update(UpdateInitiativeRepoArgs {
         share_permission: Some(add_channel(channel_id)),
         ..update_args(created.id)
@@ -1059,9 +1247,14 @@ async fn delete_returns_the_document_id_and_leaves_no_initiative_rows(
     repo.assign_tasks(created.id, vec![task_id.clone()]).await?;
     let share_id = created.share_permission.id.clone();
     let initiative_id = created.id.as_uuid();
-    let document_id = created.description_document_id;
 
-    assert_eq!(repo.delete(created.id).await?, document_id);
+    assert_eq!(
+        repo.delete(created.id).await?.description,
+        DescriptionLocation {
+            surface_id: document_id.adopting_surface(),
+            legacy_document_id: Some(document_id),
+        }
+    );
 
     let leftover_share = sqlx::query_scalar!(
         r#"SELECT EXISTS(SELECT 1 FROM "SharePermission" WHERE id = $1) AS "exists!""#,
@@ -1120,5 +1313,28 @@ async fn delete_returns_the_document_id_and_leaves_no_initiative_rows(
         repo.delete(created.id).await,
         Err(InitiativeError::NotFound)
     ));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_of_a_surface_initiative_returns_only_its_surface(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER).await?;
+    let repo = repo(pool.clone());
+    let args = create_args(&pool, OWNER, "Surface", &[]).await?;
+    let surface_id = args.description_surface_id;
+    let created = repo
+        .create(args, share_off(), TeamShareCreation::Unshared)
+        .await?;
+
+    assert_eq!(
+        repo.delete(created.id).await?.description,
+        DescriptionLocation {
+            surface_id,
+            legacy_document_id: None,
+        }
+    );
+    assert!(repo.get_detail(created.id).await?.is_none());
     Ok(())
 }

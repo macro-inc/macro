@@ -5,17 +5,21 @@ import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { createProductionProjectDescriptionSession } from './queries/production-project-description';
 
 function DescriptionSession(props: {
-  documentId: string;
+  projectId: string;
+  surfaceId: string;
   canEdit: boolean;
   onRetry(): void;
 }) {
-  const session = createProductionProjectDescriptionSession(props.documentId);
+  const session = createProductionProjectDescriptionSession({
+    projectId: props.projectId,
+    surfaceId: props.surfaceId,
+  });
   onCleanup(session.dispose);
   return (
     <>
       <CollabMarkdownEditor
         resolveAppLink={useMacroMentionLinkResolver()}
-        sourceId={props.documentId}
+        sourceId={props.surfaceId}
         session={session}
         canEdit={() => props.canEdit}
         canComment={() => false}
@@ -33,27 +37,34 @@ function DescriptionSession(props: {
   );
 }
 
-/** Production adapter for the existing description document's collaboration session. */
+/** Production adapter for the project's collaborative description surface. */
 export function ProjectDescription(props: {
-  documentId: string;
+  projectId: string;
+  surfaceId: string;
   canEdit: boolean;
 }) {
   const [attempt, setAttempt] = createSignal(0);
-  // Project refreshes re-read the same documentId; only a new id or retry reopens.
+  // Project refreshes re-read the same surface; only a new surface or retry reopens.
   const identity = createMemo(
-    () => ({ documentId: props.documentId, attempt: attempt() }),
+    () => ({
+      projectId: props.projectId,
+      surfaceId: props.surfaceId,
+      attempt: attempt(),
+    }),
     undefined,
     {
       equals: (previous, next) =>
-        previous.documentId === next.documentId &&
+        previous.projectId === next.projectId &&
+        previous.surfaceId === next.surfaceId &&
         previous.attempt === next.attempt,
     }
   );
   return (
-    <Show when={identity()} keyed>
+    <Show when={identity().surfaceId ? identity() : undefined} keyed>
       {(identity) => (
         <DescriptionSession
-          documentId={identity.documentId}
+          projectId={identity.projectId}
+          surfaceId={identity.surfaceId}
           canEdit={props.canEdit}
           onRetry={() => setAttempt((attempt) => attempt + 1)}
         />

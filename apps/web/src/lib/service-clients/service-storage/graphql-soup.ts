@@ -1366,7 +1366,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
             id: entity.id,
             name: entity.displayName ?? 'Untitled project',
             ownerId: entity.metadata.ownerId ?? '',
-            descriptionDocumentId: entity.descriptionDocumentId ?? null,
+            descriptionSurfaceId: entity.descriptionSurfaceId ?? null,
             createdAt: entity.metadata.createdAt ?? '',
             updatedAt: entity.metadata.updatedAt ?? '',
             viewedAt: entity.metadata.viewedAt,

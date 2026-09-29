@@ -30,14 +30,16 @@ pub(super) async fn grant_assignees(
     .map_err(AdapterError::Sqlx)
     .map_err(map_sqlx)?
     .ok_or(InitiativeError::NotFound)?;
-    let description_id = parse_description_document_id(id.as_uuid(), &row.description_document_id)?;
+    let description_id =
+        parse_description_document_id(id.as_uuid(), row.description_document_id.as_deref())?;
     let collaborators = user_ids
         .iter()
         .filter(|user_id| user_id.as_ref() != row.owner_user_id)
         .cloned()
         .collect::<Vec<_>>();
     // Assignment grants remain after the property is cleared, just like task sharing.
-    // Record those grants as collaborators so the owner can explicitly revoke them.
+    // Record those grants as collaborators so the owner can explicitly revoke them. The
+    // description surface follows the initiative grant; a legacy document is mirrored.
     apply_member_diff(
         &mut tx,
         &GrantTargets::new(id, description_id),

@@ -1,12 +1,14 @@
 //! Composition of project workflows from owning domain ports and adapters.
 
 use super::*;
-use documents::domain::{ports::mentions::NoOpDocumentMentionTracker, purge::DocumentPurger};
-use documents::outbound::{
-    document_bytes_upload::ReqwestDocumentBytesUploader,
-    document_purge::{LegacyDocumentPurgeRepository, SqsDocumentPurgeQueue},
-    markdown_init::LexicalSyncMarkdownInitializer,
+use collab_surface::{
+    domain::service::CollabSurfaceServiceImpl,
+    outbound::{
+        pg_collab_surface_repo::PgCollabSurfaceRepo, surface_init::LexicalSyncSurfaceInitializer,
+    },
 };
+use documents::domain::purge::DocumentPurger;
+use documents::outbound::document_purge::{LegacyDocumentPurgeRepository, SqsDocumentPurgeQueue};
 use initiative::{
     domain::{
         history::InitiativeHistory, resources::InitiativeResources, service::InitiativeServiceImpl,
@@ -16,15 +18,37 @@ use initiative::{
 };
 
 type ToolDescriptionDocuments = initiative_documents::InitiativeDescriptionDocumentsAdapter<
-    Arc<ToolDocumentService>,
-    LexicalSyncMarkdownInitializer,
-    ReqwestDocumentBytesUploader,
-    NoOpDocumentMentionTracker,
     DocumentPurger<LegacyDocumentPurgeRepository, SqsDocumentPurgeQueue, ToolEventBroker>,
 >;
 
-/// Production initiative service with the same document lifecycle as DSS.
-pub type ToolInitiativeService = InitiativeServiceImpl<PgInitiativeRepo, ToolDescriptionDocuments>;
+type ToolDescriptionSurfaces = initiative_documents::InitiativeDescriptionSurfacesAdapter<
+    CollabSurfaceServiceImpl<
+        PgCollabSurfaceRepo,
+        LexicalSyncSurfaceInitializer,
+        ToolCollabSurfaceDocumentIds,
+    >,
+>;
+
+/// Glue giving collab surfaces their view of the document id namespace, which
+/// they share in sync-service.
+pub struct ToolCollabSurfaceDocumentIds(sqlx::PgPool);
+
+impl collab_surface::domain::ports::DocumentIds for ToolCollabSurfaceDocumentIds {
+    #[tracing::instrument(err, skip(self))]
+    async fn is_document_id(&self, id: uuid::Uuid) -> Result<bool, rootcause::Report> {
+        // Soft-deleted documents keep their session, so the helper counts them.
+        macro_db_client::dcs::does_document_exist::does_document_exist(
+            self.0.clone(),
+            &id.to_string(),
+        )
+        .await
+        .map_err(|e| rootcause::report!("failed to look up document id {id}: {e:?}").into_dynamic())
+    }
+}
+
+/// Production initiative service with the same description lifecycle as DSS.
+pub type ToolInitiativeService =
+    InitiativeServiceImpl<PgInitiativeRepo, ToolDescriptionDocuments, ToolDescriptionSurfaces>;
 
 /// Native project workflow context for every AI/MCP host.
 pub type ToolInitiativeToolContext = InitiativeToolContext<
@@ -33,7 +57,8 @@ pub type ToolInitiativeToolContext = InitiativeToolContext<
     activity::outbound::pg_activity_repo::PgActivityRepo,
 >;
 
-/// Compose project lifecycle tools with document cleanup and activity publication.
+/// Compose project lifecycle tools with description surfaces, legacy document cleanup and
+/// activity publication.
 pub fn build_initiative_tool_context(
     pool: sqlx::PgPool,
     documents: &ToolDocumentToolContext,
@@ -51,10 +76,18 @@ pub fn build_initiative_tool_context(
         SqsDocumentPurgeQueue::new(document_queue),
         event_broker.clone(),
     );
-    let description = initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
-        documents.creator.clone(),
-        purger,
-    );
+    let description = initiative_documents::InitiativeDescriptionDocumentsAdapter::new(purger);
+    let surfaces = initiative_documents::InitiativeDescriptionSurfacesAdapter::new(Arc::new(
+        CollabSurfaceServiceImpl::new(
+            Arc::new(PgCollabSurfaceRepo::new(pool.clone())),
+            Arc::new(LexicalSyncSurfaceInitializer::new(
+                documents.lexical_client.as_ref().clone(),
+                documents.sync_service_client.as_ref().clone(),
+            )),
+            Arc::new(ToolCollabSurfaceDocumentIds(pool.clone())),
+            documents.document_permission_jwt_secret.clone(),
+        ),
+    ));
     let resources: Arc<dyn InitiativeResources> = Arc::new(ProjectResources::new(
         properties,
         Arc::new(SystemPropertiesServiceImpl::new(
@@ -65,6 +98,7 @@ pub fn build_initiative_tool_context(
     let service = InitiativeServiceImpl::new(
         PgInitiativeRepo::new(pool.clone()),
         description,
+        surfaces,
         resources.clone(),
     )
     .with_event_publisher(Arc::new(

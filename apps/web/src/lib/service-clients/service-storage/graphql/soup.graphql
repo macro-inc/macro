@@ -124,7 +124,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 	}
 	frecencyScore
 	... on GraphqlSoupInitiative {
-		descriptionDocumentId
+		descriptionSurfaceId
 		metadata { ownerId createdAt updatedAt viewedAt }
 		viewerPermission {
 			__typename

@@ -22,7 +22,7 @@ const project = {
   __typename: 'GraphqlSoupInitiative',
   id: 'project-1',
   displayName: 'Launch',
-  descriptionDocumentId: 'description-1',
+  descriptionSurfaceId: 'description-1',
   metadata: {
     ownerId: 'macro|owner@example.com',
     updatedAt: '2026-09-22T12:00:00Z',
@@ -85,7 +85,7 @@ describe('initiative GraphQL transport', () => {
       ownerId: 'macro|owner@example.com',
       updatedAt: '2026-09-22T12:00:00Z',
       createdAt: '2026-09-20T12:00:00Z',
-      descriptionDocumentId: 'description-1',
+      descriptionSurfaceId: 'description-1',
       userAccessLevel: 'comment',
       taskIds: ['task-1'],
       sharePermission: {
@@ -97,6 +97,17 @@ describe('initiative GraphQL transport', () => {
         ],
       },
     });
+  });
+
+  it('ensures the description surface and returns its id', async () => {
+    const { client, requests } = clientWith(() => ({
+      data: { ensureInitiativeDescriptionSurface: 'description-1' },
+    }));
+    const result = await client.ensureDescriptionSurface('project-1');
+    expect(requests).toHaveLength(1);
+    expect(requests[0].kind).toBe('mutation');
+    expect(requests[0].variables).toEqual({ initiativeId: 'project-1' });
+    expect(result.isOk() && result.value).toBe('description-1');
   });
 
   it('keeps detail controls read-only when no viewer permission is returned', async () => {

@@ -5,9 +5,18 @@ edition = "2024"
 publish = false
 
 [dependencies]
-documents_hex = { package = "documents", path = "../documents", default-features = false, features = ["document_create"] }
+collab_surface = { path = "../collab_surface", features = ["ports"] }
+documents_hex = { package = "documents", path = "../documents", default-features = false, features = ["ports"] }
 initiative = { path = "../initiative", default-features = false, features = ["ports"] }
-model_owner = { path = "../model_owner" }
+model-entity = { path = "../model-entity" }
 rootcause = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+macro_sync_service_jwt = { path = "../macro_sync_service_jwt" }
+macro_user_id = { path = "../macro_user_id" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+uuid = { workspace = true }

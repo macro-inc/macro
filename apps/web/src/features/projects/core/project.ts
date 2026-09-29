@@ -2,7 +2,8 @@
 export type Project = {
   id: string;
   name: string;
-  descriptionDocumentId: string;
+  /** Collaborative surface holding the description; empty when unknown. */
+  descriptionSurfaceId: string;
   updatedAt: string;
   access?: ProjectAccess;
   taskCount?: number;

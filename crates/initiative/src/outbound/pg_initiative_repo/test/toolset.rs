@@ -3,7 +3,7 @@ mod reads;
 use crate::domain::{
     events::{InitiativeEventPublisher, InitiativeMacroEvent, InitiativeTopicEvent},
     history::InitiativeHistory,
-    ports::MockInitiativeDescriptionDocuments,
+    ports::{MockInitiativeDescriptionDocuments, MockInitiativeDescriptionSurfaces},
     reads::InitiativePropertySnapshot,
     resources::{InitiativeResources, ResourceFuture},
     service::InitiativeServiceImpl,
@@ -63,10 +63,29 @@ impl InitiativeEventPublisher for Events {
 }
 
 type Context = InitiativeToolContext<
-    InitiativeServiceImpl<PgInitiativeRepo, MockInitiativeDescriptionDocuments>,
+    InitiativeServiceImpl<
+        PgInitiativeRepo,
+        MockInitiativeDescriptionDocuments,
+        MockInitiativeDescriptionSurfaces,
+    >,
     EntityAccessServiceImpl<PgAccessRepository>,
     PgActivityRepo,
 >;
+
+/// Description surfaces that accept every call, standing in for sync-service.
+fn surfaces() -> MockInitiativeDescriptionSurfaces {
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    surfaces
+        .expect_ensure()
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
+    surfaces
+        .expect_read_markdown()
+        .returning(|_| Box::pin(async { Ok("# Goals".to_string()) }));
+    surfaces
+        .expect_delete()
+        .returning(|_| Box::pin(async { Ok(()) }));
+    surfaces
+}
 
 fn context(pool: PgPool, events: Arc<Events>) -> Context {
     context_with_resources(pool, events, Arc::new(UnusedProperties))
@@ -85,6 +104,7 @@ fn context_with_resources(
             InitiativeServiceImpl::new(
                 repo(pool.clone()),
                 MockInitiativeDescriptionDocuments::new(),
+                surfaces(),
                 resources.clone(),
             )
             .with_event_publisher(events),

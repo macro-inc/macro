@@ -7,7 +7,7 @@ import { createProjectComposer } from './create-project';
 const project: ProjectDetail = {
   id: 'project-id',
   name: 'Release',
-  descriptionDocumentId: 'description',
+  descriptionSurfaceId: 'description',
   updatedAt: '',
   createdAt: '',
   ownerId: 'owner',

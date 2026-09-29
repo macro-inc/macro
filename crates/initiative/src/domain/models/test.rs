@@ -40,6 +40,37 @@ fn description_document_id_round_trips_uuid_strings() {
 }
 
 #[test]
+fn description_surface_id_round_trips_uuid_strings() {
+    let id = DescriptionSurfaceId::generate();
+    let parsed = DescriptionSurfaceId::from_str(&id.to_string()).expect("uuid string");
+    assert_eq!(parsed, id);
+    assert_eq!(parsed.as_uuid().get_version_num(), 7);
+}
+
+#[test]
+fn legacy_rows_adopt_their_document_and_new_rows_start_blank() {
+    let document = DescriptionDocumentId::from_uuid(Uuid::from_u128(2));
+    let legacy = DescriptionLocation {
+        surface_id: document.adopting_surface(),
+        legacy_document_id: Some(document),
+    };
+    assert_eq!(legacy.seed(), DescriptionSeed::LegacyDocument(document));
+
+    let fresh = DescriptionLocation {
+        surface_id: DescriptionSurfaceId::generate(),
+        legacy_document_id: None,
+    };
+    assert_eq!(fresh.seed(), DescriptionSeed::Markdown(String::new()));
+
+    // A surface that is not the document's session never adopts it.
+    let mismatched = DescriptionLocation {
+        surface_id: DescriptionSurfaceId::generate(),
+        legacy_document_id: Some(document),
+    };
+    assert_eq!(mismatched.seed(), DescriptionSeed::Markdown(String::new()));
+}
+
+#[test]
 fn update_request_has_no_description_field() {
     let request: UpdateInitiativeRequest = serde_json::from_value(serde_json::json!({
         "name": "Renamed",

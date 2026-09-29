@@ -5,13 +5,17 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SoupInitiativeSoupPropertiesFieldAllOfTwoDescriptionDocumentId } from './soupInitiativeSoupPropertiesFieldAllOfTwoDescriptionDocumentId';
+import type { SoupInitiativeSoupPropertiesFieldAllOfTwoDescriptionSurfaceId } from './soupInitiativeSoupPropertiesFieldAllOfTwoDescriptionSurfaceId';
 import type { SoupInitiativeSoupPropertiesFieldAllOfTwoViewedAt } from './soupInitiativeSoupPropertiesFieldAllOfTwoViewedAt';
 
 export type SoupInitiativeSoupPropertiesFieldAllOfTwo = {
   /** Creation timestamp. */
   createdAt: string;
-  /** Document holding the initiative description. */
+  /** Legacy document that held the description before collab surfaces, for initiatives
+created before them. Its session is the description surface. */
   descriptionDocumentId?: SoupInitiativeSoupPropertiesFieldAllOfTwoDescriptionDocumentId;
+  /** Collab surface holding the initiative description. */
+  descriptionSurfaceId?: SoupInitiativeSoupPropertiesFieldAllOfTwoDescriptionSurfaceId;
   /** Initiative identifier. */
   id: string;
   /** Initiative display name. */

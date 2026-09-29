@@ -92,6 +92,7 @@ fn soup_initiative(id: Uuid) -> SoupItem<()> {
         id,
         name: "Launch project".to_string(),
         owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
+        description_surface_id: Some(Uuid::from_u128(44)),
         description_document_id: Some(Uuid::from_u128(43)),
         created_at: Default::default(),
         updated_at: Default::default(),
@@ -2357,7 +2358,7 @@ async fn initiatives_are_returned_by_soup_with_shared_edges() {
                 __typename id entityType displayName
                 metadata { ownerId ownerType createdAt updatedAt }
                 properties { id }
-                ... on GraphqlSoupInitiative { descriptionDocumentId }
+                ... on GraphqlSoupInitiative { descriptionSurfaceId descriptionDocumentId }
             }
         } }
     }"#,
@@ -2371,6 +2372,10 @@ async fn initiatives_are_returned_by_soup_with_shared_edges() {
     assert_eq!(item["entityType"], "INITIATIVE");
     assert_eq!(item["displayName"], "Launch project");
     assert_eq!(item["metadata"]["ownerId"], VALID_USER_ID);
+    assert_eq!(
+        item["descriptionSurfaceId"],
+        Uuid::from_u128(44).to_string()
+    );
     assert_eq!(
         item["descriptionDocumentId"],
         Uuid::from_u128(43).to_string()

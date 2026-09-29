@@ -20,7 +20,7 @@
       ]
     },
     "nullable": [
-      false,
+      true,
       false
     ]
   },

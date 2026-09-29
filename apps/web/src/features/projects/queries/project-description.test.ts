@@ -91,7 +91,7 @@ describe('project description sessions', () => {
     }
   });
 
-  it('joins the existing document and closes its socket on disposal', async () => {
+  it('joins the description surface and closes its socket on disposal', async () => {
     const port = transport(async () => 'token');
     const { session, cleanup } = createRoot((cleanup) => ({
       cleanup,

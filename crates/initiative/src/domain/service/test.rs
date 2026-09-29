@@ -16,16 +16,19 @@ use models_permissions::share_permission::{
     LinkShare, LinkShareState, SharePermissionV2, TeamLinkShareDefault,
     UpdateSharePermissionRequestV2,
 };
+use std::sync::{Arc, Mutex};
 
 use super::InitiativeServiceImpl;
 use crate::domain::models::{
-    AssignTaskStatus, AssignTasksResult, CreateInitiativeRequest, DescriptionDocumentId,
+    AssignTaskStatus, AssignTasksResult, CreateInitiativeRequest, DeletedInitiative,
+    DescriptionDocumentId, DescriptionLocation, DescriptionSeed, DescriptionSurfaceId,
     InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId, InitiativeList,
     InitiativeSummary, LockstepTeamShareFacts, MAX_INITIATIVE_DESCRIPTION_GRAPHEMES,
     MAX_INITIATIVE_NAME_GRAPHEMES, MAX_TASKS_PER_ASSIGN, TaskAssignment, UpdateInitiativeRequest,
 };
 use crate::domain::ports::{
-    InitiativeService, MockInitiativeDescriptionDocuments, MockInitiativeRepo,
+    InitiativeService, MockInitiativeDescriptionDocuments, MockInitiativeDescriptionSurfaces,
+    MockInitiativeRepo,
 };
 
 const OWNER: &str = "macro|owner@macro.com";
@@ -48,19 +51,49 @@ fn initiative_id() -> InitiativeId {
     InitiativeId::from_uuid(uuid::Uuid::from_u128(1))
 }
 
+/// The legacy description document of an initiative created before surfaces.
 fn description_document_id() -> DescriptionDocumentId {
     DescriptionDocumentId::from_uuid(uuid::Uuid::from_u128(2))
+}
+
+/// The description surface of an initiative created with one.
+fn description_surface_id() -> DescriptionSurfaceId {
+    DescriptionSurfaceId::from_uuid(uuid::Uuid::from_u128(3))
+}
+
+fn surface_location() -> DescriptionLocation {
+    DescriptionLocation {
+        surface_id: description_surface_id(),
+        legacy_document_id: None,
+    }
+}
+
+fn legacy_location() -> DescriptionLocation {
+    DescriptionLocation {
+        surface_id: description_document_id().adopting_surface(),
+        legacy_document_id: Some(description_document_id()),
+    }
 }
 
 fn share_permission() -> SharePermissionV2 {
     SharePermissionV2::new_initiative_share_permission(None)
 }
 
+/// An initiative created before surfaces, whose surface adopted its document.
+fn legacy_detail(member_ids: Vec<MacroUserIdStr<'static>>) -> InitiativeDetail {
+    InitiativeDetail {
+        description_surface_id: legacy_location().surface_id,
+        description_document_id: legacy_location().legacy_document_id,
+        ..detail(member_ids)
+    }
+}
+
 fn detail(member_ids: Vec<MacroUserIdStr<'static>>) -> InitiativeDetail {
     InitiativeDetail {
         id: initiative_id(),
         name: "Launch".to_string(),
-        description_document_id: description_document_id(),
+        description_surface_id: description_surface_id(),
+        description_document_id: None,
         owner_id: user(OWNER),
         member_ids,
         task_ids: Vec::new(),
@@ -123,21 +156,56 @@ fn owner_receipt() -> EntityAccessReceipt<OwnerAccessLevel> {
     receipt(OWNER, EntityType::Initiative, AccessLevel::Owner)
 }
 
-fn service(
-    repo: MockInitiativeRepo,
-) -> InitiativeServiceImpl<MockInitiativeRepo, MockInitiativeDescriptionDocuments> {
-    service_with_documents(repo, MockInitiativeDescriptionDocuments::new())
+type TestService = InitiativeServiceImpl<
+    MockInitiativeRepo,
+    MockInitiativeDescriptionDocuments,
+    MockInitiativeDescriptionSurfaces,
+>;
+
+fn service(repo: MockInitiativeRepo) -> TestService {
+    service_with(
+        repo,
+        MockInitiativeDescriptionDocuments::new(),
+        MockInitiativeDescriptionSurfaces::new(),
+    )
 }
 
-fn service_with_documents(
+/// A service whose description surfaces ensure successfully and record each ensure.
+fn service_with_surfaces(
+    repo: MockInitiativeRepo,
+    surfaces: MockInitiativeDescriptionSurfaces,
+) -> TestService {
+    service_with(repo, MockInitiativeDescriptionDocuments::new(), surfaces)
+}
+
+fn service_with(
     repo: MockInitiativeRepo,
     documents: MockInitiativeDescriptionDocuments,
-) -> InitiativeServiceImpl<MockInitiativeRepo, MockInitiativeDescriptionDocuments> {
+    surfaces: MockInitiativeDescriptionSurfaces,
+) -> TestService {
     InitiativeServiceImpl::new(
         repo,
         documents,
+        surfaces,
         std::sync::Arc::new(reads::FakeResources::default()),
     )
+}
+
+/// Every ensure seen by the surfaces port, in call order.
+type Ensured = Arc<Mutex<Vec<(DescriptionSurfaceId, InitiativeId, DescriptionSeed)>>>;
+
+/// Surfaces that ensure successfully, recording each call.
+fn recording_surfaces() -> (MockInitiativeDescriptionSurfaces, Ensured) {
+    let ensured = Ensured::default();
+    let record = ensured.clone();
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    surfaces
+        .expect_ensure()
+        .returning(move |id, initiative, seed| {
+            record.lock().unwrap().push((id, initiative, seed));
+            Box::pin(async { Ok(()) })
+        });
+    (surfaces, ensured)
 }
 
 fn share_update() -> UpdateSharePermissionRequestV2 {
@@ -159,14 +227,15 @@ fn team_facts(entity_type: EntityType, entity_id: String, owner: &str) -> TeamSh
     }
 }
 
+/// Facts for an initiative created before surfaces, whose document still mirrors grants.
 fn lockstep_facts(description_owner: &str) -> LockstepTeamShareFacts {
     LockstepTeamShareFacts {
         initiative: team_facts(EntityType::Initiative, initiative_id().to_string(), OWNER),
-        description: team_facts(
+        description: Some(team_facts(
             EntityType::Document,
             description_document_id().to_string(),
             description_owner,
-        ),
+        )),
     }
 }
 
@@ -219,6 +288,7 @@ async fn create_rejects_too_long_description_before_creating_any_document() {
 
 #[tokio::test]
 async fn create_drops_owner_from_members_and_shares_with_team() {
+    let (surfaces, ensured) = recording_surfaces();
     let mut repo = MockInitiativeRepo::new();
     repo.expect_get_team_default_link_share()
         .return_once(|_| Box::pin(async { Ok(None) }));
@@ -227,15 +297,10 @@ async fn create_drops_owner_from_members_and_shares_with_team() {
             *team_share == TeamShareCreation::Initiative
                 && args.member_ids == vec![user(MEMBER)]
                 && args.owner_id == user(OWNER)
-                && args.description_document_id == description_document_id()
         })
         .return_once(|_, _, _| Box::pin(async { Ok(detail(vec![user(MEMBER)])) }));
-    let mut documents = MockInitiativeDescriptionDocuments::new();
-    documents
-        .expect_create()
-        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
 
-    let created = service_with_documents(repo, documents)
+    let created = service_with_surfaces(repo, surfaces)
         .create(
             &user(OWNER),
             CreateInitiativeRequest {
@@ -248,37 +313,38 @@ async fn create_drops_owner_from_members_and_shares_with_team() {
         .await
         .expect("created");
     assert_eq!(created.member_ids, vec![user(MEMBER)]);
-    assert_eq!(created.description_document_id, description_document_id());
+    assert_eq!(ensured.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
-async fn create_asks_for_a_description_document_named_after_the_initiative() {
+async fn create_seeds_the_description_surface_before_the_initiative_row() {
     let mut sequence = Sequence::new();
     let mut repo = MockInitiativeRepo::new();
-    let mut documents = MockInitiativeDescriptionDocuments::new();
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    let ensured = Ensured::default();
+    let record = ensured.clone();
     repo.expect_get_team_default_link_share()
         .return_once(|_| Box::pin(async { Ok(None) }));
-    documents
-        .expect_create()
-        .withf(|document| {
-            document.owner == user(OWNER)
-                && document.name == "Launch"
-                && document.prefill_markdown == "# Goals"
-                && document.link_share == LinkShareState::Off
-        })
+    surfaces
+        .expect_ensure()
+        .withf(|_, _, seed| *seed == DescriptionSeed::Markdown("# Goals".into()))
         .times(1)
         .in_sequence(&mut sequence)
-        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+        .returning(move |id, initiative, seed| {
+            record.lock().unwrap().push((id, initiative, seed));
+            Box::pin(async { Ok(()) })
+        });
+    let written = Arc::new(Mutex::new(None));
+    let write = written.clone();
     repo.expect_create()
-        .withf(|args, share_permission, _| {
-            args.description_document_id == description_document_id()
-                && share_permission.link_share_state() == LinkShareState::Off
-        })
         .times(1)
         .in_sequence(&mut sequence)
-        .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
+        .return_once(move |args, _, _| {
+            *write.lock().unwrap() = Some((args.id, args.description_surface_id));
+            Box::pin(async { Ok(detail(Vec::new())) })
+        });
 
-    service_with_documents(repo, documents)
+    service_with_surfaces(repo, surfaces)
         .create(
             &user(OWNER),
             CreateInitiativeRequest {
@@ -289,29 +355,29 @@ async fn create_asks_for_a_description_document_named_after_the_initiative() {
         )
         .await
         .expect("created");
+
+    // The row names exactly the surface that was ensured for it, parented by its id.
+    let (surface, initiative, _) = ensured.lock().unwrap()[0].clone();
+    assert_eq!(*written.lock().unwrap(), Some((initiative, surface)));
+    assert_eq!(surface.as_uuid().get_version_num(), 7);
 }
 
 #[tokio::test]
-async fn create_copies_the_initiative_link_share_onto_the_document() {
+async fn create_never_creates_a_description_document() {
     let expected = LinkShareState::On {
         scope: LinkShare::Team,
         level: ShareAccessLevel::View,
     };
+    let (surfaces, ensured) = recording_surfaces();
     let mut repo = MockInitiativeRepo::new();
-    let mut documents = MockInitiativeDescriptionDocuments::new();
     repo.expect_get_team_default_link_share()
         .return_once(|_| Box::pin(async { Ok(Some(TeamLinkShareDefault(Some(LinkShare::Team)))) }));
-    documents
-        .expect_create()
-        .withf(move |document| {
-            document.link_share == expected && document.prefill_markdown.is_empty()
-        })
-        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
     repo.expect_create()
         .withf(move |_, share_permission, _| share_permission.link_share_state() == expected)
         .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
 
-    service_with_documents(repo, documents)
+    // The documents mock has no expectations: any document call fails the test.
+    service_with(repo, MockInitiativeDescriptionDocuments::new(), surfaces)
         .create(
             &user(OWNER),
             CreateInitiativeRequest {
@@ -321,20 +387,56 @@ async fn create_copies_the_initiative_link_share_onto_the_document() {
         )
         .await
         .expect("created");
+    assert_eq!(
+        ensured.lock().unwrap()[0].2,
+        DescriptionSeed::Markdown(String::new())
+    );
 }
 
 #[tokio::test]
-async fn failed_initiative_write_purges_the_document_and_returns_the_original_error() {
-    let mut sequence = Sequence::new();
+async fn create_writes_nothing_when_the_description_surface_fails() {
     let mut repo = MockInitiativeRepo::new();
-    let mut documents = MockInitiativeDescriptionDocuments::new();
     repo.expect_get_team_default_link_share()
         .return_once(|_| Box::pin(async { Ok(None) }));
-    documents
-        .expect_create()
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    surfaces.expect_ensure().return_once(|_, _, _| {
+        Box::pin(async { Err(InitiativeError::Internal(rootcause::report!("sync down"))) })
+    });
+    // A half-created surface is discarded; no initiative row is written.
+    surfaces
+        .expect_delete()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(()) }));
+
+    let result = service_with_surfaces(repo, surfaces)
+        .create(
+            &user(OWNER),
+            CreateInitiativeRequest {
+                name: "Launch".into(),
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(InitiativeError::Internal(_))));
+}
+
+#[tokio::test]
+async fn failed_initiative_write_discards_the_surface_and_returns_the_original_error() {
+    let mut sequence = Sequence::new();
+    let mut repo = MockInitiativeRepo::new();
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    let ensured = Ensured::default();
+    let record = ensured.clone();
+    repo.expect_get_team_default_link_share()
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    surfaces
+        .expect_ensure()
         .times(1)
         .in_sequence(&mut sequence)
-        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+        .returning(move |id, initiative, seed| {
+            record.lock().unwrap().push((id, initiative, seed));
+            Box::pin(async { Ok(()) })
+        });
     repo.expect_create()
         .times(1)
         .in_sequence(&mut sequence)
@@ -345,20 +447,21 @@ async fn failed_initiative_write_purges_the_document_and_returns_the_original_er
                 ))
             })
         });
-    documents
-        .expect_purge()
-        .withf(|id| *id == description_document_id())
+    let discarded = Arc::new(Mutex::new(None));
+    let discard = discarded.clone();
+    surfaces
+        .expect_delete()
         .times(1)
         .in_sequence(&mut sequence)
-        .return_once(|_| {
+        .return_once(move |id| {
+            *discard.lock().unwrap() = Some(id);
             Box::pin(async {
                 Err(InitiativeError::Internal(rootcause::report!(
-                    "purge failed"
+                    "delete failed"
                 )))
             })
         });
-
-    let result = service_with_documents(repo, documents)
+    let result = service_with_surfaces(repo, surfaces)
         .create(
             &user(OWNER),
             CreateInitiativeRequest {
@@ -369,6 +472,10 @@ async fn failed_initiative_write_purges_the_document_and_returns_the_original_er
         .await;
     assert!(
         matches!(result, Err(InitiativeError::Conflict(ref message)) if message == "initiative already exists")
+    );
+    assert_eq!(
+        *discarded.lock().unwrap(),
+        Some(ensured.lock().unwrap()[0].0)
     );
 }
 
@@ -483,10 +590,44 @@ async fn owner_patches_team_share_on_both_entities_from_one_snapshot() {
                 return false;
             };
             let facts = lockstep_facts(OWNER);
+            let Some(description) = team_share.description.as_ref() else {
+                return false;
+            };
             team_share.initiative.expected() == &facts.initiative
-                && team_share.description.expected() == &facts.description
+                && Some(description.expected()) == facts.description.as_ref()
                 && team_share.initiative.target().map(|grant| grant.level)
-                    == team_share.description.target().map(|grant| grant.level)
+                    == description.target().map(|grant| grant.level)
+        })
+        .return_once(|_| Box::pin(async { Ok(detail(Vec::new())) }));
+
+    service(repo)
+        .update(
+            owner_edit_receipt(),
+            UpdateInitiativeRequest {
+                share_permission: Some(share_update()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("updated");
+}
+
+#[tokio::test]
+async fn team_share_patch_on_a_surface_initiative_targets_only_the_initiative() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_get_team_share_facts().return_once(|_| {
+        Box::pin(async {
+            Ok(LockstepTeamShareFacts {
+                initiative: team_facts(EntityType::Initiative, initiative_id().to_string(), OWNER),
+                description: None,
+            })
+        })
+    });
+    repo.expect_update()
+        .withf(|args| {
+            args.team_share
+                .as_ref()
+                .is_some_and(|team_share| team_share.description.is_none())
         })
         .return_once(|_| Box::pin(async { Ok(detail(Vec::new())) }));
 
@@ -623,7 +764,8 @@ async fn get_list_and_unassign_call_the_repo() {
                 initiatives: vec![InitiativeSummary {
                     id: initiative_id(),
                     name: "Launch".into(),
-                    description_document_id: description_document_id(),
+                    description_surface_id: description_surface_id(),
+                    description_document_id: None,
                     updated_at: now(),
                 }],
             })
@@ -644,23 +786,59 @@ async fn get_list_and_unassign_call_the_repo() {
 }
 
 #[tokio::test]
-async fn delete_purges_the_document_after_the_initiative_is_gone() {
+async fn delete_purges_the_document_then_the_surface_after_the_initiative_is_gone() {
     let mut sequence = Sequence::new();
     let mut repo = MockInitiativeRepo::new();
     let mut documents = MockInitiativeDescriptionDocuments::new();
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
     repo.expect_delete()
         .withf(|id| *id == initiative_id())
         .times(1)
         .in_sequence(&mut sequence)
-        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+        .return_once(|_| {
+            Box::pin(async {
+                Ok(DeletedInitiative {
+                    description: legacy_location(),
+                })
+            })
+        });
     documents
         .expect_purge()
         .withf(|id| *id == description_document_id())
         .times(1)
         .in_sequence(&mut sequence)
         .return_once(|_| Box::pin(async { Ok(()) }));
+    surfaces
+        .expect_delete()
+        .withf(|id| *id == description_document_id().adopting_surface())
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_| Box::pin(async { Ok(()) }));
 
-    service_with_documents(repo, documents)
+    service_with(repo, documents, surfaces)
+        .delete(owner_receipt())
+        .await
+        .expect("deleted");
+}
+
+#[tokio::test]
+async fn delete_of_a_surface_initiative_only_deletes_its_surface() {
+    let mut repo = MockInitiativeRepo::new();
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    repo.expect_delete().return_once(|_| {
+        Box::pin(async {
+            Ok(DeletedInitiative {
+                description: surface_location(),
+            })
+        })
+    });
+    surfaces
+        .expect_delete()
+        .withf(|id| *id == description_surface_id())
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(()) }));
+
+    service_with_surfaces(repo, surfaces)
         .delete(owner_receipt())
         .await
         .expect("deleted");
@@ -670,14 +848,89 @@ async fn delete_purges_the_document_after_the_initiative_is_gone() {
 async fn delete_surfaces_a_failed_purge_after_the_initiative_is_gone() {
     let mut repo = MockInitiativeRepo::new();
     let mut documents = MockInitiativeDescriptionDocuments::new();
-    repo.expect_delete()
-        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    repo.expect_delete().return_once(|_| {
+        Box::pin(async {
+            Ok(DeletedInitiative {
+                description: legacy_location(),
+            })
+        })
+    });
     documents.expect_purge().return_once(|_| {
         Box::pin(async { Err(InitiativeError::Internal(rootcause::report!("sync down"))) })
     });
+    // The surface is still cut off even though the document purge failed.
+    surfaces
+        .expect_delete()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(()) }));
 
-    let result = service_with_documents(repo, documents)
+    let result = service_with(repo, documents, surfaces)
         .delete(owner_receipt())
         .await;
     assert!(matches!(result, Err(InitiativeError::Internal(_))));
+}
+
+#[tokio::test]
+async fn ensure_description_surface_adopts_a_legacy_document_session() {
+    let (surfaces, ensured) = recording_surfaces();
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_get_detail()
+        .return_once(|_| Box::pin(async { Ok(Some(legacy_detail(Vec::new()))) }));
+
+    let surface = service_with_surfaces(repo, surfaces)
+        .ensure_description_surface(view_receipt())
+        .await
+        .expect("ensured");
+
+    assert_eq!(surface, description_document_id().adopting_surface());
+    assert_eq!(
+        *ensured.lock().unwrap(),
+        vec![(
+            surface,
+            initiative_id(),
+            DescriptionSeed::LegacyDocument(description_document_id())
+        )]
+    );
+}
+
+#[tokio::test]
+async fn read_description_ensures_then_reads_a_new_surface() {
+    let mut sequence = Sequence::new();
+    let mut repo = MockInitiativeRepo::new();
+    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
+    repo.expect_get_detail()
+        .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
+    surfaces
+        .expect_ensure()
+        .withf(|id, initiative, seed| {
+            *id == description_surface_id()
+                && *initiative == initiative_id()
+                && *seed == DescriptionSeed::Markdown(String::new())
+        })
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_, _, _| Box::pin(async { Ok(()) }));
+    surfaces
+        .expect_read_markdown()
+        .withf(|id| *id == description_surface_id())
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_| Box::pin(async { Ok("# Goals".to_string()) }));
+
+    let description = service_with_surfaces(repo, surfaces)
+        .read_description(view_receipt())
+        .await
+        .expect("read");
+    assert_eq!(description, "# Goals");
+}
+
+#[tokio::test]
+async fn ensure_description_surface_rejects_non_initiative_receipts() {
+    let document_receipt: EntityAccessReceipt<ViewAccessLevel> =
+        receipt(OWNER, EntityType::Document, AccessLevel::View);
+    let result = service(MockInitiativeRepo::new())
+        .ensure_description_surface(document_receipt)
+        .await;
+    assert!(matches!(result, Err(InitiativeError::BadRequest(_))));
 }

@@ -58,8 +58,6 @@ pub struct ProjectListRow {
     pub initiative_id: Uuid,
     /// Project name.
     pub name: String,
-    /// Description document id.
-    pub description_document_id: Uuid,
     /// Effective caller access.
     pub access: String,
     /// Canonical system properties.
@@ -123,7 +121,6 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
                 .map(|row| ProjectListRow {
                     initiative_id: row.initiative.id.as_uuid(),
                     name: row.initiative.name,
-                    description_document_id: row.initiative.description_document_id.as_uuid(),
                     access: row.user_access_level.to_string(),
                     properties: row.properties.into(),
                     task_count: row.task_count,
@@ -139,7 +136,7 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ReadInitiative",
-    description = "Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. The descriptionDocumentId can be read or edited with document tools. Use entity_type='initiative' with property tools. ReadInitiativeActivity returns the project's activity history."
+    description = "Read a project, its sharing, canonical status/priority/assignees/due date, and a bounded page of associated task ids that you can view, with their total count. Pass nextTaskCursor back as taskCursor to read more task ids. Requires view access. Includes the description as Markdown; projects created before collaborative descriptions also report a descriptionDocumentId that document tools can edit. Use entity_type='initiative' with property tools. ReadInitiativeActivity returns the project's activity history."
 )]
 pub struct ReadInitiative {
     /// Project identifier.
@@ -192,7 +189,18 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
             .map_err(failure)?
             .remove(&id)
             .unwrap_or_default();
-        let detail = context.service.get(receipt).await.map_err(failure)?;
+        let detail = context
+            .service
+            .get(receipt.clone())
+            .await
+            .map_err(failure)?;
+        // The rest of the project stays readable if the description session is unavailable.
+        let description = context
+            .service
+            .read_description(receipt)
+            .await
+            .inspect_err(|error| tracing::warn!(?error, %id, "project description unavailable"))
+            .ok();
         let tasks = detail
             .task_page(InitiativeTasksRequest {
                 limit: self.task_limit.or(Some(100)),
@@ -200,6 +208,7 @@ impl<S: InitiativeService, A: EntityAccessService, R: EntityActivityReads>
             })
             .map_err(failure)?;
         let mut project: ProjectDetails = detail.into();
+        project.description = description;
         project.task_ids = tasks.task_ids;
         project.task_count = tasks.total as usize;
         project.tasks_truncated = tasks.next_cursor.is_some();

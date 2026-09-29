@@ -4,6 +4,7 @@
             i.id::text as "id",
             NULL as "document_version_id",
             i.description_document_id as "description_document_id",
+            i.description_surface_id::text as "description_surface_id",
             i.owner_user_id as "user_id",
             i.name as "name",
             NULL as "branched_from_id",

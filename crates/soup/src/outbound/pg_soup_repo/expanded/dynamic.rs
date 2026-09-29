@@ -180,6 +180,7 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
             d.id as "id",
             CAST(COALESCE(di.id, db.id) as TEXT) as "document_version_id",
             NULL::text as "description_document_id",
+            NULL::text as "description_surface_id",
             d.owner as "user_id",
             d.name as "name",
             d."branchedFromId" as "branched_from_id",
@@ -265,6 +266,7 @@ static CHAT_DETAIL_CLAUSE: &str = r#"
             c.id as "id",
             NULL as "document_version_id",
             NULL::text as "description_document_id",
+            NULL::text as "description_surface_id",
             c."userId" as "user_id",
             c.name as "name",
             NULL as "branched_from_id",
@@ -298,6 +300,7 @@ static PROJECT_DETAIL_CLAUSE: &str = r#"
             p.id as "id",
             NULL as "document_version_id",
             NULL::text as "description_document_id",
+            NULL::text as "description_surface_id",
             p."userId" as "user_id",
             p.name as "name",
             NULL as "branched_from_id",
@@ -344,6 +347,7 @@ static GROUPED_DOCUMENT_DETAIL_CLAUSE: &str = r#"
             d.id as "id",
             CAST(COALESCE(di.id, db.id) as TEXT) as "document_version_id",
             NULL::text as "description_document_id",
+            NULL::text as "description_surface_id",
             d.owner as "user_id",
             d.name as "name",
             d."branchedFromId" as "branched_from_id",
@@ -405,6 +409,7 @@ static GROUPED_CHAT_DETAIL_CLAUSE: &str = r#"
             c.id as "id",
             NULL::text as "document_version_id",
             NULL::text as "description_document_id",
+            NULL::text as "description_surface_id",
             c."userId" as "user_id",
             c.name as "name",
             NULL::text as "branched_from_id",
@@ -439,6 +444,7 @@ static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
             p.id as "id",
             NULL::text as "document_version_id",
             NULL::text as "description_document_id",
+            NULL::text as "description_surface_id",
             p."userId" as "user_id",
             p.name as "name",
             NULL::text as "branched_from_id",
@@ -478,6 +484,7 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
             event.id::text as "id",
             NULL::text as "document_version_id",
             NULL::text as "description_document_id",
+            NULL::text as "description_surface_id",
             event.owner_id as "user_id",
             event.title as "name",
             NULL::text as "branched_from_id",
@@ -542,6 +549,7 @@ static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
             NULL::text as "id",
             NULL::text as "document_version_id",
             NULL::text as "description_document_id",
+            NULL::text as "description_surface_id",
             NULL::text as "user_id",
             NULL::text as "name",
             NULL::text as "branched_from_id",
@@ -1572,6 +1580,7 @@ fn build_query(
                 NULL::text as "id",
                 NULL::text as "document_version_id",
             NULL::text as "description_document_id",
+            NULL::text as "description_surface_id",
                 NULL::text as "user_id",
                 NULL::text as "name",
                 NULL::text as "branched_from_id",
@@ -1659,6 +1668,7 @@ struct InitiativeRow {
     user_id: String,
     name: String,
     description_document_id: Option<String>,
+    description_surface_id: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
@@ -1818,20 +1828,30 @@ impl SoupRow {
                 deleted_at,
                 extra: (),
             }),
-            SoupRow::Initiative(row) => SoupItem::Initiative(SoupInitiative {
-                id: row.id.parse().map_err(type_err)?,
-                name: row.name,
-                owner_id: Owner::from_principal_str(&row.user_id).map_err(type_err)?,
-                description_document_id: row
+            SoupRow::Initiative(row) => {
+                let description_document_id = row
                     .description_document_id
                     .map(|id| id.parse())
                     .transpose()
-                    .map_err(type_err)?,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-                viewed_at: row.viewed_at,
-                extra: (),
-            }),
+                    .map_err(type_err)?;
+                SoupItem::Initiative(SoupInitiative {
+                    id: row.id.parse().map_err(type_err)?,
+                    name: row.name,
+                    owner_id: Owner::from_principal_str(&row.user_id).map_err(type_err)?,
+                    description_surface_id: super::super::initiative::description_surface_id(
+                        row.description_surface_id
+                            .map(|id| id.parse())
+                            .transpose()
+                            .map_err(type_err)?,
+                        description_document_id,
+                    ),
+                    description_document_id,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                    viewed_at: row.viewed_at,
+                    extra: (),
+                })
+            }
             SoupRow::CalendarEvent(event) => SoupItem::CalendarEvent(event),
         })
     }

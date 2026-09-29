@@ -159,13 +159,15 @@ Assigning a person to a project also adds them as a collaborator with edit acces
 Clearing the assignee leaves that access in place; the owner can remove it through
 Manage collaborators in Share. Removing a collaborator does not clear assignees.
 
-Overview's Description uses the shared collaborative Markdown editor and saves
-automatically to the existing backing document. Edit/owner access allows typing;
-view/comment access is read-only. The description is part of the native project
-view and does not open a separate document block. Discussion appears below the
-description, using the same discussion component as tasks.
-Backing descriptions remain available through direct reads, but are omitted from
-ordinary document search, history, and Soup lists.
+Overview's Description uses the shared collaborative Markdown editor on the
+project's collab surface and saves automatically; its access follows project
+access. Edit/owner access allows typing; view/comment access is read-only. Two
+tabs on the same project see each other's edits live. The description is part
+of the native project view and does not open a separate document block.
+Discussion appears below the description, using the same discussion component
+as tasks. Projects created before collab surfaces keep their description: the
+surface adopts the old backing document's content on first open. Those backing
+documents are omitted from ordinary document search, history, and Soup lists.
 An unavailable connection shows `Retry description` without clearing saved content.
 
 The project's Tasks tab starts with the task search, controls, and unified list;

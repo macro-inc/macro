@@ -10360,9 +10360,19 @@ export const listInitiativesResponse = zod
         zod
           .object({
             descriptionDocumentId: zod
+              .union([
+                zod.null(),
+                zod
+                  .uuid()
+                  .describe(
+                    "Id of the legacy markdown document that held an initiative's description before\ncollab surfaces. Only initiatives created before surfaces have one; its session is\nthe description surface, and its grants are still mirrored until it is retired."
+                  ),
+              ])
+              .optional(),
+            descriptionSurfaceId: zod
               .uuid()
               .describe(
-                "Id of the markdown document that holds an initiative's description."
+                "Id of the collab surface that holds an initiative's description: a Loro session in\nsync-service whose access derives from the initiative. Minted as UUIDv7 for new\ninitiatives; for initiatives created before surfaces, it is the legacy description\ndocument's id, whose session the surface adopted in place."
               ),
             id: zod
               .uuid()
@@ -10389,7 +10399,7 @@ export const createInitiativeBody = zod
       .string()
       .nullish()
       .describe(
-        'Initial markdown for the description document. Not stored on the initiative; later\nedits happen in the document editor.'
+        'Initial markdown for the description surface. Not stored on the initiative; later\nedits happen in the collaborative description editor.'
       ),
     memberIds: zod
       .array(zod.string())
@@ -10413,9 +10423,19 @@ export const createInitiativeResponse = zod
       .datetime({})
       .describe('When the initiative was created.'),
     descriptionDocumentId: zod
+      .union([
+        zod.null(),
+        zod
+          .uuid()
+          .describe(
+            "Id of the legacy markdown document that held an initiative's description before\ncollab surfaces. Only initiatives created before surfaces have one; its session is\nthe description surface, and its grants are still mirrored until it is retired."
+          ),
+      ])
+      .optional(),
+    descriptionSurfaceId: zod
       .uuid()
       .describe(
-        "Id of the markdown document that holds an initiative's description."
+        "Id of the collab surface that holds an initiative's description: a Loro session in\nsync-service whose access derives from the initiative. Minted as UUIDv7 for new\ninitiatives; for initiatives created before surfaces, it is the legacy description\ndocument's id, whose session the surface adopted in place."
       ),
     id: zod
       .uuid()
@@ -10495,9 +10515,19 @@ export const getInitiativeResponse = zod
       .datetime({})
       .describe('When the initiative was created.'),
     descriptionDocumentId: zod
+      .union([
+        zod.null(),
+        zod
+          .uuid()
+          .describe(
+            "Id of the legacy markdown document that held an initiative's description before\ncollab surfaces. Only initiatives created before surfaces have one; its session is\nthe description surface, and its grants are still mirrored until it is retired."
+          ),
+      ])
+      .optional(),
+    descriptionSurfaceId: zod
       .uuid()
       .describe(
-        "Id of the markdown document that holds an initiative's description."
+        "Id of the collab surface that holds an initiative's description: a Loro session in\nsync-service whose access derives from the initiative. Minted as UUIDv7 for new\ninitiatives; for initiatives created before surfaces, it is the legacy description\ndocument's id, whose session the surface adopted in place."
       ),
     id: zod
       .uuid()
@@ -10647,7 +10677,7 @@ export const updateInitiativeBody = zod
       .optional(),
   })
   .describe(
-    'Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its document, not here.'
+    'Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its collab surface, not here.'
   );
 
 export const updateInitiativeResponse = zod
@@ -10656,9 +10686,19 @@ export const updateInitiativeResponse = zod
       .datetime({})
       .describe('When the initiative was created.'),
     descriptionDocumentId: zod
+      .union([
+        zod.null(),
+        zod
+          .uuid()
+          .describe(
+            "Id of the legacy markdown document that held an initiative's description before\ncollab surfaces. Only initiatives created before surfaces have one; its session is\nthe description surface, and its grants are still mirrored until it is retired."
+          ),
+      ])
+      .optional(),
+    descriptionSurfaceId: zod
       .uuid()
       .describe(
-        "Id of the markdown document that holds an initiative's description."
+        "Id of the collab surface that holds an initiative's description: a Loro session in\nsync-service whose access derives from the initiative. Minted as UUIDv7 for new\ninitiatives; for initiatives created before surfaces, it is the legacy description\ndocument's id, whose session the surface adopted in place."
       ),
     id: zod
       .uuid()
@@ -11949,7 +11989,15 @@ export const getItemsSoupResponse = zod
                     descriptionDocumentId: zod
                       .uuid()
                       .nullish()
-                      .describe('Document holding the initiative description.'),
+                      .describe(
+                        'Legacy document that held the description before collab surfaces, for initiatives\ncreated before them. Its session is the description surface.'
+                      ),
+                    descriptionSurfaceId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Collab surface holding the initiative description.'
+                      ),
                     id: zod.uuid().describe('Initiative identifier.'),
                     name: zod.string().describe('Initiative display name.'),
                     ownerId: zod.string().describe('Initiative owner.'),
@@ -16322,7 +16370,15 @@ export const postItemsSoupResponse = zod
                     descriptionDocumentId: zod
                       .uuid()
                       .nullish()
-                      .describe('Document holding the initiative description.'),
+                      .describe(
+                        'Legacy document that held the description before collab surfaces, for initiatives\ncreated before them. Its session is the description surface.'
+                      ),
+                    descriptionSurfaceId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Collab surface holding the initiative description.'
+                      ),
                     id: zod.uuid().describe('Initiative identifier.'),
                     name: zod.string().describe('Initiative display name.'),
                     ownerId: zod.string().describe('Initiative owner.'),
@@ -20101,7 +20157,15 @@ export const postItemsSoupAstResponse = zod
                     descriptionDocumentId: zod
                       .uuid()
                       .nullish()
-                      .describe('Document holding the initiative description.'),
+                      .describe(
+                        'Legacy document that held the description before collab surfaces, for initiatives\ncreated before them. Its session is the description surface.'
+                      ),
+                    descriptionSurfaceId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Collab surface holding the initiative description.'
+                      ),
                     id: zod.uuid().describe('Initiative identifier.'),
                     name: zod.string().describe('Initiative display name.'),
                     ownerId: zod.string().describe('Initiative owner.'),
@@ -24157,7 +24221,13 @@ export const postItemsSoupAstGroupedResponse = zod
                             .uuid()
                             .nullish()
                             .describe(
-                              'Document holding the initiative description.'
+                              'Legacy document that held the description before collab surfaces, for initiatives\ncreated before them. Its session is the description surface.'
+                            ),
+                          descriptionSurfaceId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Collab surface holding the initiative description.'
                             ),
                           id: zod.uuid().describe('Initiative identifier.'),
                           name: zod
@@ -27942,7 +28012,13 @@ export const postItemsSoupAstGroupedResponse = zod
                             .uuid()
                             .nullish()
                             .describe(
-                              'Document holding the initiative description.'
+                              'Legacy document that held the description before collab surfaces, for initiatives\ncreated before them. Its session is the description surface.'
+                            ),
+                          descriptionSurfaceId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'Collab surface holding the initiative description.'
                             ),
                           id: zod.uuid().describe('Initiative identifier.'),
                           name: zod

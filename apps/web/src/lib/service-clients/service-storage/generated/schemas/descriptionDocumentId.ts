@@ -6,6 +6,8 @@
  */
 
 /**
- * Id of the markdown document that holds an initiative's description.
+ * Id of the legacy markdown document that held an initiative's description before
+collab surfaces. Only initiatives created before surfaces have one; its session is
+the description surface, and its grants are still mirrored until it is retired.
  */
 export type DescriptionDocumentId = string;

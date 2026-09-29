@@ -163,6 +163,12 @@ type CompleteMutationRoot {
 	"""
 	updateInitiative(initiativeId: ID!, input: UpdateInitiativeInput!): GraphqlSoupInitiative!
 	"""
+	Idempotently ensure the collaborative description surface of an initiative the viewer
+	can see, returning its id. Call before connecting: an initiative created before
+	surfaces adopts its legacy description document here, so its content carries over.
+	"""
+	ensureInitiativeDescriptionSurface(initiativeId: ID!): ID!
+	"""
 	Delete an initiative after its owner capability has been verified.
 	"""
 	deleteInitiative(initiativeId: ID!): Boolean!
@@ -6150,7 +6156,13 @@ type GraphqlSoupInitiative implements GraphqlSoupEntity {
 	"""
 	metadata: GraphqlEntityMetadata!
 	"""
-	Document backing the project's description, when one exists.
+	Collaborative surface holding the project's description. Ensure it with
+	`ensureInitiativeDescriptionSurface` before connecting.
+	"""
+	descriptionSurfaceId: ID
+	"""
+	Legacy document that held the project's description before collaborative surfaces,
+	for projects created before them. Deprecated: use `descriptionSurfaceId`.
 	"""
 	descriptionDocumentId: ID
 	"""

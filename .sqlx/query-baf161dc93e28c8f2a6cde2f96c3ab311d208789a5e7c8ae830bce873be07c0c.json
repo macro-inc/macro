@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        DELETE FROM initiative\n        WHERE id = $1\n        RETURNING share_permission_id, description_document_id\n        ",
+  "query": "\n        DELETE FROM initiative\n        WHERE id = $1\n        RETURNING share_permission_id, description_surface_id, description_document_id\n        ",
   "describe": {
     "columns": [
       {
@@ -10,6 +10,11 @@
       },
       {
         "ordinal": 1,
+        "name": "description_surface_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
         "name": "description_document_id",
         "type_info": "Text"
       }
@@ -21,8 +26,9 @@
     },
     "nullable": [
       false,
-      false
+      true,
+      true
     ]
   },
-  "hash": "630a797b9b8fe15ef5a79f2368ca09309a8dfd144886330fcef5e6fd87e2c6f8"
+  "hash": "baf161dc93e28c8f2a6cde2f96c3ab311d208789a5e7c8ae830bce873be07c0c"
 }

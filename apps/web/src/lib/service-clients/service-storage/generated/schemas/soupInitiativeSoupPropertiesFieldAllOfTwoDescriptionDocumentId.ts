@@ -6,7 +6,8 @@
  */
 
 /**
- * Document holding the initiative description.
+ * Legacy document that held the description before collab surfaces, for initiatives
+created before them. Its session is the description surface.
  */
 export type SoupInitiativeSoupPropertiesFieldAllOfTwoDescriptionDocumentId =
   | string

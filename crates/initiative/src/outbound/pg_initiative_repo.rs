@@ -25,9 +25,9 @@ use sqlx::{Executor, PgPool, Postgres};
 
 use crate::domain::events::{AssignedTasks, TaskMembershipChange};
 use crate::domain::models::{
-    CreateInitiativeRepoArgs, DescriptionDocumentId, InitiativeBasic, InitiativeDetail,
-    InitiativeError, InitiativeId, InitiativeList, LockstepTeamShareFacts,
-    UpdateInitiativeRepoArgs,
+    CreateInitiativeRepoArgs, DeletedInitiative, DescriptionDocumentId, DescriptionLocation,
+    DescriptionSurfaceId, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
+    InitiativeList, LockstepTeamShareFacts, UpdateInitiativeRepoArgs,
 };
 use crate::domain::ports::InitiativeRepo;
 
@@ -35,6 +35,9 @@ const DETAIL_ACCESS_WITHOUT_ACTOR: AccessLevel = AccessLevel::View;
 
 /// Postgres' generated name for the `UNIQUE` on `initiative.description_document_id`.
 const DESCRIPTION_DOCUMENT_UNIQUE: &str = "initiative_description_document_id_key";
+
+/// The `UNIQUE` on `initiative.description_surface_id`.
+const DESCRIPTION_SURFACE_UNIQUE: &str = "initiative_description_surface_id_key";
 
 /// PostgreSQL `InitiativeRepo`. One pool. One transaction per mutation.
 #[derive(Clone)]
@@ -161,24 +164,26 @@ impl InitiativeRepo for PgInitiativeRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn delete(&self, id: InitiativeId) -> Result<DescriptionDocumentId, Self::Err> {
+    async fn delete(&self, id: InitiativeId) -> Result<DeletedInitiative, Self::Err> {
         create::delete(&self.pool, id).await
     }
 }
 
-/// Both entities every grant write targets. Built once per mutation so no path
-/// can grant on the initiative and forget the document.
+/// Every entity a grant write targets: the initiative and, for initiatives created before
+/// description surfaces, the legacy description document whose grants still mirror it.
+/// Built once per mutation so no path can grant on the initiative and forget the document.
+/// The description surface needs no grants: its access derives from the initiative.
 #[derive(Debug, Clone, Copy)]
 struct GrantTargets {
     initiative: uuid::Uuid,
-    description: uuid::Uuid,
+    description: Option<uuid::Uuid>,
 }
 
 impl GrantTargets {
-    fn new(initiative: InitiativeId, description: DescriptionDocumentId) -> Self {
+    fn new(initiative: InitiativeId, description: Option<DescriptionDocumentId>) -> Self {
         Self {
             initiative: initiative.as_uuid(),
-            description: description.as_uuid(),
+            description: description.map(|id| id.as_uuid()),
         }
     }
 
@@ -186,30 +191,28 @@ impl GrantTargets {
         self.initiative
     }
 
-    fn description_id(&self) -> uuid::Uuid {
-        self.description
-    }
-
     fn initiative_entity(&self) -> Entity<'static> {
         EntityType::Initiative.with_entity_string(self.initiative.to_string())
     }
 
-    fn description_entity(&self) -> Entity<'static> {
-        EntityType::Document.with_entity_string(self.description.to_string())
+    fn description_entity(&self) -> Option<Entity<'static>> {
+        self.description
+            .map(|id| EntityType::Document.with_entity_string(id.to_string()))
     }
 
-    fn each(&self) -> [(uuid::Uuid, EntityType); 2] {
-        [
-            (self.initiative, EntityType::Initiative),
-            (self.description, EntityType::Document),
-        ]
+    fn each(&self) -> impl Iterator<Item = (uuid::Uuid, EntityType)> {
+        std::iter::once((self.initiative, EntityType::Initiative)).chain(
+            self.description
+                .map(|description| (description, EntityType::Document)),
+        )
     }
 }
 
 struct InitiativeRecord {
     id: uuid::Uuid,
     name: String,
-    description_document_id: String,
+    description_surface_id: Option<uuid::Uuid>,
+    description_document_id: Option<String>,
     owner_user_id: String,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
@@ -234,13 +237,16 @@ impl InitiativeRecord {
     fn into_detail(self) -> Result<InitiativeDetail, InitiativeError> {
         let share_permission = share_permission_from_record(&self)?;
         let owner_id = parse_owner(&self.owner_user_id)?;
+        let description = description_location(
+            self.id,
+            self.description_surface_id,
+            self.description_document_id.as_deref(),
+        )?;
         Ok(InitiativeDetail {
             id: InitiativeId::from_uuid(self.id),
             name: self.name,
-            description_document_id: parse_description_document_id(
-                self.id,
-                &self.description_document_id,
-            )?,
+            description_surface_id: description.surface_id,
+            description_document_id: description.legacy_document_id,
             owner_id,
             member_ids: parse_members(self.member_ids)?,
             task_ids: self.task_ids,
@@ -252,14 +258,40 @@ impl InitiativeRecord {
     }
 }
 
+/// Parse the legacy description document column; absent for initiatives created with a
+/// description surface.
 fn parse_description_document_id(
     initiative: uuid::Uuid,
-    raw: &str,
-) -> Result<DescriptionDocumentId, InitiativeError> {
-    DescriptionDocumentId::from_str(raw).map_err(|error| {
-        InitiativeError::Internal(report!(
-            "initiative {initiative} has a non-UUID description document id {raw:?}: {error}"
-        ))
+    raw: Option<&str>,
+) -> Result<Option<DescriptionDocumentId>, InitiativeError> {
+    raw.map(|raw| {
+        DescriptionDocumentId::from_str(raw).map_err(|error| {
+            InitiativeError::Internal(report!(
+                "initiative {initiative} has a non-UUID description document id {raw:?}: {error}"
+            ))
+        })
+    })
+    .transpose()
+}
+
+/// Build the description location from the row's columns. Rows written before
+/// `description_surface_id` existed read it through the legacy document id, which is
+/// the surface id by construction.
+fn description_location(
+    initiative: uuid::Uuid,
+    surface: Option<uuid::Uuid>,
+    document: Option<&str>,
+) -> Result<DescriptionLocation, InitiativeError> {
+    let legacy_document_id = parse_description_document_id(initiative, document)?;
+    let surface_id = surface
+        .map(DescriptionSurfaceId::from_uuid)
+        .or_else(|| legacy_document_id.map(|document| document.adopting_surface()))
+        .ok_or_else(|| {
+            InitiativeError::Internal(report!("initiative {initiative} has no description"))
+        })?;
+    Ok(DescriptionLocation {
+        surface_id,
+        legacy_document_id,
     })
 }
 
@@ -328,10 +360,14 @@ fn map_sqlx(error: AdapterError) -> InitiativeError {
 fn classify_sqlx(error: sqlx::Error) -> InitiativeError {
     if let Some(db) = error.as_database_error() {
         if db.is_unique_violation() {
-            // A second initiative on the same document is a bug in this path, not a caller error.
-            if db.constraint() == Some(DESCRIPTION_DOCUMENT_UNIQUE) {
+            // A second initiative on the same description is a bug in this path, not a
+            // caller error.
+            if matches!(
+                db.constraint(),
+                Some(DESCRIPTION_DOCUMENT_UNIQUE | DESCRIPTION_SURFACE_UNIQUE)
+            ) {
                 return InitiativeError::Internal(report!(
-                    "description document already linked to another initiative: {error}"
+                    "description already linked to another initiative: {error}"
                 ));
             }
             return InitiativeError::Conflict("initiative already exists".to_string());
@@ -378,6 +414,7 @@ async fn load_record(
         SELECT
             i.id,
             i.name,
+            i.description_surface_id,
             i.description_document_id,
             i.owner_user_id,
             i.created_at,
@@ -413,6 +450,7 @@ async fn load_record(
         GROUP BY
             i.id,
             i.name,
+            i.description_surface_id,
             i.description_document_id,
             i.owner_user_id,
             i.created_at,
@@ -430,6 +468,7 @@ async fn load_record(
     Ok(row.map(|row| InitiativeRecord {
         id: row.id,
         name: row.name,
+        description_surface_id: row.description_surface_id,
         description_document_id: row.description_document_id,
         owner_user_id: row.owner_user_id,
         created_at: row.created_at,

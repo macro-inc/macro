@@ -29,9 +29,13 @@ impl<'a> ShareTarget<'a> {
         }
     }
 
-    pub(super) fn description(targets: &GrantTargets, share_permission_id: &'a str) -> Self {
+    /// The legacy description document of an initiative created before surfaces.
+    pub(super) fn description(
+        document: DescriptionDocumentId,
+        share_permission_id: &'a str,
+    ) -> Self {
         Self {
-            entity_id: targets.description_id(),
+            entity_id: document.as_uuid(),
             entity_type: EntityType::Document,
             share_permission_id,
         }
@@ -272,16 +276,21 @@ pub(super) async fn get_lockstep_team_share_facts(
     .ok_or(InitiativeError::NotFound)?;
     let targets = GrantTargets::new(
         id,
-        parse_description_document_id(id.as_uuid(), &description_document_id)?,
+        parse_description_document_id(id.as_uuid(), description_document_id.as_deref())?,
     );
     let initiative = team_share::load_facts(&mut tx, &targets.initiative_entity())
         .await
         .map_err(AdapterError::TeamShare)
         .map_err(map_sqlx)?;
-    let description = team_share::load_facts(&mut tx, &targets.description_entity())
-        .await
-        .map_err(AdapterError::TeamShare)
-        .map_err(map_sqlx)?;
+    let description = match targets.description_entity() {
+        Some(entity) => Some(
+            team_share::load_facts(&mut tx, &entity)
+                .await
+                .map_err(AdapterError::TeamShare)
+                .map_err(map_sqlx)?,
+        ),
+        None => None,
+    };
     tx.commit()
         .await
         .map_err(AdapterError::Sqlx)

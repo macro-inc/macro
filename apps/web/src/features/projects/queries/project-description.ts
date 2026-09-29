@@ -20,9 +20,10 @@ import type { ResultAsync } from 'neverthrow';
 import { createSignal, getOwner, runWithOwner } from 'solid-js';
 
 export type ProjectDescriptionTransport<Access> = {
-  authorize(documentId: string): Promise<Access>;
+  /** Ensure the surface exists and mint connection access for it. */
+  authorize(surfaceId: string): Promise<Access>;
   connect(
-    documentId: string,
+    surfaceId: string,
     access: Access
   ): {
     source: LiveSyncSource;
@@ -30,28 +31,30 @@ export type ProjectDescriptionTransport<Access> = {
   };
 };
 
-/** Join the existing backing document; fresh authorization precedes local snapshot reads. */
+/** Join the project's description surface; fresh authorization precedes local snapshot reads. */
 export function createProjectDescriptionSession<Access>(
-  documentId: string,
+  surfaceId: string,
   transport: ProjectDescriptionTransport<Access>
 ): CollabMarkdownSession & { dispose(): void; loaded: Promise<void> } {
   const owner = getOwner();
-  const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, { documentId });
+  const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
+    documentId: surfaceId,
+  });
   const [syncSource, setSyncSource] = createSignal<LiveSyncSource>();
   const [connectionError, setConnectionError] = createSignal<string>();
   let disposed = false;
   const loaded = (async () => {
     try {
-      const access = await transport.authorize(documentId);
+      const access = await transport.authorize(surfaceId);
       if (disposed) return;
       // Local cache failures must not prevent a fresh server snapshot.
       void ingestLocalSnapshot(
         loroManager,
-        new IDBSnapshotStore<RawUpdate>(LORO_SNAPSHOT_DB_NAME, documentId),
-        new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, documentId)
+        new IDBSnapshotStore<RawUpdate>(LORO_SNAPSHOT_DB_NAME, surfaceId),
+        new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, surfaceId)
       ).catch(() => {});
       const connection = runWithOwner(owner, () =>
-        transport.connect(documentId, access)
+        transport.connect(surfaceId, access)
       );
       if (!connection) throw new Error('Could not start description session.');
       setSyncSource(connection.source);

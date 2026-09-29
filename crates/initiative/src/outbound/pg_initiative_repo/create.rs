@@ -10,15 +10,44 @@ use models_permissions::share_permission::team_share::{
 use share_permission_db_utils::team_share;
 use sqlx::{PgPool, Postgres, Transaction};
 
-use super::{AdapterError, GrantTargets, map_sqlx, parse_description_document_id, require_detail};
+use super::{
+    AdapterError, GrantTargets, description_location, map_sqlx, parse_description_document_id,
+    require_detail,
+};
 use crate::domain::models::{
-    CreateInitiativeRepoArgs, DescriptionDocumentId, InitiativeDetail, InitiativeError,
-    InitiativeId, UpdateInitiativeRepoArgs,
+    CreateInitiativeRepoArgs, DeletedInitiative, DescriptionDocumentId, InitiativeDetail,
+    InitiativeError, InitiativeId, UpdateInitiativeRepoArgs,
 };
 
 pub(super) async fn create(
     pool: &PgPool,
     args: CreateInitiativeRepoArgs,
+    share_permission: SharePermissionV2,
+    team_share: TeamShareCreation,
+) -> Result<InitiativeDetail, InitiativeError> {
+    insert_initiative(pool, args, None, share_permission, team_share).await
+}
+
+/// Persist an initiative shaped like one created before description surfaces: it links a
+/// legacy description document whose session its surface adopted, and mirrors grants onto
+/// it. Production never creates these; fixtures use this to cover the mirroring that legacy
+/// rows still rely on.
+#[cfg(test)]
+pub(super) async fn create_legacy(
+    pool: &PgPool,
+    mut args: CreateInitiativeRepoArgs,
+    document: DescriptionDocumentId,
+    share_permission: SharePermissionV2,
+    team_share: TeamShareCreation,
+) -> Result<InitiativeDetail, InitiativeError> {
+    args.description_surface_id = document.adopting_surface();
+    insert_initiative(pool, args, Some(document), share_permission, team_share).await
+}
+
+async fn insert_initiative(
+    pool: &PgPool,
+    args: CreateInitiativeRepoArgs,
+    legacy_document: Option<DescriptionDocumentId>,
     share_permission: SharePermissionV2,
     team_share: TeamShareCreation,
 ) -> Result<InitiativeDetail, InitiativeError> {
@@ -28,7 +57,7 @@ pub(super) async fn create(
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
     let id = args.id.as_uuid();
-    let targets = GrantTargets::new(args.id, args.description_document_id);
+    let targets = GrantTargets::new(args.id, legacy_document);
 
     team_share::acquire_guard(&mut tx)
         .await
@@ -45,15 +74,17 @@ pub(super) async fn create(
             name,
             owner_user_id,
             share_permission_id,
+            description_surface_id,
             description_document_id
         )
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES ($1, $2, $3, $4, $5, $6)
         "#,
         id,
         args.name,
         args.owner_id.as_ref(),
         share_permission_id,
-        args.description_document_id.to_string(),
+        args.description_surface_id.as_uuid(),
+        legacy_document.map(|document| document.to_string()),
     )
     .execute(tx.as_mut())
     .await
@@ -62,7 +93,7 @@ pub(super) async fn create(
 
     super::members::insert_members(&mut tx, id, &args.member_ids).await?;
 
-    // Owner on the document was written when the documents side created it.
+    // Owner on a legacy document was written when the documents side created it.
     insert_entity_access_row(
         &mut tx,
         &id,
@@ -82,13 +113,11 @@ pub(super) async fn create(
         .map_err(AdapterError::TeamShareCreate)
         .map_err(map_sqlx)?;
 
-    team_share::initialize(
-        &mut tx,
-        &targets.description_entity(),
-        description_team_share(team_share),
-    )
-    .await
-    .map_err(|error| InitiativeError::Internal(error.into()))?;
+    if let Some(description) = targets.description_entity() {
+        team_share::initialize(&mut tx, &description, description_team_share(team_share))
+            .await
+            .map_err(|error| InitiativeError::Internal(error.into()))?;
+    }
 
     tx.commit()
         .await
@@ -135,21 +164,22 @@ pub(super) async fn update(
     .await?;
 
     if let Some(update) = &args.share_permission {
-        let description_share_permission_id =
-            super::share::description_share_permission_id(&mut tx, patched.description_document_id)
-                .await?;
         super::share::apply_share_patch(
             &mut tx,
             super::share::ShareTarget::initiative(&targets, &patched.share_permission_id),
             update,
         )
         .await?;
-        super::share::apply_share_patch(
-            &mut tx,
-            super::share::ShareTarget::description(&targets, &description_share_permission_id),
-            update,
-        )
-        .await?;
+        if let Some(document) = patched.description_document_id {
+            let description_share_permission_id =
+                super::share::description_share_permission_id(&mut tx, document).await?;
+            super::share::apply_share_patch(
+                &mut tx,
+                super::share::ShareTarget::description(document, &description_share_permission_id),
+                update,
+            )
+            .await?;
+        }
     }
 
     if let Some(lockstep) = &args.team_share {
@@ -161,8 +191,13 @@ pub(super) async fn update(
             command.expected().entity == entity
                 && requested == Some(command.target().map(|grant| grant.level.into()))
         };
-        if !matches_edit(&lockstep.initiative, targets.initiative_entity())
-            || !matches_edit(&lockstep.description, targets.description_entity())
+        // A legacy document needs its own command; a surface-only initiative has none.
+        let description_matches = match (&lockstep.description, targets.description_entity()) {
+            (Some(command), Some(entity)) => matches_edit(command, entity),
+            (None, None) => true,
+            _ => false,
+        };
+        if !matches_edit(&lockstep.initiative, targets.initiative_entity()) || !description_matches
         {
             return Err(InitiativeError::BadRequest(
                 "team-share command does not match edit".to_string(),
@@ -172,10 +207,12 @@ pub(super) async fn update(
             .await
             .map_err(AdapterError::TeamShare)
             .map_err(map_sqlx)?;
-        team_share::apply(&mut tx, &lockstep.description)
-            .await
-            .map_err(AdapterError::TeamShare)
-            .map_err(map_sqlx)?;
+        if let Some(description) = &lockstep.description {
+            team_share::apply(&mut tx, description)
+                .await
+                .map_err(AdapterError::TeamShare)
+                .map_err(map_sqlx)?;
+        }
     }
 
     tx.commit()
@@ -186,11 +223,12 @@ pub(super) async fn update(
     require_detail(pool, args.id).await
 }
 
-/// The document's rows are untouched here. The service purges them after this commits.
+/// A legacy document's rows and the description surface are untouched here. The service
+/// cleans them up after this commits.
 pub(super) async fn delete(
     pool: &PgPool,
     id: InitiativeId,
-) -> Result<DescriptionDocumentId, InitiativeError> {
+) -> Result<DeletedInitiative, InitiativeError> {
     let mut tx = pool
         .begin()
         .await
@@ -207,7 +245,7 @@ pub(super) async fn delete(
         r#"
         DELETE FROM initiative
         WHERE id = $1
-        RETURNING share_permission_id, description_document_id
+        RETURNING share_permission_id, description_surface_id, description_document_id
         "#,
         uuid,
     )
@@ -234,12 +272,18 @@ pub(super) async fn delete(
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
 
-    parse_description_document_id(uuid, &deleted.description_document_id)
+    Ok(DeletedInitiative {
+        description: description_location(
+            uuid,
+            deleted.description_surface_id,
+            deleted.description_document_id.as_deref(),
+        )?,
+    })
 }
 
 struct PatchedRow {
     share_permission_id: String,
-    description_document_id: DescriptionDocumentId,
+    description_document_id: Option<DescriptionDocumentId>,
 }
 
 async fn patch_initiative_row(
@@ -268,7 +312,7 @@ async fn patch_initiative_row(
         share_permission_id: row.share_permission_id,
         description_document_id: parse_description_document_id(
             args.id.as_uuid(),
-            &row.description_document_id,
+            row.description_document_id.as_deref(),
         )?,
     })
 }

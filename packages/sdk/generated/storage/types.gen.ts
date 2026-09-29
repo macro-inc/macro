@@ -3657,8 +3657,8 @@ export type CreateEntityMentionResponse = {
  */
 export type CreateInitiativeRequest = {
     /**
-     * Initial markdown for the description document. Not stored on the initiative; later
-     * edits happen in the document editor.
+     * Initial markdown for the description surface. Not stored on the initiative; later
+     * edits happen in the collaborative description editor.
      */
     description?: string | null;
     /**
@@ -4541,9 +4541,19 @@ export type DeleteUnthreadedPdfAnchorRequest = {
 };
 
 /**
- * Id of the markdown document that holds an initiative's description.
+ * Id of the legacy markdown document that held an initiative's description before
+ * collab surfaces. Only initiatives created before surfaces have one; its session is
+ * the description surface, and its grants are still mirrored until it is retired.
  */
 export type DescriptionDocumentId = string;
+
+/**
+ * Id of the collab surface that holds an initiative's description: a Loro session in
+ * sync-service whose access derives from the initiative. Minted as UUIDv7 for new
+ * initiatives; for initiatives created before surfaces, it is the legacy description
+ * document's id, whose session the surface adopted in place.
+ */
+export type DescriptionSurfaceId = string;
 
 /**
  * Returns basic information of a document used for some db queries
@@ -6704,10 +6714,11 @@ export type InitiativeDetail = {
      * When the initiative was created.
      */
     createdAt: string;
+    descriptionDocumentId?: null | DescriptionDocumentId;
     /**
-     * The markdown document holding the description; open it in the editor.
+     * The collab surface holding the description; open it in the editor.
      */
-    descriptionDocumentId: DescriptionDocumentId;
+    descriptionSurfaceId: DescriptionSurfaceId;
     /**
      * Opaque identifier.
      */
@@ -6795,10 +6806,11 @@ export type InitiativeList = {
  * List-row view of an initiative.
  */
 export type InitiativeSummary = {
+    descriptionDocumentId?: null | DescriptionDocumentId;
     /**
-     * The markdown document holding the description; open it in the editor.
+     * The collab surface holding the description; open it in the editor.
      */
-    descriptionDocumentId: DescriptionDocumentId;
+    descriptionSurfaceId: DescriptionSurfaceId;
     /**
      * Opaque identifier.
      */
@@ -9747,9 +9759,14 @@ export type SoupInitiativeSoupPropertiesField = {
      */
     createdAt: string;
     /**
-     * Document holding the initiative description.
+     * Legacy document that held the description before collab surfaces, for initiatives
+     * created before them. Its session is the description surface.
      */
     descriptionDocumentId?: string | null;
+    /**
+     * Collab surface holding the initiative description.
+     */
+    descriptionSurfaceId?: string | null;
     /**
      * Initiative identifier.
      */
@@ -10752,7 +10769,7 @@ export type UpdateCrmTeamSettingsRequest = {
 
 /**
  * Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
- * present is a full replace. The description is edited in its document, not here.
+ * present is a full replace. The description is edited in its collab surface, not here.
  */
 export type UpdateInitiativeRequest = {
     /**
