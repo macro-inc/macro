@@ -30,6 +30,9 @@ vi.mock('@core/auth/native-auth', () => ({
 
 vi.mock('@queries/auth', () => ({
   invalidateGithubLinkStatus: mocks.invalidateGithubLinkStatus,
+  useReauthenticateGithubMutation: () => ({
+    mutateAsync: mocks.reauthenticateGithub,
+  }),
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -43,7 +46,6 @@ vi.mock('@core/component/Toast/Toast', () => ({
 vi.mock('@service-auth/client', () => ({
   authServiceClient: {
     checkGithubLinkStatus: mocks.checkGithubLinkStatus,
-    reauthenticateGithub: mocks.reauthenticateGithub,
   },
 }));
 
@@ -138,7 +140,7 @@ describe('GithubReauthenticationPrompt', () => {
       );
       const originalUrl = window.location.href;
       const authorizationUrl = 'https://github.com/login/oauth/authorize';
-      mocks.reauthenticateGithub.mockResolvedValue(resultOk(authorizationUrl));
+      mocks.reauthenticateGithub.mockResolvedValue(authorizationUrl);
       mocks.authenticate.mockResolvedValue(result);
 
       const cleanup = renderPrompt();
@@ -174,9 +176,7 @@ describe('GithubReauthenticationPrompt', () => {
       mocks.checkGithubLinkStatus.mockResolvedValue(
         resultErr([{ code: 'REAUTHENTICATION_REQUIRED', message: 'Reconnect' }])
       );
-      mocks.reauthenticateGithub.mockResolvedValue(
-        resultErr([{ code: 'INTERNAL_SERVER_ERROR', message: 'Unavailable' }])
-      );
+      mocks.reauthenticateGithub.mockRejectedValue(new Error('Unavailable'));
       const cleanup = renderPrompt();
       await flushPromises();
       await getReconnectAction().onClick();
@@ -194,7 +194,7 @@ describe('GithubReauthenticationPrompt', () => {
       resultErr([{ code: 'REAUTHENTICATION_REQUIRED', message: 'Reconnect' }])
     );
     mocks.reauthenticateGithub.mockResolvedValue(
-      resultOk('https://github.com/login/oauth/authorize')
+      'https://github.com/login/oauth/authorize'
     );
     let complete!: (result: { success: boolean; error: string }) => void;
     mocks.authenticate.mockImplementation(
@@ -209,6 +209,12 @@ describe('GithubReauthenticationPrompt', () => {
     action.onClick();
     action.onClick();
     await vi.advanceTimersByTimeAsync(0);
+    window.dispatchEvent(
+      new PageTransitionEvent('pageshow', { persisted: true })
+    );
+    action.onClick();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.checkGithubLinkStatus).toHaveBeenCalledOnce();
     expect(mocks.authenticate).toHaveBeenCalledOnce();
     expect(mocks.toastDismiss).toHaveBeenCalledWith(101);
     expect(mocks.toastCustom).toHaveBeenCalledOnce();
@@ -229,7 +235,7 @@ describe('GithubReauthenticationPrompt', () => {
     );
     const originalUrl = window.location.href;
     const authorizationUrl = `${originalUrl}#github-reauth`;
-    mocks.reauthenticateGithub.mockResolvedValue(resultOk(authorizationUrl));
+    mocks.reauthenticateGithub.mockResolvedValue(authorizationUrl);
 
     const cleanup = renderPrompt();
     await flushPromises();
@@ -249,6 +255,79 @@ describe('GithubReauthenticationPrompt', () => {
     expect(mocks.reauthenticateGithub).toHaveBeenCalledWith(originalUrl);
     expect(window.location.href).toBe(authorizationUrl);
 
+    cleanup();
+  });
+
+  it.each([true, false])(
+    'refreshes a restored browser page before allowing retry (needs reauth: %s)',
+    async (needsReauth) => {
+      mocks.checkGithubLinkStatus.mockResolvedValue(
+        resultOk({ reauthentication_required: true })
+      );
+      mocks.reauthenticateGithub.mockResolvedValue(
+        `${window.location.href}#github-reauth`
+      );
+      const cleanup = renderPrompt();
+      await flushPromises();
+      getReconnectAction().onClick();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mocks.toastCustom).toHaveBeenCalledOnce();
+      expect(mocks.toastDismiss).toHaveBeenCalledWith(101);
+
+      window.dispatchEvent(new PageTransitionEvent('pageshow'));
+      expect(mocks.checkGithubLinkStatus).toHaveBeenCalledOnce();
+
+      const refreshedStatus = resultOk({
+        reauthentication_required: needsReauth,
+      });
+      let complete!: (value: typeof refreshedStatus) => void;
+      mocks.checkGithubLinkStatus.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve;
+          })
+      );
+      window.dispatchEvent(
+        new PageTransitionEvent('pageshow', { persisted: true })
+      );
+      expect(mocks.checkGithubLinkStatus).toHaveBeenCalledTimes(2);
+      expect(mocks.toastCustom).toHaveBeenCalledOnce();
+      complete(refreshedStatus);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mocks.toastCustom).toHaveBeenCalledTimes(needsReauth ? 2 : 1);
+      if (needsReauth) {
+        getReconnectAction().onClick();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(mocks.reauthenticateGithub).toHaveBeenCalledTimes(2);
+      }
+
+      cleanup();
+      window.dispatchEvent(
+        new PageTransitionEvent('pageshow', { persisted: true })
+      );
+      expect(mocks.checkGithubLinkStatus).toHaveBeenCalledTimes(2);
+    }
+  );
+
+  it('allows retry if the restored browser page cannot refresh link status', async () => {
+    mocks.checkGithubLinkStatus.mockResolvedValue(
+      resultOk({ reauthentication_required: true })
+    );
+    mocks.reauthenticateGithub.mockResolvedValue(
+      `${window.location.href}#github-reauth`
+    );
+    const cleanup = renderPrompt();
+    await flushPromises();
+    getReconnectAction().onClick();
+    await vi.advanceTimersByTimeAsync(0);
+    mocks.checkGithubLinkStatus.mockRejectedValueOnce(
+      new Error('Network unavailable')
+    );
+    window.dispatchEvent(
+      new PageTransitionEvent('pageshow', { persisted: true })
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.toastCustom).toHaveBeenCalledTimes(2);
     cleanup();
   });
 

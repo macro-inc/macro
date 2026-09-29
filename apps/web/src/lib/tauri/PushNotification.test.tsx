@@ -13,6 +13,7 @@ const mock = vi.hoisted(() => ({
   register: vi.fn(),
   configure: vi.fn(),
   unwatch: vi.fn(),
+  watch: vi.fn(),
   registerDevice: vi.fn(),
   unregisterDevice: vi.fn(),
   recipient: vi.fn(),
@@ -72,7 +73,7 @@ vi.mock('./push-api', () => ({
     unwatch: mock.unwatch,
     acknowledge: mock.acknowledge,
     watch: async (callback: (event: PushEvent) => void) => {
-      mock.watcher = callback;
+      await mock.watch(callback);
     },
   }),
 }));
@@ -84,6 +85,11 @@ beforeEach(() => {
   localStorage.clear();
   mock.loggedIn = true;
   mock.watcher = undefined;
+  mock.watch.mockImplementation(
+    async (callback: (event: PushEvent) => void) => {
+      mock.watcher = callback;
+    }
+  );
   mock.notifications = undefined;
   mock.check.mockResolvedValue({ status: 'denied' });
   mock.register.mockResolvedValue({ success: true, token: 'test-token' });
@@ -93,7 +99,10 @@ beforeEach(() => {
   mock.registerDevice.mockResolvedValue({ isErr: () => false });
   mock.unregisterDevice.mockResolvedValue({ isErr: () => false });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 async function mount() {
   render(() => (
@@ -127,6 +136,72 @@ describe('Android push lifecycle', () => {
     expect(mock.navigate).toHaveBeenCalledWith('id');
     expect(mock.acknowledge).toHaveBeenCalledWith('delivery-id');
   });
+
+  it('shares an in-flight watcher and retries failure so taps still navigate', async () => {
+    vi.useFakeTimers();
+    let fail!: (error: Error) => void;
+    mock.watch.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          fail = reject;
+        })
+    );
+    render(() => (
+      <MaybePushNotificationRegistration>
+        <div />
+      </MaybePushNotificationRegistration>
+    ));
+    await vi.advanceTimersByTimeAsync(0);
+    mock.check.mockResolvedValue({ status: 'granted' });
+    let finished = false;
+    async function syncRegistration() {
+      await mock.lifecycle!.syncRegistration();
+      finished = true;
+    }
+    const registration = syncRegistration();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mock.watch).toHaveBeenCalledOnce();
+    expect(finished).toBe(false);
+    fail(new Error('Transient bridge failure'));
+    await registration;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mock.watch).toHaveBeenCalledTimes(2);
+    mock.watcher?.({
+      type: 'BACKGROUND_TAP',
+      payload: { notificationId: 'id' },
+      deliveryId: 'tap',
+    });
+    expect(mock.navigate).toHaveBeenCalledWith('id');
+    expect(mock.acknowledge).toHaveBeenCalledWith('tap');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(mock.watch).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([false, true])(
+    'does not retry a failed watcher after disposal (failure pending: %s)',
+    async (pending) => {
+      vi.useFakeTimers();
+      let fail!: (error: Error) => void;
+      mock.watch.mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            fail = reject;
+          })
+      );
+      const { unmount } = render(() => (
+        <MaybePushNotificationRegistration>
+          <div />
+        </MaybePushNotificationRegistration>
+      ));
+      await vi.advanceTimersByTimeAsync(0);
+      if (pending) unmount();
+      fail(new Error('Transient bridge failure'));
+      await vi.advanceTimersByTimeAsync(0);
+      if (!pending) unmount();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(mock.watch).toHaveBeenCalledOnce();
+    }
+  );
 
   it('binds the native receiver only after backend registration succeeds', async () => {
     await mount();

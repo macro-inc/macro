@@ -2,9 +2,9 @@ import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { throwOnErr } from '@core/util/result';
+import { useReauthenticateGithubMutation } from '@queries/auth';
 import { authServiceClient } from '@service-auth/client';
-import { createSignal, onMount } from 'solid-js';
+import { createSignal, onCleanup, onMount } from 'solid-js';
 
 async function checkGithubReauthenticationStatus(): Promise<boolean> {
   const response = await authServiceClient.checkGithubLinkStatus();
@@ -17,20 +17,20 @@ async function checkGithubReauthenticationStatus(): Promise<boolean> {
 
 /**
  * Surfaces a "Reconnect GitHub" prompt when the GitHub grant has expired,
- * probed once on mount. Shares the capped prompt region with the other auth
- * prompts, so it takes its turn instead of stacking on them.
+ * probed on mount and browser history restoration. Shares the capped prompt
+ * region with the other auth prompts, so it takes its turn instead of stacking.
  */
 export function GithubReauthenticationPrompt() {
   const [needsReauth, setNeedsReauth] = createSignal(false);
   const [reconnecting, setReconnecting] = createSignal(false);
+  const reauthenticateGithub = useReauthenticateGithubMutation();
 
   async function reconnect() {
     if (reconnecting()) return;
     setReconnecting(true);
     try {
       const connected = await authorizeGithub(
-        (callbackUrl) =>
-          throwOnErr(() => authServiceClient.reauthenticateGithub(callbackUrl)),
+        (callbackUrl) => reauthenticateGithub.mutateAsync(callbackUrl),
         'Failed to reconnect GitHub'
       );
       if (connected) setNeedsReauth(false);
@@ -44,6 +44,21 @@ export function GithubReauthenticationPrompt() {
 
   onMount(() => {
     void checkGithubReauthenticationStatus().then(setNeedsReauth);
+    if (isNativeMobilePlatform()) return;
+
+    async function onPageShow(event: PageTransitionEvent) {
+      if (!event.persisted) return;
+      try {
+        setNeedsReauth(await checkGithubReauthenticationStatus());
+      } catch {
+        // Preserve the previous status if the restored page cannot reach auth.
+      } finally {
+        setReconnecting(false);
+      }
+    }
+
+    window.addEventListener('pageshow', onPageShow);
+    onCleanup(() => window.removeEventListener('pageshow', onPageShow));
   });
 
   useKeyedPersistentToasts({

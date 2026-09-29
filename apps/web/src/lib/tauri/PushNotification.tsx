@@ -50,7 +50,8 @@ function usePushNotifications(
   const recipientMutex = new Mutex();
   let disposed = false;
   let requestingPermission = false;
-  let notificationWatchStarted = false;
+  let notificationWatch: Promise<void> | undefined;
+  let watchRetryTimeout: ReturnType<typeof setTimeout> | undefined;
 
   const [registrationResult, setRegistrationResult] = makePersisted(
     createSignal<NotificationRegistrationResult | undefined>(undefined)
@@ -276,6 +277,7 @@ function usePushNotifications(
   onCleanup(() => {
     disposed = true;
     ++registrationEpoch;
+    clearTimeout(watchRetryTimeout);
     void stopWatch();
   });
 
@@ -313,9 +315,15 @@ function usePushNotifications(
     void startWatch();
   });
 
-  async function startWatch() {
-    if (disposed || notificationWatchStarted || !onPushNotification) return;
-    notificationWatchStarted = true;
+  function startWatch() {
+    if (disposed || !onPushNotification) return;
+    if (notificationWatch) return notificationWatch;
+    clearTimeout(watchRetryTimeout);
+    notificationWatch = watchNotifications();
+    return notificationWatch;
+  }
+
+  async function watchNotifications() {
     const epoch = registrationEpoch;
     try {
       if (deviceType === 'android' && !hasLoginCookie())
@@ -325,8 +333,11 @@ function usePushNotifications(
       });
       if (disposed) await api.unwatch();
     } catch (error) {
-      notificationWatchStarted = false;
+      notificationWatch = undefined;
       console.error('failed to watch push notifications', error);
+      if (!disposed) {
+        watchRetryTimeout = setTimeout(() => void startWatch(), 1000);
+      }
     }
   }
 
