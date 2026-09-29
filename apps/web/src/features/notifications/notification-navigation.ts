@@ -154,7 +154,15 @@ type NotFoundError = {
   notificationId: string;
 };
 
-type OpenNotificationFromIdError = NotSupportedError | NotFoundError;
+type NavigationDeferredError = {
+  tag: 'NavigationDeferredError';
+  notificationId: string;
+};
+
+type OpenNotificationFromIdError =
+  | NotSupportedError
+  | NotFoundError
+  | NavigationDeferredError;
 
 function getSupportedHandler(
   notification: UnifiedNotification,
@@ -420,14 +428,25 @@ export function openSingleStackNotification(
 export function openNotificationFromId(
   notificationId: string,
   layoutManager: SplitManager,
-  notificationSource: NotificationSource
+  notificationSource: NotificationSource,
+  options: { canOpen?: () => boolean } = {}
 ): ResultAsync<void, OpenNotificationFromIdError> {
+  const openIfReady = (notification: UnifiedNotification) => {
+    if (options.canOpen && !options.canOpen()) {
+      return errAsync({
+        tag: 'NavigationDeferredError' as const,
+        notificationId,
+      });
+    }
+    return openNotification(notification, layoutManager);
+  };
+
   // Check notification source first
   const cached = notificationSource
     .notifications()
     .find((n) => n.id === notificationId);
   if (cached) {
-    return openNotification(cached, layoutManager);
+    return openIfReady(cached);
   }
 
   // Fetch if not in notification source
@@ -438,6 +457,6 @@ export function openNotificationFromId(
       const err: NotFoundError = { tag: 'NotFoundError', notificationId };
       return errAsync(err);
     }
-    return openNotification(unified, layoutManager);
+    return openIfReady(unified);
   });
 }

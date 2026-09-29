@@ -16,6 +16,7 @@ vi.mock('../notification-stacking', () => ({
 
 const flags = vi.hoisted(() => ({ reminders: true }));
 const openReminderDetail = vi.hoisted(() => vi.fn());
+const getNotificationById = vi.hoisted(() => vi.fn());
 
 vi.mock('@app/features/reminders/reminder-navigation', () => ({
   openReminderDetail,
@@ -46,12 +47,16 @@ vi.mock('@core/util/url', () => ({
   openExternalUrl: vi.fn(),
 }));
 vi.mock('@queries/notification/user-notifications', () => ({
-  getNotificationById: vi.fn(),
+  getNotificationById,
 }));
 
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { openNotification } from '../notification-navigation';
+import {
+  openNotification,
+  openNotificationFromId,
+} from '../notification-navigation';
+import type { NotificationSource } from '../notification-source';
 import type { UnifiedNotification } from '../types';
 
 function reminderNotification(): UnifiedNotification {
@@ -72,6 +77,7 @@ describe('reminder notification navigation', () => {
   beforeEach(() => {
     flags.reminders = true;
     openReminderDetail.mockClear();
+    getNotificationById.mockReset();
   });
 
   it('opens source-less reminders through their claimed detail route', async () => {
@@ -102,5 +108,26 @@ describe('reminder notification navigation', () => {
       handle: undefined,
       openInNewSplit: false,
     });
+  });
+
+  it('does not open a fetched reminder after its route host becomes stale', async () => {
+    const notification = reminderNotification();
+    getNotificationById.mockResolvedValue(notification);
+    const layout = {} as SplitManager;
+    const source = { notifications: () => [] } as unknown as NotificationSource;
+
+    const result = await openNotificationFromId(
+      'notification-1',
+      layout,
+      source,
+      { canOpen: () => false }
+    );
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr()).toEqual({
+      tag: 'NavigationDeferredError',
+      notificationId: 'notification-1',
+    });
+    expect(openReminderDetail).not.toHaveBeenCalled();
   });
 });
