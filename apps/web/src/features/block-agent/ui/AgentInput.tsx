@@ -218,6 +218,9 @@ export function AgentInput(props: AgentInputProps) {
       },
     })
     .onEnter(() => {
+      // On a virtual keyboard Enter is a newline, as in channels; the send
+      // button is the only way to submit.
+      if (isTouchDevice()) return false;
       if (canSend()) send();
       else sendNext();
       return true;
