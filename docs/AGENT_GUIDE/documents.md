@@ -519,6 +519,13 @@ keeps at least 16px of
 bottom clearance above the drawer's curve, including while the keyboard is open,
 and accounts for the home-indicator safe area when the keyboard is closed.
 
+An inline-comment notification or `/app/md/<id>?comment_id=<comment-id>` link
+should scroll to the anchor and open its thread on the first click, including
+when the document has not loaded yet. Verify both comments arriving before the
+editor and comments arriving after it. Once loaded, click elsewhere in the
+document, then click the same notification again: it should revisit the comment,
+while background comment refreshes should leave the user's position alone.
+
 Also verify anchored comments in Drive's detail pane: open a document with
 existing text anchors, then click a numbered comment badge to expand it. The
 document should stay visible and the thread should open; loading the document
