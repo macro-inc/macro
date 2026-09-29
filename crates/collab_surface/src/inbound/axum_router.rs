@@ -104,10 +104,10 @@ where
 /// `ChannelMessage` is deliberately absent: it has no access resolution in
 /// `entity_access` — a message-scoped surface attaches to its channel instead
 /// (the `Call → Channel` precedent). `Initiative` is absent because its
-/// description surface is owned by the initiative domain, which creates it
-/// (or adopts its legacy description document) itself; its surfaces still
-/// mint tokens here, with access derived from the initiative. The rest are
-/// excluded until they have a surface story.
+/// description surface is owned by the initiative domain, which adopts its
+/// description document itself; its surfaces still mint tokens here, with
+/// access derived from the initiative. The rest are excluded until they have a
+/// surface story.
 const SUPPORTED_PARENT_TYPES: &[EntityType] = &[
     EntityType::Document,
     EntityType::Channel,

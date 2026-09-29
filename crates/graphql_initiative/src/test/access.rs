@@ -77,12 +77,6 @@ impl InitiativeService for ReceiptService {
         ));
         Ok(DescriptionSurfaceId::from_uuid(Uuid::from_u128(2)))
     }
-    async fn read_description(
-        &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<String, InitiativeError> {
-        unreachable!("unexpected domain call")
-    }
     async fn list(&self, user_id: &MacroUserIdStr<'_>) -> Result<InitiativeList, InitiativeError> {
         unreachable!("unexpected domain call")
     }

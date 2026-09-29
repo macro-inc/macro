@@ -20724,7 +20724,7 @@
         "properties": {
           "description": {
             "type": ["string", "null"],
-            "description": "Initial markdown for the description surface. Not stored on the initiative; later\nedits happen in the collaborative description editor."
+            "description": "Initial markdown for the description document. Not stored on the initiative; later\nedits happen in the collaborative description editor."
           },
           "memberIds": {
             "type": ["array", "null"],
@@ -21930,12 +21930,12 @@
       "DescriptionDocumentId": {
         "type": "string",
         "format": "uuid",
-        "description": "Id of the legacy markdown document that held an initiative's description before\ncollab surfaces. Only initiatives created before surfaces have one; its session is\nthe description surface, and its grants are still mirrored until it is retired."
+        "description": "Id of the markdown document that backs an initiative's description. Its sync-service\nsession is the description surface, and its grants mirror the initiative's."
       },
       "DescriptionSurfaceId": {
         "type": "string",
         "format": "uuid",
-        "description": "Id of the collab surface that holds an initiative's description: a Loro session in\nsync-service whose access derives from the initiative. Minted as UUIDv7 for new\ninitiatives; for initiatives created before surfaces, it is the legacy description\ndocument's id, whose session the surface adopted in place."
+        "description": "Id of the collab surface that holds an initiative's description: a Loro session in\nsync-service whose access derives from the initiative. The surface adopts the\ndescription document's session in place, so while a document is linked the ids match."
       },
       "DocumentBasic": {
         "type": "object",
@@ -25776,7 +25776,7 @@
               },
               {
                 "$ref": "#/components/schemas/DescriptionDocumentId",
-                "description": "Legacy description document, for initiatives created before surfaces. Deprecated:\nits session is the description surface; new initiatives have none."
+                "description": "The markdown document backing the description; document tools can read and edit\nit. Absent only for initiatives created by a later release."
               }
             ]
           },
@@ -25894,7 +25894,7 @@
               },
               {
                 "$ref": "#/components/schemas/DescriptionDocumentId",
-                "description": "Legacy description document, for initiatives created before surfaces. Deprecated:\nits session is the description surface; new initiatives have none."
+                "description": "The markdown document backing the description; document tools can read and edit\nit. Absent only for initiatives created by a later release."
               }
             ]
           },
@@ -30741,7 +30741,7 @@
               "descriptionDocumentId": {
                 "type": ["string", "null"],
                 "format": "uuid",
-                "description": "Legacy document that held the description before collab surfaces, for initiatives\ncreated before them. Its session is the description surface."
+                "description": "Document backing the initiative description; its session is the description\nsurface."
               },
               "descriptionSurfaceId": {
                 "type": ["string", "null"],

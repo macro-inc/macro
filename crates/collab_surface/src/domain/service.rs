@@ -96,6 +96,9 @@ where
         initial_markdown: String,
     ) -> Result<CollabSurface, CollabSurfaceError> {
         let parent = resolve_parent(user_id, &parent_receipt)?;
+        if owned_by_parent_domain(parent.entity_type) {
+            return Err(CollabSurfaceError::AccessDenied);
+        }
         self.ensure_bound(parent, id, SurfaceSeed::Markdown(initial_markdown))
             .await
     }
@@ -162,6 +165,11 @@ where
         let parent = resolve_parent(user_id, &parent_receipt)?;
         let surface = self.get_live(id).await?;
         verify_receipt_matches_parent(&surface, &parent)?;
+        // A deleted id never comes back, so a surface its parent's domain owns
+        // (e.g. a project description) is retired only by that domain.
+        if owned_by_parent_domain(parent.entity_type) {
+            return Err(CollabSurfaceError::AccessDenied);
+        }
 
         // Deletion requires an edit-capable permission on the parent; there is
         // no per-surface owner. `access_level_for` already maps channel
@@ -196,17 +204,6 @@ where
             .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
         Ok(())
     }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn internal_read_markdown(&self, id: Uuid) -> Result<String, CollabSurfaceError> {
-        let surface = self.get_live(id).await?;
-        if surface.state != SurfaceState::Ready {
-            return Err(CollabSurfaceError::NotReady);
-        }
-        self.initializer
-            .read_markdown(&surface.id.to_string())
-            .await
-    }
 }
 
 impl<R, I, D> CollabSurfaceServiceImpl<R, I, D>
@@ -223,7 +220,9 @@ where
         id: Uuid,
         seed: SurfaceSeed,
     ) -> Result<CollabSurface, CollabSurfaceError> {
-        if seed.initial_markdown().len() > MAX_INITIAL_MARKDOWN_LEN {
+        if let SurfaceSeed::Markdown(markdown) = &seed
+            && markdown.len() > MAX_INITIAL_MARKDOWN_LEN
+        {
             return Err(CollabSurfaceError::BadRequest(format!(
                 "initial markdown exceeds {MAX_INITIAL_MARKDOWN_LEN} bytes"
             )));
@@ -331,12 +330,13 @@ where
         })
     }
 
-    /// Take a surface the caller may act on to `Ready`, (re)initializing its
-    /// sync-service session when it is still `Pending`. The initializer treats
-    /// an already-initialized session as success, so this is safe to run
-    /// concurrently and after partial failures: a pending row whose session
-    /// was initialized before `mark_ready` failed heals here. An adoption
-    /// reuses the document's session as-is.
+    /// Take a surface the caller may act on to `Ready`. A markdown seed
+    /// (re)initializes a `Pending` session; the initializer treats an
+    /// already-initialized session as success, so this is safe to run
+    /// concurrently and after partial failures (a pending row whose session
+    /// was initialized before `mark_ready` failed heals here). An adoption
+    /// never initializes: it waits for the document's own session, and stays
+    /// `Pending` until then.
     async fn finish_init(
         &self,
         surface: CollabSurface,
@@ -346,9 +346,17 @@ where
             return Ok(surface);
         }
 
-        self.initializer
-            .initialize(&surface.id.to_string(), seed.initial_markdown())
-            .await?;
+        let session_id = surface.id.to_string();
+        match seed {
+            SurfaceSeed::Markdown(markdown) => {
+                self.initializer.initialize(&session_id, markdown).await?;
+            }
+            SurfaceSeed::AdoptDocumentSession => {
+                if !self.initializer.await_session(&session_id).await? {
+                    return Err(CollabSurfaceError::NotReady);
+                }
+            }
+        }
 
         self.repo
             .mark_ready(surface.id)

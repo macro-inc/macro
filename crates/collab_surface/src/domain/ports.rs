@@ -6,6 +6,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use uuid::Uuid;
 
+#[cfg(doc)]
+use crate::domain::models::owned_by_parent_domain;
 use crate::domain::models::{CollabSurface, CollabSurfaceError, SurfaceSeed};
 
 /// Outbound persistence port for collab surfaces.
@@ -55,7 +57,7 @@ pub trait DocumentIds: Send + Sync + 'static {
 }
 
 /// Outbound port for a surface's sync-service session: boots it from
-/// markdown, checks whether it exists, and reads it back.
+/// markdown and checks whether it exists.
 ///
 /// Implementations convert the markdown to a Loro snapshot (an empty string
 /// maps to the canonical blank-document snapshot) and store it as the
@@ -79,11 +81,12 @@ pub trait SurfaceInitializer: Send + Sync + 'static {
         surface_id: &str,
     ) -> impl Future<Output = Result<bool, CollabSurfaceError>> + Send;
 
-    /// Read the session's current content as internal (lossless) markdown.
-    fn read_markdown(
+    /// Whether the session for `surface_id` exists, waiting briefly for a
+    /// session another service is still initializing.
+    fn await_session(
         &self,
         surface_id: &str,
-    ) -> impl Future<Output = Result<String, CollabSurfaceError>> + Send;
+    ) -> impl Future<Output = Result<bool, CollabSurfaceError>> + Send;
 }
 
 /// The collab-surface use-cases, generic over the outbound ports.
@@ -100,6 +103,8 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
     /// - the id names a document, or a new id already has a sync-service
     ///   session → [`CollabSurfaceError::IdReserved`], before any row is
     ///   written: a new surface only ever creates its own session.
+    /// - the parent's domain owns its surfaces ([`owned_by_parent_domain`]) →
+    ///   [`CollabSurfaceError::AccessDenied`].
     ///
     /// Concurrent ensures for the same id converge: the insert is
     /// conflict-tolerant and the initializer treats an already-initialized
@@ -142,9 +147,11 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<DocumentPermissionToken, CollabSurfaceError>> + Send;
 
     /// Soft-delete a surface. Requires an edit-capable permission on the
-    /// parent. The sync-service session is not reclaimed (documented gap
-    /// shared with documents); deletion makes the surface unmintable, which
-    /// cuts off all access.
+    /// parent, and a parent whose domain does not own its surfaces
+    /// ([`owned_by_parent_domain`]): a deleted id never comes back, so only the
+    /// owning domain may retire one. The sync-service session is not reclaimed
+    /// (documented gap shared with documents); deletion makes the surface
+    /// unmintable, which cuts off all access.
     fn delete_surface(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -170,11 +177,4 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
         &self,
         id: Uuid,
     ) -> impl Future<Output = Result<(), CollabSurfaceError>> + Send;
-
-    /// Read a ready surface's content as internal markdown for the domain that
-    /// owns it. For internal callers only.
-    fn internal_read_markdown(
-        &self,
-        id: Uuid,
-    ) -> impl Future<Output = Result<String, CollabSurfaceError>> + Send;
 }

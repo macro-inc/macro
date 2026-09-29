@@ -11,8 +11,8 @@ import type { SoupInitiativeSoupPropertiesFieldAllOfTwoViewedAt } from './soupIn
 export type SoupInitiativeSoupPropertiesFieldAllOfTwo = {
   /** Creation timestamp. */
   createdAt: string;
-  /** Legacy document that held the description before collab surfaces, for initiatives
-created before them. Its session is the description surface. */
+  /** Document backing the initiative description; its session is the description
+surface. */
   descriptionDocumentId?: SoupInitiativeSoupPropertiesFieldAllOfTwoDescriptionDocumentId;
   /** Collab surface holding the initiative description. */
   descriptionSurfaceId?: SoupInitiativeSoupPropertiesFieldAllOfTwoDescriptionSurfaceId;

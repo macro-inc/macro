@@ -21,13 +21,16 @@ async fn attributed_creation_preserves_the_bot_and_delegating_owner() {
         .return_once(|_| Box::pin(async { Ok(None) }));
     repo.expect_create()
         .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
-    let (surfaces, _) = recording_surfaces();
+    let mut documents = MockInitiativeDescriptionDocuments::new();
+    documents
+        .expect_create()
+        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
     let events = Arc::new(Events::default());
     let attribution = activity::Attribution::delegated(
         activity::Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID),
         user(OWNER),
     );
-    service_with_surfaces(repo, surfaces)
+    service_with_documents(repo, documents)
         .with_event_publisher(events.clone())
         .create_attributed(
             &user(OWNER),
@@ -134,8 +137,8 @@ async fn committed_deletion_purges_activity_even_when_description_cleanup_fails(
     let mut repo = MockInitiativeRepo::new();
     repo.expect_delete().times(1).return_once(|_| {
         Box::pin(async {
-            Ok(crate::domain::models::DeletedInitiative {
-                description: legacy_location(),
+            Ok(DeletedInitiative {
+                description: description(),
             })
         })
     });
@@ -147,13 +150,8 @@ async fn committed_deletion_purges_activity_even_when_description_cleanup_fails(
             )))
         })
     });
-    let mut surfaces = MockInitiativeDescriptionSurfaces::new();
-    surfaces
-        .expect_delete()
-        .times(1)
-        .return_once(|_| Box::pin(async { Ok(()) }));
     let events = Arc::new(Events::default());
-    let result = service_with(repo, documents, surfaces)
+    let result = service_with(repo, documents, deleting_surfaces(description().surface_id))
         .with_event_publisher(events.clone())
         .delete(owner_receipt())
         .await;

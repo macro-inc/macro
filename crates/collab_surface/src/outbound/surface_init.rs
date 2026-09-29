@@ -1,5 +1,5 @@
-//! Sync-service session initializer (and markdown reader) backed by
-//! lexical-service and sync-service HTTP clients.
+//! Sync-service session initializer backed by lexical-service and
+//! sync-service HTTP clients.
 //!
 //! Mirrors `crates/documents/src/outbound/markdown_init.rs`, with one
 //! deliberate difference: initialization here is awaited by the caller (with
@@ -8,9 +8,9 @@
 
 use std::time::Duration;
 
-use lexical_client::{LexicalClient, parse_markdown::MarkdownTarget};
+use lexical_client::LexicalClient;
 use sync_service_client::SyncServiceClient;
-use tokio_retry::{Retry, strategy::FixedInterval};
+use tokio_retry::{Retry, RetryIf, strategy::FixedInterval};
 
 use crate::domain::models::CollabSurfaceError;
 use crate::domain::ports::SurfaceInitializer;
@@ -22,6 +22,10 @@ const MARKDOWN_GOLDEN_SNAPSHOT: &[u8] =
 
 const MAX_ATTEMPTS: usize = 3;
 const RETRY_DELAY: Duration = Duration::from_secs(1);
+
+/// Backoff while an adoption waits for a document session still being initialized:
+/// about 1.5 s in all, checking soon after the first miss.
+const SESSION_WAIT_BACKOFF_MS: [u64; 5] = [50, 100, 200, 400, 800];
 
 /// [`SurfaceInitializer`] over the real lexical-service and sync-service
 /// clients.
@@ -103,14 +107,29 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn read_markdown(&self, surface_id: &str) -> Result<String, CollabSurfaceError> {
-        self.lexical_client
-            .get_markdown(surface_id, MarkdownTarget::Internal)
-            .await
-            .map_err(|e| {
-                CollabSurfaceError::Internal(
-                    rootcause::report!("failed to read surface markdown: {e:?}").into_dynamic(),
-                )
-            })
+    async fn await_session(&self, surface_id: &str) -> Result<bool, CollabSurfaceError> {
+        // A document's own initialization runs in the background after it is
+        // created, so give a just-created session a moment to land. Only a
+        // missing session is retried; a failed check is reported at once.
+        let result = RetryIf::start(
+            SESSION_WAIT_BACKOFF_MS.map(Duration::from_millis),
+            || async {
+                match self.sync_service_client.exists(surface_id).await {
+                    Ok(true) => Ok(()),
+                    Ok(false) => Err(None),
+                    Err(error) => Err(Some(error)),
+                }
+            },
+            |error: &Option<anyhow::Error>| error.is_none(),
+        )
+        .await;
+        match result {
+            Ok(()) => Ok(true),
+            Err(None) => Ok(false),
+            Err(Some(error)) => Err(CollabSurfaceError::Internal(
+                rootcause::report!("failed to check sync-service session: {error:?}")
+                    .into_dynamic(),
+            )),
+        }
     }
 }

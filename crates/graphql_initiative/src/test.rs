@@ -193,8 +193,9 @@ fn detail() -> InitiativeDetail {
     InitiativeDetail {
         id: InitiativeId::from_uuid(Uuid::parse_str(PROJECT_ID).unwrap()),
         name: "Launch".into(),
-        description_surface_id: DescriptionSurfaceId::from_uuid(Uuid::from_u128(2)),
-        description_document_id: None,
+        description_surface_id: DescriptionDocumentId::from_uuid(Uuid::from_u128(2))
+            .adopting_surface(),
+        description_document_id: Some(DescriptionDocumentId::from_uuid(Uuid::from_u128(2))),
         owner_id: user(),
         member_ids: vec![],
         task_ids: vec![],

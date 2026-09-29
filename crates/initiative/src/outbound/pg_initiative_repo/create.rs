@@ -25,39 +25,14 @@ pub(super) async fn create(
     share_permission: SharePermissionV2,
     team_share: TeamShareCreation,
 ) -> Result<InitiativeDetail, InitiativeError> {
-    insert_initiative(pool, args, None, share_permission, team_share).await
-}
-
-/// Persist an initiative shaped like one created before description surfaces: it links a
-/// legacy description document whose session its surface adopted, and mirrors grants onto
-/// it. Production never creates these; fixtures use this to cover the mirroring that legacy
-/// rows still rely on.
-#[cfg(test)]
-pub(super) async fn create_legacy(
-    pool: &PgPool,
-    mut args: CreateInitiativeRepoArgs,
-    document: DescriptionDocumentId,
-    share_permission: SharePermissionV2,
-    team_share: TeamShareCreation,
-) -> Result<InitiativeDetail, InitiativeError> {
-    args.description_surface_id = document.adopting_surface();
-    insert_initiative(pool, args, Some(document), share_permission, team_share).await
-}
-
-async fn insert_initiative(
-    pool: &PgPool,
-    args: CreateInitiativeRepoArgs,
-    legacy_document: Option<DescriptionDocumentId>,
-    share_permission: SharePermissionV2,
-    team_share: TeamShareCreation,
-) -> Result<InitiativeDetail, InitiativeError> {
     let mut tx = pool
         .begin()
         .await
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
     let id = args.id.as_uuid();
-    let targets = GrantTargets::new(args.id, legacy_document);
+    let document = args.description_document_id;
+    let targets = GrantTargets::new(args.id, Some(document));
 
     team_share::acquire_guard(&mut tx)
         .await
@@ -83,8 +58,8 @@ async fn insert_initiative(
         args.name,
         args.owner_id.as_ref(),
         share_permission_id,
-        args.description_surface_id.as_uuid(),
-        legacy_document.map(|document| document.to_string()),
+        document.adopting_surface().as_uuid(),
+        document.to_string(),
     )
     .execute(tx.as_mut())
     .await
@@ -93,7 +68,7 @@ async fn insert_initiative(
 
     super::members::insert_members(&mut tx, id, &args.member_ids).await?;
 
-    // Owner on a legacy document was written when the documents side created it.
+    // Owner on the document was written when the documents side created it.
     insert_entity_access_row(
         &mut tx,
         &id,
@@ -113,11 +88,13 @@ async fn insert_initiative(
         .map_err(AdapterError::TeamShareCreate)
         .map_err(map_sqlx)?;
 
-    if let Some(description) = targets.description_entity() {
-        team_share::initialize(&mut tx, &description, description_team_share(team_share))
-            .await
-            .map_err(|error| InitiativeError::Internal(error.into()))?;
-    }
+    team_share::initialize(
+        &mut tx,
+        &EntityType::Document.with_entity_string(document.to_string()),
+        description_team_share(team_share),
+    )
+    .await
+    .map_err(|error| InitiativeError::Internal(error.into()))?;
 
     tx.commit()
         .await
@@ -191,7 +168,7 @@ pub(super) async fn update(
             command.expected().entity == entity
                 && requested == Some(command.target().map(|grant| grant.level.into()))
         };
-        // A legacy document needs its own command; a surface-only initiative has none.
+        // A linked document needs its own command; a document-less initiative has none.
         let description_matches = match (&lockstep.description, targets.description_entity()) {
             (Some(command), Some(entity)) => matches_edit(command, entity),
             (None, None) => true,
@@ -223,8 +200,8 @@ pub(super) async fn update(
     require_detail(pool, args.id).await
 }
 
-/// A legacy document's rows and the description surface are untouched here. The service
-/// cleans them up after this commits.
+/// The document's rows and the description surface are untouched here. The service cleans
+/// them up after this commits.
 pub(super) async fn delete(
     pool: &PgPool,
     id: InitiativeId,
@@ -245,7 +222,10 @@ pub(super) async fn delete(
         r#"
         DELETE FROM initiative
         WHERE id = $1
-        RETURNING share_permission_id, description_surface_id, description_document_id
+        RETURNING
+            share_permission_id,
+            description_surface_id,
+            description_document_id AS "description_document_id?"
         "#,
         uuid,
     )
@@ -297,7 +277,7 @@ async fn patch_initiative_row(
             name = CASE WHEN $2 THEN $3 ELSE name END,
             updated_at = now()
         WHERE id = $1
-        RETURNING share_permission_id, description_document_id
+        RETURNING share_permission_id, description_document_id AS "description_document_id?"
         "#,
         args.id.as_uuid(),
         args.name.is_some(),

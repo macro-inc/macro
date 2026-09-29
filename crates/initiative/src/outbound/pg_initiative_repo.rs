@@ -76,6 +76,34 @@ impl InitiativeRepo for PgInitiativeRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn description(
+        &self,
+        id: InitiativeId,
+    ) -> Result<Option<DescriptionLocation>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                description_surface_id,
+                description_document_id AS "description_document_id?"
+            FROM initiative
+            WHERE id = $1
+            "#,
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(classify_sqlx)?;
+        row.map(|row| {
+            description_location(
+                id.as_uuid(),
+                row.description_surface_id,
+                row.description_document_id.as_deref(),
+            )
+        })
+        .transpose()
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_detail(&self, id: InitiativeId) -> Result<Option<InitiativeDetail>, Self::Err> {
         load_record(&self.pool, id)
             .await
@@ -169,10 +197,11 @@ impl InitiativeRepo for PgInitiativeRepo {
     }
 }
 
-/// Every entity a grant write targets: the initiative and, for initiatives created before
-/// description surfaces, the legacy description document whose grants still mirror it.
-/// Built once per mutation so no path can grant on the initiative and forget the document.
-/// The description surface needs no grants: its access derives from the initiative.
+/// Every entity a grant write targets: the initiative and its description document, whose
+/// grants mirror it. Built once per mutation so no path can grant on the initiative and
+/// forget the document. The description surface needs no grants: its access derives from
+/// the initiative. The document is optional only so rows from a later release that stops
+/// creating documents stay writable.
 #[derive(Debug, Clone, Copy)]
 struct GrantTargets {
     initiative: uuid::Uuid,
@@ -211,7 +240,7 @@ impl GrantTargets {
 struct InitiativeRecord {
     id: uuid::Uuid,
     name: String,
-    description_surface_id: Option<uuid::Uuid>,
+    description_surface_id: uuid::Uuid,
     description_document_id: Option<String>,
     owner_user_id: String,
     created_at: chrono::DateTime<chrono::Utc>,
@@ -246,7 +275,7 @@ impl InitiativeRecord {
             id: InitiativeId::from_uuid(self.id),
             name: self.name,
             description_surface_id: description.surface_id,
-            description_document_id: description.legacy_document_id,
+            description_document_id: description.document_id,
             owner_id,
             member_ids: parse_members(self.member_ids)?,
             task_ids: self.task_ids,
@@ -258,8 +287,8 @@ impl InitiativeRecord {
     }
 }
 
-/// Parse the legacy description document column; absent for initiatives created with a
-/// description surface.
+/// Parse the description document column. Every row this release writes has one; a
+/// later release may stop creating documents.
 fn parse_description_document_id(
     initiative: uuid::Uuid,
     raw: Option<&str>,
@@ -274,24 +303,15 @@ fn parse_description_document_id(
     .transpose()
 }
 
-/// Build the description location from the row's columns. Rows written before
-/// `description_surface_id` existed read it through the legacy document id, which is
-/// the surface id by construction.
+/// Build the description location from the row's columns.
 fn description_location(
     initiative: uuid::Uuid,
-    surface: Option<uuid::Uuid>,
+    surface: uuid::Uuid,
     document: Option<&str>,
 ) -> Result<DescriptionLocation, InitiativeError> {
-    let legacy_document_id = parse_description_document_id(initiative, document)?;
-    let surface_id = surface
-        .map(DescriptionSurfaceId::from_uuid)
-        .or_else(|| legacy_document_id.map(|document| document.adopting_surface()))
-        .ok_or_else(|| {
-            InitiativeError::Internal(report!("initiative {initiative} has no description"))
-        })?;
     Ok(DescriptionLocation {
-        surface_id,
-        legacy_document_id,
+        surface_id: DescriptionSurfaceId::from_uuid(surface),
+        document_id: parse_description_document_id(initiative, document)?,
     })
 }
 
@@ -415,7 +435,7 @@ async fn load_record(
             i.id,
             i.name,
             i.description_surface_id,
-            i.description_document_id,
+            i.description_document_id AS "description_document_id?",
             i.owner_user_id,
             i.created_at,
             i.updated_at,

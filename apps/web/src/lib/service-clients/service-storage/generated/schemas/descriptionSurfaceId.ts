@@ -7,8 +7,7 @@
 
 /**
  * Id of the collab surface that holds an initiative's description: a Loro session in
-sync-service whose access derives from the initiative. Minted as UUIDv7 for new
-initiatives; for initiatives created before surfaces, it is the legacy description
-document's id, whose session the surface adopted in place.
+sync-service whose access derives from the initiative. The surface adopts the
+description document's session in place, so while a document is linked the ids match.
  */
 export type DescriptionSurfaceId = string;

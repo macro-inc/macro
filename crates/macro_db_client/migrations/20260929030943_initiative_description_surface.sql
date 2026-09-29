@@ -1,28 +1,44 @@
--- Initiative descriptions move from a hidden `initiative_description` Document to a
--- collab surface (collab_surfaces) parented by the initiative. Access to the surface
--- derives from access to the initiative, so new initiatives no longer need a document
--- whose grants are mirrored in lockstep.
+-- Project (initiative) descriptions move onto a collab surface (collab_surfaces)
+-- parented by the initiative, whose access derives from initiative access. The surface
+-- adopts the description document's existing sync-service session in place: the
+-- surface id is the document id, so content and history carry over and nothing is
+-- copied.
 --
--- Existing initiatives adopt their description document's sync-service session in
--- place: the surface id is the legacy document id, so the CRDT (content and history)
--- is reused as-is and nothing is copied or lost. The legacy document stays linked
--- through description_document_id, and its grants keep being mirrored, until a later
--- change retires it.
---
--- Expand phase: description_surface_id stays nullable so services still running the
--- previous release can insert rows without it. Readers fall back to the legacy
--- document id, which is the surface id by construction. A follow-up migration
--- backfills again and sets NOT NULL once every writer sets the column.
+-- This release still creates a description document for every initiative and keeps
+-- mirroring its grants, so description_document_id stays NOT NULL and every row stays
+-- readable by services still running the previous release. Readers in this release
+-- tolerate a NULL document, so a follow-up can stop creating documents after this one
+-- is fully deployed.
 ALTER TABLE initiative
     ADD COLUMN IF NOT EXISTS description_surface_id UUID;
+
+-- The previous release (rolling deploys, rollbacks) inserts rows without a surface.
+-- Name its document's session, as for every other row, so the column is never NULL.
+CREATE OR REPLACE FUNCTION initiative_default_description_surface()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.description_surface_id IS NULL THEN
+        NEW.description_surface_id := NEW.description_document_id::uuid;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS initiative_default_description_surface ON initiative;
+
+CREATE TRIGGER initiative_default_description_surface
+    BEFORE INSERT ON initiative
+    FOR EACH ROW
+    EXECUTE FUNCTION initiative_default_description_surface();
 
 UPDATE initiative
 SET description_surface_id = description_document_id::uuid
 WHERE description_surface_id IS NULL;
 
--- New initiatives have no description document.
 ALTER TABLE initiative
-    ALTER COLUMN description_document_id DROP NOT NULL;
+    ALTER COLUMN description_surface_id SET NOT NULL;
 
 ALTER TABLE initiative
     DROP CONSTRAINT IF EXISTS initiative_description_surface_id_key;
@@ -30,9 +46,8 @@ ALTER TABLE initiative
 ALTER TABLE initiative
     ADD CONSTRAINT initiative_description_surface_id_key UNIQUE (description_surface_id);
 
--- While a legacy document is linked, the surface is that document's session. The
--- spelling must match exactly: the sync-service session key is the document id text,
--- and a surface is addressed by its canonical uuid spelling.
+-- While a document is linked, the surface is that document's session. Compared as
+-- uuids, so any spelling of a document id satisfies it.
 ALTER TABLE initiative
     DROP CONSTRAINT IF EXISTS initiative_description_surface_adopts_document;
 
@@ -40,14 +55,5 @@ ALTER TABLE initiative
     ADD CONSTRAINT initiative_description_surface_adopts_document
         CHECK (
             description_document_id IS NULL
-            OR description_surface_id IS NULL
-            OR description_surface_id::text = description_document_id
+            OR description_surface_id = description_document_id::uuid
         );
-
--- Every initiative keeps a description somewhere.
-ALTER TABLE initiative
-    DROP CONSTRAINT IF EXISTS initiative_description_present;
-
-ALTER TABLE initiative
-    ADD CONSTRAINT initiative_description_present
-        CHECK (description_surface_id IS NOT NULL OR description_document_id IS NOT NULL);

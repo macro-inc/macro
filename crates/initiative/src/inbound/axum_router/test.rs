@@ -31,9 +31,9 @@ use super::*;
 use crate::domain::{
     models::{
         AssignTaskStatus, AssignTasksResponse, AssignTasksResult, CreateInitiativeRequest,
-        DescriptionSurfaceId, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
-        InitiativeList, InitiativeSummary, MAX_INITIATIVE_NAME_GRAPHEMES, TaskAssignment,
-        UpdateInitiativeRequest,
+        DescriptionDocumentId, DescriptionSurfaceId, InitiativeBasic, InitiativeDetail,
+        InitiativeError, InitiativeId, InitiativeList, InitiativeSummary,
+        MAX_INITIATIVE_NAME_GRAPHEMES, TaskAssignment, UpdateInitiativeRequest,
     },
     ports::InitiativeService,
 };
@@ -52,8 +52,8 @@ fn unknown_id() -> InitiativeId {
     InitiativeId::from_uuid(Uuid::from_u128(99))
 }
 
-fn description_surface_id() -> DescriptionSurfaceId {
-    DescriptionSurfaceId::from_uuid(Uuid::from_u128(2))
+fn description_document_id() -> DescriptionDocumentId {
+    DescriptionDocumentId::from_uuid(Uuid::from_u128(2))
 }
 
 fn now() -> DateTime<Utc> {
@@ -93,8 +93,8 @@ fn sample_detail() -> InitiativeDetail {
     InitiativeDetail {
         id: existing_id(),
         name: "Launch".to_string(),
-        description_surface_id: description_surface_id(),
-        description_document_id: None,
+        description_surface_id: description_document_id().adopting_surface(),
+        description_document_id: Some(description_document_id()),
         owner_id: user(),
         member_ids: Vec::new(),
         task_ids: Vec::new(),
@@ -110,8 +110,8 @@ fn sample_list() -> InitiativeList {
         initiatives: vec![InitiativeSummary {
             id: existing_id(),
             name: "Launch".to_string(),
-            description_surface_id: description_surface_id(),
-            description_document_id: None,
+            description_surface_id: description_document_id().adopting_surface(),
+            description_document_id: Some(description_document_id()),
             updated_at: now(),
         }],
     }
@@ -413,14 +413,7 @@ impl InitiativeService for FakeInitiativeService {
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<DescriptionSurfaceId, InitiativeError> {
-        Ok(description_surface_id())
-    }
-
-    async fn read_description(
-        &self,
-        _receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<String, InitiativeError> {
-        Ok(String::new())
+        Ok(description_document_id().adopting_surface())
     }
 
     async fn update(
@@ -643,7 +636,7 @@ async fn create_returns_200() {
 }
 
 #[tokio::test]
-async fn create_response_points_at_the_description_surface_instead_of_inlining_text() {
+async fn create_response_points_at_the_description_document_instead_of_inlining_text() {
     let response = send(
         build_router(
             FakeInitiativeService::default(),
@@ -662,10 +655,13 @@ async fn create_response_points_at_the_description_surface_instead_of_inlining_t
     assert_eq!(response.status(), StatusCode::OK);
     let body = read_json(response).await;
     assert_eq!(
-        body["descriptionSurfaceId"],
-        serde_json::json!(description_surface_id().to_string())
+        body["descriptionDocumentId"],
+        serde_json::json!(description_document_id().to_string())
     );
-    assert_eq!(body["descriptionDocumentId"], serde_json::Value::Null);
+    assert_eq!(
+        body["descriptionSurfaceId"],
+        serde_json::json!(description_document_id().to_string())
+    );
     assert!(body.get("description").is_none());
 }
 

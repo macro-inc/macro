@@ -73,8 +73,8 @@ fn summary(id: u128, name: &str) -> InitiativeSummary {
     InitiativeSummary {
         id: InitiativeId::from_uuid(uuid::Uuid::from_u128(id)),
         name: name.into(),
-        description_surface_id: description_surface_id(),
-        description_document_id: None,
+        description_surface_id: description().surface_id,
+        description_document_id: description().document_id,
         updated_at: now(),
     }
 }
@@ -137,22 +137,24 @@ async fn failed_property_initialization_compensates_project_and_description() {
     repo.expect_delete().times(1).return_once(|_| {
         Box::pin(async {
             Ok(crate::domain::models::DeletedInitiative {
-                description: surface_location(),
+                description: description(),
             })
         })
     });
-    let (mut surfaces, ensured) = recording_surfaces();
-    let discarded = ensured.clone();
-    surfaces
-        .expect_delete()
-        .withf(move |id| discarded.lock().unwrap().first().map(|e| e.0) == Some(*id))
+    let mut documents = MockInitiativeDescriptionDocuments::new();
+    documents
+        .expect_create()
+        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+    documents
+        .expect_purge()
+        .withf(|id| *id == description_document_id())
         .times(1)
         .return_once(|_| Box::pin(async { Ok(()) }));
     let events = Arc::new(super::events::Events::default());
     let svc = InitiativeServiceImpl::new(
         repo,
-        MockInitiativeDescriptionDocuments::new(),
-        surfaces,
+        documents,
+        MockInitiativeDescriptionSurfaces::new(),
         Arc::new(FakeResources {
             fail_initialization: true,
             ..Default::default()
@@ -190,13 +192,15 @@ async fn failed_initialization_compensation_does_not_purge_a_remaining_project()
             )))
         })
     });
-    // The surface stays: the project row it belongs to could not be removed.
-    let (surfaces, _) = recording_surfaces();
+    let mut documents = MockInitiativeDescriptionDocuments::new();
+    documents
+        .expect_create()
+        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
     let events = Arc::new(super::events::Events::default());
     let svc = InitiativeServiceImpl::new(
         repo,
-        MockInitiativeDescriptionDocuments::new(),
-        surfaces,
+        documents,
+        MockInitiativeDescriptionSurfaces::new(),
         Arc::new(FakeResources {
             fail_initialization: true,
             ..Default::default()

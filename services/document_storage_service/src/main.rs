@@ -1244,6 +1244,7 @@ async fn run() -> anyhow::Result<()> {
         InitiativeServiceImpl::new(
             PgInitiativeRepo::new(db.clone()),
             initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
+                document_creator.clone(),
                 documents_hex::domain::purge::DocumentPurger::new(
                     documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(
                         db.clone(),

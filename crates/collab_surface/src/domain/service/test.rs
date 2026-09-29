@@ -578,16 +578,16 @@ async fn a_pending_surface_with_a_document_id_is_never_initialized() {
 }
 
 #[tokio::test]
-async fn internal_ensure_adopts_a_document_session_without_reseeding() {
+async fn internal_ensure_adopts_an_existing_document_session_without_reseeding() {
     let repo = Arc::new(MemRepo::default());
     repo.document_ids.store(true, Ordering::SeqCst);
     let mut init = no_sessions();
-    // Adoption only initializes a session the document never got, and then
-    // with the blank document; an existing session is kept as-is.
-    init.expect_initialize()
-        .withf(|_, markdown| markdown.is_empty())
+    // Adoption only checks that the document's session exists; it never
+    // writes a snapshot, so the document's content is kept as-is.
+    init.expect_initialize().never();
+    init.expect_await_session()
         .times(1)
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+        .returning(|_| Box::pin(async { Ok(true) }));
     let svc = service_with(repo.clone(), init);
     let id = surface_id();
 
@@ -599,15 +599,78 @@ async fn internal_ensure_adopts_a_document_session_without_reseeding() {
     assert_eq!(surface.id, id);
     assert_eq!(surface.state, SurfaceState::Ready);
     assert_eq!(surface.parent, initiative_parent());
+}
 
-    // The owning domain bound it to the document on purpose, so it mints.
-    let receipt = receipt_for(
-        "macro|a@b.c",
-        EntityType::Initiative,
-        "11111111-1111-4111-8111-111111111111",
-        edit_permission(),
+#[tokio::test]
+async fn adoption_stays_pending_until_the_document_session_exists() {
+    let repo = Arc::new(MemRepo::default());
+    let exists = Arc::new(AtomicBool::new(false));
+    let exists_in_mock = exists.clone();
+    let mut init = no_sessions();
+    init.expect_initialize().never();
+    init.expect_await_session().returning(move |_| {
+        let exists = exists_in_mock.load(Ordering::SeqCst);
+        Box::pin(async move { Ok(exists) })
+    });
+    let svc = service_with(repo.clone(), init);
+    let id = surface_id();
+
+    // The document is still initializing: never seed a blank session over it.
+    let err = svc
+        .internal_ensure_surface(initiative_parent(), id, SurfaceSeed::AdoptDocumentSession)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CollabSurfaceError::NotReady));
+    assert_eq!(
+        repo.surface.lock().unwrap().as_ref().unwrap().state,
+        SurfaceState::Pending
     );
-    svc.mint_token(&user("macro|a@b.c"), receipt, id)
+
+    exists.store(true, Ordering::SeqCst);
+    let surface = svc
+        .internal_ensure_surface(initiative_parent(), id, SurfaceSeed::AdoptDocumentSession)
+        .await
+        .unwrap();
+    assert_eq!(surface.state, SurfaceState::Ready);
+}
+
+#[tokio::test]
+async fn the_public_api_cannot_ensure_or_delete_a_domain_owned_surface() {
+    let repo = Arc::new(MemRepo::default());
+    // Its id is the adopted document's, which the owning domain intends.
+    repo.document_ids.store(true, Ordering::SeqCst);
+    let mut init = no_sessions();
+    init.expect_await_session()
+        .returning(|_| Box::pin(async { Ok(true) }));
+    let svc = service_with(repo.clone(), init);
+    let id = surface_id();
+    svc.internal_ensure_surface(initiative_parent(), id, SurfaceSeed::AdoptDocumentSession)
+        .await
+        .unwrap();
+    let editor = || {
+        receipt_for(
+            "macro|a@b.c",
+            EntityType::Initiative,
+            "11111111-1111-4111-8111-111111111111",
+            edit_permission(),
+        )
+    };
+
+    let err = svc
+        .delete_surface(&user("macro|a@b.c"), editor(), id)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CollabSurfaceError::AccessDenied));
+    assert!(!repo.soft_deleted.load(Ordering::SeqCst));
+
+    let err = svc
+        .ensure_surface(&user("macro|a@b.c"), editor(), surface_id(), String::new())
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CollabSurfaceError::AccessDenied));
+
+    // Collaborators still connect through the public token route.
+    svc.mint_token(&user("macro|a@b.c"), editor(), id)
         .await
         .unwrap();
 }
@@ -649,54 +712,11 @@ async fn internal_ensure_seeds_markdown_and_rejects_a_second_parent() {
 }
 
 #[tokio::test]
-async fn mint_token_and_reads_require_a_ready_surface() {
-    let repo = Arc::new(MemRepo::default());
-    let mut init = no_sessions();
-    init.expect_initialize().returning(|_, _| {
-        Box::pin(async {
-            Err(CollabSurfaceError::Internal(
-                rootcause::Report::new(MemErr).into_dynamic(),
-            ))
-        })
-    });
-    let svc = service_with(repo.clone(), init);
-    let id = surface_id();
-    let receipt = || {
-        receipt_for(
-            "macro|a@b.c",
-            EntityType::Channel,
-            "chan-1",
-            edit_permission(),
-        )
-    };
-
-    svc.ensure_surface(&user("macro|a@b.c"), receipt(), id, String::new())
-        .await
-        .unwrap_err();
-    assert_eq!(
-        repo.surface.lock().unwrap().as_ref().unwrap().state,
-        SurfaceState::Pending
-    );
-
-    // A pending row has not proven its session is its own.
-    let err = svc
-        .mint_token(&user("macro|a@b.c"), receipt(), id)
-        .await
-        .unwrap_err();
-    assert!(matches!(err, CollabSurfaceError::NotReady));
-    let err = svc.internal_read_markdown(id).await.unwrap_err();
-    assert!(matches!(err, CollabSurfaceError::NotReady));
-}
-
-#[tokio::test]
-async fn internal_read_and_delete_act_on_the_surface() {
+async fn internal_delete_retires_the_surface() {
     let repo = Arc::new(MemRepo::default());
     let mut init = no_sessions();
     init.expect_initialize()
         .returning(|_, _| Box::pin(async { Ok(()) }));
-    init.expect_read_markdown()
-        .times(1)
-        .returning(|_| Box::pin(async { Ok("# Launch".to_string()) }));
     let svc = service_with(repo, init);
     let id = surface_id();
     svc.internal_ensure_surface(
@@ -706,8 +726,6 @@ async fn internal_read_and_delete_act_on_the_surface() {
     )
     .await
     .unwrap();
-
-    assert_eq!(svc.internal_read_markdown(id).await.unwrap(), "# Launch");
 
     svc.internal_delete_surface(id).await.unwrap();
     svc.internal_delete_surface(id).await.unwrap();
@@ -756,6 +774,43 @@ async fn parent_comment_access_mints_a_read_only_token() {
         assert_eq!(claims.document_id, id.to_string());
         assert_eq!(claims.access_level, minted, "{parent:?}");
     }
+}
+#[tokio::test]
+async fn mint_token_refuses_a_pending_surface() {
+    let repo = Arc::new(MemRepo::default());
+    let mut init = no_sessions();
+    init.expect_initialize().returning(|_, _| {
+        Box::pin(async {
+            Err(CollabSurfaceError::Internal(
+                rootcause::Report::new(MemErr).into_dynamic(),
+            ))
+        })
+    });
+    let svc = service_with(repo.clone(), init);
+    let id = surface_id();
+    let receipt = || {
+        receipt_for(
+            "macro|a@b.c",
+            EntityType::Channel,
+            "chan-1",
+            edit_permission(),
+        )
+    };
+
+    svc.ensure_surface(&user("macro|a@b.c"), receipt(), id, String::new())
+        .await
+        .unwrap_err();
+    assert_eq!(
+        repo.surface.lock().unwrap().as_ref().unwrap().state,
+        SurfaceState::Pending
+    );
+
+    // A pending row has not proven its session is its own.
+    let err = svc
+        .mint_token(&user("macro|a@b.c"), receipt(), id)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CollabSurfaceError::NotReady));
 }
 
 #[tokio::test]

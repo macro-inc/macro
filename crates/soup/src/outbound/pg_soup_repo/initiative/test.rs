@@ -104,8 +104,8 @@ async fn initiatives_access_cursor_and_hydration(pool: PgPool) -> anyhow::Result
         item.description_document_id,
         Some(Uuid::from_u128(0xaf000000000000000000000000000004))
     );
-    // Rows written without a surface column read their surface through the document it
-    // adopted.
+    // The fixture inserts rows the way the previous release does, without a surface; the
+    // migration's trigger names the document's session.
     assert_eq!(
         item.description_surface_id,
         Some(Uuid::from_u128(0xaf000000000000000000000000000004))

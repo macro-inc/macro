@@ -82,10 +82,6 @@ impl CollabSurfaceService for FakeSurfaces {
         self.deleted.lock().unwrap().push(id);
         Ok(())
     }
-
-    async fn internal_read_markdown(&self, _: Uuid) -> Result<String, CollabSurfaceError> {
-        Err(CollabSurfaceError::NotReady)
-    }
 }
 
 fn initiative() -> InitiativeId {
@@ -93,69 +89,48 @@ fn initiative() -> InitiativeId {
 }
 
 #[tokio::test]
-async fn new_descriptions_seed_markdown_under_the_initiative() {
+async fn adoption_binds_the_document_session_to_the_initiative_surface() {
     let fake = Arc::new(FakeSurfaces::default());
     let adapter = InitiativeDescriptionSurfacesAdapter::new(fake.clone());
-    let id = DescriptionSurfaceId::generate();
+    let document = DescriptionDocumentId::from_uuid(Uuid::now_v7());
 
-    adapter
-        .ensure(
-            id,
-            initiative(),
-            DescriptionSeed::Markdown("# Goals".into()),
-        )
-        .await
-        .unwrap();
-    adapter.delete(id).await.unwrap();
+    adapter.adopt(document, initiative()).await.unwrap();
+    adapter.delete(document.adopting_surface()).await.unwrap();
 
     assert_eq!(
         *fake.ensured.lock().unwrap(),
         vec![(
             EntityType::Initiative.with_entity_string(initiative().to_string()),
-            id.as_uuid(),
-            SurfaceSeed::Markdown("# Goals".into()),
+            document.as_uuid(),
+            SurfaceSeed::AdoptDocumentSession,
         )]
     );
-    assert_eq!(*fake.deleted.lock().unwrap(), vec![id.as_uuid()]);
+    assert_eq!(*fake.deleted.lock().unwrap(), vec![document.as_uuid()]);
 }
 
-#[tokio::test]
-async fn legacy_documents_are_adopted_only_under_their_own_id() {
-    let fake = Arc::new(FakeSurfaces::default());
-    let adapter = InitiativeDescriptionSurfacesAdapter::new(fake.clone());
-    let document = DescriptionDocumentId::from_uuid(Uuid::now_v7());
-
-    adapter
-        .ensure(
-            document.adopting_surface(),
-            initiative(),
-            DescriptionSeed::LegacyDocument(document),
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        fake.ensured.lock().unwrap()[0].2,
-        SurfaceSeed::AdoptDocumentSession
-    );
-
-    let error = adapter
-        .ensure(
-            DescriptionSurfaceId::generate(),
-            initiative(),
-            DescriptionSeed::LegacyDocument(document),
-        )
-        .await
-        .unwrap_err();
-    assert!(matches!(error, InitiativeError::Internal(_)));
-    assert_eq!(fake.ensured.lock().unwrap().len(), 1);
-}
-
-#[tokio::test]
-async fn unreadable_surfaces_are_internal_errors() {
-    let adapter = InitiativeDescriptionSurfacesAdapter::new(Arc::new(FakeSurfaces::default()));
-    let error = adapter
-        .read_markdown(DescriptionSurfaceId::generate())
-        .await
-        .unwrap_err();
-    assert!(matches!(error, InitiativeError::Internal(_)));
+#[test]
+fn expected_surface_states_are_client_errors() {
+    for (error, expected) in [
+        (CollabSurfaceError::NotFound, "not found"),
+        (CollabSurfaceError::ParentNotFound, "not found"),
+        (CollabSurfaceError::Gone, "not found"),
+        (CollabSurfaceError::NotReady, "conflict"),
+        (CollabSurfaceError::IdReserved, "conflict"),
+        (CollabSurfaceError::BadRequest("bad".into()), "bad request"),
+        (CollabSurfaceError::AccessDenied, "unauthorized"),
+        (
+            CollabSurfaceError::Internal(rootcause::report!("boom").into_dynamic()),
+            "internal",
+        ),
+    ] {
+        let mapped = match map_surface_error(error) {
+            InitiativeError::NotFound => "not found",
+            InitiativeError::Conflict(_) => "conflict",
+            InitiativeError::BadRequest(_) => "bad request",
+            InitiativeError::Unauthorized => "unauthorized",
+            InitiativeError::Internal(_) => "internal",
+            other => panic!("unexpected mapping {other:?}"),
+        };
+        assert_eq!(mapped, expected);
+    }
 }

@@ -15,7 +15,9 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts,
 };
-use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+use models_permissions::share_permission::{
+    LinkShareState, SharePermissionV2, UpdateSharePermissionRequestV2,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -66,20 +68,14 @@ impl FromStr for InitiativeId {
 }
 
 /// Id of the collab surface that holds an initiative's description: a Loro session in
-/// sync-service whose access derives from the initiative. Minted as UUIDv7 for new
-/// initiatives; for initiatives created before surfaces, it is the legacy description
-/// document's id, whose session the surface adopted in place.
+/// sync-service whose access derives from the initiative. The surface adopts the
+/// description document's session in place, so while a document is linked the ids match.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(transparent)]
 pub struct DescriptionSurfaceId(Uuid);
 
 impl DescriptionSurfaceId {
-    /// Mint a new UUIDv7 identifier.
-    pub fn generate() -> Self {
-        Self(Uuid::now_v7())
-    }
-
     /// Wrap an already-persisted id.
     pub fn from_uuid(id: Uuid) -> Self {
         Self(id)
@@ -97,17 +93,8 @@ impl fmt::Display for DescriptionSurfaceId {
     }
 }
 
-impl FromStr for DescriptionSurfaceId {
-    type Err = uuid::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(Uuid::parse_str(s)?))
-    }
-}
-
-/// Id of the legacy markdown document that held an initiative's description before
-/// collab surfaces. Only initiatives created before surfaces have one; its session is
-/// the description surface, and its grants are still mirrored until it is retired.
+/// Id of the markdown document that backs an initiative's description. Its sync-service
+/// session is the description surface, and its grants mirror the initiative's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(transparent)]
@@ -124,7 +111,7 @@ impl DescriptionDocumentId {
         self.0
     }
 
-    /// The surface that adopted this document's session: the same id.
+    /// The surface that adopts this document's session: the same id.
     pub fn adopting_surface(&self) -> DescriptionSurfaceId {
         DescriptionSurfaceId(self.0)
     }
@@ -144,37 +131,30 @@ impl FromStr for DescriptionDocumentId {
     }
 }
 
-/// How the description surface is seeded when an ensure creates it.
+/// The description document the service asks the documents side to create. Every field is
+/// already validated by the initiative domain.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DescriptionSeed {
-    /// A new initiative's description: initial markdown, already trimmed and bounded.
-    /// Empty seeds a blank description.
-    Markdown(String),
-    /// An initiative created before surfaces: the surface adopts this legacy document's
-    /// existing session as-is, so its content (and history) carries over untouched.
-    LegacyDocument(DescriptionDocumentId),
+pub struct NewDescriptionDocument {
+    /// Document owner; the initiative owner, so both entities agree on who may team-share.
+    pub owner: MacroUserIdStr<'static>,
+    /// The initiative's name at create time. Renames are not mirrored.
+    pub name: String,
+    /// Trimmed initial markdown; empty when the request had none.
+    pub prefill_markdown: String,
+    /// The initiative's resolved link share, applied verbatim so the markdown default
+    /// (PUBLIC/Edit) never exists for this document.
+    pub link_share: LinkShareState,
 }
 
-/// Where an initiative keeps its description, as persisted on the row.
+/// Where an initiative keeps its description, as persisted on the row. The database
+/// guarantees the surface is the document's session while a document is linked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DescriptionLocation {
     /// The collab surface holding the description.
     pub surface_id: DescriptionSurfaceId,
-    /// The legacy description document, for initiatives created before surfaces.
-    pub legacy_document_id: Option<DescriptionDocumentId>,
-}
-
-impl DescriptionLocation {
-    /// How to seed the surface if it does not exist yet. A legacy row is only adopted
-    /// when the surface is that document's session; anything else starts blank.
-    pub fn seed(&self) -> DescriptionSeed {
-        match self.legacy_document_id {
-            Some(document) if document.adopting_surface() == self.surface_id => {
-                DescriptionSeed::LegacyDocument(document)
-            }
-            _ => DescriptionSeed::Markdown(String::new()),
-        }
-    }
+    /// The backing description document. Every initiative this release creates has one;
+    /// readers tolerate its absence so a later release can stop creating documents.
+    pub document_id: Option<DescriptionDocumentId>,
 }
 
 /// Minimal initiative identity used by access checks and internal lookups.
@@ -201,8 +181,8 @@ pub struct InitiativeSummary {
     pub name: String,
     /// The collab surface holding the description; open it in the editor.
     pub description_surface_id: DescriptionSurfaceId,
-    /// Legacy description document, for initiatives created before surfaces. Deprecated:
-    /// its session is the description surface; new initiatives have none.
+    /// The markdown document backing the description; document tools can read and edit
+    /// it. Absent only for initiatives created by a later release.
     pub description_document_id: Option<DescriptionDocumentId>,
     /// When the initiative was last updated.
     pub updated_at: DateTime<Utc>,
@@ -219,8 +199,8 @@ pub struct InitiativeDetail {
     pub name: String,
     /// The collab surface holding the description; open it in the editor.
     pub description_surface_id: DescriptionSurfaceId,
-    /// Legacy description document, for initiatives created before surfaces. Deprecated:
-    /// its session is the description surface; new initiatives have none.
+    /// The markdown document backing the description; document tools can read and edit
+    /// it. Absent only for initiatives created by a later release.
     pub description_document_id: Option<DescriptionDocumentId>,
     /// Owner of the initiative.
     pub owner_id: MacroUserIdStr<'static>,
@@ -245,7 +225,7 @@ pub struct InitiativeDetail {
 pub struct CreateInitiativeRequest {
     /// Display name.
     pub name: String,
-    /// Initial markdown for the description surface. Not stored on the initiative; later
+    /// Initial markdown for the description document. Not stored on the initiative; later
     /// edits happen in the collaborative description editor.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -423,8 +403,9 @@ pub struct CreateInitiativeRepoArgs {
     pub owner_id: MacroUserIdStr<'static>,
     /// Validated name.
     pub name: String,
-    /// The description surface, already initialized by the collab-surface side.
-    pub description_surface_id: DescriptionSurfaceId,
+    /// The description document, already committed by the documents side. Its session is
+    /// the description surface.
+    pub description_document_id: DescriptionDocumentId,
     /// Member ids with the owner removed and duplicates dropped.
     pub member_ids: Vec<MacroUserIdStr<'static>>,
 }
@@ -446,23 +427,23 @@ pub struct UpdateInitiativeRepoArgs {
     pub team_share: Option<LockstepTeamShare>,
 }
 
-/// Team-share commands for an initiative and its legacy description document, authorized
-/// by the owner against one snapshot of facts.
+/// Team-share commands for an initiative and its description document, authorized by the
+/// owner against one snapshot of facts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockstepTeamShare {
     /// Command whose expected facts name the initiative.
     pub initiative: AuthorizedTeamShareCommand,
-    /// Command whose expected facts name the legacy description document, when one exists.
+    /// Command whose expected facts name the description document, when one exists.
     pub description: Option<AuthorizedTeamShareCommand>,
 }
 
-/// Team-share facts for an initiative and its legacy description document, read in one
-/// guarded transaction so the service authorizes both against the same snapshot.
+/// Team-share facts for an initiative and its description document, read in one guarded
+/// transaction so the service authorizes both against the same snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockstepTeamShareFacts {
     /// Facts for the initiative entity.
     pub initiative: TeamShareFacts,
-    /// Facts for the legacy description document entity, when one exists. The description
+    /// Facts for the description document entity, when one exists. The description
     /// surface derives access from the initiative and has no facts of its own.
     pub description: Option<TeamShareFacts>,
 }

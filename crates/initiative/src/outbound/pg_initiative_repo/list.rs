@@ -25,7 +25,7 @@ pub(super) async fn list_accessible(
             i.id,
             i.name,
             i.description_surface_id,
-            i.description_document_id,
+            i.description_document_id AS "description_document_id?",
             i.updated_at
         FROM initiative i
         JOIN "SharePermission" sp ON sp.id = i.share_permission_id
@@ -66,7 +66,7 @@ pub(super) async fn list_accessible(
                 id: InitiativeId::from_uuid(row.id),
                 name: row.name,
                 description_surface_id: description.surface_id,
-                description_document_id: description.legacy_document_id,
+                description_document_id: description.document_id,
                 updated_at: row.updated_at,
             })
         })

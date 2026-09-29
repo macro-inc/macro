@@ -1018,8 +1018,8 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
         self.0.description_surface_id.map(|id| ID(id.to_string()))
     }
 
-    /// Legacy document that held the project's description before collaborative surfaces,
-    /// for projects created before them. Deprecated: use `descriptionSurfaceId`.
+    /// Document backing the project's description; document tools read and edit it. Absent
+    /// only for projects created by a later release.
     async fn description_document_id(&self) -> Option<ID> {
         self.0.description_document_id.map(|id| ID(id.to_string()))
     }

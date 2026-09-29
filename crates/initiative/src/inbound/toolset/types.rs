@@ -14,10 +14,7 @@ pub struct ProjectDetails {
     pub initiative_id: Uuid,
     /// Project name.
     pub name: String,
-    /// The description as Markdown, when it could be read.
-    pub description: Option<String>,
-    /// Legacy description document of a project created before collaborative descriptions.
-    /// Document tools can read or edit its Markdown; newer projects have none.
+    /// Description document; read or edit its Markdown using document tools.
     pub description_document_id: Option<Uuid>,
     /// Project owner.
     pub owner_id: String,
@@ -58,7 +55,6 @@ impl From<InitiativeDetail> for ProjectDetails {
         Self {
             initiative_id: value.id.as_uuid(),
             name: value.name,
-            description: None,
             description_document_id: value.description_document_id.map(|id| id.as_uuid()),
             owner_id: value.owner_id.to_string(),
             member_ids: value

@@ -29,7 +29,7 @@ impl<'a> ShareTarget<'a> {
         }
     }
 
-    /// The legacy description document of an initiative created before surfaces.
+    /// The initiative's description document.
     pub(super) fn description(
         document: DescriptionDocumentId,
         share_permission_id: &'a str,
@@ -263,7 +263,7 @@ pub(super) async fn get_lockstep_team_share_facts(
         .map_err(map_sqlx)?;
     let description_document_id = sqlx::query_scalar!(
         r#"
-        SELECT description_document_id
+        SELECT description_document_id AS "description_document_id?"
         FROM initiative
         WHERE id = $1
         "#,

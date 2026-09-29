@@ -128,8 +128,6 @@ async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_visible_tasks
             .await
             .map_err(|error| error.internal_error)?;
         assert_eq!(page.project.task_count, 201);
-        assert_eq!(page.project.description.as_deref(), Some("# Goals"));
-        assert_eq!(page.project.description_document_id, None);
         assert!(page.project.task_ids.len() <= 100);
         assert!(!page.project.task_ids.contains(&hidden_task));
         assert_eq!(

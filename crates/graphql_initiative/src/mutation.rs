@@ -77,8 +77,9 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
     }
 
     /// Idempotently ensure the collaborative description surface of an initiative the viewer
-    /// can see, returning its id. Call before connecting: an initiative created before
-    /// surfaces adopts its legacy description document here, so its content carries over.
+    /// can see, returning its id. Call before connecting: the surface adopts the description
+    /// document's session here, so its content carries over. `CONFLICT` means the document
+    /// is still initializing; retry shortly.
     async fn ensure_initiative_description_surface(
         &self,
         ctx: &Context<'_>,

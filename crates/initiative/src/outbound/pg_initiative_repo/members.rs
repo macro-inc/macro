@@ -22,7 +22,12 @@ pub(super) async fn grant_assignees(
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
     let row = sqlx::query!(
-        "SELECT description_document_id, owner_user_id FROM initiative WHERE id = $1 FOR UPDATE",
+        r#"
+        SELECT description_document_id AS "description_document_id?", owner_user_id
+        FROM initiative
+        WHERE id = $1
+        FOR UPDATE
+        "#,
         id.as_uuid(),
     )
     .fetch_optional(tx.as_mut())
@@ -38,8 +43,7 @@ pub(super) async fn grant_assignees(
         .cloned()
         .collect::<Vec<_>>();
     // Assignment grants remain after the property is cleared, just like task sharing.
-    // Record those grants as collaborators so the owner can explicitly revoke them. The
-    // description surface follows the initiative grant; a legacy document is mirrored.
+    // Record those grants as collaborators so the owner can explicitly revoke them.
     apply_member_diff(
         &mut tx,
         &GrantTargets::new(id, description_id),

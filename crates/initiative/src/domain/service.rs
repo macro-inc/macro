@@ -31,11 +31,10 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use crate::domain::models::{
     AssignTaskStatus, AssignTasksResponse, AssignTasksResult, CreateInitiativeRepoArgs,
-    CreateInitiativeRequest, DeletedInitiative, DescriptionLocation, DescriptionSeed,
-    DescriptionSurfaceId, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
-    InitiativeList, LockstepTeamShare, MAX_INITIATIVE_DESCRIPTION_GRAPHEMES,
-    MAX_INITIATIVE_NAME_GRAPHEMES, MAX_TASKS_PER_ASSIGN, TaskAssignment, UpdateInitiativeRepoArgs,
-    UpdateInitiativeRequest,
+    CreateInitiativeRequest, DeletedInitiative, DescriptionSurfaceId, InitiativeBasic,
+    InitiativeDetail, InitiativeError, InitiativeId, InitiativeList, LockstepTeamShare,
+    MAX_INITIATIVE_DESCRIPTION_GRAPHEMES, MAX_INITIATIVE_NAME_GRAPHEMES, MAX_TASKS_PER_ASSIGN,
+    NewDescriptionDocument, TaskAssignment, UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
 };
 use crate::domain::ports::{
     InitiativeDescriptionDocuments, InitiativeDescriptionSurfaces, InitiativeRepo,
@@ -43,8 +42,8 @@ use crate::domain::ports::{
 };
 use crate::domain::resources::InitiativeResources;
 
-/// Concrete initiative service backed by an [`InitiativeRepo`], the description surface port,
-/// and the legacy description document port.
+/// Concrete initiative service backed by an [`InitiativeRepo`] and the description document
+/// and surface ports.
 #[derive(Clone)]
 pub struct InitiativeServiceImpl<R, D, S> {
     repo: R,
@@ -99,9 +98,9 @@ where
         }
     }
 
-    /// Authorize one team-share edit against the initiative and, for initiatives created
-    /// before surfaces, its legacy description document, from a single snapshot of facts.
-    /// A `NotOwner` on the document means the two owners have drifted apart.
+    /// Authorize one team-share edit against the initiative and its description document
+    /// from a single snapshot of facts. A `NotOwner` on the document means the two owners
+    /// have drifted apart.
     async fn authorize_lockstep_team_share(
         &self,
         receipt: &EntityAccessReceipt<EditAccessLevel>,
@@ -140,45 +139,12 @@ where
             description,
         }))
     }
-
-    /// Ensure the description surface recorded on the row, adopting a legacy document's
-    /// session when the row has one.
-    async fn ensure_description(
-        &self,
-        id: InitiativeId,
-        description: DescriptionLocation,
-    ) -> Result<DescriptionSurfaceId, InitiativeError> {
-        self.description_surfaces
-            .ensure(description.surface_id, id, description.seed())
-            .await?;
-        Ok(description.surface_id)
-    }
-
-    /// Remove a new initiative's surface after its creation failed. Best effort: an
-    /// orphaned surface is unreachable, because its parent never became visible.
-    async fn discard_new_surface(&self, id: InitiativeId, surface: DescriptionSurfaceId) {
-        if let Err(error) = self.description_surfaces.delete(surface).await {
-            tracing::error!(
-                ?error,
-                %surface,
-                %id,
-                "description surface orphaned after failed initiative create"
-            );
-        }
-    }
 }
 
 fn missing_team_share_command() -> InitiativeError {
     InitiativeError::Internal(rootcause::report!(
         "team-share authorization produced no command for a supplied request"
     ))
-}
-
-fn location_of(detail: &InitiativeDetail) -> DescriptionLocation {
-    DescriptionLocation {
-        surface_id: detail.description_surface_id,
-        legacy_document_id: detail.description_document_id,
-    }
 }
 
 impl<R, D, S> InitiativeService for InitiativeServiceImpl<R, D, S>
@@ -218,9 +184,8 @@ where
     ) -> Result<crate::domain::reads::TaskInitiativeReferences, InitiativeError> {
         self.read_task_references(user_id, request).await
     }
-    /// Two commits with compensation. The description surface is initialized first, so its
-    /// id is ready before the initiative becomes visible. A failed initiative write discards
-    /// the surface so nothing orphaned survives an `Err`.
+    /// Two commits with compensation. The documents side commits first. A failed
+    /// initiative write purges the document so nothing orphaned survives an `Err`.
     #[tracing::instrument(err, skip_all)]
     async fn create(
         &self,
@@ -271,21 +236,17 @@ where
             TeamShareCreation::Unshared
         };
 
-        let id = InitiativeId::generate();
-        let description_surface_id = DescriptionSurfaceId::generate();
-        if let Err(error) = self
-            .description_surfaces
-            .ensure(
-                description_surface_id,
-                id,
-                DescriptionSeed::Markdown(prefill_markdown),
-            )
-            .await
-        {
-            self.discard_new_surface(id, description_surface_id).await;
-            return Err(error);
-        }
+        let description_document_id = self
+            .description_documents
+            .create(NewDescriptionDocument {
+                owner: owner_id.clone(),
+                name: name.clone(),
+                prefill_markdown,
+                link_share: share_permission.link_share_state(),
+            })
+            .await?;
 
+        let id = InitiativeId::generate();
         let created = self
             .repo
             .create(
@@ -293,7 +254,7 @@ where
                     id,
                     owner_id,
                     name,
-                    description_surface_id,
+                    description_document_id,
                     member_ids,
                 },
                 share_permission,
@@ -308,7 +269,7 @@ where
                     }).is_ok() {
                         self.publish(id, InitiativeTopicEvent::Purged { initiative_id: id })
                             .await;
-                        self.discard_new_surface(id, description_surface_id).await;
+                        let _ = self.description_documents.purge(description_document_id).await.inspect_err(|cleanup| tracing::error!(error=?cleanup, %id, "failed to compensate initiative initialization"));
                     }
                     return Err(error);
                 }
@@ -325,7 +286,18 @@ where
                 Ok(detail)
             }
             Err(error) => {
-                self.discard_new_surface(id, description_surface_id).await;
+                if let Err(purge_error) = self
+                    .description_documents
+                    .purge(description_document_id)
+                    .await
+                {
+                    tracing::error!(
+                        error = ?purge_error,
+                        %description_document_id,
+                        %id,
+                        "description document orphaned after failed initiative create"
+                    );
+                }
                 Err(error.into())
             }
         }
@@ -366,22 +338,17 @@ where
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<DescriptionSurfaceId, InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        let detail = self
+        let description = self
             .repo
-            .get_detail(id)
+            .description(id)
             .await
             .map_err(Into::into)?
             .ok_or(InitiativeError::NotFound)?;
-        self.ensure_description(id, location_of(&detail)).await
-    }
-
-    #[tracing::instrument(err, skip_all)]
-    async fn read_description(
-        &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<String, InitiativeError> {
-        let surface = self.ensure_description_surface(receipt).await?;
-        self.description_surfaces.read_markdown(surface).await
+        // A surface without a document was created ready by the release that wrote it.
+        if let Some(document) = description.document_id {
+            self.description_surfaces.adopt(document, id).await?;
+        }
+        Ok(description.surface_id)
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -576,9 +543,10 @@ where
         super::assignees::grant(&self.repo, &receipt, user_ids).await
     }
 
-    /// Initiative rows first, then the description. A legacy document's FK is
-    /// `ON DELETE RESTRICT`, which would reject a document-first purge while the initiative
-    /// still names it; the surface is soft-deleted last so no token outlives the initiative.
+    /// Initiative rows first, then the description. The document FK's `ON DELETE RESTRICT`
+    /// would reject a document-first purge while the initiative still names it. Purging the
+    /// document drops its sync-service session, which the surface adopted; the surface row
+    /// is then soft-deleted so no token outlives the initiative.
     #[tracing::instrument(err, skip_all)]
     async fn delete(
         &self,
@@ -599,9 +567,7 @@ where
         )
         .map_err(|_| InitiativeError::Unauthorized)?;
         let properties_cleanup = self.resources.purge(cleanup_receipt).await;
-        // Purging a legacy document also drops its sync-service session, which the surface
-        // adopted.
-        let document_cleanup = match description.legacy_document_id {
+        let document_cleanup = match description.document_id {
             Some(document) => self.description_documents.purge(document).await.inspect_err(|error| {
                 tracing::error!(?error, %document, %id, "description document orphaned after initiative delete");
             }),

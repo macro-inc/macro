@@ -7,8 +7,12 @@ use collab_surface::{
         pg_collab_surface_repo::PgCollabSurfaceRepo, surface_init::LexicalSyncSurfaceInitializer,
     },
 };
-use documents::domain::purge::DocumentPurger;
-use documents::outbound::document_purge::{LegacyDocumentPurgeRepository, SqsDocumentPurgeQueue};
+use documents::domain::{ports::mentions::NoOpDocumentMentionTracker, purge::DocumentPurger};
+use documents::outbound::{
+    document_bytes_upload::ReqwestDocumentBytesUploader,
+    document_purge::{LegacyDocumentPurgeRepository, SqsDocumentPurgeQueue},
+    markdown_init::LexicalSyncMarkdownInitializer,
+};
 use initiative::{
     domain::{
         history::InitiativeHistory, resources::InitiativeResources, service::InitiativeServiceImpl,
@@ -18,6 +22,10 @@ use initiative::{
 };
 
 type ToolDescriptionDocuments = initiative_documents::InitiativeDescriptionDocumentsAdapter<
+    Arc<ToolDocumentService>,
+    LexicalSyncMarkdownInitializer,
+    ReqwestDocumentBytesUploader,
+    NoOpDocumentMentionTracker,
     DocumentPurger<LegacyDocumentPurgeRepository, SqsDocumentPurgeQueue, ToolEventBroker>,
 >;
 
@@ -57,8 +65,8 @@ pub type ToolInitiativeToolContext = InitiativeToolContext<
     activity::outbound::pg_activity_repo::PgActivityRepo,
 >;
 
-/// Compose project lifecycle tools with description surfaces, legacy document cleanup and
-/// activity publication.
+/// Compose project lifecycle tools with description documents and surfaces, and activity
+/// publication.
 pub fn build_initiative_tool_context(
     pool: sqlx::PgPool,
     documents: &ToolDocumentToolContext,
@@ -76,7 +84,10 @@ pub fn build_initiative_tool_context(
         SqsDocumentPurgeQueue::new(document_queue),
         event_broker.clone(),
     );
-    let description = initiative_documents::InitiativeDescriptionDocumentsAdapter::new(purger);
+    let description = initiative_documents::InitiativeDescriptionDocumentsAdapter::new(
+        documents.creator.clone(),
+        purger,
+    );
     let surfaces = initiative_documents::InitiativeDescriptionSurfacesAdapter::new(Arc::new(
         CollabSurfaceServiceImpl::new(
             Arc::new(PgCollabSurfaceRepo::new(pool.clone())),

@@ -13,8 +13,11 @@ async fn create_defaults_to_team_sharing_and_preserves_explicit_opt_out() {
         repo.expect_create()
             .withf(move |_, _, intent| *intent == expected)
             .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
-        let (surfaces, _) = recording_surfaces();
-        let created = service_with_surfaces(repo, surfaces)
+        let mut documents = MockInitiativeDescriptionDocuments::new();
+        documents
+            .expect_create()
+            .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+        let created = service_with_documents(repo, documents)
             .create(
                 &user(OWNER),
                 CreateInitiativeRequest {

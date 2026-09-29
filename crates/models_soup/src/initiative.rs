@@ -18,8 +18,8 @@ pub struct SoupInitiative<T = ()> {
     /// Collab surface holding the initiative description.
     #[serde(default)]
     pub description_surface_id: Option<Uuid>,
-    /// Legacy document that held the description before collab surfaces, for initiatives
-    /// created before them. Its session is the description surface.
+    /// Document backing the initiative description; its session is the description
+    /// surface.
     pub description_document_id: Option<Uuid>,
     /// Creation timestamp.
     pub created_at: DateTime<Utc>,

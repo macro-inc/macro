@@ -58,7 +58,8 @@ pub struct CollabSurface {
     pub updated_at: DateTime<Utc>,
 }
 
-/// How a surface's sync-service session is seeded when an ensure creates it.
+/// How a surface's sync-service session comes to exist when an ensure creates
+/// the surface.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SurfaceSeed {
     /// Initialize a new session from markdown; empty seeds the canonical blank
@@ -68,25 +69,17 @@ pub enum SurfaceSeed {
     /// Bind the surface to the existing sync-service session of the document
     /// with the same id, reusing its CRDT as-is. Only a trusted caller that has
     /// verified the document belongs to the surface's parent may choose this
-    /// (e.g. an initiative adopting its legacy description document). A
-    /// document that never got a session is initialized blank.
+    /// (e.g. an initiative adopting its description document). Adoption never
+    /// initializes: until the document's own session exists (it may still be
+    /// initializing), the surface stays `pending` and ensure reports
+    /// [`CollabSurfaceError::NotReady`].
     AdoptDocumentSession,
 }
 
-impl SurfaceSeed {
-    /// The markdown to initialize a missing session with.
-    pub fn initial_markdown(&self) -> &str {
-        match self {
-            SurfaceSeed::Markdown(markdown) => markdown,
-            SurfaceSeed::AdoptDocumentSession => "",
-        }
-    }
-}
-
-/// Whether surfaces under `parent` belong to the parent's own domain, which
-/// creates them through the internal entry points and may bind them to a
-/// document's session on purpose (an initiative adopting its description
-/// document).
+/// Whether surfaces under `parent` are owned by the parent's domain, which
+/// creates and deletes them through the internal entry points and may bind
+/// them to its own document's session. The public API may mint tokens for
+/// them but never ensures or deletes them.
 pub fn owned_by_parent_domain(parent: EntityType) -> bool {
     matches!(parent, EntityType::Initiative)
 }

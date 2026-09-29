@@ -5,9 +5,9 @@ import { createCollabSurfaceSource } from '@service-sync/source';
 import { createProjectDescriptionSession } from './project-description';
 
 /**
- * Open a project's description surface. The project domain ensures the surface first, so a
- * project created before surfaces adopts its legacy description document's session (and
- * content) before anyone connects; access then derives from project access.
+ * Open a project's description surface. The project domain ensures the surface first, so it
+ * adopts the description document's session (and content) before anyone connects; access
+ * then derives from project access.
  */
 export function createProductionProjectDescriptionSession(project: {
   projectId: string;

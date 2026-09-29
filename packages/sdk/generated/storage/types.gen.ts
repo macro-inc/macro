@@ -3657,7 +3657,7 @@ export type CreateEntityMentionResponse = {
  */
 export type CreateInitiativeRequest = {
     /**
-     * Initial markdown for the description surface. Not stored on the initiative; later
+     * Initial markdown for the description document. Not stored on the initiative; later
      * edits happen in the collaborative description editor.
      */
     description?: string | null;
@@ -4541,17 +4541,15 @@ export type DeleteUnthreadedPdfAnchorRequest = {
 };
 
 /**
- * Id of the legacy markdown document that held an initiative's description before
- * collab surfaces. Only initiatives created before surfaces have one; its session is
- * the description surface, and its grants are still mirrored until it is retired.
+ * Id of the markdown document that backs an initiative's description. Its sync-service
+ * session is the description surface, and its grants mirror the initiative's.
  */
 export type DescriptionDocumentId = string;
 
 /**
  * Id of the collab surface that holds an initiative's description: a Loro session in
- * sync-service whose access derives from the initiative. Minted as UUIDv7 for new
- * initiatives; for initiatives created before surfaces, it is the legacy description
- * document's id, whose session the surface adopted in place.
+ * sync-service whose access derives from the initiative. The surface adopts the
+ * description document's session in place, so while a document is linked the ids match.
  */
 export type DescriptionSurfaceId = string;
 
@@ -9759,8 +9757,8 @@ export type SoupInitiativeSoupPropertiesField = {
      */
     createdAt: string;
     /**
-     * Legacy document that held the description before collab surfaces, for initiatives
-     * created before them. Its session is the description surface.
+     * Document backing the initiative description; its session is the description
+     * surface.
      */
     descriptionDocumentId?: string | null;
     /**

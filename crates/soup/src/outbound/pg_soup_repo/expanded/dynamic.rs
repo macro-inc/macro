@@ -1828,30 +1828,25 @@ impl SoupRow {
                 deleted_at,
                 extra: (),
             }),
-            SoupRow::Initiative(row) => {
-                let description_document_id = row
+            SoupRow::Initiative(row) => SoupItem::Initiative(SoupInitiative {
+                id: row.id.parse().map_err(type_err)?,
+                name: row.name,
+                owner_id: Owner::from_principal_str(&row.user_id).map_err(type_err)?,
+                description_surface_id: row
+                    .description_surface_id
+                    .map(|id| id.parse())
+                    .transpose()
+                    .map_err(type_err)?,
+                description_document_id: row
                     .description_document_id
                     .map(|id| id.parse())
                     .transpose()
-                    .map_err(type_err)?;
-                SoupItem::Initiative(SoupInitiative {
-                    id: row.id.parse().map_err(type_err)?,
-                    name: row.name,
-                    owner_id: Owner::from_principal_str(&row.user_id).map_err(type_err)?,
-                    description_surface_id: super::super::initiative::description_surface_id(
-                        row.description_surface_id
-                            .map(|id| id.parse())
-                            .transpose()
-                            .map_err(type_err)?,
-                        description_document_id,
-                    ),
-                    description_document_id,
-                    created_at: row.created_at,
-                    updated_at: row.updated_at,
-                    viewed_at: row.viewed_at,
-                    extra: (),
-                })
-            }
+                    .map_err(type_err)?,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                viewed_at: row.viewed_at,
+                extra: (),
+            }),
             SoupRow::CalendarEvent(event) => SoupItem::CalendarEvent(event),
         })
     }
