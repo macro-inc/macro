@@ -519,6 +519,12 @@ keeps at least 16px of
 bottom clearance above the drawer's curve, including while the keyboard is open,
 and accounts for the home-indicator safe area when the keyboard is closed.
 
+When checking desktop margin placement, scroll a long document while an embed
+or image above the highlighted text changes height. Scroll anchoring may keep
+the text at the same screen position; its comment card should stay aligned
+through the resize, without briefly jumping upward or downward. Repeat with
+several rapid height changes, including while scrolling has paused.
+
 Also verify anchored comments in Drive's detail pane: open a document with
 existing text anchors, then click a numbered comment badge to expand it. The
 document should stay visible and the thread should open; loading the document
