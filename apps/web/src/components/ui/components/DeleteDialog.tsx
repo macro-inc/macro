@@ -21,6 +21,8 @@ export type DeleteDialogProps = ManagedDialogProps & {
   pending?: boolean;
   position?: DialogProps['position'];
   class?: string;
+  /** Where focus lands on close, e.g. when the opener no longer exists. */
+  onCloseAutoFocus?: DialogProps['onCloseAutoFocus'];
   onDelete: () => void;
 };
 
@@ -49,6 +51,7 @@ export function DeleteDialog(props: DeleteDialogProps) {
       onOpenChange={(open) => {
         if (!open) close();
       }}
+      onCloseAutoFocus={props.onCloseAutoFocus}
       position={props.position ?? 'center'}
       class={cn('w-110', props.class)}
       visibleScrim

@@ -12,19 +12,32 @@ import {
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
 import { taskGridColumnCount } from '@app/features/tasks-view/components/task-list/task-grid-template';
+import { toast } from '@core/component/Toast/Toast';
 import { EntitySelectionToolbarModal } from '@entity/EntitySelectionToolbarModal';
 import CalendarIcon from '@phosphor/calendar.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
-import { Button, Dropdown, Input } from '@ui';
+import type { Property, PropertyApiValues } from '@property/types';
+import { Button, DeleteDialog, Dropdown, Input } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { ProjectListHeader, ProjectRow } from '../components/project-row';
-import { useProjectsContext } from '../context/projects-context';
+import {
+  ProjectRowMenu,
+  type ProjectRowMenuCommand,
+} from '../components/project-row-menu';
+import { RenameProjectDialog } from '../components/rename-project-dialog';
+import {
+  type ProjectRow as ProjectRowData,
+  useProjectsContext,
+} from '../context/projects-context';
+import { projectMenuTargets } from '../core/project-menu';
 import type {
   createProjectCollection,
   ProjectListActivation,
+  ProjectListEntity,
 } from '../primitives/project-collection';
 
 type FilterGroup = 'status' | 'priority' | 'assignee';
@@ -35,6 +48,12 @@ export function ProjectsCollection(props: {
   scopeId: string;
   isActive: Accessor<boolean>;
   collection: ReturnType<typeof createProjectCollection>;
+  /** Whether the layout has room to open a project beside the list. */
+  canOpenInNewSplit: Accessor<boolean>;
+  onCopyLink(id: string): void;
+  onCopyId(id: string): void;
+  /** Omit where the host cannot show the project's Share menu. */
+  onShare?(id: string): void;
 }) {
   const context = useProjectsContext();
   const collection = props.collection;
@@ -130,6 +149,100 @@ export function ProjectsCollection(props: {
       },
     },
   });
+  const [renaming, setRenaming] = createSignal<ProjectRowData>();
+  const [deleting, setDeleting] = createSignal<readonly ProjectRowData[]>();
+  const [deletePending, setDeletePending] = createSignal(false);
+  const [deleteError, setDeleteError] = createSignal<string>();
+  // The menu entry that opened a dialog no longer exists when it closes.
+  const returnFocusToList = (event: Event) => {
+    event.preventDefault();
+    grid?.focus();
+  };
+  const menuTargets = (entity: ProjectListEntity) =>
+    projectMenuTargets(
+      entity,
+      list.selection
+        .items()
+        .flatMap((row) => (row.kind === 'entity' ? [row.entity] : []))
+    );
+  const setOption = async (
+    rows: readonly ProjectRowData[],
+    property: Property,
+    optionId: string
+  ) => {
+    const value: PropertyApiValues = {
+      valueType: 'SELECT_STRING',
+      values: [optionId],
+    };
+    const results = await Promise.allSettled(
+      rows.map((row) =>
+        commands.saveProperty(
+          row.project.id,
+          // A row's own value saves exactly like editing its cell.
+          row.properties.find(
+            (current) =>
+              current.propertyDefinitionId === property.propertyDefinitionId
+          ) ?? property,
+          value
+        )
+      )
+    );
+    const failed = results.filter(
+      (result) => result.status === 'rejected'
+    ).length;
+    if (failed === 0) return;
+    toast.failure(
+      rows.length === 1
+        ? `Could not update ${property.displayName.toLowerCase()}`
+        : `Could not update ${failed} of ${rows.length} projects`
+    );
+  };
+  const deleteProjects = async (rows: readonly ProjectRowData[]) => {
+    setDeletePending(true);
+    setDeleteError(undefined);
+    const results = await Promise.allSettled(
+      rows.map((row) => commands.delete(row.project.id))
+    );
+    setDeletePending(false);
+    const failed = rows.filter(
+      (_, index) => results[index]?.status === 'rejected'
+    );
+    for (const row of rows)
+      if (!failed.includes(row)) list.selection.deselectKey(row.project.id);
+    if (failed.length === 0) {
+      setDeleting(undefined);
+      toast.success(
+        rows.length > 1 ? `Deleted ${rows.length} projects` : 'Project deleted'
+      );
+      return;
+    }
+    // Only the failures remain for a retry.
+    setDeleting(failed);
+    setDeleteError(
+      failed.length === rows.length
+        ? 'Could not delete. Please try again.'
+        : `Deleted ${rows.length - failed.length} of ${rows.length}. The rest could not be deleted.`
+    );
+  };
+  const runMenuCommand = (command: ProjectRowMenuCommand) =>
+    match(command)
+      .with({ kind: 'open-in-split' }, ({ row }) =>
+        props.onOpen(row.project.id, { newSplit: true })
+      )
+      .with({ kind: 'rename' }, ({ row }) => setRenaming(row))
+      .with({ kind: 'set-option' }, ({ rows, property, optionId }) => {
+        void setOption(rows, property, optionId);
+      })
+      .with({ kind: 'copy-link' }, ({ row }) =>
+        props.onCopyLink(row.project.id)
+      )
+      .with({ kind: 'copy-id' }, ({ row }) => props.onCopyId(row.project.id))
+      .with({ kind: 'share' }, ({ row }) => props.onShare?.(row.project.id))
+      .with({ kind: 'delete' }, ({ rows }) => {
+        setDeleteError(undefined);
+        setDeleting(rows);
+      })
+      .exhaustive();
   useViewControlHotkeys({
     scopeId: props.scopeId,
     enabled: props.isActive,
@@ -381,36 +494,57 @@ export function ProjectsCollection(props: {
                     </Match>
                     <Match when={row.kind === 'entity' ? row : undefined}>
                       {(item) => (
-                        <ProjectRow
-                          rowId={item().id}
-                          row={item().entity}
-                          highlighted={list.focus.key() === item().id}
-                          checked={list.selection.isSelected(item().id)}
-                          onFocus={() =>
-                            list.focus.set(item().id, { reason: 'hover' })
-                          }
-                          onChecked={(selected, range) =>
-                            interaction.selection.set(item().id, selected, {
-                              range,
-                            })
-                          }
-                          onOpen={(event) => {
-                            if (event.ctrlKey || event.metaKey)
-                              interaction.selection.toggle(item().id);
-                            else
-                              list.activate.key(item().id, {
-                                reason: 'pointer',
-                                metadata: { event, newSplit: event.shiftKey },
-                              });
+                        <ProjectRowMenu
+                          targets={() => menuTargets(item().entity)}
+                          properties={definitions.properties()}
+                          canOpenInNewSplit={props.canOpenInNewSplit()}
+                          canShare={Boolean(props.onShare)}
+                          onCommand={runMenuCommand}
+                          onOpenChange={(open) => {
+                            if (!open) return;
+                            list.focus.set(item().id, {
+                              reason: 'pointer',
+                              force: true,
+                            });
+                            list.selection.setAnchor(item().id);
                           }}
-                          onSave={(property, value) =>
-                            commands.saveProperty(
-                              item().entity.id,
-                              property,
-                              value
-                            )
-                          }
-                        />
+                          onCloseAutoFocus={(event) => {
+                            // Leave focus with a dialog the entry just opened.
+                            if (renaming() || deleting())
+                              event.preventDefault();
+                          }}
+                        >
+                          <ProjectRow
+                            rowId={item().id}
+                            row={item().entity}
+                            highlighted={list.focus.key() === item().id}
+                            checked={list.selection.isSelected(item().id)}
+                            onFocus={() =>
+                              list.focus.set(item().id, { reason: 'hover' })
+                            }
+                            onChecked={(selected, range) =>
+                              interaction.selection.set(item().id, selected, {
+                                range,
+                              })
+                            }
+                            onOpen={(event) => {
+                              if (event.ctrlKey || event.metaKey)
+                                interaction.selection.toggle(item().id);
+                              else
+                                list.activate.key(item().id, {
+                                  reason: 'pointer',
+                                  metadata: { event, newSplit: event.shiftKey },
+                                });
+                            }}
+                            onSave={(property, value) =>
+                              commands.saveProperty(
+                                item().entity.id,
+                                property,
+                                value
+                              )
+                            }
+                          />
+                        </ProjectRowMenu>
                       )}
                     </Match>
                     <Match when={row.kind === 'load-more' ? row : undefined}>
@@ -447,6 +581,57 @@ export function ProjectsCollection(props: {
               selectedCount={list.selection.count()}
               onClose={interaction.selection.clear}
             />
+          </Show>
+          <Show when={renaming()} keyed>
+            {(row) => (
+              <RenameProjectDialog
+                name={row.project.name}
+                onOpenChange={(open) => {
+                  if (!open) setRenaming(undefined);
+                }}
+                onRename={(name) => commands.rename(row.project.id, name)}
+                onCloseAutoFocus={returnFocusToList}
+              />
+            )}
+          </Show>
+          <Show when={deleting()}>
+            {(rows) => (
+              <DeleteDialog
+                open
+                onOpenChange={(open) => {
+                  if (!open) setDeleting(undefined);
+                }}
+                title={
+                  rows().length > 1
+                    ? `Delete ${rows().length} projects?`
+                    : 'Delete project?'
+                }
+                body={
+                  <>
+                    <p>
+                      {rows().length > 1
+                        ? 'These projects and their activity will be deleted. Their tasks will remain in your workspace.'
+                        : 'The project and its activity will be deleted. Its tasks will remain in your workspace.'}
+                    </p>
+                    <Show when={deleteError()}>
+                      {(message) => (
+                        <p role="alert" class="mt-2 text-failure">
+                          {message()}
+                        </p>
+                      )}
+                    </Show>
+                  </>
+                }
+                deleteLabel={
+                  rows().length > 1
+                    ? `Delete ${rows().length} projects`
+                    : 'Delete project'
+                }
+                pending={deletePending()}
+                onDelete={() => void deleteProjects(rows())}
+                onCloseAutoFocus={returnFocusToList}
+              />
+            )}
           </Show>
         </div>
       </ViewShell.Content>

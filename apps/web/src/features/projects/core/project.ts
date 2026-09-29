@@ -35,8 +35,11 @@ export type TaskProjectReference =
   | { state: 'unavailable' }
   | { state: 'visible'; id: string; name: string };
 
-export const canEditProject = (project: ProjectDetail) =>
+export const canEditProject = (project: Pick<Project, 'access'>) =>
   project.access === 'edit' || project.access === 'owner';
+
+export const canDeleteProject = (project: Pick<Project, 'access'>) =>
+  project.access === 'owner';
 
 export const canDiscussProject = (project: ProjectDetail) =>
   project.access !== 'view';
