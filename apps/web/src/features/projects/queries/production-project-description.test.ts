@@ -1,5 +1,5 @@
-import { ok } from 'neverthrow';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { err, ok } from 'neverthrow';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const doubles = vi.hoisted(() => ({
   ensure: vi.fn(),
@@ -33,14 +33,20 @@ function transport(): ProjectDescriptionTransport<string> {
   return port;
 }
 
+const preparing = () =>
+  err([{ code: 'CONFLICT', message: 'still being prepared' }]);
+
 describe('production project description transport', () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.useRealTimers());
 
   it('ensures the project surface before minting its connection token', async () => {
     doubles.ensure.mockResolvedValue(ok('surface-1'));
     doubles.token.mockResolvedValue('token-1');
 
-    await expect(transport().authorize('surface-1')).resolves.toBe('token-1');
+    await expect(
+      transport().authorize('surface-1', new AbortController().signal)
+    ).resolves.toBe('token-1');
 
     expect(doubles.ensure).toHaveBeenCalledWith('project-1');
     expect(doubles.token).toHaveBeenCalledWith('surface-1');
@@ -53,9 +59,74 @@ describe('production project description transport', () => {
     doubles.ensure.mockResolvedValue(ok('surface-1'));
     doubles.token.mockResolvedValue(undefined);
 
-    await expect(transport().authorize('surface-1')).rejects.toThrow(
-      'Could not open the project description.'
+    await expect(
+      transport().authorize('surface-1', new AbortController().signal)
+    ).rejects.toThrow('Could not open the project description.');
+  });
+
+  it('waits for a description that is still being prepared', async () => {
+    vi.useFakeTimers();
+    doubles.ensure
+      .mockResolvedValueOnce(preparing())
+      .mockResolvedValueOnce(preparing())
+      .mockResolvedValue(ok('surface-1'));
+    doubles.token.mockResolvedValue('token-1');
+
+    const authorized = transport().authorize(
+      'surface-1',
+      new AbortController().signal
     );
+    await vi.runAllTimersAsync();
+
+    await expect(authorized).resolves.toBe('token-1');
+    expect(doubles.ensure).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives up on a description that never becomes ready', async () => {
+    vi.useFakeTimers();
+    doubles.ensure.mockResolvedValue(preparing());
+
+    const authorized = transport().authorize(
+      'surface-1',
+      new AbortController().signal
+    );
+    const rejected = expect(authorized).rejects.toThrow('still being prepared');
+    await vi.runAllTimersAsync();
+
+    await rejected;
+    // A bounded number of attempts over about fifteen seconds.
+    const attempts = doubles.ensure.mock.calls.length;
+    expect(attempts).toBeGreaterThan(5);
+    expect(attempts).toBeLessThan(25);
+    expect(doubles.token).not.toHaveBeenCalled();
+  });
+
+  it('fails at once on any other error', async () => {
+    doubles.ensure.mockResolvedValue(
+      err([{ code: 'FORBIDDEN', message: 'unauthorized' }])
+    );
+
+    await expect(
+      transport().authorize('surface-1', new AbortController().signal)
+    ).rejects.toThrow('unauthorized');
+    expect(doubles.ensure).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops waiting once the view closes', async () => {
+    vi.useFakeTimers();
+    doubles.ensure.mockResolvedValue(preparing());
+    const closed = new AbortController();
+
+    const authorized = transport().authorize('surface-1', closed.signal);
+    const rejected = expect(authorized).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    closed.abort();
+    await rejected;
+    await vi.runAllTimersAsync();
+
+    expect(doubles.ensure).toHaveBeenCalledTimes(1);
   });
 
   it('connects through the collab surface source with refreshing tokens', async () => {

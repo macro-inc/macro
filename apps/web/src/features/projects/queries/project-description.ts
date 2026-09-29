@@ -20,8 +20,8 @@ import type { ResultAsync } from 'neverthrow';
 import { createSignal, getOwner, runWithOwner } from 'solid-js';
 
 export type ProjectDescriptionTransport<Access> = {
-  /** Ensure the surface exists and mint connection access for it. */
-  authorize(surfaceId: string): Promise<Access>;
+  /** Ensure the surface exists and mint connection access for it; stop once `signal` aborts. */
+  authorize(surfaceId: string, signal: AbortSignal): Promise<Access>;
   connect(
     surfaceId: string,
     access: Access
@@ -43,9 +43,10 @@ export function createProjectDescriptionSession<Access>(
   const [syncSource, setSyncSource] = createSignal<LiveSyncSource>();
   const [connectionError, setConnectionError] = createSignal<string>();
   let disposed = false;
+  const authorization = new AbortController();
   const loaded = (async () => {
     try {
-      const access = await transport.authorize(surfaceId);
+      const access = await transport.authorize(surfaceId, authorization.signal);
       if (disposed) return;
       // Local cache failures must not prevent a fresh server snapshot.
       void ingestLocalSnapshot(
@@ -83,6 +84,7 @@ export function createProjectDescriptionSession<Access>(
     dispose: () => {
       if (disposed) return;
       disposed = true;
+      authorization.abort();
       syncSource()?.cleanup();
     },
   };
