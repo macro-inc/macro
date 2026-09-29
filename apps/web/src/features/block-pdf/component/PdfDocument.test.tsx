@@ -84,6 +84,10 @@ it.each([false, true])(
     test.setVisible(true);
     expect(state.navigate).not.toHaveBeenCalled();
     expect(state.clearOverlays).not.toHaveBeenCalled();
+    expect(state.initial).toHaveBeenCalledExactlyOnceWith({
+      pageNumber: '3',
+      yPos: '0',
+    });
 
     test.setTarget({ pdf_search_page: '8' });
     expect(state.navigate).toHaveBeenCalledExactlyOnceWith({
@@ -102,12 +106,29 @@ it('preserves a newer imperative location when the route target clears', async (
   test.setReady(true);
   test.setVisible(true);
   expect(state.navigate).toHaveBeenCalledExactlyOnceWith(mention);
+  expect(state.initial).not.toHaveBeenCalled();
 
   test.setVisible(false);
   test.setTarget({ pdf_search_page: '8' });
   test.setTarget(undefined);
   test.setVisible(true);
   expect(state.navigate).toHaveBeenCalledTimes(1);
+  expect(state.initial).not.toHaveBeenCalled();
+});
+
+it('does not restore the initial location after a target has been applied', () => {
+  const test = setup({ pdf_search_page: '7' }, true);
+  test.setVisible(true);
+  expect(state.navigate).toHaveBeenCalledExactlyOnceWith({
+    pdf_search_page: '7',
+  });
+  test.setTarget(undefined);
+  test.setVisible(false);
+  test.setTarget({ pdf_search_page: '8' });
+  test.setTarget(undefined);
+  test.setVisible(true);
+  expect(state.navigate).toHaveBeenCalledTimes(1);
+  expect(state.initial).not.toHaveBeenCalled();
 });
 
 it('keeps legacy initial-location navigation when there is no route target', () => {
