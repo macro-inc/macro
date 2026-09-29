@@ -42,10 +42,12 @@ name (otherwise the opening words of the prompt name the document), an aspect ra
 access required). The file extension comes from the generated format, so
 `fileName: "lighthouse"` yields `lighthouse.png`.
 
-The tool row displays **Generate image** with the file name and, on success,
-**Generated**. The result opens expanded and shows the image itself once the
-upload is ready (a **Preparing preview** placeholder until then), the document
-chip that opens it, its media type and size, and any commentary the model added.
+The tool row displays **Generate image** with the file name, the aspect ratio when
+one was requested, and, on success, the document chip that opens the image plus a
+**Generated · \<size\>** toggle. The result opens expanded and shows a small
+thumbnail once the upload is ready (a **Preparing preview** placeholder until
+then); clicking the thumbnail opens the image document in a split. Any commentary
+the model added appears under the thumbnail.
 Refused prompts, provider failures, and hosts without a Google Generative AI key
 display a failed tool call; the error tells the agent whether to rephrase, retry,
 or stop.
