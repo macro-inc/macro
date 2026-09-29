@@ -1,5 +1,4 @@
 import { openReminderDetail } from '@app/features/reminders/reminder-navigation';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
@@ -80,10 +79,7 @@ export function ReminderComposerModal() {
         actions: [
           {
             label: 'View',
-            onClick: () => {
-              const manager = globalSplitManager();
-              if (manager) openReminderDetail(reminder.id, { manager });
-            },
+            onClick: () => void openReminderDetail(reminder.id),
           },
         ],
       }

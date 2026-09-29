@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
   success: vi.fn(),
   openReminderDetail: vi.fn(),
-  splitManager: {},
 }));
 
 vi.mock('@queries/reminders/reminders', () => ({
@@ -26,9 +25,6 @@ vi.mock('@queries/reminders/reminders', () => ({
   useCreateReminderMutation: () => ({ mutateAsync: mocks.save }),
 }));
 vi.mock('@queries/soup/cache', () => ({ refetchSoupEntity: vi.fn() }));
-vi.mock('@app/signal/splitLayout', () => ({
-  globalSplitManager: () => mocks.splitManager,
-}));
 vi.mock('@app/features/reminders/reminder-navigation', () => ({
   openReminderDetail: mocks.openReminderDetail,
 }));
@@ -145,7 +141,8 @@ it('keeps the draft open and prevents concurrent duplicate submits', async () =>
   expect(onCreated).not.toHaveBeenCalled();
 });
 
-it('retries a rejected mutation with the same draft and closes only on success', async () => {
+it('retries with the same draft and opens View while route application is deferred', async () => {
+  mocks.openReminderDetail.mockReturnValue({ status: 'navigating' });
   mocks.save
     .mockRejectedValueOnce(new Error('offline'))
     .mockResolvedValueOnce(savedReminder());
@@ -176,9 +173,9 @@ it('retries a rejected mutation with the same draft and closes only on success',
     })
   );
   mocks.success.mock.calls[0]?.[1].actions[0].onClick();
-  expect(mocks.openReminderDetail).toHaveBeenCalledWith('reminder-1', {
-    manager: mocks.splitManager,
-  });
+  expect(mocks.openReminderDetail).toHaveBeenCalledExactlyOnceWith(
+    'reminder-1'
+  );
 });
 
 it('waits for a deferred mutation before closing and running the follow-up', async () => {
