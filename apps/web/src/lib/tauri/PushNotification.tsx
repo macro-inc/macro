@@ -72,15 +72,21 @@ function usePushNotifications(
     return epoch !== registrationEpoch;
   }
 
+  // A registration step must stop once a newer sync started or the session
+  // ended, otherwise late async completion could bind the wrong account.
+  function aborted(epoch: number) {
+    return isStale(epoch) || !hasLoginCookie();
+  }
+
   async function registerDeviceWithNotificationService(
     token: string,
     epoch: number
   ): Promise<'granted' | 'denied'> {
     return registrationMutex.runExclusive(async () => {
-      if (isStale(epoch) || !hasLoginCookie()) return 'denied';
+      if (aborted(epoch)) return 'denied';
       const recipient = await fetchRecipient();
       if (recipient === undefined) return 'denied';
-      if (isStale(epoch) || !hasLoginCookie()) return 'denied';
+      if (aborted(epoch)) return 'denied';
       const res = await registerPushDevice({ deviceType, token });
       if (res.isErr()) {
         // Transient failures must not erase a previously granted permission.
@@ -88,18 +94,18 @@ function usePushNotifications(
         return 'denied';
       }
       try {
-        if (isStale(epoch) || !hasLoginCookie()) return 'denied';
+        if (aborted(epoch)) return 'denied';
         await configureRecipient(recipient, epoch);
-        if (isStale(epoch) || !hasLoginCookie()) return 'denied';
+        if (aborted(epoch)) return 'denied';
         setPermission('granted');
         setPushDisabledByUser(false);
         await startWatch();
-        if (isStale(epoch) || !hasLoginCookie()) return 'denied';
+        if (aborted(epoch)) return 'denied';
         return 'granted';
       } finally {
         // A successful backend write may finish after logout/opt-out. Roll it
         // back before a newer registration can acquire the lock and bind it.
-        if (isStale(epoch) || !hasLoginCookie()) await unregisterDevice(token);
+        if (aborted(epoch)) await unregisterDevice(token);
       }
     });
   }
@@ -112,7 +118,7 @@ function usePushNotifications(
       } finally {
         // The bridge may finish an old configure after logout has started.
         // Disarm before releasing the lock to any newer account's configure.
-        if (recipient !== null && (isStale(epoch) || !hasLoginCookie())) {
+        if (recipient !== null && aborted(epoch)) {
           await api.configureRecipient(null);
         }
       }
