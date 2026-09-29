@@ -609,6 +609,25 @@ impl<
         }
     }
 
+    /// A new document starts its own collaborative session, so a caller-chosen
+    /// id must not already have one: the document would take it over instead.
+    async fn refuse_existing_session(&self, id: Option<uuid::Uuid>) -> Result<(), DocumentError> {
+        let Some(id) = id else {
+            return Ok(());
+        };
+        if self
+            .sync_service_client
+            .exists(&id.to_string())
+            .await
+            .map_err(DocumentError::Internal)?
+        {
+            return Err(DocumentError::Conflict(
+                "document id is already in use".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Clean up a document on creation error.
     async fn cleanup_document(&self, document_id: &str) {
         if let Err(e) = self.repo.delete_document_by_id(document_id).await {
@@ -1307,6 +1326,7 @@ impl<
             }
             document.team_id = Some(*team);
         }
+        self.refuse_existing_session(document.id).await?;
 
         let owner = principal.owner();
         let file_type = document.file_type;
@@ -1355,6 +1375,8 @@ impl<
                 max: MAX_DOCUMENT_NAME_GRAPHEMES,
             });
         }
+
+        self.refuse_existing_session(args.document.id).await?;
 
         let file_type = args.document.file_type;
         let project_id = args.document.project_id;
