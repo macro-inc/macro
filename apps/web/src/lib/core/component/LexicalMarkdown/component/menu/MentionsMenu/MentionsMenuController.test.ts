@@ -67,6 +67,35 @@ it('keeps all people accessible through View all and keyboard navigation', () =>
   });
 });
 
+it('keeps document preview slots stable when only total match counts change', () => {
+  createRoot((dispose) => {
+    const documents = items('doc', 74);
+    const [documentCount, setDocumentCount] = createSignal(15);
+    const menu = useMentionsMenuController(() => [
+      bucket('users', items('person', 7)),
+      bucket('documents', documents.slice(0, documentCount())),
+      bucket('channels', items('channel', 1)),
+      bucket('emails', items('email', 4)),
+    ]);
+    const initialBins = menu.bins();
+    const documentSlots = initialBins.documents;
+    expect(documentSlots).toBeGreaterThan(0);
+    expect(menu.combinedItems()).toHaveLength(8);
+    menu.selectItem(3 + documentSlots - 1);
+    for (const count of [11, 15, 74, 11]) {
+      setDocumentCount(count);
+      expect(menu.bins()).toEqual(initialBins);
+      expect(menu.combinedItems().slice(3, 3 + documentSlots)).toEqual(
+        documents.slice(0, documentSlots)
+      );
+      expect(menu.selectedItem()).toBe(documents[documentSlots - 1]);
+    }
+    menu.viewAll('documents');
+    expect(menu.combinedItems()).toHaveLength(11);
+    dispose();
+  });
+});
+
 it('allocates unused people slots to other categories and excludes ignored people', () => {
   createRoot((dispose) => {
     const people = items('person', 2);

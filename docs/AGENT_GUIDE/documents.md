@@ -570,6 +570,11 @@ result categories load; use **View all** for the remaining matches. Check that a
 person stays clickable after document and email results arrive. Type and
 backspace through a query that keeps the same matches: existing rows should
 stay mounted and the menu should not collapse while cached results refresh.
+Check document titles and their order as well as People: type and backspace
+between a name's prefixes and verify the top document does not disappear and
+return while the result count briefly drops.
+Changing the total number of matches should not change a category's preview
+slots when it still has enough rows to fill them; use **View all** for the full list.
 Clear the unsent draft after testing.
 
 Select text and choose the comment action to create an anchored comment. These

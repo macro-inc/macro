@@ -360,7 +360,7 @@ class MentionsMenuController {
       return { ...rawBins };
     }
 
-    // Allocate items proportionally, ensuring each non-empty bin gets at least 1
+    // Give every non-empty category a preview before sharing spare slots.
     const scaled: MentionBins = {};
 
     const nonEmptyBins = Object.entries(rawBins).filter(
@@ -377,38 +377,16 @@ class MentionsMenuController {
       }
     }
 
-    // Second pass: distribute remaining slots proportionally
-    const remaining = targetItems - allocated;
-
-    if (remaining > 0) {
-      const nonEmptyTotal = nonEmptyBins.reduce((sum, [_, c]) => sum + c, 0);
-      const remainders: Array<{ key: string; remainder: number }> = [];
-      let totalFloorsAdded = 0;
-
+    // Share spare slots in category order. Total match counts can change on
+    // each keystroke or cache response even when the visible matches are the
+    // same; proportional allocation would hide/show those rows repeatedly.
+    while (allocated < targetItems) {
       for (const [key, count] of nonEmptyBins) {
-        const proportion = count / nonEmptyTotal;
-        const raw = proportion * remaining;
-        const floor = Math.floor(raw);
-        const remainder = raw - floor;
-
-        scaled[key] = (scaled[key] || 0) + floor;
-        totalFloorsAdded += floor;
-        remainders.push({ key, remainder });
+        if (allocated >= targetItems) break;
+        if (scaled[key] >= count) continue;
+        scaled[key] += 1;
+        allocated += 1;
       }
-
-      // Distribute leftover items to bins with largest remainders
-      const leftover = remaining - totalFloorsAdded;
-      const sorted = remainders.sort((a, b) => b.remainder - a.remainder);
-
-      for (let i = 0; i < leftover && i < sorted.length; i++) {
-        const key = sorted[i].key;
-        scaled[key] = (scaled[key] || 0) + 1;
-      }
-    }
-
-    // Ensure we don't exceed actual bin counts
-    for (const [key, count] of Object.entries(scaled)) {
-      scaled[key] = Math.min(count, rawBins[key] || 0);
     }
 
     return scaled;
