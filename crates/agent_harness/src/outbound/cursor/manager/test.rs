@@ -97,6 +97,7 @@ impl AgentSessionRepo for StubSessions {
             pull_request_url: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            is_archived: false,
             sandbox_size: SandboxSize::Default,
             instructions: None,
             mcp_servers: Default::default(),
@@ -174,6 +175,10 @@ impl AgentSessionRepo for StubSessions {
 
     async fn set_name(&self, _id: AgentSessionId, _name: &str) -> SessionResult<()> {
         unimplemented!("naming sessions is the session actor's job")
+    }
+
+    async fn set_archived(&self, _id: AgentSessionId, _is_archived: bool) -> SessionResult<()> {
+        unimplemented!("archiving sessions is the harness service's job")
     }
 
     async fn set_name_if_default(&self, _id: AgentSessionId, _name: &str) -> SessionResult<bool> {
