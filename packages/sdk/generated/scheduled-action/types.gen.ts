@@ -17,6 +17,25 @@ export type ActionConfiguration = {
     trigger: ActionTrigger;
 };
 
+/**
+ * Canonical configuration replacement. Activation has its own endpoint, so
+ * omitting `enabled` keeps the stored value.
+ */
+export type ActionConfigurationUpdate = {
+    /**
+     * Still sent by clients deployed before the activation endpoint.
+     *
+     * @deprecated
+     */
+    enabled?: boolean | null;
+    kind: ActionKind;
+    name: string;
+    task: {
+        [key: string]: unknown;
+    };
+    trigger: ActionTrigger;
+};
+
 export type ActionExecutionRecord = {
     action_id: string;
     created_at: string;
@@ -223,10 +242,14 @@ export type ScheduledActionUpdate = {
     type: 'stopped';
 };
 
+export type SetScheduledActionEnabled = {
+    enabled: boolean;
+};
+
 /**
  * Full replacement of client configuration, not of server-owned action state.
  */
-export type UpdateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
+export type UpdateScheduledAction = ActionConfigurationUpdate | LegacyActionConfiguration;
 
 export type ScheduledActionHealthData = {
     body?: never;
@@ -347,6 +370,37 @@ export type UpdateScheduledActionResponses = {
 };
 
 export type UpdateScheduledActionResponse = UpdateScheduledActionResponses[keyof UpdateScheduledActionResponses];
+
+export type SetScheduledActionEnabledData = {
+    body: SetScheduledActionEnabled;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/enabled';
+};
+
+export type SetScheduledActionEnabledErrors = {
+    400: string;
+    401: string;
+    404: string;
+    /**
+     * Configuration changed or execution is active
+     */
+    409: string;
+    500: string;
+};
+
+export type SetScheduledActionEnabledError = SetScheduledActionEnabledErrors[keyof SetScheduledActionEnabledErrors];
+
+export type SetScheduledActionEnabledResponses = {
+    200: ScheduledActionResponse;
+};
+
+export type SetScheduledActionEnabledResponse = SetScheduledActionEnabledResponses[keyof SetScheduledActionEnabledResponses];
 
 export type ExecuteScheduledActionNowData = {
     body?: never;
