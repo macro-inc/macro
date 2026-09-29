@@ -1264,6 +1264,7 @@ async fn run() -> anyhow::Result<()> {
             lexical_client.as_ref().clone(),
             sync_service_client.as_ref().clone(),
         )),
+        Arc::new(service::collab_surface_document_ids::DssCollabSurfaceDocumentIds(db.clone())),
         config.document_permission_jwt.as_ref().to_string(),
     );
 

@@ -6027,6 +6027,16 @@
               }
             }
           },
+          "409": {
+            "description": "The surface id is already in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "410": {
             "description": "The surface id was deleted and cannot be reused",
             "content": {
@@ -6165,6 +6175,16 @@
           },
           "404": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The surface is not initialized yet, or its id is in use",
             "content": {
               "application/json": {
                 "schema": {

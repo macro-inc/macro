@@ -38,9 +38,24 @@ pub trait CollabSurfaceRepo: Send + Sync + 'static {
 
     /// Soft-delete a surface. Idempotent.
     fn soft_delete(&self, id: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Whether `id` belongs to a soft-deleted surface.
+    fn is_deleted(&self, id: Uuid) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
-/// Outbound port that boots a surface's sync-service session from markdown.
+/// Outbound port onto the document id namespace, which surfaces share in
+/// sync-service. The composition root implements it over macro_db_client's
+/// `does_document_exist` helper, which owns reads of the documents table.
+pub trait DocumentIds: Send + Sync + 'static {
+    /// Whether `id` names a document, live or soft-deleted.
+    fn is_document_id(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<bool, rootcause::Report>> + Send;
+}
+
+/// Outbound port for a surface's sync-service session: boots it from markdown
+/// and checks whether it exists.
 ///
 /// Implementations convert the markdown to a Loro snapshot (an empty string
 /// maps to the canonical blank-document snapshot) and store it as the
@@ -54,6 +69,15 @@ pub trait SurfaceInitializer: Send + Sync + 'static {
         surface_id: &str,
         markdown: &str,
     ) -> impl Future<Output = Result<(), CollabSurfaceError>> + Send;
+
+    /// Whether a session for `surface_id` exists. Only asked for a new id,
+    /// before its row is inserted. Sync-service answers yes as soon as a
+    /// session knows its id (a client connected, say), not only once it is
+    /// initialized: the conservative answer for an id nothing should use yet.
+    fn session_exists(
+        &self,
+        surface_id: &str,
+    ) -> impl Future<Output = Result<bool, CollabSurfaceError>> + Send;
 }
 
 /// The collab-surface use-cases, generic over the outbound ports.
@@ -67,6 +91,9 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
     ///   row (an earlier ensure died or failed mid-init) has its
     ///   initialization retried.
     /// - soft-deleted → [`CollabSurfaceError::Gone`]; ids are never reused.
+    /// - the id names a document, or a new id already has a sync-service
+    ///   session → [`CollabSurfaceError::IdReserved`], before any row is
+    ///   written: a new surface only ever creates its own session.
     ///
     /// Concurrent ensures for the same id converge: the insert is
     /// conflict-tolerant and the initializer treats an already-initialized
@@ -96,8 +123,10 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<Entity<'static>, CollabSurfaceError>> + Send;
 
-    /// Mint a sync-service connection token for the surface, at the access
-    /// level implied by the caller's permission on the parent entity.
+    /// Mint a sync-service connection token for a `ready` surface, at the
+    /// access level implied by the caller's permission on the parent entity.
+    /// A surface whose id names a document is refused
+    /// ([`CollabSurfaceError::IdReserved`]), whenever it was bound.
     fn mint_token(
         &self,
         user_id: &MacroUserIdStr<'_>,

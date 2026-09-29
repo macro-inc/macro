@@ -36,6 +36,7 @@ serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
 sync_service_client = { path = "../sync_service_client", optional = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 tokio-retry = { workspace = true }
 tracing = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }

@@ -517,8 +517,11 @@ pub(crate) type DssInitiativeState =
     InitiativeRouterState<InitiativeServiceType, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the collab-surface service.
-pub(crate) type CollabSurfaceServiceType =
-    CollabSurfaceServiceImpl<PgCollabSurfaceRepo, LexicalSyncSurfaceInitializer>;
+pub(crate) type CollabSurfaceServiceType = CollabSurfaceServiceImpl<
+    PgCollabSurfaceRepo,
+    LexicalSyncSurfaceInitializer,
+    crate::service::collab_surface_document_ids::DssCollabSurfaceDocumentIds,
+>;
 
 /// Type alias for the collab-surface router state.
 pub(crate) type DssCollabSurfaceState =
