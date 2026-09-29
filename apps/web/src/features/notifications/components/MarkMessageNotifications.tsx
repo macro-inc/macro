@@ -46,19 +46,27 @@ export function MarkMessageNotifications(props: {
   //
   // Not a one-shot latch: a stale refetch can land after the optimistic write
   // and flip notifications back to unviewed while this row stays mounted, so
-  // re-mark whenever the cache regresses, bounded per mount. inFlight is a
-  // signal so a regression that lands mid-mark re-runs the effect on settle.
+  // re-mark whenever the cache regresses, bounded per notification batch.
+  // New notifications get a fresh budget. inFlight is a signal so a regression
+  // that lands mid-mark re-runs the effect on settle.
   const [inFlight, setInFlight] = createSignal(false);
   let attempts = 0;
+  let attemptedIds = '';
 
   createEffect(() => {
     const unread = notifications().filter(
       (notification) =>
         isMessageNotification(notification) && notification.state === 'unseen'
     );
-    if (unread.length === 0 || inFlight() || attempts >= MAX_MARK_ATTEMPTS) {
-      return;
+    if (unread.length === 0 || inFlight()) return;
+    const ids = JSON.stringify(
+      unread.map((notification) => notification.id).sort()
+    );
+    if (ids !== attemptedIds) {
+      attemptedIds = ids;
+      attempts = 0;
     }
+    if (attempts >= MAX_MARK_ATTEMPTS) return;
     attempts += 1;
     setInFlight(true);
     void notificationSource

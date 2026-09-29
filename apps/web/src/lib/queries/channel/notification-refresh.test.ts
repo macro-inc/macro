@@ -254,6 +254,10 @@ describe('shared channel notification refresh', () => {
       f.request.mockResolvedValue({ error });
       f.queue.onPatch(patch(), false);
       await tick();
+      // Blocked jobs must leave committed revalidations to the caller's fallback.
+      expect(delegateChannelNotificationRefresh(f.client, descriptor())).toBe(
+        false
+      );
       f.queue.reconnect();
       f.queue.onPatch(patch(), false);
       await vi.advanceTimersByTimeAsync(60000);

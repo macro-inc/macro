@@ -117,7 +117,8 @@ export class ChannelNotificationRefresh {
     const job = this.jobs.get(
       createRequest(query.document, query.variables).key
     );
-    if (!job || !this.enabled(job)) return false;
+    // Decline work we cannot run so committed writes retain their network fallback.
+    if (!job || !this.enabled(job) || job.blocked) return false;
     this.invalidate(job);
     this.schedule();
     return true;

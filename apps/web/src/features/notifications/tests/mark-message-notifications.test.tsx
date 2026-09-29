@@ -108,36 +108,57 @@ describe('MarkMessageNotifications', () => {
     expect(globalRead).not.toHaveBeenCalled();
     await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
     expect(bulkMarkAsRead).toHaveBeenCalledWith(matchingNotifications);
-    const liveNotifications = [documentMentionNotification('live')];
-    setNotifications(liveNotifications);
-    await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(2));
-    expect(bulkMarkAsRead).toHaveBeenLastCalledWith(liveNotifications);
+    for (let i = 0; i < 4; i++) {
+      const liveNotifications = [documentMentionNotification(`live-${i}`)];
+      setNotifications(liveNotifications);
+      await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(i + 2));
+      expect(bulkMarkAsRead).toHaveBeenLastCalledWith(liveNotifications);
+    }
     expect(globalRead).not.toHaveBeenCalled();
     expect(observer).not.toHaveBeenCalled();
     expect(view.container.firstElementChild?.tagName).toBe('SPAN');
   });
 
-  it('handles mark failures while preserving bounded retries', async () => {
+  it('bounds retries for the same notifications and retries a new batch after exhaustion', async () => {
     const error = new Error('mark failed');
     bulkMarkAsRead.mockRejectedValue(error);
     const consoleError = vi
       .spyOn(console, 'error')
       .mockImplementation(() => {});
+    const [notifications, setNotifications] = createSignal(
+      matchingNotifications
+    );
 
     try {
       render(() => (
-        <MarkMessageNotifications
-          messageId="message-1"
-          parent={{ type: 'channel', id: 'channel-1' }}
-        >
-          <span>Message</span>
-        </MarkMessageNotifications>
+        <MessageNotificationSourceContext.Provider value={notifications}>
+          <MarkMessageNotifications
+            messageId="message-1"
+            parent={{ type: 'channel', id: 'channel-1' }}
+          >
+            <span>Message</span>
+          </MarkMessageNotifications>
+        </MessageNotificationSourceContext.Provider>
       ));
 
       await waitFor(() => {
         expect(bulkMarkAsRead).toHaveBeenCalledTimes(3);
         expect(consoleError).toHaveBeenCalledTimes(3);
       });
+      // A refetch or a different ordering must not restart the failed batch.
+      setNotifications(
+        [...matchingNotifications].reverse().map((n) => ({ ...n }))
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(bulkMarkAsRead).toHaveBeenCalledTimes(3);
+
+      const incoming = [documentMentionNotification('new-after-failure')];
+      bulkMarkAsRead.mockImplementation(async (notifications) => {
+        for (const notification of notifications) notification.state = 'seen';
+      });
+      setNotifications(incoming);
+      await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(4));
+      expect(bulkMarkAsRead).toHaveBeenLastCalledWith(incoming);
     } finally {
       consoleError.mockRestore();
     }
