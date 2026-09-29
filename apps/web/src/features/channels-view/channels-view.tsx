@@ -1,7 +1,10 @@
 import { ViewShell } from '@app/components/view-shell';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { useMobileSearchText } from '@app/features/command/mobile/use-mobile-search-text';
-import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
+import {
+  getChannelEntityTarget,
+  markChannelNotificationsSeenOnOpen,
+} from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { SplitRouter } from '@app/lib/split-router';
@@ -14,10 +17,8 @@ import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
   createContext,
-  createEffect,
   createMemo,
   createSignal,
-  on,
   onMount,
   Show,
   useContext,
@@ -26,6 +27,7 @@ import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelDetailView } from './components/ChannelDetailView';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
+import { createChannelDetail } from './primitives/create-channel-detail';
 import {
   type ChannelsSources,
   deduplicateChannels,
@@ -33,6 +35,7 @@ import {
   useChannelByIdQuery,
   useChannelsSources,
 } from './queries';
+import { createChannelDetailSource } from './queries/channel-detail-source';
 import { createChannelSearchSource } from './queries/channel-search-source';
 
 const ChannelSourcesContext =
@@ -218,66 +221,48 @@ function ChannelDetailRouteContent() {
         : []
     )
   );
-  const needsFullEdge = createMemo(
-    on(
-      channelId,
-      // The rail selects immediately. Even an empty bounded unread edge can
-      // be stale, so refresh here before choosing the initial message target.
-      () =>
-        loaded() === undefined || loaded()?.unreadNotifications !== undefined
-    )
-  );
-  const query = useChannelByIdQuery(
+  const source = createChannelDetailSource({
     channelId,
-    () =>
-      channelId() !== undefined && (needsFullEdge() || loaded() === undefined)
-  );
-  const hydrated = createMemo((previous: ReturnType<typeof loaded>) => {
-    const selection = selectedChannel();
-    if (!selection || selection.type !== 'channel') return;
-    const cached = loaded();
-    if (cached && !needsFullEdge())
-      return { ...cached, target: selection.target, notifications: () => [] };
-    if (
-      !query.isEnabled ||
-      query.isLoading ||
-      query.isFetching ||
-      query.error
-    ) {
-      return previous?.id === selection.id ? previous : undefined;
-    }
-    const full = resolveSelectedChannel(selection.id, [], query.data?.entities);
-    if (!full) return;
+    cached: loaded,
+    createQuery: useChannelByIdQuery,
+  });
+  const detail = createChannelDetail({
+    selection: selectedChannel,
+    cached: loaded,
+    source,
+    resolveDestination: (channel) =>
+      getChannelEntityTarget(
+        withEntityNotifications(channel, notificationSource),
+        { scopeChannelThreads: false }
+      ),
+    markRead: (channel) =>
+      markChannelNotificationsSeenOnOpen(
+        withEntityNotifications(channel, notificationSource),
+        notificationSource,
+        { scopeChannelThreads: false }
+      ),
+  });
+  const visibleChannel = createMemo(() => {
+    const view = detail.view();
+    if (view.status !== 'ready') return;
     return withEntityNotifications(
-      { ...full, target: selection.target },
+      { ...view.channel, target: selectedChannel()?.target },
       notificationSource
     );
   });
-  const unavailable = () =>
-    Boolean(query.error) ||
-    (query.isEnabled && !query.isLoading && !query.isFetching && !hydrated());
+  const unavailable = () => detail.view().status === 'unavailable';
   const retry = async () => {
     try {
-      await query.refresh();
+      await detail.refresh();
     } catch {
-      /* Query state presents the failure. */
+      /* The source presents the failure. */
     }
   };
-  const readyId = createMemo(() => hydrated()?.id);
-  createEffect(
-    on(readyId, () => {
-      const channel = hydrated();
-      if (channel && channel.isParticipant !== false)
-        markChannelNotificationsSeenOnOpen(channel, notificationSource, {
-          scopeChannelThreads: false,
-        });
-    })
-  );
 
   return (
     <DebugSuspense name="ChannelsView.detail-content">
       <Show
-        when={hydrated()}
+        when={visibleChannel()}
         fallback={
           <>
             <ViewShell.TopBar>
@@ -303,7 +288,20 @@ function ChannelDetailRouteContent() {
           </>
         }
       >
-        {(channel) => <ChannelDetailView channel={channel()} />}
+        {(channel) => (
+          <div
+            class="flex size-full min-h-0 flex-col"
+            on:pointerdown={{
+              capture: true,
+              handleEvent: detail.onInteraction,
+            }}
+            on:keydown={{ capture: true, handleEvent: detail.onInteraction }}
+            on:wheel={{ capture: true, handleEvent: detail.onInteraction }}
+            on:touchmove={{ capture: true, handleEvent: detail.onInteraction }}
+          >
+            <ChannelDetailView channel={channel()} target={detail.target()} />
+          </div>
+        )}
       </Show>
     </DebugSuspense>
   );

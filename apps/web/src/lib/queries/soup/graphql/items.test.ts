@@ -1228,6 +1228,12 @@ describe('createGraphqlSoupAstItemsQuery', () => {
           });
           fake.executions[0].fail(unauthorized);
           expect(query.error()).toBe(unauthorized);
+          const unavailable = new CombinedError({
+            networkError: new Error('HTTP 503'),
+            response: { status: 503 },
+          });
+          fake.executions[0].fail(unavailable);
+          expect(query.error()).toBe(unavailable);
         } else {
           expect(query.data()?.cachedMail).not.toBe(true);
           expect(query.error()).toBe(offlineError);

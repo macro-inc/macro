@@ -178,9 +178,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
       });
       const previous = selectedChannel();
       if (!setSelectedChannel(selection)) return;
-      // Mark on every accepted activation, including re-clicks of the same
-      // route. The detail's ready-id effect only handles initial/route opens.
-      if (channel.isParticipant !== false) {
+      // The detail owns read marking on route opens. Re-clicks refresh and
+      // mark again even though the mounted route does not change.
+      if (previous?.id === selection.id && channel.isParticipant !== false) {
         markChannelNotificationsSeenOnOpen(entity, notificationSource, {
           scopeChannelThreads: false,
         });
@@ -229,11 +229,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     // A different channel owns its loading UI and notification hydration.
     // Select it before fetching so the rail and destination respond to the
     // click immediately. Re-clicks still refresh and re-aim the open channel.
-    if (
-      !openInNewSplit &&
-      selectedChannel()?.id !== channelId &&
-      channel.unreadNotifications !== undefined
-    ) {
+    if (!openInNewSplit && selectedChannel()?.id !== channelId) {
       setSelectedChannel(
         channelPreviewSelection(channelId, {
           target: channel.target

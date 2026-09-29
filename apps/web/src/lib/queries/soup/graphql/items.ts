@@ -15,6 +15,7 @@ import {
   createUrqlInfiniteQuery,
   type UrqlInfiniteData,
 } from '@app/lib/urql-solid';
+import { isTransientRequestError } from '@core/util/request-error';
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
@@ -772,9 +773,9 @@ export function createGraphqlSoupAstItemsQuery(
     // Keep server responses (including HTTP auth failures), GraphQL errors,
     // and failures without current-query local proof visible.
     if (
-      error?.networkError &&
+      error &&
+      isTransientRequestError(error) &&
       !error.response &&
-      error.graphQLErrors.length === 0 &&
       displayLocalProjection()
     ) {
       return undefined;

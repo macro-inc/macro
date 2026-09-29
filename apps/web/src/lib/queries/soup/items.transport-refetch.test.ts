@@ -2,7 +2,10 @@ import { useInfiniteQuery } from '@tanstack/solid-query';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const testState = vi.hoisted(() => ({ graphqlEnabled: false }));
+const testState = vi.hoisted(() => ({
+  graphqlEnabled: false,
+  restPending: false,
+}));
 const restRefetch = vi.hoisted(() => vi.fn(async () => undefined));
 const fetchSoup = vi.hoisted(() => vi.fn());
 const flatQuery = vi.hoisted(() => makeGraphqlQuery(false));
@@ -69,6 +72,9 @@ vi.mock('@tanstack/solid-query', () => ({
   useInfiniteQuery: vi.fn(() => ({
     data: undefined,
     error: null,
+    get isPending() {
+      return testState.restPending;
+    },
     isLoading: false,
     isFetching: false,
     isPlaceholderData: false,
@@ -120,12 +126,20 @@ function mountAutoTransportQuery(): SoupAstItemsQuery {
 describe('Soup refetch transport selection', () => {
   beforeEach(() => {
     testState.graphqlEnabled = false;
+    testState.restPending = false;
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     disposeRoot?.();
     disposeRoot = undefined;
+  });
+
+  it('exposes paused REST requests as pending even when they are not loading', () => {
+    testState.restPending = true;
+    const query = mountAutoTransportQuery();
+    expect(query.isLoading).toBe(false);
+    expect(query.isPending).toBe(true);
   });
 
   it('forwards the channel list projection only to the flat GraphQL query', () => {

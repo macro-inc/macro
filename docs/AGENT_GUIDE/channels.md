@@ -341,6 +341,23 @@ In Chat, the detail uses the shared channel top bar with Messages, Attachments,
 Participants, and Calls tabs (when calls are enabled). A message target switches
 back to Messages; changing unread notifications does not restart navigation.
 
+On desktop, switching conversations selects and mounts the cached conversation
+immediately. Messages load alongside the notification refresh. Explicit message
+or search targets apply immediately; otherwise the first notification result can
+navigate to the newest unread message. Scrolling, clicking, or typing in the
+conversation cancels that automatic jump. Later notification updates never
+restart navigation. With a slow connection, switch channels quickly: an earlier
+response must not switch back or mark that earlier channel read.
+
+A transient notification-fetch failure keeps the conversation and composer mounted
+and offers **Retry**. Retrying preserves focus and scroll; recovery marks the full
+notification list read without a delayed jump. No notification read marking runs
+from an abbreviated list result, even if that result is empty. Access failures
+show **Conversation unavailable** and stay hidden during retry until access is
+confirmed. A route without cached channel metadata shows **Loading conversation**
+until its channel arrives. Mobile and opening in a new split retain the block
+host's existing notification-before-navigation flow.
+
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
 **Show navigation** (the hamburger) immediately before the conversation title.
 Chat remembers this choice independently of other workspaces and restores it

@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import type { ChannelEntity } from '@entity/types/entity';
 import type { Notification } from '@entity/types/notification';
 import {
@@ -7,6 +8,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { CombinedError } from '@urql/core';
 import { batch, createSignal, For, type JSX, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   mobileTab: (): ChannelsQueryScope => 'channels',
   selectedQuery: vi.fn(),
   markRead: vi.fn(),
+  resolveTarget: vi.fn(() => ({ kind: 'message', messageId: 'unread' })),
   refresh: vi.fn(async () => {}),
 }));
 
@@ -57,7 +60,7 @@ vi.mock('@app/components/view-shell', () => ({
   },
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
-  getChannelEntityTarget: () => undefined,
+  getChannelEntityTarget: mocks.resolveTarget,
   markChannelNotificationsSeenOnOpen: mocks.markRead,
 }));
 vi.mock('@app/features/soup', () => ({
@@ -66,7 +69,10 @@ vi.mock('@app/features/soup', () => ({
 vi.mock('@app/features/soup/entity-notifications', () => ({
   withEntityNotifications: (entity: FullChannel) => ({
     ...entity,
-    notifications: () => entity.notifications,
+    notifications:
+      typeof entity.notifications === 'function'
+        ? entity.notifications
+        : () => entity.notifications,
   }),
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
@@ -98,8 +104,11 @@ vi.mock('@entity', async () => ({
   ListEntityMetadataQueryProvider: mocks.pass,
 }));
 vi.mock('./components/ChannelDetailView', () => ({
-  ChannelDetailView: (props: { channel: ChannelEntity }) => (
-    <div data-testid="channel-detail">
+  ChannelDetailView: (props: { channel: ChannelEntity; target?: unknown }) => (
+    <div
+      data-testid="channel-detail"
+      data-target={JSON.stringify(props.target)}
+    >
       {props.channel.id}
       <textarea aria-label="Composer" />
     </div>
@@ -228,6 +237,9 @@ beforeEach(() => {
     get isEnabled() {
       return enabled();
     },
+    get isPending() {
+      return query.isLoading;
+    },
     get isLoading() {
       return query.isLoading;
     },
@@ -281,6 +293,161 @@ describe('mobile dock search wiring', () => {
 });
 
 describe('channel selection loading and recovery', () => {
+  it.each(['pointerDown', 'keyDown', 'wheel'] as const)(
+    'captures %s in the conversation to prevent a late unread jump',
+    (event) => {
+      setQuery({ isFetching: true, data: undefined });
+      render(() => <ChannelsView />);
+      const composer = screen.getByRole('textbox', { name: 'Composer' });
+      fireEvent[event](composer);
+      batch(() =>
+        setQuery({
+          isFetching: false,
+          data: { entities: [full('one', ['unread'])] },
+        })
+      );
+      expect(mocks.resolveTarget).not.toHaveBeenCalled();
+      expect(
+        screen.getByTestId('channel-detail').dataset.target
+      ).toBeUndefined();
+      expect(mocks.markRead).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('applies the unread destination after mounting when the user has not interacted', () => {
+    setQuery({ isFetching: true, data: undefined });
+    render(() => <ChannelsView />);
+    const composer = screen.getByRole('textbox', { name: 'Composer' });
+    batch(() =>
+      setQuery({
+        isFetching: false,
+        data: { entities: [full('one', ['unread'])] },
+      })
+    );
+    expect(screen.getByTestId('channel-detail').dataset.target).toBe(
+      JSON.stringify({ kind: 'message', messageId: 'unread' })
+    );
+    expect(screen.getByRole('textbox', { name: 'Composer' })).toBe(composer);
+  });
+
+  it('preserves an already-loaded full notification edge on route open', () => {
+    setRows([full('one', ['unread-message'])]);
+    render(() => <ChannelsView />);
+    expect(mocks.markRead).toHaveBeenCalledOnce();
+    const marked = mocks.markRead.mock.calls[0][0];
+    expect(
+      marked
+        .notifications()
+        .map((notification: Notification) => notification.id)
+    ).toEqual(['unread-message']);
+  });
+
+  it('keeps the composer mounted and focused across loading, failure, retry, and recovery', () => {
+    setQuery({ isFetching: true, data: undefined });
+    render(() => <ChannelsView />);
+    const composer = screen.getByRole('textbox', { name: 'Composer' });
+    composer.focus();
+    batch(() => setQuery({ isFetching: false, error: new Error('Offline') }));
+    expect(screen.getByRole('textbox', { name: 'Composer' })).toBe(composer);
+    batch(() => setQuery({ isFetching: true, error: null }));
+    expect(screen.getByRole('textbox', { name: 'Composer' })).toBe(composer);
+    batch(() =>
+      setQuery({
+        isFetching: false,
+        data: { entities: [full('one', ['new'])] },
+      })
+    );
+    expect(screen.getByRole('textbox', { name: 'Composer' })).toBe(composer);
+    expect(document.activeElement).toBe(composer);
+    expect(mocks.markRead).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    new Error('Connection interrupted'),
+    new ThrownResultError([{ code: 'NETWORK_ERROR', message: 'Offline' }]),
+    new ThrownResultError([{ code: 'SERVER_ERROR', message: 'Server failed' }]),
+    new CombinedError({ networkError: new Error('Offline') }),
+    new CombinedError({
+      networkError: new Error('HTTP 503'),
+      response: { status: 503 },
+    }),
+  ])(
+    'renders an empty unread projection after a transient failure without marking read: %s',
+    (error) => {
+      setSelectedId('two');
+      setQuery({ error, data: undefined });
+      render(() => <ChannelsView />);
+      expect(screen.getByTestId('channel-detail').textContent).toBe('two');
+      expect(screen.queryByText('Conversation unavailable')).toBeNull();
+      expect(mocks.markRead).not.toHaveBeenCalled();
+
+      batch(() => {
+        setQuery('data', { entities: [full('two', ['fresh'])] });
+        setQuery('error', null);
+      });
+      expect(mocks.markRead).toHaveBeenCalledOnce();
+      const marked = mocks.markRead.mock.calls[0][0] as {
+        notifications: () => Notification[];
+      };
+      expect(
+        marked.notifications().map((notification) => notification.id)
+      ).toEqual(['fresh']);
+    }
+  );
+
+  it('does not mark a cached nonempty unread projection on a transient failure', () => {
+    setQuery({ error: new Error('Offline'), data: undefined });
+    render(() => <ChannelsView />);
+    expect(screen.getByTestId('channel-detail').textContent).toBe('one');
+    expect(mocks.markRead).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    new ThrownResultError([{ code: 'UNAUTHORIZED', message: 'Unauthorized' }]),
+    new ThrownResultError([{ code: 'FORBIDDEN', message: 'Forbidden' }]),
+    new ThrownResultError([{ code: 'NOT_FOUND', message: 'Not found' }]),
+    new CombinedError({
+      networkError: new Error('HTTP 401'),
+      response: { status: 401 },
+    }),
+    new CombinedError({
+      networkError: new Error('HTTP 403'),
+      response: { status: 403 },
+    }),
+    new CombinedError({
+      graphQLErrors: [
+        { message: 'Forbidden', extensions: { code: 'FORBIDDEN' } },
+      ],
+    }),
+  ])(
+    'keeps access failures unavailable even with cached or previously loaded data: %s',
+    (error) => {
+      setSelectedId('two');
+      setQuery('error', error);
+      render(() => <ChannelsView />);
+      expect(screen.getByText('Conversation unavailable')).toBeTruthy();
+      expect(screen.queryByTestId('channel-detail')).toBeNull();
+      expect(mocks.markRead).not.toHaveBeenCalled();
+
+      setQuery('error', null);
+      expect(screen.getByTestId('channel-detail').textContent).toBe('two');
+      mocks.markRead.mockClear();
+      setQuery('error', error);
+      expect(screen.getByText('Conversation unavailable')).toBeTruthy();
+      expect(screen.queryByTestId('channel-detail')).toBeNull();
+      expect(mocks.markRead).not.toHaveBeenCalled();
+    }
+  );
+
+  it('keeps an uncached channel unavailable after a transient failure', () => {
+    setRows([]);
+    setQuery({ error: new Error('Offline'), data: undefined });
+    render(() => <ChannelsView />);
+    expect(screen.getByText('Conversation unavailable')).toBeTruthy();
+    expect(screen.queryByTestId('channel-detail')).toBeNull();
+    expect(mocks.markRead).not.toHaveBeenCalled();
+  });
+
   it('shows the selected channel while its notification data is still loading', () => {
     setSelectedId('two');
     render(() => <ChannelsView />);
@@ -291,9 +458,8 @@ describe('channel selection loading and recovery', () => {
       setQuery('isFetching', true);
       setSelectedId('one');
     });
-    expect(screen.queryByTestId('channel-detail')).toBeNull();
-    expect(screen.getByText('one')).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toBe('Loading conversation');
+    expect(screen.getByTestId('channel-detail').textContent).toBe('one');
+    expect(screen.queryByText('Loading conversation')).toBeNull();
     expect(mocks.markRead).not.toHaveBeenCalled();
 
     batch(() => {
@@ -304,11 +470,11 @@ describe('channel selection loading and recovery', () => {
     expect(mocks.markRead).toHaveBeenCalledOnce();
   });
 
-  it('refreshes even an empty unread projection before choosing the message target', () => {
+  it('renders an empty unread projection while refreshing its notifications', () => {
     setSelectedId('two');
     setQuery('isFetching', true);
     render(() => <ChannelsView />);
-    expect(screen.getByText('Loading conversation')).toBeTruthy();
+    expect(screen.getByTestId('channel-detail')).toBeTruthy();
     expect(mocks.markRead).not.toHaveBeenCalled();
     batch(() => {
       setQuery('data', { entities: [full('two', ['arrived-after-list'])] });
@@ -331,7 +497,7 @@ describe('channel selection loading and recovery', () => {
     expect(mocks.markRead).not.toHaveBeenCalled();
 
     setQuery('isFetching', true);
-    expect(screen.getByText('Loading conversation')).toBeTruthy();
+    expect(screen.getByTestId('channel-detail').textContent).toBe('one');
     batch(() => {
       setQuery('data', { entities: [full('one', ['new'])] });
       setQuery('isFetching', false);
@@ -355,7 +521,7 @@ describe('channel selection loading and recovery', () => {
       setSelectedId('one');
       setQuery('isFetching', true);
     });
-    expect(screen.getByText('Loading conversation')).toBeTruthy();
+    expect(screen.getByTestId('channel-detail')).toBeTruthy();
     expect(mocks.markRead).not.toHaveBeenCalled();
     batch(() => {
       setQuery('data', { entities: [full('one', ['old', 'new'])] });
