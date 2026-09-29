@@ -14,7 +14,6 @@ import { resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
   enableProjects,
-  enableReminders,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -316,7 +315,6 @@ function getSupportedHandler(
       )
       .with('reminder', () => {
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          if (!isFeatureEnabled(enableReminders)) return;
           openReminderDetail(notification.entity_id, {
             manager: lm,
             handle: sourceHandle,

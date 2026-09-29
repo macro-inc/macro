@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { defineRoute, useRouteParams } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
@@ -5,8 +6,9 @@ import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
-import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
-import { lazy, onMount } from 'solid-js';
+import { LoadingBlock } from '@core/component/LoadingBlock';
+import { enableReminders } from '@core/constant/featureFlags';
+import { lazy, onMount, Show } from 'solid-js';
 import { z } from 'zod';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { ReminderDetails } from './ReminderEditorSplit';
@@ -16,9 +18,7 @@ const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
 }));
 
-export const RemindersRouteView = withAuth(() => {
-  if (!isFeatureEnabled(enableReminders))
-    return <RedirectSplit to={{ type: 'component', id: 'home' }} />;
+function RemindersView() {
   usePageViewTracking('reminders');
   const preset = getViewPreset('reminders');
   return (
@@ -30,6 +30,20 @@ export const RemindersRouteView = withAuth(() => {
       disableLocalSearch
     />
   );
+}
+
+export const RemindersRouteView = withAuth(() => {
+  const reminders = useFeatureFlag(enableReminders);
+  return (
+    <Show when={!reminders().loading} fallback={<LoadingBlock />}>
+      <Show
+        when={reminders().enabled}
+        fallback={<RedirectSplit to={{ type: 'component', id: 'home' }} />}
+      >
+        <RemindersView />
+      </Show>
+    </Show>
+  );
 });
 
 export const remindersRoute = defineRoute({
@@ -40,12 +54,9 @@ export const remindersRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'reminders' }),
 });
 
-const ReminderDetailRouteView = withAuth(() => {
+function ReminderDetailView() {
   const params = useRouteParams(reminderDetailRoute);
   const panel = useSplitPanelOrThrow();
-  if (!isFeatureEnabled(enableReminders)) {
-    return <RedirectSplit to={{ type: 'component', id: 'home' }} />;
-  }
   usePageViewTracking('reminder');
   onMount(() => panel.handle.setDisplayName('Reminder'));
   return (
@@ -53,6 +64,20 @@ const ReminderDetailRouteView = withAuth(() => {
       reminderId={params.reminderId}
       onClose={() => panel.handle.close()}
     />
+  );
+}
+
+const ReminderDetailRouteView = withAuth(() => {
+  const reminders = useFeatureFlag(enableReminders);
+  return (
+    <Show when={!reminders().loading} fallback={<LoadingBlock />}>
+      <Show
+        when={reminders().enabled}
+        fallback={<RedirectSplit to={{ type: 'component', id: 'home' }} />}
+      >
+        <ReminderDetailView />
+      </Show>
+    </Show>
   );
 });
 

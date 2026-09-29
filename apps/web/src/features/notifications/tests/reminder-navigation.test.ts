@@ -91,12 +91,16 @@ describe('reminder notification navigation', () => {
     expect(getOrchestrator).not.toHaveBeenCalled();
   });
 
-  it('does not open a reminder destination while the feature is disabled', async () => {
+  it('defers feature enforcement to the reactive destination route', async () => {
     flags.reminders = false;
     const layout = {} as SplitManager;
 
     await openNotification(reminderNotification(), layout);
 
-    expect(openReminderDetail).not.toHaveBeenCalled();
+    expect(openReminderDetail).toHaveBeenCalledExactlyOnceWith('reminder-1', {
+      manager: layout,
+      handle: undefined,
+      openInNewSplit: false,
+    });
   });
 });

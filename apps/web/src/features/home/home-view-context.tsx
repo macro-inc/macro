@@ -16,7 +16,6 @@ import {
   previewBlockTarget,
 } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
@@ -192,7 +191,6 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
       return openCalendarEvent(entity);
     }
     if (entity.type === 'reminder') {
-      if (!isFeatureEnabled(enableReminders)) return false;
       navigate(
         { route: homeReminderRoute, params: { reminderId: entity.id } },
         { search: withTab(homeDetailSearch()) }
