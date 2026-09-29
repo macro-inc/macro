@@ -1130,7 +1130,8 @@ async fn create_grants_the_owner_and_the_originating_channel(pool: PgPool) {
         (
             origin_channel_id.to_string(),
             "channel".to_string(),
-            "edit".to_string(),
+            // `create_test_bot` is a private agent.
+            "view".to_string(),
         ),
     ];
     expected.sort();
@@ -2809,4 +2810,66 @@ fn log_json_drops_null_bytes_before_it_reaches_postgres() {
             serde_json::Value::String("plain".to_owned()),
         ])
     );
+}
+
+async fn channel_grant(pool: &PgPool, session: AgentSessionId, channel_id: Uuid) -> String {
+    sqlx::query_scalar!(
+        r#"SELECT access_level::text AS "access_level!" FROM entity_access WHERE entity_id = $1 AND entity_type = 'agent_session' AND source_id = $2"#,
+        session.as_uuid(),
+        channel_id.to_string(),
+    )
+    .fetch_one(pool)
+    .await
+    .expect("originating channel grant")
+}
+
+/// A private agent's channel watches its session; a team agent's or a
+/// system bot's channel can also steer it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_originating_channel_steers_only_shared_agents_sessions(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let private_bot = create_test_bot(&pool).await;
+
+    let team_id = macro_uuid::generate_uuid_v7();
+    let team_owner = "macro|agent-session-team-owner@example.com";
+    insert_user(&pool, team_owner).await;
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Agents', $2)",
+        team_id,
+        team_owner,
+    )
+    .execute(&pool)
+    .await
+    .expect("create team");
+    let team_bot = PgBotsRepo::new(pool.clone())
+        .create_owned_bot(
+            BotOwner::Team { team_id },
+            user_id(team_owner),
+            CreateBotRequest {
+                team_id: Some(team_id),
+                name: "Team Agent".to_string(),
+                handle: format!("team-agent-{}", macro_uuid::generate_uuid_v7()),
+                description: None,
+                avatar_url: None,
+                has_agent: None,
+            },
+        )
+        .await
+        .expect("create team bot")
+        .id;
+
+    for (bot, expected) in [
+        (private_bot, "view"),
+        (team_bot, "edit"),
+        (bot_id::CURSOR_BOT_ID, "edit"),
+    ] {
+        let (channel_id, thread_id, message_id) = insert_originating_thread_fixture(&pool).await;
+        let session =
+            create_session(&repo, new_session(bot, Some(thread_id), Some(message_id))).await;
+        assert_eq!(
+            channel_grant(&pool, session.id, channel_id).await,
+            expected,
+            "bot {bot}"
+        );
+    }
 }
