@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT finalization AS \"finalization: Json<StateData>\" FROM ai_usage_observation WHERE invocation_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "finalization: Json<StateData>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "9e630408ab64e086f3d05ce57b9e612cc71856aa421640675dedb7fae95c2c09"
+}

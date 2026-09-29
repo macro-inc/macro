@@ -156,6 +156,7 @@ struct RepoState {
     suspended: bool,
     allowances: HashMap<DateTime<Utc>, PeriodAllowance>,
     releases: Vec<(String, DateTime<Utc>, String)>,
+    activated_seats: Vec<String>,
 }
 
 impl RepoState {
@@ -206,6 +207,22 @@ impl FakeRepo {
 }
 
 impl BillingRepo for FakeRepo {
+    async fn legacy_seats(
+        &self,
+        _payer: &MacroUserIdStr<'_>,
+        _period: BillingPeriod,
+        mut seats: Vec<SeatAllowance>,
+    ) -> Result<Vec<SeatAllowance>> {
+        let state = self.state.lock().unwrap();
+        seats.retain(|seat| {
+            !state
+                .activated_seats
+                .iter()
+                .any(|user| user == seat.user.as_ref())
+        });
+        Ok(seats)
+    }
+
     async fn settings(&self, _payer: &MacroUserIdStr<'_>) -> Result<BillingSettings> {
         let s = self.state.lock().unwrap();
         let mut settings = s.settings.clone();
@@ -488,6 +505,68 @@ impl PaymentGateway for FakePayments {
     }
 }
 
+#[derive(Default)]
+struct FakePeriodSync(Mutex<Vec<SubscriptionPeriod>>);
+
+impl PeriodSync for FakePeriodSync {
+    fn sync<'a>(
+        &'a self,
+        _payer: MacroUserIdStr<'static>,
+        observation: SubscriptionPeriod,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async move {
+            self.0.lock().unwrap().push(observation);
+            Ok(())
+        })
+    }
+}
+
+#[tokio::test]
+async fn period_sync_is_gated_and_never_calls_payments_or_changes_item_anchors() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    let start = Utc::now();
+    let end = start + chrono::Duration::days(31);
+    let facts = SubscriptionPeriod {
+        event_id: "evt_period".parse().unwrap(),
+        event_at: start,
+        subscription_id: "sub_verified".parse().unwrap(),
+        subscription_created_at: start,
+        customer_id: "cus_123".parse().unwrap(),
+        team_id: None,
+        quantity: 1,
+        item_count: 1,
+        item_id: "si_verified".parse().unwrap(),
+        price_id: "price_verified".parse().unwrap(),
+        product_id: "prod_verified".parse().unwrap(),
+        unit_amount: Some(4000),
+        currency: "usd".into(),
+        monthly: true,
+        activity: super::super::period::SubscriptionActivity::Active,
+        period: BillingPeriod { start, end },
+        evidence: super::super::period::PeriodEvidence::Initial,
+    };
+    svc.sync_period(&payer, start, end, Some(facts.clone()))
+        .await
+        .unwrap();
+    assert!(repo.settings(&payer).await.unwrap().period_anchor.is_none());
+    let sync = Arc::new(FakePeriodSync::default());
+    let svc = svc.with_period_sync(sync.clone());
+    svc.sync_period(&payer, start, end, None).await.unwrap();
+    assert!(sync.0.lock().unwrap().is_empty());
+    svc.sync_period(&payer, start, end, Some(facts.clone()))
+        .await
+        .unwrap();
+    assert_eq!(*sync.0.lock().unwrap(), vec![facts.clone()]);
+    svc.sync_period(&payer, start, end + chrono::Duration::days(1), Some(facts))
+        .await
+        .unwrap();
+    assert_eq!(sync.0.lock().unwrap().len(), 1);
+    assert!(payments.opened().is_empty());
+    assert!(payments.payments().is_empty());
+    assert!(payments.checkouts.lock().unwrap().is_empty());
+}
+
 type Service = BillingServiceImpl<FakeEntitlements, FakeUsage, FakeRepo, FakePayments>;
 
 fn premium_service(used_cents: i64) -> (Service, FakeRepo, FakePayments, FakeUsage) {
@@ -520,6 +599,59 @@ fn premium_service_in(
         payments,
         usage,
     )
+}
+
+#[tokio::test]
+async fn recorded_new_policy_never_enters_legacy_analytics_settlement() {
+    let (svc, repo, payments, _) = premium_service(100_000);
+    let payer = user("payer@x.com");
+    {
+        let mut state = repo.state.lock().unwrap();
+        state.activated_seats.push(payer.as_ref().to_owned());
+        state.balance = 10_000;
+        state.settings.overage_enabled = true;
+        state.settings.overage_limit_cents = 10_000;
+    }
+    svc.settle(&payer).await.unwrap();
+    assert!(repo.state.lock().unwrap().consumed.is_empty());
+    assert!(repo.charges().is_empty());
+    assert!(payments.opened().is_empty());
+    assert_eq!(repo.state.lock().unwrap().balance, 10_000);
+}
+
+#[tokio::test]
+async fn policy_activation_during_analytics_read_cannot_double_bill() {
+    struct ActivatingUsage(FakeRepo);
+    impl UsageReader for ActivatingUsage {
+        async fn list_rate_usage_cents_by_user(
+            &self,
+            users: &[MacroUserIdStr<'static>],
+            _period: BillingPeriod,
+        ) -> Result<Vec<SeatUsage>> {
+            self.0.state.lock().unwrap().activated_seats =
+                users.iter().map(ToString::to_string).collect();
+            Ok(users
+                .iter()
+                .map(|user| SeatUsage {
+                    user: user.clone(),
+                    used_cents: 100_000,
+                })
+                .collect())
+        }
+    }
+    let (svc, repo, payments, _) = premium_service(0);
+    repo.state.lock().unwrap().balance = 10_000;
+    let svc = BillingServiceImpl::new(
+        svc.entitlements,
+        ActivatingUsage(repo.clone()),
+        repo.clone(),
+        payments.clone(),
+        Environment::Develop,
+    );
+    svc.settle(&user("payer@x.com")).await.unwrap();
+    assert!(repo.state.lock().unwrap().consumed.is_empty());
+    assert!(repo.charges().is_empty());
+    assert!(payments.opened().is_empty());
 }
 
 #[tokio::test]
@@ -574,7 +706,7 @@ async fn outside_dev_preserves_credits_and_never_reserves_or_collects_overage() 
         let (mut svc, repo, payments, usage, _, payer, previous, current) =
             anchored_premium(1_000_000);
         svc.environment = environment;
-        svc.sync_period(&payer, current.start, current.end)
+        svc.sync_period(&payer, current.start, current.end, None)
             .await
             .unwrap();
         usage.add(
@@ -1057,12 +1189,25 @@ async fn synced_period_anchors_the_snapshot() {
     let payer = user("payer@x.com");
     let start = Utc::now() - chrono::Duration::days(3);
     let end = start + chrono::Duration::days(30);
-    svc.sync_period(&payer, start, end).await.unwrap();
+    svc.sync_period(&payer, start, end, None).await.unwrap();
     let snap = svc.snapshot(&payer).await.unwrap();
     assert_eq!(snap.period_start, start);
     assert_eq!(snap.period_end, end);
+    for corrected in [
+        end + chrono::Duration::days(2),
+        end - chrono::Duration::days(2),
+    ] {
+        svc.sync_period(&payer, start, corrected, None)
+            .await
+            .unwrap();
+        let snapshot = svc.snapshot(&payer).await.unwrap();
+        assert_eq!(
+            (snapshot.period_start, snapshot.period_end),
+            (start, corrected)
+        );
+    }
     // Inverted periods are ignored.
-    svc.sync_period(&payer, end, start).await.unwrap();
+    svc.sync_period(&payer, end, start, None).await.unwrap();
     assert_eq!(svc.snapshot(&payer).await.unwrap().period_start, start);
 }
 
@@ -1108,7 +1253,7 @@ fn anchored_premium(
 #[tokio::test]
 async fn snapshot_freezes_the_open_period_allowance_and_refreshes_it() {
     let (svc, repo, _, _, ents, payer, _, current) = anchored_premium(0);
-    svc.sync_period(&payer, current.start, current.end)
+    svc.sync_period(&payer, current.start, current.end, None)
         .await
         .unwrap();
     svc.snapshot(&payer).await.unwrap();
@@ -1132,7 +1277,7 @@ async fn snapshot_freezes_the_open_period_allowance_and_refreshes_it() {
 #[tokio::test]
 async fn previous_period_overage_survives_an_upgrade() {
     let (svc, repo, payments, usage, ents, payer, previous, current) = anchored_premium(0);
-    svc.sync_period(&payer, current.start, current.end)
+    svc.sync_period(&payer, current.start, current.end, None)
         .await
         .unwrap();
     repo.freeze(
@@ -1169,7 +1314,7 @@ async fn previous_period_overage_survives_an_upgrade() {
 #[tokio::test]
 async fn previous_period_does_not_charge_included_usage_after_a_downgrade() {
     let (svc, repo, payments, usage, ents, payer, previous, current) = anchored_premium(0);
-    svc.sync_period(&payer, current.start, current.end)
+    svc.sync_period(&payer, current.start, current.end, None)
         .await
         .unwrap();
     repo.freeze(
@@ -1229,7 +1374,7 @@ async fn previous_period_usage_uses_the_frozen_billed_users() {
         end: current_end,
     };
     let previous = current.previous();
-    svc.sync_period(&owner, current.start, current.end)
+    svc.sync_period(&owner, current.start, current.end, None)
         .await
         .unwrap();
     repo.freeze(
@@ -1269,7 +1414,7 @@ async fn previous_period_usage_uses_the_frozen_billed_users() {
 #[tokio::test]
 async fn current_period_uses_the_live_allowance_after_an_upgrade() {
     let (svc, repo, payments, usage, ents, payer, previous, current) = anchored_premium(0);
-    svc.sync_period(&payer, current.start, current.end)
+    svc.sync_period(&payer, current.start, current.end, None)
         .await
         .unwrap();
     repo.freeze(

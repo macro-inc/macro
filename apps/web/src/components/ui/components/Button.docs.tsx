@@ -31,6 +31,15 @@ function VariantsDemo() {
               <PlusIcon />
               With icon
             </Button>
+            <Button variant={variant} size="icon-md" label={`${variant} icon`}>
+              <PlusIcon />
+            </Button>
+            <Button variant={variant} glass>
+              Glass
+            </Button>
+            <Button variant={variant} glass={false}>
+              No glass
+            </Button>
             <Button variant={variant} disabled>
               Disabled
             </Button>
@@ -186,7 +195,7 @@ export default defineDoc({
       id: 'variants',
       title: 'Variants',
       description:
-        '`ghost` for low-emphasis actions in dense chrome, `outline` for standard actions, `accent` for the primary action in a group, `cta` for the single most important action on a screen. `danger` is reserved for destructive work.',
+        '`ghost` for low-emphasis actions in dense chrome, `outline` for standard actions, `strong` for the same frame with bolder text, `accent` for the primary action in a group, `cta` for the single most important action on a screen. `danger` is reserved for destructive work. Framed variants use glass only on touch by default. `glass={true}` opts in on desktop; `glass={false}` removes it everywhere. Success and danger use colored ink with an unfilled outline frame; icon sizes preserve the same emphasis as text buttons.',
       render: VariantsDemo,
       fill: true,
     },

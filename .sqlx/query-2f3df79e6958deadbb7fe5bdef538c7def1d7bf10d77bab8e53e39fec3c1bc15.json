@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_financial_invocation SET finalization = $2,\n                       recovery_required = $3, finalized_at = now() WHERE invocation_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2f3df79e6958deadbb7fe5bdef538c7def1d7bf10d77bab8e53e39fec3c1bc15"
+}

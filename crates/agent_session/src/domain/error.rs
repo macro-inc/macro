@@ -57,6 +57,8 @@ pub enum AgentSessionError {
     InvalidPullRequestUrl,
     #[error("invalid agent session name: {0}")]
     InvalidName(&'static str),
+    #[error("agent session {0} is archived")]
+    Archived(AgentSessionId),
     #[error("a preview request may name at most {0} sessions")]
     TooManyPreviewIds(usize),
     #[error("the caller may not control this agent session")]

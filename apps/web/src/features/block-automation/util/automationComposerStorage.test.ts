@@ -16,7 +16,6 @@ const draft: ScheduleDraft = {
   time: '09:00',
   daysOfWeek: [],
   dayOfMonth: '',
-  enabled: true,
   target: { kind: 'model', model: 'retired-model' },
 };
 
@@ -53,10 +52,15 @@ describe('automation composer storage', () => {
     expect(loadAutomationComposerDraft()).toEqual(saved);
   });
 
+  it('drops activation saved by older clients', () => {
+    store({ draft: { ...draft, enabled: false }, timestamp: Date.now() });
+    expect(loadAutomationComposerDraft()).toEqual(draft);
+  });
+
   it('migrates an unexpired legacy model without refreshing its expiry', () => {
     const { target: _target, ...fields } = draft;
     store({
-      draft: { ...fields, model: 'removed-from-catalog' },
+      draft: { ...fields, model: 'removed-from-catalog', enabled: true },
       timestamp: Date.now(),
     });
     vi.advanceTimersByTime(expiry);

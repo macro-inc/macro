@@ -155,7 +155,11 @@ function StackEntityDetail(props: {
       </Match>
       <Match when={true}>
         <Show when={props.entry.data.type !== 'document'}>
-          <EntityDetailBreadcrumbItem entry={props.entry} order={props.order} />
+          <EntityDetailBreadcrumbItem
+            entry={props.entry}
+            order={props.order}
+            setsSplitDisplayName
+          />
         </Show>
         <EntityDetail
           target={props.entry.data}

@@ -48,6 +48,26 @@ ordinary engine handoff preserves the marker and continues the saved scan.
 Reset notifications restart active backfills promptly, but checkpoint validity
 does not depend on observing a notification.
 
+## Soup page retention
+
+Backfill hydration persists normalized descendants (including email message
+pages), identity, email links and filter/search projections, but not the viewer's
+`soup(...)` / `groupSoup(...)` page wrappers. `@cacheOnly` still controls the
+returned cursor projection; it is not an entity-eviction directive.
+
+Foreground Soup snapshots share a per-viewer budget of 64 pages and 512 KiB
+(encoded fields plus retention metadata). Most recently written pages win; reads
+do not persist recency or cause a COMMIT. Individually oversized snapshots are
+not retained. Evicted snapshots miss and require a network refetch; their entity
+records and pending offline mutations remain available.
+
+On the first compatible Turso open after this upgrade, a metadata-versioned
+transaction compacts only `GraphqlUser` records via the type/id index. It prefers
+initial pages when legacy data has no recency ordering. It preserves the storage
+generation, normalized entities, projection facts, queue and optimistic shadows.
+Subsequent opens only check the marker. There is no schema/namespace bump, reset,
+or VACUUM; freed pages can be reused without rewriting the whole database file.
+
 ## Entity-rooted optimistic relations
 
 Link recipes may use an optional `recordRoot` (`fragmentName`, `entityKey`).

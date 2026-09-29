@@ -13,6 +13,10 @@ import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
+  createParamsState,
+  ParamsProvider,
+} from '@core/component/ParamsProvider';
+import {
   getShareDrawerRecipientInput,
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
@@ -20,7 +24,8 @@ import { useShareModal } from '@core/component/TopBar/shareModal';
 import { useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';
 import { isMobile } from '@core/mobile/isMobile';
-import { blockMetadataSignal } from '@core/signal/load';
+import { createMethodRegistration } from '@core/orchestrator';
+import { blockHandleSignal, blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -39,17 +44,23 @@ import { SpreadsheetEditor } from './views/SpreadsheetEditor';
 
 export default function SpreadsheetBlock(props: { share?: string }) {
   const enabled = useSpreadsheetAccess();
+  const params = createParamsState();
+  createMethodRegistration(blockHandleSignal.get, {
+    goToLocationFromParams: params.navigate,
+  });
   return (
-    <Show
-      when={enabled()}
-      fallback={
-        <div class="p-6 text-ink-muted">
-          Spreadsheets are not enabled for this account.
-        </div>
-      }
-    >
-      <SpreadsheetBlockContent share={props.share} />
-    </Show>
+    <ParamsProvider state={params}>
+      <Show
+        when={enabled()}
+        fallback={
+          <div class="p-6 text-ink-muted">
+            Spreadsheets are not enabled for this account.
+          </div>
+        }
+      >
+        <SpreadsheetBlockContent share={props.share} />
+      </Show>
+    </ParamsProvider>
   );
 }
 

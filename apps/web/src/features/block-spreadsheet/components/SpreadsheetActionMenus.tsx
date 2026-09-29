@@ -35,7 +35,7 @@ function ActionMenu(
         variant="ghost"
         label={props.label}
         disabled={props.disabled}
-        class="h-7 w-7 min-h-7 min-w-7 shrink-0 rounded-md p-1 text-ink-muted touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
+        class="h-7 w-7 min-h-7 min-w-7 shrink-0 p-1 text-ink-muted touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
       >
         {props.icon}
       </Dropdown.Trigger>

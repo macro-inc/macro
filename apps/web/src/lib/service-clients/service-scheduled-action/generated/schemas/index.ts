@@ -8,6 +8,9 @@
 
 export * from './actionConfiguration';
 export * from './actionConfigurationTask';
+export * from './actionConfigurationUpdate';
+export * from './actionConfigurationUpdateEnabled';
+export * from './actionConfigurationUpdateTask';
 export * from './actionExecutionRecord';
 export * from './actionExecutionRecordId';
 export * from './actionExecutionRecordResourceId';
@@ -60,4 +63,5 @@ export * from './scheduledActionUpdateOneOfFiveResource';
 export * from './scheduledActionUpdateOneOfFiveType';
 export * from './scheduledActionUpdateOneOfResource';
 export * from './scheduledActionUpdateOneOfType';
+export * from './setScheduledActionEnabled';
 export * from './updateScheduledAction';

@@ -255,9 +255,16 @@ open until dismissed so a reply is not lost when moving the pointer.
 
 **Comments** in the document header opens all workbook threads. Range labels
 navigate to the corresponding sheet and cells; deleted-sheet threads remain
-readable. These are the same document annotation comments used by docs/tasks:
-mentions and replies use the existing inbox notifications and comment links.
+readable. **Workbook discussion** contains comments about the whole workbook,
+with its own composer. The pinned composer at the bottom posts on the displayed
+range; **Use selection** changes that range. Both surfaces use the shared message
+controls for replies, edits, deletion, reactions, and attachments. Range threads
+also offer **Resolve** and **Reopen**. Mentions and replies use inbox notifications
+and message links. Older spreadsheet annotation comments are not displayed.
 Opening an inbox notification opens the sidebar and targets its comment/range.
+Range links leave Workbook discussion on its normal timeline; workbook links
+open that discussion at the linked message, clear the previous range highlight
+or navigation error, and preserve an open range draft's attachment.
 Comment-only access can post/reply; view-only access can read. Edit/delete applies
 to the author's own comments, and failures retain the input draft. Draft demos
 must be saved before persistent comments are available.
@@ -519,6 +526,19 @@ keeps at least 16px of
 bottom clearance above the drawer's curve, including while the keyboard is open,
 and accounts for the home-indicator safe area when the keyboard is closed.
 
+An inline-comment notification or `/app/md/<id>?comment_id=<comment-id>` link
+should scroll to the anchor and open its thread on the first click, including
+when the document has not loaded yet. Verify both comments arriving before the
+editor and comments arriving after it. Once loaded, click elsewhere in the
+document, then click the same notification again: it should revisit the comment,
+while background comment refreshes should leave the user's position alone.
+
+When checking desktop margin placement, scroll a long document while an embed
+or image above the highlighted text changes height. Scroll anchoring may keep
+the text at the same screen position; its comment card should stay aligned
+through the resize, without briefly jumping upward or downward. Repeat with
+several rapid height changes, including while scrolling has paused.
+
 Also verify anchored comments in Drive's detail pane: open a document with
 existing text anchors, then click a numbered comment badge to expand it. The
 document should stay visible and the thread should open; loading the document
@@ -543,11 +563,27 @@ preview replies per thread. Expand a thread to load its replies;
 `Load earlier comments` pages backward. Live updates preserve unsent replies
 and edits while updating the surrounding thread.
 
+When verifying `@` mentions, compare the same person query in the document body
+and the Discussion composer: shared contacts use the same recent-interaction
+ranking. The desktop menu keeps up to three People results visible while other
+result categories load; use **View all** for the remaining matches. Check that a
+person stays clickable after document and email results arrive. Type and
+backspace through a query that keeps the same matches: existing rows should
+stay mounted and the menu should not collapse while cached results refresh.
+Check document titles and their order as well as People: type and backspace
+between a name's prefixes and verify the top document does not disappear and
+return while the result count briefly drops.
+Changing the total number of matches should not change a category's preview
+slots when it still has enough rows to fill them; use **View all** for the full list.
+Clear the unsent draft after testing.
+
 Select text and choose the comment action to create an anchored comment. These
 threads appear beside their text in the margin (or in the active thread drawer
 on phones) and never in the bottom Discussion, including after live updates or
-reloads. Existing highlights locate threads by their stable mark IDs. Replies,
-attachments, reactions, and editing use the same message controls as channels.
+reloads. Links to these threads open the margin without changing the bottom
+Discussion's timeline or expanding it. Existing highlights locate threads by
+their stable mark IDs. Replies, attachments, reactions, and editing use the same
+message controls as channels.
 Removing the last marked text moves its retained conversation to Discussion,
 where it remains after reload. Removing only part of a marked range keeps the
 conversation anchored to the remaining text. On phones, the active Markdown

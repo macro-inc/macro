@@ -839,10 +839,7 @@ describe('layoutManager', () => {
   });
 
   describe('router layout synchronization', () => {
-    function ingressRouter(
-      url: string,
-      options: { enabled?: boolean; loading?: boolean; touch?: boolean } = {}
-    ) {
+    function ingressRouter(url: string, options: { touch?: boolean } = {}) {
       return createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
           { type: 'component', id: 'home' },
@@ -854,10 +851,6 @@ describe('layoutManager', () => {
           layout: createAppSplitRouterLayout(manager, routes),
           location,
           middleware: createAppSplitRouterMiddleware({
-            newAppViews: () => ({
-              enabled: options.enabled ?? true,
-              loading: options.loading ?? false,
-            }),
             isTouchDevice: () => options.touch ?? false,
           }),
         });
@@ -1819,7 +1812,7 @@ describe('layoutManager', () => {
 
     it('applies a new-split location when an entity pane is reused', async () => {
       const { manager, router, dispose } = ingressRouter('/channel/one', {
-        enabled: false,
+        touch: true,
       });
       await router.settled();
       const split = manager.splits()[0];
@@ -1877,33 +1870,26 @@ describe('layoutManager', () => {
       dispose();
     });
 
-    it.each([
-      { enabled: false, loading: false, touch: false },
-      { enabled: true, loading: true, touch: false },
-      { enabled: true, loading: false, touch: true },
-    ])(
-      'preserves full-block legacy targets when inline detail is unsupported: %o',
-      async (options) => {
-        const { location, router, dispose } = ingressRouter(
-          '/email/one/~/channel/c1?email_message_id=message&channel_message_id=first' +
-            '&channel_message_id=last&channel_thread_id=thread',
-          options
-        );
-        await router.settled();
-        expect(location.read().pathname).toBe('/email/one/~/channel/c1');
-        const query = new URLSearchParams(location.read().search);
-        expect(query.getAll('email_message_id')).toEqual(['message']);
-        expect(query.getAll('channel_message_id')).toEqual(['first', 'last']);
-        expect(query.get('channel_thread_id')).toBe('thread');
-        expect(
-          [...query.keys()].some(
-            (key) => key.startsWith('s0.') || key.startsWith('s1.')
-          )
-        ).toBe(false);
-        router.dispose();
-        dispose();
-      }
-    );
+    it('preserves full-block legacy targets on touch', async () => {
+      const { location, router, dispose } = ingressRouter(
+        '/email/one/~/channel/c1?email_message_id=message&channel_message_id=first' +
+          '&channel_message_id=last&channel_thread_id=thread',
+        { touch: true }
+      );
+      await router.settled();
+      expect(location.read().pathname).toBe('/email/one/~/channel/c1');
+      const query = new URLSearchParams(location.read().search);
+      expect(query.getAll('email_message_id')).toEqual(['message']);
+      expect(query.getAll('channel_message_id')).toEqual(['first', 'last']);
+      expect(query.get('channel_thread_id')).toBe('thread');
+      expect(
+        [...query.keys()].some(
+          (key) => key.startsWith('s0.') || key.startsWith('s1.')
+        )
+      ).toBe(false);
+      router.dispose();
+      dispose();
+    });
 
     it.each(['company', 'contact'])(
       'keeps a %s discussion link comment for the record page',
@@ -1939,7 +1925,6 @@ describe('layoutManager', () => {
           layout: createAppSplitRouterLayout(manager, routes),
           location,
           middleware: createAppSplitRouterMiddleware({
-            newAppViews: () => ({ enabled: true, loading: false }),
             isTouchDevice: () => false,
           }),
         });
@@ -1957,39 +1942,31 @@ describe('layoutManager', () => {
       dispose();
     });
 
-    it.each([
-      { enabled: false, touch: false },
-      { enabled: true, touch: true },
-      { enabled: false, touch: true },
-    ])(
-      'keeps legacy task detail when enabled=$enabled and touch=$touch',
-      async ({ enabled, touch }) => {
-        let dispose!: () => void;
-        let router!: ReturnType<typeof createSplitRouter<string>>;
-        let location!: ReturnType<typeof createMemorySplitRouterLocation>;
-        createRoot((rootDispose) => {
-          dispose = rootDispose;
-          const manager = createSplitLayout(createMockOrchestrator(), [
-            { type: 'task', id: 'task-1' },
-          ]);
-          const routes = createRoutesManifest(appSplitRoutes);
-          location = createMemorySplitRouterLocation('/task/task-1');
-          router = createSplitRouter({
-            routes,
-            layout: createAppSplitRouterLayout(manager, routes),
-            location,
-            middleware: createAppSplitRouterMiddleware({
-              newAppViews: () => ({ enabled, loading: false }),
-              isTouchDevice: () => touch,
-            }),
-          });
+    it('keeps legacy task detail on touch', async () => {
+      let dispose!: () => void;
+      let router!: ReturnType<typeof createSplitRouter<string>>;
+      let location!: ReturnType<typeof createMemorySplitRouterLocation>;
+      createRoot((rootDispose) => {
+        dispose = rootDispose;
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'task', id: 'task-1' },
+        ]);
+        const routes = createRoutesManifest(appSplitRoutes);
+        location = createMemorySplitRouterLocation('/task/task-1');
+        router = createSplitRouter({
+          routes,
+          layout: createAppSplitRouterLayout(manager, routes),
+          location,
+          middleware: createAppSplitRouterMiddleware({
+            isTouchDevice: () => true,
+          }),
         });
+      });
 
-        await router.settled();
-        expect(location.read().pathname).toBe('/task/task-1');
-        dispose();
-      }
-    );
+      await router.settled();
+      expect(location.read().pathname).toBe('/task/task-1');
+      dispose();
+    });
 
     it('keeps a migrated workspace mounted across typed detail history', () => {
       createRoot((dispose) => {

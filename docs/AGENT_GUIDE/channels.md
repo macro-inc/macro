@@ -408,7 +408,12 @@ optional `Favorites` section and the
 independently paginated `Channels` and `DMs` sections. Favorites appears when
 the user has channel favorites and only lists channels. Channel favorites open
 in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
-conversation in a new split instead.
+conversation in a new split instead. Shift-click refreshes the notification
+selection and opens at latest. Split opens mark top-level notifications seen,
+including mentions and reactions, only after the split is opened or reused.
+Deferred navigation waits until the destination is applied; an unavailable split
+must leave unread state unchanged. Join-only channels remain
+blocked after hydration, including on mobile.
 
 ### Channel labels
 
@@ -635,7 +640,7 @@ per channel through an aliased, filtered `notifications` edge. An empty edge mea
 no unread messages; invites and call notifications do not light the dot. Recent
 cards still use the latest-message preview. Full notification edges load only for
 an opened unread conversation, so mark-read and message targeting retain their
-complete channel-wide inputs in Chat and thread-scoped inputs in Inbox. Reopening
+complete top-level inputs in Chat and thread-scoped inputs in Inbox. Reopening
 a conversation must refresh that full
 edge even within 30 seconds; mark-read waits for the refresh rather than using
 older cached notifications. Failed lookups and successful lookups with no matching

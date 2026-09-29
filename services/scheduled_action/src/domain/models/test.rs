@@ -1,11 +1,12 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use macro_uuid::{Uuid, generate_uuid_v7};
 use model_owner::{Owner, OwnerType};
 use serde_json::json;
 
 use super::{
-    ActionConfiguration, ActionKind, AgentTask, CreateScheduledAction, ResolvedTaskTarget,
-    RoutineModelId, Schedule, ScheduledAction, TaskTargetError, UpdateScheduledAction,
+    ActionConfiguration, ActionKind, AgentTask, CreateScheduledAction, MAX_ACTION_TIME,
+    ResolvedTaskTarget, RoutineModelId, Schedule, ScheduledAction, TaskTargetError,
+    UpdateScheduledAction,
 };
 use crate::domain::event_runs::ConfigurationRevision;
 use crate::domain::event_trigger::ActionTrigger;
@@ -20,10 +21,21 @@ fn both_request_representations_normalize_to_the_same_configuration() {
         let create: CreateScheduledAction = serde_json::from_value(input.clone()).unwrap();
         let update: UpdateScheduledAction = serde_json::from_value(input).unwrap();
         let create = serde_json::to_value(ActionConfiguration::from(create)).unwrap();
-        let update = serde_json::to_value(ActionConfiguration::from(update)).unwrap();
+        let update = serde_json::to_value(update.into_configuration(false)).unwrap();
         assert_eq!(create, update);
         assert_eq!(create["trigger"]["type"], "cron");
     }
+}
+
+#[test]
+fn updates_may_omit_activation_but_creates_may_not() {
+    let input = json!({"name":"routine", "kind":"Agent", "task":{},
+        "trigger":{"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"}});
+    for stored in [false, true] {
+        let update: UpdateScheduledAction = serde_json::from_value(input.clone()).unwrap();
+        assert_eq!(update.into_configuration(stored).enabled, stored);
+    }
+    assert!(serde_json::from_value::<CreateScheduledAction>(input).is_err());
 }
 
 #[test]
@@ -274,4 +286,17 @@ fn event_action_round_trips_without_cron_fields() {
         decoded.configuration_revision,
         ConfigurationRevision::INITIAL
     );
+}
+
+#[test]
+fn claim_expires_at_is_claimed_plus_the_maximum_run_time() {
+    let mut action =
+        action_owned_by(Owner::from_principal_str(USER_PRINCIPAL).expect("user principal"));
+    assert_eq!(action.claim_expires_at(), None);
+
+    let claimed = DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .expect("timestamp")
+        .with_timezone(&Utc);
+    action.claimed = Some(claimed);
+    assert_eq!(action.claim_expires_at(), Some(claimed + MAX_ACTION_TIME));
 }

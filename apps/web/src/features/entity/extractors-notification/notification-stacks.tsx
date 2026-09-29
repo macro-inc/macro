@@ -151,7 +151,7 @@ export function NotificationStackRow(props: {
               <Button
                 onClick={handleMarkAsDone}
                 tooltip={'Mark done'}
-                class="rounded text-ink-muted hover:text-accent hover:bg-accent/10 hidden group-hover/notif:grid p-0 place-items-center size-5"
+                class="text-ink-muted hover:text-accent hover:bg-accent/10 hidden group-hover/notif:grid p-0 place-items-center size-5"
               >
                 <CheckIcon class="size-3" />
               </Button>

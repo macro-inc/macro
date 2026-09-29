@@ -15,43 +15,42 @@ import { Tooltip } from './Tooltip';
 const BUTTON_TOUCH_STYLES =
   "touch:min-h-9 touch:min-w-9 touch:[&>svg:not([class*='size-'])]:size-6";
 
-// Text actions use flat frames. Icon actions and embedded controls remain
-// unframed; navigation keeps its independent quiet selection treatment.
+// Variant owns emphasis and surface; size only controls geometry.
 /** Canonical variant classes for buttons and button-like elements. */
 export const buttonVariants = createVariants(
   cn(
     'relative inline-flex shrink-0 items-center justify-center whitespace-nowrap text-sm',
-    'rounded-full border border-edge-button bg-control text-ink-muted font-medium outline-none select-none transition-colors duration-120 motion-reduce:transition-none [&_*]:select-none',
-    'not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:hover:text-ink not-disabled:active:overlay-active',
+    'rounded-full border border-transparent font-medium outline-none select-none transition-colors duration-120 motion-reduce:transition-none [&_*]:select-none',
     'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-edge-focus',
-    'aria-pressed:overlay-active aria-pressed:text-ink',
+    'aria-pressed:overlay-active',
     'data-disabled:cursor-not-allowed data-disabled:opacity-50',
     '[&_svg]:pointer-events-none [&_svg]:shrink-0'
   ),
   {
     variant: {
       danger:
-        'text-failure not-touch:not-disabled:hover:text-failure aria-pressed:text-failure',
-      outline: '',
-      accent: 'text-ink font-semibold',
+        'bg-transparent border-edge-button text-failure not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:active:overlay-active',
+      outline:
+        'bg-control text-ink-muted border-edge-button not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:hover:text-ink not-touch:not-disabled:active:overlay-active',
+      accent:
+        'bg-accent-bg not-touch:not-disabled:hover:overlay-accent-bg text-accent',
       success:
-        'text-success not-touch:not-disabled:hover:text-success aria-pressed:text-success',
-      // Retained for existing callers; ordinary actions always have a frame.
-      ghost: '',
-      plain: 'border-0 bg-transparent',
-      strong: 'text-ink font-semibold',
-      cta: 'text-ink font-semibold',
-      navigation: 'border-transparent bg-transparent',
+        'bg-transparent border-edge-button text-success not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:active:overlay-active',
+      ghost:
+        'bg-transparent text-ink-muted not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:hover:text-ink not-touch:not-disabled:active:overlay-active',
+      strong:
+        'bg-control text-ink-muted border-edge-button font-semibold not-touch:not-disabled:hover:overlay-hover not-touch:not-disabled:hover:text-ink not-touch:not-disabled:active:overlay-active',
+      cta: 'bg-accent text-accent-contrast focus-visible:ring-accent-contrast/70 [--color-edge:var(--color-accent-contrast-muted)] [--color-edge-muted:var(--color-accent-contrast-muted)] not-touch:not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] not-touch:not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)]',
     },
     size: {
-      xs: "h-5 gap-1 px-1 text-xs [&>svg:not([class*='size-'])]:size-3",
+      xs: "h-5 gap-1 px-1.5 text-xs [&>svg:not([class*='size-'])]:size-3",
       'icon-xs': "size-5 p-0.5 [&>svg:not([class*='size-'])]:size-3",
       sm: CONTROL_SIZE_VARIANTS.sm,
       md: CONTROL_SIZE_VARIANTS.md,
       lg: CONTROL_SIZE_VARIANTS.lg,
       xl: "h-12 gap-2 px-4 text-base [&>svg:not([class*='size-'])]:size-5",
       'icon-lg':
-        "size-9 aspect-square rounded-xl p-2 [&>svg:not([class*='size-'])]:size-5",
+        "size-9 aspect-square p-2 [&>svg:not([class*='size-'])]:size-5",
       'icon-md':
         "size-8 aspect-square p-1.5 [&>svg:not([class*='size-'])]:size-4",
       'icon-sm':
@@ -76,6 +75,8 @@ export type ButtonClassOptions = {
   size?: ButtonSize;
   fullWidth?: boolean;
   noTouchResize?: boolean;
+  /** Override glass: framed variants default to touch-only; true enables all devices. */
+  glass?: boolean;
   square?: boolean;
   class?: string;
 };
@@ -91,6 +92,8 @@ export type ButtonProps = ButtonRootProps<'button'> &
      */
     fullWidth?: boolean;
     noTouchResize?: boolean;
+    /** Override glass: framed variants default to touch-only; true enables all devices. */
+    glass?: boolean;
     square?: boolean;
     variant?: ButtonVariant;
     children?: JSX.Element;
@@ -122,12 +125,14 @@ export function buttonClasses(options: ButtonClassOptions = {}): string {
     fullWidth = false,
     noTouchResize = false,
     square = false,
+    glass,
     class: className,
   } = options;
 
   return cn(
     buttonVariants({ variant, size }),
-    (isIconSize(size ?? 'md') || square) && 'border-0 bg-transparent',
+    glass === true && 'glass',
+    glass === undefined && (variant ?? 'ghost') !== 'ghost' && 'touch:glass',
     fullWidth && 'w-full',
     !noTouchResize && BUTTON_TOUCH_STYLES,
     square && 'aspect-square p-0',
@@ -144,10 +149,9 @@ function isIconSize(size: ButtonSize): boolean {
  * `size` carries density; both are shared with Badge so button-like elements
  * line up.
  *
- * @do Use icon sizes (or square) for borderless icon actions.
- * @do Use plain for embedded controls such as the composer agent picker.
- * @do Use strong ink/weight for primary text actions on the flat frame.
- * @do Use `navigation` only for selectable navigation or list rows.
+ * @do Use ghost for unframed actions, at any size.
+ * @do Use strong for outline actions with bolder type and cta for accent-filled actions.
+ * @do Use glass={true} to opt in on desktop, or glass={false} to opt out on touch.
  * @do Always set `label` on icon-only buttons; it is the accessible name.
  * @do Use `danger` only for destructive actions, paired with a confirmation.
  * @dont Do not restyle a button with utility classes when a variant already
@@ -169,6 +173,7 @@ export const Button = (props: ButtonProps) => {
     'size',
     'fullWidth',
     'noTouchResize',
+    'glass',
     'square',
     'tooltipDisabled',
     'aria-label',
@@ -186,9 +191,9 @@ export const Button = (props: ButtonProps) => {
         size: size(),
         fullWidth: local.fullWidth,
         noTouchResize: local.noTouchResize,
+        glass: group !== undefined ? false : local.glass,
         square: local.square,
       }),
-      group && 'bg-transparent',
       local.class
     );
 

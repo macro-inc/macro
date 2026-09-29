@@ -72,7 +72,7 @@ export interface AgentInputProps {
   autofocus?: boolean;
   /**
    * Slash commands the harness advertises (ACP `available_commands_update`);
-   * typing `/` opens a typeahead over them. `/` stays plain text while empty.
+   * shown alongside skills and pull requests in the `/` menu.
    */
   commands?: () => AgentCommandItem[];
   /**
@@ -409,7 +409,7 @@ export function AgentInput(props: AgentInputProps) {
                             onClick={() => props.onStop?.()}
                             class={
                               isTouchDevice()
-                                ? 'rounded-full size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
+                                ? 'size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
                                 : undefined
                             }
                           >

@@ -309,12 +309,11 @@ function Toggle() {
     <Show when={ctx.hasSections()}>
       <Button
         depth={2}
-        variant="plain"
+        variant="ghost"
         size="icon-md"
         class={cn(
-          'rounded-xl',
           isTouchDevice() &&
-            'rounded-full border-0 hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
+            'border-0 hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
           isTouchDevice() && ctx.isOpen() && 'text-accent'
         )}
         tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}

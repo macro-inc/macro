@@ -415,6 +415,16 @@ pub enum ReplyTarget {
 /// with the id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommentAnchor {
+    /// A cell or rectangular range in a native spreadsheet.
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
+    },
+
     /// A comment mark in a markdown document.
     Mark {
         /// Lexical mark the thread is attached to.

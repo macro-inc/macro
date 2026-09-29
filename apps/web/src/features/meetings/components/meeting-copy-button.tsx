@@ -6,9 +6,11 @@ import { createSignal, onCleanup, Show } from 'solid-js';
 export function MeetingCopyButton(props: {
   url: string;
   onCopy: () => Promise<void>;
+  disabled?: boolean;
 }) {
   const [copied, setCopied] = createSignal(false);
   const [error, setError] = createSignal(false);
+  const [copying, setCopying] = createSignal(false);
   let reset: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
   onCleanup(() => {
@@ -17,6 +19,9 @@ export function MeetingCopyButton(props: {
   });
 
   async function copy() {
+    if (copying()) return;
+    setCopying(true);
+    setError(false);
     try {
       await props.onCopy();
       if (disposed) return;
@@ -29,6 +34,8 @@ export function MeetingCopyButton(props: {
       clearTimeout(reset);
       setCopied(false);
       setError(true);
+    } finally {
+      if (!disposed) setCopying(false);
     }
   }
 
@@ -38,6 +45,8 @@ export function MeetingCopyButton(props: {
         type="button"
         variant="ghost"
         size="lg"
+        disabled={props.disabled || copying()}
+        aria-busy={copying()}
         class="bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
         onClick={() => void copy()}
       >
@@ -51,15 +60,19 @@ export function MeetingCopyButton(props: {
       </span>
       <Show when={error()}>
         <p role="status" class="mt-2 text-xs">
-          Could not copy. Select the URL to copy it manually.
+          {props.url
+            ? 'Could not copy. Select the URL to copy it manually.'
+            : 'Could not load call link. Try again.'}
         </p>
-        <input
-          aria-label="Call link"
-          readOnly
-          value={props.url}
-          onFocus={(event) => event.currentTarget.select()}
-          class="mt-1 w-full bg-transparent text-xs text-ink-muted outline-none"
-        />
+        <Show when={props.url}>
+          <input
+            aria-label="Call link"
+            readOnly
+            value={props.url}
+            onFocus={(event) => event.currentTarget.select()}
+            class="mt-1 w-full bg-transparent text-xs text-ink-muted outline-none"
+          />
+        </Show>
       </Show>
     </div>
   );

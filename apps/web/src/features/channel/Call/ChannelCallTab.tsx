@@ -78,7 +78,7 @@ function JoinCallEmptyState(props: {
       <Button
         variant="cta"
         size="lg"
-        class="rounded-lg px-5"
+        class="px-5"
         onClick={props.onJoin}
         disabled={props.isJoining}
       >

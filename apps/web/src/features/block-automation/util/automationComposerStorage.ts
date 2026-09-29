@@ -17,18 +17,21 @@ const draftFields = {
   time: z.string(),
   daysOfWeek: z.array(z.string()),
   dayOfMonth: z.string(),
-  enabled: z.boolean(),
+  // Older clients saved routine activation with the draft.
+  enabled: z.boolean().optional(),
 };
 
-const draftSchema = z.union([
-  z.strictObject({ ...draftFields, target: routineTargetSchema }),
-  z.strictObject({ ...draftFields, model: routineModelSchema }).transform(
-    ({ model, ...fields }): ScheduleDraft => ({
-      ...fields,
-      target: { kind: 'model', model },
-    })
-  ),
-]);
+const draftSchema = z
+  .union([
+    z.strictObject({ ...draftFields, target: routineTargetSchema }),
+    z
+      .strictObject({ ...draftFields, model: routineModelSchema })
+      .transform(({ model, ...fields }) => ({
+        ...fields,
+        target: { kind: 'model' as const, model },
+      })),
+  ])
+  .transform(({ enabled: _enabled, ...draft }): ScheduleDraft => draft);
 
 const storedDraftSchema = z.object({
   draft: draftSchema,

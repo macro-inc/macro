@@ -297,13 +297,13 @@ export function EmailCard() {
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="outline"
+                variant="ghost"
                 depth={3}
                 onClick={() => setRemoveTarget(null)}
               >
                 Cancel
               </Button>
-              <Button variant="danger" depth={3} onClick={handleRemoveInbox}>
+              <Button variant="strong" depth={3} onClick={handleRemoveInbox}>
                 Remove
               </Button>
             </div>

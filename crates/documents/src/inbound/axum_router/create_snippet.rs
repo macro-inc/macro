@@ -3,11 +3,11 @@
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
+use entity_registry::CreationPrincipalExtractor;
 use macro_authorization::MacroAuthorizationService;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
-use super::creation_principal::CreationPrincipalExtractor;
 use crate::domain::create::{MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument};
 use crate::domain::models::{CreateSnippetRequest, CreateSnippetResponse, DocumentError};
 use crate::domain::ports::DocumentService;
