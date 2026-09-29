@@ -13,9 +13,6 @@ import {
 } from './tests/mock-context';
 
 const [session, setSession] = createSignal<AgentSessionResponse>();
-const [queuedMessages, setQueuedMessages] = createSignal<
-  Array<{ actionId: string; kind: string; prompt: string }>
->([]);
 /** Every session id the changes source was asked to read, in order. */
 const sourceSessionIds: Array<string | undefined> = [];
 
@@ -24,7 +21,6 @@ vi.mock('../block-agent/context/AgentSessionContext', () => ({
     userId: () => 'user-1',
     sessionId: () => 'session-1',
     session,
-    queue: { entries: queuedMessages },
     loadFailed: () => false,
     issue: async () => undefined,
   }),
@@ -85,13 +81,6 @@ describe('AgentChangesProvider', () => {
     expect(screen.getByRole('button', { name: /Changes/ })).toBeTruthy();
     expect(screen.getByText('Changes ready to review')).toBeTruthy();
     expect(sourceSessionIds.at(-1)).toBe('session-1');
-
-    setQueuedMessages([
-      { actionId: 'queued-1', kind: 'prompt', prompt: 'Update the tests' },
-    ]);
-    expect(screen.queryByText('Changes ready to review')).toBeNull();
-    setQueuedMessages([]);
-    expect(screen.getByText('Changes ready to review')).toBeTruthy();
   });
 
   it('keeps the controls hidden for a chat-only harness even with a pull request', () => {

@@ -31,7 +31,7 @@ const GALLERY_QUEUE = Array.from({ length: 12 }, (_, index) => ({
           ...Array.from(
             { length: 12 },
             (_, step) =>
-              `Scenario ${step + 1}: queue a follow-up while the agent is working. Verify that the changes-ready card stays hidden, the next prompt stays reachable, and editing a queued message preserves its attachments.`
+              `Scenario ${step + 1}: queue a follow-up while the agent is working. Verify that the next prompt stays reachable and editing a queued message preserves its attachments.`
           ),
         ].join('\n\n')
       : `Queued follow-up #${index + 1}: tighten the unread rail query.`,
@@ -73,7 +73,6 @@ export default function AgentChangesGallery() {
   const [transcript, setTranscript] = createSignal<string[]>([]);
   const [queued, setQueued] = createSignal(false);
   const [queueItems, setQueueItems] = createSignal(GALLERY_QUEUE);
-  context.host.hasQueuedMessages = queued;
   // The mock host records prompts; surface them like a transcript would.
   const originalSend = context.host.agent.send;
   context.host.agent.send = (markdown) => {
@@ -119,9 +118,7 @@ export default function AgentChangesGallery() {
                   setQueued((value) => !value);
                 }}
               >
-                {queued()
-                  ? 'Clear queued messages'
-                  : 'Simulate queued messages'}
+                {queued() ? 'Hide queued messages' : 'Show a long queue'}
               </Button>
             </div>
             <For each={transcript()}>

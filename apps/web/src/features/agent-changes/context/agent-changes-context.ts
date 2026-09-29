@@ -57,11 +57,6 @@ export type ChangesHost = {
    * Changes control instead of showing an empty pane.
    */
   canHaveChanges?: Accessor<boolean>;
-  /**
-   * Prompts still waiting to run. The "changes ready" card hides while any
-   * remain — the tree is about to move again.
-   */
-  hasQueuedMessages?: Accessor<boolean>;
   /** GitHub API totals; undefined while unavailable, with no estimated fallback. */
   pullRequestChangeCounts?: Accessor<
     { additions: number; deletions: number } | undefined
