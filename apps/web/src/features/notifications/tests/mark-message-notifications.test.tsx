@@ -1,8 +1,12 @@
 import type { NotificationSource } from '@notifications/notification-source';
 import type { UnifiedNotification } from '@notifications/types';
 import { render, waitFor } from '@solidjs/testing-library';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MarkMessageNotifications } from '../components/MarkMessageNotifications';
+import { createSignal } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  MarkMessageNotifications,
+  MessageNotificationSourceContext,
+} from '../components/MarkMessageNotifications';
 
 const mocks = vi.hoisted(() => ({
   notificationSource: undefined as NotificationSource | undefined,
@@ -77,6 +81,54 @@ describe('MarkMessageNotifications', () => {
 
     expect(bulkMarkAsRead).toHaveBeenCalledOnce();
     expect(bulkMarkAsRead).toHaveBeenCalledWith(matchingNotifications);
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reads the scoped edge only after visibility, including later live notifications', async () => {
+    let intersect: (entries: { isIntersecting: boolean }[]) => void = () => {};
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(callback: typeof intersect) {
+          intersect = callback;
+        }
+        observe() {}
+        disconnect = disconnect;
+      }
+    );
+    const globalRead = vi.spyOn(
+      mocks.notificationSource!,
+      'notificationsByEntity'
+    );
+    const [notifications, setNotifications] = createSignal(
+      matchingNotifications
+    );
+    const view = render(() => (
+      <MessageNotificationSourceContext.Provider value={notifications}>
+        <MarkMessageNotifications
+          messageId="message-1"
+          parent={{ type: 'channel', id: 'channel-1' }}
+        >
+          <span>Message</span>
+        </MarkMessageNotifications>
+      </MessageNotificationSourceContext.Provider>
+    ));
+    expect(globalRead).not.toHaveBeenCalled();
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    intersect([{ isIntersecting: true }]);
+    await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
+    // The retry budget belongs to a batch, not the lifetime of an open channel.
+    for (let i = 0; i < 4; i++) {
+      setNotifications([documentMentionNotification(`live-${i}`)]);
+      await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(i + 2));
+    }
+    intersect([{ isIntersecting: false }]);
+    setNotifications([documentMentionNotification('offscreen')]);
+    expect(bulkMarkAsRead).toHaveBeenCalledTimes(5);
+    view.unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
   });
 
   it('handles mark failures while preserving bounded retries', async () => {

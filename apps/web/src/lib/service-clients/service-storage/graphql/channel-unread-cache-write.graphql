@@ -11,7 +11,7 @@ query ChannelUnreadMembershipCacheWrite($input: SoupInput!) {
 
 # Local cache entrypoint only: subscription roots are not persisted as query
 # membership. Write the channel relationship without rewriting its other fields.
-subscription ChannelUnreadCacheWrite($includeConversation: Boolean!) {
+subscription ChannelUnreadCacheWrite {
 	soupUpdates {
 		__typename
 		... on SoupUpdated {
@@ -22,7 +22,7 @@ subscription ChannelUnreadCacheWrite($includeConversation: Boolean!) {
 					unreadNotifications: notifications(
 						filter: {
 							states: [UNSEEN]
-							eventTypes: ["channel_mention", "channel_message_send", "channel_message_reply", "document_mention"]
+							topLevelMessagesOnly: true
 						}
 						limit: 1
 					) {
@@ -30,14 +30,6 @@ subscription ChannelUnreadCacheWrite($includeConversation: Boolean!) {
 						state
 						createdAt
 					}
-                    topLevelUnreadNotifications: notifications(
-                        filter: { states: [UNSEEN], topLevelMessagesOnly: true }
-                        limit: 1
-                    ) @include(if: $includeConversation) {
-                        id
-                        state
-                        createdAt
-                    }
 				}
 			}
 		}

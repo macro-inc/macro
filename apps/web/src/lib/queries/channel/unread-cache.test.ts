@@ -78,12 +78,7 @@ function setup(ids = ['other']) {
 }
 
 describe('websocket channel unread cache writes', () => {
-  it.each([
-    'channel_message_send',
-    'channel_message_reply',
-    'channel_mention',
-    'document_mention',
-  ])(
+  it.each(['channel_message_send', 'channel_mention', 'document_mention'])(
     'links %s and admits its channel to an empty badge page',
     async (eventType) => {
       const host = setup([]);
@@ -150,15 +145,8 @@ describe('websocket channel unread cache writes', () => {
         },
         () => true
       );
-      expect(host.writeQuery).toHaveBeenCalledOnce();
-      const write = host.writeQuery.mock.calls[0][0];
-      expect(write.variables).toEqual({
-        includeConversation: threadId === null,
-      });
-      const payload = JSON.stringify(write.data);
-      expect(payload.includes('topLevelUnreadNotifications')).toBe(
-        threadId === null
-      );
+      expect(host.writeQuery).toHaveBeenCalledTimes(threadId === null ? 1 : 0);
+      if (threadId !== null) expect(host.readQuery).not.toHaveBeenCalled();
     }
   );
 
@@ -188,6 +176,8 @@ describe('websocket channel unread cache writes', () => {
     { state: 'SEEN' as const },
     { state: 'DONE' as const },
     { eventType: 'call_started' },
+    { eventType: 'channel_message_reply' },
+    { eventType: 'channel_message_reaction' },
     { eventType: 'channel_invite' },
     { entityType: 'DOCUMENT' as const },
   ])('does not admit non-message or read evidence: %j', async (patch) => {
@@ -247,12 +237,7 @@ describe('websocket channel unread cache writes', () => {
     };
     const key = argumentsOf(ChannelUnreadCacheWriteDocument);
     expect(key).toBeDefined();
-    expect(argumentsOf(ChannelListSoupDocument)).toBe(
-      argumentsOf(
-        ChannelUnreadCacheWriteDocument,
-        'topLevelUnreadNotifications'
-      )
-    );
+    expect(argumentsOf(ChannelListSoupDocument)).toBe(key);
     expect(argumentsOf(ChannelUnreadPresenceDocument)).toBe(key);
   });
 });

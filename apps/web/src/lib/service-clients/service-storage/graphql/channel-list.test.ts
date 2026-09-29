@@ -50,7 +50,7 @@ describe('bounded channel unread projection', () => {
         expect(field.alias?.value).toBe('unreadNotifications');
         expect(print(field)).toContain('limit: 1');
         expect(print(field)).toContain('states: [UNSEEN]');
-        expect(print(field)).toContain('channel_message_reply');
+        expect(print(field)).toContain('topLevelMessagesOnly: true');
       },
     });
     expect(new Set(fields)).toEqual(

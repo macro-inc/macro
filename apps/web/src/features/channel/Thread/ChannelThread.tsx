@@ -9,7 +9,6 @@ import { useThreadRepliesQuery } from '@queries/messages/thread-replies';
 import type { Message as EntityMessage } from '@service-storage/messages';
 import {
   createEffect,
-  createMemo,
   createSignal,
   on,
   onCleanup,
@@ -23,6 +22,7 @@ import { createTargetReplyNavigationController } from './create-target-reply-nav
 import { createTargetReplyScroller } from './create-target-reply-scroller';
 import { createThreadHotkeys } from './create-thread-hotkeys';
 import { createThreadRepliesFetchGate } from './create-thread-replies-fetch-gate';
+import { createThreadReplyView } from './create-thread-reply-view';
 import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
 import { ThreadTypingIndicator } from './ThreadTypingIndicator';
@@ -32,7 +32,6 @@ import {
   getCollapsedRepliesCount,
   getThreadLatestReplyAt,
   getUniqueReplyUserIds,
-  getVisibleReplyCount,
 } from './utils/thread-reply-indicator-helpers';
 
 export function ChannelThread(props: ThreadProps) {
@@ -44,7 +43,6 @@ export function ChannelThread(props: ThreadProps) {
   const hasReplies = () => thread().reply_count > 0;
   const fetchRepliesEnabled = createThreadRepliesFetchGate({
     threadId: () => props.data().id,
-    replyCount: () => thread().reply_count,
     isExpanded: props.isExpanded,
     isFindBarOpen: props.isFindBarOpen,
     targetThreadId: () => props.targetNavigation?.targetThreadId(),
@@ -85,20 +83,12 @@ export function ChannelThread(props: ThreadProps) {
   const loadedReplies = () => queryReplies() ?? [];
   const canScrollToTargetReply = () => queryReplies() !== undefined;
 
-  const activeReplies = (): Array<EntityMessage> => {
-    return queryReplies() ?? thread().preview ?? [];
-  };
-
-  // Full replies can extend the server preview's final group. The guarded
-  // query read lets collapsed threads update without suspending while fetching.
-  const visibleReplyCount = createMemo(() =>
-    getVisibleReplyCount(activeReplies())
-  );
-  const displayReplies = createMemo(() =>
-    props.isExpanded()
-      ? activeReplies()
-      : activeReplies().slice(0, visibleReplyCount())
-  );
+  const { activeReplies, visibleReplyCount, displayReplies } =
+    createThreadReplyView({
+      preview: () => thread().preview,
+      loaded: queryReplies,
+      isExpanded: props.isExpanded,
+    });
 
   // Thread-local reply selection
   const replySelection = createMessageSelection({

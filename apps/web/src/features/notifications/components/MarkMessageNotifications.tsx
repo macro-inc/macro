@@ -3,7 +3,19 @@ import { useNotificationsForEntity } from '@notifications/notification-helpers';
 import type { UnifiedNotification } from '@notifications/types';
 import type { MessageParent } from '@service-storage/messages';
 import type { JSXElement } from 'solid-js';
-import { createEffect, createSignal } from 'solid-js';
+import {
+  type Accessor,
+  createContext,
+  createEffect,
+  createSignal,
+  onCleanup,
+  onMount,
+  useContext,
+} from 'solid-js';
+
+/** A channel can supply its complete edge without activating the global feed. */
+export const MessageNotificationSourceContext =
+  createContext<Accessor<UnifiedNotification[]>>();
 
 const MAX_MARK_ATTEMPTS = 3;
 
@@ -17,10 +29,10 @@ export function MarkMessageNotifications(props: {
   // matches metadata.messageId only; the current CHANNEL_MESSAGE entity scope
   // is thread-aware, so targeting a root also includes reply notifications.
   const notificationSource = useGlobalNotificationSource();
-  const notifications = useNotificationsForEntity(
-    notificationSource,
-    props.parent
-  );
+  const scopedNotifications = useContext(MessageNotificationSourceContext);
+  const notifications =
+    scopedNotifications ??
+    useNotificationsForEntity(notificationSource, props.parent);
   const isMessageNotification = (n: UnifiedNotification) => {
     const content = n.notification_metadata.content;
     return (
@@ -39,13 +51,36 @@ export function MarkMessageNotifications(props: {
   // re-mark whenever the cache regresses, bounded per mount. inFlight is a
   // signal so a regression that lands mid-mark re-runs the effect on settle.
   const [inFlight, setInFlight] = createSignal(false);
+  const [visible, setVisible] = createSignal(!scopedNotifications);
+  let container: HTMLDivElement | undefined;
+  onMount(() => {
+    if (!scopedNotifications || !container) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      setVisible(entry.isIntersecting);
+    });
+    observer.observe(container);
+    onCleanup(() => observer.disconnect());
+  });
   let attempts = 0;
+  let attemptedIds = '';
 
   createEffect(() => {
+    // Virtual rows include overscan. Mounting an offscreen reply is not reading it.
+    if (!visible()) return;
     const unread = notifications().filter(
       (notification) =>
         isMessageNotification(notification) && notification.state === 'unseen'
     );
+    if (scopedNotifications && unread.length > 0 && !inFlight()) {
+      const ids = unread
+        .map((notification) => notification.id)
+        .sort()
+        .join(',');
+      if (ids !== attemptedIds) {
+        attemptedIds = ids;
+        attempts = 0;
+      }
+    }
     if (unread.length === 0 || inFlight() || attempts >= MAX_MARK_ATTEMPTS) {
       return;
     }
@@ -61,5 +96,9 @@ export function MarkMessageNotifications(props: {
       });
   });
 
-  return <>{props.children}</>;
+  return scopedNotifications ? (
+    <div ref={container}>{props.children}</div>
+  ) : (
+    <>{props.children}</>
+  );
 }

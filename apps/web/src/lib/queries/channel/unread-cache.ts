@@ -16,7 +16,6 @@ import { getChannelListRevalidations } from '../soup/graphql/channel-list-revali
 const channelMessageEvents = new Set([
   'channel_mention',
   'channel_message_send',
-  'channel_message_reply',
   'document_mention',
 ]);
 
@@ -43,14 +42,12 @@ export async function cacheNewChannelUnread(
     !isCurrent() ||
     notification.entityType !== 'CHANNEL' ||
     notification.state !== 'UNSEEN' ||
-    !channelMessageEvents.has(notification.eventType)
+    !channelMessageEvents.has(notification.eventType) ||
+    !isUnreadChannelMessageNotification(mapGraphqlNotification(notification))
   ) {
     return false;
   }
 
-  const includeConversation = isUnreadChannelMessageNotification(
-    mapGraphqlNotification(notification)
-  );
   const channel = {
     __typename: 'GraphqlSoupChannel' as const,
     id: notification.entityId,
@@ -63,7 +60,7 @@ export async function cacheNewChannelUnread(
   await host.writeQuery({
     query: relationshipQuery,
     operationName: 'ChannelUnreadCacheWrite',
-    variables: { includeConversation },
+    variables: {},
     data: {
       soupUpdates: [
         {
@@ -71,9 +68,6 @@ export async function cacheNewChannelUnread(
           item: {
             ...channel,
             unreadNotifications: [witness],
-            ...(includeConversation
-              ? { topLevelUnreadNotifications: [witness] }
-              : {}),
           },
         },
       ],
