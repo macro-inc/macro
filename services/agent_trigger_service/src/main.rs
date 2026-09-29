@@ -113,7 +113,7 @@ async fn run() -> anyhow::Result<()> {
     );
     let task_context = DssTaskAssignmentContext::new(
         DocumentStorageServiceClient::new(
-            config.internal_api_key.clone(),
+            config.document_storage_service_auth_key.clone(),
             DocumentStorageServiceUrl::new()?.to_string(),
         ),
         lexical.clone(),
