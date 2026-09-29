@@ -10,7 +10,10 @@ use tower::ServiceExt;
 
 use super::*;
 use crate::{
-    domain::models::{BotAccessScope, EditAccessLevel, OwnerAccessLevel, ViewAccessLevel},
+    domain::models::{
+        AccessLevel, BotAccessScope, EditAccessLevel, EntityPermission, OwnerAccessLevel,
+        ViewAccessLevel,
+    },
     inbound::axum_extractors::test_support::{
         BOT_ACTING_USER_ID, BOT_ACTING_USER_ORGANIZATION_ID, BOT_ID, BotAccessCall,
         FakeAuthorizationService, FakeEntityAccessService, INTERNAL_KEY, TestState, USER_ID,
@@ -188,24 +191,12 @@ async fn user_scoped_bot_uses_scheduled_action_bot_receipt() {
 }
 
 #[tokio::test]
-async fn internal_without_user_mints_owner_receipt_without_a_lookup() {
-    let state = TestState::new(None);
+async fn internal_without_user_is_unauthorized_without_a_lookup() {
+    let state = TestState::new(Some(AccessLevel::Owner));
     let app = Router::new()
         .route(
             "/scheduled-actions/{id}",
-            put(|access: OwnerExtractor| async move {
-                assert!(matches!(
-                    access.entity_access_receipt.auth(),
-                    EntityAccessAuth::Internal
-                ));
-                assert_eq!(
-                    access.entity_access_receipt.entity_permission(),
-                    &EntityPermission::AccessLevel {
-                        access_level: AccessLevel::Owner
-                    }
-                );
-                StatusCode::NO_CONTENT
-            }),
+            put(|_access: ViewExtractor| async { StatusCode::NO_CONTENT }),
         )
         .with_state(state.clone());
     let request = Request::put(format!("/scheduled-actions/{ACTION_ID}"))
@@ -213,7 +204,7 @@ async fn internal_without_user_mints_owner_receipt_without_a_lookup() {
         .body(Body::empty())
         .unwrap();
 
-    assert_eq!(status(app, request).await, StatusCode::NO_CONTENT);
+    assert_eq!(status(app, request).await, StatusCode::UNAUTHORIZED);
     assert_eq!(state.entity_access.calls(), []);
     assert_eq!(state.entity_access.bot_calls(), []);
 }

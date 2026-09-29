@@ -2,7 +2,8 @@
 //!
 //! The grant is an `entity_access` row with `entity_type = 'scheduled_action'`.
 //! Unlike the agent-session extractor, an anonymous caller is not given View,
-//! and the route parameter is `{id}`.
+//! an internal caller must name an acting user (a routine runs as a person, so
+//! a user-less receipt authorizes nothing), and the route parameter is `{id}`.
 
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -20,10 +21,7 @@ use uuid::Uuid;
 
 use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
-    models::{
-        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
-        RequiredPermission,
-    },
+    models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityType, RequiredPermission},
     ports::EntityAccessService,
 };
 
@@ -85,34 +83,12 @@ where
             });
         }
 
-        let is_internal_access = authorization
-            .authorization
-            .as_ref()
-            .is_some_and(MacroAuthorization::is_internal);
-        let macro_user_id = authorization
+        let Some(user) = authorization
             .authorization
             .as_ref()
             .and_then(MacroAuthorization::acting_user)
-            .map(|user| user.macro_user_id.clone());
-
-        if macro_user_id.is_none() && is_internal_access {
-            return Ok(Self {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
-                        entity_id: id.to_string(),
-                        entity_type: EntityType::ScheduledAction,
-                    },
-                    auth: EntityAccessAuth::Internal,
-                    entity_permission: EntityPermission::AccessLevel {
-                        access_level: AccessLevel::Owner,
-                    },
-                    _marker: PhantomData,
-                },
-                _marker: PhantomData,
-            });
-        }
-
-        let Some(user) = macro_user_id else {
+            .map(|user| user.macro_user_id.clone())
+        else {
             return Err(ExtractorError::Unauthorized);
         };
 
