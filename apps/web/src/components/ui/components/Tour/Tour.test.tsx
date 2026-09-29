@@ -48,6 +48,12 @@ function Card() {
   );
 }
 
+let tour!: ReturnType<typeof useTour>;
+function Probe() {
+  tour = useTour();
+  return null;
+}
+
 const status = () =>
   document.querySelector('[data-tour-popover]')?.getAttribute('data-status');
 
@@ -246,6 +252,73 @@ describe('Tour', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     expect(onComplete).toHaveBeenCalledOnce();
+  });
+
+  it('moves the beacon along the chain when an entry is pressed', async () => {
+    const [expanded, setExpanded] = createSignal(false);
+    render(() => (
+      <>
+        <Show when={!expanded()}>
+          <button
+            type="button"
+            ref={tourTarget(T.toggle)}
+            onClick={() => setExpanded(true)}
+          >
+            Show sidebar
+          </button>
+        </Show>
+        <Show when={expanded()}>
+          <button type="button" data-testid="row" ref={tourTarget(T.row)}>
+            Row
+          </button>
+        </Show>
+        <Tour.Root
+          steps={[
+            {
+              target: T.hidden,
+              entry: [T.row, T.toggle],
+              title: 'Inside',
+              description: 'Behind the row',
+            },
+          ]}
+        >
+          <Probe />
+        </Tour.Root>
+      </>
+    ));
+    await settle();
+    expect(tour.status()).toBe('waiting');
+    expect(tour.entry()?.textContent).toBe('Show sidebar');
+
+    const toggle = screen.getByRole('button', { name: 'Show sidebar' });
+    fireEvent.pointerDown(toggle);
+    fireEvent.click(toggle);
+    await settle();
+    expect(tour.status()).toBe('waiting');
+    expect(tour.entry()).toBe(screen.getByTestId('row'));
+  });
+
+  it('falls back to the root entry for steps with a target', async () => {
+    render(() => (
+      <>
+        <button type="button" ref={tourTarget(T.toggle)}>
+          Show sidebar
+        </button>
+        <Tour.Root
+          fallbackEntry={T.toggle}
+          steps={[
+            { target: T.hidden, title: 'Tucked away', description: '' },
+            { title: 'No target', description: '' },
+          ]}
+        >
+          <Probe />
+        </Tour.Root>
+      </>
+    ));
+    await settle();
+    expect(tour.status()).toBe('waiting');
+    tour.next();
+    expect(tour.status()).toBe('floating');
   });
 
   it('points at the top-most element when several share a target', () => {

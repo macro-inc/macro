@@ -122,6 +122,12 @@ export type TourRootProps<Step extends TourStep> = ParentProps<{
    * within it. Defaults to the viewport.
    */
   boundary?: (root: HTMLElement) => HTMLElement | null | undefined;
+  /**
+   * Entries tried after a step's own, for every step that has a target. Use
+   * for controls that reveal most hidden targets, such as a sidebar toggle,
+   * so a step never floats unattached while its target is tucked away.
+   */
+  fallbackEntry?: Targets;
 }>;
 
 /** Owns step state and target resolution. Renders nothing visible itself. */
@@ -163,20 +169,27 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
       end++;
     return end;
   };
+  const entries = () => {
+    const step = current();
+    if (step.target === undefined) return toList(step.entry);
+    return [...toList(step.entry), ...toList(props.fallbackEntry)];
+  };
   const entry = createMemo(() =>
-    target()
-      ? undefined
-      : resolveTourTarget(toList(current().entry), boundary())
+    target() ? undefined : resolveTourTarget(entries(), boundary())
   );
 
-  // Pressing the entry clears its beacon; the target appearing (by any route)
-  // resets that, so leaving again shows the beacon again.
-  const [pressed, setPressed] = createSignal(false);
-  createEffect(on([index, target], () => setPressed(false), { defer: true }));
+  // Pressing an entry clears its beacon. It's remembered per element, so
+  // when that press reveals the next entry in the chain (a sidebar toggle
+  // showing the row to open), the beacon moves there. The target appearing,
+  // by any route, forgets it, so leaving again shows the beacon again.
+  const [pressedEntry, setPressedEntry] = createSignal<HTMLElement>();
+  createEffect(
+    on([index, target], () => setPressedEntry(undefined), { defer: true })
+  );
   createEffect(() => {
     const element = entry();
     if (!element) return;
-    const press = () => setPressed(true);
+    const press = () => setPressedEntry(element);
     element.addEventListener('pointerdown', press, true);
     element.addEventListener('keydown', press, true);
     onCleanup(() => {
@@ -186,7 +199,11 @@ function TourRoot<Step extends TourStep>(props: TourRootProps<Step>) {
   });
 
   const status = (): TourStatus =>
-    target() ? 'anchored' : entry() && !pressed() ? 'waiting' : 'floating';
+    target()
+      ? 'anchored'
+      : entry() && entry() !== pressedEntry()
+        ? 'waiting'
+        : 'floating';
 
   const goTo = (next: number) => {
     const clamped = Math.min(Math.max(next, 0), props.steps.length - 1);
