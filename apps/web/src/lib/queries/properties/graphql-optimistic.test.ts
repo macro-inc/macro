@@ -6,6 +6,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 import {
   apiValuesToGraphqlPropertyValue,
+  buildOptimisticEntityPropertyOptions,
   buildOptimisticSetEntityProperty,
 } from './graphql-optimistic';
 
@@ -119,6 +120,46 @@ describe('apiValuesToGraphqlPropertyValue', () => {
   });
 });
 
+describe('buildOptimisticEntityPropertyOptions', () => {
+  const definition: PropertyDefinitionDomain = {
+    id: 'tag-def',
+    displayName: 'Tags',
+    valueType: 'TAG',
+    isMultiSelect: true,
+    isMetadata: false,
+    isSystem: false,
+    owner: { scope: 'system' },
+    createdAt: '',
+    updatedAt: '',
+  };
+
+  it('uses a known assignment with the original tag definition metadata', () => {
+    expect(
+      buildOptimisticEntityPropertyOptions(definition, ['cool'], 'assignment-1')
+    ).toMatchObject({
+      id: 'assignment-1',
+      propertyDefinitionId: 'tag-def',
+      dataType: 'TAG',
+      value: {
+        __typename: 'GraphqlSelectOptionPropertyValue',
+        optionIds: ['cool'],
+      },
+    });
+  });
+
+  it.each([
+    undefined,
+    '',
+    'tag-def',
+    'pending:tag-def',
+    'optimistic-property:DOCUMENT:doc:tag-def',
+  ])('does not treat %s as a persisted assignment', (assignmentId) => {
+    expect(
+      buildOptimisticEntityPropertyOptions(definition, ['cool'], assignmentId)
+    ).toBeUndefined();
+  });
+});
+
 describe('buildOptimisticSetEntityProperty', () => {
   const instantiated: Property = {
     propertyId: 'prop-1',
@@ -168,7 +209,42 @@ describe('buildOptimisticSetEntityProperty', () => {
     });
   });
 
-  it('skips optimism for uninstantiated definitions (no stable id)', () => {
+  it('scopes new assignments to their entity and preserves persisted assignment IDs', () => {
+    const value: PropertyApiValues = {
+      valueType: 'SELECT_STRING',
+      values: ['urgent'],
+    };
+    const target = { entityType: 'DOCUMENT', entityId: 'task-1' };
+    const first = buildOptimisticSetEntityProperty(
+      definitionOnly,
+      value,
+      target
+    )!;
+    const second = buildOptimisticSetEntityProperty(definitionOnly, value, {
+      ...target,
+      entityId: 'task-2',
+    })!;
+    expect(first.id).not.toBe(second.id);
+    expect(first.id).not.toBe(definitionOnly.id);
+    expect(first.value).toEqual({
+      __typename: 'GraphqlSelectOptionPropertyValue',
+      optionIds: ['urgent'],
+    });
+    expect(
+      buildOptimisticSetEntityProperty(instantiated, value, target)?.id
+    ).toBe('prop-1');
+    for (const propertyId of ['def-1', 'pending:def-1', first.id]) {
+      expect(
+        buildOptimisticSetEntityProperty(
+          { ...instantiated, propertyId },
+          value,
+          target
+        )?.id
+      ).toBe(first.id);
+    }
+  });
+
+  it('skips optimism for uninstantiated definitions without an owning target', () => {
     expect(
       buildOptimisticSetEntityProperty(definitionOnly, {
         valueType: 'SELECT_STRING',

@@ -2,6 +2,7 @@ import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFla
 import type { Entity } from '@core/types';
 import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
+import { updateSoupForNotification } from '@queries/notification/notification-soup';
 import {
   useMuteItemMutation,
   useUnmuteItemMutation,
@@ -48,6 +49,7 @@ import {
 export const CHANNEL_EVENT_TYPES = [
   'channel_mention',
   'channel_message_send',
+  'channel_message_reaction',
   'channel_message_reply',
   'document_mention',
 ] as const;
@@ -412,7 +414,9 @@ export function createNotificationSource(
       if (!usesGraphql()) return;
       scheduleGraphqlNotificationRefetch();
       if (patch.__typename !== 'GraphqlNewNotification') return;
-      dispatchIncomingNotification(mapGraphqlNotification(patch.notification));
+      const notification = mapGraphqlNotification(patch.notification);
+      updateSoupForNotification(notification);
+      dispatchIncomingNotification(notification);
     }
   );
   onCleanup(() => {
@@ -457,11 +461,12 @@ export function createNotificationSource(
       console.error('Failed to parse notification', wsData.data, e);
       return;
     }
-    dispatchIncomingNotification(parsedNotification);
-
+    // Apply optimistic Soup writes before callbacks start list revalidation;
+    // otherwise those writes cancel the refetch triggered by this delivery.
     if (notificationsQuery.transport === 'rest') {
       optimisticInsertNotification(parsedNotification);
     }
+    dispatchIncomingNotification(parsedNotification);
   });
 
   // Skip empty batches: entity-level read markers fire on mount regardless

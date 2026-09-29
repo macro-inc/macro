@@ -41,6 +41,16 @@ const workspaceRoute = defineRoute({
   children: [workspaceFolderRoute, workspacePageRoute],
 });
 
+const stateRoute = defineRoute({
+  id: 'state-root',
+  path: 'state',
+  state: z
+    .object({ trail: z.array(z.string()) })
+    .transform((state) => ({ ...state, length: state.trail.length })),
+  children: [{ id: 'state-child', path: 'child' }],
+});
+const stateChildRoute = stateRoute.children[0];
+
 const tree = defineRoutes({ definitions: [workspaceRoute] });
 const routes = createRoutesManifest(tree);
 const boundDetail = tree.definitions[0].children[0].children[0];
@@ -56,6 +66,19 @@ function assertTypedRouteTargets(navigate: SplitNavigate<string>) {
     params: { documentId: 'document-1' },
   });
   navigate({ route: workspaceRoute });
+  navigate({ route: stateChildRoute }, { state: { trail: ['first'] } });
+  navigate(
+    { route: stateChildRoute },
+    {
+      state: (current) => ({
+        trail: [...(current?.trail ?? []), String(current?.length ?? 0)],
+      }),
+    }
+  );
+  // @ts-expect-error Routes without a state schema reject navigation state.
+  navigate({ route: workspaceRoute }, { state: { trail: [] } });
+  // @ts-expect-error Navigation uses the route state schema's input type.
+  navigate({ route: stateChildRoute }, { state: { length: 1 } });
   navigate({ route: workspacePageRoute, params: { page: 2 } });
   navigate({
     route: boundDetail,

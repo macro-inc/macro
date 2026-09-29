@@ -228,18 +228,38 @@ function MobileDrawerHandle<T extends ValidComponent = 'div'>(
 }
 
 /**
+ * A Kobalte menu, select, or popover opened inside a drawer portals to
+ * `document.body` and, while modal, sets `pointer-events: none` there. A
+ * pointer aimed at the menu's backdrop therefore lands on `<html>`, which
+ * corvu reads as a pointer outside the drawer — so dismissing the menu would
+ * tear down the whole drawer with it. Leave those to the menu's own layer;
+ * the next pointer, with no menu open, reaches the overlay and closes the
+ * drawer as usual.
+ */
+function dismissesDrawer(event: PointerEvent) {
+  return event.target !== document.documentElement;
+}
+
+/**
  * Wrapper around Corvu's Drawer for mobile. Handles styling and input/virtual keyboard behaviour.
  */
 export const MobileDrawer = Object.assign(
-  (props: ComponentProps<typeof Drawer>) => (
-    <Drawer
-      breakPoints={[0.8]}
-      closeOnOutsideFocus={false}
-      noOutsidePointerEvents={false}
-      restoreFocus={false}
-      {...props}
-    />
-  ),
+  (props: ComponentProps<typeof Drawer>) => {
+    const [local, rest] = splitProps(props, ['onOutsidePointer']);
+    return (
+      <Drawer
+        breakPoints={[0.8]}
+        closeOnOutsideFocus={false}
+        noOutsidePointerEvents={false}
+        restoreFocus={false}
+        {...rest}
+        onOutsidePointer={(event) => {
+          if (!dismissesDrawer(event)) event.preventDefault();
+          local.onOutsidePointer?.(event);
+        }}
+      />
+    );
+  },
   {
     Trigger: Drawer.Trigger,
     Portal: Drawer.Portal,

@@ -602,7 +602,7 @@ export const BulkMoveToProjectView = (props: {
                 <Button
                   size="sm"
                   variant="outline"
-                  class="rounded-xs shrink-0"
+                  class="shrink-0"
                   disabled={!newFolderName().trim() || isSavingFolder()}
                   onClick={submitNewFolder}
                 >

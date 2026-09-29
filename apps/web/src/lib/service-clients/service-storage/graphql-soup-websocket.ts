@@ -1,6 +1,11 @@
 import { toast } from '@core/component/Toast/Toast';
+import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { Client, OperationResult } from '@urql/core';
+import {
+  channelNotificationRefresh,
+  disposeChannelNotificationRefresh,
+} from '../../queries/channel/notification-refresh';
 import {
   ActivityUpdatesDocument,
   type ActivityUpdatesSubscription,
@@ -151,6 +156,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
 
   const onPagehide = () => {
     suspended = true;
+    if (currentClient) channelNotificationRefresh(currentClient).suspend(true);
     // The graphql-ws client is lazy: removing all subscriptions closes the
     // socket without permanently disposing it, so it can reconnect on restore.
     unsubscribeAll();
@@ -158,6 +164,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
   const onPageshow = (event: PageTransitionEvent) => {
     if (!event.persisted || !suspended) return;
     suspended = false;
+    if (currentClient) channelNotificationRefresh(currentClient).suspend(false);
     lifecycle.replace(currentClient, currentHost);
   };
   if (options.suspendOnPagehide) {
@@ -167,12 +174,14 @@ export function createGraphqlSoupSubscriptionsLifecycle(
 
   const lifecycle = {
     replace(client?: Pick<Client, 'subscription' | 'query'>, host?: CacheHost) {
+      if (currentClient && currentClient !== client)
+        disposeChannelNotificationRefresh(currentClient);
       currentClient = client;
       currentHost = host;
       unsubscribeAll();
       if (!client || suspended) return;
       activity = createActivityUpdatesHandler(client);
-      channels = createChannelListUpdatesHandler(client);
+      channels = createChannelListUpdatesHandler(client, host);
       const activityHandler = activity;
       const channelHandler = channels;
 
@@ -199,7 +208,12 @@ export function createGraphqlSoupSubscriptionsLifecycle(
               const patch = (result.data as NotificationUpdatesSubscription)
                 .notificationUpdates;
               publishNotificationPatch(patch);
-              channelHandler.onPatch(patch);
+              const metadata = normalizedCacheResultMetadata(result);
+              void channelHandler.onPatch(
+                patch,
+                metadata?.source === 'live-network' &&
+                  metadata.cacheEffectsApplied === true
+              );
             }
             if (result.error) {
               console.warn(errorMessage, result.error);
@@ -223,6 +237,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(
         removeEventListener('pagehide', onPagehide);
         removeEventListener('pageshow', onPageshow);
       }
+      if (currentClient) disposeChannelNotificationRefresh(currentClient);
       currentClient = undefined;
       currentHost = undefined;
       unsubscribeAll();

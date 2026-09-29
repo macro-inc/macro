@@ -34,11 +34,11 @@ function OldBaseItem(props: ParentProps<OldBaseItemProps>) {
   return (
     <div class="flex flex-col justify-start items-start w-full">
       <Show when={props.spacerTop}>
-        <h4 class="my-1 border-edge border-t w-full" />
+        <h4 class="my-1 border-edge-divider border-t w-full" />
       </Show>
       <div class="px-1 w-full">{props.children}</div>
       <Show when={props.spacerBottom}>
-        <h4 class="my-1 border-edge border-t w-full" />
+        <h4 class="my-1 border-edge-divider border-t w-full" />
       </Show>
     </div>
   );
@@ -242,7 +242,7 @@ export function OldMenu(props: ParentProps<OldMenuProps>) {
   return (
     <div
       class={cn(
-        'flex flex-col py-1 justify-start items-start border border-edge bg-menu-glass [--color-surface:var(--color-menu)] glass rounded-md cursor-default select-none',
+        'menu-surface flex flex-col py-1 justify-start items-start cursor-default select-none',
         props.width && (oldMenuWidths[props.width] ?? props.width),
         isTouchDevice() && 'relative',
         props.hide && 'hidden',

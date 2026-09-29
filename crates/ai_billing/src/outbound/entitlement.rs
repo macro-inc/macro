@@ -1,9 +1,12 @@
 //! Resolves a user's plan and payer from their roles and team membership.
 
+use crate::domain::period::{PeriodBindingSource, SubscriptionPeriod};
 use crate::domain::{BillingError, Entitlement, EntitlementSource, PayerScope, PlanTier, Result};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
+use teams::domain::model::TeamError;
 use teams::domain::team_repo::TeamRepository;
 
 /// [`EntitlementSource`] over the roles service and the teams repository.
@@ -43,6 +46,88 @@ where
             .await
             .map_err(entitlement_err)?;
         Ok(PlanTier::from_roles(&roles))
+    }
+}
+
+impl<P, T> PeriodBindingSource for RolesTeamsEntitlementSource<P, T>
+where
+    P: UserRolesAndPermissionsService,
+    T: TeamRepository,
+{
+    async fn seats(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        observation: &SubscriptionPeriod,
+    ) -> Result<Option<Vec<MacroUserIdStr<'static>>>> {
+        // The user/customer mapping is unique in the owning domain. Email is only
+        // an existing webhook candidate, never sufficient evidence of ownership.
+        let customer = self
+            .teams
+            .get_stripe_customer_id(payer)
+            .await
+            .map_err(entitlement_err)?;
+        if customer.as_ref().map(|id| id.as_str()) != Some(observation.customer_id.as_str()) {
+            return Ok(None);
+        }
+        let Some(team_id) = observation.team_id else {
+            if observation.quantity != 1 || observation.item_count != 1 {
+                return Ok(None);
+            }
+            // Do not bind a personal subscription to a seat currently billed by
+            // another subscription. This uses team facts, not role fallback.
+            for team in self
+                .teams
+                .get_user_teams(payer)
+                .await
+                .map_err(entitlement_err)?
+            {
+                if team.enterprise()
+                    || self
+                        .teams
+                        .get_team_subscription_id(team.id())
+                        .await
+                        .map_err(entitlement_err)?
+                        .is_some()
+                {
+                    return Ok(None);
+                }
+            }
+            return Ok(Some(vec![payer.clone().into_owned()]));
+        };
+        let owner = match self.teams.get_team_owner(&team_id).await {
+            Ok(owner) => owner,
+            Err(TeamError::TeamDoesNotExist) => return Ok(None),
+            Err(error) => return Err(entitlement_err(error)),
+        };
+        let subscription = self
+            .teams
+            .get_team_subscription_id(&team_id)
+            .await
+            .map_err(entitlement_err)?;
+        if owner.as_ref() != payer.as_ref()
+            || subscription.as_ref().map(|id| id.as_str())
+                != Some(observation.subscription_id.as_str())
+            || self
+                .teams
+                .get_team_enterprise_status(&team_id)
+                .await
+                .map_err(entitlement_err)?
+        {
+            return Ok(None);
+        }
+        let seats: Vec<_> = self
+            .teams
+            .get_team_members(&team_id)
+            .await
+            .map_err(entitlement_err)?
+            .into_iter()
+            .filter(|member| member.plan == teams::domain::model::SeatPlan::Premium)
+            .map(|member| member.user_id.into_owned())
+            .collect();
+        if seats.is_empty() || seats.len() as u64 > observation.quantity {
+            return Ok(None);
+        }
+        Ok(Some(seats))
     }
 }
 
@@ -127,6 +212,15 @@ where
                 }
             },
         })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn team_payer(&self, team_id: Uuid) -> Result<Option<MacroUserIdStr<'static>>> {
+        match self.teams.get_team_owner(&team_id).await {
+            Ok(owner) => Ok(Some(owner)),
+            Err(TeamError::TeamDoesNotExist) => Ok(None),
+            Err(error) => Err(entitlement_err(error)),
+        }
     }
 
     #[tracing::instrument(skip(self), err)]

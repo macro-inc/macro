@@ -73,7 +73,7 @@ export default defineDoc({
   name: 'Toolbar',
   category: 'Actions',
   description:
-    'A floating surface for compact actions. It owns the frame and shares button size and variant defaults with its children.',
+    'A floating surface for compact actions. It owns the frame and gives contained buttons small corners, with shared size and variant defaults.',
   status: 'stable',
   exports: ['Toolbar'],
   import: "import { Toolbar } from '@ui';",

@@ -156,6 +156,12 @@ impl SeatPlan {
     /// Every plan.
     pub const ALL: [SeatPlan; 2] = [SeatPlan::Premium, SeatPlan::Max];
 
+    /// Plans available for a new purchase or plan move.
+    pub const PURCHASABLE: [SeatPlan; 1] = [
+        SeatPlan::Premium,
+        // SeatPlan::Max,
+    ];
+
     /// The role tier recorded on a user holding this seat.
     pub fn product_tier(self) -> ProductTier {
         match self {
@@ -688,6 +694,9 @@ pub enum RemoveUserFromTeamError {
     /// Remove roles from user error
     #[error("Remove roles from user error")]
     RemoveRolesFromUserError(#[from] UserRolesAndPermissionsError),
+    /// The removed member's open seat could not be released, and the removal was rolled back.
+    #[error("failed to release the removed member's open seat")]
+    OpenSeatRelease(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// Arguments for creating a subscription

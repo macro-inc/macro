@@ -23,6 +23,20 @@ pub fn url(instance: &Instance) -> String {
     format!("http://localhost:{}/app", instance.port(Port::Frontend))
 }
 
+/// Browser-facing origin for development redirects and integration callbacks.
+pub fn https_origin(instance: &Instance) -> Result<String> {
+    Ok(format!(
+        "https://{}:{}",
+        super::tls::hostname()?,
+        instance.port(Port::Proxy)
+    ))
+}
+
+/// Browser-facing development URL, using the machine certificate and proxy.
+pub fn https_url(instance: &Instance) -> Result<String> {
+    Ok(format!("{}/app/", https_origin(instance)?))
+}
+
 /// Frontend URL when the proxy serves the static bundle (headless stacks): the
 /// app lives on the single proxy origin, not a dev-server port.
 pub fn static_url(instance: &Instance) -> String {
@@ -106,13 +120,18 @@ fn dev_env(
     mode: Mode,
     traces_enabled: bool,
     enable_onboarding: bool,
-) -> Vec<(String, String)> {
+) -> Result<Vec<(String, String)>> {
     let mut env = vec![
         (
             "PORT".to_string(),
             instance.port(Port::Frontend).to_string(),
         ),
         ("VITE_LOCAL_SERVERS".to_string(), "ALL".to_string()),
+        ("MACRO_LOCAL_HOSTNAME".to_string(), super::tls::hostname()?),
+        (
+            "NODE_EXTRA_CA_CERTS".to_string(),
+            proxy::ca_pem().display().to_string(),
+        ),
         (
             "VITE_LOCAL_BACKEND_ORIGIN".to_string(),
             "same-origin".to_string(),
@@ -155,18 +174,56 @@ fn dev_env(
         "VITE_ENABLE_ONBOARDING_V4".to_string(),
         enable_onboarding.to_string(),
     ));
-    env
+    Ok(env)
 }
 
 /// Poll the backend (auth health, through the proxy) until ready.
 pub fn wait_backend_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     let url = format!("{}/auth/health", proxy::url(instance));
+    let cacert = proxy::ca_pem();
     let script = format!(
-        "for i in $(seq 1 600); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'backend not ready'; exit 1"
+        "for i in $(seq 1 600); do curl -fsS --cacert '{cacert}' --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'backend not ready'; exit 1",
+        cacert = cacert.display()
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);
     stage.run("Waiting for backend (proxy /auth/health)", &mut cmd)
+}
+
+/// A listening Vite port does not prove the containerized proxy can reach it.
+/// Verify the browser's route before announcing that the stack is ready.
+fn wait_frontend_proxy_ready(stage: &Stage, instance: &Instance) -> Result<()> {
+    let mut cmd = Command::new("curl");
+    cmd.args([
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--retry",
+        "8",
+        "--retry-connrefused",
+        "--retry-delay",
+        "1",
+        "--retry-max-time",
+        "45",
+        "--max-time",
+        "5",
+        "--output",
+        "/dev/null",
+        "--cacert",
+    ])
+    .arg(proxy::ca_pem())
+    .arg(format!("{}/app/", proxy::url(instance)));
+    stage
+        .run("Checking frontend through HTTPS proxy", &mut cmd)
+        .with_context(|| {
+            format!(
+                "HTTPS proxy could not serve the frontend. Check proxy logs and Docker-to-host \
+                 firewall access to host.docker.internal:{} (Vite's port). \
+                 Direct Vite URL: {}",
+                instance.port(Port::Frontend),
+                url(instance)
+            )
+        })
 }
 
 /// A running frontend dev server plus its captured output, so an unexpected
@@ -310,10 +367,11 @@ pub fn start(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for (k, v) in dev_env(instance, mode, traces_enabled, enable_onboarding) {
+    for (k, v) in dev_env(instance, mode, traces_enabled, enable_onboarding)? {
         cmd.env(k, v);
     }
     let process = spawn(stage, &mut cmd, port)?;
+    wait_frontend_proxy_ready(stage, instance)?;
     Ok(Some(Frontend {
         process,
         command: cmd,

@@ -18,7 +18,6 @@ export function LoginButton() {
       <Button
         variant="outline"
         size="sm"
-        class="rounded-xs"
         onClick={() => navigate(`/login${window.location.search}`)}
       >
         Login
@@ -27,7 +26,6 @@ export function LoginButton() {
       <Button
         variant="accent"
         size="sm"
-        class="rounded-xs"
         onClick={() => navigate(`/welcome${window.location.search}`)}
       >
         Sign Up

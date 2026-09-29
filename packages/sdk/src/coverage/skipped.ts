@@ -31,6 +31,7 @@ export const agentHarnessExcluded = [
   'start',
   'status',
   'loadAgentModelsHandler',
+  'discoverAgentCapabilitiesHandler',
   'previewAgentSessions',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
@@ -221,6 +222,7 @@ export const emailBacklog = [
   'deleteEmailFilter',
   'deleteScheduledDraft',
   'getScheduledMessages',
+  'getThreadCalendarInvitations',
   'listContacts',
   'listEmailFilters',
   'removeDraftAttachment',
@@ -263,6 +265,7 @@ export const scheduledActionBacklog = [
   'executeScheduledActionNow',
   'listScheduledActionHistory',
   'listScheduledActions',
+  'setScheduledActionEnabled',
   'updateScheduledAction',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
@@ -326,6 +329,10 @@ export const storageExcluded = [
   'jobProcessingResultHandler',
   'joinChannelByCode',
   'leaveOrEndCall',
+  // Joining and leaving live meetings are app session flows.
+  'meetingGuestJoin',
+  'meetingJoin',
+  'meetingLeave',
   'mentionPreviews',
   'patchViewHandler',
   'postChannelMessages',
@@ -397,6 +404,17 @@ export const storageBacklog = [
   'listTeamOutOfOffice',
   'listUserApiKeys',
   'messageTimeline',
+  // Meeting management uses the generated client.
+  'meetingCancel',
+  'meetingCreate',
+  'meetingInvite',
+  'meetingInvitePermissions',
+  'meetingInviteUsers',
+  'meetingList',
+  'meetingListActive',
+  'meetingLookup',
+  'meetingShare',
+  'meetingUpdate',
   'postActivity',
   'presaveDocumentHandler',
   'saveDocumentHandler',

@@ -15,6 +15,7 @@ import {
   createUrqlInfiniteQuery,
   type UrqlInfiniteData,
 } from '@app/lib/urql-solid';
+import { isTransientRequestError } from '@core/util/request-error';
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
@@ -52,6 +53,7 @@ import {
   untrack,
 } from 'solid-js';
 import { NIL as NIL_UUID } from 'uuid';
+import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { soupPageTimestamp } from '../page-timestamp';
 import {
@@ -79,6 +81,8 @@ export type GraphqlSoupAstItemsQueryArgs = {
 
 export type GraphqlSoupAstItemsQueryOptions = {
   enabled: boolean;
+  networkPaused?: boolean;
+  keepPreviousData?: boolean;
   projection?: 'channel-list';
   /** Reconcile indexed members while retaining server-only email rows. */
   localReconciliation?: 'without-email';
@@ -612,8 +616,10 @@ export function createGraphqlSoupAstItemsQuery(
       getNextPageParam: (lastPage) =>
         lastPage.user.soup.nextCursor ?? undefined,
       enabled: queryOptions.enabled && firstInput !== undefined,
-      requestPolicy: 'cache-and-network',
-      keepPreviousData: false,
+      requestPolicy: queryOptions.networkPaused
+        ? 'cache-only'
+        : 'cache-and-network',
+      keepPreviousData: queryOptions.keepPreviousData ?? false,
       onResult: (result, page) => {
         if (!result.data) return;
         setBaselineGeneration(cacheGeneration);
@@ -678,8 +684,37 @@ export function createGraphqlSoupAstItemsQuery(
           ? [{ document: queryDocument(), variables: { input } }]
           : [];
       });
-    })
+    }, getGraphqlSoupClient)
   );
+
+  registerChannelNotificationRefresh(() => ({
+    client: getGraphqlSoupClient(),
+    // urql retains loaded pages after errors; keep them registered for retry.
+    queries:
+      options().projection === 'channel-list'
+        ? [...new Set([null, ...(query.data?.pageParams ?? [])])].flatMap(
+            (cursor) => {
+              const input = inputForCursor(cursor);
+              return input
+                ? [{ document: queryDocument(), variables: { input } }]
+                : [];
+            }
+          )
+        : [],
+    reader: {
+      enabled: query.isEnabled && !options().networkPaused,
+      fetching: query.isFetching,
+      filtered: true,
+      notificationIds: query.isSuccess
+        ? (query.data?.records() ?? []).flatMap((item) =>
+            item.__typename === 'GraphqlSoupChannel' &&
+            'unreadNotifications' in item
+              ? (item.unreadNotifications?.map((n) => n.id) ?? [])
+              : []
+          )
+        : [],
+    },
+  }));
 
   // Capture membership/sort evidence for each published projection, so a later
   // cache revision cannot change the baseline of an in-flight reconciliation.
@@ -768,9 +803,9 @@ export function createGraphqlSoupAstItemsQuery(
     // Keep server responses (including HTTP auth failures), GraphQL errors,
     // and failures without current-query local proof visible.
     if (
-      error?.networkError &&
+      error &&
+      isTransientRequestError(error) &&
       !error.response &&
-      error.graphQLErrors.length === 0 &&
       displayLocalProjection()
     ) {
       return undefined;
@@ -909,6 +944,8 @@ export function createGraphqlSoupAstItemsQuery(
     },
     refresh: async () => {
       if (firstPageInput() === undefined) return;
+      // An explicit list refresh rebuilds the cursor chain in order. The
+      // notification queue observes isFetching and waits for this to finish.
       await query.refetch({
         requestPolicy: 'network-only',
         throwOnError: true,

@@ -15,6 +15,7 @@ import { buildPostMessageRequest } from '@channel/Input/message-payload';
 import { hasSendableInputContent } from '@channel/Input/utils/sendable-content';
 import { ConfirmDrawer } from '@components/app/mobile/ConfirmDrawer';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
@@ -255,6 +256,7 @@ function IosShareSheetComposer(props: { handleCancel: () => void }) {
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: `ios-share-input-${composerId}`,
+    resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
     scrollContainer,
     onMentionCreate: (mention) => {

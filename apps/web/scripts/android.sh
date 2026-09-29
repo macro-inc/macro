@@ -8,14 +8,18 @@ case "$action" in
   *) echo "Usage: android.sh {dev|build} [--firebase-config /path/google-services.json] [Tauri arguments]" >&2; exit 1 ;;
 esac
 
-script_dir="$(\cd "$(dirname "$0")" && pwd)"
-\cd "$script_dir/.."
-
 firebase_config=""
 if [[ "${1:-}" == "--firebase-config" ]]; then
-  [[ -f "${2:-}" ]] || { echo "Firebase configuration file not found" >&2; exit 1; }
-  firebase_config="$2"
+  firebase_config="${2:-}"
+  [[ -n "$firebase_config" ]] || { echo "Firebase configuration file not found" >&2; exit 1; }
+  [[ "$firebase_config" = /* ]] || firebase_config="$PWD/$firebase_config"
   shift 2
+fi
+
+script_dir="$(\cd "$(dirname "$0")" && pwd)"
+\cd "$script_dir/.."
+if [[ -n "$firebase_config" ]]; then
+  [[ -f "$firebase_config" ]] || { echo "Firebase configuration file not found" >&2; exit 1; }
 fi
 
 firebase_environment=prod

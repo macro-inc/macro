@@ -4,10 +4,9 @@ import {
   SidePanel,
 } from '@components/app/side-panel';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
-import type { Accessor } from 'solid-js';
 
 export function PrSidePanelSections(props: {
-  enrichment: Accessor<GithubPullRequestWithDetails | undefined>;
+  enrichment?: GithubPullRequestWithDetails;
 }) {
   return (
     <>

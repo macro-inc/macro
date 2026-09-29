@@ -32,3 +32,20 @@ it('edits mention tokens atomically and maps selection offsets to the canonical 
   expect(root.textContent).toBe('**literal** <script>unsafe</script>');
   root.remove();
 });
+it('labels date pills relative to today while keeping the stored instant', () => {
+  const root = document.createElement('div');
+  document.body.append(root);
+  const tomorrow = new Date();
+  tomorrow.setHours(0, 0, 0, 0);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const token = encodeCellMention({
+    type: 'date',
+    date: tomorrow.toISOString(),
+    displayFormat: 'Next week',
+  });
+  writeCellText(root, `Due ${token}`);
+  expect(root.textContent).toBe('Due Tomorrow');
+  expect(root.querySelector('span')?.contentEditable).toBe('false');
+  expect(readCellText(root)).toBe(`Due ${token}`);
+  root.remove();
+});

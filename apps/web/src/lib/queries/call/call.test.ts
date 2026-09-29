@@ -111,6 +111,7 @@ const record = (over: Partial<CallRecord>): CallRecord => ({
   createdBy: 'macro|a@test.com',
   isActive: false,
   participants: [],
+  guests: [],
   roomName: 'room',
   startedAt: '2026-08-21T09:00:00.000Z',
   transcript: [],
@@ -124,6 +125,30 @@ describe('call team sharing helpers', () => {
     queryClient.clear();
     callClient.getCallRecord.mockReset();
     callClient.editCallRecord.mockReset();
+  });
+
+  it('never represents standalone calls as team shared, including stale record and cache values', () => {
+    const standalone = record({
+      channelId: null,
+      shareWithTeam: true,
+      teamShareAccessLevel: 'view',
+    });
+    expect(isCallSharedWithTeam(standalone)).toBe(false);
+    expect(
+      sharePermissionFromCallRecord(standalone).teamShareAccessLevel
+    ).toBeNull();
+
+    queryClient.setQueryData(
+      callKeys.record(standalone.callId).queryKey,
+      standalone
+    );
+    setCallRecordTeamShareCache(standalone.callId, true);
+    expect(
+      queryClient.getQueryData(callKeys.record(standalone.callId).queryKey)
+    ).toMatchObject({
+      shareWithTeam: false,
+      teamShareAccessLevel: null,
+    });
   });
 
   it('buildCallTeamSharePayload maps the checkbox to view or an explicit clear', () => {

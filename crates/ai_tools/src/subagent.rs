@@ -8,6 +8,17 @@ use tokio::select;
 
 use crate::ToolServiceContext;
 
+#[cfg(test)]
+mod test;
+
+fn usage_for_request(
+    inherited: &ai_usage::UsageContext,
+    request: &RequestContext,
+) -> ai_usage::UsageContext {
+    ai_usage::UsageContext::new(inherited.feature, request.user_id.clone())
+        .with_entity(inherited.entity)
+}
+
 static SUBAGENT_MODEL: PredefinedModel = PredefinedModel::Smart;
 
 static SUBAGENT_PROMPT: &str = include_str!("prompts/subagent.md");
@@ -50,12 +61,13 @@ impl AsyncTool<ToolServiceContext> for Subagent {
         // Cooperative cancellation: race the completion against the request's
         // cancel token. If the user cancels, drop the in-flight completion and
         // report "cancelled" rather than a partial or errored result.
+        let usage = usage_for_request(&service_context.usage_context, &request_context);
         let completion = agent::complete(
             SUBAGENT_MODEL,
             SUBAGENT_PROMPT,
             &self.task,
             service_context.recorder.as_ref(),
-            service_context.usage_context.clone(),
+            usage,
         );
 
         select! {

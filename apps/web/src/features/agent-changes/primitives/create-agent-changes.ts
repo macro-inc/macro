@@ -4,8 +4,11 @@
  */
 
 import type { Accessor } from 'solid-js';
-import type { AgentChangesContext } from '../context/agent-changes-context';
-import type { DiffStyle, PaneLayout } from '../core/layout';
+import type {
+  AgentChangesContext,
+  PaneViewState,
+} from '../context/agent-changes-context';
+import type { DiffStyle } from '../core/layout';
 import { formatNotesForAgent, sendableNotes } from '../core/review-notes';
 import { type ChangesModel, createChangesModel } from './create-changes-model';
 import {
@@ -47,10 +50,8 @@ export type AgentChangesController = {
 export function createAgentChanges(options: {
   context: AgentChangesContext;
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
-  /** Optional controlled pane layout, such as the URL state. */
-  paneLayout?: [get: Accessor<PaneLayout>, set: (layout: PaneLayout) => void];
-  /** Read and write the reviewer's diff layout preference. */
-  diffStyle: [get: Accessor<DiffStyle>, set: (style: DiffStyle) => void];
+  /** The pane's layout and diff style, from `createPaneViewState`. */
+  view: PaneViewState;
   /** Per-session "dismissed for changeset id" memory. */
   dismissed: [
     get: Accessor<string | undefined>,
@@ -61,7 +62,7 @@ export function createAgentChanges(options: {
   const layout = createPaneLayout({
     sessionId: host.scopeKey,
     storage: options.storage,
-    layout: options.paneLayout,
+    layout: [options.view.layout, options.view.setLayout],
   });
   const model = createChangesModel({
     source,
@@ -72,7 +73,7 @@ export function createAgentChanges(options: {
     changeset: model.changeset,
     storage: options.storage,
   });
-  const [diffStyle, setDiffStyle] = options.diffStyle;
+  const { diffStyle, setDiffStyle } = options.view;
   const [dismissed, setDismissed] = options.dismissed;
 
   const copyPath = async (path: string) => {

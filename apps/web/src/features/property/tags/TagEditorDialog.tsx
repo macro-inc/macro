@@ -185,7 +185,7 @@ export function TagEditorDialog(props: {
       onCloseAutoFocus={props.onCloseAutoFocus}
     >
       <CommandMenuShell depth={2} class="text-sm" onKeyDown={handleKeyDown}>
-        <CommandMenuShell.Header class="my-0 h-13 gap-3 border-b-0 px-4">
+        <CommandMenuShell.Header class="my-0 gap-3 border-b-0">
           <span class="text-ink-muted">
             <TagIcon class="size-3.5" />
           </span>
@@ -270,7 +270,6 @@ export function TagEditorDialog(props: {
             <Button
               variant="danger"
               size="sm"
-              class="rounded-lg"
               disabled={pending()}
               onClick={remove}
             >
@@ -282,16 +281,15 @@ export function TagEditorDialog(props: {
             <Button
               variant="ghost"
               size="sm"
-              class="rounded-lg"
               disabled={pending()}
               onClick={close}
             >
               Cancel
             </Button>
             <Button
-              variant={canSubmit() ? 'accent' : 'ghost'}
+              variant="strong"
               depth={3}
-              class="gap-3 rounded-lg border-0"
+              class="gap-3 "
               disabled={!canSubmit() || pending()}
               onClick={submit}
             >

@@ -415,7 +415,11 @@ async fn main() -> anyhow::Result<()> {
     // same persistence and delivery as every other channel message.
     let channel_messages: Arc<dyn messages::domain::api::MessageCommands> = Arc::new(
         messages::domain::service::MessageService::new(
-            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
+                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
+                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                ))
+                .with_crm(crm::outbound::lookup::PgCrmParentReader::new(db.clone())),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
                 messages::domain::ports::NoMessageEventPublisher,
@@ -441,19 +445,6 @@ async fn main() -> anyhow::Result<()> {
             ),
         ),
     );
-
-    let teams_service_impl = TeamServiceImpl::new_with_analytics(
-        teams_repo_impl.clone(),
-        customer_repo_impl,
-        channel_service.clone(),
-        user_roles_and_permissions_service.clone(),
-        notification_ingress_service.clone(),
-        crm_enqueuer,
-        team_crm_settings_repo_impl,
-        team_analytics,
-    )
-    .with_contacts_enqueuer(contacts_enqueuer)
-    .with_event_broker(macro_event_broker);
 
     let foreign_entity_service =
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
@@ -516,7 +507,21 @@ async fn main() -> anyhow::Result<()> {
         ai_billing::outbound::PgUsageReader::new(db.clone()),
         ai_billing::outbound::PgBillingRepo::new(db.clone()),
         ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
+        config.environment,
     ));
+    let teams_service_impl = TeamServiceImpl::new_with_analytics(
+        teams_repo_impl.clone(),
+        customer_repo_impl,
+        channel_service.clone(),
+        user_roles_and_permissions_service.clone(),
+        notification_ingress_service.clone(),
+        crm_enqueuer,
+        team_crm_settings_repo_impl,
+        team_analytics,
+    )
+    .with_contacts_enqueuer(contacts_enqueuer)
+    .with_event_broker(macro_event_broker)
+    .with_open_seat_release((*ai_billing_service).clone());
     let document_storage_service_client = Arc::new(document_storage_service_client);
     let user_deletion = Arc::new(
         authentication_service::outbound::user_deletion::UserDeletionAdapter::new(

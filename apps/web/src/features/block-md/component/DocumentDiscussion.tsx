@@ -11,44 +11,21 @@ import {
   enableUnifiedDocumentDiscussions,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import {
-  DocumentConversation,
-  DocumentConversationComposer,
-} from '@core/messages/DocumentConversation';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
+import { EntityDiscussion } from '@core/messages/EntityDiscussion';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { buildSimpleEntityUrl } from '@core/util/url';
-import type { MessageParent } from '@service-storage/messages';
+import {
+  useMessageLink,
+  useMessageRootsQuery,
+} from '@queries/messages/document-messages';
 import { Show } from 'solid-js';
 import { createDocumentDiscussionSource } from '../comments/documentDiscussionSource';
-import { URL_PARAMS } from '../constants';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
 function MobileDiscussionComposer(props: { hidden: boolean }) {
   // Preserve the editor and draft while its placement is hidden.
   const input = <DiscussionComposer collapsible blurOnSend />;
-
-  return (
-    <FloatRegion region="accessory">
-      <Show when={!props.hidden}>
-        <ChannelInputContainer>{input}</ChannelInputContainer>
-      </Show>
-    </FloatRegion>
-  );
-}
-
-function MobileMessageComposer(props: {
-  parent: MessageParent;
-  hidden: boolean;
-}) {
-  // Preserve the editor and draft while its placement is hidden.
-  const input = (
-    <DocumentConversationComposer
-      parent={props.parent}
-      collapsible
-      blurOnSend
-    />
-  );
 
   return (
     <FloatRegion region="accessory">
@@ -73,35 +50,26 @@ export function MessageDocumentDiscussion(props: {
   const id = documentId();
   const documentKind = kind();
   const blockName = documentKind === 'document' ? 'md' : documentKind;
-  const params = useUrlParams(URL_PARAMS);
-  const parent: MessageParent = { type: 'document', id };
-  const floating = () =>
-    props.floatingComposerOnTouch === true && isTouchDevice();
+  const parent = () => ({ type: 'document' as const, id });
+  const params = useUrlParams({ commentId: COMMENT_LINK_PARAM });
+  const target = useMessageLink(parent, params.commentId);
+  const roots = useMessageRootsQuery(parent);
+  const discussionTarget = () =>
+    roots.isSuccess &&
+    roots.data.find((thread) => thread.id === target.rootId())?.state.anchor ===
+      null
+      ? target.messageId()
+      : null;
   return (
-    <>
-      <DocumentConversation
-        parent={parent}
-        canWrite={permissions.canComment()}
-        targetId={params.commentId()}
-        label={props.label}
-        buildLink={(message) =>
-          buildSimpleEntityUrl(
-            { type: blockName, id },
-            { [URL_PARAMS.commentId]: message.id }
-          )
-        }
-        hideComposer={floating()}
-        hideWhenEmpty={floating()}
-      />
-      <Show when={floating() && permissions.canComment()}>
-        <StaticMarkdownContext>
-          <MobileMessageComposer
-            parent={parent}
-            hidden={props.editorHasFocus === true && virtualKeyboardVisible()}
-          />
-        </StaticMarkdownContext>
-      </Show>
-    </>
+    <EntityDiscussion
+      parent={parent()}
+      targetId={discussionTarget()}
+      canWrite={permissions.canComment()}
+      link={{ type: blockName, id }}
+      label={props.label}
+      floatingComposerOnTouch={props.floatingComposerOnTouch}
+      editorHasFocus={props.editorHasFocus}
+    />
   );
 }
 

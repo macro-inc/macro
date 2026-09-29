@@ -1,3 +1,4 @@
+export type { AiFilterOutcome } from './AiFilterInput';
 export {
   CollapsibleSection,
   type CollapsibleSectionRootProps,
@@ -40,6 +41,7 @@ export {
 } from './ViewBreadcrumbs';
 export {
   useViewShell,
+  ViewNavigationControls,
   ViewShell,
   type ViewShellLayout,
   type ViewShellRootProps,

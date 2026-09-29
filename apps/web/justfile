@@ -1,9 +1,11 @@
+set positional-arguments
+
 # Android: SDK/JDK setup and optional Firebase config are handled by the launcher.
 android-dev *ARGS:
-    bash scripts/android.sh dev {{ARGS}}
+    bash scripts/android.sh dev "$@"
 
 android-build *ARGS:
-    bash scripts/android.sh build {{ARGS}}
+    bash scripts/android.sh build "$@"
 
 # iOS: dev-facing, for testing in Simulator. Honors PORT like the web dev
 # server (`PORT=3001 just ios-dev`): the vite server picks PORT up through
@@ -24,6 +26,34 @@ ios-build-no-update: ios-prepare
 # iOS: build for release
 ios-build: ios-prepare
     cd tauri/src-tauri && cargo tauri ios build --open
+
+# iOS: arm64 Simulator .app for the Appetize PR preview (the `ios_preview`
+# workflow). Simulator builds need no signing, and --no-default-features keeps
+# the bundle auto-updater off so a preview cannot quietly replace itself with
+# the production bundle.
+#
+# The frontend is built as a separate step rather than through Tauri's
+# beforeBuildCommand hook: the web and wasm builds want the nix toolchain,
+# while everything Xcode drives wants Apple's, and running both under one set
+# of compiler flags breaks whichever one loses. CI builds the frontend in a
+# clean nix shell and then calls this with prebuilt=true.
+#
+# Output: tauri/src-tauri/gen/apple/build/arm64-sim/macro.app
+ios-build-sim prebuilt="false": ios-prepare
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{prebuilt}}" != "true" ]; then just build-tauri-dev; fi
+    # frontendDist is restated because this override replaces the build table:
+    # dropping it silently produces an app with an empty assets/ and no
+    # index.html, which installs and launches to a black screen.
+    # Release, like every other iOS recipe here. A debug build links a ~240MB
+    # unoptimised binary, which a real Mac starts fine but Appetize's
+    # virtualised device does not — the preview launched to a black screen
+    # while the identical debug build rendered in CI's simulator.
+    cd tauri/src-tauri && cargo tauri ios build \
+      --target aarch64-sim --ci --no-sign -v \
+      --config '{"build":{"beforeBuildCommand":"","frontendDist":"../../dist"}}' \
+      -- --no-default-features
 
 # iOS generated project prep. Keep native bundle metadata in sync with
 # tauri.ios.conf.json, then prepare ignored local Swift dependencies.
@@ -73,27 +103,47 @@ local-email: ensure-cache-wasm
 # without it the cache worker's dynamic import 404s at runtime and the
 # normalized cache silently degrades to network-only.
 #
+# The two wasm-pack crates do not share artifacts. Build them in parallel
+# with distinct CARGO_TARGET_DIR values so they do not serialize on the
+# workspace cargo lock. CI still always rebuilds (schema/engine changes can
+# alter wasm without a version bump); Namespace `web-ci` sccache makes the
+# rustc invocations cheap across deploys.
+#
 # Vite's chunk-rendering can exceed 6GB as the app grows. Leave headroom
 # above that peak; CI builds use the same mid-size runner as preview deploys.
 node_heap := "--max-old-space-size=8192"
+cache_wasm_target := justfile_directory() / "../../target/cache-wasm"
+agent_fold_wasm_target := justfile_directory() / "../../target/agent-fold-wasm"
 
-build-dev: build-cache-wasm build-agent-fold-wasm
+[parallel]
+build-wasm: build-cache-wasm build-agent-fold-wasm
+
+build-dev: build-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
 
-build-staging: build-cache-wasm build-agent-fold-wasm
+build-staging: build-wasm
     MODE=staging NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
 
-build-prod: build-cache-wasm build-agent-fold-wasm
+build-prod: build-wasm
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
 
 # Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
 [private]
-build-tauri: build-cache-wasm build-agent-fold-wasm
+build-tauri: build-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
+    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+    bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
+
+# As build-tauri, but MODE=development so the bundle talks to dev.macro.com.
+# Used by `ios-build-sim`: a PR preview must never be wired to production.
+[private]
+build-tauri-dev: build-cache-wasm build-agent-fold-wasm
+    printf development > tauri/src-tauri/.macro-tauri-env
+    MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
     bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
 
@@ -178,7 +228,7 @@ cycles-ci:
 # (gitignored). Unconditional — CI app builds must never skip it (schema or
 # engine changes alter the wasm without a cache-wasm version bump).
 build-cache-wasm:
-    wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
+    CARGO_TARGET_DIR="{{cache_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
 
 # Build the production browser harness served by Vite preview.
 build-cache-wasm-browser-production: build-cache-wasm build-cache-wasm-browser-test-hooks
@@ -189,7 +239,7 @@ build-cache-wasm-browser-production: build-cache-wasm build-cache-wasm-browser-t
 # Its distinct name keeps it outside the one-production-cache-WASM deploy gate.
 [private]
 build-cache-wasm-browser-test-hooks:
-    wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm \
+    CARGO_TARGET_DIR="{{cache_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm \
       --target web --release \
       --out-name cache_wasm_browser_test_hooks \
       --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm-browser-test \
@@ -206,13 +256,13 @@ test-cache-wasm-browser:
 # This overwrites the gitignored release wasm package and is intentionally not
 # used by application or CI builds.
 build-cache-wasm-profile:
-    wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --profile cache-wasm-profiling --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
+    CARGO_TARGET_DIR="{{cache_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --profile cache-wasm-profiling --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
 
 # Build the agent-fold wasm module into src/lib/core/agent-fold/wasm
 # (gitignored). `--no-default-features` drops the crate's `cli` feature, whose
 # tokio/clap do not build for wasm32; the fold itself needs neither.
 build-agent-fold-wasm:
-    wasm-pack build {{justfile_directory()}}/../../crates/agent_fold --target web --release --out-dir {{justfile_directory()}}/src/lib/core/agent-fold/wasm -- --no-default-features
+    CARGO_TARGET_DIR="{{agent_fold_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/agent_fold --target web --release --out-dir {{justfile_directory()}}/src/lib/core/agent-fold/wasm -- --no-default-features
 
 # Dev fast path: build the agent-fold wasm pkg only when it is missing or any
 # fold source is newer than the built artifact. A stale artifact folds with the

@@ -4,9 +4,9 @@
     "deep-link": {
       "mobile": [
         { "scheme": ["macro"], "host": "app", "appLink": false },
-        { "host": "macro.com", "pathPrefix": ["/app"] },
-        { "host": "dev.macro.com", "pathPrefix": ["/app"] },
-        { "host": "staging.macro.com", "pathPrefix": ["/app"] }
+        { "host": "macro.com", "path": ["/app"], "pathPrefix": ["/app/"] },
+        { "host": "dev.macro.com", "path": ["/app"], "pathPrefix": ["/app/"] },
+        { "host": "staging.macro.com", "path": ["/app"], "pathPrefix": ["/app/"] }
       ]
     }
   },

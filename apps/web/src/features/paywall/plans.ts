@@ -1,3 +1,5 @@
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+
 export type PlanTier = 'free' | 'premium' | 'max';
 export type Plan = {
   tier: PlanTier;
@@ -13,44 +15,52 @@ export type Plan = {
 /** Tiers that correspond to real Stripe products. Excludes 'free'. */
 export type PaidPlanTier = Exclude<PlanTier, 'free'>;
 
+const FREE_PLAN = {
+  tier: 'free',
+  name: 'Free',
+  price: 0,
+  highlighted: false,
+  aiIncluded: 0,
+} as const satisfies Plan;
+
+const PREMIUM_PLAN = {
+  tier: 'premium',
+  name: 'Premium',
+  price: 40,
+  highlighted: true,
+  aiIncluded: 40,
+} as const satisfies Plan;
+
+const MAX_PLAN = {
+  tier: 'max',
+  name: 'Max',
+  price: 200,
+  highlighted: false,
+  aiIncluded: 200,
+} as const satisfies Plan;
+
 export const PLANS = [
-  {
-    tier: 'free' as const,
-    name: 'Free',
-    price: 0,
-    highlighted: false,
-    aiIncluded: 0,
-  },
-  {
-    tier: 'premium' as const,
-    name: 'Premium',
-    price: 40,
-    highlighted: true,
-    aiIncluded: 40,
-  },
-  {
-    tier: 'max' as const,
-    name: 'Max',
-    price: 200,
-    highlighted: false,
-    aiIncluded: 200,
-  },
+  FREE_PLAN,
+  PREMIUM_PLAN,
+  // MAX_PLAN,
 ] as const satisfies Plan[];
 
 export const PLAN_BY_TIER: Record<PlanTier, Plan> = {
-  free: PLANS[0],
-  premium: PLANS[1],
-  max: PLANS[2],
+  free: FREE_PLAN,
+  premium: PREMIUM_PLAN,
+  max: MAX_PLAN,
 };
 
 interface PlanFeature {
   label: string;
   values: Record<PlanTier, string>;
+  devOnly?: boolean;
 }
 
-export const PLAN_FEATURES: PlanFeature[] = [
+const planFeatures: PlanFeature[] = [
   {
     label: 'AI usage included',
+    devOnly: true,
     values: {
       free: 'Limited',
       premium: '$40 / mo',
@@ -67,6 +77,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
   },
   {
     label: 'Beyond included',
+    devOnly: true,
     values: {
       free: '—',
       premium: 'Credits or usage billing',
@@ -82,3 +93,7 @@ export const PLAN_FEATURES: PlanFeature[] = [
     },
   },
 ];
+
+export const PLAN_FEATURES = planFeatures.filter(
+  (feature) => !feature.devOnly || DEV_MODE_ENV
+);

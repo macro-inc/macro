@@ -158,6 +158,7 @@ impl AgentSessionRepo for FixedBotSessions {
             repo_url: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            is_archived: false,
             sandbox_size: SandboxSize::Default,
             instructions: None,
             mcp_servers: Default::default(),
@@ -228,6 +229,10 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("naming sessions is the session actor's job")
     }
 
+    async fn set_archived(&self, _id: AgentSessionId, _is_archived: bool) -> SessionResult<()> {
+        unimplemented!("archiving sessions is the harness service's job")
+    }
+
     async fn set_name_if_default(&self, _id: AgentSessionId, _name: &str) -> SessionResult<bool> {
         unimplemented!("naming sessions is the session actor's job")
     }
@@ -249,6 +254,21 @@ impl AgentSessionRepo for FixedBotSessions {
         _size: SandboxSize,
     ) -> SessionResult<()> {
         unimplemented!("resizing is the harness service's job")
+    }
+
+    async fn list_queued_actions(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<Vec<agent_session::domain::model::StoredQueuedAction>> {
+        unimplemented!("the router never reads the queue")
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        _id: AgentSessionId,
+        _entries: &[agent_session::domain::model::StoredQueuedAction],
+    ) -> SessionResult<()> {
+        unimplemented!("the router never writes the queue")
     }
 }
 

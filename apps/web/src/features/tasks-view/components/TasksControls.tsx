@@ -78,6 +78,10 @@ export function TasksControls() {
           isSelected={filters.isSelected}
           onSelectionChange={filters.setSelected}
           onClear={filters.clear}
+          aiFilter={{
+            placeholder: 'Filter with AI…',
+            onSubmit: filters.applyDescription,
+          }}
         />
         <Show when={filters.activeCount() > 0}>
           <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">

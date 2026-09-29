@@ -1,10 +1,10 @@
-import { createNativeAuthSession } from '@core/auth/native-auth';
+import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { invalidateGithubLinkStatus } from '@queries/auth';
+import { useReauthenticateGithubMutation } from '@queries/auth';
 import { authServiceClient } from '@service-auth/client';
-import { createSignal, onMount } from 'solid-js';
+import { createSignal, onCleanup, onMount } from 'solid-js';
 
 async function checkGithubReauthenticationStatus(): Promise<boolean> {
   const response = await authServiceClient.checkGithubLinkStatus();
@@ -15,49 +15,57 @@ async function checkGithubReauthenticationStatus(): Promise<boolean> {
       );
 }
 
-/** Kick off the OAuth flow; on success the browser navigates away. */
-async function startGithubReauthentication(): Promise<void> {
-  const session = isNativeMobilePlatform()
-    ? createNativeAuthSession('github-link-callback')
-    : undefined;
-  const result = await authServiceClient.reauthenticateGithub(
-    session?.callbackUrl ?? window.location.href
-  );
-
-  if (result.isErr()) {
-    toast.failure('Failed to start GitHub reconnect flow');
-    return;
-  }
-
-  if (!session) {
-    window.location.href = result.value;
-    return;
-  }
-  const auth = await session.authenticate(result.value);
-  if (auth.success) {
-    await invalidateGithubLinkStatus();
-  } else if (auth.error !== 'User canceled login') {
-    toast.failure('Failed to reconnect GitHub');
-  }
-}
-
 /**
  * Surfaces a "Reconnect GitHub" prompt when the GitHub grant has expired,
- * probed once on mount. Shares the capped prompt region with the other auth
- * prompts, so it takes its turn instead of stacking on them.
+ * probed on mount and browser history restoration. Shares the capped prompt
+ * region with the other auth prompts, so it takes its turn instead of stacking.
  */
 export function GithubReauthenticationPrompt() {
   const [needsReauth, setNeedsReauth] = createSignal(false);
+  const [reconnecting, setReconnecting] = createSignal(false);
+  const reauthenticateGithub = useReauthenticateGithubMutation();
+
+  async function reconnect() {
+    if (reconnecting()) return;
+    setReconnecting(true);
+    try {
+      const connected = await authorizeGithub(
+        (callbackUrl) => reauthenticateGithub.mutateAsync(callbackUrl),
+        'Failed to reconnect GitHub'
+      );
+      if (connected) setNeedsReauth(false);
+      // Browser OAuth is navigating away. Native OAuth settles in this view.
+      if (!isNativeMobilePlatform()) return;
+    } catch {
+      toast.failure('Failed to start GitHub reconnect flow');
+    }
+    setReconnecting(false);
+  }
 
   onMount(() => {
     void checkGithubReauthenticationStatus().then(setNeedsReauth);
+    if (isNativeMobilePlatform()) return;
+
+    async function onPageShow(event: PageTransitionEvent) {
+      if (!event.persisted) return;
+      try {
+        setNeedsReauth(await checkGithubReauthenticationStatus());
+      } catch {
+        // Preserve the previous status if the restored page cannot reach auth.
+      } finally {
+        setReconnecting(false);
+      }
+    }
+
+    window.addEventListener('pageshow', onPageShow);
+    onCleanup(() => window.removeEventListener('pageshow', onPageShow));
   });
 
   useKeyedPersistentToasts({
     // One GitHub grant per user, so the set is empty or this one fixed key.
-    items: () => (needsReauth() ? ['github'] : []),
+    items: () => (needsReauth() && !reconnecting() ? ['github'] : []),
     key: (item) => item,
-    toast: (_item, dismiss) => ({
+    toast: () => ({
       title: 'Reconnect GitHub',
       content(): string {
         return 'Your GitHub authorization has expired. Reconnect GitHub to restore pull request details.';
@@ -66,10 +74,7 @@ export function GithubReauthenticationPrompt() {
         {
           label: 'Reconnect',
           onClick: () => {
-            // Suppress re-prompting while the OAuth flow runs; success
-            // navigates the page away entirely.
-            dismiss();
-            void startGithubReauthentication();
+            void reconnect();
           },
         },
       ],

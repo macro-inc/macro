@@ -17,6 +17,7 @@
     "android-mobile:allow-beginExport",
     "android-mobile:allow-appendExport",
     "android-mobile:allow-finishExport",
-    "android-mobile:allow-discardExport"
+    "android-mobile:allow-discardExport",
+    "android-push:default"
   ]
 }

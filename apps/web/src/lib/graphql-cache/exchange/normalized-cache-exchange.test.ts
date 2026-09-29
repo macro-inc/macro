@@ -277,6 +277,9 @@ function makeFakeHost(): FakeHost {
     async currentRevision() {
       return INITIAL_CACHE_REVISION;
     },
+    async currentStorageGeneration() {
+      return '00000000-0000-4000-8000-000000000001';
+    },
     async readQuery(args) {
       host.reads.push({
         opKey: args.opKey,
@@ -681,6 +684,10 @@ describe('normalizedCacheExchange', () => {
     expect(host.writes[0]?.data).toBe(data);
     expect(results).toHaveLength(1);
     expect(results[0]?.data).toBe(data);
+    expect(normalizedCacheResultMetadata(results[0]!)).toEqual({
+      source: 'live-network',
+      cacheEffectsApplied: true,
+    });
   });
 
   it('deletes the exact normalized key from subscription patches', async () => {
@@ -926,6 +933,10 @@ describe('normalizedCacheExchange', () => {
     expect(host.invalidations).toEqual([['GraphqlSoupDocument:document-2']]);
     expect(results).toHaveLength(1);
     expect(results[0]?.data).toBe(data);
+    expect(normalizedCacheResultMetadata(results[0]!)).toEqual({
+      source: 'live-network',
+      cacheEffectsApplied: false,
+    });
   });
 
   it('cache-first miss forwards to network and writes through', async () => {
@@ -2726,6 +2737,47 @@ describe('normalizedCacheExchange', () => {
       expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
     });
 
+    it('acknowledges cache installation independently of the network result', async () => {
+      const acknowledge = vi.fn();
+      const enqueue = host.enqueueOptimisticMutation.bind(host);
+      let release!: () => void;
+      const installation = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      host.enqueueOptimisticMutation = vi.fn(async (args, claim) => {
+        await installation;
+        return enqueue(args, claim);
+      });
+      const { ops, forwarded, results, network } = controlledQueryHarness(host);
+      const operation = makeMutationOp(1, optimistic);
+      ops.next(
+        makeOperation('mutation', operation, {
+          ...operation.context,
+          normalizedCacheOptimisticEnqueued: acknowledge,
+        })
+      );
+      await tick();
+      expect(acknowledge).not.toHaveBeenCalled();
+      expect(forwarded).toEqual([]);
+      release();
+      await tick();
+      expect(acknowledge).toHaveBeenCalledOnce();
+      expect(results).toEqual([]);
+      expect(forwarded).toHaveLength(1);
+      expect(
+        vi.mocked(host.enqueueOptimisticMutation).mock.calls[0][0]
+      ).not.toHaveProperty('onEnqueued');
+      network.next({
+        operation: forwarded[0],
+        data: optimistic,
+        stale: false,
+        hasNext: false,
+      });
+      await tick();
+      expect(results).toHaveLength(1);
+      expect(acknowledge).toHaveBeenCalledOnce();
+    });
+
     it('installs the optimistic layer before forwarding to the network', async () => {
       const { ops, results, forwarded } = harness(host);
       const enqueue = host.enqueueOptimisticMutation.bind(host);
@@ -3015,6 +3067,53 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits).toHaveLength(1);
     });
 
+    it('uses only explicit recovery queries when a record-rooted parent is missing', async () => {
+      const base = makeMutationOp(1, optimistic);
+      const recovery = {
+        query: 'query Target { user { id } }',
+        operationName: 'Target',
+        variablesJson: '{}',
+      };
+      const op = makeOperation(base.kind, base, {
+        ...base.context,
+        normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
+          optimisticResponse: optimistic,
+          linkPatches: [
+            {
+              query:
+                'fragment Parent on GraphqlSoupDocument { properties { id } }',
+              recordRoot: {
+                fragmentName: 'Parent',
+                entityKey: 'GraphqlSoupDocument:missing',
+              },
+              variablesJson: '{}',
+              path: [{ field: 'properties' }],
+              operation: {
+                kind: 'prependUnique',
+                entityKey: 'GraphqlProperty:temporary',
+              },
+            },
+          ],
+          revalidations: [recovery],
+        },
+      });
+      const enqueue = host.enqueueOptimisticMutation.bind(host);
+      host.enqueueOptimisticMutation = vi.fn(async (args, claim) => {
+        if (args.linkPatches?.length) throw new Error('missing parent');
+        return enqueue(args, claim);
+      });
+      const { ops } = harness(host);
+      ops.next(op);
+      await tick();
+      expect(host.begins[0]?.linkPatches).toEqual([]);
+      expect(host.enqueueOptimisticMutation).toHaveBeenLastCalledWith(
+        expect.objectContaining({ linkPatches: [], revalidations: [recovery] }),
+        expect.anything()
+      );
+      expect(host.commits).toHaveLength(1);
+    });
+
     it('bounds queued network attempts to one minute', async () => {
       const timeoutSignal = new AbortController().signal;
       const existingSignal = new AbortController().signal;
@@ -3239,6 +3338,64 @@ describe('normalizedCacheExchange', () => {
       expect(vi.mocked(client.query).mock.calls[0]?.[2]).toEqual({
         requestPolicy: 'network-only',
       });
+    });
+
+    it.each([true, false])(
+      'delegates persisted commit revalidations only when an owner accepts: %s',
+      async (handled) => {
+        const commit = host.commitOptimisticWrite.bind(host);
+        host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+          ...(await commit(transactionId, claim, args)),
+          revalidations: [
+            {
+              query: stringifyDocument(QUERY),
+              operationName: 'Soup',
+              variablesJson: '{"input":{"limit":2}}',
+            },
+          ],
+        });
+        const delegateRevalidation = vi.fn(() => handled);
+        const { ops, client, results } = harness(host, undefined, {
+          delegateRevalidation,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await tick();
+        expect(delegateRevalidation).toHaveBeenCalledWith(client, {
+          document: expect.any(Object),
+          variables: { input: { limit: 2 } },
+        });
+        expect(vi.mocked(client.query)).toHaveBeenCalledTimes(handled ? 0 : 1);
+        expect(results[0]?.error).toBeUndefined();
+        expect(host.commits).toHaveLength(1);
+      }
+    );
+
+    it('preserves a committed mutation when delegated reconciliation fails', async () => {
+      const commit = host.commitOptimisticWrite.bind(host);
+      host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+        ...(await commit(transactionId, claim, args)),
+        revalidations: [
+          {
+            query: stringifyDocument(QUERY),
+            operationName: 'Soup',
+            variablesJson: '{}',
+          },
+        ],
+      });
+      const error = new Error('refresh owner unavailable');
+      const onCacheError = vi.fn();
+      const { ops, results } = harness(host, undefined, {
+        delegateRevalidation: () => {
+          throw error;
+        },
+        onCacheError,
+      });
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+      expect(onCacheError).toHaveBeenCalledWith(error, expect.any(Object));
+      expect(results[0]?.error).toBeUndefined();
+      expect(host.commits).toHaveLength(1);
+      expect(host.rollbacks).toHaveLength(0);
     });
 
     it('rolls back on a GraphQL error result', async () => {

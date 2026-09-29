@@ -51,9 +51,9 @@
                 <data android:scheme="https" />
                 <data android:scheme="http" />
                 <data android:host="macro.com" />
+                <data android:path="/app" />
                 
-                
-                <data android:pathPrefix="/app" />
+                <data android:pathPrefix="/app/" />
                 
             </intent-filter>
             <intent-filter android:autoVerify="true" >
@@ -63,9 +63,9 @@
                 <data android:scheme="https" />
                 <data android:scheme="http" />
                 <data android:host="dev.macro.com" />
+                <data android:path="/app" />
                 
-                
-                <data android:pathPrefix="/app" />
+                <data android:pathPrefix="/app/" />
                 
             </intent-filter>
             <intent-filter android:autoVerify="true" >
@@ -75,9 +75,9 @@
                 <data android:scheme="https" />
                 <data android:scheme="http" />
                 <data android:host="staging.macro.com" />
+                <data android:path="/app" />
                 
-                
-                <data android:pathPrefix="/app" />
+                <data android:pathPrefix="/app/" />
                 
             </intent-filter>
             <!-- DEEP LINK PLUGIN. AUTO-GENERATED. DO NOT REMOVE. -->

@@ -1,5 +1,6 @@
 //! Plans, the margin math, billing periods, and the API-facing snapshot.
 
+use ai_usage::AiFeature;
 use chrono::{DateTime, Datelike, Months, TimeZone, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -9,13 +10,33 @@ use std::collections::HashSet;
 use thiserror::Error;
 use utoipa::ToSchema;
 
-/// Target gross margin on AI, in basis points. The list rate is provider cost
+/// Persisted usage-policy identity, independent of purchase availability or today's roles.
+/// A verified period activation selects this value; legacy records are never repriced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UsagePolicy {
+    /// Original 2.5x list-rate arithmetic and plan allowances.
+    Legacy,
+    /// Existing $40 offer: $20 public usage per seat, then public usage times 1.05.
+    PublicAllowanceV1,
+}
+
+/// Legacy target gross margin on AI, in basis points. The list rate is provider cost
 /// divided by `(1 - margin)`; at 60% that is a 2.5x markup.
 pub const TARGET_GROSS_MARGIN_BPS: i64 = 6_000;
 
 const BPS_PER_UNIT: i64 = 10_000;
 
-/// Convert a provider cost in USD to Macro's list rate in whole cents,
+/// Features whose provider costs are recorded but never consume allowances,
+/// prepaid credits, or overage. Dictation is the Whispr transcription feature.
+pub const NON_BILLABLE_AI_FEATURES: [AiFeature; 4] = [
+    AiFeature::Memory,
+    AiFeature::AiProjection,
+    AiFeature::CallSummary,
+    AiFeature::Dictation,
+];
+
+/// Legacy only: convert a provider cost in USD to Macro's list rate in whole cents,
 /// rounding up so fractional cents never accrue in the customer's favour.
 pub fn list_rate_cents(provider_cost_usd: f64) -> i64 {
     if !provider_cost_usd.is_finite() || provider_cost_usd <= 0.0 {
@@ -77,7 +98,7 @@ impl PlanTier {
         }
     }
 
-    /// AI usage included per seat per period, in list-rate cents. Equal to the
+    /// Legacy AI usage included per seat per period, in list-rate cents. Equal to the
     /// plan price by construction: spending it all costs Macro
     /// `price x (1 - margin)`, which is exactly the target margin.
     pub const fn included_ai_cents_per_seat(self) -> i64 {
@@ -112,7 +133,7 @@ impl From<teams::domain::model::SeatPlan> for PlanTier {
 }
 
 /// A half-open `[start, end)` window that usage is metered against.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BillingPeriod {
     /// Inclusive start.
     pub start: DateTime<Utc>,
@@ -178,6 +199,83 @@ impl BillingPeriod {
     /// Whether `now` is at or past the end of this period.
     pub fn has_ended(&self, now: DateTime<Utc>) -> bool {
         now >= self.end
+    }
+
+    /// `Some` while `now` is inside `[start, end)`.
+    pub fn open_start(self, now: DateTime<Utc>) -> Option<OpenPeriodStart> {
+        if self.has_ended(now) {
+            None
+        } else {
+            Some(OpenPeriodStart(self.start))
+        }
+    }
+}
+
+/// Start of the period that contains `now`.
+///
+/// Closed periods cannot be named by this type, so open-period writers cannot
+/// target them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OpenPeriodStart(DateTime<Utc>);
+
+impl OpenPeriodStart {
+    /// Inclusive start of the open period.
+    pub const fn start(self) -> DateTime<Utc> {
+        self.0
+    }
+}
+
+/// Monotonic generation of a payer's open-seat roster.
+///
+/// A missing `ai_billing_account` row is generation zero. Releasing a seat
+/// moves it forward so a roster read from before the release cannot be stored.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SeatGeneration(i64);
+
+impl SeatGeneration {
+    /// The generation stored in Postgres.
+    pub const fn from_raw(raw: i64) -> Self {
+        Self(raw)
+    }
+
+    /// The generation stored in Postgres.
+    pub const fn raw(self) -> i64 {
+        self.0
+    }
+}
+
+/// Outcome of a conditional open-period allowance store.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AllowanceStore {
+    /// The open-period row matches the supplied seats.
+    Stored,
+    /// `seat_generation` moved after it was observed. The arrays were not written.
+    Conflict,
+}
+
+/// Which of the payer's subscriptions funds an overage charge.
+///
+/// A payer may hold a personal subscription and a team subscription at the
+/// same time. Team owners and team members both use the team subscription.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubscriptionScope {
+    /// The subscription that is not tied to a team.
+    Personal,
+    /// The subscription for this team.
+    Team {
+        /// The team.
+        team_id: Uuid,
+    },
+}
+
+impl From<&PayerScope> for SubscriptionScope {
+    fn from(scope: &PayerScope) -> Self {
+        match scope {
+            PayerScope::Personal => Self::Personal,
+            PayerScope::TeamOwner { team_id } | PayerScope::TeamMember { team_id } => {
+                Self::Team { team_id: *team_id }
+            }
+        }
     }
 }
 
@@ -282,7 +380,7 @@ impl Entitlement {
     }
 }
 
-/// The payer's overage settings and Stripe period anchor.
+/// The payer's overage settings, Stripe period anchor, and open-seat generation.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BillingSettings {
     /// Whether usage past allowance and credits is billed as overage.
@@ -293,6 +391,8 @@ pub struct BillingSettings {
     pub overage_suspended_at: Option<DateTime<Utc>>,
     /// The subscription period last synced from Stripe.
     pub period_anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
+    /// Generation of the payer's open-seat roster. Zero when no account row exists.
+    pub seat_generation: SeatGeneration,
 }
 
 impl BillingSettings {
@@ -366,7 +466,7 @@ impl DenyReason {
     pub fn message(self) -> &'static str {
         match self {
             DenyReason::AllowanceExhausted => {
-                "You've used this period's included AI. Add credits, turn on usage billing, or upgrade to keep going."
+                "You've used this period's included AI. Add credits or turn on usage billing to keep going."
             }
             DenyReason::OverageLimitReached => {
                 "You've reached your AI spending limit for this period. Raise the limit or add credits to keep going."

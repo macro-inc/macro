@@ -12,6 +12,7 @@ use macro_db_client::instructions::create::{
 };
 use macro_db_client::instructions::get::get_instructions_document;
 use model::response::GenericErrorResponse;
+use model_owner::CreationPrincipal;
 use models_dcs::constants::INSTRUCTIONS_FILE_NAME;
 
 /// Creates an instructions document for the current user
@@ -46,7 +47,7 @@ pub async fn create_instructions_handler(
         .documents_state
         .creator
         .create_markdown_text(
-            user_id.clone(),
+            &CreationPrincipal::User(user_id.clone()),
             NewMarkdownTextDocument::empty_note(NewDocumentMetadata::new(INSTRUCTIONS_FILE_NAME)),
         )
         .await?;

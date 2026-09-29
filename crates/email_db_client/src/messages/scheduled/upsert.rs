@@ -7,7 +7,7 @@ pub async fn upsert_scheduled_message(
     scheduled_message: service::message::ScheduledMessage,
 ) -> anyhow::Result<()> {
     let db_message = db::message::ScheduledMessage::from(scheduled_message);
-    sqlx::query!(
+    let result = sqlx::query!(
         r#"
         INSERT INTO email_scheduled_messages (
             link_id, message_id, send_time, sent, actor_id,
@@ -16,9 +16,9 @@ pub async fn upsert_scheduled_message(
         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
         ON CONFLICT (link_id, message_id) DO UPDATE SET
             send_time = EXCLUDED.send_time,
-            sent = EXCLUDED.sent,
             actor_id = EXCLUDED.actor_id,
             updated_at = NOW()
+        WHERE NOT email_scheduled_messages.sent AND NOT email_scheduled_messages.processing
         "#,
         db_message.link_id,
         db_message.message_id,
@@ -28,7 +28,10 @@ pub async fn upsert_scheduled_message(
     )
     .execute(&mut *tx)
     .await?;
-
+    anyhow::ensure!(
+        result.rows_affected() == 1,
+        "scheduled message is already processing or sent"
+    );
     Ok(())
 }
 
@@ -47,8 +50,9 @@ where
         UPDATE email_scheduled_messages
         SET
             sent = true,
+            processing = false,
             updated_at = NOW()
-        WHERE link_id = $1 AND message_id = $2
+        WHERE link_id = $1 AND message_id = $2 AND processing AND NOT sent
         "#,
         link_id,
         message_id,
@@ -76,7 +80,7 @@ where
         SET
             processing = false,
             updated_at = NOW()
-        WHERE link_id = $1 AND message_id = $2
+        WHERE link_id = $1 AND message_id = $2 AND processing AND NOT sent
         "#,
         link_id,
         message_id,

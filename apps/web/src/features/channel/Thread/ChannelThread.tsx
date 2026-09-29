@@ -2,6 +2,7 @@ import { DebugSuspense } from '@channel/DebugSuspense';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { queryReadyGate } from '@queries/gate';
 import { useThreadRepliesQuery } from '@queries/messages/thread-replies';
@@ -11,6 +12,7 @@ import {
   createSignal,
   on,
   onCleanup,
+  type ParentProps,
   Show,
   untrack,
 } from 'solid-js';
@@ -20,13 +22,13 @@ import { createTargetReplyNavigationController } from './create-target-reply-nav
 import { createTargetReplyScroller } from './create-target-reply-scroller';
 import { createThreadHotkeys } from './create-thread-hotkeys';
 import { createThreadRepliesFetchGate } from './create-thread-replies-fetch-gate';
+import { createThreadReplyView } from './create-thread-reply-view';
 import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
 import { ThreadTypingIndicator } from './ThreadTypingIndicator';
 import type { ThreadProps } from './types';
 import { channelReplyInputOffsetX } from './utils/thread-rail-geometry';
 import {
-  DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
   getThreadLatestReplyAt,
   getUniqueReplyUserIds,
@@ -41,7 +43,6 @@ export function ChannelThread(props: ThreadProps) {
   const hasReplies = () => thread().reply_count > 0;
   const fetchRepliesEnabled = createThreadRepliesFetchGate({
     threadId: () => props.data().id,
-    replyCount: () => thread().reply_count,
     isExpanded: props.isExpanded,
     isFindBarOpen: props.isFindBarOpen,
     targetThreadId: () => props.targetNavigation?.targetThreadId(),
@@ -66,32 +67,28 @@ export function ChannelThread(props: ThreadProps) {
     () => props.data().id,
     fetchRepliesEnabled
   );
+  // A project's cached root must not outlive an explicit denial from its
+  // thread read while the surrounding project is revalidating access.
+  const projectUnavailable = () =>
+    props.parent().type === 'initiative' &&
+    ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'].some((code) =>
+      thrownResultErrorHasCode(repliesQuery.error, code)
+    );
 
   const queryReplies = (): Array<EntityMessage> | undefined => {
+    if (projectUnavailable()) return [];
     return queryReadyGate(repliesQuery) ? repliesQuery.data : undefined;
   };
 
   const loadedReplies = () => queryReplies() ?? [];
   const canScrollToTargetReply = () => queryReplies() !== undefined;
 
-  const activeReplies = (): Array<EntityMessage> => {
-    return queryReplies() ?? thread().preview ?? [];
-  };
-
-  const displayReplies = (): Array<EntityMessage> => {
-    const preview = thread().preview ?? [];
-    // When collapsed, use preview directly without reading query state.
-    if (!props.isExpanded()) {
-      return preview.length > DEFAULT_VISIBLE_REPLY_COUNT
-        ? preview.slice(0, DEFAULT_VISIBLE_REPLY_COUNT)
-        : preview;
-    }
-
-    // When expanded, prefer fetched data (full reply list).
-    const fetched = queryReplies();
-    if (fetched) return fetched;
-    return preview;
-  };
+  const { activeReplies, visibleReplyCount, displayReplies } =
+    createThreadReplyView({
+      preview: () => thread().preview,
+      loaded: queryReplies,
+      isExpanded: props.isExpanded,
+    });
 
   // Thread-local reply selection
   const replySelection = createMessageSelection({
@@ -177,13 +174,13 @@ export function ChannelThread(props: ThreadProps) {
   });
 
   const collapsedRepliesCount = () =>
-    getCollapsedRepliesCount(thread().reply_count, DEFAULT_VISIBLE_REPLY_COUNT);
+    getCollapsedRepliesCount(thread().reply_count, visibleReplyCount());
   const collapsedRepliesContainsNewMessages = () =>
     activeReplies()
-      .slice(DEFAULT_VISIBLE_REPLY_COUNT)
+      .slice(visibleReplyCount())
       .some((reply: EntityMessage) => props.isNewMessage?.(reply));
   const collapsedReplyUsers = () =>
-    getUniqueReplyUserIds(activeReplies().slice(DEFAULT_VISIBLE_REPLY_COUNT));
+    getUniqueReplyUserIds(activeReplies().slice(visibleReplyCount()));
   const collapsedLatestReplyAt = () =>
     getThreadLatestReplyAt(thread().latest_reply_at, activeReplies());
   // Replying to this thread — inline input open, or the unified input bound.
@@ -282,7 +279,7 @@ export function ChannelThread(props: ThreadProps) {
   onCleanup(targetReplyNavigation.dispose);
 
   return (
-    <DebugSuspense name="ChannelThread.root">
+    <ThreadReadBoundary available={!projectUnavailable()}>
       <Thread.Row
         ref={setThreadRowElement}
         channelId={
@@ -464,6 +461,14 @@ export function ChannelThread(props: ThreadProps) {
           </Show>
         </div>
       </Thread.Row>
+    </ThreadReadBoundary>
+  );
+}
+
+function ThreadReadBoundary(props: ParentProps<{ available: boolean }>) {
+  return (
+    <DebugSuspense name="ChannelThread.root">
+      <Show when={props.available}>{props.children}</Show>
     </DebugSuspense>
   );
 }

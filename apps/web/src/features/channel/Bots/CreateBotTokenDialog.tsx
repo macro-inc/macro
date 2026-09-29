@@ -99,7 +99,7 @@ export function CreateBotTokenDialog(props: {
                           Cancel
                         </Button>
                         <Button
-                          variant="cta"
+                          variant="strong"
                           size="sm"
                           disabled={isPending}
                           onClick={mint}
@@ -115,7 +115,7 @@ export function CreateBotTokenDialog(props: {
                         Store this token somewhere secure before closing.
                       </div>
                       <div class="flex justify-end border-t border-edge-muted pt-4">
-                        <Button variant="cta" size="sm" onClick={close}>
+                        <Button variant="strong" size="sm" onClick={close}>
                           Done
                         </Button>
                       </div>

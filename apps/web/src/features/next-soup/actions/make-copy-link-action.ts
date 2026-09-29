@@ -41,8 +41,12 @@ const getEntityUrlParams = (
 };
 
 const getEntityUrl = (entity: EntityData): string => {
-  // TODO(dev-rb/github): Return the Macro /pr/:id URL.
-  if (isGithubPrEntity(entity)) return entity.metadata.url;
+  if (isGithubPrEntity(entity)) {
+    return buildSimpleEntityUrl({
+      type: 'reviews/pr',
+      id: encodeURIComponent(entity.id),
+    });
+  }
 
   return buildSimpleEntityUrl(
     {

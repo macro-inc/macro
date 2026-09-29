@@ -27,6 +27,7 @@ type ReplyEnvelopeProps = {
   mobile: Accessor<boolean>;
   portalScope: Accessor<'local' | undefined>;
   replyType: Accessor<ReplyType | undefined>;
+  disabled: Accessor<boolean>;
 };
 
 /** Sender, recipients and subject, sharing field behavior across both layouts. */
@@ -137,13 +138,14 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                       activeInboxId={props.activeInboxId()}
                       onSelect={props.onSenderChange}
                       portalScope={props.portalScope()}
+                      disabled={props.disabled()}
                     />
                   </div>
                   <div class="flex items-center ml-auto shrink-0">
                     <Show when={!showCc()}>
                       <Button
                         size="sm"
-                        class="rounded-lg"
+                        disabled={props.disabled()}
                         onClick={() => {
                           setShowCc(true);
                           queueMicrotask(() => ccRef()?.focus());
@@ -155,7 +157,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                     <Show when={!showBcc()}>
                       <Button
                         size="sm"
-                        class="rounded-lg"
+                        disabled={props.disabled()}
                         onClick={() => {
                           setShowBcc(true);
                           queueMicrotask(() => bccRef()?.focus());
@@ -229,6 +231,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                 e.currentTarget.blur();
               }}
               placeholder="Subject"
+              disabled={props.disabled()}
             />
           </div>
         </>
@@ -249,7 +252,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="shrink-0 rounded-full bg-transparent text-ink-placeholder"
+            class="shrink-0 bg-transparent text-ink-placeholder"
             tooltip={mobileDrawerCcBccOpen() ? 'Hide Cc/Bcc' : 'Show Cc/Bcc'}
             aria-expanded={mobileDrawerCcBccOpen()}
             onClick={toggleMobileDrawerCcBcc}
@@ -305,6 +308,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
             activeInboxId={props.activeInboxId()}
             onSelect={props.onSenderChange}
             portalScope={props.portalScope()}
+            disabled={props.disabled()}
           />
         </div>
 
@@ -322,6 +326,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
               e.currentTarget.blur();
             }}
             placeholder="Subject:"
+            disabled={props.disabled()}
           />
         </div>
       </div>

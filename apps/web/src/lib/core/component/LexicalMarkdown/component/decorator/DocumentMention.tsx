@@ -542,17 +542,23 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
 
   const [previewCardOpen, setPreviewCardOpen] = createSignal(false);
 
+  const calendarOpen = createMemo(() =>
+    verifyBlockName(props.blockName) === 'calendar'
+      ? calendarMentionOpen(
+          item(),
+          props.documentId,
+          props.blockParams?.occurrenceKey
+        )
+      : undefined
+  );
+
   const open = createCallback((e: MouseEvent | KeyboardEvent | null) => {
     // The calendar is a singleton block: open it aimed at the viewer's own
     // copy of the meeting. A meeting shared through the channel but absent
     // from the viewer's calendars has nothing to open, so its read-only
     // preview card is shown instead.
-    if (verifyBlockName(props.blockName) === 'calendar') {
-      const target = calendarMentionOpen(
-        item(),
-        props.documentId,
-        props.blockParams?.occurrenceKey
-      );
+    const target = calendarOpen();
+    if (target) {
       if (target.kind === 'read_only') {
         setPreviewCardOpen(true);
         return;
@@ -654,6 +660,7 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     <HoverCard
       open={previewCardOpen()}
       onOpenChange={setPreviewCardOpen}
+      keepOpenOnTriggerPress={calendarOpen()?.kind === 'read_only'}
       trigger={
         <span class="relative">
           <span

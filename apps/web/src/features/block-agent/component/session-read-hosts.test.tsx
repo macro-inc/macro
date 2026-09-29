@@ -7,6 +7,7 @@ import type { NotificationSource } from '@notifications/notification-source';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentMessageTarget } from '../core/search-location';
 import BlockAgent from './Block';
 
 const mocks = vi.hoisted(() => ({
@@ -15,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   failed: (): boolean => false,
   active: (): boolean => false,
   source: undefined as NotificationSource | undefined,
+  target: (): AgentMessageTarget | undefined => undefined,
+  navigate: (_params: Record<string, unknown>) => {},
 }));
 
 // Keep both real session hosts and the real read marker. Replace unrelated
@@ -58,8 +61,18 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ isPanelActive: () => mocks.active() }),
 }));
 vi.mock('@core/block', () => ({ useBlockId: () => 'placeholder-session' }));
-vi.mock('@core/orchestrator', () => ({ createMethodRegistration: vi.fn() }));
+vi.mock('@core/orchestrator', () => ({
+  createMethodRegistration: (
+    _handle: unknown,
+    methods: { goToLocationFromParams: typeof mocks.navigate }
+  ) => {
+    mocks.navigate = methods.goToLocationFromParams;
+  },
+}));
 vi.mock('@core/signal/load', () => ({ blockHandleSignal: { get: vi.fn() } }));
+vi.mock('../primitives/create-agent-route-target', () => ({
+  createAgentRouteTarget: () => () => mocks.target(),
+}));
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'owner' }));
 vi.mock('@core/util/url', () => ({ openExternalUrl: vi.fn() }));
@@ -82,17 +95,19 @@ vi.mock('@core/component/EntityLoadGate', () => ({
   LoadErrorPanel: () => <div>Unable to load</div>,
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
+// Chrome, and query-backed: both hosts render it, and this file mounts them
+// without a QueryClientProvider.
+vi.mock('./AgentPreviewBanner', () => ({ AgentPreviewBanner: () => null }));
 vi.mock('@core/component/AI/component/ProviderIcon', () => ({
   modelProvider: () => undefined,
   ProviderIcon: () => null,
 }));
 vi.mock('@core/component/SharePermissions', () => ({ Permissions: {} }));
 vi.mock('@core/component/TopBar/ShareButton', () => ({
-  ShareDialogContext: {
-    Provider: (props: { children: JSX.Element }) => props.children,
-  },
-  ShareModal: () => null,
   ShareTrigger: () => null,
+}));
+vi.mock('@core/component/TopBar/shareModal', () => ({
+  useShareModal: () => () => {},
 }));
 vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
   FloatRegionOrInline: (props: { children: JSX.Element }) => props.children,
@@ -128,7 +143,11 @@ vi.mock('./AgentSplitHeader', () => ({
 vi.mock('./sidepanel/AgentSidePanelSections', () => ({
   AgentSidePanelSections: () => null,
 }));
-vi.mock('./Transcript', () => ({ Transcript: () => <div>Conversation</div> }));
+vi.mock('./Transcript', () => ({
+  Transcript: (props: { searchTarget?: AgentMessageTarget }) => (
+    <output>{JSON.stringify(props.searchTarget)}</output>
+  ),
+}));
 vi.mock('@app/features/agents-view/components/ChatComposer', () => ({
   ChatSessionInput: () => null,
 }));
@@ -146,10 +165,28 @@ beforeEach(() => {
   mocks.loaded = () => false;
   mocks.failed = () => false;
   mocks.active = () => false;
+  mocks.target = () => undefined;
   mocks.source = {
     notificationsByEntity: () => ({}),
     isLoading: () => false,
   } as NotificationSource;
+});
+
+it('preserves an imperative agent target across Home route cleanup', () => {
+  const [target, setTarget] = createSignal<AgentMessageTarget | undefined>({
+    messageTurn: 0,
+    author: 'agent',
+  });
+  mocks.target = target;
+  const view = render(() => <BlockAgent />);
+  const output = () => view.container.querySelector('output')!.textContent;
+  mocks.navigate({ agent_message_turn: '2', agent_message_author: 'user' });
+  setTarget(undefined);
+  expect(JSON.parse(output()!)).toEqual({ messageTurn: 2, author: 'user' });
+  setTarget({ messageTurn: 3, author: 'agent' });
+  expect(JSON.parse(output()!)).toEqual({ messageTurn: 3, author: 'agent' });
+  setTarget(undefined);
+  expect(output()).toBe('');
 });
 
 afterEach(() => {
@@ -206,5 +243,25 @@ describe.each(['Home', 'Agents'] as const)('%s session host', (host) => {
     mountHost();
     await vi.advanceTimersByTimeAsync(2_000);
     expect(mocks.markRead).not.toHaveBeenCalled();
+  });
+
+  it('clears a route target before the same session is reopened', () => {
+    const [target, setTarget] = createSignal<AgentMessageTarget>();
+    mocks.target = target;
+    mountHost();
+    const output = () => document.querySelector('output')!.textContent;
+    expect(output()).toBe('');
+    setTarget({ messageTurn: 0, author: 'agent' });
+    expect(JSON.parse(output()!)).toEqual({
+      messageTurn: 0,
+      author: 'agent',
+    });
+    setTarget(undefined);
+    expect(output()).toBe('');
+    setTarget({ messageTurn: 0, author: 'agent' });
+    expect(JSON.parse(output()!)).toEqual({
+      messageTurn: 0,
+      author: 'agent',
+    });
   });
 });

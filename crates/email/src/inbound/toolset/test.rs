@@ -83,6 +83,44 @@ fn test_send_email_schema_validation() {
     );
 }
 
+/// The confirmed variant takes exactly `SendEmail`'s fields plus the
+/// confirmation, and the confirmation is required: the schema is the gate.
+#[test]
+fn send_confirmed_email_is_send_email_plus_a_required_confirmation() {
+    let confirmed = generate_validated_input_schema::<SendConfirmedEmail>().unwrap();
+    let plain = generate_validated_input_schema::<SendEmail>().unwrap();
+    assert_eq!(confirmed.name, "SendConfirmedEmail");
+    assert!(
+        confirmed.description.contains("userConfirmation"),
+        "{}",
+        confirmed.description
+    );
+
+    let confirmed = confirmed.schema.to_value();
+    let plain = plain.schema.to_value();
+    let properties = |schema: &serde_json::Value| {
+        let mut names: Vec<String> = schema["properties"]
+            .as_object()
+            .expect("an object schema")
+            .keys()
+            .cloned()
+            .collect();
+        names.sort();
+        names
+    };
+    let mut expected = properties(&plain);
+    expected.push("userConfirmation".to_owned());
+    expected.sort();
+    assert_eq!(properties(&confirmed), expected);
+    assert!(
+        confirmed["required"]
+            .as_array()
+            .expect("required is an array")
+            .contains(&serde_json::json!("userConfirmation")),
+        "{confirmed:#}"
+    );
+}
+
 #[test]
 fn test_get_thread_schema_validation() {
     let result = generate_validated_input_schema::<GetThread>();

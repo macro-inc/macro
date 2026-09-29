@@ -13,31 +13,27 @@ import {
   CALENDAR_VIEW_ID,
   type CalendarViewTarget,
 } from '@app/features/calendar-view/types';
-import { driveDocumentFromContent } from '@app/features/drive-view/primitives/drive-route';
-import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
+import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
+import { projectRouteId } from '@app/features/projects/core/route';
+import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
   type EntityWithRawNotifications,
   getEntityNotifications,
   scopeChannelNotificationsForEntity,
 } from '@app/features/soup/entity-notifications';
+import { replaceSplitSearchParams } from '@app/lib/split-router/search';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
-import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
-  getChannelParams,
   goToChannelLatest,
   goToChannelMessage,
 } from '@block-channel/utils/link';
-import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
-import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/constants';
 import type {
   ReferredFrom,
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
-import { driveSplitContent } from '@components/app/split-layout/split-router/legacy-route';
 import { toast } from '@core/component/Toast/Toast';
 import {
   fileTypeToBlockName,
@@ -95,6 +91,7 @@ import {
   setDoneOverride,
   type UnifiedNotification,
 } from '@notifications';
+import { isTopLevelChannelNotification } from '@notifications/top-level-channel-notification';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
 import {
@@ -129,6 +126,10 @@ import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-qu
 import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
+import {
+  searchLocationTarget,
+  searchLocationUpdates,
+} from './search-navigation';
 
 export { scopeChannelNotificationsForEntity };
 
@@ -275,7 +276,9 @@ export const openEntityInNewTab = ({
 
   // Build URL for the entity
   let entityPath: string;
-  if (entity.type === 'calendar_event') {
+  if (entity.type === 'initiative') {
+    entityPath = `/app/component/${projectRouteId({ id: entity.id, section: 'overview' })}`;
+  } else if (entity.type === 'calendar_event') {
     entityPath = `/app${calendarPath(getPreferredCalendarPeriodView())}`;
   } else if (entity.type === 'document') {
     const { fileType, subType } = entity;
@@ -287,7 +290,7 @@ export const openEntityInNewTab = ({
   ) {
     entityPath = `/app/channel/${entity.channelId}`;
   } else {
-    entityPath = `/app/${entity.type}/${entity.id}`;
+    entityPath = `/app/${entity.type === 'agent_session' ? 'agent' : entity.type}/${entity.id}`;
   }
 
   // Add location params if present
@@ -298,76 +301,25 @@ export const openEntityInNewTab = ({
       calendarFocusedEventSearchKey(),
       calendarViewTargetForEntity(entity).eventId ?? entity.id
     );
-  } else if (
-    entity.type === 'channel_message' ||
-    entity.type === 'channel_thread'
-  ) {
-    entityUrl.searchParams.set(CHANNEL_PARAMS.message, entity.messageId);
-    if (entity.threadId) {
-      entityUrl.searchParams.set(CHANNEL_PARAMS.thread, entity.threadId);
-    }
-  } else if (location) {
-    switch (location.type) {
-      case 'agent':
-        for (const [key, value] of Object.entries(
-          agentMessageParams(location)
-        )) {
-          entityUrl.searchParams.set(key, value);
-        }
-        break;
-      case 'channel':
-        if (location.messageId) {
-          entityUrl.searchParams.set(
-            CHANNEL_PARAMS.message,
-            location.messageId
-          );
-        }
-        if (location.threadId) {
-          entityUrl.searchParams.set(CHANNEL_PARAMS.thread, location.threadId);
-        }
-        break;
-      case 'email':
-        if (location.messageId) {
-          entityUrl.searchParams.set('email_message_id', location.messageId);
-        }
-
-        break;
-      case 'md':
-        if (location.nodeId) {
-          entityUrl.searchParams.set('node_id', location.nodeId);
-        }
-        break;
-      case 'pdf':
-        if (location.searchPage !== undefined) {
-          entityUrl.searchParams.set(
-            'search_page',
-            location.searchPage.toString()
-          );
-        }
-        if (location.searchRawQuery) {
-          entityUrl.searchParams.set(
-            'search_raw_query',
-            location.searchRawQuery
-          );
-        }
-        if (location.highlightTerms) {
-          entityUrl.searchParams.set(
-            'search_highlight_terms',
-            JSON.stringify(location.highlightTerms)
-          );
-        }
-        if (location.searchSnippet) {
-          entityUrl.searchParams.set('search_snippet', location.searchSnippet);
-        }
-        break;
-      case 'call_record':
-        if (location.transcriptId) {
-          entityUrl.searchParams.set(
-            CALL_PARAMS.transcriptId,
-            location.transcriptId
-          );
-        }
-        break;
+  } else {
+    const channelTarget = getChannelEntityTarget(entity);
+    const target =
+      location ??
+      (channelTarget?.kind === 'message'
+        ? {
+            type: 'channel' as const,
+            messageId: channelTarget.messageId,
+            threadId: channelTarget.threadId,
+          }
+        : undefined);
+    if (target) {
+      const { namespace, params } = searchLocationTarget(
+        getEntitySplitContent(entity).id,
+        target
+      );
+      replaceSplitSearchParams(entityUrl.searchParams, [
+        { location: { search: { [namespace]: params } } },
+      ]);
     }
   }
 
@@ -428,6 +380,10 @@ interface OpenEntityOptions {
    * opening a channel row. Callers that can open channels must provide it.
    */
   notificationSource?: NotificationSource;
+  /** Default: notification. Explicit message targets always take precedence. */
+  channelNavigation?: 'latest' | 'notification';
+  /** Default: inbox-row. Top-level includes mentions and reactions outside threads. */
+  channelReadScope?: 'top-level' | 'inbox-row';
 }
 
 /**
@@ -472,8 +428,57 @@ export type ChannelPreviewSelection = WithNotification<
     >
 >;
 
+/**
+ * Build the route selection a channels-rail click navigates with.
+ *
+ * Takes a plain `id` (capture it before any `await` — store proxies held across
+ * hydration can lose fields) and a resolved `ChannelClickTarget`. Stamps only
+ * `ChannelEntityTarget` fields onto `target` — never `kind`, which belongs on
+ * the click intent, not the route selection.
+ */
+export function channelPreviewSelection(
+  channelId: string,
+  options: {
+    target?: ChannelClickTarget;
+    notifications?: WithNotification<ChannelEntity>['notifications'];
+  } = {}
+): ChannelPreviewSelection {
+  if (!channelId) {
+    throw new Error('Missing channel id for channel preview selection');
+  }
+  const target =
+    options.target?.kind === 'message'
+      ? {
+          messageId: options.target.messageId,
+          ...(options.target.threadId != null
+            ? { threadId: options.target.threadId }
+            : {}),
+        }
+      : undefined;
+  return {
+    type: 'channel',
+    id: channelId,
+    ...(target ? { target } : {}),
+    ...(options.notifications ? { notifications: options.notifications } : {}),
+  };
+}
+
+/** Resolve the path param for a channel preview route, or throw. */
+export function channelIdForPreviewNavigation(
+  channel: ChannelPreviewSelection
+): string {
+  const channelId = channel.type === 'channel' ? channel.id : channel.channelId;
+  if (typeof channelId !== 'string' || channelId.length === 0) {
+    throw new Error('Missing channel id for channel preview navigation');
+  }
+  return channelId;
+}
+
 export function getChannelEntityTarget(
-  entity: EntityData | ChannelPreviewSelection
+  entity: EntityData | ChannelPreviewSelection,
+  {
+    channelNavigation = 'notification',
+  }: { channelNavigation?: 'latest' | 'notification' } = {}
 ): ChannelClickTarget | undefined {
   if (
     entity.type !== 'channel' &&
@@ -500,12 +505,11 @@ export function getChannelEntityTarget(
           threadId: entity.threadId,
         };
 
-  if (!isWithNotification(entity)) return fallback;
+  if (channelNavigation === 'latest' || !isWithNotification(entity))
+    return fallback;
 
-  const scoped = scopeChannelNotificationsForEntity(
-    entity,
-    entity.notifications?.() ?? []
-  );
+  const notifications = entity.notifications?.() ?? [];
+  const scoped = scopeChannelNotificationsForEntity(entity, notifications);
   for (const notification of scoped) {
     // For a whole-`channel` row, ignore notifications you have already read:
     // the row stands for the entire channel, so once read it should open at
@@ -661,14 +665,16 @@ export const openEntityInSplitFromUnifiedList = async (
 
   if (isGithubPrEntity(entity)) {
     if (USE_MACRO_PR_SUMMARY_BLOCK) {
+      const content = { type: 'pr' as const, id: entity.id };
       const result = splitManager.openWithSplit(
-        { type: 'pr', id: entity.id },
+        reviewsHostedContent(content) ?? content,
         {
           referredFrom: options.referredFrom,
           activate: true,
           preferNewSplit: openInNewSplit,
           handle: splitHandle,
           mergeHistory,
+          allowDuplicate: true,
         }
       );
       if (result.status === 'reused' && result.owner !== result.sourceOwner) {
@@ -710,33 +716,26 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const content = getEntitySplitContent(entity);
 
-  const channelTarget = getChannelEntityTarget(entity);
+  const channelTarget = getChannelEntityTarget(entity, {
+    channelNavigation: options.channelNavigation,
+  });
   const channelMessageTarget =
     channelTarget?.kind === 'message' ? channelTarget : undefined;
   const openChannelAtLatest = channelTarget?.kind === 'latest';
 
-  if (options.notificationSource) {
-    markChannelNotificationsSeenOnOpen(entity, options.notificationSource);
-  }
-
-  let params: Record<string, string> | undefined;
-  if (entity.type === 'agent_session' && location?.type === 'agent') {
-    params = agentMessageParams(location);
-  } else if (entity.type === 'channel' && location?.type === 'channel') {
-    params = getChannelParams(location.messageId, location.threadId);
-  } else if (channelMessageTarget) {
-    params = getChannelParams(
-      channelMessageTarget.messageId,
-      channelMessageTarget.threadId
-    );
-  } else if (entity.type === 'call' && location?.type === 'call_record') {
-    params = { [CALL_PARAMS.transcriptId]: location.transcriptId };
-  }
+  const target =
+    location ??
+    (channelMessageTarget
+      ? {
+          type: 'channel' as const,
+          messageId: channelMessageTarget.messageId,
+          threadId: channelMessageTarget.threadId,
+        }
+      : undefined);
   const commentParams =
-    !location && entity.type === 'document'
+    !target && entity.type === 'document'
       ? getDocumentCommentTarget(entity)?.params
       : undefined;
-  params ??= commentParams;
 
   const sourceContent =
     splitHandle?.content() ?? splitManager.activeSplit()?.content();
@@ -747,33 +746,41 @@ export const openEntityInSplitFromUnifiedList = async (
       : undefined;
   const referredFrom = options.referredFrom ?? sourceListView;
 
-  // Documents are hosted by Drive. Construct the canonical routed content
-  // before opening the split so the layout manager does not mount a legacy
-  // block and immediately replace it during router feedback.
-  // A comment target opens the document block itself, exactly like a copied
-  // comment link, because Drive-hosted documents cannot take a comment target.
-  const driveDocument =
-    !isTouchDevice() && !commentParams
-      ? driveDocumentFromContent(content)
-      : undefined;
-  let splitContent: SplitContent = driveDocument
-    ? driveSplitContent({ kind: 'tab', tab: 'owned' }, driveDocument)
-    : { ...content, params };
+  // Construct hosted content before opening the split so details do not mount
+  // legacy blocks. Comment targets keep their document block.
+  const hostedContent =
+    reviewsHostedContent(content) ??
+    driveHostedContent(content, {
+      allowDocuments: !isTouchDevice() && !commentParams,
+    });
+  let splitContent: SplitContent = hostedContent ?? {
+    ...content,
+    params: commentParams,
+  };
   if (splitHandle && referredFrom && isListViewID(referredFrom)) {
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
 
+  let markedNotifications = false;
+  const markNotificationsSeen = () => {
+    if (markedNotifications) return;
+    markedNotifications = true;
+    if (options.notificationSource) {
+      markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
+        channelReadScope: options.channelReadScope,
+      });
+    }
+  };
   const result = splitManager.openWithSplit(splitContent, {
+    search: target ? searchLocationUpdates(content.id, target) : undefined,
+    onApplied: markNotificationsSeen,
     referredFrom,
     activate: true,
     preferNewSplit: openInNewSplit,
     handle: splitHandle,
     mergeHistory,
-    // Each routed document has a distinct Drive location even though all
-    // Drive splits share the same component identity.
-    allowDuplicate:
-      allowDuplicate ||
-      (splitContent.type === 'component' && splitContent.id === 'documents'),
+    // Hosted details have distinct routes even when they share a component identity.
+    allowDuplicate: allowDuplicate || hostedContent !== undefined,
     reopen:
       entity.type === 'channel' && !location && openChannelAtLatest
         ? 'latest'
@@ -783,24 +790,14 @@ export const openEntityInSplitFromUnifiedList = async (
     toast.alert('Content already open');
   }
 
-  // Navigate to specific location if provided
-  if (location) {
-    await navigateToLocation(content.id, location, blockOrchestrator);
-  } else if (channelMessageTarget) {
-    // NOTE: This will force target message navigation in case the split is already open.
-    await navigateToLocation(
-      content.id,
-      {
-        type: 'channel',
-        messageId: channelMessageTarget.messageId,
-        threadId: channelMessageTarget.threadId,
-      },
-      blockOrchestrator
-    );
-  } else if (commentParams && entity.type === 'document') {
+  if (result.status === 'opened' || result.status === 'reused') {
+    markNotificationsSeen();
+  }
+
+  if (commentParams && entity.type === 'document') {
     // An already-open document ignores new split params.
     await navigateDocumentEntityToComment(entity, blockOrchestrator);
-  } else if (openChannelAtLatest) {
+  } else if (!target && openChannelAtLatest) {
     // Force the scroll-to-bottom even when the channel is already open in a
     // (preview) split, where reopen: 'latest' only reactivates the parked
     // split without re-pinning it to the newest message.
@@ -815,11 +812,15 @@ export const openEntityInSplitFromUnifiedList = async (
  * array (mobile Channels) or a list accessor. Only rows without an edge fall
  * back to the separately paginated global source. Passing these notifications
  * through the source keeps its REST cache and durable seen overrides in sync
- * while the configured mutation updates GraphQL edges.
+ * while the configured mutation updates GraphQL edges. Chat opens the whole
+ * conversation's top-level messages; Inbox opens only the row's stack.
  */
 export function markChannelNotificationsSeenOnOpen(
   entity: EntityWithRawNotifications<EntityData>,
-  notificationSource: NotificationSource
+  notificationSource: NotificationSource,
+  {
+    channelReadScope = 'inbox-row',
+  }: { channelReadScope?: 'top-level' | 'inbox-row' } = {}
 ) {
   if (
     entity.type !== 'channel' &&
@@ -830,8 +831,13 @@ export function markChannelNotificationsSeenOnOpen(
   }
 
   const notifications = getEntityNotifications(entity, notificationSource, {
-    scopeChannelThreads: true,
-  }).filter((notification) => !notificationIsRead(notification));
+    scopeChannelThreads: channelReadScope === 'inbox-row',
+  }).filter(
+    (notification) =>
+      !notificationIsRead(notification) &&
+      (channelReadScope === 'inbox-row' ||
+        isTopLevelChannelNotification(notification))
+  );
   if (notifications.length === 0) return;
 
   void notificationSource.bulkMarkAsRead(notifications).catch((error) => {
@@ -953,6 +959,10 @@ export function reminderSplitTarget(entity: ReminderPreviewSelection) {
 function getEntitySplitContent(entity: EntityData) {
   return (
     match(entity)
+      .with({ type: 'initiative' }, (entity) => ({
+        type: 'component' as const,
+        id: projectRouteId({ id: entity.id, section: 'overview' }),
+      }))
       .with({ type: 'document' }, (entity) => {
         const { id, fileType, subType } = entity;
         const blockName = fileTypeToBlockName(subType?.type ?? fileType);
@@ -997,61 +1007,6 @@ function getEntitySplitContent(entity: EntityData) {
         return { type: entity.type, id: entity.id };
       })
   );
-}
-
-/**
- * Navigates to a specific location within a block.
- */
-async function navigateToLocation(
-  entityId: string,
-  location: SearchLocation,
-  blockOrchestrator: BlockOrchestrator
-): Promise<void> {
-  const blockHandle = await blockOrchestrator.getBlockHandle(entityId);
-  if (!blockHandle) return;
-
-  switch (location.type) {
-    case 'agent': {
-      await blockHandle.goToLocationFromParams(agentMessageParams(location));
-      break;
-    }
-    case 'channel': {
-      // NOTE: this is handled by the channel block params but this can be used to re-flash an open channel
-      await blockHandle.goToLocationFromParams(
-        getChannelParams(location.messageId, location.threadId)
-      );
-      break;
-    }
-    case 'email': {
-      await blockHandle.goToLocationFromParams({
-        [EMAIL_PARAMS.messageId]: location.messageId,
-      });
-      break;
-    }
-    case 'md': {
-      await blockHandle.goToLocationFromParams({
-        [MD_PARAMS.nodeId]: location.nodeId,
-      });
-      break;
-    }
-    case 'pdf': {
-      await blockHandle.goToLocationFromParams({
-        [PDF_PARAMS.searchPage]: location.searchPage.toString(),
-        [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
-        [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
-          location.highlightTerms
-        ),
-        [PDF_PARAMS.searchSnippet]: location.searchSnippet,
-      });
-      break;
-    }
-    case 'call_record': {
-      await blockHandle.goToLocationFromParams({
-        [CALL_PARAMS.transcriptId]: location.transcriptId,
-      });
-      break;
-    }
-  }
 }
 
 async function _archiveEmail(
@@ -1808,5 +1763,3 @@ export async function executeMarkEntitiesUndone(args: {
   ]);
   return hasQueuedEmail ? 'queued' : 'committed';
 }
-
-import { agentMessageParams } from '@app/features/block-agent/core/search-location';

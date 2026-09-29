@@ -109,6 +109,7 @@ import {
   registerInternalLayoutShiftListener,
 } from '@core/component/LexicalMarkdown/plugins/shared/utils';
 import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
+import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   editorFocusSignal,
@@ -206,6 +207,7 @@ export function MarkdownEditor(props: {
   loroManager: LoroManager;
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
+  resolveAppLink?: MentionLinkResolver;
 }) {
   const {
     documentId,
@@ -625,7 +627,7 @@ export function MarkdownEditor(props: {
         dragListenerRef: editorContainerRef,
       })
     )
-    .use(textPastePlugin())
+    .use(textPastePlugin(props.resolveAppLink))
     .use(restoreFocusPlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())

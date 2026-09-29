@@ -6105,7 +6105,7 @@
             "items": {
               "$ref": "#/components/schemas/PlanCatalogEntry"
             },
-            "description": "Every plan, cheapest first."
+            "description": "Free and every purchasable paid plan, cheapest first."
           }
         }
       },

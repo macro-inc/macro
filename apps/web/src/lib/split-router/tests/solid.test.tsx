@@ -1,5 +1,11 @@
-import { cleanup, render } from '@solidjs/testing-library';
-import { type Accessor, onCleanup } from 'solid-js';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import {
+  type Accessor,
+  createSignal,
+  onCleanup,
+  onMount,
+  startTransition,
+} from 'solid-js';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
@@ -7,20 +13,23 @@ import {
   type SetSearchParams,
 } from '../create-search-params';
 import { createMemorySplitRouterLocation } from '../integrations/memory';
+import { createSolidRouterLocation } from '../integrations/solid-router';
 import { defineRoute, defineRoutes } from '../routes';
 import {
   SplitRouter,
   useCanGo,
   useNavigate,
+  useOwnsSearchNamespace,
   useParams,
   useRouteParams,
+  useRouteState,
   useSplitHistory,
   useSplitRouter,
 } from '../solid';
 import type {
-  SplitRouterEntry,
   SplitRouterHistorySnapshot,
   SplitRouterLayout,
+  SplitRouterLayoutEntry,
   SplitRouterSettledChange,
   SplitRoutes,
 } from '../types';
@@ -38,7 +47,7 @@ function CoercedParamsView() {
 }
 
 function createLayout(): SplitRouterLayout<string> {
-  let entry: (SplitRouterEntry & { splitId: string }) | undefined;
+  let entry: SplitRouterLayoutEntry<string> | undefined;
   const listeners = new Set<(change: SplitRouterSettledChange) => void>();
   const notify = () => {
     for (const listener of listeners) {
@@ -50,15 +59,15 @@ function createLayout(): SplitRouterLayout<string> {
     snapshot: () => ({
       entries: entry ? [entry] : [],
     }),
-    updateCurrentEntry(_splitId, update) {
+    updateCurrentLocation(_splitId, update) {
       if (!entry) return;
-      entry = { splitId: entry.splitId, ...update(entry) };
+      entry = { splitId: entry.splitId, location: update(entry) };
       notify();
     },
-    open: () => {},
-    reconcile(entries) {
-      const next = entries[0];
-      entry = next ? { splitId: 'split', ...next } : undefined;
+    open: () => ({ status: 'unavailable' }),
+    reconcile(locations) {
+      const location = locations[0];
+      entry = location ? { splitId: 'split', location } : undefined;
       notify();
     },
     activate: () => {},
@@ -101,9 +110,65 @@ const schema = z.object({
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe('Solid split router hooks', () => {
+  it('reads inherited route state and types navigation state', () => {
+    const root = defineRoute({
+      id: 'state-root',
+      path: 'state',
+      state: z
+        .object({ trail: z.array(z.string()) })
+        .transform((state) => ({ ...state, length: state.trail.length })),
+      children: [{ id: 'state-child', path: 'item/:id' }],
+    });
+    const child = root.children[0];
+
+    function StateView() {
+      const state = useRouteState(root);
+      const navigate = useNavigate();
+      expectTypeOf(state()).toEqualTypeOf<
+        { trail: string[]; length: number } | undefined
+      >();
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            navigate(
+              { route: child, params: { id: 'one' } },
+              {
+                state: (current) => ({
+                  trail: [
+                    ...(current?.trail ?? []),
+                    `one-${current?.length ?? 0}`,
+                  ],
+                }),
+              }
+            )
+          }
+        >
+          {state()?.trail.join('/') ?? 'empty'}
+        </button>
+      );
+    }
+
+    const result = render(() => (
+      <SplitRouter.Root
+        layout={createLayout()}
+        routes={{ definitions: [root] }}
+        location={createMemorySplitRouterLocation('/state')}
+      >
+        <SplitRouter.Scope splitId="split">
+          <StateView />
+        </SplitRouter.Scope>
+      </SplitRouter.Root>
+    ));
+
+    fireEvent.click(result.getByRole('button'));
+    expect(result.getByRole('button').textContent).toBe('one-0');
+  });
+
   it('reads typed branch params only through the referenced node and stays reactive', () => {
     const tree = defineRoutes({
       definitions: [
@@ -269,16 +334,13 @@ describe('Solid split router hooks', () => {
     ));
 
     const setChild = (itemId: string) => {
-      layout.updateCurrentEntry('split', (entry) => ({
-        ...entry,
-        location: {
-          ...entry.location,
-          route: {
-            matches: [
-              { id: 'parent', params: {} },
-              { id: 'child', params: { itemId } },
-            ],
-          },
+      layout.updateCurrentLocation('split', (entry) => ({
+        ...entry.location,
+        route: {
+          matches: [
+            { id: 'parent', params: {} },
+            { id: 'child', params: { itemId } },
+          ],
         },
       }));
     };
@@ -343,6 +405,108 @@ describe('Solid split router hooks', () => {
 
     expect(mounts).toBe(2);
     expect(disposals).toBe(1);
+  });
+
+  it('mounts keyed details before synchronizing their browser URLs', async () => {
+    vi.useFakeTimers();
+    const [external, setExternal] = createSignal({
+      pathname: '/detail/one',
+      state: undefined as unknown,
+    });
+    let mountedId: string | undefined;
+    let router!: ReturnType<typeof useSplitRouter<string>>;
+    const commits: Array<{ url: string; mountedId: string | undefined }> = [];
+    const location = createSolidRouterLocation({
+      pathname: () => external().pathname,
+      state: () => external().state,
+      navigate: (url, options) => {
+        commits.push({ url, mountedId });
+        return startTransition(() =>
+          setExternal({ pathname: url, state: options.state })
+        );
+      },
+    });
+    const View = () => {
+      router = useSplitRouter<string>();
+      const { id } = useParams<{ id: string }>();
+      onMount(() => {
+        mountedId = id;
+      });
+      onCleanup(() => {
+        mountedId = undefined;
+      });
+      return <article>{id}</article>;
+    };
+    const view = render(() => (
+      <SplitRouter.Root
+        layout={createLayout()}
+        routes={{
+          definitions: [
+            {
+              id: 'detail',
+              path: 'detail/:id',
+              component: View,
+              remountKey: (params) =>
+                typeof params.id === 'string' ? params.id : undefined,
+            },
+          ],
+        }}
+        location={location}
+      >
+        <SplitRouter.Outlet splitId="split" />
+      </SplitRouter.Root>
+    ));
+    await vi.runAllTimersAsync();
+    commits.length = 0;
+
+    for (const id of ['two', 'three', 'two', 'one']) {
+      router.navigate('split', `/detail/${id}`);
+      expect(view.getByRole('article').textContent).toBe(id);
+      await vi.runAllTimersAsync();
+      expect(commits.at(-1)).toEqual({ url: `/detail/${id}`, mountedId: id });
+    }
+    expect(commits).toHaveLength(4);
+  });
+
+  it('cancels pending browser URL updates when the router is disposed', async () => {
+    vi.useFakeTimers();
+    const navigate = vi.fn();
+    const location = createSolidRouterLocation({
+      pathname: () => '/drive',
+      navigate,
+    });
+    const unsubscribe = location.subscribe(() => {});
+    location.commit(
+      { pathname: '/drive/folder/one', search: '', hash: '' },
+      { history: 'push' }
+    );
+    unsubscribe();
+    await vi.runAllTimersAsync();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('reports which search namespaces the split route owns', () => {
+    const Harness = () => {
+      const drive = useOwnsSearchNamespace('drive');
+      const other = useOwnsSearchNamespace('other');
+      return <div>{`${drive()}:${other()}`}</div>;
+    };
+    const view = render(() => (
+      <SplitRouter.Root
+        layout={createLayout()}
+        routes={routes}
+        location={createMemorySplitRouterLocation('/drive/folder/one')}
+      >
+        <SplitRouter.Scope splitId="split">
+          <Harness />
+        </SplitRouter.Scope>
+        <span data-testid="outside">
+          {`${useOwnsSearchNamespace('drive')()}`}
+        </span>
+      </SplitRouter.Root>
+    ));
+    expect(view.getByText('true:false')).toBeTruthy();
+    expect(view.getByTestId('outside').textContent).toBe('false');
   });
 
   it.each(['invalid', 'updated_at'])(

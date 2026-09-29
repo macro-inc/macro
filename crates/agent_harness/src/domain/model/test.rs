@@ -143,3 +143,77 @@ fn a_session_repository_keeps_the_url_it_was_read_from() {
         assert_eq!(SessionRepository::parse(url), None, "accepted {url}");
     }
 }
+
+/// The in-memory runtime is the one that chats; everything else works in a
+/// repository and is announced as a live chip.
+#[test]
+fn only_the_in_memory_runtime_is_not_a_coder() {
+    assert!(!AgentKind::InMemory.is_coding());
+    for coder in [
+        AgentKind::SandboxedCoder,
+        AgentKind::Cursor,
+        AgentKind::CodexCloud,
+        AgentKind::ClaudeCloud,
+        AgentKind::External,
+    ] {
+        assert!(coder.is_coding(), "{coder:?} has a repository to work in");
+    }
+}
+
+/// The persona's choice wins; without one, the runtime's nature decides.
+#[test]
+fn a_persona_chooses_whether_it_codes_and_otherwise_follows_its_runtime() {
+    for kind in [AgentKind::InMemory, AgentKind::External, AgentKind::Cursor] {
+        assert!(is_coding_agent(Some(true), kind), "{kind:?}");
+        assert!(!is_coding_agent(Some(false), kind), "{kind:?}");
+        assert_eq!(is_coding_agent(None, kind), kind.is_coding(), "{kind:?}");
+    }
+}
+
+#[test]
+fn a_turn_with_text_answered_however_it_stopped() {
+    for stop in [
+        StopReason::EndTurn,
+        StopReason::Cancelled,
+        StopReason::Failed {
+            message: "boom".to_owned(),
+            notice: None,
+        },
+    ] {
+        assert_eq!(
+            ReplyOutcome::of_turn(&stop, Some("Here you go.".to_owned())),
+            ReplyOutcome::Answered("Here you go.".to_owned()),
+            "{stop:?}"
+        );
+    }
+}
+
+#[test]
+fn a_silent_turn_is_told_by_how_it_stopped() {
+    for (stop, expected) in [
+        (StopReason::EndTurn, ReplyOutcome::Empty),
+        (StopReason::MaxTokens, ReplyOutcome::Empty),
+        (StopReason::Refusal, ReplyOutcome::Empty),
+        (
+            StopReason::Other {
+                reason: "mystery".to_owned(),
+            },
+            ReplyOutcome::Empty,
+        ),
+        (StopReason::Cancelled, ReplyOutcome::Cancelled),
+        (
+            StopReason::Failed {
+                message: "boom".to_owned(),
+                notice: None,
+            },
+            ReplyOutcome::Failed,
+        ),
+    ] {
+        assert_eq!(ReplyOutcome::of_turn(&stop, None), expected, "{stop:?}");
+        assert_eq!(
+            ReplyOutcome::of_turn(&stop, Some("  \n".to_owned())),
+            expected,
+            "blank text is no text: {stop:?}"
+        );
+    }
+}

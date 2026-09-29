@@ -161,6 +161,7 @@ pub fn run() {
     {
         builder = builder
             .plugin(tauri_plugin_auth::init())
+            .plugin(tauri_plugin_notifications::init())
             .plugin(tauri_plugin_virtual_keyboard::init())
             .plugin(tauri_plugin_edit_menu::init())
             .plugin(tauri_plugin_input_accessory::init())
@@ -174,7 +175,8 @@ pub fn run() {
     {
         builder = builder
             .plugin(tauri_plugin_android_auth::init())
-            .plugin(tauri_plugin_android_mobile::init());
+            .plugin(tauri_plugin_android_mobile::init())
+            .plugin(tauri_plugin_android_push::init());
     }
 
     // register the rest of the common plugins
@@ -223,8 +225,7 @@ pub fn run() {
         // register mobile specific plugins
         builder = builder
             .plugin(tauri_plugin_haptics::init())
-            .plugin(tauri_plugin_safe_area_insets::init())
-            .plugin(tauri_plugin_notifications::init());
+            .plugin(tauri_plugin_safe_area_insets::init());
     }
 
     // Window origin differs by platform:
@@ -261,6 +262,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             graphql_cache_plugin::commands::graphql_cache_init,
             graphql_cache_plugin::commands::graphql_cache_current_revision,
+            graphql_cache_plugin::commands::graphql_cache_current_storage_generation,
             graphql_cache_plugin::commands::graphql_cache_read,
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
             graphql_cache_plugin::commands::graphql_cache_search,
@@ -464,12 +466,7 @@ fn emit_navigate_for_deep_link(url: Url, handle: &AppHandle) -> Result<(), Repor
     // Universal/App links come in as https:// URLs, custom scheme links come in as macro://
     let macro_scheme = match url.scheme() {
         s if s == APP_SCHEME => MacroScheme::new(url)?,
-        "http" | "https"
-            if url
-                .host_str()
-                .is_some_and(|host| APP_LINK_HOSTS.contains(&host))
-                && (url.path() == "/app" || url.path().starts_with("/app/")) =>
-        {
+        "http" | "https" if navigation_plugin::is_app_link(APP_LINK_HOSTS, &url) => {
             MacroScheme::from_url(&url)?
         }
         scheme => {

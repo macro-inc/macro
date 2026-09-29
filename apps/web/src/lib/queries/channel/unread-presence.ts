@@ -11,6 +11,8 @@ import {
   registerGraphqlSoupRevalidations,
 } from '../soup/graphql/active-queries';
 
+import { registerChannelNotificationRefresh } from './register-notification-refresh';
+
 function unreadWitnesses(data: ChannelUnreadPresenceQuery) {
   return data.user.soup.items.flatMap((item) =>
     item.__typename === 'GraphqlSoupChannel' ? item.unreadNotifications : []
@@ -32,20 +34,26 @@ export function createChannelUnreadQuery(
     select: unreadWitnesses,
   }));
   onCleanup(
-    registerGraphqlSoupRevalidations(() =>
-      enabled() ? [{ document: ChannelUnreadPresenceDocument, variables }] : []
+    registerGraphqlSoupRevalidations(
+      () =>
+        enabled()
+          ? [{ document: ChannelUnreadPresenceDocument, variables }]
+          : [],
+      getGraphqlSoupClient
     )
   );
-  onCleanup(
-    registerActiveGraphqlSoupQuery({
-      isEnabled: enabled,
-      refresh: async () => {
-        await query.refetch({
-          requestPolicy: 'network-only',
-          throwOnError: true,
-        });
-      },
-    })
-  );
+  const refresh = registerChannelNotificationRefresh(() => ({
+    client: getGraphqlSoupClient(),
+    queries: [{ document: ChannelUnreadPresenceDocument, variables }],
+    reader: {
+      enabled: enabled(),
+      fetching: query.isFetching,
+      filtered: true,
+      notificationIds: query.isSuccess
+        ? (query.data ?? []).map((n) => n.id)
+        : [],
+    },
+  }));
+  onCleanup(registerActiveGraphqlSoupQuery({ isEnabled: enabled, refresh }));
   return query;
 }

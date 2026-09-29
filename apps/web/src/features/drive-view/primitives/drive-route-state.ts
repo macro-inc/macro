@@ -22,12 +22,8 @@ import {
 } from 'solid-js';
 import type { DriveLocation, DriveState } from '../core/types';
 import { driveDestination } from '../drive-route-navigation';
-import {
-  type DriveRouteParams,
-  type DriveSearchParams,
-  driveLocationFromParams,
-  driveSearch,
-} from './drive-route';
+import { type DriveRouteParams, driveLocationFromParams } from './drive-route';
+import { type DriveSearchParams, driveSearch } from './drive-search';
 
 type NavigationOptions = Pick<
   SplitNavigateOptions<unknown>,
@@ -90,6 +86,7 @@ const routeSearch = ({
   scope,
   sort,
   facets: normalizeFacetSelection(facets),
+  commentId: '',
 });
 
 /** Restored entry state supplies UI state; the current URL always wins selection. */

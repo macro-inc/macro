@@ -1,50 +1,67 @@
+import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheNewChannelUnread } from '@queries/channel/unread-cache';
 import type { Client } from '@urql/core';
-import { revalidateChannelLists } from '../../queries/soup/graphql/channel-list-revalidation';
+import { channelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import type { GraphqlNotificationPatch } from './graphql-soup-websocket';
 
-/** Coalesce notification membership changes and recover filtered edges on reconnect. */
-export function createChannelListUpdatesHandler(client: Pick<Client, 'query'>) {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let dirty = false;
-  let running = false;
+/** Patch delivered unread evidence locally, then reconcile bounded edges. */
+export function createChannelListUpdatesHandler(
+  client: Pick<Client, 'query'>,
+  host?: CacheHost
+) {
+  const cache = host?.disabled ? undefined : host;
+  const coordinator = channelNotificationRefresh(client);
+  let cacheGeneration = 0;
+  const unsubscribeGeneration = cache?.onCacheGenerationChanged(() => {
+    cacheGeneration += 1;
+    coordinator.reset();
+  });
+  let pendingPatch = Promise.resolve();
   let disposed = false;
 
-  const flush = async () => {
-    timer = undefined;
-    if (disposed || running || document.hidden || !dirty) return;
-    running = true;
-    dirty = false;
+  const applyNewNotification = async (
+    previous: Promise<void>,
+    patch: Extract<
+      GraphqlNotificationPatch,
+      { __typename: 'GraphqlNewNotification' }
+    >,
+    generation: number
+  ): Promise<void> => {
+    await previous;
+    const isCurrent = () => !disposed && generation === cacheGeneration;
+    if (!cache || !isCurrent()) return;
     try {
-      await revalidateChannelLists(client);
-    } finally {
-      running = false;
-      if (dirty) schedule();
+      await cacheNewChannelUnread(cache, patch.notification, isCurrent);
+    } catch (error) {
+      console.warn('Failed to cache channel unread notification', error);
     }
+    if (isCurrent()) coordinator.onPatch(patch, true);
   };
-  const schedule = () => {
-    if (disposed) return;
-    dirty = true;
-    if (timer !== undefined || running || document.hidden) return;
-    timer = setTimeout(flush, 300);
-  };
-  const visible = () => {
-    if (dirty && !document.hidden) schedule();
-  };
-  document.addEventListener('visibilitychange', visible);
 
   return {
-    onPatch(patch: GraphqlNotificationPatch) {
-      if (
-        patch.__typename === 'GraphqlCacheDeletion' ||
-        patch.notification.entityType === 'CHANNEL'
-      )
-        schedule();
+    onPatch(patch: GraphqlNotificationPatch, normalized = false) {
+      if (disposed) return;
+      if (patch.__typename === 'GraphqlCacheDeletion') {
+        coordinator.onPatch(patch, normalized);
+        return;
+      }
+      if (patch.notification.entityType !== 'CHANNEL') return;
+      if (patch.__typename === 'GraphqlNewNotification' && cache) {
+        // Serialize read/append writes to the badge's cached membership. Never
+        // let a slower earlier delivery overwrite a later one in this client.
+        pendingPatch = applyNewNotification(
+          pendingPatch,
+          patch,
+          cacheGeneration
+        );
+        return pendingPatch;
+      }
+      coordinator.onPatch(patch, normalized);
     },
-    reconnect: schedule,
+    reconnect: () => coordinator.reconnect(),
     dispose() {
       disposed = true;
-      if (timer !== undefined) clearTimeout(timer);
-      document.removeEventListener('visibilitychange', visible);
+      unsubscribeGeneration?.();
     },
   };
 }

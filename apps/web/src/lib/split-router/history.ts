@@ -12,7 +12,8 @@ export type SplitRouterHistory<TEntry> = {
 
 export function createSplitRouterHistory<TEntry>(
   initial: TEntry,
-  equals: (left: TEntry, right: TEntry) => boolean
+  equals: (left: TEntry, right: TEntry) => boolean,
+  sameIdentity: (left: TEntry, right: TEntry) => boolean = equals
 ): SplitRouterHistory<TEntry> {
   let items = [initial];
   let currentIndex = 0;
@@ -65,9 +66,10 @@ export function createSplitRouterHistory<TEntry>(
       if (equals(items[currentIndex]!, entry)) return false;
 
       const existingIndex = items.findIndex((candidate) =>
-        equals(candidate, entry)
+        sameIdentity(candidate, entry)
       );
       if (existingIndex >= 0) {
+        items = items.with(existingIndex, entry);
         currentIndex = existingIndex;
         return true;
       }
@@ -84,7 +86,8 @@ export function createSplitRouterHistory<TEntry>(
 }
 
 export function createSplitRouterHistories<TId, TEntry>(
-  equals: (left: TEntry, right: TEntry) => boolean
+  equals: (left: TEntry, right: TEntry) => boolean,
+  sameIdentity: (left: TEntry, right: TEntry) => boolean = equals
 ) {
   const histories = new Map<TId, SplitRouterHistory<TEntry>>();
   let order: TId[] = [];
@@ -117,7 +120,10 @@ export function createSplitRouterHistories<TId, TEntry>(
           else if (intent === 'replace') history.replace(entry);
           else history.push(entry);
         } else {
-          histories.set(id, createSplitRouterHistory(entry, equals));
+          histories.set(
+            id,
+            createSplitRouterHistory(entry, equals, sameIdentity)
+          );
         }
       });
 

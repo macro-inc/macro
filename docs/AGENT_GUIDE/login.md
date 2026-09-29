@@ -13,10 +13,21 @@
    the user's inbox (locally: Mailpit).
 5. First login auto-creates the user, seeds onboarding content (a "Macro Support x <name>"
    channel, a "Macro how to guide" doc favorite, three sample tasks), and lands on
-   `/app/component/inbox`. The starter documents share a personal `docs` tag; the
+   `/app/home`. The starter documents share a personal `docs` tag; the
    guide's `#` example is an inline mention of that same tag. A tag attachment
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
+
+## Hosted-dev proxy SSO
+
+On an allowed OAuth origin such as `https://localhost:<port>`, Google/SSO
+sign-in navigates the browser to `/__macro_dev/gateway/auth/login/sso` with
+`is_mobile=true` to request the session-code handoff. The `original_url`
+remains the browser destination (including its query and hash). Returning
+from the provider redeems the session code to establish cookies locally.
+This browser flow must not open a native authentication session. Verify the
+redirect separately from provider completion; arbitrary development hostnames
+are not on the hosted OAuth redirect allowlist.
 
 ## Native iOS 27
 
@@ -43,6 +54,9 @@ The Android welcome screen also offers `Create new account` and `Log into existi
 account`. Google sign-in opens a system browser Auth Tab; completing or canceling
 returns to Macro. Cancel and retry should open a fresh attempt. Enter provider
 passwords and verification codes only in that browser, never in agent messages.
+For browsers using the Custom Tabs fallback, verify that the callback returns to
+the original Macro task. A callback for another attempt must leave the current
+attempt pending; a callback after process death must not restore that attempt.
 
 After signing in, test background/foreground, force-stop/relaunch, logout, and
 signing in as another account. An entity link opened while signed out should
@@ -57,6 +71,18 @@ See [Android development](../ANDROID_DEVELOPMENT.md) for build commands and
 certificate-dependent domain verification. Provider completion, account linking,
 and verified links still require end-to-end qualification.
 
+## GitHub reconnect prompt
+
+On native mobile, the `Reconnect GitHub` prompt hides while the authentication
+browser is open. Canceling or failing authentication restores the prompt so the
+user can retry; successful reconnection keeps it hidden. Verify cancel followed
+by retry, browser failure, and failure to start OAuth. Repeated taps while a flow
+is pending must start only one attempt. On the web, a successful OAuth kickoff
+navigates away and the prompt stays hidden during that navigation.
+Use browser Back to return from GitHub: when the page is restored from BFCache,
+it refreshes link status and restores the retry prompt only if reconnection is
+still needed.
+
 ## Mailpit (local email)
 
 - UI: `http://localhost:<mailpit-port>/`
@@ -66,7 +92,7 @@ and verified links still require end-to-end qualification.
 
 ## Known crash on first landing (local)
 
-Immediately after login the app navigates to `/app/component/inbox` and can throw a
+Immediately after login the app navigates to `/app/home` and can throw a
 full-screen error dialog: **"Something went terribly wrong — Cannot read properties of
 undefined (reading 'id')"**. Console shows `Failed to init email link on login` with a 404 on
 `GET /auth/link/github/status` and a 400 on `POST /email/email/init`. This is cosmetic-ish and

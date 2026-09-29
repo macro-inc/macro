@@ -15,8 +15,8 @@ export const FooterActions = (props: {
   const { openSettings, selectTab, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
 
-  // Same handling as `AppSidebar`: retarget the panel when it is already open
-  // rather than reopening it, and ignore tabs this account cannot reach.
+  // Retarget the panel when it is already open rather than reopening it, and
+  // ignore tabs this account cannot reach.
   const openSettingsTab = (tab: SettingsTab) => {
     if (!isTabAvailable(tab)) return;
     if (settingsOpen()) {
@@ -28,10 +28,10 @@ export const FooterActions = (props: {
 
   return (
     /*
-      The account card from the old sidebar, reused whole. Its trigger already
-      collapses to the bare avatar under that sidebar's slim contract, so the
-      group is scoped to this wrapper — setting `data-slim` on the rail root
-      would expose every descendant to those selectors.
+      The account card's trigger collapses to the bare avatar under
+      `group-data-[slim=true]/sidebar`, so the group is scoped to this
+      wrapper — setting `data-slim` on the rail root would expose every
+      descendant to those selectors.
     */
     <div
       class="group/sidebar flex w-full shrink-0 justify-center"

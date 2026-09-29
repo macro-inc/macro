@@ -43,10 +43,15 @@ impl SoupEntityEdges for TestSoupEdges {
     type NotificationFilter = String;
     type ActivityEvent = String;
     type EmailThreadEdges = TestEmailEdges;
+    type InitiativeEdges = TestEmailEdges;
     type AgentSessionEdges = TestAgentSessionEdges;
 
     fn from_entity(_entity: Entity<'static>) -> Self {
         Self { available: true }
+    }
+
+    fn initiative_edges(_initiative_id: Uuid) -> Self::InitiativeEdges {
+        TestEmailEdges { available: true }
     }
 
     fn email_thread_edges(_email_thread_id: Uuid) -> Self::EmailThreadEdges {

@@ -29,12 +29,16 @@ enum Cmd {
     RuntimeImage(ForceArg),
     /// Render the per-instance compose override and print its path.
     GenCompose(InstanceArgs),
+    /// Print the inventoried backend path prefixes for an external Vite launcher.
+    FrontendProxyRoutes,
     /// Render merged compose and assert the no-build / runtime-image invariants.
     ValidateLocalCompose(InstanceArgs),
     /// Resolve env layers and assert mode-appropriate invariants.
     ValidateLocalEnv(ValidateEnvArgs),
     /// Create the declared Kafka event topics on the instance's local broker.
     KafkaProvision(InstanceArgs),
+    /// Restore missing local AWS resources without resetting databases or volumes.
+    LocalstackProvision(InstanceArgs),
     /// Preflight checks (docker, toolchain, ports, env sources, images).
     DoctorLocal(InstanceArgs),
     /// Show an instance's endpoints and container states without starting anything.
@@ -250,6 +254,10 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Zigbuild => super::zigbuild_only(),
         Cmd::RuntimeImage(a) => super::runtime_image_only(a.force),
         Cmd::GenCompose(a) => super::gen_compose_only(&a),
+        Cmd::FrontendProxyRoutes => {
+            println!("{}", super::proxy::frontend_path_prefixes().join(","));
+            Ok(())
+        }
         Cmd::ValidateLocalCompose(a) => {
             let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
             super::validate::local_compose(&instance, Mode::Local)
@@ -266,6 +274,10 @@ fn run(cli: Cli) -> Result<()> {
             super::kafka::ensure_available("kafka-provision")?;
             let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
             super::kafka::provision(&instance)
+        }
+        Cmd::LocalstackProvision(a) => {
+            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            super::localstack::provision(&instance)
         }
         Cmd::DoctorLocal(a) => super::doctor::run(&a),
         Cmd::StatusLocal(a) => {

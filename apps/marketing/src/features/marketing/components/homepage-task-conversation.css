@@ -1,0 +1,5 @@
+.homepage-task-thread { width: 100%; margin-inline: auto; }
+.homepage-task-thread .homepage-conversation { width: min(760px, 100%); margin: 0 auto; }
+.homepage-task-thread .homepage-message { max-width: 94%; }
+.homepage-task-thread .homepage-enter { opacity: 1; transform: none; }
+.homepage-task-animation { margin-block: 32px 48px; scroll-margin-top: 120px; }

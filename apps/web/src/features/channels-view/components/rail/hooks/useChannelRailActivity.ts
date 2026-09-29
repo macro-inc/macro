@@ -2,6 +2,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { compareDateDesc, type DateValue } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
+import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ChannelsGroup } from '../../../types';
@@ -60,7 +61,12 @@ export function useChannelRailActivity(
         continue;
       }
       for (const notification of channel.unreadNotifications) {
-        if (notification.state !== 'unseen') continue;
+        // Mark-seen intentionally leaves the normalized state unchanged until
+        // commit. Honor the same local intent as the app-shell Chat badge.
+        const state =
+          notificationSource.withLocalState?.(notification) ??
+          notification.state;
+        if (state !== 'unseen') continue;
         notifications.push({
           id: notification.id,
           entity_id: channel.id,
@@ -78,6 +84,7 @@ export function useChannelRailActivity(
             (notification) =>
               notification.entity_type === 'channel' &&
               legacyChannelIds.has(notification.entity_id) &&
+              isUnreadChannelMessageNotification(notification) &&
               !notificationIsRead(notification)
           )
       );
@@ -130,6 +137,7 @@ export function useChannelRailActivity(
     notificationSource.subscribe((notification) => {
       if (
         notification.entity_type !== 'channel' ||
+        !isUnreadChannelMessageNotification(notification) ||
         notificationIsRead(notification)
       ) {
         return;

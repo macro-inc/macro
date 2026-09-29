@@ -30,7 +30,7 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         (
             CallTopicEvent::Started(CallStartedMetadata {
                 call_id: uuid(CALL_ID),
-                channel_id: uuid(CHANNEL_ID),
+                channel_id: Some(uuid(CHANNEL_ID)),
                 created_by: user_id("macro|creator@example.com"),
                 created_at: timestamp("2026-07-27T18:01:02Z"),
                 recording_enabled: true,
@@ -49,7 +49,7 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         (
             CallTopicEvent::RecordArchived(CallRecordArchivedMetadata {
                 call_id: uuid(CALL_ID),
-                channel_id: uuid(CHANNEL_ID),
+                channel_id: Some(uuid(CHANNEL_ID)),
                 created_by: user_id("macro|creator@example.com"),
                 started_at: timestamp("2026-07-27T18:01:02Z"),
                 ended_at: timestamp("2026-07-27T18:03:07Z"),
@@ -76,7 +76,7 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         (
             CallTopicEvent::RecordUpdated(CallRecordUpdatedMetadata {
                 call_id: uuid(CALL_ID),
-                channel_id: uuid(CHANNEL_ID),
+                channel_id: Some(uuid(CHANNEL_ID)),
                 actor_user_id: Some(user_id("macro|editor@example.com")),
                 custom_name: Some("Weekly planning".to_string()),
                 share_with_team: None,
@@ -95,7 +95,7 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         (
             CallTopicEvent::RecordDeleted(CallRecordDeletedMetadata {
                 call_id: uuid(CALL_ID),
-                channel_id: uuid(CHANNEL_ID),
+                channel_id: Some(uuid(CHANNEL_ID)),
                 actor_user_id: None,
             }),
             json!({
@@ -110,7 +110,7 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         (
             CallTopicEvent::RecordSummarized(CallRecordSummarizedMetadata {
                 call_id: uuid(CALL_ID),
-                channel_id: uuid(CHANNEL_ID),
+                channel_id: Some(uuid(CHANNEL_ID)),
                 ai_name_generated: true,
             }),
             json!({
@@ -125,7 +125,7 @@ fn topic_events() -> Vec<(CallTopicEvent, Value)> {
         (
             CallTopicEvent::RecordingReady(CallRecordingReadyMetadata {
                 call_id: uuid(CALL_ID),
-                channel_id: uuid(CHANNEL_ID),
+                channel_id: Some(uuid(CHANNEL_ID)),
             }),
             json!({
                 "event_type": "call.recording_ready",

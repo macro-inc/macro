@@ -12,6 +12,9 @@ stay outside this library.
 - `defineRoute()` infers node-local callback and synchronous Standard Schema
   output types, including `remountKey`, and types descendant references relative
   to that root. `defineRoutes()` assembles the static tree and rebinds ancestry.
+  Both attach a non-enumerable `to(params)` builder to route definitions in place.
+- `toReference(params)` optionally describes the matched content as `{ type, id }`
+  for host consumers. The router does not interpret or invoke it during navigation.
 - `useRouteParams(route)` reads only that node's params. `useParams(route)` reads
   the merged branch through that node; `useParams()` still reads the entire
   active branch.
@@ -30,6 +33,7 @@ export const folder = defineRoute({
   id: 'folder',
   path: 'drive/folder/:folderId',
   params: z.object({ folderId: z.string() }),
+  search: ['drive'],
   children: [defineRoute({
     id: 'document',
     path: 'document/:documentId',
@@ -40,16 +44,21 @@ export const folder = defineRoute({
 export const document = folder.children[0];
 export const routes = defineRoutes({ definitions: [folder] });
 
-navigate({
-  route: document,
-  params: { folderId: 'folder-1', documentId: 'document-1' },
+navigate(document.to({ folderId: 'folder-1', documentId: 'document-1' }));
+// Search remains a navigation option, not part of the route target:
+navigate(document.to({ folderId: 'folder-1', documentId: 'document-1' }), {
+  search: { drive: { commentId: ['comment-1'] } },
 });
 const branch = useParams(document);       // folderId + documentId
 const local = useRouteParams(document);  // documentId only
 ```
 
-Both helpers return the same objects: they do not clone, mutate, compile, or
-cache the tree. Ancestry metadata exists only in TypeScript. Export root definitions
+These helpers preserve the same route objects; they do not clone or compile the tree.
+`to(params)` returns `{ route, params }` without serializing, validating, or
+navigating. It is available on nested declarations and plain nodes assembled by
+`defineRoutes()`. TypeScript enforces the complete destination params; navigation
+validates them at runtime. Route identity is preserved while the builder is attached
+in place. Ancestry metadata exists only in TypeScript. Export root definitions
 directly and take descendant references through their named parent; positional
 aliases from `routes.definitions` are unnecessary. A separately declared child
 variable cannot acquire knowledge of a parent that later adopts it. Use `defineRoute`
@@ -89,6 +98,41 @@ those fields back to canonical names. Widened `string` paths retain untyped para
   external/browser history restores the complete positional layout.
 - Clearing search retains the route. Ordinary unprefixed external/global search
   keys remain distinct from namespaced split search.
+
+### Route-owned entry state
+
+A route may declare a synchronous Standard Schema as `state`. Descendants inherit
+that schema unless they declare their own, so a view root can own history state for
+its complete route branch. Typed route navigation infers the schema input and output,
+and `useRouteState(route)` returns its parsed output. Since browser history stores a
+structured clone of that output, schemas with different input/output shapes must also
+accept their cloned output when restoring an entry.
+
+Every accepted history entry has a stable router-generated `key`. State supplied to
+navigation is parsed by the destination route and structured-cloned before the entry
+is accepted. If cloning fails, navigation continues without state. Invalid local
+navigation state throws. Invalid browser, persisted, or
+host-layout state is discarded without rejecting the route. Middleware redirects
+retain state only when it is accepted by the final route. A route without a state
+schema cannot retain state.
+
+A route navigation without state starts with no state. Every route navigation receives
+a new key, whether it pushes or replaces the browser slot. Search-only writes preserve
+already parsed state; a search push receives a new key while a search replacement
+retains its key. Values read from entries are immutable snapshots and must not be
+mutated.
+
+`router.entry(splitId)` and history snapshots expose complete entries. Numeric
+history traversal restores the exact stored entry. The external
+location adapters round-trip visible entry keys and parsed state through a namespaced
+field in browser `history.state`; the URL remains route-and-search only. Copied or
+direct URLs therefore have no entry state, and views must provide a route-derived
+fallback. Malformed or positionally mismatched browser metadata is ignored.
+
+Host layout adapters own pane identity and the current location only. Entry keys,
+route state, and per-pane history remain router-owned. Key/state-only navigation does
+not write layout metadata or remount the view. Opening reports the pane that accepted
+the requested location, or reports that no pane was available.
 
 ## Claims
 
@@ -152,6 +196,7 @@ failures are logged and release their reservations.
 - `routes.ts`, `path.ts`: manifest, matching, params, ownership, and claim derivation.
 - `router.ts`, `transitions.ts`, `claims.ts`: orchestration, cancellation, pending claims.
 - `history.ts`, `layout.ts`, `location-sync.ts`: pane history and host boundaries.
+- `entry-state.ts`: entry identity and browser-history state envelopes.
 - `url.ts`, `search.ts`: URL framing and raw search state.
 - `search-params-codec.ts`, `create-search-params.ts`: typed search conversion/binding.
 - `solid.tsx`: providers, hooks, and nested outlets.

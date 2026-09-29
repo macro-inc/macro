@@ -32,9 +32,13 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { replace: mocks.replace } }),
 }));
 vi.mock('@core/component/AI/component/input/buildChatEditor', () => ({
-  buildChatEditor: () => ({
-    withMentions: () => ({ controls: { setMarkdown: mocks.setMarkdown } }),
-  }),
+  buildChatEditor: () => {
+    const builder = {
+      withAppLinkResolver: () => builder,
+      withMentions: () => ({ controls: { setMarkdown: mocks.setMarkdown } }),
+    };
+    return builder;
+  },
 }));
 vi.mock('@core/component/AI/component/input/ChatInput', () => ({
   ChatInput: (props: { onSend: typeof mocks.onSend }) => {

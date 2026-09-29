@@ -17,7 +17,7 @@ fn call_started_yields_channel_and_call_activities() {
         Uuid::now_v7(),
         CallTopicEvent::Started(CallStartedMetadata {
             call_id,
-            channel_id,
+            channel_id: Some(channel_id),
             created_by: MacroUserIdStr::try_from("macro|rahul@example.com".to_string()).unwrap(),
             created_at,
             recording_enabled: false,
@@ -52,7 +52,7 @@ fn record_deletion_purges_the_call() {
         Uuid::now_v7(),
         CallTopicEvent::RecordDeleted(CallRecordDeletedMetadata {
             call_id,
-            channel_id: Uuid::from_u128(6),
+            channel_id: Some(Uuid::from_u128(6)),
             actor_user_id: None,
         }),
     );

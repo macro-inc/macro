@@ -1,5 +1,7 @@
 use super::{client_id_mapping, message, thread};
-use crate::domain::models::{ResolvedDraftInput, SettledDraftIds, ThreadRow, UpsertedContacts};
+use crate::domain::models::{
+    EmailErr, ResolvedDraftInput, SettledDraftIds, ThreadRow, UpsertedContacts,
+};
 use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -18,8 +20,8 @@ pub(crate) async fn insert_message(
     link_id: Uuid,
     new_thread: Option<ThreadRow>,
     is_draft: bool,
-) -> Result<Option<SettledDraftIds>, sqlx::Error> {
-    let mut tx = pool.begin().await?;
+) -> Result<Option<SettledDraftIds>, EmailErr> {
+    let mut tx = pool.begin().await.map_err(anyhow::Error::from)?;
 
     let mut settled = SettledDraftIds {
         message_db_id: input.db_id,
@@ -34,8 +36,12 @@ pub(crate) async fn insert_message(
     // handle and re-read the binding under the lock: the loser adopts the row
     // the winner settled on and updates it instead.
     if let Some(client_id) = input.draft_client_id {
-        client_id_mapping::lock_draft_client_id(&mut tx, client_id, link_id).await?;
-        if let Some(bound) = client_id_mapping::bound_draft_row(&mut tx, client_id, link_id).await?
+        client_id_mapping::lock_draft_client_id(&mut tx, client_id, link_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        if let Some(bound) = client_id_mapping::bound_draft_row(&mut tx, client_id, link_id)
+            .await
+            .map_err(anyhow::Error::from)?
             && bound.message_db_id != settled.message_db_id
         {
             settled = bound;
@@ -49,11 +55,36 @@ pub(crate) async fn insert_message(
         thread_db_id,
     } = settled;
 
-    if let Some(thread) = new_thread {
-        thread::insert_thread(&mut tx, &thread, link_id).await?;
+    // Serialize with schedule/cancel/claim before checking editability. The
+    // domain's earlier read cannot protect a save waiting on this transaction.
+    let existing = sqlx::query!(
+        "SELECT link_id, is_sent, is_draft FROM email_messages WHERE id = $1 FOR UPDATE",
+        message_db_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(anyhow::Error::from)?;
+    let was_missing = existing.is_none();
+    if let Some(existing) = existing {
+        if existing.link_id != link_id || existing.is_sent || !existing.is_draft {
+            return Ok(None);
+        }
+        let scheduled = sqlx::query_scalar!(
+            "SELECT EXISTS(SELECT 1 FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2) AS \"exists!\"",
+            message_db_id, link_id,
+        ).fetch_one(&mut *tx).await.map_err(anyhow::Error::from)?;
+        if scheduled {
+            return Err(EmailErr::MessageDeliveryConflict(message_db_id));
+        }
     }
 
-    let applied = upsert_draft(
+    if let Some(thread) = new_thread {
+        thread::insert_thread(&mut tx, &thread, link_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+    }
+
+    let updated = upsert_draft(
         &mut tx,
         input,
         message_db_id,
@@ -62,15 +93,29 @@ pub(crate) async fn insert_message(
         link_id,
         is_draft,
     )
-    .await?;
-    if !applied {
-        tx.rollback().await?;
+    .await
+    .map_err(anyhow::Error::from)?;
+    if !updated {
         return Ok(None);
     }
 
-    // Only touch scheduling if send_time is explicitly provided.
-    // Scheduling is managed via the dedicated /drafts/scheduled endpoints.
-    if input.send_time.is_some() {
+    // A first save can miss an uncommitted insert in the initial SELECT, then
+    // wait on its unique-key conflict. ON CONFLICT's subquery keeps that older
+    // statement snapshot, so recheck after the upsert owns the message lock.
+    // A concurrent insert+schedule must roll back this entire stale write.
+    if was_missing {
+        let scheduled = sqlx::query_scalar!(
+            "SELECT EXISTS(SELECT 1 FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2) AS \"exists!\"",
+            message_db_id, link_id,
+        ).fetch_one(&mut *tx).await.map_err(anyhow::Error::from)?;
+        if scheduled {
+            return Err(EmailErr::MessageDeliveryConflict(message_db_id));
+        }
+    }
+
+    // Only immediate Send persists its internal undo-window delivery here.
+    // Ordinary draft writes never touch scheduling, even for legacy clients.
+    if !is_draft && input.send_time.is_some() {
         message::process_scheduled_message(
             &mut tx,
             link_id,
@@ -78,25 +123,36 @@ pub(crate) async fn insert_message(
             input.send_time,
             input.actor_id.as_deref(),
         )
-        .await?;
+        .await
+        .map_err(anyhow::Error::from)?;
     }
 
-    message::upsert_recipients(&mut tx, message_db_id, contacts).await?;
+    message::upsert_recipients(&mut tx, message_db_id, contacts)
+        .await
+        .map_err(anyhow::Error::from)?;
 
-    thread::update_thread_metadata(&mut tx, thread_db_id, link_id).await?;
+    thread::update_thread_metadata(&mut tx, thread_db_id, link_id)
+        .await
+        .map_err(anyhow::Error::from)?;
 
-    thread::upsert_user_history(&mut tx, link_id, thread_db_id).await?;
+    thread::upsert_user_history(&mut tx, link_id, thread_db_id)
+        .await
+        .map_err(anyhow::Error::from)?;
 
-    // Bind client handles to the settled rows in the same transaction, so a
-    // replayed offline save resolves to this row instead of creating another.
+    // Persist handles with the actual settled identity, including a concurrent
+    // first-save winner and a draft recreated after sender migration.
     if let Some(client_id) = input.draft_client_id {
-        client_id_mapping::bind_draft_client_id(&mut tx, client_id, link_id, message_db_id).await?;
+        client_id_mapping::bind_draft_client_id(&mut tx, client_id, link_id, message_db_id)
+            .await
+            .map_err(anyhow::Error::from)?;
     }
     if let Some(client_id) = input.thread_client_id {
-        client_id_mapping::bind_thread_client_id(&mut tx, client_id, link_id, thread_db_id).await?;
+        client_id_mapping::bind_thread_client_id(&mut tx, client_id, link_id, thread_db_id)
+            .await
+            .map_err(anyhow::Error::from)?;
     }
 
-    tx.commit().await?;
+    tx.commit().await.map_err(anyhow::Error::from)?;
     Ok(Some(settled))
 }
 
@@ -146,8 +202,8 @@ pub(crate) async fn upsert_draft(
             headers_jsonb = EXCLUDED.headers_jsonb,
             updated_at = NOW()
         WHERE email_messages.link_id = EXCLUDED.link_id
-            AND email_messages.is_draft
-            AND NOT email_messages.is_sent
+          AND email_messages.is_draft AND NOT email_messages.is_sent
+          AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages WHERE message_id = EXCLUDED.id AND link_id = EXCLUDED.link_id)
         "#,
         message_db_id,
         input.provider_id,
@@ -173,5 +229,5 @@ pub(crate) async fn upsert_draft(
     .execute(&mut *tx)
     .await?;
 
-    Ok(result.rows_affected() > 0)
+    Ok(result.rows_affected() == 1)
 }

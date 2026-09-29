@@ -87,6 +87,23 @@ pub struct SessionManager {
     /// `None` means the manager is live but unreachable - hold the error
     /// rather than execute somewhere the actor is not.
     pub address: Option<ReplicaAddress>,
+    /// Whether the holder has published that it is shutting down. Still
+    /// heartbeating, so still "live" by the lease's own liveness rule, but
+    /// no longer somewhere to send work.
+    pub draining: bool,
+}
+
+/// What the lease says about a session, seen from one replica.
+#[derive(Debug, Clone)]
+pub struct LeaseView {
+    /// The replica holding the lease, when a live one holds it - draining
+    /// or not, because who may take over from a draining holder is the
+    /// reader's decision, not the store's.
+    pub holder: Option<SessionManager>,
+    /// Whether the replica that asked has published that it is draining.
+    /// Asked in the same statement as the holder: a command's routing turns
+    /// on both, and two round trips could straddle the drain.
+    pub asking_replica_draining: bool,
 }
 
 /// Where a session's live actor runs, from one service instance's viewpoint.
@@ -99,6 +116,9 @@ pub enum SessionManagement {
     Ours,
     /// A live peer manages it; commands belong at its address.
     Peer(SessionManager),
+    /// This instance is draining: it is about to stop, so work sent here
+    /// would die with it. Commands belong on a replica that is staying.
+    Draining,
 }
 
 /// A session's takeover counter, bumped by every successful claim.
@@ -211,6 +231,8 @@ pub struct AgentSession {
     pub id: AgentSessionId,
     /// User-facing session name.
     pub name: String,
+    /// Whether the session is archived and therefore read-only.
+    pub is_archived: bool,
     /// Who created and owns the session. Immutable for its life.
     pub owner_id: Owner,
     /// The root message where the bot was originally invoked, if any.
@@ -334,6 +356,43 @@ pub struct SessionBot {
     /// Avatar, when it has one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
+}
+
+/// One waiting action as the session store records it.
+///
+/// The harness keeps an in-memory working copy beside the live actor; this
+/// is the durable form a restart or a reader on another replica consults.
+/// `announce` is the harness's channel/document origin, stored as JSON so
+/// this crate does not depend on harness types.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredQueuedAction {
+    /// The id the action was accepted under.
+    pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
+    /// What will be delivered - a prompt's text is the raw user text.
+    pub action: agent_runtime_protocol::domain::action::AgentAction,
+    /// The user who queued it, absent when a bot acted on nobody's behalf.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// When it was accepted.
+    pub created_at: DateTime<Utc>,
+    /// Harness announce origin, opaque to this crate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub announce: Option<serde_json::Value>,
+    /// Chip message id, once posted, so a retry does not announce twice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub announced_message_id: Option<Uuid>,
+}
+
+impl From<&StoredQueuedAction> for super::ports::QueuedControl {
+    fn from(stored: &StoredQueuedAction) -> Self {
+        Self {
+            action_id: stored.action_id,
+            action: stored.action.clone(),
+            actor: stored.actor.clone(),
+            created_at: stored.created_at,
+        }
+    }
 }
 
 /// One action waiting in a session's queue.

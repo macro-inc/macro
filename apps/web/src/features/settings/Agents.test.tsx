@@ -728,6 +728,7 @@ describe('Agents', () => {
       expect(agentMocks.update).toHaveBeenCalledWith({
         agentId: 'agent-1',
         autoAcceptPermissions: true,
+        isCoding: false,
         avatarUrl: undefined,
         channelIds: ['channel-engineering'],
         channelScope: 'selected',
@@ -955,6 +956,7 @@ describe('Agents', () => {
       expect(agentMocks.create).toHaveBeenCalledWith({
         autoAcceptPermissions: true,
         avatarUrl: undefined,
+        isCoding: false,
         channelIds: [],
         channelScope: 'all',
         defaultModel: Model.sonnet5,
@@ -1241,6 +1243,7 @@ describe('Agents', () => {
       expect(agentMocks.create).toHaveBeenCalledWith({
         autoAcceptPermissions: false,
         avatarUrl: undefined,
+        isCoding: true,
         channelIds: [],
         channelScope: 'all',
         defaultModel: 'claude-code',
@@ -1252,6 +1255,42 @@ describe('Agents', () => {
         mcp: { scope: 'owner_connections' },
         teamId: undefined,
       });
+    });
+  });
+
+  it('seeds the coding choice from the runtime and lets the user override it', async () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels(
+      [{ id: 'claude-code', name: 'Claude Code' }],
+      'claude-code'
+    );
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'New agent' }));
+
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Chatty' },
+    });
+    // Macro's in-memory runtime chats; a macrod harness codes.
+    expect(within(dialog).getByLabelText('Chat agent')).toHaveProperty(
+      'checked',
+      true
+    );
+    chooseSelectOption(within(dialog).getByLabelText('Runtime'), 'Dev box');
+    expect(within(dialog).getByLabelText('Coding agent')).toHaveProperty(
+      'checked',
+      true
+    );
+    fireEvent.click(within(dialog).getByLabelText('Chat agent'));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+
+    await waitFor(() => {
+      expect(agentMocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ harness: 'macrod', isCoding: false })
+      );
     });
   });
 

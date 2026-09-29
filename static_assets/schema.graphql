@@ -60,6 +60,10 @@ Mutation root combining independent domain GraphQL adapters.
 """
 type CompleteMutationRoot {
 	"""
+	Remove a property assignment and identify its normalized cache record.
+	"""
+	deleteEntityProperty(entityType: GraphqlPropertyTargetEntityType!, entityId: String!, entityPropertyId: ID!): GraphqlCacheDeletion!
+	"""
 	Set or attach one property on an entity.
 	"""
 	setEntityProperty(input: SetEntityPropertyInput!): GraphqlProperty!
@@ -150,6 +154,30 @@ type CompleteMutationRoot {
 	`DRAFT_ALREADY_SENT`.
 	"""
 	deleteEmailDraft(input: DeleteEmailDraftInput!): DeleteEmailDraftPayload!
+	"""
+	Create an initiative owned by the authenticated user.
+	"""
+	createInitiative(input: CreateInitiativeInput!): GraphqlSoupInitiative!
+	"""
+	Update project fields; owner-only sharing and membership policy remains in the domain.
+	"""
+	updateInitiative(initiativeId: ID!, input: UpdateInitiativeInput!): GraphqlSoupInitiative!
+	"""
+	Delete an initiative after its owner capability has been verified.
+	"""
+	deleteInitiative(initiativeId: ID!): Boolean!
+	"""
+	Assign or move tasks, preserving partial task authorization results.
+	"""
+	assignInitiativeTasks(initiativeId: ID!, taskIds: [ID!]!): [InitiativeTaskAssignment!]!
+	"""
+	Remove a task using project and task edit capabilities.
+	"""
+	unassignInitiativeTask(initiativeId: ID!, taskId: ID!): Boolean!
+	"""
+	Clear a task's project using task edit access, even after project access is revoked.
+	"""
+	clearTaskInitiative(taskId: ID!): Boolean!
 }
 
 """
@@ -169,6 +197,28 @@ type CompleteSubscriptionRoot {
 	Subscribe to realtime activity for the authenticated user.
 	"""
 	activityUpdates: GraphqlActivityPatch!
+}
+
+"""
+Create an initiative owned by the authenticated viewer.
+"""
+input CreateInitiativeInput {
+	"""
+	Initial name.
+	"""
+	name: String!
+	"""
+	Initial description Markdown.
+	"""
+	description: String
+	"""
+	Initial collaborators.
+	"""
+	memberIds: [String!]
+	"""
+	Whether to share with the owner's team, defaulting to true.
+	"""
+	shareWithTeam: Boolean
 }
 
 """
@@ -330,7 +380,7 @@ The typed activity-action vocabulary. One member per durable action, plus
 with an undecodable payload) surface with their raw tag and payload
 instead of failing the page.
 """
-union GraphqlActivityAction = GraphqlActivityCreated | GraphqlActivityEdited | GraphqlActivityOpened | GraphqlActivityDeleted | GraphqlActivityMessaged | GraphqlActivitySent | GraphqlActivityPropertyChanged | GraphqlActivityParticipantAdded | GraphqlActivityParticipantRemoved | GraphqlActivityCallStarted | GraphqlActivityUnknownAction
+union GraphqlActivityAction = GraphqlActivityCreated | GraphqlActivityEdited | GraphqlActivityOpened | GraphqlActivityDeleted | GraphqlActivityMessaged | GraphqlActivitySent | GraphqlActivityPropertyChanged | GraphqlActivityParticipantAdded | GraphqlActivityParticipantRemoved | GraphqlActivityCallStarted | GraphqlActivityTaskAdded | GraphqlActivityTaskRemoved | GraphqlActivityUnknownAction
 
 """
 A call was started in the entity.
@@ -568,6 +618,26 @@ type GraphqlActivityPropertyChanged {
 An email message was sent on the thread.
 """
 type GraphqlActivitySent {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+A task was added to a project.
+"""
+type GraphqlActivityTaskAdded {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
+A task was removed from a project.
+"""
+type GraphqlActivityTaskRemoved {
 	"""
 	this object has nothing as a field but we need at least 1 field
 	"""
@@ -1183,6 +1253,40 @@ type GraphqlChannelMentionMetadata {
 }
 
 """
+Metadata for a reaction to a channel message.
+"""
+type GraphqlChannelMessageReactionMetadata {
+	"""
+	Reacted-to message identifier.
+	"""
+	messageId: String!
+	"""
+	Root thread identifier when the message is a reply.
+	"""
+	threadId: String
+	"""
+	Reacted-to message content.
+	"""
+	messageContent: String!
+	"""
+	Emoji added by the reactor.
+	"""
+	emoji: String!
+	"""
+	Channel type.
+	"""
+	channelType: GraphqlNotificationChannelType!
+	"""
+	Channel display name.
+	"""
+	channelName: String!
+	"""
+	Sender profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
+}
+
+"""
 Metadata for a newly sent channel message.
 """
 type GraphqlChannelMessageSendMetadata {
@@ -1573,6 +1677,58 @@ input GraphqlCrmCompanyLiteral @oneOf {
 	The hidden option.
 	"""
 	hidden: Boolean
+}
+
+"""
+Metadata for a discussion on a CRM company or contact.
+"""
+type GraphqlCrmDiscussionMetadata {
+	"""
+	Company or contact display name.
+	"""
+	recordName: String!
+	"""
+	Notification reason.
+	"""
+	reason: GraphqlCrmDiscussionReason!
+	"""
+	Shared message identifier.
+	"""
+	messageId: ID!
+	"""
+	Shared discussion root identifier.
+	"""
+	threadId: ID!
+	"""
+	Comment Markdown.
+	"""
+	text: String!
+	"""
+	Public bot display name, if applicable.
+	"""
+	senderDisplayName: String
+	"""
+	Sender avatar URL.
+	"""
+	senderProfilePictureUrl: String
+}
+
+"""
+Why a CRM discussion notification was sent.
+"""
+enum GraphqlCrmDiscussionReason {
+	"""
+	Explicit user mention.
+	"""
+	MENTION
+	"""
+	Reply to a discussion.
+	"""
+	REPLY
+	"""
+	Comment on an owned company or one of its contacts.
+	"""
+	OWNER
 }
 
 """
@@ -2105,6 +2261,10 @@ GraphQL input mirroring `item_filters::ast::EntityFilterAst`.
 """
 input GraphqlEntityFilterAst {
 	"""
+	Restrict results to the authenticated viewer's favorites when true.
+	"""
+	favoritesOnly: Boolean
+	"""
 	The calendar event filter to apply.
 	"""
 	calendarEventFilter: GraphqlCalendarEventExpr
@@ -2152,6 +2312,10 @@ input GraphqlEntityFilterAst {
 	The agent session filter to apply.
 	"""
 	agentSessionFilter: GraphqlAgentSessionExpr
+	"""
+	The initiative filter to apply. Initiatives are opt-in.
+	"""
+	initiativeFilter: GraphqlInitiativeExpr
 	"""
 	The properties filter to apply.
 	"""
@@ -3081,6 +3245,20 @@ type GraphqlInboxReauthRequiredMetadata {
 }
 
 """
+The two operands of a recursive `InitiativeFilterExpr` binary expression.
+"""
+input GraphqlInitiativeBinaryExpr {
+	"""
+	Left expression.
+	"""
+	left: GraphqlInitiativeExpr!
+	"""
+	Right expression.
+	"""
+	right: GraphqlInitiativeExpr!
+}
+
+"""
 represents the initiative description subtype fields
 """
 type GraphqlInitiativeDescriptionSubType {
@@ -3088,6 +3266,118 @@ type GraphqlInitiativeDescriptionSubType {
 	this object has nothing as a field but we need at least 1 field
 	"""
 	nothing: Boolean!
+}
+
+"""
+Metadata for a discussion in a project.
+"""
+type GraphqlInitiativeDiscussionMetadata {
+	"""
+	Project display name.
+	"""
+	projectName: String!
+	"""
+	Project owner principal.
+	"""
+	owner: String!
+	"""
+	Notification reason.
+	"""
+	reason: GraphqlInitiativeDiscussionReason!
+	"""
+	Shared message identifier.
+	"""
+	messageId: ID!
+	"""
+	Shared discussion root identifier.
+	"""
+	threadId: ID!
+	"""
+	Comment Markdown.
+	"""
+	text: String!
+	"""
+	Public bot display name, if applicable.
+	"""
+	senderDisplayName: String
+	"""
+	Sender avatar URL.
+	"""
+	senderProfilePictureUrl: String
+}
+
+"""
+Why a project discussion notification was sent.
+"""
+enum GraphqlInitiativeDiscussionReason {
+	"""
+	Explicit user mention.
+	"""
+	MENTION
+	"""
+	Reply to a discussion.
+	"""
+	REPLY
+	"""
+	Comment on an assigned project.
+	"""
+	ASSIGNEE
+	"""
+	Comment on an owned project.
+	"""
+	OWNER
+}
+
+"""
+A recursive `InitiativeFilterExpr` filter expression.
+"""
+input GraphqlInitiativeExpr @oneOf {
+	"""
+	Both expressions must match.
+	"""
+	and: GraphqlInitiativeBinaryExpr
+	"""
+	Either expression may match.
+	"""
+	or: GraphqlInitiativeBinaryExpr
+	"""
+	Negate an expression.
+	"""
+	not: GraphqlInitiativeExpr
+	"""
+	Match a literal.
+	"""
+	literal: GraphqlInitiativeLiteral
+}
+
+"""
+GraphQL input for selecting initiatives through Soup.
+"""
+input GraphqlInitiativeLiteral @oneOf {
+	"""
+	Opt into initiatives; must be true. Omit the filter to exclude them.
+	"""
+	include: Boolean
+	"""
+	Match an initiative identifier.
+	"""
+	id: ID
+	"""
+	Match the owning principal.
+	"""
+	owner: String
+	"""
+	Match a case-insensitive substring of the name.
+	"""
+	nameContains: String
+	"""
+	Match projects due before this RFC 3339 timestamp.
+	"""
+	dueBefore: String
+	"""
+	Match projects due after this RFC 3339 timestamp.
+	"""
+	dueAfter: String
 }
 
 """
@@ -3290,7 +3580,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata
+union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata
 
 """
 A notification associated with a Soup entity.
@@ -3399,12 +3689,26 @@ input GraphqlNotificationFilter {
 	Event names to include; omitted or empty means every event type.
 	"""
 	eventTypes: [String!]
+	"""
+	Only notifications about top-level channel messages, including mentions but excluding reactions.
+	"""
+	topLevelMessagesOnly: Boolean
 }
 
 """
 Realtime notification patch represented as a new, updated, or deleted notification.
 """
 union GraphqlNotificationPatch = GraphqlNewNotification | GraphqlUpdatedNotification | GraphqlCacheDeletion
+
+"""
+Number stored by a numeric select option.
+"""
+type GraphqlNumberPropertyOptionValue {
+	"""
+	Stored number.
+	"""
+	value: Float!
+}
 
 """
 A numeric property value.
@@ -3592,6 +3896,92 @@ enum GraphqlPropertyDataType {
 }
 
 """
+A globally identified property definition, independent of any assignment.
+"""
+type GraphqlPropertyDefinition {
+	"""
+	Global identity of the shared definition, not an entity assignment.
+	"""
+	id: ID!
+	"""
+	Principal owning the definition.
+	"""
+	owner: GraphqlPropertyDefinitionOwner!
+	"""
+	User-visible property name.
+	"""
+	displayName: String!
+	"""
+	The type of value accepted by this property.
+	"""
+	dataType: GraphqlPropertyDataType!
+	"""
+	Whether more than one selected value is supported.
+	"""
+	isMultiSelect: Boolean!
+	"""
+	Entity-reference type constraint, if any.
+	"""
+	specificEntityType: GraphqlPropertyEntityType
+	"""
+	Whether the system manages this definition.
+	"""
+	isSystem: Boolean!
+	"""
+	Whether the property represents generated entity metadata.
+	"""
+	isMetadata: Boolean!
+	"""
+	When this definition was created, as RFC 3339.
+	"""
+	createdAt: String!
+	"""
+	When this definition last changed, as RFC 3339.
+	"""
+	updatedAt: String!
+	"""
+	Selectable options, loaded only when requested.
+	"""
+	options: [GraphqlPropertyOption!]!
+}
+
+"""
+Ownership facts embedded in a property definition.
+"""
+type GraphqlPropertyDefinitionOwner {
+	"""
+	Kind of owning principal.
+	"""
+	scope: GraphqlPropertyOwnerScope!
+	"""
+	User or team identifier; absent for system definitions.
+	"""
+	principalId: String
+}
+
+"""
+Which authenticated-caller property definitions to list.
+"""
+enum GraphqlPropertyDefinitionScope {
+	"""
+	Definitions owned by the viewer.
+	"""
+	USER
+	"""
+	Definitions owned by the viewer's team.
+	"""
+	TEAM
+	"""
+	System definitions shared by all viewers.
+	"""
+	SYSTEM
+	"""
+	The viewer's personal, team, and system definitions.
+	"""
+	ALL
+}
+
+"""
 An entity reference stored in a property value.
 """
 type GraphqlPropertyEntityReference {
@@ -3638,6 +4028,10 @@ enum GraphqlPropertyEntityType {
 	"""
 	DOCUMENT
 	"""
+	Initiative entity.
+	"""
+	INITIATIVE
+	"""
 	Project entity.
 	"""
 	PROJECT
@@ -3653,6 +4047,63 @@ enum GraphqlPropertyEntityType {
 	User entity.
 	"""
 	USER
+}
+
+"""
+A globally identified selectable option belonging to one property definition.
+"""
+type GraphqlPropertyOption {
+	"""
+	Stable global identity of this selectable option.
+	"""
+	id: ID!
+	"""
+	Definition to which the option belongs.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	Ordering within the definition's available options.
+	"""
+	displayOrder: Int!
+	"""
+	Typed option value.
+	"""
+	value: GraphqlPropertyOptionValue!
+	"""
+	Optional display color.
+	"""
+	color: String
+	"""
+	Creation time as RFC 3339.
+	"""
+	createdAt: String!
+	"""
+	Last update time as RFC 3339.
+	"""
+	updatedAt: String!
+}
+
+"""
+Exactly one of the supported option value types.
+"""
+union GraphqlPropertyOptionValue = GraphqlStringPropertyOptionValue | GraphqlNumberPropertyOptionValue
+
+"""
+The kind of principal owning a property definition.
+"""
+enum GraphqlPropertyOwnerScope {
+	"""
+	A personal definition.
+	"""
+	USER
+	"""
+	A team definition.
+	"""
+	TEAM
+	"""
+	A system definition.
+	"""
+	SYSTEM
 }
 
 """
@@ -3680,7 +4131,11 @@ enum GraphqlPropertyTargetEntityType {
 	"""
 	DOCUMENT
 	"""
-	Project target.
+	Initiative target, displayed as a Project in the application.
+	"""
+	INITIATIVE
+	"""
+	Folder project target.
 	"""
 	PROJECT
 	"""
@@ -3842,6 +4297,158 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 	"""
 	senderDisplayName: String
 }
+
+"""
+An AI routine owned by the authenticated user.
+"""
+type GraphqlScheduledAction {
+	"""
+	Stable identifier of the routine.
+	"""
+	id: ID!
+	"""
+	Name shown for the routine.
+	"""
+	name: String!
+	"""
+	Whether automatic dispatch runs this routine.
+	"""
+	enabled: Boolean!
+	"""
+	What starts a run of this routine.
+	"""
+	trigger: GraphqlScheduledActionTrigger!
+	"""
+	Agent task for this routine. Null when the stored task is not an agent task.
+	"""
+	agentTask: GraphqlScheduledActionAgentTask
+	"""
+	When the current execution claim stops blocking configuration changes.
+	The timestamp stays present after that instant so clients can compare it themselves.
+	"""
+	claimExpiresAt: String
+	"""
+	When the routine was created, as RFC 3339.
+	"""
+	createdAt: String!
+	"""
+	When the routine row last changed, including execution bookkeeping, as RFC 3339.
+	"""
+	updatedAt: String!
+}
+
+"""
+An agent selected to run a routine.
+"""
+type GraphqlScheduledActionAgent {
+	"""
+	Stable identifier of the selected agent.
+	"""
+	botId: ID!
+}
+
+"""
+The agent task a routine runs.
+"""
+type GraphqlScheduledActionAgentTask {
+	"""
+	Model the task runs. Null when the selected agent uses its default model.
+	"""
+	model: String
+	"""
+	Selected agent. Null for model-only tasks.
+	"""
+	agent: GraphqlScheduledActionAgent
+	"""
+	System prompt for the agent.
+	"""
+	prompt: String!
+	"""
+	User prompt for the agent.
+	"""
+	userPrompt: String!
+}
+
+"""
+A routine that runs on a cron schedule.
+"""
+type GraphqlScheduledActionCronTrigger {
+	"""
+	Cron expression in the six- or seven-field format the scheduler accepts.
+	"""
+	schedule: String!
+	"""
+	Time zone name the cron expression is evaluated in.
+	"""
+	timezone: String!
+	"""
+	Next cron firing, as RFC 3339. Null when the routine is disabled.
+	"""
+	nextRunAt: String
+}
+
+"""
+One event filter. The event name and entity id must both match.
+"""
+type GraphqlScheduledActionEventFilter {
+	"""
+	Event names that can satisfy this filter.
+	"""
+	events: [GraphqlScheduledActionEventName!]!
+	"""
+	Entity ids that can satisfy this filter. Null matches every id; an empty list matches nothing.
+	"""
+	entityIds: [ID!]
+}
+
+"""
+Events a routine filter can name.
+"""
+enum GraphqlScheduledActionEventName {
+	"""
+	A document was created.
+	"""
+	DOCUMENT_CREATED
+	"""
+	A document was updated.
+	"""
+	DOCUMENT_UPDATED
+	"""
+	A channel was created.
+	"""
+	CHANNEL_CREATED
+	"""
+	A channel message was posted.
+	"""
+	CHANNEL_MESSAGE_POSTED
+	"""
+	A user was mentioned in a channel.
+	"""
+	CHANNEL_MENTIONED
+	"""
+	A channel message was patched.
+	"""
+	CHANNEL_MESSAGE_PATCHED
+	"""
+	A channel message attachment was created.
+	"""
+	CHANNEL_MESSAGE_ATTACHMENT_CREATED
+}
+
+"""
+A routine that runs when matching events are published.
+"""
+type GraphqlScheduledActionEventsTrigger {
+	"""
+	Event filters. A run starts when any filter matches.
+	"""
+	filters: [GraphqlScheduledActionEventFilter!]!
+}
+
+"""
+The way a routine starts.
+"""
+union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger
 
 """
 A select-option property value.
@@ -4041,6 +4648,10 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	The name.
 	"""
 	name: String!
+	"""
+	Whether the session is archived and read-only.
+	"""
+	isArchived: Boolean!
 	"""
 	The principal identifier of the owner.
 	"""
@@ -4283,7 +4894,7 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	"""
 	The identifier of the channel.
 	"""
-	channelId: ID!
+	channelId: ID
 	"""
 	The channel name.
 	"""
@@ -4341,6 +4952,10 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	"""
 	participants: [GraphqlSoupCallParticipant!]!
 	"""
+	Non-account guests who attended the call.
+	"""
+	guests: [GraphqlSoupCallGuest!]!
+	"""
 	Properties assigned to this entity that the authenticated user may view.
 	"""
 	properties: [GraphqlProperty!]!
@@ -4366,6 +4981,28 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
+}
+
+"""
+GraphQL representation of a non-account call guest.
+"""
+type GraphqlSoupCallGuest {
+	"""
+	Opaque guest identity; matches the guest's transcript speaker id.
+	"""
+	id: ID!
+	"""
+	Guest-provided display name.
+	"""
+	displayName: String!
+	"""
+	The joined timestamp in RFC 3339 format.
+	"""
+	joinedAt: String!
+	"""
+	The left timestamp in RFC 3339 format.
+	"""
+	leftAt: String
 }
 
 """
@@ -5091,6 +5728,10 @@ An adaptively hydrated email content projection for Soup queries.
 """
 type GraphqlSoupEmailMessage {
 	"""
+	Immutable scheduling snapshots; JSON keeps both transports identical.
+	"""
+	calendarInvitations: JSON!
+	"""
 	The unique message identifier.
 	"""
 	id: ID!
@@ -5511,6 +6152,10 @@ GraphQL representation of Soup entity types.
 """
 enum GraphqlSoupEntityType {
 	"""
+	Initiative entity, presented as a project in the frontend.
+	"""
+	INITIATIVE
+	"""
 	Document entity.
 	"""
 	DOCUMENT
@@ -5634,6 +6279,82 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	timeline. Deeper history belongs to the viewer's activity feed.
 	"""
 	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+}
+
+"""
+GraphQL representation of a Soup initiative.
+"""
+type GraphqlSoupInitiative implements GraphqlSoupEntity {
+	"""
+	The canonical initiative identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	User-visible project name.
+	"""
+	displayName: String
+	"""
+	Common initiative metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	Document backing the project's description, when one exists.
+	"""
+	descriptionDocumentId: ID
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	Collaborators, independent of assignees.
+	"""
+	memberIds: [String!]!
+	"""
+	Associated task identifiers visible to this viewer.
+	"""
+	taskIds: [ID!]!
+	"""
+	Current sharing state.
+	"""
+	sharePermission: InitiativeSharePermission!
+	"""
+	Number of associated tasks this viewer can see.
+	"""
+	taskCount: Int!
+	"""
+	Number of completed associated tasks this viewer can see.
+	"""
+	completedTaskCount: Int!
 	"""
 	The viewer's frecency score for this entity, when loaded.
 	"""
@@ -5854,6 +6575,16 @@ type GraphqlSoupReminderReference {
 }
 
 """
+Text stored by a string select option.
+"""
+type GraphqlStringPropertyOptionValue {
+	"""
+	Stored text.
+	"""
+	value: String!
+}
+
+"""
 A string property value.
 """
 type GraphqlStringPropertyValue {
@@ -5945,6 +6676,30 @@ type GraphqlUser {
 	Stable id of the authenticated user.
 	"""
 	id: ID!
+	"""
+	One initiative accessible to the authenticated viewer.
+	"""
+	initiative(initiativeId: ID!): GraphqlSoupInitiative!
+	"""
+	A permission-filtered page of task identifiers within an initiative.
+	"""
+	initiativeTasks(initiativeId: ID!, input: InitiativeTasksInput): InitiativeTasksPage!
+	"""
+	Initiative chips for tasks, without inaccessible project metadata.
+	"""
+	taskInitiativeReferences(taskIds: [ID!]!): [TaskInitiativeReference!]!
+	"""
+	AI routines owned by the authenticated user.
+	"""
+	scheduledActions: [GraphqlScheduledAction!]!
+	"""
+	Authorized property definitions available to this viewer.
+	"""
+	propertyDefinitions(scope: GraphqlPropertyDefinitionScope!, forEntityType: GraphqlPropertyEntityType): [GraphqlPropertyDefinition!]!
+	"""
+	Select options available to the viewer for one property definition.
+	"""
+	propertyOptions(propertyDefinitionId: ID!): [GraphqlPropertyOption!]!
 	"""
 	The authenticated user's favorites in manual order, optionally
 	restricted by entity type and entity id.
@@ -6044,6 +6799,194 @@ input GroupedSoupInput @oneOf {
 	Continue one bin from a cursor returned by a previous grouped query.
 	"""
 	continuation: GroupedSoupContinuationInput
+}
+
+"""
+Grant to a shared channel.
+"""
+type InitiativeChannelShare {
+	"""
+	Channel receiving access.
+	"""
+	channelId: ID!
+	"""
+	Access granted to the channel.
+	"""
+	accessLevel: GraphqlEntityAccessLevel!
+}
+
+"""
+A channel sharing patch.
+"""
+input InitiativeChannelShareInput {
+	"""
+	Kind of channel grant change.
+	"""
+	operation: InitiativeChannelShareOperation!
+	"""
+	Channel identifier.
+	"""
+	channelId: ID!
+	"""
+	Grant level for add or replace.
+	"""
+	accessLevel: GraphqlEntityAccessLevel
+}
+
+"""
+Mutation of one channel grant.
+"""
+enum InitiativeChannelShareOperation {
+	"""
+	Add a grant.
+	"""
+	ADD
+	"""
+	Remove a grant.
+	"""
+	REMOVE
+	"""
+	Replace a grant.
+	"""
+	REPLACE
+}
+
+"""
+Link recipients supported by the sharing domain.
+"""
+enum InitiativeLinkShare {
+	"""
+	Everyone with the link.
+	"""
+	PUBLIC
+	"""
+	Members of the owner's team with the link.
+	"""
+	TEAM
+}
+
+"""
+Typed sharing state for an initiative.
+"""
+type InitiativeSharePermission {
+	"""
+	Stable identifier of the sharing policy.
+	"""
+	id: ID!
+	"""
+	Audience permitted through the link, when enabled.
+	"""
+	linkShare: InitiativeLinkShare
+	"""
+	Permission granted to the link audience.
+	"""
+	linkShareAccessLevel: GraphqlEntityAccessLevel
+	"""
+	Explicit permission granted to the owner's team.
+	"""
+	teamShareAccessLevel: GraphqlEntityAccessLevel
+	"""
+	Owner of the shared initiative.
+	"""
+	owner: String!
+	"""
+	Explicit channel sharing grants.
+	"""
+	channelSharePermissions: [InitiativeChannelShare!]!
+}
+
+"""
+Sharing patch; omitted and null fields have distinct meanings.
+"""
+input InitiativeSharePermissionInput {
+	"""
+	Omit to preserve, null to disable link sharing.
+	"""
+	linkShare: InitiativeLinkShare
+	"""
+	Omit to preserve, null to reset to the domain default.
+	"""
+	linkShareAccessLevel: GraphqlEntityAccessLevel
+	"""
+	Omit to preserve, null to disable team sharing.
+	"""
+	teamShareAccessLevel: GraphqlEntityAccessLevel
+	"""
+	Changes to channel grants.
+	"""
+	channelSharePermissions: [InitiativeChannelShareInput!]
+}
+
+"""
+One result in the deduplicated request order.
+"""
+type InitiativeTaskAssignment {
+	"""
+	Task whose assignment was attempted.
+	"""
+	taskId: ID!
+	"""
+	Domain result of this assignment.
+	"""
+	status: InitiativeTaskAssignmentStatus!
+}
+
+"""
+Per-task result of an assignment request.
+"""
+enum InitiativeTaskAssignmentStatus {
+	"""
+	Newly assigned or already assigned here.
+	"""
+	ASSIGNED
+	"""
+	Moved from another initiative.
+	"""
+	MOVED
+	"""
+	Document exists but is not a task.
+	"""
+	NOT_A_TASK
+	"""
+	Task could not be found.
+	"""
+	NOT_FOUND
+	"""
+	Viewer cannot edit this task.
+	"""
+	SKIPPED_NO_PERMISSION
+}
+
+"""
+Cursor pagination for visible initiative tasks.
+"""
+input InitiativeTasksInput {
+	"""
+	Page size, one through one hundred.
+	"""
+	limit: Int
+	"""
+	Opaque continuation from the previous page.
+	"""
+	cursor: String
+}
+
+"""
+A page of visible task references.
+"""
+type InitiativeTasksPage {
+	"""
+	Visible task identifiers in the current page.
+	"""
+	taskIds: [ID!]!
+	"""
+	Continuation when another visible page exists.
+	"""
+	nextCursor: String
+	"""
+	Total tasks visible to this viewer.
+	"""
+	total: Int!
 }
 
 """
@@ -6456,6 +7399,42 @@ type SoupUpdated {
 }
 
 """
+Permission-filtered relationship between a task and its project.
+"""
+type TaskInitiativeReference {
+	"""
+	Task whose relationship is described, never this object's identity.
+	"""
+	taskId: ID!
+	"""
+	Permission-filtered relationship state.
+	"""
+	state: TaskInitiativeReferenceState!
+	"""
+	The same initiative entity used by collection/detail queries.
+	"""
+	initiative: GraphqlSoupInitiative
+}
+
+"""
+Visibility state of a task's initiative.
+"""
+enum TaskInitiativeReferenceState {
+	"""
+	Visible task without an initiative.
+	"""
+	NONE
+	"""
+	Task or initiative cannot be viewed.
+	"""
+	UNAVAILABLE
+	"""
+	Both task and initiative can be viewed.
+	"""
+	VISIBLE
+}
+
+"""
 Input for adding or removing a label from an email thread.
 """
 input UpdateEmailThreadLabelInput {
@@ -6503,6 +7482,24 @@ input UpdateEntitySharePolicyInput {
 	New link, explicit team, and channel policy values.
 	"""
 	policy: EntitySharePolicyInput!
+}
+
+"""
+Partial initiative update; collaborator lists replace the previous list.
+"""
+input UpdateInitiativeInput {
+	"""
+	Replacement name.
+	"""
+	name: String
+	"""
+	Full replacement collaborator list, authorized by the domain service.
+	"""
+	memberIds: [String!]
+	"""
+	Sharing patch, authorized by the domain service.
+	"""
+	sharePermission: InitiativeSharePermissionInput
 }
 
 """

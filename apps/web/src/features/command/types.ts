@@ -11,7 +11,7 @@ import type { HotkeyRegistrationOptions } from '@core/hotkey/types';
  * than in `BlockAliasRegistry`, where it would leak into `fileTypeToBlockName`,
  * split content types and `NonDocumentBlockTypes`.
  */
-export type CreatableName = BlockName | BlockAlias | 'reminder';
+export type CreatableName = BlockName | BlockAlias | 'reminder' | 'initiative';
 
 export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
   label: string;

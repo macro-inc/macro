@@ -3,6 +3,9 @@ import { driveLocationLabel } from './location-label';
 import type { DriveFolder, DriveLocation } from './types';
 
 export const DRIVE_VIEW_BREADCRUMB = 'drive-view';
+export function driveCallBreadcrumbValue(callId: string) {
+  return `drive-call:${callId}`;
+}
 
 export type DriveLocationBreadcrumb = {
   type: 'drive-location';

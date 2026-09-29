@@ -1,11 +1,9 @@
-import { createNativeAuthSession } from '@core/auth/native-auth';
+import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import GithubIcon from '@icon/mcp-github.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import {
-  invalidateGithubLinkStatus,
   useDeleteGithubLinkMutation,
   useGithubLinkStatusQuery,
   useInitGithubLinkMutation,
@@ -39,30 +37,12 @@ export function GitHubCard() {
   const connectionLabel = () =>
     connectionState() === 'attention' ? 'Reconnect required' : 'Connected';
 
-  const authorizeGithub = async (
-    getAuthorizationUrl: (callbackUrl: string) => Promise<string>
-  ) => {
-    const session = isNativeMobilePlatform()
-      ? createNativeAuthSession('github-link-callback')
-      : undefined;
-    const url = await getAuthorizationUrl(
-      session?.callbackUrl ?? window.location.href
-    );
-    if (!session) {
-      window.location.href = url;
-      return;
-    }
-    const result = await session.authenticate(url);
-    if (result.success) {
-      await invalidateGithubLinkStatus();
-    } else if (result.error !== 'User canceled login') {
-      toast.failure('Failed to connect GitHub');
-    }
-  };
-
   const handleGithubEnable = async () => {
     try {
-      await authorizeGithub((url) => initGithubLink.mutateAsync(url));
+      await authorizeGithub(
+        (callbackUrl) => initGithubLink.mutateAsync(callbackUrl),
+        'Failed to connect GitHub'
+      );
     } catch {
       toast.failure('Failed to start GitHub connect flow');
     }
@@ -78,7 +58,10 @@ export function GitHubCard() {
 
   const handleGithubReconnect = async () => {
     try {
-      await authorizeGithub((url) => reauthenticateGithub.mutateAsync(url));
+      await authorizeGithub(
+        (callbackUrl) => reauthenticateGithub.mutateAsync(callbackUrl),
+        'Failed to reconnect GitHub'
+      );
     } catch {
       toast.failure('Failed to start GitHub reconnect flow');
     }

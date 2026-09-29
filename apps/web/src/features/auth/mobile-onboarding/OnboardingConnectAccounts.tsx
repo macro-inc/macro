@@ -1,12 +1,10 @@
-import { createNativeAuthSession } from '@core/auth/native-auth';
+import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { useIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import IconGoogle from '@icon/macro-google.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import {
-  invalidateGithubLinkStatus,
   useGithubLinkStatusQuery,
   useInitGithubLinkMutation,
 } from '@queries/auth';
@@ -59,32 +57,12 @@ export function OnboardingConnectAccounts() {
       toast.success('GitHub connected (debug)');
       return;
     }
-    const native = isNativeMobilePlatform();
-    const session = native
-      ? createNativeAuthSession('github-link-callback')
-      : undefined;
     try {
-      const authorizationUrl = await initGithubLink.mutateAsync(
-        session?.callbackUrl ?? window.location.href
+      const linked = await authorizeGithub(
+        (callbackUrl) => initGithubLink.mutateAsync(callbackUrl),
+        'Failed to connect GitHub'
       );
-
-      if (!session) {
-        // Web / desktop: the OAuth callback redirects back to original_url.
-        window.location.href = authorizationUrl;
-        return;
-      }
-
-      const auth = await session.authenticate(authorizationUrl);
-
-      if (!auth.success) {
-        if (auth.error !== 'User canceled login') {
-          toast.failure('Failed to connect GitHub');
-        }
-        return;
-      }
-
-      await invalidateGithubLinkStatus();
-      toast.success('GitHub connected');
+      if (linked) toast.success('GitHub connected');
     } catch (error) {
       console.error('connect github failed', error);
       toast.failure('Failed to connect GitHub');

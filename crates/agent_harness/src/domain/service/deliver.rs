@@ -92,6 +92,10 @@ where
                                 .permission_policy(permission_policy),
                         )
                         .await?;
+                    // The sandbox is back; take waiting prompts from the store
+                    // so a restart cannot drop what was queued while this
+                    // replica was gone.
+                    self.restore_queue(session_id).await?;
                 } else {
                     // An external runtime is not ours to start - only its
                     // operator can dial - but a bot whose runtime is already
@@ -128,9 +132,10 @@ where
                             session_id,
                             attachment
                                 .permission_policy(permission_policy)
-                                .mcp_servers(vec![egress.sandbox.internal_mcp_server()]),
+                                .mcp_servers(self.egress.external_mcp_servers(&egress.sandbox)),
                         )
                         .await?;
+                    self.restore_queue(session_id).await?;
                 }
                 self.sessions
                     .send_action(session_id, actor, action, id)
@@ -146,17 +151,33 @@ where
     /// Message context is loaded when the prompt named an origin. The actor's
     /// current access to that origin gates composition; a failed history read
     /// still composes, with empty history, so a transient context outage
-    /// cannot eat the prompt.
+    /// cannot eat the prompt. The prompt that opens a session's first turn
+    /// also carries the session's instructions, unless its runtime already
+    /// reads them as a system prompt.
     pub(super) async fn compose_action(
         &self,
+        session_id: AgentSessionId,
         action: &mut AgentAction,
         actor: Option<&MacroUserIdStr<'static>>,
         announce: Option<&AnnounceOrigin>,
+        first_turn: bool,
     ) -> Result<()> {
         let AgentAction::Prompt(prompt) = action else {
             return Ok(());
         };
         let raw_prompt = prompt.prompt.clone();
+        let session = if first_turn {
+            Some(self.sessions.get_session(session_id).await?)
+        } else {
+            None
+        };
+        let instructions = session
+            .as_ref()
+            .filter(|session| {
+                AgentKind::for_session(session.bot_id, &session.harness).folds_instructions()
+            })
+            .and_then(|session| session.instructions.as_deref())
+            .filter(|instructions| !instructions.trim().is_empty());
         let context = if let Some(origin) = announce {
             Some(self.load_prompt_context(origin, actor).await?)
         } else {
@@ -166,6 +187,7 @@ where
             .prompt_composer
             .compose(
                 &raw_prompt,
+                instructions,
                 announce.map(|origin| &origin.parent),
                 context.as_ref(),
             )
@@ -227,10 +249,12 @@ where
         // The announcement posts as the session's own bot, which only the
         // row remembers.
         let session = self.sessions.get_session(session_id).await?;
+        let persona = self.reply_persona(&session).await?;
 
         Ok(Some(SessionAnnouncement {
             session_id,
             bot_id: session.bot_id,
+            is_coding: persona.is_coding,
             origin_parent: origin.parent,
             origin_thread_id: origin.thread_id,
             origin_message_id: origin.message_id,
@@ -238,5 +262,76 @@ where
             prompted_content: prompt.prompt.clone(),
             triggered_by: triggered_by.clone(),
         }))
+    }
+
+    /// Tell the thread what an announced turn's reply should say now: how
+    /// the turn ended, or that it is waiting on the user.
+    ///
+    /// Best-effort, like every lifecycle publish: the turn is over or still
+    /// running regardless, and the queue behind it drains whether or not the
+    /// thread hears. The bot and its persona are re-read as they were when
+    /// the turn was announced. A turn nobody announced - no origin, no
+    /// actor, or no message posted - has nothing to resolve. Whether the
+    /// persona's message needs resolving at all is the announcer's call.
+    pub(super) async fn resolve_reply(
+        &self,
+        session_id: AgentSessionId,
+        turn: Option<&InFlightTurn>,
+        outcome: ReplyOutcome,
+    ) {
+        let Some(turn) = turn else {
+            return;
+        };
+        let (Some(message_id), Some(origin), Some(triggered_by)) = (
+            turn.announcement_message_id,
+            turn.announce.as_ref(),
+            turn.actor.as_ref(),
+        ) else {
+            return;
+        };
+        let session = match self.sessions.get_session(session_id).await {
+            Ok(session) => session,
+            Err(error) => {
+                tracing::error!(
+                    error = ?error,
+                    %session_id,
+                    %message_id,
+                    "leaving a turn's reply unresolved: session row unavailable"
+                );
+                return;
+            }
+        };
+        let persona = match self.reply_persona(&session).await {
+            Ok(persona) => persona,
+            Err(error) => {
+                tracing::error!(
+                    error = ?error,
+                    %session_id,
+                    %message_id,
+                    "leaving a turn's reply unresolved: the session's persona is unavailable"
+                );
+                return;
+            }
+        };
+        if let Err(error) = self
+            .announcer
+            .resolve(ResolvedReply {
+                session_id,
+                bot_id: session.bot_id,
+                is_coding: persona.is_coding,
+                message_id,
+                origin_parent: origin.parent.clone(),
+                triggered_by: triggered_by.clone(),
+                outcome,
+            })
+            .await
+        {
+            tracing::error!(
+                error = ?error,
+                %session_id,
+                %message_id,
+                "failed to resolve a turn's reply in its thread"
+            );
+        }
     }
 }

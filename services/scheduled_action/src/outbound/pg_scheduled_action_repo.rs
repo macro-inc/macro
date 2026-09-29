@@ -332,7 +332,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
         Ok(())
     }
 
-    async fn claim_action(&self, id: &Uuid) -> Result<ClaimToken> {
+    async fn claim_action(&self, id: &Uuid, revision: ConfigurationRevision) -> Result<ClaimToken> {
         let token = ClaimToken::generate();
         let now = Utc::now();
         let stale_threshold = now - MAX_ACTION_TIME;
@@ -342,12 +342,14 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
             UPDATE scheduled_action
             SET claimed = $1, claim_token = $4, updated_at = now()
             WHERE id = $2
+              AND configuration_revision = $5
               AND (claimed IS NULL OR claimed < $3)
             "#,
             now,
             *id,
             stale_threshold,
             token.as_uuid(),
+            revision.get(),
         )
         .execute(&self.pool)
         .await?;

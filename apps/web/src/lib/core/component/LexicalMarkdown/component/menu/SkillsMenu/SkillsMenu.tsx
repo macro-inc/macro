@@ -1,3 +1,4 @@
+import { makeDeleteAction } from '@app/features/next-soup/actions/make-delete-action';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type {
   ComposeSkillProps,
@@ -7,16 +8,20 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import type { EntityItem } from '@core/context/quickAccess';
 import { searchQuickAccessEntities } from '@core/context/quickAccess/entity-search';
+import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { debouncedDependent } from '@core/util/debounce';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import type { GithubPullRequestEntity } from '@entity';
 import PlusIcon from '@phosphor/plus.svg';
+import { useSlashMenuPullRequests } from '@queries/soup/slash-menu-pull-requests';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import type { SystemSkillSummary } from '@service-storage/generated/schemas/systemSkillSummary';
 import { cn, Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
+  createMemo,
   createSignal,
   For,
   onCleanup,
@@ -26,21 +31,35 @@ import {
   untrack,
 } from 'solid-js';
 import { floatWithSelection } from '../../../directive/floatWithSelection';
-import { INSERT_DOCUMENT_MENTION_COMMAND } from '../../../plugins/mentions';
+import {
+  type AgentCommandItem,
+  CLOSE_AGENT_COMMAND_SEARCH_COMMAND,
+  INSERT_AGENT_COMMAND_COMMAND,
+  REMOVE_AGENT_COMMAND_SEARCH_COMMAND,
+} from '../../../plugins/agent-commands';
+import {
+  INSERT_DOCUMENT_MENTION_COMMAND,
+  INSERT_PR_MENTION_COMMAND,
+} from '../../../plugins/mentions';
 import {
   CLOSE_SKILL_SEARCH_COMMAND,
   REMOVE_SKILL_SEARCH_COMMAND,
 } from '../../../plugins/skills';
 import type { MenuOperations } from '../../../shared/inlineMenu';
+import { AgentCommandRow } from '../AgentCommandsMenu/AgentCommandRow';
+import { filterCommands } from '../AgentCommandsMenu/filterCommands';
+import { ItemBin } from '../MentionsMenu/components/ItemBin';
 import { MentionsMenuItem } from '../MentionsMenu/components/MentionsMenuItem';
 import { useEntityMention } from '../MentionsMenu/hooks/useEntityMention';
 import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
+import { PullRequestRow } from './PullRequestRow';
+import { SkillActions } from './SkillActions';
 
 false && clickOutside;
 false && floatWithSelection;
 
-// Height consumed by Surface's border + vertical padding
-const PANEL_DECORATION_HEIGHT = 18;
+// Surface border/padding plus the fixed New skill footer.
+const PANEL_DECORATION_HEIGHT = 58;
 
 /**
  * A built-in system skill as a menu item. System skills are static strings in
@@ -72,6 +91,8 @@ type SkillsMenuProps = {
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
   useBlockBoundary?: boolean;
   portalScope?: PortalScope;
+  /** Enables the combined agent menu, even before any commands arrive. */
+  agentCommands?: () => AgentCommandItem[];
 };
 
 /**
@@ -108,6 +129,25 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     ...searchQuickAccessEntities(systemSkillItems(), activeSearchTerm()),
   ];
 
+  const commands = createMemo(() =>
+    filterCommands(props.agentCommands?.() ?? [], activeSearchTerm())
+  );
+  const { query: pullRequestQuery, pullRequests: allPullRequests } =
+    useSlashMenuPullRequests(
+      () => !!props.agentCommands && props.menu.isOpen()
+    );
+  const pullRequests = createMemo(() => {
+    if (!props.agentCommands) return [];
+    const term = activeSearchTerm().trim().toLowerCase();
+    return allPullRequests().filter((item) =>
+      `${item.name} ${item.metadata.owner}/${item.metadata.repo} #${item.metadata.number}`
+        .toLowerCase()
+        .includes(term)
+    );
+  });
+  const commandOffset = () => skills().length + pullRequests().length;
+  const newSkillIndex = () => commandOffset() + commands().length;
+
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
@@ -137,8 +177,7 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     setSelectedIndex(0);
   });
 
-  // Selectable rows: every skill plus the trailing "New skill" row.
-  const itemCount = () => skills().length + 1;
+  const itemCount = () => newSkillIndex() + 1;
 
   createEffect(() => {
     if (selectedIndex() >= itemCount()) {
@@ -147,13 +186,28 @@ function SkillsMenuInner(props: SkillsMenuProps) {
   });
 
   const closeMenu = () => {
-    props.editor.dispatchCommand(CLOSE_SKILL_SEARCH_COMMAND, undefined);
+    props.editor.dispatchCommand(
+      props.agentCommands
+        ? CLOSE_AGENT_COMMAND_SEARCH_COMMAND
+        : CLOSE_SKILL_SEARCH_COMMAND,
+      undefined
+    );
+    setMenuOpen(false);
+  };
+
+  const removeSearch = () => {
+    props.editor.dispatchCommand(
+      props.agentCommands
+        ? REMOVE_AGENT_COMMAND_SEARCH_COMMAND
+        : REMOVE_SKILL_SEARCH_COMMAND,
+      undefined
+    );
     setMenuOpen(false);
   };
 
   const insertSkill = (item: EntityItem) => {
     analytics.track('skills_menu_use', {});
-    props.editor.dispatchCommand(REMOVE_SKILL_SEARCH_COMMAND, undefined);
+    removeSearch();
     props.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
       documentId: item.id,
       documentName: item.data.name ?? '',
@@ -166,15 +220,38 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     insertSkill(item);
   };
 
-  const { popoverSplit } = useSplitLayout();
+  const insertPullRequest = (item: GithubPullRequestEntity) => {
+    removeSearch();
+    props.editor.dispatchCommand(INSERT_PR_MENTION_COMMAND, {
+      id: item.id,
+      label: `${item.metadata.owner}/${item.metadata.repo}#${item.metadata.number}`,
+    });
+  };
+
+  const insertCommand = (command: AgentCommandItem) => {
+    props.editor.dispatchCommand(INSERT_AGENT_COMMAND_COMMAND, command);
+    setMenuOpen(false);
+  };
+
+  const { popoverSplit, openWithSplit } = useSplitLayout();
+  const deleteAction = makeDeleteAction({ userId: useUserId() });
+
+  const editSkill = (item: EntityItem) => {
+    closeMenu();
+    openWithSplit({ type: 'skill', id: item.id }, { preferNewSplit: true });
+  };
+
+  const deleteSkill = (item: EntityItem) => {
+    closeMenu();
+    void deleteAction.execute([item.data]);
+  };
 
   /**
    * Opens the skill composer dialog; when the skill is created there, its
    * mention is inserted at the cursor so the AI picks it up.
    */
   const createNewSkill = () => {
-    props.editor.dispatchCommand(REMOVE_SKILL_SEARCH_COMMAND, undefined);
-    setMenuOpen(false);
+    removeSearch();
     const onSuccess = ({ documentId, title }: ComposeSkillSuccess) => {
       props.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
         documentId,
@@ -205,8 +282,15 @@ function SkillsMenuInner(props: SkillsMenuProps) {
     },
     onSelect: () => {
       const selectedItem = skills()[selectedIndex()];
+      const selectedPullRequest =
+        pullRequests()[selectedIndex() - skills().length];
+      const selectedCommand = commands()[selectedIndex() - commandOffset()];
       if (selectedItem) {
         itemAction(selectedItem);
+      } else if (selectedPullRequest) {
+        insertPullRequest(selectedPullRequest);
+      } else if (selectedCommand) {
+        insertCommand(selectedCommand);
       } else {
         void createNewSkill();
       }
@@ -245,8 +329,9 @@ function SkillsMenuInner(props: SkillsMenuProps) {
 
   const contentMaxHeight = () => {
     const h = menuAvailableHeight();
-    if (h === undefined) return 256;
-    return Math.min(256, Math.max(0, h - PANEL_DECORATION_HEIGHT));
+    const preferredHeight = props.agentCommands ? 384 : 256;
+    if (h === undefined) return preferredHeight;
+    return Math.min(preferredHeight, Math.max(0, h - PANEL_DECORATION_HEIGHT));
   };
 
   return (
@@ -266,35 +351,133 @@ function SkillsMenuInner(props: SkillsMenuProps) {
           on:touchstart={(e) => e.stopPropagation()}
         >
           <Surface depth={2} class="pt-2 pb-1.5 glass bg-menu-glass rounded-xl">
-            <div class="px-3.5 pb-1 text-xs font-medium text-ink-muted">
-              Skills
-            </div>
-            <Show
-              when={skills().length > 0}
-              fallback={
-                <div class="px-3.5 pb-1 text-ink-extra-muted">
-                  {searchTerm() ? 'No results' : 'No skills yet'}
-                </div>
-              }
+            <div
+              class="overflow-y-auto scrollbar-hidden"
+              style={{ 'max-height': `${contentMaxHeight()}px` }}
             >
-              <div
-                class="overflow-y-auto scrollbar-hidden"
-                style={{ 'max-height': `${contentMaxHeight()}px` }}
+              <ItemBin
+                label="Skills"
+                binType="skills"
+                isSelected={selectedIndex() < skills().length}
               >
-                <For each={skills()}>
-                  {(item, index) => (
-                    <MentionsMenuItem
-                      item={item}
-                      index={index()}
-                      selected={index() === selectedIndex()}
-                      itemAction={() => itemAction(item)}
-                      setIndex={setSelectedIndexFromMouse}
-                      setOpen={setMenuOpen}
-                    />
-                  )}
-                </For>
-              </div>
-            </Show>
+                <Show
+                  when={skills().length > 0}
+                  fallback={
+                    <div class="px-3.5 pb-2 text-xs text-ink-extra-muted">
+                      {searchTerm() ? 'No matching skills' : 'No skills yet'}
+                    </div>
+                  }
+                >
+                  <For each={skills()}>
+                    {(item, index) => (
+                      <MentionsMenuItem
+                        item={item}
+                        index={index()}
+                        selected={index() === selectedIndex()}
+                        itemAction={() => itemAction(item)}
+                        setIndex={setSelectedIndexFromMouse}
+                        setOpen={setMenuOpen}
+                        actions={
+                          <Show
+                            when={
+                              item.data.ownerId !== '' &&
+                              !systemSkills.isSystemSkillId(item.id)
+                            }
+                          >
+                            <SkillActions
+                              item={item}
+                              onEdit={() => editSkill(item)}
+                              onDelete={
+                                deleteAction.canExecute(item.data)
+                                  ? () => deleteSkill(item)
+                                  : undefined
+                              }
+                            />
+                          </Show>
+                        }
+                      />
+                    )}
+                  </For>
+                </Show>
+              </ItemBin>
+              <Show when={props.agentCommands}>
+                <div class="mt-2 border-t border-edge pt-2">
+                  <ItemBin
+                    label="Pull requests"
+                    binType="pull-requests"
+                    isSelected={
+                      selectedIndex() >= skills().length &&
+                      selectedIndex() < commandOffset()
+                    }
+                  >
+                    <Show
+                      when={pullRequests().length > 0}
+                      fallback={
+                        <div class="px-3.5 pb-2 text-xs text-ink-extra-muted">
+                          {pullRequestQuery.isError
+                            ? 'Could not load pull requests'
+                            : pullRequestQuery.isPending
+                              ? 'Loading pull requests…'
+                              : 'No matching pull requests'}
+                        </div>
+                      }
+                    >
+                      <For each={pullRequests()}>
+                        {(item, index) => (
+                          <PullRequestRow
+                            item={item}
+                            selected={
+                              selectedIndex() === skills().length + index()
+                            }
+                            onHover={() =>
+                              setSelectedIndexFromMouse(
+                                skills().length + index()
+                              )
+                            }
+                            onSelect={() => insertPullRequest(item)}
+                          />
+                        )}
+                      </For>
+                    </Show>
+                  </ItemBin>
+                </div>
+                <div class="mt-2 border-t border-edge pt-2">
+                  <ItemBin
+                    label="Commands"
+                    binType="commands"
+                    isSelected={
+                      selectedIndex() >= commandOffset() &&
+                      selectedIndex() < newSkillIndex()
+                    }
+                  >
+                    <Show
+                      when={commands().length > 0}
+                      fallback={
+                        <div class="px-3.5 pb-2 text-xs text-ink-extra-muted">
+                          {searchTerm()
+                            ? 'No matching commands'
+                            : 'No commands available'}
+                        </div>
+                      }
+                    >
+                      <For each={commands()}>
+                        {(command, index) => (
+                          <AgentCommandRow
+                            command={command}
+                            index={commandOffset() + index()}
+                            selected={
+                              selectedIndex() === commandOffset() + index()
+                            }
+                            setIndex={setSelectedIndexFromMouse}
+                            itemAction={() => insertCommand(command)}
+                          />
+                        )}
+                      </For>
+                    </Show>
+                  </ItemBin>
+                </div>
+              </Show>
+            </div>
             <div class="mt-1 pt-1 border-t border-edge">
               <div
                 on:mouseup={(e) => {
@@ -309,9 +492,9 @@ function SkillsMenuInner(props: SkillsMenuProps) {
                   void createNewSkill();
                   e.stopPropagation();
                 }}
-                on:mousemove={() => setSelectedIndexFromMouse(skills().length)}
+                on:mousemove={() => setSelectedIndexFromMouse(newSkillIndex())}
                 class={cn('group flex items-center p-1.5 mx-1.5 rounded-md', {
-                  'bg-ink/5': selectedIndex() === skills().length,
+                  'bg-ink/5': selectedIndex() === newSkillIndex(),
                 })}
               >
                 <div class="mr-2 flex items-center">

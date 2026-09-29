@@ -347,7 +347,7 @@ where
             ));
         }
 
-        // APNS (iOS push): 1:M (single message for all recipients' device endpoints)
+        // Mobile push: one message with all platforms grouped by recipient.
         if let Some(build_apns) = notification.build_apns.take() {
             let recipients_vec: Vec<_> = notification.req.recipient_ids.iter().cloned().collect();
             let device_endpoints = self
@@ -356,38 +356,16 @@ where
                 .await
                 .context(SendNotificationError::Other)?;
 
-            let ios_endpoints: std::collections::HashMap<_, _> = device_endpoints
-                .into_iter()
-                .filter_map(|(user_id, endpoints)| {
-                    let ios: Vec<String> = endpoints
-                        .into_iter()
-                        .filter_map(|e| match e {
-                            DeviceEndpoint::Ios(arn) => Some(arn),
-                            DeviceEndpoint::Android(_) | DeviceEndpoint::IosVoip(_) => None,
-                        })
-                        .collect();
-                    if ios.is_empty() {
-                        None
-                    } else {
-                        Some((
-                            user_id,
-                            UserApnsEndpoints {
-                                endpoints: ios,
-                                digest_state: None,
-                            },
-                        ))
-                    }
-                })
-                .collect();
+            let mobile_endpoints = group_mobile_endpoints(device_endpoints);
 
-            if !ios_endpoints.is_empty() {
+            if !mobile_endpoints.is_empty() {
                 let BuildApnsOutput { notif, attr } = build_apns;
                 apns_collapse_key = Some(attr.collapse_key.clone());
                 messages.push(QueueMessage::new_from_apns(
                     APNSTargets {
                         notif,
                         attributes: attr,
-                        ios_device_endpoints: ios_endpoints,
+                        ios_device_endpoints: mobile_endpoints,
                     },
                     typename,
                 ));
@@ -534,13 +512,15 @@ where
             }
         }
 
-        if !req.status.should_clear_push_notifs() {
+        if changed.is_empty() || !req.status.should_clear_push_notifs() {
             return deserialize_updated_notifications(changed);
         }
 
+        // Only clear notifications the repository confirmed belong to this user.
+        let notification_ids: Vec<_> = changed.iter().map(|row| row.notification_id).collect();
         let notifications_with_keys = self
             .repository
-            .get_basic_notifications(req.notification_ids)
+            .get_basic_notifications(&notification_ids)
             .await?;
 
         if notifications_with_keys.is_empty() {
@@ -552,40 +532,22 @@ where
             .get_device_endpoints(&[req.user_id.copied()])
             .await?;
 
-        let ios_endpoints: std::collections::HashMap<_, _> = device_endpoints
-            .into_iter()
-            .filter_map(|(user_id, endpoints)| {
-                let ios: Vec<String> = endpoints
-                    .into_iter()
-                    .filter_map(|e| match e {
-                        DeviceEndpoint::Ios(arn) => Some(arn),
-                        DeviceEndpoint::Android(_) | DeviceEndpoint::IosVoip(_) => None,
-                    })
-                    .collect();
-                if ios.is_empty() {
-                    None
-                } else {
-                    Some((
-                        user_id,
-                        UserApnsEndpoints {
-                            endpoints: ios,
-                            digest_state: None,
-                        },
-                    ))
-                }
-            })
-            .collect();
+        let mobile_endpoints = group_mobile_endpoints(device_endpoints);
 
-        if ios_endpoints.is_empty() {
+        if mobile_endpoints.is_empty() {
             return deserialize_updated_notifications(changed);
         }
 
+        // A channel's notifications commonly share a collapse key. Clear each push once,
+        // rather than enqueueing an identical background push for every historical row.
+        let collapse_keys: HashSet<_> = notifications_with_keys
+            .into_iter()
+            .map(|notification| notification.apns_collapse_key)
+            .collect();
         let messages: Vec<QueueMessage<'_, ClearPushIdentifier, ClearPushIdentifier>> =
-            notifications_with_keys
+            collapse_keys
                 .into_iter()
-                .map(|n| {
-                    let collapse_key = n.apns_collapse_key;
-
+                .map(|collapse_key| {
                     let notif = ClearPushIdentifier {
                         identifier: collapse_key.clone(),
                     };
@@ -606,7 +568,7 @@ where
                                 push_type: PushType::Background,
                                 collapse_key,
                             },
-                            ios_device_endpoints: ios_endpoints.clone(),
+                            ios_device_endpoints: mobile_endpoints.clone(),
                         },
                         &typename,
                     )
@@ -617,6 +579,38 @@ where
 
         deserialize_updated_notifications(changed)
     }
+}
+
+/// Group a user's registered devices into push targets, dropping users with
+/// no push-capable device. VoIP endpoints are delivered separately.
+fn group_mobile_endpoints(
+    device_endpoints: HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>,
+) -> HashMap<MacroUserIdStr<'static>, UserApnsEndpoints> {
+    device_endpoints
+        .into_iter()
+        .filter_map(|(user_id, endpoints)| {
+            let mut ios = Vec::new();
+            let mut android = Vec::new();
+            for endpoint in endpoints {
+                match endpoint {
+                    DeviceEndpoint::Ios(arn) => ios.push(arn),
+                    DeviceEndpoint::Android(arn) => android.push(arn),
+                    DeviceEndpoint::IosVoip(_) => {}
+                }
+            }
+            if ios.is_empty() && android.is_empty() {
+                return None;
+            }
+            Some((
+                user_id,
+                UserApnsEndpoints {
+                    endpoints: ios,
+                    android_endpoints: android,
+                    digest_state: None,
+                },
+            ))
+        })
+        .collect()
 }
 
 /// Deserialize updated rows from their persisted event-tagged metadata representation.
@@ -675,7 +669,7 @@ where
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         let notification_ids = self
             .repository
-            .get_notification_ids_for_entities(req.user_id.copied(), &req.entities)
+            .get_notification_ids_for_entities(req.user_id.copied(), &req.entities, &req.status)
             .await?;
 
         if notification_ids.is_empty() {

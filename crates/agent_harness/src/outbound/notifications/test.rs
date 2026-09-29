@@ -75,7 +75,7 @@ async fn a_planned_notification_becomes_an_ingress_request() {
     let ingress = Arc::new(RecordingIngress::default());
     let notifier = IngressAgentSessionNotifier::new(Arc::clone(&ingress));
 
-    for notification in plan(&settled()) {
+    for notification in plan(&settled(), true) {
         notifier.notify(notification).await;
     }
 
@@ -101,7 +101,7 @@ async fn an_ingress_failure_is_swallowed() {
     });
     let notifier = IngressAgentSessionNotifier::new(ingress);
 
-    for notification in plan(&settled()) {
+    for notification in plan(&settled(), true) {
         notifier.notify(notification).await;
     }
 }

@@ -1,8 +1,9 @@
 import { AiUsageControls, AiUsageMeter } from '@app/features/settings/AiUsage';
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { toast } from '@core/component/Toast/Toast';
+// import { useAnalytics } from '@app/lib/analytics/analytics-context';
+// import { toast } from '@core/component/Toast/Toast';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { useAiBillingSummaryQuery, useChangePlanMutation } from '@queries/auth';
+import { useAiBillingSummaryQuery } from '@queries/auth';
+// import { useChangePlanMutation } from '@queries/auth';
 import type { AiDenyCode } from '@service-auth/ai-billing-types';
 import { useNavigate } from '@solidjs/router';
 import { Button, Dialog, Surface } from '@ui';
@@ -21,14 +22,15 @@ const TITLES: Record<AiDenyCode, string> = {
 export function AiUsageLimitDialog() {
   const { usageLimitOpen, usageLimitCode, hideUsageLimit } =
     useAiUsageLimitState();
-  const analytics = useAnalytics();
+  // const analytics = useAnalytics();
   const navigate = useNavigate();
   const summary = useAiBillingSummaryQuery({ enabled: usageLimitOpen });
-  const changePlan = useChangePlanMutation();
+  // const changePlan = useChangePlanMutation();
 
   const title = () => TITLES[usageLimitCode() ?? 'ai_allowance_exhausted'];
   const returnUrl = () => `${window.location.origin}/app/settings/billing`;
 
+  /*
   const upgradeToMax = async () => {
     try {
       await changePlan.mutateAsync({ plan: 'max' });
@@ -40,6 +42,7 @@ export function AiUsageLimitDialog() {
       toast.failure("Couldn't upgrade. Please try again from Billing.");
     }
   };
+  */
 
   return (
     <Dialog
@@ -54,8 +57,7 @@ export function AiUsageLimitDialog() {
             <h2 class="text-xl font-semibold text-ink">{title()}</h2>
             <p class="text-sm text-ink-extra-muted">
               Your plan includes AI each month at Macro's usage rates. Add
-              credits or turn on usage billing to keep going now, or move to Max
-              for five times the included usage.
+              credits or turn on usage billing to keep going.
             </p>
           </div>
 
@@ -81,7 +83,7 @@ export function AiUsageLimitDialog() {
             <Button
               variant="ghost"
               depth={3}
-              class="rounded-full px-3 py-1.5"
+              class="px-3 py-1.5"
               onClick={() => {
                 hideUsageLimit();
                 navigate('/app/settings/billing');
@@ -93,11 +95,12 @@ export function AiUsageLimitDialog() {
               <Button
                 variant="ghost"
                 depth={3}
-                class="rounded-full px-3 py-1.5"
+                class="px-3 py-1.5"
                 onClick={hideUsageLimit}
               >
                 Dismiss
               </Button>
+              {/*
               <Suspense fallback={null}>
                 <Show
                   when={
@@ -107,7 +110,7 @@ export function AiUsageLimitDialog() {
                   }
                 >
                   <Button
-                    variant="cta"
+                    variant="strong"
                     class="rounded-full px-3 py-1.5"
                     disabled={changePlan.isPending}
                     onClick={() => void upgradeToMax()}
@@ -116,6 +119,7 @@ export function AiUsageLimitDialog() {
                   </Button>
                 </Show>
               </Suspense>
+              */}
             </div>
           </div>
         </section>

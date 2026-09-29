@@ -85,6 +85,7 @@ fn one_of_each() -> Vec<AgentSessionLifecycleEvent> {
                     .expect("valid user id")
                     .into_owned(),
             ],
+            origin_message_id: None,
         }),
         AgentSessionLifecycleEvent::Stopped(SessionStoppedMetadata {
             identity: identity(),

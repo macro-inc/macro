@@ -10,10 +10,11 @@ import {
 import { useAgentSessionMentionPreview } from '@queries/agent-session/mentions';
 import {
   $getNodeByKey,
+  $isRootOrShadowRoot,
   COMMAND_PRIORITY_NORMAL,
   KEY_ENTER_COMMAND,
 } from 'lexical';
-import { Show, Suspense, useContext } from 'solid-js';
+import { onMount, Show, Suspense, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { autoRegister } from '../../plugins';
 import { AgentSessionMentionLabel } from './AgentSessionMentionLabel';
@@ -22,6 +23,17 @@ import { MagicChip } from './MagicChip';
 export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
   const wrapper = useContext(LexicalWrapperContext);
   const layout = useSplitLayout();
+  // Older documents stored expanded references inside paragraphs. Parsing a
+  // saved editor state skips transforms; normalize this node on first mount.
+  onMount(() => {
+    if (!props.expanded) return;
+    wrapper?.editor.update(() => {
+      const node = $getNodeByKey(props.key);
+      if (!$isAgentSessionMentionNode(node)) return;
+      const parent = node.getParent();
+      if (parent && !$isRootOrShadowRoot(parent)) node.markDirty();
+    });
+  });
   const query = useAgentSessionMentionPreview(
     () => props.id,
     () => !wrapper?.skipPreviewFetch
@@ -122,19 +134,17 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
         />
       }
     >
-      <span
-        class="inline-block w-full align-top my-2"
-        data-agent-session-expanded="true"
-      >
+      <div class="block w-full" data-agent-session-expanded="true">
         <Suspense>
           <MagicChip
+            key={props.key}
             agentSessionId={props.id}
             promptedMessage={null}
             status="no_messages"
             onCollapse={canExpand() ? () => setExpanded(false) : undefined}
           />
         </Suspense>
-      </span>
+      </div>
     </Show>
   );
 }

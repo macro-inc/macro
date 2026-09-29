@@ -138,7 +138,6 @@ export function PlanStep(props: {
   );
 }
 
-/** The regular free/premium/max picker. */
 function PlanPicker(props: {
   finishing: boolean;
   selected: PlanTier;
@@ -149,7 +148,7 @@ function PlanPicker(props: {
   const selected = () => props.selected;
   return (
     <div class="flex flex-col gap-6">
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Index each={PLANS}>
           {(plan) => (
             <button

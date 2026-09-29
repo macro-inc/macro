@@ -231,7 +231,6 @@ const InlineFormatButton = (props: {
       shortcut={InlineShortcuts[props.format]}
       size={props.size ?? 'icon-sm'}
       variant={isActive() ? 'accent' : 'ghost'}
-      class="rounded-md"
       depth={3}
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
@@ -282,7 +281,6 @@ export const ElementFormatButton = (props: {
     <Button
       tooltip={name}
       size={props.size ?? 'icon-sm'}
-      class="rounded-md"
       depth={3}
       variant={
         isElementFormatActive(props.selection(), props.format)
@@ -527,7 +525,6 @@ export function FormatTools(props: {
         <Dropdown.Trigger
           variant={isActive() ? 'accent' : 'ghost'}
           size={buttonSize()}
-          class="rounded-md"
           depth={3}
           tooltip={'Text Styles'}
           disabled={buttonIsDisabled()}
@@ -591,7 +588,6 @@ export function FormatTools(props: {
         <Dropdown.Trigger
           variant={isActive() ? 'accent' : 'ghost'}
           size={buttonSize()}
-          class="rounded-md"
           depth={3}
           tooltip="Text Styles"
           disabled={props.buttonIsDisabled()}
@@ -650,7 +646,6 @@ export function FormatTools(props: {
             : 'ghost'
         }
         size={buttonSize()}
-        class="rounded-md"
         depth={3}
         tooltip={props.label ?? 'More Formats'}
         disabled={buttonIsDisabled()}
@@ -699,7 +694,6 @@ export function FormatTools(props: {
             : 'ghost'
         }
         size={buttonSize()}
-        class="rounded-md"
         depth={3}
         tooltip={props.label ?? 'More Formats'}
         disabled={buttonIsDisabled()}
@@ -761,7 +755,6 @@ export function FormatTools(props: {
         <Dropdown.Trigger
           variant="ghost"
           size={buttonSize()}
-          class="rounded-md"
           depth={3}
           tooltip="More formatting"
           disabled={buttonIsDisabled()}
@@ -828,7 +821,7 @@ export function FormatTools(props: {
         <Dropdown.Trigger
           variant="ghost"
           size="sm"
-          class="gap-1 rounded-md"
+          class="gap-1"
           depth={3}
           tooltip="Text style"
           disabled={buttonIsDisabled()}
@@ -896,7 +889,6 @@ export function FormatTools(props: {
           <Button
             variant="ghost"
             size={buttonSize()}
-            class="rounded-md"
             depth={3}
             onPointerDown={(e: PointerEvent) => e.preventDefault()}
             onClick={(e) => {
@@ -922,7 +914,6 @@ export function FormatTools(props: {
             <Button
               variant="ghost"
               size={buttonSize()}
-              class="rounded-md"
               depth={3}
               tooltip="Merge cells"
               onClick={handleMergeCells}
@@ -935,7 +926,6 @@ export function FormatTools(props: {
             <Button
               variant="ghost"
               size={buttonSize()}
-              class="rounded-md"
               depth={3}
               tooltip="Split cell"
               onClick={handleSplitCell}
@@ -1064,7 +1054,6 @@ export function FormatTools(props: {
             <Button
               variant="ghost"
               size="icon-sm"
-              class="rounded-md"
               depth={3}
               onPointerDown={(e: PointerEvent) => e.preventDefault()}
               onClick={handleLink}
@@ -1080,7 +1069,6 @@ export function FormatTools(props: {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="rounded-md"
                 depth={3}
                 tooltip="Comment"
                 onClick={(e) => {
@@ -1101,7 +1089,6 @@ export function FormatTools(props: {
               <Dropdown.Trigger
                 variant="ghost"
                 size="icon-sm"
-                class="rounded-md"
                 depth={3}
                 tooltip="More"
                 disabled={buttonIsDisabled()}
@@ -1178,7 +1165,6 @@ export function FormatTools(props: {
           <Button
             variant="ghost"
             size="icon-sm"
-            class="rounded-md"
             depth={3}
             tooltip="Comment"
             onClick={(e) => {

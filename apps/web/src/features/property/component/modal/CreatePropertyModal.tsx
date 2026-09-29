@@ -151,7 +151,7 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
               size="icon-sm"
               label="Remove option"
               onClick={() => props.onRemove(option().id)}
-              class="shrink-0 rounded-lg text-failure-ink"
+              class="shrink-0 text-failure-ink"
             >
               <XIcon />
             </Button>
@@ -543,7 +543,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       }}
     >
       <CommandMenuShell depth={2} class="text-sm" onKeyDown={handleKeyDown}>
-        <CommandMenuShell.Header class="my-0 h-13 gap-3 border-b-0 px-4">
+        <CommandMenuShell.Header class="my-0 gap-3 border-b-0">
           <span class="text-ink-muted">
             <SlidersIcon class="size-3.5" />
           </span>
@@ -759,16 +759,15 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
             <Button
               variant="ghost"
               size="sm"
-              class="rounded-lg"
               onClick={close}
               disabled={pending()}
             >
               Cancel
             </Button>
             <Button
-              variant={canSubmit() ? 'accent' : 'ghost'}
+              variant="strong"
               depth={3}
-              class={cn('gap-3 rounded-lg border-0', pending() && 'gap-1.5')}
+              class={cn('gap-3 ', pending() && 'gap-1.5')}
               onClick={handleCreateProperty}
               disabled={!canSubmit()}
             >

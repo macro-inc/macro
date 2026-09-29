@@ -388,6 +388,26 @@ export const useEntityActionHotkeys = (
 
   // Mute notifications (command menu only, no keybinding)
   registerHotkey({
+    scopeId,
+    description: 'Snooze notifications…',
+    keywords: ['pause', 'morning', 'weekend', 'notifications'],
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (!entities.length || !entities.every(muteAction.canExecute))
+        return false;
+      muteAction.snooze(entities);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(muteAction.canExecute);
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  registerHotkey({
     hotkeyToken: TOKENS.entity.action.mute,
     scopeId,
     description: () => {
