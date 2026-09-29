@@ -44,6 +44,10 @@ const DELETED_DOCUMENT_ID: &str = "20000000-0000-0000-0000-000000000002";
 const CHAT_ID: &str = "30000000-0000-0000-0000-000000000001";
 const DELETED_CHAT_ID: &str = "30000000-0000-0000-0000-000000000002";
 
+fn project_owner() -> Owner {
+    Owner::User(MacroUserIdStr::try_from("macro|owner@test.com").unwrap())
+}
+
 #[derive(Debug, Eq, PartialEq)]
 struct StoredSharePermission {
     link_share: Option<String>,
@@ -289,7 +293,7 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
     let permission = SharePermissionV2::new_project_share_permission(None);
     let project = repo
         .create_project(CreateProjectArgs {
-            user_id: "macro|owner@test.com".to_owned(),
+            owner: project_owner(),
             name: "Created".to_owned(),
             parent_id: Some(ROOT_ID.to_owned()),
             share_permission: permission.clone(),
@@ -329,7 +333,7 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
 
     assert!(
         repo.create_project(CreateProjectArgs {
-            user_id: "macro|owner@test.com".to_owned(),
+            owner: project_owner(),
             name: "Must roll back".to_owned(),
             parent_id: Some("missing-parent".to_owned()),
             share_permission: permission,
@@ -372,7 +376,7 @@ async fn create_defaults_enabled_link_share_to_view(pool: Pool<Postgres>) -> any
 
     let project = repo
         .create_project(CreateProjectArgs {
-            user_id: "macro|owner@test.com".to_owned(),
+            owner: project_owner(),
             name: "Team project".to_owned(),
             parent_id: None,
             share_permission: permission,

@@ -1,7 +1,6 @@
 use entity_access_db_utils::{
     AccessLevel, EntityAccessSourceType, EntityType, insert_entity_access_row,
 };
-use macro_user_id::user_id::MacroUserIdStr;
 use model::project::Project;
 use sqlx::{Postgres, Transaction};
 
@@ -13,6 +12,7 @@ pub(super) async fn create_project(
     transaction: &mut Transaction<'_, Postgres>,
     args: &CreateProjectArgs,
 ) -> Result<Project, sqlx::Error> {
+    let owner_id = args.owner.principal_id();
     let row = sqlx::query!(
         r#"
         INSERT INTO "Project" (name, "userId", "parentId", "createdAt", "updatedAt")
@@ -27,7 +27,7 @@ pub(super) async fn create_project(
             "deletedAt"::timestamptz AS deleted_at
         "#,
         args.name,
-        args.user_id,
+        owner_id,
         args.parent_id,
     )
     .fetch_one(transaction.as_mut())
@@ -52,7 +52,7 @@ pub(super) async fn create_project(
         ON CONFLICT ("userId", "itemId", "itemType") DO UPDATE
         SET "updatedAt" = NOW()
         "#,
-        args.user_id,
+        owner_id,
         project.id,
     )
     .execute(transaction.as_mut())
@@ -66,7 +66,7 @@ pub(super) async fn create_project(
         transaction,
         &project_id,
         EntityType::Project,
-        &args.user_id,
+        &owner_id,
         EntityAccessSourceType::User,
         AccessLevel::Owner,
     )
@@ -77,10 +77,7 @@ pub(super) async fn create_project(
         entity_registry_db_utils::NewEntityRecord::new(
             project_id,
             entity_registry_db_utils::RegisteredEntityType::Project,
-            model_owner::Owner::User(
-                MacroUserIdStr::try_from(args.user_id.clone())
-                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
-            ),
+            args.owner.clone(),
         ),
     )
     .await

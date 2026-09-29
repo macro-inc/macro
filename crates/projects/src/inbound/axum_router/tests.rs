@@ -32,7 +32,7 @@ use model::{
         response::GetProjectResponseData,
     },
 };
-use model_owner::Owner;
+use model_owner::{CreationPrincipal, Owner};
 use model_user::UserContext;
 use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
 use models_permissions::share_permission::{
@@ -136,7 +136,7 @@ impl ProjectService for FakeProjectService {
 
     async fn create_project(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _principal: &CreationPrincipal,
         _args: CreateProjectRequest,
     ) -> Result<Project, ProjectError> {
         self.mutations

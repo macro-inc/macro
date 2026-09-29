@@ -18,6 +18,7 @@ use model::project::{
     BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewV2,
     ProjectWithUploadRequest,
 };
+use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, UploadExtractFolderRequest,
     UploadExtractFolderResponseData,
@@ -91,11 +92,12 @@ pub trait ProjectRepo: Send + Sync + 'static {
         project_ids: &[String],
     ) -> impl Future<Output = Result<Vec<ProjectPreviewV2>, Self::Err>> + Send;
 
-    /// Get the link-share preference of the user's team, or `None` when the
-    /// user is not on a team.
+    /// Get the link-share preference of the team `owner` resolves to, per
+    /// [`model_owner::team::owner_team`]. Bots resolve through their team or
+    /// owning user; a teamless owner has no team default.
     fn get_team_default_link_share(
         &self,
-        user_id: &str,
+        owner: &Owner,
     ) -> impl Future<Output = Result<Option<TeamLinkShareDefault>, Self::Err>> + Send;
 
     /// Atomically create a project and its permission, history, and owner-access rows.
@@ -369,10 +371,11 @@ pub trait ProjectService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<AccessLevel, ProjectError>> + Send;
 
-    /// Create a project, optionally beneath an authorized parent.
+    /// Create a project owned by `principal`, optionally beneath an authorized
+    /// parent.
     fn create_project(
         &self,
-        actor: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         args: CreateProjectRequest,
     ) -> impl Future<Output = Result<Project, ProjectError>> + Send;
 

@@ -1,5 +1,7 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
+use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts, TeamShareLevel, TeamShareRequest,
@@ -20,7 +22,7 @@ const TEAM_ID: Uuid = Uuid::from_u128(0xb2222222_2222_2222_2222_222222222222);
 
 async fn create_project(repo: &TestRepo, name: &str) -> String {
     repo.create_project(CreateProjectArgs {
-        user_id: OWNER.to_owned(),
+        owner: Owner::User(MacroUserIdStr::try_from(OWNER).unwrap()),
         name: name.to_string(),
         parent_id: None,
         share_permission: SharePermissionV2::new_project_share_permission(None),

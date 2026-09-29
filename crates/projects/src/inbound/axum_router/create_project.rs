@@ -7,6 +7,7 @@ use entity_access::{
 };
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use model::project::{request::CreateProjectRequest, response::CreateProjectResponse};
+use model_owner::CreationPrincipal;
 
 use super::ProjectRouterState;
 use crate::domain::{models::ProjectError, ports::ProjectService};
@@ -41,7 +42,7 @@ where
     let data = state
         .service
         .create_project(
-            user.authorization.user.macro_user_id.clone(),
+            &CreationPrincipal::User(user.authorization.user.macro_user_id.clone()),
             project.into_inner(),
         )
         .await?;

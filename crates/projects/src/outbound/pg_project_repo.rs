@@ -74,9 +74,10 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
     #[tracing::instrument(err, skip(self))]
     async fn get_team_default_link_share(
         &self,
-        user_id: &str,
+        owner: &Owner,
     ) -> Result<Option<models_permissions::share_permission::TeamLinkShareDefault>, Self::Err> {
-        share_permission_db_utils::get_team_default_link_share(&self.pool, user_id).await
+        share_permission_db_utils::get_team_default_link_share(&self.pool, &owner.principal_id())
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]
