@@ -5,6 +5,7 @@ import { MACRO_AGENT_NAME } from '@core/constant/macroAgent';
 import { Telemetry } from '@macro-inc/observability';
 import { getDocumentPermissionToken } from '@service-storage/client';
 import { createSignal } from 'solid-js';
+import { developmentProxyUrl } from '../../core/constant/developmentProxy';
 
 // Full-URL override (scheme included) for pointing at a local wrangler dev
 // worker, e.g. VITE_AI_EDITING_WORKER_URL=http://localhost:8788 bun run dev
@@ -13,9 +14,11 @@ const overrideUrl: string | undefined = import.meta.env
 
 const AI_EDITING_WORKER_HOST =
   overrideUrl?.replace(/\/$/, '') ??
-  (import.meta.env.MODE === 'development'
-    ? 'https://ai-editing-worker-dev.macroverse.workers.dev'
-    : 'https://ai-editing-worker.macroverse.workers.dev');
+  developmentProxyUrl(
+    import.meta.env.MODE === 'development'
+      ? 'https://ai-editing-worker-dev.macroverse.workers.dev'
+      : 'https://ai-editing-worker.macroverse.workers.dev'
+  );
 
 /**
  * Model fallback chains per worker role. Mirrors the chains the backend

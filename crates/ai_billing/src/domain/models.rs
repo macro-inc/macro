@@ -242,6 +242,32 @@ pub enum AllowanceStore {
     Conflict,
 }
 
+/// Which of the payer's subscriptions funds an overage charge.
+///
+/// A payer may hold a personal subscription and a team subscription at the
+/// same time. Team owners and team members both use the team subscription.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubscriptionScope {
+    /// The subscription that is not tied to a team.
+    Personal,
+    /// The subscription for this team.
+    Team {
+        /// The team.
+        team_id: Uuid,
+    },
+}
+
+impl From<&PayerScope> for SubscriptionScope {
+    fn from(scope: &PayerScope) -> Self {
+        match scope {
+            PayerScope::Personal => Self::Personal,
+            PayerScope::TeamOwner { team_id } | PayerScope::TeamMember { team_id } => {
+                Self::Team { team_id: *team_id }
+            }
+        }
+    }
+}
+
 /// Who pays for a user's AI, and through what.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PayerScope {

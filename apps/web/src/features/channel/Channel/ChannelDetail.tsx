@@ -77,7 +77,7 @@ export type ChannelDetailProps = {
    */
   target?: ChannelTargetRequest;
   /** Re-aim the current target without remounting the channel. */
-  navigationRequest?: number;
+  navigationRequest?: number | string;
   /** Name shown until the channel loads. */
   fallbackName?: string;
   /** Whether the composer grabs focus on mount. Defaults to false. */

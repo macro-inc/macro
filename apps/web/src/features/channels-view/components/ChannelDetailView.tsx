@@ -1,4 +1,5 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { createSearchParams } from '@app/lib/split-router';
 import {
   ChannelDetail,
   ChannelDetailTopBar,
@@ -6,6 +7,7 @@ import {
 import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { ChannelEntity } from '@entity';
+import { channelsSearch } from '../channels-route';
 
 /** Adapts a resolved conversation and navigation intent to the shared surface. */
 export function ChannelDetailView(props: {
@@ -13,6 +15,7 @@ export function ChannelDetailView(props: {
   target?: ChannelTargetRequest;
 }) {
   const panel = useSplitPanelOrThrow();
+  const [search] = createSearchParams(channelsSearch);
   useBlockEntityCommands({
     id: props.channel.id,
     scopeId: panel.splitHotkeyScope,
@@ -23,6 +26,7 @@ export function ChannelDetailView(props: {
     <ChannelDetail
       channelId={props.channel.id}
       target={props.target}
+      navigationRequest={search.seek}
       fallbackName={props.channel.name}
       autofocus={false}
     >

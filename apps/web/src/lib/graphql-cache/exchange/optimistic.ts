@@ -28,6 +28,7 @@ import {
   type Present,
   type StringKey,
 } from './generated-selection';
+import { selectRecords } from './record-selection';
 
 /** Private operation-context field carrying serializable optimistic data. */
 const OPTIMISTIC_MUTATION_CONTEXT_KEY = 'normalizedCacheOptimistic';
@@ -56,6 +57,7 @@ type SelectionState = {
   readonly document: TypedDocumentNode<unknown, AnyVariables>;
   readonly variables: AnyVariables;
   readonly path: readonly EmbeddedLinkPathSegment[];
+  readonly recordRoot?: OptimisticLinkPatchWire['recordRoot'];
 };
 
 /** A type-generated path through one query result. */
@@ -272,6 +274,29 @@ export function select<TData, TVariables extends AnyVariables>(
   });
 }
 
+/**
+ * Starts a fragment-typed relation update at one explicit normalized record.
+ * It requires no cached query path and never enumerates unrelated query variants.
+ */
+export function selectRecord<
+  TData extends NormalizedEntityIdentity,
+  TVariables,
+>(
+  document: TypedDocumentNode<TData, TVariables>,
+  entity: { __typename: TData['__typename']; id: string }
+): Selection<TData> {
+  const fragment = selectRecords(document);
+  return createSelection<TData>({
+    document: document as TypedDocumentNode<unknown, AnyVariables>,
+    variables: {},
+    path: [],
+    recordRoot: {
+      fragmentName: fragment.fragmentName,
+      entityKey: normalizedEntityKey(entity),
+    },
+  });
+}
+
 /** Construct the wire key for one normalized `id: ID!` GraphQL entity. */
 export function normalizedEntityKey(entity: NormalizedEntityIdentity): string {
   return `${entity.__typename}:${entity.id}`;
@@ -297,6 +322,7 @@ export function update<TItem extends object>(
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
     path: [...selection.path],
+    ...(selection.recordRoot ? { recordRoot: selection.recordRoot } : {}),
     operation: {
       kind: operation.kind,
       entityKey: normalizedEntityKey(operation.entity),
@@ -321,6 +347,7 @@ export function upsertByField<TItem extends object, K extends ScalarKey<TItem>>(
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
     path: [...selection.path],
+    ...(selection.recordRoot ? { recordRoot: selection.recordRoot } : {}),
     operation: {
       kind: 'upsertByField',
       entityKey: normalizedEntityKey(args.entity),
@@ -357,6 +384,7 @@ export function removeEmbeddedLink<
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
     path: [...selection.path],
+    ...(selection.recordRoot ? { recordRoot: selection.recordRoot } : {}),
     operation: {
       kind: 'removeEmbeddedLink',
       listItem: args.listItem,
@@ -399,6 +427,7 @@ export function upsertEmbeddedLink<
     operationName: documentOperationName(selection.document),
     variablesJson: JSON.stringify(selection.variables ?? {}),
     path: [...selection.path],
+    ...(selection.recordRoot ? { recordRoot: selection.recordRoot } : {}),
     operation: {
       kind: 'upsertEmbeddedLink',
       listItem: args.listItem,

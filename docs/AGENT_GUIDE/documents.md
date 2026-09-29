@@ -587,7 +587,14 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
 
 - `Actions` → `Ask Macro` (opens a doc-scoped AI chat, see ai-chat.md).
 - `Details` → Owner, Created, Last updated.
-- `Tags` → `Add tags` (dialog). `Properties` → `Add property`.
+- `Tags` → `Add tags` (dialog). Click a tag's label to toggle and save; Shift-click
+  keeps the picker open for multiple selections. Reopen it to remove a tag.
+  With GraphQL Soup enabled, applying the first tag refetches only that entity's
+  properties; later edits update the existing assignment optimistically. Verify
+  both the side panel and list-row chip, then reload to confirm persistence.
+  This must also work after background backfills populate more than 128 cached
+  Soup variants—tag saves must not scan all cached pages.
+  `Properties` → `Add property`.
 - Collapsed sections: `Stats`, `History` (version time-travel), `Activity`.
 - `Activity` lists the same glyph-rail lines as `/app/component/activity` (plain glyphs on a
   thin connector, one line each with long names truncated, compact `17h` / `8d` / `1mo`

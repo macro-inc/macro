@@ -748,6 +748,7 @@ dependencies = [
  "tokio",
  "tracing",
  "utoipa",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -3299,7 +3300,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.28"
+version = "0.6.29"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -10424,6 +10425,7 @@ dependencies = [
  "futures",
  "local_e2e_test_support",
  "reqwest 0.13.4",
+ "rustls 0.23.45",
  "serde",
  "serde_json",
  "sqlx",
@@ -15753,6 +15755,8 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "agent",
+ "agent_runtime_protocol",
+ "agent_session",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
@@ -15760,6 +15764,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "bot_id",
  "channel_sender",
  "channels",
  "chat",
@@ -15798,6 +15803,7 @@ dependencies = [
  "models_permissions",
  "notification",
  "rdkafka",
+ "reqwest 0.13.4",
  "rootcause",
  "secretsmanager_client",
  "serde",

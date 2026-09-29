@@ -12,10 +12,11 @@ use model_error_response::ErrorResponse;
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionSettledMetadata,
     AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
-    ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata,
-    CommentedOnDocumentMetadata, CrmDiscussionMetadata, DocumentMentionMetadata, GithubPrComment,
-    GithubPrMention, GithubPrReview, GithubPrStatusChanged, GithubReviewRequested,
-    InitiativeDiscussionMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
+    ChannelMentionMetadata, ChannelMessageReactionMetadata, ChannelMessageSendMetadata,
+    ChannelReplyMetadata, CommentedOnDocumentMetadata, CrmDiscussionMetadata,
+    DocumentMentionMetadata, GithubPrComment, GithubPrMention, GithubPrReview,
+    GithubPrStatusChanged, GithubReviewRequested, InitiativeDiscussionMetadata,
+    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
     RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
 use notification::{
@@ -35,6 +36,7 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
         NewEmailMetadata::TYPE_NAME,
         AiResponseMetadata::TYPE_NAME,
         ChannelMessageSendMetadata::TYPE_NAME,
+        ChannelMessageReactionMetadata::TYPE_NAME,
         ChannelMentionMetadata::TYPE_NAME,
         ChannelReplyMetadata::TYPE_NAME,
         DocumentMentionMetadata::TYPE_NAME,

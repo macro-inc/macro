@@ -110,8 +110,11 @@ the shimmer.
   Hover an agent (or use the right arrow key) to open its model submenu, with
   the searchable Settings catalog, provider icons, and scrollable **More models**.
   The submenu focuses the `Search models` field so you can type immediately.
-  Clicking an agent directly uses its default; choosing a submenu model selects
-  both the agent and that model. A checkmark identifies the selected model,
+  Clicking an agent directly, or pressing Enter/Space on its focused row, uses
+  its default and clears any previous model override. Right Arrow still opens
+  the model submenu; choosing a submenu model selects both the agent and that
+  model. Escape dismisses the picker and restores focus to its trigger.
+  A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Runtimes.
   The built-in sandbox and paired macrod runtimes are not offered here.
@@ -217,6 +220,16 @@ the shimmer.
   Automations / Skills list. On touch devices, conversation links open standalone
   agent sessions or legacy chats instead of the desktop Agents workspace. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
   is `/app/md/<doc>/chat/<chat>` (split view).
+
+## Routine run history
+
+A routine's **History** can contain both legacy chats and agent sessions. Each
+row opens the surface created by that run; changing the routine's execution
+target does not change older links. Shift-click opens the run in a new split.
+Loading metadata affects only its row. Deleted, inaccessible, or missing resources
+show **Run unavailable** without a link, including failed preparation that created
+no resource. Live pending rows remain neutral; persisted unsuccessful runs keep
+the failure-colored timestamp even when their transcript is still available.
 
 ## Start a standalone chat
 
@@ -439,7 +452,10 @@ The agent has workspace tools (it can list your documents, read channels, create
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
 
-When asked, the agent also answers document comments in place. A reply row reads
+When explicitly asked, the agent uses `CommentOnDocument` to reply with `threadId`,
+start an inline markdown comment with `quote`, or start a Discussion comment with
+neither. `threadId` and `quote` cannot be combined; `occurrence` only applies with
+`quote`. Thread ids come from the comments returned by `ReadContent`. A reply row reads
 **Replied to a comment on** (or **Commented on** for a new Discussion comment) followed
 by the document, and expands to the posted text; a resolve row reads **Resolved** or
 **Reopened a comment on** the document. Asked to comment on part of a markdown

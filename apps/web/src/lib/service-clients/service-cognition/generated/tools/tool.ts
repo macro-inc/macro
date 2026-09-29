@@ -20,9 +20,9 @@ type ToolParserMap = {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
   };
-  CommentOnDocumentText: {
-    call: types.CommentOnDocumentText;
-    response: types.CommentOnDocumentTextResponse;
+  CommentOnDocument: {
+    call: types.CommentOnDocument;
+    response: types.CommentOnDocumentResponse;
   };
   ConfigureBot: {
     call: types.ConfigureBot;
@@ -224,10 +224,6 @@ type ToolParserMap = {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
   };
-  ReplyToDocumentComment: {
-    call: types.ReplyToDocumentComment;
-    response: types.ReplyToDocumentCommentResponse;
-  };
   ResolveDocumentComment: {
     call: types.ResolveDocumentComment;
     response: types.ResolveDocumentCommentResponse;
@@ -305,9 +301,9 @@ const toolParserMap = {
     call: schemas.CalculateSpreadsheet,
     response: schemas.SpreadsheetResponse,
   },
-  CommentOnDocumentText: {
-    call: schemas.CommentOnDocumentText,
-    response: schemas.CommentOnDocumentTextResponse,
+  CommentOnDocument: {
+    call: schemas.CommentOnDocument,
+    response: schemas.CommentOnDocumentResponse,
   },
   ConfigureBot: {
     call: schemas.ConfigureBot,
@@ -533,10 +529,6 @@ const toolParserMap = {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
   },
-  ReplyToDocumentComment: {
-    call: schemas.ReplyToDocumentComment,
-    response: schemas.ReplyToDocumentCommentResponse,
-  },
   ResolveDocumentComment: {
     call: schemas.ResolveDocumentComment,
     response: schemas.ResolveDocumentCommentResponse,
@@ -631,9 +623,9 @@ type ToolDataMap = {
     call: types.CalculateSpreadsheet;
     response: types.SpreadsheetResponse;
   };
-  CommentOnDocumentText: {
-    call: types.CommentOnDocumentText;
-    response: types.CommentOnDocumentTextResponse;
+  CommentOnDocument: {
+    call: types.CommentOnDocument;
+    response: types.CommentOnDocumentResponse;
   };
   ConfigureBot: {
     call: types.ConfigureBot;
@@ -834,10 +826,6 @@ type ToolDataMap = {
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
-  };
-  ReplyToDocumentComment: {
-    call: types.ReplyToDocumentComment;
-    response: types.ReplyToDocumentCommentResponse;
   };
   ResolveDocumentComment: {
     call: types.ResolveDocumentComment;

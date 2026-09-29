@@ -133,6 +133,7 @@ impl ScheduledActionExecutor for RecordingExecutor {
         Ok(InProgressExecution {
             action_id: action.id.expect("test action should have an id"),
             chat_id: None,
+            resource: None,
         })
     }
 }
@@ -160,6 +161,7 @@ impl ScheduledActionExecutor for GatedExecutor {
         Ok(InProgressExecution {
             action_id: action.id.expect("test action should have an id"),
             chat_id: None,
+            resource: None,
         })
     }
 }

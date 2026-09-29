@@ -13,7 +13,7 @@ use macro_authorization::{
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
-use macro_service_urls::ConnectionGatewayUrl;
+use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl};
 use memory::domain::service::MemoryServiceImpl;
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use notification::domain::service::SqsNotificationIngress;
@@ -24,11 +24,14 @@ use scheduled_action::domain::event_runs::{
 };
 use scheduled_action::domain::ports::ScheduledActionDispatcher;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
+use scheduled_action::domain::target_runner::TargetRunner;
+use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::inbound::axum_router::{
     ScheduledActionRouterState, health, scheduled_action_router,
 };
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
+use scheduled_action::outbound::agent_session_client::AgentSessionClient;
 use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
 use scheduled_action::outbound::event_access::EventAccessAdapter;
 use scheduled_action::outbound::inprocess_executor::{
@@ -115,6 +118,11 @@ async fn main() -> Result<()> {
         tool_context,
         notification_ingress,
     ));
+    let sessions = Arc::new(AgentSessionClient::new(
+        AgentHarnessServiceUrl::new()?.as_ref(),
+        &config.internal_api_key,
+    )?);
+    let runner = Arc::new(TargetRunner::new(runner, Arc::clone(&sessions)));
     let dispatcher_executor = InProcessExecutor::new(
         Arc::clone(&repo),
         runner,
@@ -187,7 +195,11 @@ async fn main() -> Result<()> {
 
     let service = Arc::new(
         ScheduledActionServiceImpl::new(Arc::clone(&repo), service_executor, dispatcher_tx)
-            .with_event_management_enabled(config.event_routines_enabled),
+            .with_event_management_enabled(config.event_routines_enabled)
+            .with_target_validation(TargetValidation::new(
+                sessions,
+                config.routine_agents_enabled,
+            )),
     );
     let state = ScheduledActionRouterState {
         service,
@@ -206,6 +218,7 @@ async fn main() -> Result<()> {
 
     tracing::info!(
         event_routines_enabled = config.event_routines_enabled,
+        routine_agents_enabled = config.routine_agents_enabled,
         "scheduled_action service listening on {addr}"
     );
 

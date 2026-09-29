@@ -108,6 +108,30 @@ describe('getChannelThreadName', () => {
     }
   );
 
+  it.each([undefined, 'thread-1'])(
+    'uses reaction metadata for the thread root or a reply (threadId: %s)',
+    (threadId) => {
+      const reaction = reply({
+        notification_event_type: 'channel_message_reaction',
+        notification_metadata: {
+          tag: 'channel_message_reaction',
+          content: {
+            channelName: 'Design',
+            channelType: 'public',
+            threadId,
+            messageId: threadId ? 'reply-1' : 'thread-1',
+            messageContent: 'A message',
+            emoji: '👍',
+          },
+        },
+      });
+      expect(getChannelThreadName(thread([reaction]), {})).toBe('Design');
+      expect(
+        getChannelThreadName({ ...thread([reaction]), threadId: 'other' }, {})
+      ).toBe('Unknown channel');
+    }
+  );
+
   it('uses a send notification only for the thread root', () => {
     const send = (messageId: string) =>
       reply({

@@ -6,32 +6,15 @@ on:
     branches:
     - main
     paths:
-    - Cargo.toml
-    - Cargo.lock
-    - Cross.toml
-    - clippy.toml
-    - rust-toolchain.toml
-    - .cargo/**
-    - .config/**
-    - .sqlx/**
-    - crates/**
-    - services/**
-    - tooling/just/**
-    - static_assets/**
-    - docker/**
-    - flake.nix
-    - flake.lock
-    - nix/**
-    - nix-support/**
     - infra/**
+    - .github/kafka-cluster-topics.json
+    - .github/services-config.json
     - .github/workflows/pulumi_preview_pr.yml
     - .github/workflows/reusable_preview_service.yml
     - .github/actions/preview-cloud-storage-pulumi/**
     - .github/actions/setup-nix/**
     - .github/actions/teardown-nix/**
     - .github/scripts/build-cloud-storage-lambdas-nix.sh
-    - .github/services-config.json
-    - .github/workspace-dep-closures.json
 permissions:
   contents: read
   pull-requests: write
@@ -51,32 +34,15 @@ jobs:
       uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62
       with:
         files: |-
-          Cargo.toml
-          Cargo.lock
-          Cross.toml
-          clippy.toml
-          rust-toolchain.toml
-          .cargo/**
-          .config/**
-          .sqlx/**
-          crates/**
-          services/**
-          tooling/just/**
-          static_assets/**
-          docker/**
-          flake.nix
-          flake.lock
-          nix/**
-          nix-support/**
           infra/**
+          .github/kafka-cluster-topics.json
+          .github/services-config.json
           .github/workflows/pulumi_preview_pr.yml
           .github/workflows/reusable_preview_service.yml
           .github/actions/preview-cloud-storage-pulumi/**
           .github/actions/setup-nix/**
           .github/actions/teardown-nix/**
           .github/scripts/build-cloud-storage-lambdas-nix.sh
-          .github/services-config.json
-          .github/workspace-dep-closures.json
         json: 'true'
         escape_json: 'false'
         write_output_files: 'true'
@@ -92,98 +58,48 @@ jobs:
         changed_files=.github/outputs/changed_files.txt
         jq -r '.[]' .github/outputs/all_modified_files.json > "$changed_files"
 
-        # Read service config
         config=$(cat .github/services-config.json)
 
-        # Check each service for changes
-        for service in $(echo "$config" | jq -r '.services | keys[]'); do
+        # Shared infra code, root infra manifests, and the preview's own
+        # machinery can change every stack.
+        preview_all=false
+        while IFS= read -r file; do
+          if [[ "$file" == infra/packages/* || \
+                ( "$file" == infra/* && "${file#infra/}" != */* ) || \
+                "$file" == ".github/services-config.json" || \
+                "$file" == ".github/workflows/pulumi_preview_pr.yml" || \
+                "$file" == ".github/workflows/reusable_preview_service.yml" || \
+                "$file" == .github/actions/preview-cloud-storage-pulumi/* || \
+                "$file" == .github/actions/setup-nix/* || \
+                "$file" == .github/actions/teardown-nix/* || \
+                "$file" == ".github/scripts/build-cloud-storage-lambdas-nix.sh" ]]; then
+            preview_all=true
+            break
+          fi
+        done < "$changed_files"
+
+        for service in $(jq -r '.services | keys[]' <<< "$config"); do
           bootstrap_pending=$(jq -r --arg s "$service" '.services[$s].bootstrap_pending // empty' <<< "$config")
           if jq -e --arg s "$service" '.services[$s].bootstrap_pending != null' <<< "$config" > /dev/null; then
             echo "::notice::Deferring $service live infrastructure checks: $bootstrap_pending"
             continue
           fi
-          service_changed=false
+          service_changed=$preview_all
 
-          # Workspace/build-system changes can affect every deployable.
-          # `.sqlx/` lives at the repo root, so a snapshot-only edit would
-          # otherwise match no service path or dependency-closure entry.
-          # A crate source edit is not in this list: those preview only the
-          # services whose deploy binaries depend on the crate.
-          while IFS= read -r file; do
-            if [[ "$file" == "Cargo.toml" || "$file" == "Cargo.lock" || \
-                  "$file" == "Cross.toml" || \
-                  "$file" == "rust-toolchain.toml" || "$file" == .cargo/* || \
-                  "$file" == .config/* || "$file" == .sqlx/* || \
-                  "$file" == tooling/just/* || "$file" == static_assets/* || \
-                  "$file" == docker/* || "$file" == "flake.nix" || \
-                  "$file" == "flake.lock" || "$file" == nix/* || \
-                  "$file" == nix-support/* || "$file" == infra/packages/* ]]; then
-              service_changed=true
-              break
-            fi
-            # Root infra manifests/configuration are shared by every stack.
-            if [[ "$file" == infra/* && "${file#infra/}" != */* ]]; then
-              service_changed=true
-              break
-            fi
-            if [[ "$file" == ".github/services-config.json" || \
-                  "$file" == ".github/workflows/pulumi_preview_pr.yml" || \
-                  "$file" == ".github/workflows/reusable_preview_service.yml" || \
-                  "$file" == .github/actions/preview-cloud-storage-pulumi/* || \
-                  "$file" == .github/actions/setup-nix/* || \
-                  "$file" == .github/actions/teardown-nix/* || \
-                  "$file" == ".github/scripts/build-cloud-storage-lambdas-nix.sh" || \
-                  "$file" == ".github/workspace-dep-closures.json" ]]; then
-              service_changed=true
-              break
-            fi
-          done < "$changed_files"
-
-          # Get all source and stack globs for this service.
-          service_paths=$(echo "$config" | jq -r --arg s "$service" \
-            '(.services[$s].source_paths // [])[], (.services[$s].stack_path // empty)')
-
-          # Check if any changed files match service paths. The action writes
-          # the list to disk so very large PRs cannot exceed the runner's
-          # environment/argument-size limit.
-          if [[ "$service_changed" != "true" ]]; then
+          stack_path=$(jq -r --arg s "$service" '.services[$s].stack_path // empty' <<< "$config")
+          if [[ "$service_changed" != "true" && -n "$stack_path" ]]; then
             while IFS= read -r file; do
-              while IFS= read -r path; do
-                if [[ -n "$path" && "$file" == $path ]]; then
-                  service_changed=true
-                  break 2
-                fi
-              done <<< "$service_paths"
+              if [[ "$file" == $stack_path ]]; then
+                service_changed=true
+                break
+              fi
             done < "$changed_files"
           fi
 
-          # Match crate/service source against each deployable's workspace
-          # dependency closure so `crates/foo` previews foo's consumers, not
-          # every stack. Binary names that are not package names are mapped
-          # onto the crate that contains them.
-          if [[ "$service_changed" != "true" ]]; then
-            crates=$(echo "$config" | jq -r --arg s "$service" '
-              [(.services[$s].deploy_binaries // [])[], (.services[$s].deploy_lambdas // [])[]]
-              | map(
-                  if . == "connection_gateway_service" then "connection_gateway"
-                  elif . == "service" then "scheduled_action"
-                  elif . == "pubsub_workers" then "email_service"
-                  else . end
-                )
-              | unique | .[]
-            ')
-            while IFS= read -r crate; do
-              [[ -z "$crate" ]] && continue
-              while IFS= read -r dir; do
-                [[ -z "$dir" ]] && continue
-                while IFS= read -r file; do
-                  if [[ "$file" == "$dir" || "$file" == "$dir"/* ]]; then
-                    service_changed=true
-                    break 3
-                  fi
-                done < "$changed_files"
-              done < <(jq -r --arg c "$crate" '.closures[$c] // empty | .[]' .github/workspace-dep-closures.json)
-            done <<< "$crates"
+          # The kafka-cluster stack reads its topics from this generated file.
+          if [[ "$service" == "kafka-cluster" ]] && \
+              grep -qxF .github/kafka-cluster-topics.json "$changed_files"; then
+            service_changed=true
           fi
 
           if [[ "$service_changed" == "true" ]]; then

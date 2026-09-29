@@ -180,8 +180,11 @@ export const homePreviewRoute = defineRoute({
   remountKey: ({ blockType, previewId }) =>
     `${homeBaseBlockType(blockType)}:${previewId}`,
   claim: ({ blockType, previewId }) => ({
-    namespace: 'block',
-    id: `${homeBaseBlockType(blockType)}:${previewId}`,
+    namespace: blockType === 'agent' ? 'agent' : 'block',
+    id:
+      blockType === 'agent'
+        ? previewId
+        : `${homeBaseBlockType(blockType)}:${previewId}`,
   }),
   toReference: ({ previewId, blockType }) =>
     blockType === 'pr'

@@ -2,8 +2,15 @@ import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
 import type { ChannelEntity } from '@entity/types/entity';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const mocks = vi.hoisted(() => ({
+  routeSearch: vi.fn((): { seek?: string } => ({})),
+}));
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
+  createSearchParams: () => [mocks.routeSearch()],
+}));
 vi.mock('@app/features/next-soup/actions', () => ({
   useBlockEntityCommands: vi.fn(),
 }));
@@ -11,8 +18,13 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test' }),
 }));
 vi.mock('@channel/Channel/ChannelDetail', () => ({
-  ChannelDetail: (props: { target?: ChannelTargetRequest }) => (
-    <output data-testid="target">{JSON.stringify(props.target)}</output>
+  ChannelDetail: (props: {
+    target?: ChannelTargetRequest;
+    navigationRequest?: string;
+  }) => (
+    <output data-testid="target" data-request={props.navigationRequest}>
+      {JSON.stringify(props.target)}
+    </output>
   ),
   ChannelDetailTopBar: () => null,
 }));
@@ -32,6 +44,10 @@ const replyTarget = {
   threadId: 'root',
 };
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.routeSearch.mockReturnValue({});
+});
 afterEach(cleanup);
 
 describe('Chat detail navigation', () => {
@@ -58,6 +74,24 @@ describe('Chat detail navigation', () => {
       <ChannelDetailView channel={selected()} target={replyTarget} />
     ));
     setSelected({ ...channel, notifications: () => [] });
+    expect(screen.getByTestId('target').textContent).toBe(
+      JSON.stringify(replyTarget)
+    );
+  });
+
+  it('replays the same search target without re-deriving it from notifications', () => {
+    const [seek, setSeek] = createSignal('first');
+    mocks.routeSearch.mockReturnValue({
+      get seek() {
+        return seek();
+      },
+    });
+    render(() => <ChannelDetailView channel={channel} target={replyTarget} />);
+    expect(screen.getByTestId('target').dataset.request).toBe('first');
+
+    setSeek('repeat');
+
+    expect(screen.getByTestId('target').dataset.request).toBe('repeat');
     expect(screen.getByTestId('target').textContent).toBe(
       JSON.stringify(replyTarget)
     );

@@ -6,12 +6,142 @@ use agent_egress::domain::model::{
 };
 use agent_egress::domain::service::EgressService;
 use agent_egress::inbound::axum_router::EgressRouterState;
+use agent_session::domain::routines::{
+    PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession, RoutineActionStatus,
+    RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError, RoutineSessions,
+    ValidateRoutineSession, ValidatedRoutineSession,
+};
+use agent_session::inbound::routine_sessions::{RoutineSessionsState, routine_sessions_router};
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use macro_authorization::{
+    INTERNAL_API_KEY_HEADER, InternalAuthConfig, MacroAuthorizationServiceImpl,
+    MacroAuthorizationState, NoBotAuthorizer, NoUserApiKeyAuthorizer, NoopMacroAuthJwtValidator,
+};
 use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
+
+#[derive(Default)]
+struct RoutineSessionsSpy(Mutex<Vec<String>>);
+
+impl RoutineSessionsSpy {
+    fn deny<T>(&self, owner: impl ToString) -> Result<T, RoutineSessionError> {
+        self.0.lock().unwrap().push(owner.to_string());
+        Err(RoutineSessionError::Forbidden)
+    }
+}
+
+impl RoutineSessions for RoutineSessionsSpy {
+    async fn validate(
+        &self,
+        command: ValidateRoutineSession,
+    ) -> Result<ValidatedRoutineSession, RoutineSessionError> {
+        self.deny(command.owner)
+    }
+
+    async fn prepare(
+        &self,
+        command: PrepareRoutineSession,
+    ) -> Result<PreparedRoutineSession, RoutineSessionError> {
+        self.deny(command.selection.owner)
+    }
+
+    async fn prompt(
+        &self,
+        command: PromptRoutineSession,
+    ) -> Result<RoutinePromptAccepted, RoutineSessionError> {
+        self.deny(command.action.owner)
+    }
+
+    async fn status(
+        &self,
+        command: RoutineSessionAction,
+    ) -> Result<RoutineActionStatus, RoutineSessionError> {
+        self.deny(command.owner)
+    }
+
+    async fn cancel(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+        self.deny(command.owner)
+    }
+}
+
+#[tokio::test]
+async fn routine_sessions_preserve_internal_auth_and_owner_at_both_mounts() {
+    let service = Arc::new(RoutineSessionsSpy::default());
+    let auth = MacroAuthorizationServiceImpl::new(
+        NoopMacroAuthJwtValidator,
+        InternalAuthConfig {
+            api_key: "internal-test-key".into(),
+            default_user_id: None,
+        },
+        NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
+    );
+    let app = mount_at_root_and_prefix(
+        routine_sessions_router(RoutineSessionsState::new(
+            service.clone(),
+            MacroAuthorizationState::new(Arc::new(auth)),
+        )),
+        GATEWAY_PATH_PREFIX,
+    );
+    let owner = "macro|routine-owner@example.com";
+    let selection = serde_json::json!({
+        "owner": owner, "bot_id": "01900000-0000-7000-8000-000000000001", "model": null,
+    });
+    let action = serde_json::json!({
+        "owner": owner, "bot_id": "01900000-0000-7000-8000-000000000001",
+        "session_id": "01900000-0000-7000-8000-000000000002",
+        "action_id": "01900000-0000-7000-8000-000000000003",
+    });
+    for prefix in ["", GATEWAY_PATH_PREFIX] {
+        for (operation, command) in [
+            ("validate", selection.clone()),
+            (
+                "prepare",
+                serde_json::json!({"selection": selection, "session_id": action["session_id"]}),
+            ),
+            (
+                "prompt",
+                serde_json::json!({"action": action, "prompt": "private prompt"}),
+            ),
+            ("status", action.clone()),
+            ("cancel", action.clone()),
+        ] {
+            for key in [None, Some("wrong"), Some("internal-test-key")] {
+                let before = service.0.lock().unwrap().len();
+                let mut request = Request::builder()
+                    .method("POST")
+                    .uri(format!("{prefix}/internal/routine-sessions/{operation}"))
+                    .header("content-type", "application/json");
+                if let Some(key) = key {
+                    request = request.header(INTERNAL_API_KEY_HEADER, key);
+                }
+                let response = app
+                    .clone()
+                    .oneshot(request.body(Body::from(command.to_string())).unwrap())
+                    .await
+                    .unwrap();
+                if key == Some("internal-test-key") {
+                    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+                    let bytes = axum::body::to_bytes(response.into_body(), 1024)
+                        .await
+                        .unwrap();
+                    assert_eq!(
+                        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+                        serde_json::json!({"code": "forbidden"})
+                    );
+                    assert_eq!(service.0.lock().unwrap().last().unwrap(), owner);
+                    assert_eq!(service.0.lock().unwrap().len(), before + 1);
+                } else {
+                    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+                    assert_eq!(service.0.lock().unwrap().len(), before);
+                }
+            }
+        }
+    }
+}
 
 #[tokio::test]
 async fn health_is_reachable_at_root_and_gateway_prefix() {

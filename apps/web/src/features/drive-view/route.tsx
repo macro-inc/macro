@@ -9,7 +9,9 @@ import {
 import { callDetailSearch } from '@block-call/call-route';
 import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as MARKDOWN_URL_PARAMS } from '@block-md/constants';
+import { markdownDetailSearch } from '@block-md/markdown-route';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
+import { pdfDetailSearch } from '@block-pdf/pdf-route';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   NewAppView,
@@ -136,6 +138,7 @@ const documentRemountKey = ({
 
 export const driveRootDocumentRoute = defineRoute({
   id: 'drive-document',
+  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -151,6 +154,7 @@ export const driveRootDocumentRoute = defineRoute({
 
 export const driveFolderDocumentRoute = defineRoute({
   id: 'drive-folder-document',
+  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -166,6 +170,7 @@ export const driveFolderDocumentRoute = defineRoute({
 
 export const driveTabDocumentRoute = defineRoute({
   id: 'drive-tab-document',
+  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,

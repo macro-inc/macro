@@ -67,8 +67,10 @@ and every 30 seconds, so missed events and gateway restarts recover automaticall
   lease replacement accumulated across reloads until every stream was cut.
   Expiry, idle timeout and one-preview-per-session are the controls that bound
   cost.
-- Per preview: 512 concurrent HTTP streams and eight WebSockets; 16 MiB request
-  bodies, 30-second upstream response-header timeout. Traffic is streamed.
+- Per preview: 4096 concurrent HTTP streams (queued, not refused) and eight
+  WebSockets; 16 MiB request bodies, 30-second upstream response-header timeout.
+  Traffic is streamed. Excess HTTP streams wait for a slot so a Vite cold load
+  is not served `text/plain` refusals that browsers report as corrupted modules.
 - 1,024 SSH connections, bounded SSH authentication time, 128 concurrent control
   requests, 64 KiB control bodies, 15-second control timeout. Tickets and browser
   credentials also have bounded registries and expiry.

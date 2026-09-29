@@ -509,7 +509,7 @@ impl<S: Storage> Engine<S> {
                     source
                         .link_patches
                         .iter()
-                        .map(OptimisticLinkPatch::revalidation),
+                        .filter_map(OptimisticLinkPatch::revalidation),
                 ),
             );
             layers.push(OptimisticLayer {
@@ -1460,7 +1460,7 @@ impl<S: Storage> Engine<S> {
             revalidations
                 .iter()
                 .cloned()
-                .chain(patches.iter().map(OptimisticLinkPatch::revalidation)),
+                .chain(patches.iter().filter_map(OptimisticLinkPatch::revalidation)),
         );
         for mutation in &projection_mutations {
             mutation
@@ -2151,9 +2151,7 @@ impl<S: Storage> Engine<S> {
         ),
         EngineError<S::Error>,
     > {
-        if !patches.is_empty() {
-            candidates.insert(EntityKey::root());
-        }
+        candidates.extend(patches.iter().map(OptimisticLinkPatch::root_key));
         loop {
             let bases = self.load_bases(&candidates).await?;
             let composed = effective_records(&bases, layers, &candidates);
