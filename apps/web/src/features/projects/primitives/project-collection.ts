@@ -16,6 +16,7 @@ import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type { ProjectRow, ProjectsContext } from '../context/projects-context';
 import type { ProjectFilters } from '../core/project';
+import { withPendingProjects } from './pending-projects';
 
 export type ProjectListEntity = ProjectRow & {
   id: string;
@@ -47,6 +48,8 @@ export type ProjectsViewState =
 
 export function createProjectCollection(capabilities: {
   createSource: ProjectsContext['createCollectionSource'];
+  /** Projects being created lead the list until the server settles them. */
+  createPendingSource: ProjectsContext['createPendingProjectsSource'];
   userId: Accessor<string | undefined>;
   onOpen?: (id: string, metadata?: ProjectListActivation) => void;
   initialState?: ProjectCollectionSnapshot;
@@ -73,7 +76,7 @@ export function createProjectCollection(capabilities: {
     defaultExpanded: true,
     initialToggledKeys: initial?.collapsedGroupIds,
   });
-  const source = capabilities.createSource(() => ({
+  const filters = (): ProjectFilters => ({
     query: query().trim() || undefined,
     status: status() || undefined,
     priority: priority() || undefined,
@@ -86,7 +89,9 @@ export function createProjectCollection(capabilities: {
     assignee: mine() ? capabilities.userId() : undefined,
     sort: sort(),
     descending: true,
-  }));
+  });
+  const source = capabilities.createSource(filters);
+  const pending = capabilities.createPendingSource();
   const state = createMemo((): ProjectsViewState => {
     const rows = source.rows();
     if (rows === undefined) {
@@ -96,7 +101,7 @@ export function createProjectCollection(capabilities: {
     }
     return {
       kind: 'ready',
-      rows,
+      rows: withPendingProjects(rows, pending.projects(), filters()),
       backgroundError: source.error(),
     };
   });
@@ -184,11 +189,12 @@ export function createProjectCollection(capabilities: {
       getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
     },
     isNavigable: (row) => row.kind !== 'section-header',
-    isSelectable: (row) => row.kind === 'entity',
+    // A pending project may not exist yet, so it cannot be opened or batched.
+    isSelectable: (row) => row.kind === 'entity' && !row.entity.pending,
     onActivate: ({ item, metadata }) => {
       if (item.kind === 'group-header') disclosure.toggle(item.groupId);
       else if (item.kind === 'load-more') void source.loadMore();
-      else if (item.kind === 'entity')
+      else if (item.kind === 'entity' && !item.entity.pending)
         capabilities.onOpen?.(item.entity.id, metadata);
     },
   });

@@ -1,6 +1,8 @@
 import type { Property, PropertyApiValues } from '@property/types';
 import { createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import type {
+  ProjectCreationResult,
   ProjectPropertyDraft,
   ProjectsContext,
 } from '../context/projects-context';
@@ -12,6 +14,9 @@ export type ProjectComposerDraft = {
   createdId?: string;
   error?: string;
 };
+
+const PROPERTIES_FAILED =
+  'Your project was created, but some properties could not be saved. Retry to finish saving it.';
 
 /** Retain the created identity if a property save fails so retry cannot duplicate it. */
 export function createProjectComposer(
@@ -34,6 +39,26 @@ export function createProjectComposer(
   const [createdId, setCreatedId] = createSignal(initial?.createdId);
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal(initial?.error);
+  // The composer may be closed by now; its signals still feed the failure draft.
+  const settle = async (creation: Promise<ProjectCreationResult>) => {
+    const result = await creation;
+    setPending(false);
+    match(result)
+      .with({ status: 'created' }, ({ id }) => onCreated(id))
+      .with({ status: 'propertiesFailed' }, ({ id }) => {
+        setCreatedId(id);
+        setError(PROPERTIES_FAILED);
+      })
+      .with({ status: 'failed' }, ({ error }) =>
+        setError(
+          createdId()
+            ? PROPERTIES_FAILED
+            : error.message || 'Could not create project.'
+        )
+      )
+      .exhaustive();
+    return result;
+  };
   return {
     name,
     setName,
@@ -64,36 +89,23 @@ export function createProjectComposer(
           value,
         })
       ),
-    async submit(): Promise<'created' | 'failed' | undefined> {
+    /**
+     * Starts creation, or returns nothing when there is nothing to submit.
+     * The project is listed as pending at once, so callers need not wait for
+     * the returned outcome before closing the composer.
+     */
+    submit(): Promise<ProjectCreationResult> | undefined {
       if (pending() || !name().trim()) return;
       setPending(true);
       setError(undefined);
-      try {
-        const id =
-          createdId() ??
-          (
-            await commands.create({
-              name: name().trim(),
-              shareWithTeam: shareWithTeam(),
-            })
-          ).id;
-        setCreatedId(id);
-        for (const { property, value } of drafts().values())
-          await commands.saveProperty(id, property, value);
-        onCreated(id);
-        return 'created';
-      } catch (error) {
-        setError(
-          createdId()
-            ? 'Your project was created, but some properties could not be saved. Retry to finish saving it.'
-            : error instanceof Error
-              ? error.message
-              : 'Could not create project.'
-        );
-        return 'failed';
-      } finally {
-        setPending(false);
-      }
+      return settle(
+        commands.create({
+          name: name().trim(),
+          shareWithTeam: shareWithTeam(),
+          properties: [...drafts().values()],
+          createdId: createdId(),
+        })
+      );
     },
   };
 }

@@ -11,10 +11,11 @@ import {
 import { type ComponentProps, type ParentProps, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
+  type ProjectCreationInput,
+  type ProjectCreationResult,
   type ProjectsContext,
   ProjectsProvider,
 } from '../context/projects-context';
-import type { ProjectDetail } from '../core/project';
 import type { ProjectComposerDraft } from '../primitives/create-project';
 import { CreateProject } from './create-project';
 
@@ -67,28 +68,29 @@ const dueDate: Property = {
   createdAt: '',
   updatedAt: '',
 };
-const project: ProjectDetail = {
-  id: 'project',
-  name: 'Launch',
-  descriptionDocumentId: 'description',
-  ownerId: 'owner',
-  memberIds: [],
-  taskIds: [],
-  access: 'owner',
-  createdAt: '',
-  updatedAt: '',
-};
 function commands() {
   return {
     createTask: vi.fn(async () => null),
     pending: () => false,
-    create: vi.fn(async () => project),
+    create: vi.fn(
+      async (_input: ProjectCreationInput): Promise<ProjectCreationResult> => ({
+        status: 'created',
+        id: 'project',
+      })
+    ),
     saveProperty: vi.fn(async () => {}),
     rename: vi.fn(async () => {}),
     setMembers: vi.fn(async () => {}),
     assignTasks: vi.fn(async () => []),
     delete: vi.fn(async () => {}),
   } satisfies ReturnType<ProjectsContext['createCommands']>;
+}
+function deferred() {
+  let resolve!: (result: ProjectCreationResult) => void;
+  const promise = new Promise<ProjectCreationResult>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
 }
 function setup(
   service = commands(),
@@ -101,6 +103,7 @@ function setup(
   const context: ProjectsContext = {
     userId: () => 'owner',
     createCollectionSource: unused,
+    createPendingProjectsSource: unused,
     createProjectSource: unused,
     createReferencesSource: unused,
     createPropertyDefinitionsSource: () => ({
@@ -142,9 +145,16 @@ function setup(
   ));
   return { ...view, service, onCreated, onClose, onContinueInSplit, onFailure };
 }
+const dueValue = {
+  valueType: 'DATE' as const,
+  value: new Date('2026-10-01T00:00:00Z'),
+};
 
-it('uses the native composer and submits edited property values and team-sharing choice', async () => {
-  const { service, onCreated } = setup();
+it('closes as soon as it submits, then opens the project once the server confirms it', async () => {
+  const service = commands();
+  const creation = deferred();
+  service.create.mockReturnValueOnce(creation.promise);
+  const { onCreated, onClose, onFailure } = setup(service);
   expect(screen.queryByRole('dialog')).toBeNull();
   const title = screen.getByRole('textbox', { name: 'Project name' });
   expect(document.activeElement).toBe(title);
@@ -159,29 +169,40 @@ it('uses the native composer and submits edited property values and team-sharing
   fireEvent.click(screen.getByRole('button', { name: 'Set due date' }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'Share with my team' }));
   fireEvent.click(screen.getByRole('button', { name: /Create Project/ }));
-  await waitFor(() => expect(onCreated).toHaveBeenCalledWith('project'));
+  // Nothing is awaited before the composer closes: the list shows it pending.
+  expect(onClose).toHaveBeenCalledOnce();
   expect(service.create).toHaveBeenCalledWith({
     name: 'Launch',
     shareWithTeam: false,
+    properties: [{ property: dueDate, value: dueValue }],
+    createdId: undefined,
   });
-  expect(service.saveProperty).toHaveBeenCalledWith('project', dueDate, {
-    valueType: 'DATE',
-    value: new Date('2026-10-01T00:00:00Z'),
-  });
+  expect(onCreated).not.toHaveBeenCalled();
+  creation.resolve({ status: 'created', id: 'project' });
+  await waitFor(() => expect(onCreated).toHaveBeenCalledWith('project'));
+  expect(onFailure).not.toHaveBeenCalled();
 });
 
 it('continues a failed property save in a split without losing the draft or creating a duplicate', async () => {
   const service = commands();
-  service.saveProperty.mockRejectedValueOnce(new Error('offline'));
+  service.create.mockResolvedValueOnce({
+    status: 'propertiesFailed',
+    id: 'project',
+    error: new Error('offline'),
+  });
   const view = setup(service);
   fireEvent.input(screen.getByRole('textbox', { name: 'Project name' }), {
     target: { value: 'Launch' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Set due date' }));
   fireEvent.click(screen.getByRole('button', { name: /Create Project/ }));
+  expect(view.onClose).toHaveBeenCalledOnce();
   expect(await screen.findByRole('alert')).toHaveProperty(
     'textContent',
     expect.stringContaining('Retry')
+  );
+  expect(view.onFailure).toHaveBeenCalledWith(
+    expect.objectContaining({ name: 'Launch', createdId: 'project' })
   );
   expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveProperty(
     'disabled',
@@ -195,10 +216,7 @@ it('continues a failed property save in a split without losing the draft or crea
     screen.getByRole('button', { name: 'Continue editing in split' })
   );
   const draft = view.onContinueInSplit.mock.calls[0][0] as ProjectComposerDraft;
-  expect(draft.properties[0].value).toEqual({
-    valueType: 'DATE',
-    value: new Date('2026-10-01T00:00:00Z'),
-  });
+  expect(draft.properties[0].value).toEqual(dueValue);
   cleanup();
   const continued = setup(service, draft);
   expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveProperty(
@@ -212,39 +230,49 @@ it('continues a failed property save in a split without losing the draft or crea
   fireEvent.click(
     screen.getByRole('button', { name: /Retry saving properties/ })
   );
+  expect(continued.onClose).toHaveBeenCalledOnce();
   await waitFor(() =>
     expect(continued.onCreated).toHaveBeenCalledWith('project')
   );
-  expect(service.create).toHaveBeenCalledTimes(1);
-  expect(service.saveProperty).toHaveBeenCalledTimes(2);
+  // The retry names the existing project, so only its properties are saved.
+  expect(service.create).toHaveBeenLastCalledWith({
+    name: 'Launch',
+    shareWithTeam: true,
+    properties: [{ property: dueDate, value: dueValue }],
+    createdId: 'project',
+  });
 });
 
 it('retains the draft after creation fails, blocks duplicate keyboard submits, and clears intentionally', async () => {
   const service = commands();
-  let rejectCreation!: (error: Error) => void;
-  service.create.mockImplementationOnce(
-    () =>
-      new Promise((_, reject) => {
-        rejectCreation = reject;
-      })
-  );
-  const { onCreated } = setup(service);
+  const creation = deferred();
+  service.create.mockReturnValueOnce(creation.promise);
+  const { onCreated, onClose, onFailure } = setup(service);
   const title = screen.getByRole('textbox', { name: 'Project name' });
   fireEvent.keyDown(title, { key: 'Enter', metaKey: true });
   expect(service.create).not.toHaveBeenCalled();
+  expect(onClose).not.toHaveBeenCalled();
   fireEvent.input(title, { target: { value: 'Launch' } });
   fireEvent.keyDown(title, { key: 'Enter', metaKey: true });
   fireEvent.keyDown(title, { key: 'Enter', metaKey: true });
   expect(service.create).toHaveBeenCalledTimes(1);
+  expect(onClose).toHaveBeenCalledOnce();
   expect(screen.getByRole('button', { name: 'Close' })).toHaveProperty(
     'disabled',
     true
   );
-  rejectCreation(new Error('offline'));
+  creation.resolve({ status: 'failed', error: new Error('offline') });
   expect(await screen.findByRole('alert')).toHaveProperty(
     'textContent',
     'offline'
   );
+  expect(onFailure).toHaveBeenCalledWith({
+    name: 'Launch',
+    shareWithTeam: true,
+    properties: [],
+    createdId: undefined,
+    error: 'offline',
+  });
   expect(title).toHaveProperty('value', 'Launch');
   fireEvent.keyDown(title, { key: 'Enter', ctrlKey: true });
   await waitFor(() => expect(onCreated).toHaveBeenCalledWith('project'));
@@ -272,40 +300,53 @@ it('retains the draft after creation fails, blocks duplicate keyboard submits, a
   });
 });
 
-it('returns the created identity and property draft for recovery if the composer closes during a failed save', async () => {
-  const service = commands();
-  let rejectSave!: (error: Error) => void;
-  service.saveProperty.mockImplementationOnce(
-    () =>
-      new Promise((_, reject) => {
-        rejectSave = reject;
-      })
-  );
-  const view = setup(service);
-  fireEvent.input(screen.getByRole('textbox', { name: 'Project name' }), {
-    target: { value: 'Launch' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Set due date' }));
-  fireEvent.click(screen.getByRole('button', { name: /Create Project/ }));
-  await waitFor(() => expect(service.saveProperty).toHaveBeenCalledOnce());
-  cleanup();
-  rejectSave(new Error('offline'));
-  await waitFor(() => expect(view.onFailure).toHaveBeenCalledOnce());
-  expect(view.onCreated).not.toHaveBeenCalled();
-  expect(view.onFailure).toHaveBeenCalledWith(
-    expect.objectContaining({
-      name: 'Launch',
+it.each([
+  {
+    outcome: 'creation',
+    result: { status: 'failed', error: new Error('offline') },
+    recovered: { createdId: undefined, error: 'offline' },
+  },
+  {
+    outcome: 'a property save',
+    result: {
+      status: 'propertiesFailed',
+      id: 'project',
+      error: new Error('offline'),
+    },
+    recovered: {
       createdId: 'project',
+      error: expect.stringContaining('Retry'),
+    },
+  },
+] satisfies {
+  outcome: string;
+  result: ProjectCreationResult;
+  recovered: Partial<ProjectComposerDraft>;
+}[])(
+  'returns the draft for recovery when $outcome fails after the composer closed',
+  async ({ result, recovered }) => {
+    const service = commands();
+    const creation = deferred();
+    service.create.mockReturnValueOnce(creation.promise);
+    const view = setup(service);
+    fireEvent.input(screen.getByRole('textbox', { name: 'Project name' }), {
+      target: { value: 'Launch' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Set due date' }));
+    fireEvent.click(screen.getByRole('button', { name: /Create Project/ }));
+    expect(view.onClose).toHaveBeenCalledOnce();
+    cleanup();
+    creation.resolve(result);
+    await waitFor(() => expect(view.onFailure).toHaveBeenCalledOnce());
+    expect(view.onCreated).not.toHaveBeenCalled();
+    expect(view.onFailure).toHaveBeenCalledWith({
+      name: 'Launch',
       shareWithTeam: true,
-      properties: [
-        {
-          property: dueDate,
-          value: { valueType: 'DATE', value: new Date('2026-10-01T00:00:00Z') },
-        },
-      ],
-    })
-  );
-});
+      properties: [{ property: dueDate, value: dueValue }],
+      ...recovered,
+    });
+  }
+);
 
 it('keeps the project name focused after the popover applies initial focus', async () => {
   setup(commands(), undefined, true);

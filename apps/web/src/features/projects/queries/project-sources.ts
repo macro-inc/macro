@@ -2,6 +2,7 @@ import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import {
+  type BulkSaveEntityPropertiesInput,
   createGraphqlBulkSaveEntityPropertiesMutation,
   refetchGraphqlInitiativeProperties,
 } from '@queries/properties/graphql/entity';
@@ -16,10 +17,17 @@ import {
   useQuery,
 } from '@tanstack/solid-query';
 import type { Client } from '@urql/core';
-import type { Accessor } from 'solid-js';
-import type { ProjectsContext } from '../context/projects-context';
+import { type Accessor, createRoot } from 'solid-js';
+import type {
+  ProjectPropertyDraft,
+  ProjectsContext,
+} from '../context/projects-context';
 import { assignProjectTasks } from '../core/assignment';
 import type { ProjectDetail, TaskProjectReference } from '../core/project';
+import {
+  createProjectCreationMutation,
+  usePendingProjects,
+} from './create-project';
 import { createProjectTaskMutation } from './create-project-task';
 import { projectKeys } from './keys';
 import { projectDetailQueryOptions } from './project-identity';
@@ -31,6 +39,58 @@ const accessLost = (error: unknown) =>
   ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'].some((code) =>
     thrownResultErrorHasCode(error, code)
   );
+
+const propertyInput = (
+  entityId: string,
+  properties: readonly ProjectPropertyDraft[]
+): BulkSaveEntityPropertiesInput => ({
+  properties: properties.map(({ property, value }) => ({
+    entityType: 'INITIATIVE',
+    entityId,
+    property,
+    apiValues: value,
+  })),
+});
+
+async function refreshSavedProperties(
+  cache: QueryClient,
+  input: BulkSaveEntityPropertiesInput
+) {
+  await Promise.all([
+    ...[...new Set(input.properties.map(({ entityId }) => entityId))].map(
+      refetchGraphqlInitiativeProperties
+    ),
+    ...input.properties.map(({ entityId }) =>
+      cache.invalidateQueries({
+        queryKey: propertiesKeys.entity({
+          entityType: 'INITIATIVE',
+          entityId,
+        }).queryKey,
+      })
+    ),
+  ]);
+}
+
+/**
+ * The composer closes before its project exists, so a creation cannot save
+ * through the composer's mutation observer. Each save owns a root instead.
+ */
+function saveCreatedProjectProperties(
+  cache: QueryClient,
+  id: string,
+  properties: readonly ProjectPropertyDraft[]
+) {
+  return createRoot(async (dispose) => {
+    try {
+      const result = await createGraphqlBulkSaveEntityPropertiesMutation({
+        onSuccess: (input) => refreshSavedProperties(cache, input),
+      }).mutateAsync(propertyInput(id, properties));
+      if (result.error) throw result.error;
+    } finally {
+      dispose();
+    }
+  });
+}
 
 /** GraphQL Soup lists projects and holds the optimistic rows of their tasks. */
 export type ProjectSoupTransport = {
@@ -75,6 +135,9 @@ export function createProjectSources(
         filters,
         () => Boolean(userId()) && readEnabled() && enabled()
       );
+    },
+    createPendingProjectsSource() {
+      return { projects: usePendingProjects(cache) };
     },
     createProjectSource(id) {
       const readEnabled = createReadGate();
@@ -198,13 +261,15 @@ export function createProjectSources(
           ]);
         }
       );
-      const create = useMutation(
-        () => ({
-          mutationFn: async (input: { name: string; shareWithTeam: boolean }) =>
+      const creation = createProjectCreationMutation(
+        {
+          create: async (input) =>
             toProjectDetail(await throwOnErr(() => client.create(input))),
-          onSuccess: refresh,
-        }),
-        () => cache
+          saveProperties: (id, properties) =>
+            saveCreatedProjectProperties(cache, id, properties),
+          refresh,
+        },
+        cache
       );
       const update = useMutation(
         () => ({
@@ -229,20 +294,7 @@ export function createProjectSources(
       );
       const property = createGraphqlBulkSaveEntityPropertiesMutation({
         onSuccess: async (input) => {
-          await Promise.all([
-            refresh(),
-            ...[
-              ...new Set(input.properties.map(({ entityId }) => entityId)),
-            ].map(refetchGraphqlInitiativeProperties),
-            ...input.properties.map(({ entityId }) =>
-              cache.invalidateQueries({
-                queryKey: propertiesKeys.entity({
-                  entityType: 'INITIATIVE',
-                  entityId,
-                }).queryKey,
-              })
-            ),
-          ]);
+          await Promise.all([refresh(), refreshSavedProperties(cache, input)]);
         },
       });
       const assign = useMutation(
@@ -292,12 +344,12 @@ export function createProjectSources(
       return {
         createTask,
         pending: () =>
-          create.isPending ||
+          creation.pending() ||
           update.isPending ||
           remove.isPending ||
           property.isPending ||
           assign.isPending,
-        create: (input) => create.mutateAsync(input),
+        create: creation.create,
         rename: async (id, name) => {
           await update.mutateAsync({ id, name });
         },
@@ -308,16 +360,9 @@ export function createProjectSources(
           await remove.mutateAsync(id);
         },
         saveProperty: async (id, input, value) => {
-          const result = await property.mutateAsync({
-            properties: [
-              {
-                entityType: 'INITIATIVE',
-                entityId: id,
-                property: input,
-                apiValues: value,
-              },
-            ],
-          });
+          const result = await property.mutateAsync(
+            propertyInput(id, [{ property: input, value }])
+          );
           if (result.error) throw result.error;
         },
         assignTasks: (projectId, taskIds) =>

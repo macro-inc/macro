@@ -66,7 +66,9 @@ export function ProjectRow(props: {
   onSave(property: Property, value: PropertyApiValues): Promise<void>;
 }) {
   const canEdit = () =>
-    props.row.project.access === 'edit' || props.row.project.access === 'owner';
+    !props.row.pending &&
+    (props.row.project.access === 'edit' ||
+      props.row.project.access === 'owner');
   const properties = () => [...props.row.properties];
   const propertyFor = (id: string) =>
     props.row.properties.find(
@@ -97,6 +99,7 @@ export function ProjectRow(props: {
         id={props.rowId}
         role="row"
         aria-selected={props.checked}
+        aria-busy={props.row.pending || undefined}
         tabIndex={-1}
         onClick={props.onOpen}
         onMouseMove={props.onFocus}
@@ -107,6 +110,8 @@ export function ProjectRow(props: {
             'bg-list-selected-highlighted': props.checked && props.highlighted,
             'bg-list-highlighted': props.highlighted && !props.checked,
             'hover:bg-list-hover': !props.highlighted && !props.checked,
+            // Saving: the real row, dimmed, until the server confirms it.
+            'opacity-60': props.row.pending,
           }
         )}
       >
@@ -115,10 +120,12 @@ export function ProjectRow(props: {
           style={gridStyle}
         >
           <Entity.Slot placement="indicator" class="size-full">
-            <MultiSelectCheckbox
-              checked={props.checked}
-              onChecked={props.onChecked}
-            />
+            <Show when={!props.row.pending}>
+              <MultiSelectCheckbox
+                checked={props.checked}
+                onChecked={props.onChecked}
+              />
+            </Show>
           </Entity.Slot>
           <Entity.Slot
             placement="content"

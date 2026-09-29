@@ -128,12 +128,19 @@ previous status catalog remain visible until an editor changes them.
 Submit with
 `Create Project` or Cmd/Ctrl+Enter. `Continue editing in split` preserves the
 name, properties, and sharing choice; `Clear Draft` resets an uncreated draft.
-Leaving a property unset keeps its normal server default. If creation succeeds
-but a property write fails, `Retry saving properties` finishes the existing
+Leaving a property unset keeps its normal server default.
+Submitting closes the composer at once. The Projects list shows the new project
+immediately as a dimmed row at the top, in the group of its selected Status and
+only under filters that match it. It cannot be opened, selected, or edited
+while the project and its properties save. Once the server confirms and the
+list refreshes, the saved row replaces it in place, without a duplicate.
+Creating from the popover then opens the project in another split; creating
+from a full composer returns that split to Projects, then to the project.
+If creation fails, the dimmed row disappears and the composer reopens with the
+draft and the error. If creation succeeds but a property write fails, the
+composer reopens with `Retry saving properties`, which finishes the existing
 project, including after continuing in a split, without creating a duplicate.
-Closing the popover keeps the underlying view open. Creating from the popover
-opens the project in another split; creating from a full composer replaces that
-composer with the project.
+Closing the popover without submitting keeps the underlying view open.
 
 Opening a project keeps the Tasks workspace and its navigation. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share

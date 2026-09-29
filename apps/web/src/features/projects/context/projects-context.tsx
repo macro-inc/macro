@@ -13,6 +13,8 @@ import type {
 export type ProjectRow = {
   project: Project;
   properties: readonly Property[];
+  /** Submitted from a composer and not yet confirmed; its id may be provisional. */
+  pending?: boolean;
 };
 
 export type ProjectsSource = {
@@ -38,6 +40,28 @@ export type ProjectPropertyDraft = {
   value: PropertyApiValues;
 };
 
+export type ProjectCreationInput = {
+  name: string;
+  shareWithTeam: boolean;
+  properties: readonly ProjectPropertyDraft[];
+  /** Set when an earlier attempt created the project; only its properties are saved. */
+  createdId?: string;
+};
+
+/** A failed request stays distinct from a property failure after the project exists. */
+export type ProjectCreationResult =
+  | { status: 'created'; id: string }
+  | { status: 'failed'; error: Error }
+  | { status: 'propertiesFailed'; id: string; error: Error };
+
+/** A creation the server has not settled. `id` is provisional until it is created. */
+export type PendingProject = {
+  id: string;
+  name: string;
+  properties: readonly ProjectPropertyDraft[];
+  submittedAt: string;
+};
+
 /** Capabilities supplied by the production entry point or by a test. */
 export type ProjectsContext = {
   userId: Accessor<string | undefined>;
@@ -46,6 +70,10 @@ export type ProjectsContext = {
     enabled?: Accessor<boolean>
   ): ProjectsSource;
   createProjectSource(id: Accessor<string>): ProjectSource;
+  /** Every composer's in-flight creations, including composers that have closed. */
+  createPendingProjectsSource(): {
+    projects: Accessor<readonly PendingProject[]>;
+  };
   createPropertyDefinitionsSource(): {
     properties: Accessor<readonly Property[]>;
     loading: Accessor<boolean>;
@@ -62,10 +90,11 @@ export type ProjectsContext = {
       ...args: Parameters<typeof createTaskWithProperties>
     ): ReturnType<typeof createTaskWithProperties>;
     pending: Accessor<boolean>;
-    create(input: {
-      name: string;
-      shareWithTeam: boolean;
-    }): Promise<ProjectDetail>;
+    /**
+     * Lists the project as pending at once, then creates it and saves its
+     * properties. Settles only after the server confirms, and never rejects.
+     */
+    create(input: ProjectCreationInput): Promise<ProjectCreationResult>;
     rename(id: string, name: string): Promise<void>;
     setMembers(id: string, memberIds: string[]): Promise<void>;
     assignTasks(

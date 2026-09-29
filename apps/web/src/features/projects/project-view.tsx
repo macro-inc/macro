@@ -74,7 +74,7 @@ export function CreateProjectView(props: {
           <CreateProject
             initialDraft={props.initialDraft}
             onFailure={(initialDraft) => {
-              // A native popover can close while a request is in flight.
+              // Submitting closes the composer before the server answers.
               // Restore its failed draft just like the task composer does.
               if (disposed)
                 layout.popoverSplit({
@@ -108,6 +108,9 @@ export function CreateProjectView(props: {
               });
             }}
             onCreated={(id) => {
+              // Runs once the server confirms, after submitting closed the
+              // composer: a popover's project opens beside the current view,
+              // and a split's replaces the Projects list it returned to.
               const content = {
                 type: 'component' as const,
                 id: projectRouteId({ id, section: 'overview' }),

@@ -1,6 +1,12 @@
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import type { Property } from '@property/types';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
-import type { ProjectRow, ProjectsSource } from '../context/projects-context';
+import type {
+  PendingProject,
+  ProjectRow,
+  ProjectsSource,
+} from '../context/projects-context';
 import type { ProjectFilters } from '../core/project';
 import { createProjectCollection } from './project-collection';
 
@@ -15,6 +21,7 @@ describe('project collection', () => {
           filters = input;
           return emptySource();
         },
+        createPendingSource: noPendingProjects,
       });
       collection.setMine(true);
       collection.setStatus('status-option');
@@ -52,6 +59,7 @@ describe('project collection', () => {
       const collection = createProjectCollection({
         userId: () => 'user',
         createSource: () => ({ ...emptySource(), rows, error }),
+        createPendingSource: noPendingProjects,
       });
       expect(collection.state().kind).toBe('loading');
       const failure = new Error('offline');
@@ -107,6 +115,7 @@ describe('project collection', () => {
           hasMore: () => true,
           loadMore,
         }),
+        createPendingSource: noPendingProjects,
       });
       const entities = () =>
         collection.items().filter((item) => item.kind === 'entity');
@@ -147,7 +156,148 @@ describe('project collection', () => {
       dispose();
     });
   });
+
+  it('leads with a pending project, then hands it to its server row without a duplicate', () => {
+    createRoot((dispose) => {
+      const [rows, setRows] = createSignal<readonly ProjectRow[]>([
+        row('older'),
+      ]);
+      const [pending, setPending] = createSignal<readonly PendingProject[]>([
+        pendingProject('pending-project-1', 'in-progress'),
+      ]);
+      const open = vi.fn();
+      const collection = createProjectCollection({
+        userId: () => 'user',
+        onOpen: open,
+        createSource: () => ({ ...emptySource(), rows }),
+        createPendingSource: () => ({ projects: pending }),
+      });
+      const shown = () =>
+        collection
+          .items()
+          .flatMap((item) =>
+            item.kind === 'entity'
+              ? [[item.entity.id, item.entity.pending ?? false]]
+              : []
+          );
+      const entityKey = (id: string) =>
+        collection
+          .items()
+          .find((item) => item.kind === 'entity' && item.entity.id === id)!.id;
+      // Grouped by status, it joins the group its drafted status belongs to.
+      expect(
+        collection.groups().map((group) => [group.id, group.count])
+      ).toEqual([
+        ['in-progress', 1],
+        ['', 1],
+      ]);
+      collection.setGroupBy('none');
+      expect(shown()).toEqual([
+        ['pending-project-1', true],
+        ['older', false],
+      ]);
+      // It may not exist yet, so it can be neither opened nor batch-selected.
+      collection.list.activate.key(entityKey('pending-project-1'));
+      collection.list.selection.select(entityKey('pending-project-1'));
+      expect(open).not.toHaveBeenCalled();
+      expect(collection.list.selection.count()).toBe(0);
+      // Created while its properties save; a list refresh already returns it.
+      setPending([pendingProject('created', 'in-progress')]);
+      setRows([row('created'), row('older')]);
+      expect(shown()).toEqual([
+        ['created', true],
+        ['older', false],
+      ]);
+      // Settled: the server row alone remains and opens normally.
+      setPending([]);
+      expect(shown()).toEqual([
+        ['created', false],
+        ['older', false],
+      ]);
+      collection.list.activate.key(entityKey('created'));
+      expect(open).toHaveBeenCalledWith('created', undefined);
+      dispose();
+    });
+  });
+
+  it('drops a failed pending project without touching the server rows', () => {
+    createRoot((dispose) => {
+      const loaded = [row('older')];
+      const [pending, setPending] = createSignal<readonly PendingProject[]>([
+        pendingProject('pending-project-1'),
+      ]);
+      const collection = createProjectCollection({
+        userId: () => 'user',
+        createSource: () => ({ ...emptySource(), rows: () => loaded }),
+        createPendingSource: () => ({ projects: pending }),
+      });
+      const state = collection.state();
+      expect(state.kind === 'ready' && state.rows).toHaveLength(2);
+      setPending([]);
+      expect(collection.state()).toEqual({
+        kind: 'ready',
+        rows: loaded,
+        backgroundError: undefined,
+      });
+      dispose();
+    });
+  });
+
+  it('shows a pending project only under filters that would keep it', () => {
+    createRoot((dispose) => {
+      const collection = createProjectCollection({
+        userId: () => 'user',
+        createSource: () => ({ ...emptySource(), rows: () => [] }),
+        createPendingSource: () => ({
+          projects: () => [pendingProject('pending', 'in-progress')],
+        }),
+      });
+      const count = () => {
+        const state = collection.state();
+        return state.kind === 'ready' ? state.rows.length : 0;
+      };
+      expect(count()).toBe(1);
+      collection.setStatus('completed');
+      expect(count()).toBe(0);
+      collection.setStatus('in-progress');
+      expect(count()).toBe(1);
+      collection.setMine(true);
+      expect(count()).toBe(0);
+      collection.setMine(false);
+      collection.setDueAfter('2026-10-01');
+      expect(count()).toBe(0);
+      dispose();
+    });
+  });
 });
+
+const status: Property = {
+  propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+  propertyDefinitionId: SYSTEM_PROPERTY_IDS.STATUS,
+  displayName: 'Status',
+  valueType: 'SELECT_STRING',
+  value: null,
+  isMultiSelect: false,
+  owner: { scope: 'system' },
+  createdAt: '',
+  updatedAt: '',
+};
+
+function pendingProject(id: string, statusOption?: string): PendingProject {
+  return {
+    id,
+    name: `Project ${id}`,
+    submittedAt: '2026-09-29T12:00:00.000Z',
+    properties: statusOption
+      ? [
+          {
+            property: status,
+            value: { valueType: 'SELECT_STRING', values: [statusOption] },
+          },
+        ]
+      : [],
+  };
+}
 
 function row(id: string): ProjectRow {
   return {
@@ -159,6 +309,10 @@ function row(id: string): ProjectRow {
     },
     properties: [],
   };
+}
+
+function noPendingProjects() {
+  return { projects: () => [] };
 }
 
 function emptySource(): ProjectsSource {

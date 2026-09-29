@@ -40,6 +40,7 @@ it('restores collection grouping, filters, collapsed groups, focus and scroll af
           loadMore: vi.fn(async () => {}),
           refresh: vi.fn(async () => {}),
         }),
+        createPendingSource: () => ({ projects: () => [] }),
       }),
     }));
   const first = mount();

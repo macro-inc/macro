@@ -27,7 +27,11 @@ export function CreateProject(props: {
   let titleInput: HTMLInputElement | undefined;
   onMount(() => titleInput?.focus());
   const submit = async () => {
-    if ((await composer.submit()) === 'failed') {
+    const submission = composer.submit();
+    if (!submission) return;
+    // The project is already listed as pending; the server settles it later.
+    props.onClose();
+    if ((await submission).status !== 'created') {
       props.onFailure?.(composer.snapshot());
     }
   };
