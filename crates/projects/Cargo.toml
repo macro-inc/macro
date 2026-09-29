@@ -14,10 +14,12 @@ ai_tools = [
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:entity_registry",
   "dep:macro_authorization",
   "dep:model-error-response",
   "dep:utoipa",
   "entity_access/axum",
+  "entity_registry/axum",
 ]
 default = ["axum", "inbound", "outbound", "ports", "service"]
 inbound = ["axum", "ports"]

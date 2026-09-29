@@ -7,9 +7,10 @@ use std::{
 use axum::{
     Router,
     body::Body,
-    http::{Request, StatusCode},
+    http::{Request, StatusCode, request::Builder},
     response::IntoResponse,
 };
+use bot_id::NonSystemBotId;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt,
@@ -17,10 +18,12 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
+use entity_registry::NonUserOwners;
 use http_body_util::BodyExt;
 use macro_authorization::{
-    InternalIdentityClaims, MacroAuthorizationError, MacroAuthorizationService,
-    MacroAuthorizationState,
+    BOT_FOR_MACRO_USER_ID_HEADER, BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims,
+    BotAuthentication, BotScope, InternalIdentityClaims, MacroAuthorizationError,
+    MacroAuthorizationService, MacroAuthorizationState, MacroUserAuthentication,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use model::{
@@ -51,8 +54,10 @@ use crate::domain::{
 
 const TOKEN: &str = "valid-token";
 const INTERNAL_KEY: &str = "internal-key";
+const BOT_TOKEN: &str = "valid-bot-token";
 const USER_ID: &str = "macro|router@example.com";
 const PROJECT_ID: &str = "project-1";
+const TEAM_ID: Uuid = Uuid::from_u128(0x7ea4);
 
 #[derive(Clone)]
 struct FakeProjectService {
@@ -60,6 +65,7 @@ struct FakeProjectService {
     mutations: Arc<Mutex<Vec<&'static str>>>,
     permanently_deleted_projects: Arc<Mutex<Vec<BasicProject>>>,
     upload_internal_flags: Arc<Mutex<Vec<bool>>>,
+    create_principals: Arc<Mutex<Vec<CreationPrincipal>>>,
 }
 
 impl FakeProjectService {
@@ -75,6 +81,7 @@ impl FakeProjectService {
             mutations: Arc::new(Mutex::new(Vec::new())),
             permanently_deleted_projects: Arc::new(Mutex::new(Vec::new())),
             upload_internal_flags: Arc::new(Mutex::new(Vec::new())),
+            create_principals: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -84,6 +91,7 @@ impl FakeProjectService {
             mutations: Arc::new(Mutex::new(Vec::new())),
             permanently_deleted_projects: Arc::new(Mutex::new(Vec::new())),
             upload_internal_flags: Arc::new(Mutex::new(Vec::new())),
+            create_principals: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -136,13 +144,17 @@ impl ProjectService for FakeProjectService {
 
     async fn create_project(
         &self,
-        _principal: &CreationPrincipal,
+        principal: &CreationPrincipal,
         _args: CreateProjectRequest,
     ) -> Result<Project, ProjectError> {
         self.mutations
             .lock()
             .expect("mutation lock poisoned")
             .push("create");
+        self.create_principals
+            .lock()
+            .expect("create principal lock poisoned")
+            .push(principal.clone());
         Ok(project())
     }
 
@@ -394,16 +406,52 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
         Ok(claims.user_id.map(|user_id| user_context(&user_id)))
     }
+
+    async fn authorize_bot(
+        &self,
+        bot_token: &str,
+        bot_scope: BotScope,
+        acting_user: Option<BotActingUserClaims>,
+    ) -> Result<BotAuthentication, Report<MacroAuthorizationError>> {
+        if bot_token != BOT_TOKEN {
+            return Err(Report::new(MacroAuthorizationError::InvalidCredentials));
+        }
+        Ok(BotAuthentication {
+            bot_id: BotId::TEST_A,
+            token_id: Uuid::nil(),
+            bot_scope,
+            team_id: Some(TEAM_ID),
+            acting_user: acting_user
+                .and_then(|claims| claims.user_id)
+                .map(|user_id| MacroUserAuthentication {
+                    macro_user_id: user(&user_id),
+                    user_context: user_context(&user_id),
+                }),
+        })
+    }
 }
 
 fn router(service: FakeProjectService, access_level: Option<AccessLevel>) -> Router {
+    router_with(service, access_level, NonUserOwners::Disabled)
+}
+
+fn router_with(
+    service: FakeProjectService,
+    access_level: Option<AccessLevel>,
+    non_user_owners: NonUserOwners,
+) -> Router {
     projects_router::<FakeProjectService, FakeEntityAccessService, FakeAuthorizationService, ()>(
         ProjectRouterState {
             service: Arc::new(service),
             access_service: Arc::new(FakeEntityAccessService { access_level }),
             authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
+            non_user_owners,
         },
     )
+}
+
+fn user(user_id: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(user_id.to_string()).expect("test user id should be valid")
 }
 
 fn user_context(value: &str) -> UserContext {
@@ -463,6 +511,78 @@ fn internal_identity_json_request(method: &str, uri: &str, body: Value) -> Reque
         .header("x-internal-fusionauth-user-id", "fusion-user")
         .header("content-type", "application/json")
         .body(Body::from(body.to_string()))
+        .expect("request should be valid")
+}
+
+type Authenticate = fn(Builder) -> Builder;
+
+fn with_jwt(builder: Builder) -> Builder {
+    builder.header("authorization", format!("Bearer {TOKEN}"))
+}
+
+fn with_internal_user(builder: Builder) -> Builder {
+    builder
+        .header("x-internal-auth-key", INTERNAL_KEY)
+        .header("x-internal-macro-user-id", USER_ID)
+}
+
+fn with_internal_service(builder: Builder) -> Builder {
+    builder.header("x-internal-auth-key", INTERNAL_KEY)
+}
+
+fn with_user_bot(builder: Builder) -> Builder {
+    builder
+        .header(BOT_TOKEN_HEADER, BOT_TOKEN)
+        .header(BOT_SCOPE_HEADER, "user")
+        .header(BOT_FOR_MACRO_USER_ID_HEADER, USER_ID)
+}
+
+fn with_user_bot_without_acting_user(builder: Builder) -> Builder {
+    builder
+        .header(BOT_TOKEN_HEADER, BOT_TOKEN)
+        .header(BOT_SCOPE_HEADER, "user")
+}
+
+fn with_team_bot(builder: Builder) -> Builder {
+    builder
+        .header(BOT_TOKEN_HEADER, BOT_TOKEN)
+        .header(BOT_SCOPE_HEADER, "team")
+}
+
+fn creating_callers() -> [(Authenticate, NonUserOwners, CreationPrincipal); 4] {
+    [
+        (
+            with_jwt,
+            NonUserOwners::Disabled,
+            CreationPrincipal::User(user(USER_ID)),
+        ),
+        (
+            with_internal_user,
+            NonUserOwners::Disabled,
+            CreationPrincipal::User(user(USER_ID)),
+        ),
+        (
+            with_user_bot,
+            NonUserOwners::Disabled,
+            CreationPrincipal::BotForUser {
+                bot: BotId::TEST_A,
+                user: user(USER_ID),
+            },
+        ),
+        (
+            with_team_bot,
+            NonUserOwners::Enabled,
+            CreationPrincipal::TeamBot {
+                bot: NonSystemBotId::new(BotId::TEST_A).expect("test bot is not a system bot"),
+                team: TEAM_ID,
+            },
+        ),
+    ]
+}
+
+fn create_request(authenticate: Authenticate, body: impl Into<Body>) -> Request<Body> {
+    authenticate(Request::post("/").header("content-type", "application/json"))
+        .body(body.into())
         .expect("request should be valid")
 }
 
@@ -581,6 +701,70 @@ async fn create_returns_project_success_envelope() {
             }
         })
     );
+}
+
+#[tokio::test]
+async fn create_records_the_resolved_creation_principal() {
+    for (authenticate, non_user_owners, principal) in creating_callers() {
+        let service = FakeProjectService::with_project(USER_ID, false);
+        let create_principals = service.create_principals.clone();
+
+        let response = router_with(service, None, non_user_owners)
+            .oneshot(create_request(
+                authenticate,
+                json!({ "name": "Created", "projectParentId": null }).to_string(),
+            ))
+            .await
+            .expect("router should respond");
+
+        assert_eq!(response.status(), StatusCode::OK, "{principal:?}");
+        assert_eq!(
+            *create_principals
+                .lock()
+                .expect("create principal lock poisoned"),
+            [principal]
+        );
+    }
+}
+
+#[tokio::test]
+async fn create_rejects_callers_that_cannot_create_before_reading_the_body() {
+    let callers: [(&str, Authenticate, NonUserOwners); 3] = [
+        ("team bot", with_team_bot, NonUserOwners::Disabled),
+        (
+            "user-scoped bot without an acting user",
+            with_user_bot_without_acting_user,
+            NonUserOwners::Enabled,
+        ),
+        (
+            "internal caller without a user",
+            with_internal_service,
+            NonUserOwners::Enabled,
+        ),
+    ];
+
+    for (caller, authenticate, non_user_owners) in callers {
+        let service = FakeProjectService::with_project(USER_ID, false);
+        let create_principals = service.create_principals.clone();
+
+        let response = router_with(service, None, non_user_owners)
+            .oneshot(create_request(authenticate, "not json"))
+            .await
+            .expect("router should respond");
+
+        assert_eq!(
+            (response.status(), json_body(response).await),
+            (StatusCode::FORBIDDEN, json!({ "message": "forbidden" })),
+            "{caller}"
+        );
+        assert!(
+            create_principals
+                .lock()
+                .expect("create principal lock poisoned")
+                .is_empty(),
+            "{caller} must not reach the service"
+        );
+    }
 }
 
 #[tokio::test]
@@ -884,6 +1068,7 @@ async fn mark_uploaded_preserves_exact_lambda_request_and_response_json() {
         service: Arc::new(FakeProjectService::with_project(USER_ID, false)),
         access_service: Arc::new(FakeEntityAccessService { access_level: None }),
         authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
+        non_user_owners: NonUserOwners::Disabled,
     };
     let router = Router::new()
         .route(

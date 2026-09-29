@@ -1682,6 +1682,7 @@ async fn run() -> anyhow::Result<()> {
             service: project_service,
             access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
+            non_user_owners,
         },
         documents_state: DocumentRouterState {
             service: document_service,
