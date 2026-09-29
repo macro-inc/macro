@@ -13,6 +13,7 @@ use futures::{Stream, StreamExt};
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::domain::MemoryService;
 use model::chat::NewChatMessage;
+use model_owner::Owner;
 use notification::domain::service::NotificationIngress;
 
 use crate::domain::event_trigger::EventReference;
@@ -68,7 +69,7 @@ where
         let chat_id = self
             .chats
             .create(
-                action.owner_user()?.clone(),
+                Owner::User(action.owner_user()?.clone()),
                 CreateChatArgs {
                     name: action.name.clone(),
                     project_id: None,

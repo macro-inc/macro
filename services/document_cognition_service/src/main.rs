@@ -273,10 +273,9 @@ async fn main() -> anyhow::Result<()> {
         config.document_storage_bucket.to_string(),
         config.docx_document_upload_bucket.to_string(),
     );
-    let document_repo = PgDocumentRepo::new(
-        db.clone(),
-        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone()))),
-    );
+    let owned_entity_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
+    let document_repo = PgDocumentRepo::new(db.clone(), owned_entity_registrar.clone());
 
     let cloudfront_config = CloudFrontConfig {
         distribution_url: config
@@ -372,7 +371,10 @@ async fn main() -> anyhow::Result<()> {
             entity_access_service.clone(),
         ),
         chat: chat::inbound::attachment::ChatAttachmentService::new(
-            Arc::new(chat::outbound::postgres::PgChatRepo::new(db.clone())),
+            Arc::new(chat::outbound::postgres::PgChatRepo::new(
+                db.clone(),
+                owned_entity_registrar.clone(),
+            )),
             entity_access_service.clone(),
         ),
         channel: channels::inbound::attachment::ChannelAttachmentService::new(
@@ -385,7 +387,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let message_service = Arc::new(
         chat::domain::service::MessageServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
             attachment_provider,
         )
         .with_event_broker(macro_event_broker.clone()),
@@ -445,7 +447,7 @@ async fn main() -> anyhow::Result<()> {
 
     let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
         chat::domain::service::ChatServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
             Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(

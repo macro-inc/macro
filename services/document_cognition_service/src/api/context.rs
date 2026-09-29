@@ -7,6 +7,7 @@ use ai_tools::{
 };
 use attachment::provider::AttachmentProvider;
 use axum::extract::FromRef;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::inbound::attachment::ChannelAttachmentService;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use chat::domain::service::MessageServiceImpl;
@@ -67,7 +68,7 @@ pub type DcsChatModelAccess = chat::inbound::http::extractors::ChatModelAccess<
 pub type DcsAttachmentProvider = AttachmentProvider<
     DocumentAttachmentService<ToolDocumentService, ToolEntityAccessService>,
     EmailAttachmentService<ToolEmailService, ToolEntityAccessService>,
-    ChatAttachmentService<PgChatRepo, ToolEntityAccessService>,
+    ChatAttachmentService<PgChatRepo<PgBotsRepo>, ToolEntityAccessService>,
     ChannelAttachmentService<PgChannelsRepo, ToolEntityAccessService>,
     StaticFileAttachmentService<CdnStaticFileRepo>,
 >;
@@ -79,7 +80,8 @@ pub type DcsEventBroker = macro_event_broker::MacroEventBrokerService<
 >;
 
 /// Type alias for the message service wired to concrete DCS services.
-pub type DcsMessageService = MessageServiceImpl<PgChatRepo, DcsAttachmentProvider, DcsEventBroker>;
+pub type DcsMessageService =
+    MessageServiceImpl<PgChatRepo<PgBotsRepo>, DcsAttachmentProvider, DcsEventBroker>;
 
 #[cfg(test)]
 mod test;

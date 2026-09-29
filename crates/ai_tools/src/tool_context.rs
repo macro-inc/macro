@@ -1055,7 +1055,8 @@ pub fn build_reminders_tool_context(
 
 /// Type alias for the chat service implementation used by AI tools.
 /// Uses an empty toolset — the read-only tool never invokes tool execution.
-pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManagementService>;
+pub type ToolChatService =
+    ChatServiceImpl<PgChatRepo<PgBotsRepo>, (), ToolEntityAccessManagementService>;
 
 /// Type alias for the project service implementation used by AI tools.
 /// Upload, content-hash, and search-cleanup ports are unwired — project

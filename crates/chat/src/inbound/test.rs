@@ -36,11 +36,7 @@ use macro_user_id::user_id::MacroUserId;
 struct MockService;
 
 impl ChatService for MockService {
-    async fn create(
-        &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _args: CreateChatArgs,
-    ) -> Result<String> {
+    async fn create(&self, _owner: Owner, _args: CreateChatArgs) -> Result<String> {
         Ok("test-chat-id".to_string())
     }
 
@@ -161,11 +157,7 @@ impl ChatService for MockService {
 struct ErrorService;
 
 impl ChatService for ErrorService {
-    async fn create(
-        &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _args: CreateChatArgs,
-    ) -> Result<String> {
+    async fn create(&self, _owner: Owner, _args: CreateChatArgs) -> Result<String> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
@@ -269,11 +261,7 @@ impl ChatService for ErrorService {
 struct NotFoundService;
 
 impl ChatService for NotFoundService {
-    async fn create(
-        &self,
-        _user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
-        _args: CreateChatArgs,
-    ) -> Result<String> {
+    async fn create(&self, _owner: Owner, _args: CreateChatArgs) -> Result<String> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 

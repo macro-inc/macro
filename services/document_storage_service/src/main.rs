@@ -513,7 +513,7 @@ async fn run() -> anyhow::Result<()> {
 
     let chat_mutation_service =
         Arc::new(chat::domain::service::ChatServiceImpl::new_without_tools(
-            chat::outbound::postgres::PgChatRepo::new(db.clone()),
+            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
             entity_access_management_service.clone(),
         ));
 
