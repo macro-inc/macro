@@ -21,6 +21,7 @@ const USER: &str = "macro|runner@macro.com";
 struct Repo {
     claim: Mutex<Option<ClaimToken>>,
     claims: AtomicUsize,
+    claimed_revisions: Mutex<Vec<i64>>,
     releases: AtomicUsize,
     records: Mutex<Vec<ActionExecutionRecord>>,
     fail_persistence: bool,
@@ -28,8 +29,9 @@ struct Repo {
 }
 
 impl ScheduledActionRepo for Repo {
-    async fn claim_action(&self, _: &Uuid) -> Result<ClaimToken> {
+    async fn claim_action(&self, _: &Uuid, revision: ConfigurationRevision) -> Result<ClaimToken> {
         self.claims.fetch_add(1, Ordering::SeqCst);
+        self.claimed_revisions.lock().unwrap().push(revision.get());
         let mut claim = self.claim.lock().unwrap();
         anyhow::ensure!(claim.is_none(), "already running");
         let token = ClaimToken::generate();
@@ -278,6 +280,17 @@ async fn manual_event_action_does_not_fabricate_event_context() {
     drain(&executor).await;
     assert_eq!(*executor.runner.contexts.lock().unwrap(), vec![None]);
     assert_eq!(executor.repo.claims.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn claim_is_fenced_to_the_snapshot_revision() {
+    let executor = executor(Repo::default(), Runner::default());
+    let mut action = action();
+    action.configuration_revision = ConfigurationRevision::try_from(7).unwrap();
+    executor.runner.finish.cancel();
+    executor.execute_action(action).await.unwrap();
+    drain(&executor).await;
+    assert_eq!(*executor.repo.claimed_revisions.lock().unwrap(), [7]);
 }
 
 #[tokio::test]

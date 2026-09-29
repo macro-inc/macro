@@ -78,6 +78,65 @@ impl<Rpo: ScheduledActionRepo, Exe, Targets> ScheduledActionServiceImpl<Rpo, Exe
         }
         Ok(())
     }
+
+    async fn replace_configuration(
+        &self,
+        mut action: ScheduledAction,
+        input: ActionConfiguration,
+        caller: &MacroUserIdStr<'static>,
+    ) -> Result<ScheduledAction>
+    where
+        Targets: TaskTargetValidator,
+    {
+        require_explicit_agent(&action.task, &input.task)?;
+        let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
+        let configuration_changed = trigger_changed
+            || action.name != input.name
+            || action.kind != input.kind
+            || action.task != input.task;
+        let disable_only = !input.enabled && !configuration_changed;
+        // A rollout gate must not prevent an owner from stopping an existing
+        // event action. Deletion, history and explicit manual runs also remain available.
+        if !disable_only {
+            self.check_event_management(&action.trigger)?;
+            self.check_event_management(&input.trigger)?;
+        }
+        let now = Utc::now();
+        if action
+            .claimed
+            .is_some_and(|claimed| claimed >= now - MAX_ACTION_TIME)
+            && !disable_only
+        {
+            return Err(ActionPolicyError::UpdateConflict.into());
+        }
+        if !disable_only {
+            self.targets.validate_task(&input.task, caller).await?;
+            action.next_run_at = next_run(&input.trigger)?;
+        }
+        action.event_activated_at = match &input.trigger {
+            ActionTrigger::Cron { .. } => None,
+            ActionTrigger::Events { .. }
+                if trigger_changed || (!action.enabled && input.enabled) =>
+            {
+                Some(now)
+            }
+            ActionTrigger::Events { .. } => action.event_activated_at,
+        };
+        action.configuration_revision = action.configuration_revision.next()?;
+        action.name = input.name;
+        action.trigger = input.trigger;
+        action.kind = input.kind;
+        action.task = input.task;
+        action.enabled = input.enabled;
+        action.updated_at = now;
+
+        let updated = self.repo.update_action(action).await?;
+        self.dispatcher_tx
+            .send(DispatchEvent::Update(updated.clone()))
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to dispatch update event: {e}"))?;
+        Ok(updated)
+    }
 }
 
 fn next_run(trigger: &ActionTrigger) -> Result<Option<DateTime<Utc>>> {
@@ -194,58 +253,31 @@ where
         input: UpdateScheduledAction,
         macro_user_id: MacroUserIdStr<'static>,
     ) -> Result<ScheduledAction> {
-        let mut action = self.owned_action(id, &macro_user_id).await?;
-        let input = ActionConfiguration::from(input);
-        require_explicit_agent(&action.task, &input.task)?;
-        let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
-        let configuration_changed = trigger_changed
-            || action.name != input.name
-            || action.kind != input.kind
-            || action.task != input.task;
-        let disable_only = !input.enabled && !configuration_changed;
-        // A rollout gate must not prevent an owner from stopping an existing
-        // event action. Deletion, history and explicit manual runs also remain available.
-        if !disable_only {
-            self.check_event_management(&action.trigger)?;
-            self.check_event_management(&input.trigger)?;
-        }
-        let now = Utc::now();
-        if action
-            .claimed
-            .is_some_and(|claimed| claimed >= now - MAX_ACTION_TIME)
-            && !disable_only
-        {
-            return Err(ActionPolicyError::UpdateConflict.into());
-        }
-        if !disable_only {
-            self.targets
-                .validate_task(&input.task, &macro_user_id)
-                .await?;
-            action.next_run_at = next_run(&input.trigger)?;
-        }
-        action.event_activated_at = match &input.trigger {
-            ActionTrigger::Cron { .. } => None,
-            ActionTrigger::Events { .. }
-                if trigger_changed || (!action.enabled && input.enabled) =>
-            {
-                Some(now)
-            }
-            ActionTrigger::Events { .. } => action.event_activated_at,
-        };
-        action.configuration_revision = action.configuration_revision.next()?;
-        action.name = input.name;
-        action.trigger = input.trigger;
-        action.kind = input.kind;
-        action.task = input.task;
-        action.enabled = input.enabled;
-        action.updated_at = now;
-
-        let updated = self.repo.update_action(action).await?;
-        self.dispatcher_tx
-            .send(DispatchEvent::Update(updated.clone()))
+        let action = self.owned_action(id, &macro_user_id).await?;
+        let input = input.into_configuration(action.enabled);
+        self.replace_configuration(action, input, &macro_user_id)
             .await
-            .map_err(|e| anyhow::anyhow!("failed to dispatch update event: {e}"))?;
-        Ok(updated)
+    }
+
+    async fn set_enabled(
+        &self,
+        id: &Uuid,
+        enabled: bool,
+        macro_user_id: MacroUserIdStr<'static>,
+    ) -> Result<ScheduledAction> {
+        let action = self.owned_action(id, &macro_user_id).await?;
+        if action.enabled == enabled {
+            return Ok(action);
+        }
+        let input = ActionConfiguration {
+            name: action.name.clone(),
+            trigger: action.trigger.clone(),
+            kind: action.kind.clone(),
+            task: action.task.clone(),
+            enabled,
+        };
+        self.replace_configuration(action, input, &macro_user_id)
+            .await
     }
 
     async fn delete_action(&self, id: &Uuid, macro_user_id: MacroUserIdStr<'static>) -> Result<()> {

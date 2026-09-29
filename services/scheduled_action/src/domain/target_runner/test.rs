@@ -492,7 +492,7 @@ impl ScheduledActionRepo for UnusedRepo {
     async fn delete_action(&self, _: &Uuid, _: MacroUserIdStr<'static>) -> Result<()> {
         unimplemented!()
     }
-    async fn claim_action(&self, _: &Uuid) -> Result<ClaimToken> {
+    async fn claim_action(&self, _: &Uuid, _: ConfigurationRevision) -> Result<ClaimToken> {
         unimplemented!()
     }
     async fn release_action(&self, _: &Uuid, _: ClaimToken) -> Result<()> {

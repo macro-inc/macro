@@ -198,6 +198,7 @@ async fn foreign_owner_operations_return_not_found_and_list_is_empty() {
     let url = format!("/scheduled-actions/{}", action["id"].as_str().unwrap());
     for (method, path, body) in [
         ("PUT", url.clone(), legacy()),
+        ("PUT", format!("{url}/enabled"), json!({"enabled": false})),
         ("DELETE", url.clone(), Value::Null),
         ("POST", format!("{url}/execute"), Value::Null),
         ("GET", format!("{url}/history"), Value::Null),
@@ -219,6 +220,38 @@ async fn foreign_owner_operations_return_not_found_and_list_is_empty() {
         .1,
         json!([])
     );
+}
+
+#[tokio::test]
+async fn activation_endpoint_is_idempotent_and_accepts_only_enabled() {
+    let app = router(false);
+    let (_, created) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+    let url = format!(
+        "/scheduled-actions/{}/enabled",
+        created["id"].as_str().unwrap()
+    );
+    for _ in 0..2 {
+        let (status, paused) = request(&app, "PUT", &url, "owner", json!({"enabled": false})).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(paused["enabled"], false);
+        assert_eq!(paused["configuration_revision"], 2);
+        assert_eq!(paused["name"], "legacy");
+        assert_eq!(paused["schedule"], "0 0 9 * * *");
+    }
+    for invalid in [
+        json!({}),
+        json!({"enabled": "false"}),
+        json!({"enabled": true, "name": "renamed"}),
+    ] {
+        assert_eq!(
+            request(&app, "PUT", &url, "owner", invalid).await.0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+    let (status, resumed) = request(&app, "PUT", &url, "owner", json!({"enabled": true})).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resumed["enabled"], true);
+    assert_eq!(resumed["configuration_revision"], 3);
 }
 
 #[tokio::test]
@@ -456,6 +489,7 @@ fn openapi_documents_canonical_legacy_and_event_opt_in_contracts() {
     let schemas = &spec["components"]["schemas"];
     for name in [
         "ActionConfiguration",
+        "ActionConfigurationUpdate",
         "LegacyActionConfiguration",
         "ActionTrigger",
         "EventFilters",
@@ -463,9 +497,24 @@ fn openapi_documents_canonical_legacy_and_event_opt_in_contracts() {
         "ScheduledActionResponse",
         "CreateScheduledAction",
         "UpdateScheduledAction",
+        "SetScheduledActionEnabled",
     ] {
         assert!(!schemas[name].is_null(), "missing {name}");
     }
+    let update = &schemas["ActionConfigurationUpdate"];
+    assert_eq!(
+        update["required"],
+        json!(["name", "trigger", "kind", "task"])
+    );
+    assert_eq!(update["properties"]["enabled"]["deprecated"], true);
+    assert_eq!(
+        schemas["SetScheduledActionEnabled"]["additionalProperties"],
+        false
+    );
+    assert_eq!(
+        spec["paths"]["/scheduled-actions/{id}/enabled"]["put"]["operationId"],
+        "set_scheduled_action_enabled"
+    );
     let legacy_properties = &schemas["ScheduledActionResponse"]["allOf"][1]["properties"];
     assert_eq!(legacy_properties["schedule"]["deprecated"], true);
     assert_eq!(legacy_properties["timezone"]["deprecated"], true);
