@@ -130,6 +130,62 @@ describe('one-shot scheduling', () => {
     });
   });
 
+  it('keeps native validation valid for an exact non-quarter-hour time', () => {
+    const { onSubmit } = renderForm({ initialDescription: 'Exact follow up' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose date & time' }));
+    const time = screen.getByLabelText('Time') as HTMLInputElement;
+    fireEvent.input(time, { target: { value: '14:37:23' } });
+
+    expect(time.step).toBe('1');
+    expect(time.form?.checkValidity()).toBe(true);
+    (
+      screen.getByRole('button', { name: 'Set reminder' }) as HTMLButtonElement
+    ).click();
+
+    expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
+      type: 'once',
+      remindAt: '2026-09-22T14:37:23.000Z',
+    });
+  });
+
+  it('keeps preset seconds valid and exact after opening Custom', () => {
+    vi.setSystemTime(new Date('2026-09-21T12:07:23.000Z'));
+    const { onSubmit } = renderForm({ initialDescription: 'Exact follow up' });
+
+    fireEvent.click(screen.getByRole('button', { name: /In 30m.*12:37 PM/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose date & time' }));
+    const time = screen.getByLabelText('Time') as HTMLInputElement;
+
+    expect(time.value).toBe('12:37');
+    expect(time.step).toBe('1');
+    expect(time.form?.checkValidity()).toBe(true);
+    (
+      screen.getByRole('button', { name: 'Set reminder' }) as HTMLButtonElement
+    ).click();
+    expect(onSubmit.mock.calls[0]?.[0].schedule).toEqual({
+      type: 'once',
+      remindAt: '2026-09-21T12:37:23.000Z',
+    });
+  });
+
+  it('invalidates a custom schedule when its time is cleared', () => {
+    const { onSubmit } = renderForm({ initialDescription: 'Follow up' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose date & time' }));
+    const time = screen.getByLabelText('Time') as HTMLInputElement;
+    fireEvent.input(time, { target: { value: '' } });
+
+    expect(time.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByText('Choose a time for this reminder.')).not.toBeNull();
+    const submit = screen.getByRole('button', {
+      name: 'Set reminder',
+    }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    submit.click();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('preserves an overdue schedule for a description-only edit', () => {
     const overdue = {
       type: 'once' as const,
@@ -278,7 +334,7 @@ describe('recurrence', () => {
   it.each([
     ['Daily', 'daily', '0 0 9 * * 1,2,3,4,5,6,7'],
     ['Weekdays', 'weekdays', '0 0 9 * * 2,3,4,5,6'],
-  ])(
+  ] as const)(
     'round-trips the %s preset through the existing cron model',
     (_label, value, cron) => {
       const { onSubmit } = renderForm({ initialDescription: 'Standup' });

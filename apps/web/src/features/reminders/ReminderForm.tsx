@@ -366,6 +366,7 @@ export function ReminderForm(props: ReminderFormProps) {
   const whenOptionsId = createUniqueId();
   let titleRef: HTMLInputElement | undefined;
   let errorRef: HTMLDivElement | undefined;
+  let customControlsRef: HTMLDivElement | undefined;
   onMount(() => {
     if (props.autofocus) titleRef?.focus();
   });
@@ -400,6 +401,8 @@ export function ReminderForm(props: ReminderFormProps) {
     onceDate() !== '' &&
     onceTime() !== '' &&
     parseLocalReminderDateTime(onceDate(), onceTime()) === undefined;
+  const customTimeIsMissing = () =>
+    showCustomTime() && !whenQuery().trim() && onceTime() === '';
 
   /** Whether the schedule controls still hold exactly what they were seeded to. */
   const scheduleUntouched = () => {
@@ -565,6 +568,15 @@ export function ReminderForm(props: ReminderFormProps) {
       }
     }
     setShowCustomTime(opening);
+    if (opening) {
+      queueMicrotask(() =>
+        customControlsRef?.scrollIntoView?.({
+          block: 'nearest',
+          inline: 'nearest',
+          behavior: 'smooth',
+        })
+      );
+    }
   };
 
   const repeatChoice = () => {
@@ -785,36 +797,38 @@ export function ReminderForm(props: ReminderFormProps) {
                   class="grid min-w-0 grid-cols-2 gap-2"
                   aria-label="Quick reminder times"
                 >
-                  <For each={quickPresets}>
-                    {(preset) => (
-                      <Button
-                        type="button"
-                        variant={
-                          onceDateTime()?.getTime() === preset.date.getTime()
-                            ? 'accent'
-                            : 'outline'
-                        }
-                        fullWidth
-                        class="h-auto min-h-12 min-w-0 flex-col items-start gap-0.5 rounded-[10px] px-3 py-2 text-left whitespace-normal"
-                        data-reminder-quick-preset={preset.id}
-                        aria-label={`${preset.label}, ${formatReminderInstant(preset.date, localZone, openedAt)}`}
-                        aria-pressed={
-                          onceDateTime()?.getTime() === preset.date.getTime()
-                        }
-                        onClick={() => {
-                          setShowCustomTime(false);
-                          selectOnceDate(preset.date);
-                        }}
-                      >
-                        <span class="max-w-full truncate text-xs font-medium text-ink">
-                          {preset.label}
-                        </span>
-                        <span class="max-w-full truncate text-[11px] font-normal text-ink-muted">
-                          {formatQuickPreset(preset.date, localZone)}
-                        </span>
-                      </Button>
-                    )}
-                  </For>
+                  <Show when={!showCustomTime()}>
+                    <For each={quickPresets}>
+                      {(preset) => (
+                        <Button
+                          type="button"
+                          variant={
+                            onceDateTime()?.getTime() === preset.date.getTime()
+                              ? 'accent'
+                              : 'outline'
+                          }
+                          fullWidth
+                          class="h-auto min-h-12 min-w-0 flex-col items-start gap-0.5 rounded-[10px] px-3 py-2 text-left whitespace-normal"
+                          data-reminder-quick-preset={preset.id}
+                          aria-label={`${preset.label}, ${formatReminderInstant(preset.date, localZone, openedAt)}`}
+                          aria-pressed={
+                            onceDateTime()?.getTime() === preset.date.getTime()
+                          }
+                          onClick={() => {
+                            setShowCustomTime(false);
+                            selectOnceDate(preset.date);
+                          }}
+                        >
+                          <span class="max-w-full truncate text-xs font-medium text-ink">
+                            {preset.label}
+                          </span>
+                          <span class="max-w-full truncate text-[11px] font-normal text-ink-muted">
+                            {formatQuickPreset(preset.date, localZone)}
+                          </span>
+                        </Button>
+                      )}
+                    </For>
+                  </Show>
                   <Button
                     type="button"
                     size="sm"
@@ -830,11 +844,10 @@ export function ReminderForm(props: ReminderFormProps) {
                 </div>
 
                 <Show when={showCustomTime()}>
-                  <div class="rounded-[10px] border border-edge-muted bg-input/50 p-3">
-                    <div class="mb-2 flex items-center gap-2 text-xs font-medium text-ink-muted">
-                      <CalendarBlankIcon class="size-4" />
-                      Custom date and time
-                    </div>
+                  <div
+                    ref={customControlsRef}
+                    class="rounded-[10px] border border-edge-muted bg-input/50 p-3"
+                  >
                     <div class="grid min-w-0 gap-2 min-[360px]:grid-cols-2">
                       <div class="flex min-w-0 flex-col gap-1">
                         <span class="text-xxs font-medium text-ink-muted">
@@ -855,23 +868,43 @@ export function ReminderForm(props: ReminderFormProps) {
                           }}
                         />
                       </div>
-                      <EventTimeInput
-                        id={`${formId}-custom-time`}
-                        label="Time"
-                        value={onceTime()}
-                        disabled={props.pending}
-                        onChange={(option) => {
-                          setWhenQuery('');
-                          setSelectedOnceInstant(undefined);
-                          setOnceTime(option.value);
-                        }}
-                      />
+                      <div class="flex min-w-0 flex-col">
+                        <EventTimeInput
+                          id={`${formId}-custom-time`}
+                          label="Time"
+                          value={onceTime()}
+                          disabled={props.pending}
+                          invalid={
+                            customTimeIsMissing() || customWallTimeIsInvalid()
+                          }
+                          step={1}
+                          onClear={() => {
+                            setWhenQuery('');
+                            setSelectedOnceInstant(undefined);
+                            setOnceTime('');
+                          }}
+                          onChange={(option) => {
+                            setWhenQuery('');
+                            setSelectedOnceInstant(undefined);
+                            setOnceTime(option.value);
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
-                  <Show when={customWallTimeIsInvalid()}>
+                  <Show
+                    when={customTimeIsMissing()}
+                    fallback={
+                      <Show when={customWallTimeIsInvalid()}>
+                        <p class="text-xs text-failure-ink" role="alert">
+                          That local time doesn’t exist because the clocks
+                          change. Choose a time before or after the gap.
+                        </p>
+                      </Show>
+                    }
+                  >
                     <p class="text-xs text-failure-ink" role="alert">
-                      That local time doesn’t exist because the clocks change.
-                      Choose a time before or after the gap.
+                      Choose a time for this reminder.
                     </p>
                   </Show>
                 </Show>
@@ -1000,6 +1033,7 @@ export function ReminderForm(props: ReminderFormProps) {
                       </Show>
                       <TimeField
                         value={repeatParts().time}
+                        disabled={props.pending}
                         onChange={(time) => updateParts({ time })}
                       />
                     </div>
@@ -1023,6 +1057,7 @@ export function ReminderForm(props: ReminderFormProps) {
                       </label>
                       <TimeField
                         value={repeatParts().time}
+                        disabled={props.pending}
                         onChange={(time) => updateParts({ time })}
                       />
                     </div>
@@ -1099,15 +1134,27 @@ export function ReminderForm(props: ReminderFormProps) {
 /** A time-of-day field for the recurring schedule. `At HH:MM`. */
 function TimeField(props: {
   value: string;
+  disabled?: boolean;
   onChange: (value: string) => void;
 }) {
   const id = createUniqueId();
   return (
-    <EventTimeInput
-      id={`reminder-repeat-time-${id}`}
-      label="At"
-      value={props.value}
-      onChange={(option) => props.onChange(option.value)}
-    />
+    <div class="flex min-w-0 flex-col">
+      <EventTimeInput
+        id={`reminder-repeat-time-${id}`}
+        label="At"
+        value={props.value}
+        disabled={props.disabled}
+        invalid={props.value === ''}
+        step={60}
+        onClear={() => props.onChange('')}
+        onChange={(option) => props.onChange(option.value)}
+      />
+      <Show when={props.value === ''}>
+        <span class="mt-1 text-xs text-failure-ink" role="alert">
+          Choose a time.
+        </span>
+      </Show>
+    </div>
   );
 }
